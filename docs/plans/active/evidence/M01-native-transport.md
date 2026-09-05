@@ -24,10 +24,11 @@ current process ID and closed/disconnected it at completion.
 
 ## Security and audio boundary
 
-The transport reads both process-token user SIDs and provides a same-user
-comparison helper. This is still not a replacement for an explicit restrictive
-pipe ACL or production authentication policy. The prototype uses the default
-pipe security descriptor. No audio endpoint was opened,
+The transport creates the pipe with an owner-only SDDL security descriptor,
+rejects a client whose process-token user SID differs from the server, and
+performs these checks before reading the request. This is a baseline local
+authentication boundary, not a replacement for deployment-account review and
+method-level authorization. No audio endpoint was opened,
 no stream was started or read, no driver was installed, and no Windows audio
 configuration was changed.
 
@@ -36,8 +37,8 @@ configuration was changed.
 The pipe integration now dispatches a framed `system.describe` request through
 the real `ControlPlane` authority. The server also exposes the connected client
 process ID and the native test verified it against the current process. The next
-transport task is to add an explicit restrictive security descriptor and enforce
-the SID check before sensitive dispatch.
+transport task is to integrate this authenticated accept path with a long-lived
+daemon and enforce method-level grants for every request.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

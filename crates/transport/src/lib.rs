@@ -30,8 +30,9 @@ mod windows_pipe {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{
-        CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
+        CloseHandle, LocalFree, GENERIC_READ, GENERIC_WRITE, HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
     };
+    use windows::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
     use windows::Win32::Security::{
         EqualSid, GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
     };
@@ -84,6 +85,29 @@ mod windows_pipe {
         .map_err(win_error)?;
         let user = unsafe { &*(buffer.as_ptr().cast::<TOKEN_USER>()) };
         Ok(user.User.Sid)
+    }
+
+    struct SecurityDescriptor(windows::Win32::Security::PSECURITY_DESCRIPTOR);
+    impl Drop for SecurityDescriptor {
+        fn drop(&mut self) {
+            if !self.0 .0.is_null() {
+                unsafe { LocalFree(Some(HLOCAL(self.0 .0))) };
+            }
+        }
+    }
+
+    fn owner_only_security() -> Result<SecurityDescriptor, TransportError> {
+        let mut descriptor = windows::Win32::Security::PSECURITY_DESCRIPTOR(std::ptr::null_mut());
+        unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                windows::core::w!("D:P(A;;GA;;;OW)"),
+                1,
+                std::ptr::addr_of_mut!(descriptor),
+                None,
+            )
+        }
+        .map_err(win_error)?;
+        Ok(SecurityDescriptor(descriptor))
     }
 
     /// Compare the connected client process token's user SID with this process.
@@ -161,8 +185,9 @@ mod windows_pipe {
     }
 
     /// Serve exactly one framed request, then disconnect and close the pipe.
-    /// The default security descriptor is intentionally left visible to the caller:
-    /// production callers must provide an explicit same-user ACL/authentication layer.
+    /// The pipe is created with an owner-only ACL and the client SID is checked
+    /// before its request is read. Production callers should still review the
+    /// deployment account/service model and authorization scopes.
     pub fn serve_once<F>(name: &str, handler: F) -> Result<(), TransportError>
     where
         F: FnOnce(&[u8]) -> Result<Vec<u8>, TransportError>,
@@ -179,6 +204,12 @@ mod windows_pipe {
     {
         check_name(name)?;
         let name = wide(name);
+        let security = owner_only_security()?;
+        let attributes = windows::Win32::Security::SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<windows::Win32::Security::SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: security.0 .0,
+            bInheritHandle: false.into(),
+        };
         let handle = unsafe {
             CreateNamedPipeW(
                 PCWSTR(name.as_ptr()),
@@ -188,7 +219,7 @@ mod windows_pipe {
                 (MAX_FRAME_BYTES + 4) as u32,
                 (MAX_FRAME_BYTES + 4) as u32,
                 0,
-                None,
+                Some(&attributes),
             )
         };
         if handle == INVALID_HANDLE_VALUE || handle.is_invalid() {
@@ -208,6 +239,11 @@ mod windows_pipe {
         if client_process_id == 0 {
             return Err(TransportError::Windows(
                 "named pipe returned no client process ID".into(),
+            ));
+        }
+        if !client_is_same_user(client_process_id)? {
+            return Err(TransportError::Windows(
+                "named pipe client is not the server user".into(),
             ));
         }
         let request = read_frame(handle.0)?;

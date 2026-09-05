@@ -76,6 +76,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo test --workspace` — all 37 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 - Added read-only same-user token validation to the native transport: the connected client PID is opened with limited query access, both user SIDs are read with `GetTokenInformation`, and `EqualSid` is used for comparison. The helper is deliberately not wired as production authorization until an explicit restrictive pipe ACL is added.
 - Checks: `cargo test --workspace` — all 37 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+- Added an owner-only SDDL security descriptor to named-pipe creation and enforced the same-user SID check before request reads. This closes the prototype’s unauthenticated default-descriptor gap; long-lived daemon integration and method-level grant enforcement remain next.
+- Checks: native transport tests passed after correcting descriptor pointer cleanup; full workspace validation is recorded with this checkpoint. No audio endpoint or persistent Windows configuration was touched.
 
 ### 2026-09-05 — WSL inventory
 
