@@ -76,7 +76,8 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 - Added a read-only Rust endpoint identity/state probe at [`tools/m00-wasapi-probe`](../../../tools/m00-wasapi-probe) with evidence notes in [M00 WASAPI probe](evidence/M00-wasapi-probe.md).
 - The probe intentionally does not open streams, change defaults, install drivers, or write outside stdout.
 - `cargo check`, `cargo build`, and `cargo run` pass; the probe reported 34 active endpoints, all with active state and endpoint IDs.
-- This is identity/state evidence only. Formats, periods, shared-mode capture/render, loopback latency, process capture, and physical tone/impulse behavior remain unmeasured.
+- The probe now also reports current mix format and device periods: most endpoints are 48 kHz/two-channel/32-bit with 2–3 ms minimum periods; Sonar endpoints include 96 kHz/eight-channel devices; the Focusrite render endpoint reports a 3 ms minimum period.
+- This remains capability metadata only. Shared-mode capture/render, loopback latency, process capture, and physical tone/impulse behavior remain unmeasured.
 
 ## Next authorized implementation task
 
