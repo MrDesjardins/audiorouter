@@ -18,8 +18,8 @@ current process ID and closed/disconnected it at completion.
 
 ## Validation
 
-- `cargo test -p audiorouter-transport`: 6 passed, including sequential authenticated connections, bounded startup/rotation retries, and grant enforcement.
-- `cargo test --workspace`: all workspace tests passed (40 unit tests; doc tests passed).
+- `cargo test -p audiorouter-transport`: 7 passed, including notification-safe one-way delivery.
+- `cargo test --workspace`: all workspace tests passed (41 unit tests; doc tests passed).
 - `cargo fmt --all` and `git diff --check`: passed.
 
 ## Security and audio boundary
@@ -39,9 +39,9 @@ the real `ControlPlane` authority. The server also exposes the connected client
 process ID and the native test verified it against the current process. The
 bounded `serve_connections` loop, transient startup/rotation retries,
 per-request `ClientGrant` dispatch, and `serve_control_connections` entry point
-now cover the basic connection lifecycle and authorization path. Notifications
-remain an explicit follow-up because a one-shot request/response transport must
-close or suppress their response without blocking a client.
+now cover the basic connection lifecycle and authorization path. Optional
+response handling and `send_oneway` allow JSON-RPC notifications to complete
+without a response or client block.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

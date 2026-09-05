@@ -99,6 +99,8 @@ This establishes that Codex can continue documentation and portable implementati
 
 - Added `serve_control_connections`, a reusable authenticated native entry point that owns a `ControlPlane` and applies an explicit `ClientGrant` to every framed request. Notification response suppression remains a documented follow-up for a production long-lived daemon.
 - Checks: `cargo test --workspace` — all 40 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+- Added optional-response pipe handling and `send_oneway` so JSON-RPC notifications are delivered, consumed, and disconnected without creating a response frame or blocking the client. `serve_control_connections` now uses this path.
+- Checks: `cargo test --workspace` — all 41 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
 ## Decisions and assumptions
 
