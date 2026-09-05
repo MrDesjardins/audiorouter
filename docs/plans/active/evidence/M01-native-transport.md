@@ -18,8 +18,8 @@ current process ID and closed/disconnected it at completion.
 
 ## Validation
 
-- `cargo test -p audiorouter-transport`: 7 passed, including notification-safe one-way delivery.
-- `cargo test --workspace`: all workspace tests passed (41 unit tests; doc tests passed).
+- `cargo test -p audiorouter-transport`: 8 passed, including preservation of all batch responses.
+- `cargo test --workspace`: all workspace tests passed (42 unit tests; doc tests passed).
 - `cargo fmt --all` and `git diff --check`: passed.
 
 ## Security and audio boundary
@@ -41,7 +41,8 @@ bounded `serve_connections` loop, transient startup/rotation retries,
 per-request `ClientGrant` dispatch, and `serve_control_connections` entry point
 now cover the basic connection lifecycle and authorization path. Optional
 response handling and `send_oneway` allow JSON-RPC notifications to complete
-without a response or client block.
+without a response or client block. Batch response frames are combined in order
+and can be read individually by the multi-frame client helper.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

@@ -326,6 +326,54 @@ mod windows_pipe {
         read_frame(handle.0)
     }
 
+    /// Exchange one request frame and read exactly `responses` response frames.
+    pub fn round_trip_many(
+        name: &str,
+        request: &[u8],
+        responses: usize,
+    ) -> Result<Vec<Vec<u8>>, TransportError> {
+        check_name(name)?;
+        if request.len() < 4 || request.len() > MAX_FRAME_BYTES + 4 {
+            return Err(TransportError::Protocol("invalid request frame".into()));
+        }
+        let name = wide(name);
+        let handle = (0..20)
+            .find_map(|_| {
+                let result = unsafe {
+                    CreateFileW(
+                        PCWSTR(name.as_ptr()),
+                        (GENERIC_READ | GENERIC_WRITE).0,
+                        FILE_SHARE_NONE,
+                        None,
+                        OPEN_EXISTING,
+                        Default::default(),
+                        None,
+                    )
+                };
+                match result {
+                    Ok(handle) => Some(Ok(handle)),
+                    Err(error)
+                        if matches!(
+                            error.code().0,
+                            x if x == 0x8007_00E7u32 as i32 || x == 0x8007_0002u32 as i32
+                        ) =>
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                        None
+                    }
+                    Err(error) => Some(Err(win_error(error))),
+                }
+            })
+            .unwrap_or_else(|| {
+                Err(TransportError::Windows(
+                    "timed out waiting for a free named-pipe instance".into(),
+                ))
+            })?;
+        let handle = Handle(handle);
+        write_all(handle.0, request)?;
+        (0..responses).map(|_| read_frame(handle.0)).collect()
+    }
+
     /// Send a notification frame and close after the server has received it.
     pub fn send_oneway(name: &str, request: &[u8]) -> Result<(), TransportError> {
         check_name(name)?;
@@ -379,8 +427,8 @@ mod windows_pipe {
 
 #[cfg(windows)]
 pub use windows_pipe::{
-    client_is_same_user, echo_handler, round_trip, send_oneway, serve_connections, serve_once,
-    serve_once_with_client, serve_once_with_client_optional,
+    client_is_same_user, echo_handler, round_trip, round_trip_many, send_oneway, serve_connections,
+    serve_once, serve_once_with_client, serve_once_with_client_optional,
 };
 
 #[cfg(windows)]
@@ -395,7 +443,16 @@ pub fn serve_control_connections(
             let responses = plane
                 .dispatch_frame_authorized(frame, &grant)
                 .map_err(|error| TransportError::Protocol(error.to_string()))?;
-            Ok(responses.into_iter().next())
+            if responses.is_empty() {
+                Ok(None)
+            } else {
+                let total = responses.iter().map(Vec::len).sum();
+                let mut combined = Vec::with_capacity(total);
+                for response in responses {
+                    combined.extend_from_slice(&response);
+                }
+                Ok(Some(combined))
+            }
         })?;
     }
     Ok(())
@@ -424,6 +481,11 @@ where
 
 #[cfg(not(windows))]
 pub fn send_oneway(_: &str, _: &[u8]) -> Result<(), TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn round_trip_many(_: &str, _: &[u8], _: usize) -> Result<Vec<Vec<u8>>, TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -567,6 +629,38 @@ mod tests {
         }))
         .unwrap();
         send_oneway(&name, &request).unwrap();
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_preserves_all_batch_responses() {
+        let name = format!(r"\\.\pipe\audiorouter-batch-test-{}", std::process::id());
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_control_connections(
+                &server_name,
+                1,
+                ControlPlane::new("native-batch-test"),
+                ClientGrant::read_only(),
+            )
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let request = encode_frame(&serde_json::json!([
+            {"jsonrpc":"2.0","id":21,"method":"system.describe"},
+            {"jsonrpc":"2.0","id":22,"method":"status.get"}
+        ]))
+        .unwrap();
+        let responses = round_trip_many(&name, &request, 2).unwrap();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&responses[0][4..]).unwrap()["id"],
+            21
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&responses[1][4..]).unwrap()["id"],
+            22
+        );
         server.join().unwrap().unwrap();
     }
 
