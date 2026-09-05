@@ -6,7 +6,6 @@
 //! process-loopback probes remain separate follow-up work.
 
 use windows::core::Result;
-use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::Media::Audio::{
     eAll, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
     AUDCLNT_STREAMFLAGS_LOOPBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE, IAudioClient,
@@ -16,8 +15,6 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
     COINIT_MULTITHREADED,
 };
-use windows::Win32::System::Threading::CreateEventW;
-use windows::core::PCWSTR;
 
 fn main() -> Result<()> {
     unsafe {
@@ -103,17 +100,12 @@ unsafe fn enumerate() -> Result<()> {
         let stream_flags = if id_string.starts_with("{0.0.0.") {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
-            windows::Win32::Media::Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+            0
         };
         let buffer_duration = if id_string.starts_with("{0.0.0.") {
             0
         } else {
-            minimum_period
-        };
-        let event_handle = if id_string.starts_with("{0.0.1.") {
-            Some(CreateEventW(None, false, false, PCWSTR::null())?)
-        } else {
-            None
+            10_000_000
         };
         let stream_result = stream_client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
@@ -125,9 +117,6 @@ unsafe fn enumerate() -> Result<()> {
         );
         let (initialize_hresult, start_hresult, buffer_frames, stream_latency_100ns) = match stream_result {
             Ok(()) => {
-                if let Some(event_handle) = event_handle {
-                    stream_client.SetEventHandle(event_handle)?;
-                }
                 let buffer = stream_client.GetBufferSize()?;
                 let latency = stream_client.GetStreamLatency()?;
                 let start_hresult = if id_string.starts_with("{0.0.0.") {
@@ -144,9 +133,6 @@ unsafe fn enumerate() -> Result<()> {
             }
             Err(error) => (error.code().0, -1, None, None),
         };
-        if let Some(event_handle) = event_handle {
-            CloseHandle(event_handle)?;
-        }
         let loopback_hresult = if id_string.starts_with("{0.0.0.") {
             let loopback_client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
             let loopback_format = loopback_client.GetMixFormat()?;
@@ -172,12 +158,27 @@ unsafe fn enumerate() -> Result<()> {
         } else {
             -1
         };
+        let capture_original_hresult = if id_string.starts_with("{0.0.1.") {
+            capture_initialize_variant(&device, 0)
+        } else {
+            -1
+        };
+        let capture_extensible_hresult = if id_string.starts_with("{0.0.1.") {
+            capture_initialize_variant(&device, 1)
+        } else {
+            -1
+        };
+        let capture_float_hresult = if id_string.starts_with("{0.0.1.") {
+            capture_initialize_variant(&device, 2)
+        } else {
+            -1
+        };
         CoTaskMemFree(Some(stream_format.cast()));
         if !closest_capture_format.is_null() {
             CoTaskMemFree(Some(closest_capture_format.cast()));
         }
         println!(
-            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} block_align={} avg_bytes={} cb_size={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} buffer_frames={} stream_latency_100ns={}",
+            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} block_align={} avg_bytes={} cb_size={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} capture_original_hresult=0x{capture_original_hresult:08x} capture_extensible_hresult=0x{capture_extensible_hresult:08x} capture_float_hresult=0x{capture_float_hresult:08x} buffer_frames={} stream_latency_100ns={}",
             state.0,
             id_string,
             format_tag,
@@ -195,6 +196,51 @@ unsafe fn enumerate() -> Result<()> {
     }
 
     Ok(())
+}
+
+unsafe fn capture_initialize_variant(device: &windows::Win32::Media::Audio::IMMDevice, mode: u8) -> i32 {
+    let client: IAudioClient = match device.Activate(CLSCTX_ALL, None) {
+        Ok(client) => client,
+        Err(error) => return error.code().0,
+    };
+    let format = match client.GetMixFormat() {
+        Ok(format) => format,
+        Err(error) => return error.code().0,
+    };
+    let copied_extensible = std::ptr::read_unaligned(format.cast::<WAVEFORMATEXTENSIBLE>());
+    let float_format = WAVEFORMATEX {
+        wFormatTag: 3,
+        nChannels: copied_extensible.Format.nChannels,
+        nSamplesPerSec: copied_extensible.Format.nSamplesPerSec,
+        nAvgBytesPerSec: copied_extensible.Format.nSamplesPerSec
+            * copied_extensible.Format.nChannels as u32
+            * 4,
+        nBlockAlign: copied_extensible.Format.nChannels * 4,
+        wBitsPerSample: 32,
+        cbSize: 0,
+    };
+    let initialize_format = match mode {
+        0 => format,
+        1 => std::ptr::addr_of!(copied_extensible.Format) as *mut WAVEFORMATEX,
+        _ => std::ptr::addr_of!(float_format) as *const WAVEFORMATEX as *mut WAVEFORMATEX,
+    };
+    let result = client.Initialize(
+        AUDCLNT_SHAREMODE_SHARED,
+        0,
+        0,
+        0,
+        initialize_format,
+        None,
+    );
+    let hresult = match result {
+        Ok(()) => {
+            let _ = client.Reset();
+            0
+        }
+        Err(error) => error.code().0,
+    };
+    CoTaskMemFree(Some(format.cast()));
+    hresult
 }
 
 unsafe fn format_support(client: &IAudioClient, sample_rate: u32, channels: u16) -> windows::core::HRESULT {
