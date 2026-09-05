@@ -50,6 +50,9 @@ handler runs, and the temporary pipe is closed cleanly.
 The control layer now exposes explicit `Observer`, `Editor`, and `Operator`
 roles. Their grants are deny-by-default for capture, recording, and device
 administration; those sensitive scopes require separately constructed policy.
+The native server exposes `serve_control_connections_as_role`, which maps an
+authenticated connection to one of those explicit roles without reconstructing
+scope sets at the transport call site.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

@@ -458,6 +458,21 @@ pub fn serve_control_connections(
     Ok(())
 }
 
+#[cfg(windows)]
+pub fn serve_control_connections_as_role(
+    name: &str,
+    connections: usize,
+    plane: audiorouter_control::ControlPlane,
+    role: audiorouter_control::ClientRole,
+) -> Result<(), TransportError> {
+    serve_control_connections(
+        name,
+        connections,
+        plane,
+        audiorouter_control::ClientGrant::for_role(role),
+    )
+}
+
 #[cfg(not(windows))]
 pub fn round_trip(_: &str, _: &[u8]) -> Result<Vec<u8>, TransportError> {
     Err(TransportError::UnsupportedPlatform)
@@ -512,10 +527,20 @@ pub fn serve_control_connections(
     Err(TransportError::UnsupportedPlatform)
 }
 
+#[cfg(not(windows))]
+pub fn serve_control_connections_as_role(
+    _: &str,
+    _: usize,
+    _: audiorouter_control::ControlPlane,
+    _: audiorouter_control::ClientRole,
+) -> Result<(), TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use audiorouter_control::{ClientGrant, ControlPlane};
+    use audiorouter_control::{ClientGrant, ClientRole, ControlPlane};
     use audiorouter_protocol::encode_frame;
 
     #[test]
@@ -560,11 +585,11 @@ mod tests {
         .unwrap();
         let server_name = name.clone();
         let server = std::thread::spawn(move || {
-            serve_control_connections(
+            serve_control_connections_as_role(
                 &server_name,
                 1,
                 ControlPlane::new("native-test"),
-                ClientGrant::read_only(),
+                ClientRole::Observer,
             )
         });
         std::thread::sleep(std::time::Duration::from_millis(20));
