@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/domain", "crates/control", "crates/protocol", "crates/storage"]
+members = ["crates/domain", "crates/control", "crates/protocol", "crates/storage", "crates/cli"]
 exclude = ["tools/m00-wasapi-probe"]
 
 [workspace.package]

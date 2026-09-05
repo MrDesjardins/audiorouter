@@ -62,6 +62,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 10 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 - Hardened graph plans with a 30-second default expiry and a testable TTL override. Expired plans fail before session mutation, while idempotency and revision checks remain unchanged.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 10 control, 12 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Added `crates/cli`, an offline M01 command surface for `help`, `status`, `schema`, `devices list`, `apps list`, `nodes types`, and `api methods`, with `--json` output and human-readable output. It reports fake/unavailable audio explicitly and shares control-plane discovery rather than inventing device results.
+- Checks: `cargo fmt --all`, `cargo test --workspace` — 3 CLI, 10 control, 12 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 

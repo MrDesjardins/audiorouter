@@ -15,6 +15,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiorouter-cli"
+version = "0.1.0"
+dependencies = [
+ "audiorouter-control",
+ "audiorouter-protocol",
+ "serde_json",
+]
+
+[[package]]
 name = "audiorouter-control"
 version = "0.1.0"
 dependencies = [
