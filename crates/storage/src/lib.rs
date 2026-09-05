@@ -79,15 +79,17 @@ impl Storage {
 
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
         let document = serde_json::to_string(session)?;
-        self.connection.execute(
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute(
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
-            params![session.id.as_str(), session.revision as i64, document],
+            params![session.id.as_str(), session.revision as i64, &document],
         )?;
-        self.connection.execute(
+        transaction.execute(
             "INSERT INTO sessions(id, revision, document) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
-            params![session.id.as_str(), session.revision as i64, document],
+            params![session.id.as_str(), session.revision as i64, &document],
         )?;
+        transaction.commit()?;
         Ok(())
     }
 

@@ -118,6 +118,8 @@ This establishes that Codex can continue documentation and portable implementati
 - Checks: `cargo test --workspace` — all 46 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No user database path was opened or modified; tests used only in-memory SQLite.
 - Added bounded validated session import/export to storage. Imports reject oversized or domain-invalid documents before writing a session/history row; exports return the persisted canonical JSON document.
 - Checks: `cargo test --workspace` — all 47 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory SQLite; no user database path was opened.
+- Made current-session and revision-history persistence atomic with one SQLite transaction, closing the partial-write window between those related tables.
+- Checks: `cargo test --workspace` — all 47 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory SQLite; no user database path was opened.
 
 ## Decisions and assumptions
 

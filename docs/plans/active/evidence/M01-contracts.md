@@ -9,7 +9,7 @@ This report covers the portable M01 foundation implemented while M00 Windows cap
 - `crates/domain`: opaque IDs; session/node/port/edge contracts; graph limits; direction/channel/matrix/dangling/duplicate/cycle validation; node registry; fake runtime generation lifecycle; revision-checked plans; idempotent commit replay; plan expiry.
 - `crates/control`: discovery metadata; session reads; graph plan/commit; storage-backed construction; fake session start/stop; JSON-RPC dispatch; batch handling; scoped grants; notification semantics.
 - `crates/protocol`: 4-byte little-endian framing, 4 MiB maximum frame, JSON-RPC request/response types, 32-request batch limit, malformed/version/method validation.
-- `crates/storage`: SQLite schema migration, session JSON documents, revision storage/history, validated bounded import/export, and idempotent operation journal.
+- `crates/storage`: SQLite schema migration, transactional session JSON/history writes, validated bounded import/export, and idempotent operation journal.
 - `crates/cli`: offline `help`, `status`, `schema`, `devices list`, `apps list`, `nodes types`, and `api methods` commands with human and `--json` output.
 - `tests/fixtures/valid-session.json`: checked-in camelCase contract fixture.
 - `tests/acceptance/m01-cli.ps1`: offline CLI acceptance script.
