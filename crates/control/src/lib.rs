@@ -251,10 +251,34 @@ impl ControlPlane {
 
     pub fn dispatch_message(&mut self, message: RpcMessage) -> Vec<JsonRpcResponse> {
         match message {
-            RpcMessage::Single(request) => vec![self.dispatch(request)],
+            RpcMessage::Single(request) => {
+                let omit = request.is_notification()
+                    && !matches!(
+                        request.method.as_str(),
+                        "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                    );
+                let response = self.dispatch(request);
+                if omit {
+                    Vec::new()
+                } else {
+                    vec![response]
+                }
+            }
             RpcMessage::Batch(requests) => requests
                 .into_iter()
-                .map(|request| self.dispatch(request))
+                .filter_map(|request| {
+                    let omit = request.is_notification()
+                        && !matches!(
+                            request.method.as_str(),
+                            "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                        );
+                    let response = self.dispatch(request);
+                    if omit {
+                        None
+                    } else {
+                        Some(response)
+                    }
+                })
                 .collect(),
         }
     }
@@ -553,5 +577,19 @@ mod tests {
         };
         let response = plane.dispatch_authorized(request, &ClientGrant::read_only());
         assert!(response.result.unwrap()["methods"].is_array());
+    }
+
+    #[test]
+    fn read_only_notifications_produce_no_response() {
+        let mut plane = ControlPlane::default();
+        let notification = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: None,
+            method: "system.describe".into(),
+            params: None,
+        };
+        assert!(plane
+            .dispatch_message(RpcMessage::Single(notification))
+            .is_empty());
     }
 }

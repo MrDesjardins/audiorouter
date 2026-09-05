@@ -65,6 +65,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Added `crates/cli`, an offline M01 command surface for `help`, `status`, `schema`, `devices list`, `apps list`, `nodes types`, and `api methods`, with `--json` output and human-readable output. It reports fake/unavailable audio explicitly and shares control-plane discovery rather than inventing device results.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 3 CLI, 10 control, 12 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 - Added `tests/acceptance/m01-cli.ps1`, a checked-in PowerShell acceptance script for schema, status, device-list, and node-type discovery. It verifies offline M01 behavior and refuses success-shaped fake device results.
+- Corrected JSON-RPC notification semantics in control dispatch: read-only notifications are consumed without response envelopes, while mutating notifications remain rejected. This prevents clients from receiving misleading success responses for notifications.
+- Checks: `cargo fmt --all`, `cargo test --workspace` — 3 CLI, 11 control, 12 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 
