@@ -54,6 +54,13 @@ impl Storage {
                  revision INTEGER NOT NULL,
                  document TEXT NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS session_history (
+                 session_id TEXT NOT NULL,
+                 revision INTEGER NOT NULL,
+                 document TEXT NOT NULL,
+                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                 PRIMARY KEY(session_id, revision)
+             );
              CREATE TABLE IF NOT EXISTS operation_journal (
                  idempotency_key TEXT PRIMARY KEY,
                  operation TEXT NOT NULL,
@@ -69,11 +76,30 @@ impl Storage {
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
         let document = serde_json::to_string(session)?;
         self.connection.execute(
+            "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
+            params![session.id.as_str(), session.revision as i64, document],
+        )?;
+        self.connection.execute(
             "INSERT INTO sessions(id, revision, document) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
             params![session.id.as_str(), session.revision as i64, document],
         )?;
         Ok(())
+    }
+
+    pub fn load_history(&self, id: &EntityId, limit: usize) -> Result<Vec<Session>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT document FROM session_history WHERE session_id = ?1
+             ORDER BY revision DESC LIMIT ?2",
+        )?;
+        let rows = statement.query_map(params![id.as_str(), limit as i64], |row| {
+            row.get::<_, String>(0)
+        })?;
+        rows.map(|row| {
+            let document = row?;
+            serde_json::from_str(&document).map_err(StorageError::Json)
+        })
+        .collect()
     }
 
     pub fn load_session(&self, id: &EntityId) -> Result<Option<Session>, StorageError> {
@@ -191,5 +217,21 @@ mod tests {
             storage.journal_result("op").unwrap().as_deref(),
             Some("{\"revision\":1}")
         );
+    }
+
+    #[test]
+    fn session_history_keeps_prior_revisions_and_honors_limit() {
+        let storage = Storage::open_memory().unwrap();
+        let original = session();
+        storage.save_session(&original).unwrap();
+        let mut newer = original.clone();
+        newer.revision = 4;
+        newer.name = "newer".into();
+        storage.save_session(&newer).unwrap();
+        let history = storage.load_history(&original.id, 2).unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0], newer);
+        assert_eq!(history[1], original);
+        assert_eq!(storage.load_history(&original.id, 1).unwrap(), vec![newer]);
     }
 }

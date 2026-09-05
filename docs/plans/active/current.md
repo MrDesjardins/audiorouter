@@ -114,6 +114,8 @@ This establishes that Codex can continue documentation and portable implementati
 - Checks: `cargo test --workspace` — all 45 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 - Added `serve_control_connections_as_role`, wiring authenticated native connections to the explicit role policy without duplicating scope construction at transport call sites. The raw `ClientGrant` entry point remains available for custom policies.
 - Checks: `cargo test --workspace` — all 45 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+- Added SQLite `session_history` persistence with bounded revision reads, preserving prior session documents for recovery/undo foundations while keeping the latest-session lookup unchanged.
+- Checks: `cargo test --workspace` — all 46 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No user database path was opened or modified; tests used only in-memory SQLite.
 
 ## Decisions and assumptions
 
