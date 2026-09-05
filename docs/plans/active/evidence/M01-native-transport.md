@@ -36,11 +36,12 @@ configuration was changed.
 
 The pipe integration now dispatches a framed `system.describe` request through
 the real `ControlPlane` authority. The server also exposes the connected client
-process ID and the native test verified it against the current process. The next
-transport task is to integrate this authenticated accept path with a long-lived
-daemon. The bounded `serve_connections` loop, transient startup/rotation
-retries, and per-request `ClientGrant` dispatch now cover the basic connection
-lifecycle and authorization path.
+process ID and the native test verified it against the current process. The
+bounded `serve_connections` loop, transient startup/rotation retries,
+per-request `ClientGrant` dispatch, and `serve_control_connections` entry point
+now cover the basic connection lifecycle and authorization path. Notifications
+remain an explicit follow-up because a one-shot request/response transport must
+close or suppress their response without blocking a client.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

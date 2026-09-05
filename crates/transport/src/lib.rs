@@ -329,6 +329,23 @@ pub use windows_pipe::{
     serve_once_with_client,
 };
 
+#[cfg(windows)]
+pub fn serve_control_connections(
+    name: &str,
+    connections: usize,
+    mut plane: audiorouter_control::ControlPlane,
+    grant: audiorouter_control::ClientGrant,
+) -> Result<(), TransportError> {
+    serve_connections(name, connections, move |_, frame| {
+        let responses = plane
+            .dispatch_frame_authorized(frame, &grant)
+            .map_err(|error| TransportError::Protocol(error.to_string()))?;
+        responses.into_iter().next().ok_or_else(|| {
+            TransportError::Protocol("notifications require response-suppression lifecycle".into())
+        })
+    })
+}
+
 #[cfg(not(windows))]
 pub fn round_trip(_: &str, _: &[u8]) -> Result<Vec<u8>, TransportError> {
     Err(TransportError::UnsupportedPlatform)
@@ -352,6 +369,16 @@ pub fn serve_connections<F>(_: &str, _: usize, _: F) -> Result<(), TransportErro
 where
     F: FnMut(u32, &[u8]) -> Result<Vec<u8>, TransportError>,
 {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn serve_control_connections(
+    _: &str,
+    _: usize,
+    _: audiorouter_control::ControlPlane,
+    _: audiorouter_control::ClientGrant,
+) -> Result<(), TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -403,15 +430,12 @@ mod tests {
         .unwrap();
         let server_name = name.clone();
         let server = std::thread::spawn(move || {
-            let mut plane = ControlPlane::new("native-test");
-            serve_once(&server_name, |frame| {
-                let responses = plane
-                    .dispatch_frame_authorized(frame, &ClientGrant::read_only())
-                    .map_err(|error| TransportError::Protocol(error.to_string()))?;
-                responses.into_iter().next().ok_or_else(|| {
-                    TransportError::Protocol("notification produced no response".into())
-                })
-            })
+            serve_control_connections(
+                &server_name,
+                1,
+                ControlPlane::new("native-test"),
+                ClientGrant::read_only(),
+            )
         });
         std::thread::sleep(std::time::Duration::from_millis(20));
         let response = round_trip(&name, &request).unwrap();

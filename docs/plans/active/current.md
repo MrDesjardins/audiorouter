@@ -95,6 +95,11 @@ M00 feasibility work has now started with a read-only environment inventory from
 
 This establishes that Codex can continue documentation and portable implementation from WSL, but M00's Windows gates require a working native Windows session (or a separately reachable Windows test machine). The WSL shell should not be treated as a replacement for that environment.
 
+### 2026-09-05 — Native daemon entry point
+
+- Added `serve_control_connections`, a reusable authenticated native entry point that owns a `ControlPlane` and applies an explicit `ClientGrant` to every framed request. Notification response suppression remains a documented follow-up for a production long-lived daemon.
+- Checks: `cargo test --workspace` — all 40 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.
