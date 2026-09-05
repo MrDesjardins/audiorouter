@@ -51,6 +51,10 @@ unsafe fn enumerate() -> Result<()> {
         let sample_rate =
             std::ptr::read_unaligned(std::ptr::addr_of!(format_value.nSamplesPerSec));
         let bits = std::ptr::read_unaligned(std::ptr::addr_of!(format_value.wBitsPerSample));
+        let block_align = std::ptr::read_unaligned(std::ptr::addr_of!(format_value.nBlockAlign));
+        let avg_bytes =
+            std::ptr::read_unaligned(std::ptr::addr_of!(format_value.nAvgBytesPerSec));
+        let extra_size = std::ptr::read_unaligned(std::ptr::addr_of!(format_value.cbSize));
         let support_44100_mono = format_support(&client, 44_100, 1).0;
         let support_44100_stereo = format_support(&client, 44_100, 2).0;
         let support_48000_mono = format_support(&client, 48_000, 1).0;
@@ -63,8 +67,7 @@ unsafe fn enumerate() -> Result<()> {
         let stream_flags = if id_string.starts_with("{0.0.0.") {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
-            windows::Win32::Media::Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                | AUDCLNT_STREAMFLAGS_NOPERSIST
+            0
         };
         let buffer_duration = if id_string.starts_with("{0.0.0.") {
             0
@@ -135,13 +138,16 @@ unsafe fn enumerate() -> Result<()> {
         };
         CoTaskMemFree(Some(stream_format.cast()));
         println!(
-            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} buffer_frames={} stream_latency_100ns={}",
+            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} block_align={} avg_bytes={} cb_size={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} buffer_frames={} stream_latency_100ns={}",
             state.0,
             id_string,
             format_tag,
             channels,
             sample_rate,
             bits,
+            block_align,
+            avg_bytes,
+            extra_size,
             default_period,
             minimum_period,
             buffer_frames.map_or_else(|| "-".to_string(), |value| value.to_string()),
