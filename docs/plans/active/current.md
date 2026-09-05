@@ -63,9 +63,17 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 - WMI/PnP access was denied in the restricted shell and succeeded only with approved elevated read-only execution. No defaults, drivers, streams, or user files were changed.
 - Evidence status: native machine inventory is now available. Capture/render, process-loopback, endpoint format/period, latency, driver bridge, and signing gates remain `not run` or `blocked`.
 
+### 2026-09-05 — SDK/WDK follow-up
+
+- Windows SDK `10.0.26100.0` and older SDK directories are present.
+- `vswhere.exe -all -format json` returned an empty Visual Studio instance list.
+- No WDK-specific markers were found under the Windows Kits tree; MSVC build tools remain unavailable on PATH.
+- Consequence: the C++/driver probe cannot be built on this host until an authorized Visual Studio/WDK environment is available. Portable Rust work can continue, but this does not satisfy the native audio probe or driver gate.
+- Evidence updated in [M00 Windows inventory](evidence/M00-windows-inventory-2026-09-05.md).
+
 ## Next authorized implementation task
 
-Continue [M00](../../milestones/M00-feasibility.md) on this native Windows 11 x64 host: establish the compiler/SDK/WDK inventory; add and run a minimal Windows WASAPI endpoint/format/period and process-loopback probe; identify an authorized physical loopback setup; and evaluate the managed-driver path. Keep the WSL inventory as supporting context only. Do not install a driver, change Windows defaults, or claim a feasibility gate until the native evidence is attached.
+Continue [M00](../../milestones/M00-feasibility.md) using an authorized Windows build environment: add and run a minimal Windows WASAPI endpoint/format/period and process-loopback probe; identify an authorized physical loopback setup; and evaluate the managed-driver path. This host's SDK-only state is insufficient for the C++/driver probe. Keep the WSL inventory as supporting context only. Do not install a driver, change Windows defaults, or claim a feasibility gate until the native evidence is attached.
 
 ## M00 preparation checklist
 

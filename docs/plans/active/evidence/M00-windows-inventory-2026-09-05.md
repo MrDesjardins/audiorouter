@@ -33,7 +33,7 @@ Read-only native Windows inventory for M00 tasks 1, 5, and 6. No defaults, drive
 | WDK | Not established; no WDK-specific installation or build environment identified |
 | `signtool.exe` | Present in Windows SDK at `bin\10.0.26100.0\x64\signtool.exe`, but not on PATH |
 
-Visual Studio presence was not established. A developer command prompt or installed-component query is still required before a driver or C++ probe can be built. The SDK supplies supporting tools such as `midl.exe`, `rc.exe`, and `signtool.exe`, but their presence does not establish a usable MSVC/WDK build environment.
+Visual Studio presence was checked with `vswhere.exe`; it reported no installed instances. No WDK markers were found under the Windows Kits tree. A Visual Studio C++ toolset/WDK installation or an authorized separate build machine is required before a driver or C++ probe can be built. The SDK supplies supporting tools such as `midl.exe`, `rc.exe`, and `signtool.exe`, but their presence does not establish a usable MSVC/WDK build environment.
 
 ## Audio hardware and existing virtual devices
 
@@ -76,3 +76,7 @@ The same WMI/PnP queries returned `Access denied` (`0x80041003`) in the restrict
 ## M00 conclusion
 
 This machine is a usable Windows inventory/reference candidate, and it has both physical USB audio hardware and interim third-party virtual audio devices. It does not provide evidence for CAP-03/04/05/06/07/08, NFR-01/02/03, or VDEV-02/09: no WASAPI probe, process-loopback probe, controlled tone/impulse harness, physical loopback measurement, driver prototype, signing route, or exact format/period manifest has been run. The existing virtual devices are interim-only under the specification and cannot satisfy the managed-driver gate.
+
+## Follow-up toolchain check
+
+`vswhere.exe -all -format json` returned an empty instance list. Windows SDK include/bin directories include `10.0.26100.0` plus older SDK versions, but no WDK-specific installation was identified. This blocks the native C++/driver portions of M00; it does not invalidate the portable Rust toolchain inventory.
