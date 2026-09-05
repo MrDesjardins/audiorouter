@@ -1,0 +1,34 @@
+# 13 — Security, privacy, and trust boundaries
+
+Milestone ownership: M01 local API/grants; M03 driver/endpoint isolation; M04 file safety; M06 plugin containment; M07 integrated abuse tests; M08 release review.
+
+## Threat model
+
+Protect microphone/desktop audio, recordings, routing configuration, driver integrity, and other Windows users' data. Relevant threats are an untrusted local client, a malicious web page trying to reach local control, hostile imported files/plugin metadata, a crashing or malicious plugin, unintended LLM actions, and accidental routing of private sources. An already compromised Windows user/kernel can exceed these boundaries; do not market the local API as protection against a fully compromised OS.
+
+OS-visible virtual capture devices are available according to Windows/app microphone access rules. AudioRouter cannot promise that only Discord can consume a system-wide virtual microphone. Restricting which apps may read an endpoint is not a v1 capability.
+
+## Requirements
+
+- **SEC-01 — Local API isolation.** Restrict named-pipe ACLs to the intended user/logon and explicitly required system principals; reject remote connections and validate peer identity before parsing privileged methods. Do not rely on default pipe permissions. Use anti-squatting/first-instance protections and verify backend identity during connection. [Microsoft named-pipe security](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipe-security-and-access-rights).
+- **SEC-02 — Client enrollment.** Bootstrap a trusted local owner client using an OS-protected installation/first-run channel. Third-party CLI/MCP clients enroll with explicit owner authorization. Store secrets under Windows user protection, never in source, URLs, plain CLI arguments, or browser storage. Grants are revocable, scoped, auditable, and cannot be self-issued by an untrusted client. Document the limitation against hostile code already running as the same user.
+- **SEC-03 — Scopes.** Distinguish `config.read`, `graph.write`, `session.control`, `audio.capture`, `recording.write` with allowed roots, `recording.manage`, `plugins.scan`, `startup.write`, and `devices.admin`. Route changes that newly capture audio or add a recording sink require the corresponding scopes even if graph writes are allowed. A granted template workflow can authorize its ordinary repeated actions without repeated prompts.
+- **SEC-04 — Backend enforcement.** Validate every request regardless of UI validation or MCP tool annotations. Bind warnings/acknowledgments to concrete plan/resource revisions. A natural-language description cannot grant permissions; client name is metadata, not authentication. Do not let `call_api`, imports, undo, or presets bypass authorization.
+- **SEC-05 — Desktop shell.** Package trusted UI assets; apply restrictive CSP, no remote script execution, minimal shell capabilities, and no arbitrary command execution bridge. External links open through a constrained OS mechanism. Native plugin windows and metadata are untrusted; HTML-escape labels and render text as data.
+- **SEC-06 — Audio privacy.** No network audio upload, telemetry audio, or recording by default. Global privacy mute silences physical capture contributions and remains latched across crash/restart. Document that muting within AudioRouter does not disable other applications' direct microphone access. UI/CLI can enumerate active captures and their destinations.
+- **SEC-07 — Plugin boundary.** Scan and execute plugins outside the backend with the least Windows privileges that tested compatibility allows, constrained process/job resources, and no inherited backend credentials/handles. Process isolation provides crash containment; full filesystem/network sandboxing is not guaranteed for arbitrary commercial plugins. Disclose this limitation before enabling third-party binaries and keep them out of kernel/privileged processes.
+- **SEC-08 — Driver boundary.** Validate IOCTL lengths, ownership, handles, buffers, rates, and lifecycle transitions; never trust user-mode lengths/pointers. Authenticate bridge ownership with OS handles/security descriptors, not display labels. Reject untrusted driver packages and unsigned update artifacts. Driver testing runs on dedicated Windows test machines/VMs, not by relaxing security on a user's primary machine.
+- **SEC-09 — File safety.** Enforce recording/export/import roots and canonical paths, reject traversal/reparse escapes, and avoid overwrite races. Library removal and file recycling are separate scopes/actions. Imported bundles never execute code, install plugins, set startup, or arm recorders automatically.
+- **SEC-10 — Audit and diagnostics.** Record who/which client requested a change, operation ID, affected resources, revision, and outcome. Redact usernames, full executable/file paths, device serials, and tokens from default support bundles. Retain 30 days or 20 MiB of audit metadata by default, rotating off realtime threads. Explain that local audit is diagnostic and not tamper-proof evidence against the account owner.
+- **SEC-11 — Updates.** Verify signed packages and integrity before applying updates, separate app/driver version compatibility, retain rollback artifacts, and avoid forced updates during live sessions. No network is necessary for ordinary operation; update checks are opt-in or explicit in v1.
+- **SEC-12 — Abuse resistance.** Bound input size/depth, resource counts, request rate, event queues, decompression, plugin scan time, and operation concurrency. Fuzz parsers/compiler/import and driver bridge inputs at their own trust boundaries. Rejected requests must not consume realtime resources or modify state.
+
+## Authorization UX
+
+Show the concrete action and affected resources: for example, “Allow this client to edit Gaming and record under D:\\Recordings.” Do not ask for a universal “AI access” grant. Existing grants may persist until revoked, with last-used time and scope visible. Driver install uses Windows elevation; granting API device administration alone cannot bypass the OS prompt.
+
+Do not add confirmation to every gain tweak. Require specific authorization where it matters: first client enrollment, newly permitted capture/file roots, driver lifecycle/elevation, and destructive file actions. Read-only inspection works with read scope and does not activate audio.
+
+## Required negative tests
+
+Another user cannot open the control pipe or bridge. A stale/revoked client cannot mutate. An untrusted page cannot invoke the shell. A plugin name containing tool instructions/HTML remains text. A crafted bundle cannot write outside staging. A generic MCP API tool cannot elevate a client grant. A slow telemetry consumer cannot starve audio. Reusing a grant under another Windows logon cannot recover old audio buffers. These results are part of M07/M08 evidence, not claims based solely on architecture diagrams.
