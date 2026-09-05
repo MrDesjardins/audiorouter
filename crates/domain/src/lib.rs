@@ -464,7 +464,7 @@ pub enum StoreError {
     EmptyIdempotencyKey,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct CommitResult {
     pub session_id: EntityId,
     pub revision: u64,

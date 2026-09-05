@@ -42,6 +42,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 10 tests passed including JSON round-trip and fixture validation; standalone WASAPI `cargo check` and `git diff --check` passed.
 - Added authoritative method-discovery metadata for the initial API surface, including permission scopes and side-effect classes (`readOnly`, `planOnly`, `mutating`, `externalOperation`). This keeps CLI/MCP/UI adapters aligned with the backend contract.
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 11 tests passed; `git diff --check` passed.
+- Added `crates/control`, a portable control-plane façade over the domain store. `system.describe`-style output includes protocol/schema versions, build, method permissions/side effects, node availability, and limits; session reads and graph plan/commit use the same authority.
+- Checks: `cargo fmt --all`, `cargo test --workspace` — 2 control tests and 11 domain tests passed; standalone WASAPI `cargo check` and `git diff --check` passed. No transport, Windows audio, driver, or durable SQLite behavior is claimed yet.
 
 ### 2026-09-05 — WSL inventory
 
