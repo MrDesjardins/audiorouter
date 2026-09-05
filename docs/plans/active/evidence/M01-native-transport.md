@@ -18,8 +18,8 @@ current process ID and closed/disconnected it at completion.
 
 ## Validation
 
-- `cargo test -p audiorouter-transport`: 8 passed, including preservation of all batch responses.
-- `cargo test --workspace`: all workspace tests passed (43 unit tests; doc tests passed).
+- `cargo test -p audiorouter-transport`: 9 passed, including oversized-frame rejection before dispatch.
+- `cargo test --workspace`: all workspace tests passed (44 unit tests; doc tests passed).
 - `cargo fmt --all` and `git diff --check`: passed.
 
 ## Security and audio boundary
@@ -45,6 +45,8 @@ without a response or client block. Batch response frames are combined in order
 and can be read individually by the multi-frame client helper.
 Mixed batches preserve successful reads and authorization denials in request
 order; native coverage verifies the second response remains `-32001`.
+Oversized frames are rejected by the native server before the control-plane
+handler runs, and the temporary pipe is closed cleanly.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

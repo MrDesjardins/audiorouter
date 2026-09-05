@@ -108,6 +108,8 @@ This establishes that Codex can continue documentation and portable implementati
 
 - Added mixed-batch authorization coverage: permitted discovery and denied `graph.commit` responses remain ordered through control dispatch and the native pipe, with the denial produced before mutation.
 - Checks: `cargo test --workspace` — all 43 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+- Added native malformed-frame coverage: an oversized length header is rejected before control dispatch, and the temporary authenticated pipe closes without leaving a server handle behind.
+- Checks: `cargo test --workspace` — all 44 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
 ## Decisions and assumptions
 

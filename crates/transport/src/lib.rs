@@ -671,6 +671,32 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn native_pipe_rejects_oversized_frame_before_dispatch() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-oversized-test-{}",
+            std::process::id()
+        );
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_control_connections(
+                &server_name,
+                1,
+                ControlPlane::new("native-oversized-test"),
+                ClientGrant::read_only(),
+            )
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let request = ((audiorouter_protocol::MAX_FRAME_BYTES as u32) + 1)
+            .to_le_bytes()
+            .to_vec();
+        let result = round_trip(&name, &request);
+        assert!(result.is_err());
+        let server_result = server.join().unwrap();
+        assert!(matches!(server_result, Err(TransportError::Protocol(_))));
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn native_pipe_exposes_connected_client_process_id() {
         let name = format!(r"\\.\pipe\audiorouter-peer-test-{}", std::process::id());
         let request =
