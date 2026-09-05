@@ -28,4 +28,6 @@ To isolate the capture failure, the probe was rerun with direction-specific init
 
 This test changed no persistent configuration and required no restoration. It does not prove audible rendering, capture data flow, loopback latency, process-tree capture, or physical tone/impulse behavior.
 
+The probe also tested endpoint loopback initialization on render endpoints using a fresh client and `LOOPBACK|AUTOCONVERTPCM|NOPERSIST`. Twenty of 21 render endpoints accepted the loopback client and were reset/released without starting or reading it. The same one endpoint that rejected normal shared initialization returned `AUDCLNT_E_EXCLUSIVE_MODE_ONLY` for loopback. This is positive endpoint-loopback initialization evidence, not loopback audio or latency evidence.
+
 It still does not establish shared-mode capture/render behavior, loopback latency, process-tree capture, or physical tone/impulse behavior.

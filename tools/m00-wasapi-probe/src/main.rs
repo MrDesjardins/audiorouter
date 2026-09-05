@@ -6,15 +6,18 @@
 //! process-loopback probes remain separate follow-up work.
 
 use windows::core::Result;
+use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::Media::Audio::{
     eAll, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-    AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE, IAudioClient, IMMDeviceEnumerator,
-    MMDeviceEnumerator, WAVEFORMATEX,
+    AUDCLNT_STREAMFLAGS_LOOPBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE, IAudioClient,
+    IMMDeviceEnumerator, MMDeviceEnumerator, WAVEFORMATEX,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
     COINIT_MULTITHREADED,
 };
+use windows::Win32::System::Threading::CreateEventW;
+use windows::core::PCWSTR;
 
 fn main() -> Result<()> {
     unsafe {
@@ -52,45 +55,87 @@ unsafe fn enumerate() -> Result<()> {
         let support_44100_stereo = format_support(&client, 44_100, 2).0;
         let support_48000_mono = format_support(&client, 48_000, 1).0;
         let support_48000_stereo = format_support(&client, 48_000, 2).0;
+        CoTaskMemFree(Some(format.cast()));
+        // Use a fresh client for Initialize. Capability queries are intentionally
+        // isolated from stream lifecycle state on the client used for negotiation.
+        let stream_client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
+        let stream_format = stream_client.GetMixFormat()?;
         let stream_flags = if id_string.starts_with("{0.0.0.") {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
-            0
+            windows::Win32::Media::Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                | AUDCLNT_STREAMFLAGS_NOPERSIST
         };
         let buffer_duration = if id_string.starts_with("{0.0.0.") {
             0
         } else {
-            200_000
+            minimum_period
         };
-        let stream_result = client.Initialize(
+        let event_handle = if id_string.starts_with("{0.0.1.") {
+            Some(CreateEventW(None, false, false, PCWSTR::null())?)
+        } else {
+            None
+        };
+        let stream_result = stream_client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
             stream_flags,
             buffer_duration,
             0,
-            format,
+            stream_format,
             None,
         );
         let (initialize_hresult, start_hresult, buffer_frames, stream_latency_100ns) = match stream_result {
             Ok(()) => {
-                let buffer = client.GetBufferSize()?;
-                let latency = client.GetStreamLatency()?;
+                if let Some(event_handle) = event_handle {
+                    stream_client.SetEventHandle(event_handle)?;
+                }
+                let buffer = stream_client.GetBufferSize()?;
+                let latency = stream_client.GetStreamLatency()?;
                 let start_hresult = if id_string.starts_with("{0.0.0.") {
-                    let result = client.Start();
+                    let result = stream_client.Start();
                     if result.is_ok() {
-                        client.Stop()?;
+                        stream_client.Stop()?;
                     }
                     result.map(|()| 0).unwrap_or_else(|error| error.code().0)
                 } else {
                     0
                 };
-                client.Reset()?;
+                stream_client.Reset()?;
                 (0, start_hresult, Some(buffer), Some(latency))
             }
             Err(error) => (error.code().0, -1, None, None),
         };
-        CoTaskMemFree(Some(format.cast()));
+        if let Some(event_handle) = event_handle {
+            CloseHandle(event_handle)?;
+        }
+        let loopback_hresult = if id_string.starts_with("{0.0.0.") {
+            let loopback_client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
+            let loopback_format = loopback_client.GetMixFormat()?;
+            let result = loopback_client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_LOOPBACK
+                    | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+                    | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                0,
+                0,
+                loopback_format,
+                None,
+            );
+            let hresult = match result {
+                Ok(()) => {
+                    loopback_client.Reset()?;
+                    0
+                }
+                Err(error) => error.code().0,
+            };
+            CoTaskMemFree(Some(loopback_format.cast()));
+            hresult
+        } else {
+            -1
+        };
+        CoTaskMemFree(Some(stream_format.cast()));
         println!(
-            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} buffer_frames={} stream_latency_100ns={}",
+            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} buffer_frames={} stream_latency_100ns={}",
             state.0,
             id_string,
             format_tag,
