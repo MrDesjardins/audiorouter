@@ -12,6 +12,16 @@ pub enum FrameError {
     Json(String),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum MessageError {
+    InvalidJson(String),
+    InvalidRequest,
+    EmptyBatch,
+    BatchTooLarge { length: usize, maximum: usize },
+}
+
+pub const MAX_BATCH_REQUESTS: usize = 32;
+
 impl std::fmt::Display for FrameError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
@@ -61,6 +71,56 @@ pub struct JsonRpcRequest {
     pub method: String,
     #[serde(default)]
     pub params: Option<serde_json::Value>,
+}
+
+impl JsonRpcRequest {
+    pub fn is_notification(&self) -> bool {
+        self.id.is_none()
+    }
+
+    pub fn validate(&self) -> Result<(), MessageError> {
+        if self.jsonrpc != "2.0" || self.method.is_empty() {
+            Err(MessageError::InvalidRequest)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RpcMessage {
+    Single(JsonRpcRequest),
+    Batch(Vec<JsonRpcRequest>),
+}
+
+pub fn parse_rpc_message(payload: &[u8]) -> Result<RpcMessage, MessageError> {
+    let value: serde_json::Value = serde_json::from_slice(payload)
+        .map_err(|error| MessageError::InvalidJson(error.to_string()))?;
+    if value.is_array() {
+        let values = value.as_array().unwrap();
+        if values.is_empty() {
+            return Err(MessageError::EmptyBatch);
+        }
+        if values.len() > MAX_BATCH_REQUESTS {
+            return Err(MessageError::BatchTooLarge {
+                length: values.len(),
+                maximum: MAX_BATCH_REQUESTS,
+            });
+        }
+        let mut requests = Vec::with_capacity(values.len());
+        for value in values {
+            let request: JsonRpcRequest =
+                serde_json::from_value(value.clone()).map_err(|_| MessageError::InvalidRequest)?;
+            request.validate()?;
+            requests.push(request);
+        }
+        Ok(RpcMessage::Batch(requests))
+    } else {
+        let request: JsonRpcRequest =
+            serde_json::from_value(value).map_err(|_| MessageError::InvalidRequest)?;
+        request.validate()?;
+        Ok(RpcMessage::Single(request))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -151,5 +211,42 @@ mod tests {
         assert!(success.error.is_none());
         let failure = JsonRpcResponse::failure(None, -32600, "invalid request");
         assert_eq!(failure.error.unwrap().code, -32600);
+    }
+
+    #[test]
+    fn parses_batches_with_the_protocol_limit() {
+        let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "status.get" });
+        let batch = serde_json::to_vec(&vec![request.clone(), request]).unwrap();
+        assert!(
+            matches!(parse_rpc_message(&batch), Ok(RpcMessage::Batch(requests)) if requests.len() == 2)
+        );
+        assert_eq!(parse_rpc_message(b"[]"), Err(MessageError::EmptyBatch));
+        let too_many = vec![
+            serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "status.get" });
+            MAX_BATCH_REQUESTS + 1
+        ];
+        let payload = serde_json::to_vec(&too_many).unwrap();
+        assert_eq!(
+            parse_rpc_message(&payload),
+            Err(MessageError::BatchTooLarge {
+                length: 33,
+                maximum: 32
+            })
+        );
+    }
+
+    #[test]
+    fn distinguishes_notifications_and_rejects_invalid_requests() {
+        let notification =
+            parse_rpc_message(br#"{"jsonrpc":"2.0","method":"status.get"}"#).unwrap();
+        assert!(matches!(notification, RpcMessage::Single(request) if request.is_notification()));
+        assert_eq!(
+            parse_rpc_message(br#"{"jsonrpc":"1.0","id":1,"method":"status.get"}"#),
+            Err(MessageError::InvalidRequest)
+        );
+        assert_eq!(
+            parse_rpc_message(br#"{"jsonrpc":"2.0","id":1,"method":""}"#),
+            Err(MessageError::InvalidRequest)
+        );
     }
 }

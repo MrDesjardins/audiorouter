@@ -46,6 +46,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 2 control tests and 11 domain tests passed; standalone WASAPI `cargo check` and `git diff --check` passed. No transport, Windows audio, driver, or durable SQLite behavior is claimed yet.
 - Added `crates/protocol` with 4-byte little-endian length framing, a 4 MiB maximum frame, malformed-frame errors, and JSON-RPC request/response contracts. This is transport-independent framing; named-pipe ACLs remain Windows-only work.
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-protocol` — 3 tests passed; `git diff --check` passed.
+- Extended the protocol boundary with JSON-RPC message parsing: version/method validation, explicit notification detection, non-empty batches, and the 32-request maximum required by API-01/API-10/AUTO-02.
+- Checks: `cargo fmt --all`, `cargo test -p audiorouter-protocol` — 5 tests passed; `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 
