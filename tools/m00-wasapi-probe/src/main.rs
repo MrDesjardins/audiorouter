@@ -57,7 +57,11 @@ unsafe fn enumerate() -> Result<()> {
         } else {
             0
         };
-        let buffer_duration = 0;
+        let buffer_duration = if id_string.starts_with("{0.0.0.") {
+            0
+        } else {
+            200_000
+        };
         let stream_result = client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
             stream_flags,
