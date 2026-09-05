@@ -1,13 +1,17 @@
 //! SQLite persistence boundary for M01.
 
-use audiorouter_domain::{EntityId, Session};
+use audiorouter_domain::{validate_session, EntityId, Session};
 use rusqlite::{params, Connection, OptionalExtension};
 
 #[derive(Debug)]
 pub enum StorageError {
     Sql(rusqlite::Error),
     Json(serde_json::Error),
+    InvalidSession(String),
+    DocumentTooLarge { bytes: usize, maximum: usize },
 }
+
+pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
 
 impl From<rusqlite::Error> for StorageError {
     fn from(error: rusqlite::Error) -> Self {
@@ -115,6 +119,35 @@ impl Storage {
             .map(|value| serde_json::from_str(&value))
             .transpose()
             .map_err(Into::into)
+    }
+
+    pub fn export_session(&self, id: &EntityId) -> Result<Option<String>, StorageError> {
+        self.load_session(id)?
+            .map(|session| serde_json::to_string(&session).map_err(StorageError::Json))
+            .transpose()
+    }
+
+    /// Validate and persist an imported session document. Validation happens
+    /// before `save_session`, so rejected documents cannot create a row/history.
+    pub fn import_session(&self, document: &str) -> Result<Session, StorageError> {
+        if document.len() > MAX_SESSION_DOCUMENT_BYTES {
+            return Err(StorageError::DocumentTooLarge {
+                bytes: document.len(),
+                maximum: MAX_SESSION_DOCUMENT_BYTES,
+            });
+        }
+        let session: Session = serde_json::from_str(document)?;
+        validate_session(&session).map_err(|errors| {
+            StorageError::InvalidSession(
+                errors
+                    .into_iter()
+                    .map(|error| format!("{error:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
+        })?;
+        self.save_session(&session)?;
+        Ok(session)
     }
 
     pub fn journal_result(&self, key: &str) -> Result<Option<String>, StorageError> {
@@ -233,5 +266,27 @@ mod tests {
         assert_eq!(history[0], newer);
         assert_eq!(history[1], original);
         assert_eq!(storage.load_history(&original.id, 1).unwrap(), vec![newer]);
+    }
+
+    #[test]
+    fn import_validates_before_writing_and_export_round_trips() {
+        let storage = Storage::open_memory().unwrap();
+        let original = session();
+        let document = serde_json::to_string(&original).unwrap();
+        assert_eq!(storage.import_session(&document).unwrap(), original);
+        assert_eq!(
+            storage.export_session(&original.id).unwrap(),
+            Some(document.clone())
+        );
+
+        let invalid = document.replace("\"nodes\":[", "\"nodes\":[{");
+        assert!(matches!(
+            storage.import_session(&invalid),
+            Err(StorageError::Json(_)) | Err(StorageError::InvalidSession(_))
+        ));
+        assert_eq!(
+            storage.load_session(&EntityId::new("missing")).unwrap(),
+            None
+        );
     }
 }
