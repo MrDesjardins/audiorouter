@@ -37,3 +37,9 @@ This test changed no persistent configuration and required no restoration. It do
 The probe also tested endpoint loopback initialization on render endpoints using a fresh client and `LOOPBACK|AUTOCONVERTPCM|NOPERSIST`. Twenty of 21 render endpoints accepted the loopback client and were reset/released without starting or reading it. The same one endpoint that rejected normal shared initialization returned `AUDCLNT_E_EXCLUSIVE_MODE_ONLY` for loopback. This is positive endpoint-loopback initialization evidence, not loopback audio or latency evidence.
 
 It still does not establish shared-mode capture/render behavior, loopback latency, process-tree capture, or physical tone/impulse behavior.
+
+## Process-loopback and driver follow-up
+
+The next capture probe cannot reuse endpoint activation. Microsoft’s application-loopback sample activates `IAudioClient` asynchronously through `ActivateAudioInterfaceAsync`, using `VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK` and a blob containing `AUDIOCLIENT_ACTIVATION_PARAMS`; the process-tree mode supports either include or exclude for one target process tree and requires Windows 10 build 20348 or later. The host build 26200 meets the documented OS minimum, but this probe has not yet been implemented or run. See the [official sample](https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/ApplicationLoopback) and [`ActivateAudioInterfaceAsync`](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nf-mmdeviceapi-activateaudiointerfaceasync).
+
+The driver gate remains unresolved. Microsoft describes SYSVAD as a source sample for a proprietary WDM audio device, not a finished AudioRouter bus driver or a production-signed redistributable. The host has Windows SDK tools but no discovered Visual Studio/WDK installation, so no driver build or signing claim is made. See [Microsoft sample audio drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/sample-audio-drivers).
