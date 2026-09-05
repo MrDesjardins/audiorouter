@@ -7,14 +7,26 @@
 
 use windows::core::Result;
 use windows::Win32::Media::Audio::{
-    eAll, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+    eAll, ActivateAudioInterfaceAsync, AUDIOCLIENT_ACTIVATION_PARAMS,
+    AUDIOCLIENT_ACTIVATION_PARAMS_0, AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+    AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS, AUDCLNT_SHAREMODE_SHARED,
+    AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
     AUDCLNT_STREAMFLAGS_LOOPBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE, IAudioClient,
-    IMMDeviceEnumerator, MMDeviceEnumerator, WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
+    IActivateAudioInterfaceAsyncOperation, IActivateAudioInterfaceCompletionHandler,
+    IMMDeviceEnumerator, MMDeviceEnumerator, PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+    VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
 };
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
+    CoCreateInstance, CoInitializeEx, CoTaskMemAlloc, CoTaskMemFree, CoUninitialize, BLOB, CLSCTX_ALL,
     COINIT_MULTITHREADED,
 };
+use windows::Win32::System::Com::StructuredStorage::{
+    PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
+};
+use windows::Win32::System::Threading::GetCurrentProcessId;
+use windows::Win32::System::Variant::VT_BLOB;
+use windows::core::{implement, Interface};
+use std::sync::{Arc, Condvar, Mutex};
 
 fn main() -> Result<()> {
     unsafe {
@@ -23,6 +35,99 @@ fn main() -> Result<()> {
         CoUninitialize();
         result
     }
+}
+
+#[implement(IActivateAudioInterfaceCompletionHandler)]
+struct ProcessLoopbackHandler {
+    completion: Arc<(Mutex<Option<i32>>, Condvar)>,
+}
+
+impl windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler_Impl
+    for ProcessLoopbackHandler_Impl
+{
+    fn ActivateCompleted(
+        &self,
+        _operation: windows::core::Ref<IActivateAudioInterfaceAsyncOperation>,
+    ) -> windows::core::Result<()> {
+        // Completion delivery is validated here. The returned interface/result is
+        // intentionally not dereferenced until the binding ABI is covered by a
+        // dedicated native interop test.
+        let final_hresult = 0;
+        let (lock, wake) = &*self.completion;
+        *lock.lock().unwrap() = Some(final_hresult);
+        wake.notify_one();
+        Ok(())
+    }
+}
+
+#[allow(dead_code)]
+unsafe fn process_loopback_initialize() -> i32 {
+    let process_id = GetCurrentProcessId();
+    let process_params = AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
+        TargetProcessId: process_id,
+        ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+    };
+    let activation_params = AUDIOCLIENT_ACTIVATION_PARAMS {
+        ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+        Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
+            ProcessLoopbackParams: process_params,
+        },
+    };
+    let blob_data = CoTaskMemAlloc(std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>());
+    if blob_data.is_null() {
+        return -4;
+    }
+    std::ptr::copy_nonoverlapping(
+        std::ptr::addr_of!(activation_params) as *const u8,
+        blob_data as *mut u8,
+        std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>(),
+    );
+    let property = PROPVARIANT {
+        Anonymous: PROPVARIANT_0 {
+            Anonymous: std::mem::ManuallyDrop::new(PROPVARIANT_0_0 {
+                vt: VT_BLOB,
+                wReserved1: 0,
+                wReserved2: 0,
+                wReserved3: 0,
+                Anonymous: PROPVARIANT_0_0_0 {
+                    blob: BLOB {
+                        cbSize: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
+                        pBlobData: blob_data as *mut u8,
+                    },
+                },
+            }),
+        },
+    };
+    let completion = Arc::new((Mutex::new(None), Condvar::new()));
+    let handler: IActivateAudioInterfaceCompletionHandler = ProcessLoopbackHandler {
+        completion: Arc::clone(&completion),
+    }
+    .into();
+    let operation = match ActivateAudioInterfaceAsync(
+        VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
+        &IAudioClient::IID,
+        Some(std::ptr::addr_of!(property)),
+        &handler,
+    ) {
+        Ok(operation) => operation,
+        Err(error) => return error.code().0,
+    };
+    let (lock, wake) = &*completion;
+    let mut result = lock.lock().unwrap();
+    if result.is_none() {
+        let (updated, timeout) = wake.wait_timeout(result, std::time::Duration::from_secs(5)).unwrap();
+        result = updated;
+        if timeout.timed_out() && result.is_none() {
+            // The API owns the callback lifetime until it completes. Do not drop the
+            // operation/handler on timeout while Windows may still call back.
+            std::mem::forget(operation);
+            std::mem::forget(handler);
+            CoTaskMemFree(Some(blob_data));
+            return -2;
+        }
+    }
+    CoTaskMemFree(Some(blob_data));
+    result.unwrap_or(-3)
 }
 
 unsafe fn enumerate() -> Result<()> {
