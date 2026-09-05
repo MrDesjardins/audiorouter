@@ -58,6 +58,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 7 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 - Connected protocol framing to control dispatch with `decode_rpc_frame` and `dispatch_frame`; framed JSON-RPC requests now produce framed responses through one portable end-to-end path.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 8 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Added scoped `ClientGrant` authorization to `crates/control`, using the same method permission metadata exposed by discovery. Read-only access succeeds; graph/session mutations are denied before dispatch with stable permission errors.
+- Checks: `cargo fmt --all`, `cargo test --workspace` — 10 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 

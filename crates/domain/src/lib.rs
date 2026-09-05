@@ -93,7 +93,7 @@ pub fn node_registry() -> [NodeTypeSpec; 8] {
     })
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionScope {
     Read,

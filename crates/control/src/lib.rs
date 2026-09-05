@@ -5,8 +5,8 @@
 //! authority and that unsupported audio capabilities are discoverable.
 
 use audiorouter_domain::{
-    node_registry, ApiMethodSpec, EntityId, FakeRuntime, GraphStore, RuntimeError, RuntimeState,
-    Session, API_METHODS,
+    node_registry, ApiMethodSpec, EntityId, FakeRuntime, GraphStore, PermissionScope, RuntimeError,
+    RuntimeState, Session, API_METHODS,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -39,6 +39,27 @@ pub enum ControlError {
     Store(audiorouter_domain::StoreError),
     Json(String),
     Storage(String),
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ClientGrant {
+    scopes: std::collections::HashSet<PermissionScope>,
+}
+
+impl ClientGrant {
+    pub fn read_only() -> Self {
+        Self::with_scopes([PermissionScope::Read])
+    }
+
+    pub fn with_scopes(scopes: impl IntoIterator<Item = PermissionScope>) -> Self {
+        Self {
+            scopes: scopes.into_iter().collect(),
+        }
+    }
+
+    fn allows(&self, scope: PermissionScope) -> bool {
+        self.scopes.contains(&scope)
+    }
 }
 
 impl From<audiorouter_domain::StoreError> for ControlError {
@@ -207,6 +228,25 @@ impl ControlPlane {
             }
             Err(error) => JsonRpcResponse::failure(id, -32000, format!("{error:?}")),
         }
+    }
+
+    pub fn dispatch_authorized(
+        &mut self,
+        request: JsonRpcRequest,
+        grant: &ClientGrant,
+    ) -> JsonRpcResponse {
+        let id = request.id.clone();
+        let Some(spec) = API_METHODS.iter().find(|spec| spec.name == request.method) else {
+            return self.dispatch(request);
+        };
+        if !grant.allows(spec.permission) {
+            return JsonRpcResponse::failure(
+                id,
+                -32001,
+                format!("permission denied: {:?}", spec.permission),
+            );
+        }
+        self.dispatch(request)
     }
 
     pub fn dispatch_message(&mut self, message: RpcMessage) -> Vec<JsonRpcResponse> {
@@ -486,6 +526,32 @@ mod tests {
         let responses = plane.dispatch_frame(&frame).unwrap();
         let response: JsonRpcResponse = audiorouter_protocol::decode_frame(&responses[0]).unwrap();
         assert_eq!(response.id, Some(json!(9)));
+        assert!(response.result.unwrap()["methods"].is_array());
+    }
+
+    #[test]
+    fn scoped_authorization_denies_mutation_before_dispatch() {
+        let mut plane = ControlPlane::default();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "graph.commit".into(),
+            params: None,
+        };
+        let response = plane.dispatch_authorized(request, &ClientGrant::read_only());
+        assert_eq!(response.error.unwrap().code, -32001);
+    }
+
+    #[test]
+    fn scoped_authorization_allows_discovery_read() {
+        let mut plane = ControlPlane::default();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(5)),
+            method: "system.describe".into(),
+            params: None,
+        };
+        let response = plane.dispatch_authorized(request, &ClientGrant::read_only());
         assert!(response.result.unwrap()["methods"].is_array());
     }
 }
