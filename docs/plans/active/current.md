@@ -12,6 +12,14 @@ M00 feasibility work has now started with a read-only environment inventory from
 
 ## M00 execution log
 
+### M00 working scope
+
+- Objective: establish Windows feasibility evidence and driver/toolchain decisions before M01.
+- Requirement IDs: CAP-01–08, ARCH-05/07/08, VDEV-02/09, NFR-01–03, and ENG-03/04.
+- Completed in this pass: native machine/OS/toolchain/device inventory and evidence record.
+- Remaining checklist: endpoint format/period enumeration; shared-mode capture/render; physical loopback latency; process-tree include/exclude and restart/PID reuse; controlled tone harness; managed-driver integration/signing evaluation; DEC-03/06/07 decision update.
+- Rollback: documentation-only changes can be reverted; no system state was changed.
+
 ### 2026-09-05 — WSL inventory
 
 - Environment: WSL2 Linux kernel `6.6.87.2-microsoft-standard-WSL2`, `x86_64`.
@@ -44,9 +52,20 @@ The first validator also matched individual IDs in the traceability table as def
 
 Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React Flow sources were consulted for relevant product/platform assumptions and are linked in the specification source register. Evolving MCP SDK/client details are explicitly deferred to implementation-time verification.
 
+### 2026-09-05 — Native Windows inventory
+
+- Evidence: [M00 Windows inventory](evidence/M00-windows-inventory-2026-09-05.md).
+- Host: Windows 11 Home x64, build `26200`, `PATRICK5080`, CyberPowerPC GamingPC, ~31.3 GiB reported memory.
+- Portable toolchain: Rust/Cargo `1.96.0`, Node `v22.22.3`, npm `10.9.8`.
+- Hardware: Focusrite USB Audio, USB Digital Audio, PD200X Podcast Microphone, NVIDIA/Realtek audio; ATEM/Blackmagic devices are present but report `Unknown`.
+- Existing virtual devices: VB-Audio Voicemeeter, VB-Audio Virtual Cable, and SteelSeries Sonar. No AudioRouter-managed driver is installed.
+- Windows SDK `10.0.26100.0` is installed with `midl.exe`, `rc.exe`, and `signtool.exe` available by absolute path, but `cl.exe`, MSBuild, and CMake are not on PATH; Visual Studio and WDK remain unverified.
+- WMI/PnP access was denied in the restricted shell and succeeded only with approved elevated read-only execution. No defaults, drivers, streams, or user files were changed.
+- Evidence status: native machine inventory is now available. Capture/render, process-loopback, endpoint format/period, latency, driver bridge, and signing gates remain `not run` or `blocked`.
+
 ## Next authorized implementation task
 
-Continue [M00](../../milestones/M00-feasibility.md) on native Windows 11 x64: collect the exact OS/build, compiler/SDK/WDK, endpoint and hardware manifest; run the capture/render and process-loopback probes; and evaluate the managed-driver path. Keep the WSL inventory as supporting context only. Do not install a driver, change Windows defaults, or claim a feasibility gate until the native evidence is attached.
+Continue [M00](../../milestones/M00-feasibility.md) on this native Windows 11 x64 host: establish the compiler/SDK/WDK inventory; add and run a minimal Windows WASAPI endpoint/format/period and process-loopback probe; identify an authorized physical loopback setup; and evaluate the managed-driver path. Keep the WSL inventory as supporting context only. Do not install a driver, change Windows defaults, or claim a feasibility gate until the native evidence is attached.
 
 ## M00 preparation checklist
 
