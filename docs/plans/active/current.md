@@ -104,6 +104,11 @@ This establishes that Codex can continue documentation and portable implementati
 - Fixed batch response loss in the control-pipe adapter: all framed responses are now concatenated in order, and `round_trip_many` reads the expected response count. A native two-request batch test verifies both IDs survive the pipe.
 - Checks: `cargo test --workspace` — all 42 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
+### 2026-09-05 — Mixed-batch authorization
+
+- Added mixed-batch authorization coverage: permitted discovery and denied `graph.commit` responses remain ordered through control dispatch and the native pipe, with the denial produced before mutation.
+- Checks: `cargo test --workspace` — all 43 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.

@@ -648,7 +648,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(20));
         let request = encode_frame(&serde_json::json!([
             {"jsonrpc":"2.0","id":21,"method":"system.describe"},
-            {"jsonrpc":"2.0","id":22,"method":"status.get"}
+            {"jsonrpc":"2.0","id":22,"method":"graph.commit"}
         ]))
         .unwrap();
         let responses = round_trip_many(&name, &request, 2).unwrap();
@@ -660,6 +660,11 @@ mod tests {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&responses[1][4..]).unwrap()["id"],
             22
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&responses[1][4..]).unwrap()["error"]
+                ["code"],
+            -32001
         );
         server.join().unwrap().unwrap();
     }

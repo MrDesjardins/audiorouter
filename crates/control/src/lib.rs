@@ -650,6 +650,31 @@ mod tests {
     }
 
     #[test]
+    fn authorized_batch_preserves_allowed_and_denied_responses_in_order() {
+        let mut plane = ControlPlane::default();
+        let message = RpcMessage::Batch(vec![
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "system.describe".into(),
+                params: None,
+            },
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "graph.commit".into(),
+                params: None,
+            },
+        ]);
+        let responses = plane.dispatch_message_authorized(message, &ClientGrant::read_only());
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0].id, Some(json!(1)));
+        assert!(responses[0].result.is_some());
+        assert_eq!(responses[1].id, Some(json!(2)));
+        assert_eq!(responses[1].error.as_ref().unwrap().code, -32001);
+    }
+
+    #[test]
     fn read_only_notifications_produce_no_response() {
         let mut plane = ControlPlane::default();
         let notification = JsonRpcRequest {
