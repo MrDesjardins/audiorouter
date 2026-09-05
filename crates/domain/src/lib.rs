@@ -371,6 +371,122 @@ pub struct FakeRuntime {
     prepared_revision: Option<u64>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StoreError {
+    SessionNotFound,
+    PlanNotFound,
+    InvalidGraph(Vec<ValidationError>),
+    RevisionConflict { expected: u64, actual: u64 },
+    EmptyIdempotencyKey,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CommitResult {
+    pub session_id: EntityId,
+    pub revision: u64,
+    pub idempotent_replay: bool,
+}
+
+#[derive(Clone, Debug)]
+struct GraphPlan {
+    session_id: EntityId,
+    base_revision: u64,
+    candidate: Session,
+}
+
+/// In-memory revision store used to prove M01 transaction semantics before
+/// SQLite and the named-pipe control process are introduced.
+#[derive(Debug, Default)]
+pub struct GraphStore {
+    sessions: HashMap<EntityId, Session>,
+    plans: HashMap<EntityId, GraphPlan>,
+    committed_keys: HashMap<String, CommitResult>,
+    next_plan: u64,
+}
+
+impl GraphStore {
+    pub fn insert_session(&mut self, session: Session) -> Result<(), StoreError> {
+        validate_session(&session).map_err(StoreError::InvalidGraph)?;
+        self.sessions.insert(session.id.clone(), session);
+        Ok(())
+    }
+
+    pub fn session(&self, id: &EntityId) -> Option<&Session> {
+        self.sessions.get(id)
+    }
+
+    pub fn plan_graph(
+        &mut self,
+        session_id: &EntityId,
+        base_revision: u64,
+        candidate: Session,
+    ) -> Result<EntityId, StoreError> {
+        let current = self
+            .sessions
+            .get(session_id)
+            .ok_or(StoreError::SessionNotFound)?;
+        if current.revision != base_revision {
+            return Err(StoreError::RevisionConflict {
+                expected: base_revision,
+                actual: current.revision,
+            });
+        }
+        if candidate.id != *session_id {
+            return Err(StoreError::SessionNotFound);
+        }
+        validate_session(&candidate).map_err(StoreError::InvalidGraph)?;
+        self.next_plan += 1;
+        let plan_id = EntityId::new(format!("plan-{}", self.next_plan));
+        self.plans.insert(
+            plan_id.clone(),
+            GraphPlan {
+                session_id: session_id.clone(),
+                base_revision,
+                candidate,
+            },
+        );
+        Ok(plan_id)
+    }
+
+    pub fn commit_graph(
+        &mut self,
+        plan_id: &EntityId,
+        base_revision: u64,
+        idempotency_key: &str,
+    ) -> Result<CommitResult, StoreError> {
+        if idempotency_key.is_empty() {
+            return Err(StoreError::EmptyIdempotencyKey);
+        }
+        if let Some(result) = self.committed_keys.get(idempotency_key) {
+            let mut replay = result.clone();
+            replay.idempotent_replay = true;
+            return Ok(replay);
+        }
+        let plan = self.plans.remove(plan_id).ok_or(StoreError::PlanNotFound)?;
+        let current = self
+            .sessions
+            .get(&plan.session_id)
+            .ok_or(StoreError::SessionNotFound)?;
+        if plan.base_revision != base_revision || current.revision != base_revision {
+            return Err(StoreError::RevisionConflict {
+                expected: base_revision,
+                actual: current.revision,
+            });
+        }
+        let mut committed = plan.candidate;
+        committed.revision = base_revision + 1;
+        let result = CommitResult {
+            session_id: plan.session_id,
+            revision: committed.revision,
+            idempotent_replay: false,
+        };
+        self.sessions.insert(committed.id.clone(), committed);
+        self.committed_keys
+            .insert(idempotency_key.into(), result.clone());
+        Ok(result)
+    }
+}
+
 impl Default for RuntimeState {
     fn default() -> Self {
         Self::Stopped
@@ -569,5 +685,42 @@ mod tests {
             .find(|spec| spec.kind == NodeKind::Gain)
             .unwrap();
         assert_eq!(gain.availability, CapabilityAvailability::Available);
+    }
+
+    #[test]
+    fn graph_store_rejects_stale_commit_and_replays_idempotently() {
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        let mut store = GraphStore::default();
+        store.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "updated".into();
+        let plan = store.plan_graph(&original.id, 0, candidate).unwrap();
+        let committed = store.commit_graph(&plan, 0, "operation-1").unwrap();
+        assert_eq!(committed.revision, 1);
+        assert!(!committed.idempotent_replay);
+        assert_eq!(
+            store.commit_graph(&plan, 0, "operation-1"),
+            Ok(CommitResult {
+                session_id: original.id.clone(),
+                revision: 1,
+                idempotent_replay: true
+            })
+        );
+        let mut second = store.session(&original.id).unwrap().clone();
+        second.name = "second".into();
+        let second_plan = store.plan_graph(&original.id, 1, second).unwrap();
+        assert_eq!(
+            store.commit_graph(&second_plan, 0, "operation-2"),
+            Err(StoreError::RevisionConflict {
+                expected: 0,
+                actual: 1
+            })
+        );
     }
 }

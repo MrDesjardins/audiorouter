@@ -36,6 +36,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Evidence boundary: these are portable domain tests only. They do not validate WASAPI, driver, process-loopback, real-time timing, or physical audio.
 - Added the M01 node registry with stable type names/versions, realtime cost classes, and explicit availability. Graph-safe nodes are marked available; physical/application/loopback nodes report `requires M02 Windows audio adapters` rather than pretending to work. The root workspace explicitly excludes the standalone Windows probe so its independent lockfile remains valid.
 - Checks: `cargo fmt --all -- --check`, `cargo test -p audiorouter-domain` — 7 tests passed; `cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml` passed; `git diff --check` passed.
+- Added an in-memory `GraphStore` transaction foundation: complete-candidate validation, base-revision checks, plan IDs, atomic revision increment, stale-commit rejection, and idempotency-key replay. This is a portable M01 proof layer; SQLite, named-pipe authorization, and JSON-RPC remain subsequent slices.
+- Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 8 tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 
