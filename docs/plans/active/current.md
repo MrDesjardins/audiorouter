@@ -71,6 +71,13 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 - Consequence: the C++/driver probe cannot be built on this host until an authorized Visual Studio/WDK environment is available. Portable Rust work can continue, but this does not satisfy the native audio probe or driver gate.
 - Evidence updated in [M00 Windows inventory](evidence/M00-windows-inventory-2026-09-05.md).
 
+### 2026-09-05 — WASAPI probe scaffold
+
+- Added a read-only Rust endpoint identity/state probe at [`tools/m00-wasapi-probe`](../../../tools/m00-wasapi-probe) with evidence notes in [M00 WASAPI probe](evidence/M00-wasapi-probe.md).
+- The probe intentionally does not open streams, change defaults, install drivers, or write outside stdout.
+- `cargo check`, `cargo build`, and `cargo run` pass; the probe reported 34 active endpoints, all with active state and endpoint IDs.
+- This is identity/state evidence only. Formats, periods, shared-mode capture/render, loopback latency, process capture, and physical tone/impulse behavior remain unmeasured.
+
 ## Next authorized implementation task
 
 Continue [M00](../../milestones/M00-feasibility.md) using an authorized Windows build environment: add and run a minimal Windows WASAPI endpoint/format/period and process-loopback probe; identify an authorized physical loopback setup; and evaluate the managed-driver path. This host's SDK-only state is insufficient for the C++/driver probe. Keep the WSL inventory as supporting context only. Do not install a driver, change Windows defaults, or claim a feasibility gate until the native evidence is attached.
