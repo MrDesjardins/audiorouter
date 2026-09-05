@@ -7,6 +7,7 @@
 use audiorouter_domain::{
     node_registry, ApiMethodSpec, EntityId, GraphStore, Session, API_METHODS,
 };
+use audiorouter_protocol::{JsonRpcRequest, JsonRpcResponse, RpcMessage};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -103,6 +104,102 @@ impl ControlPlane {
             .commit_graph(plan_id, base_revision, idempotency_key)?;
         serde_json::to_value(result).map_err(|error| ControlError::Json(error.to_string()))
     }
+
+    pub fn dispatch(&mut self, request: JsonRpcRequest) -> JsonRpcResponse {
+        let id = request.id.clone();
+        if request.validate().is_err() {
+            return JsonRpcResponse::failure(id, -32600, "invalid request");
+        }
+        let mutating = matches!(
+            request.method.as_str(),
+            "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+        );
+        if request.is_notification() && mutating {
+            return JsonRpcResponse::failure(
+                None,
+                -32600,
+                "mutating notifications are not supported",
+            );
+        }
+        let result = match request.method.as_str() {
+            "system.describe" => Ok(self.describe()),
+            "status.get" => Ok(
+                json!({ "build": self.build, "audio": "unavailable", "reason": "M02 Windows audio adapters not implemented" }),
+            ),
+            "devices.list" | "apps.list" => Ok(json!([])),
+            "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
+            "graph.plan" => self.dispatch_plan(request.params),
+            "graph.commit" => self.dispatch_commit(request.params),
+            _ => Err(ControlError::InvalidRequest("method not found".into())),
+        };
+        match result {
+            Ok(value) => JsonRpcResponse::success(id, value),
+            Err(ControlError::InvalidRequest(message)) if message == "method not found" => {
+                JsonRpcResponse::failure(id, -32601, message)
+            }
+            Err(ControlError::InvalidRequest(message)) => {
+                JsonRpcResponse::failure(id, -32602, message)
+            }
+            Err(error) => JsonRpcResponse::failure(id, -32000, format!("{error:?}")),
+        }
+    }
+
+    pub fn dispatch_message(&mut self, message: RpcMessage) -> Vec<JsonRpcResponse> {
+        match message {
+            RpcMessage::Single(request) => vec![self.dispatch(request)],
+            RpcMessage::Batch(requests) => requests
+                .into_iter()
+                .map(|request| self.dispatch(request))
+                .collect(),
+        }
+    }
+
+    fn dispatch_plan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params
+            .ok_or_else(|| ControlError::InvalidRequest("graph.plan params are required".into()))?;
+        let session_id: EntityId = serde_json::from_value(
+            params
+                .get("sessionId")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
+        )
+        .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let base_revision = params
+            .get("baseRevision")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| ControlError::InvalidRequest("baseRevision is required".into()))?;
+        let candidate: Session = serde_json::from_value(
+            params
+                .get("candidate")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("candidate is required".into()))?,
+        )
+        .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        let plan_id = self.plan_graph(&session_id, base_revision, candidate)?;
+        Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 30000 }))
+    }
+
+    fn dispatch_commit(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("graph.commit params are required".into())
+        })?;
+        let plan_id: EntityId = serde_json::from_value(
+            params
+                .get("planId")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("planId is required".into()))?,
+        )
+        .map_err(|_| ControlError::InvalidRequest("invalid planId".into()))?;
+        let base_revision = params
+            .get("baseRevision")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| ControlError::InvalidRequest("baseRevision is required".into()))?;
+        let key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        self.commit_graph(&plan_id, base_revision, key)
+    }
 }
 
 #[cfg(test)]
@@ -185,5 +282,54 @@ mod tests {
         let result = plane.commit_graph(&plan, 0, "op-1").unwrap();
         assert_eq!(result["revision"], 1);
         assert_eq!(plane.get_session(&original.id).unwrap().name, "changed");
+    }
+
+    #[test]
+    fn dispatch_rejects_mutating_notifications_and_unknown_methods() {
+        let mut plane = ControlPlane::default();
+        let notification = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: None,
+            method: "graph.commit".into(),
+            params: None,
+        };
+        assert_eq!(plane.dispatch(notification).error.unwrap().code, -32600);
+        let unknown = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "no.such.method".into(),
+            params: None,
+        };
+        assert_eq!(plane.dispatch(unknown).error.unwrap().code, -32601);
+    }
+
+    #[test]
+    fn dispatch_plan_and_commit_use_json_contracts() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "via-api".into();
+        let plan_request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "graph.plan".into(),
+            params: Some(
+                json!({ "sessionId": "session", "baseRevision": 0, "candidate": candidate }),
+            ),
+        };
+        let plan_id = plane.dispatch(plan_request).result.unwrap()["planId"].clone();
+        let commit_request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "graph.commit".into(),
+            params: Some(
+                json!({ "planId": plan_id, "baseRevision": 0, "idempotencyKey": "api-op" }),
+            ),
+        };
+        assert_eq!(
+            plane.dispatch(commit_request).result.unwrap()["revision"],
+            1
+        );
     }
 }

@@ -48,6 +48,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-protocol` — 3 tests passed; `git diff --check` passed.
 - Extended the protocol boundary with JSON-RPC message parsing: version/method validation, explicit notification detection, non-empty batches, and the 32-request maximum required by API-01/API-10/AUTO-02.
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-protocol` — 5 tests passed; `git diff --check` passed.
+- Extended `crates/control` with JSON-RPC dispatch over the shared authority: discovery/status/list reads, graph.plan/graph.commit parameter parsing, unknown-method and invalid-parameter errors, batch dispatch, and rejection of mutating notifications.
+- Checks: `cargo fmt --all`, `cargo test --workspace` — 4 control, 11 domain, and 5 protocol tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 
