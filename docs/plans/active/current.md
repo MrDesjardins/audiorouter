@@ -40,6 +40,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 8 tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 - Restored pinned `serde`/`serde_json` contract dependencies once the approved build path supplied the crates. Domain structs now serialize using camelCase API fields, and `tests/fixtures/valid-session.json` is a checked-in valid contract fixture.
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 10 tests passed including JSON round-trip and fixture validation; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Added authoritative method-discovery metadata for the initial API surface, including permission scopes and side-effect classes (`readOnly`, `planOnly`, `mutating`, `externalOperation`). This keeps CLI/MCP/UI adapters aligned with the backend contract.
+- Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 11 tests passed; `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 

@@ -95,6 +95,82 @@ pub fn node_registry() -> [NodeTypeSpec; 8] {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum PermissionScope {
+    Read,
+    GraphWrite,
+    SessionControl,
+    Capture,
+    Record,
+    DeviceAdministration,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SideEffectClass {
+    ReadOnly,
+    PlanOnly,
+    Mutating,
+    ExternalOperation,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiMethodSpec {
+    pub name: &'static str,
+    pub permission: PermissionScope,
+    pub side_effect: SideEffectClass,
+}
+
+pub const API_METHODS: [ApiMethodSpec; 9] = [
+    ApiMethodSpec {
+        name: "system.describe",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "status.get",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "devices.list",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "apps.list",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "nodes.types",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "graph.plan",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::PlanOnly,
+    },
+    ApiMethodSpec {
+        name: "graph.commit",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "session.start",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "session.stop",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+];
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PortDirection {
     Input,
     Output,
@@ -755,5 +831,25 @@ mod tests {
                 .unwrap();
         assert_eq!(fixture.id.as_str(), "session-fixture");
         assert!(validate_session(&fixture).is_ok());
+    }
+
+    #[test]
+    fn method_discovery_classifies_permissions_and_side_effects() {
+        let plan = API_METHODS
+            .iter()
+            .find(|method| method.name == "graph.plan")
+            .unwrap();
+        assert_eq!(plan.permission, PermissionScope::GraphWrite);
+        assert_eq!(plan.side_effect, SideEffectClass::PlanOnly);
+        let describe = API_METHODS
+            .iter()
+            .find(|method| method.name == "system.describe")
+            .unwrap();
+        assert_eq!(describe.side_effect, SideEffectClass::ReadOnly);
+        let start = API_METHODS
+            .iter()
+            .find(|method| method.name == "session.start")
+            .unwrap();
+        assert_eq!(start.side_effect, SideEffectClass::ExternalOperation);
     }
 }
