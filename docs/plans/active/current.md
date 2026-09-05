@@ -50,6 +50,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-protocol` — 5 tests passed; `git diff --check` passed.
 - Extended `crates/control` with JSON-RPC dispatch over the shared authority: discovery/status/list reads, graph.plan/graph.commit parameter parsing, unknown-method and invalid-parameter errors, batch dispatch, and rejection of mutating notifications.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 4 control, 11 domain, and 5 protocol tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Added `crates/storage` with SQLite schema migration, session document persistence, and an idempotent operation journal. The schema records migration version, session revision/document, operation key/result/revision, and timestamps. Tests use only an in-memory database.
+- Checks: `cargo fmt --all`, `cargo test -p audiorouter-storage` — 2 tests passed; no user database path was opened or modified.
 
 ### 2026-09-05 — WSL inventory
 
