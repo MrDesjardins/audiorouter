@@ -37,8 +37,8 @@ mod windows_pipe {
         PIPE_ACCESS_DUPLEX,
     };
     use windows::Win32::System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
-        PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
+        PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
     };
 
     fn wide(value: &str) -> Vec<u16> {
@@ -112,6 +112,16 @@ mod windows_pipe {
     where
         F: FnOnce(&[u8]) -> Result<Vec<u8>, TransportError>,
     {
+        serve_once_with_client(name, |_, frame| handler(frame))
+    }
+
+    /// Serve one request and provide the connected client's Windows process ID.
+    /// The process ID is an identity input, not authentication by itself; callers
+    /// must still validate the process token/SID before allowing sensitive methods.
+    pub fn serve_once_with_client<F>(name: &str, handler: F) -> Result<(), TransportError>
+    where
+        F: FnOnce(u32, &[u8]) -> Result<Vec<u8>, TransportError>,
+    {
         check_name(name)?;
         let name = wide(name);
         let handle = unsafe {
@@ -137,8 +147,16 @@ mod windows_pipe {
                 return Err(win_error(error));
             }
         }
+        let mut client_process_id = 0;
+        unsafe { GetNamedPipeClientProcessId(handle.0, &mut client_process_id) }
+            .map_err(win_error)?;
+        if client_process_id == 0 {
+            return Err(TransportError::Windows(
+                "named pipe returned no client process ID".into(),
+            ));
+        }
         let request = read_frame(handle.0)?;
-        let response = handler(&request)?;
+        let response = handler(client_process_id, &request)?;
         write_all(handle.0, &response)?;
         unsafe { FlushFileBuffers(handle.0) }.map_err(win_error)?;
         let _ = unsafe { DisconnectNamedPipe(handle.0) };
@@ -178,7 +196,7 @@ mod windows_pipe {
 }
 
 #[cfg(windows)]
-pub use windows_pipe::{echo_handler, round_trip, serve_once};
+pub use windows_pipe::{echo_handler, round_trip, serve_once, serve_once_with_client};
 
 #[cfg(not(windows))]
 pub fn round_trip(_: &str, _: &[u8]) -> Result<Vec<u8>, TransportError> {
@@ -256,6 +274,25 @@ mod tests {
         let response = serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap();
         assert_eq!(response["id"], 9);
         assert_eq!(response["result"]["protocolVersion"]["major"], 1);
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_exposes_connected_client_process_id() {
+        let name = format!(r"\\.\pipe\audiorouter-peer-test-{}", std::process::id());
+        let request =
+            encode_frame(&serde_json::json!({"jsonrpc":"2.0","id":1,"method":"status.get"}))
+                .unwrap();
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_once_with_client(&server_name, |client_pid, frame| {
+                assert_eq!(client_pid, std::process::id());
+                echo_handler(frame)
+            })
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        round_trip(&name, &request).unwrap();
         server.join().unwrap().unwrap();
     }
 }

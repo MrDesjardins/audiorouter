@@ -72,6 +72,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo test --workspace` — all 35 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. This is transport-only evidence: no audio streams, defaults, drivers, or system configuration were touched. The default pipe security descriptor is not production authentication.
 - Connected the native pipe test harness to `ControlPlane::dispatch_frame`; a framed `system.describe` request now crosses the actual Windows pipe and returns the control-plane discovery contract. This remains a test harness, not a production daemon or authentication implementation.
 - Checks: `cargo test --workspace` — all 36 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+- Added a native `GetNamedPipeClientProcessId` peer-identity primitive and verified it in the Windows round-trip test. The API documents that a process ID alone is not authentication; token/SID validation and an explicit pipe ACL remain required before sensitive operations.
+- Checks: `cargo test --workspace` — all 37 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
 ### 2026-09-05 — WSL inventory
 

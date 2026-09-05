@@ -33,7 +33,10 @@ configuration was changed.
 ## Follow-up
 
 The pipe integration now dispatches a framed `system.describe` request through
-the real `ControlPlane` authority. The next transport task is to add an explicit
-authenticated/same-user security descriptor. The
+the real `ControlPlane` authority. The server also exposes the connected client
+process ID and the native test verified it against the current process. This is
+an identity primitive only; it is not yet same-user authentication. The next
+transport task is to add an explicit authenticated/same-user security descriptor.
+The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.
