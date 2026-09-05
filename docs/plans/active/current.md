@@ -67,6 +67,7 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Added `tests/acceptance/m01-cli.ps1`, a checked-in PowerShell acceptance script for schema, status, device-list, and node-type discovery. It verifies offline M01 behavior and refuses success-shaped fake device results.
 - Corrected JSON-RPC notification semantics in control dispatch: read-only notifications are consumed without response envelopes, while mutating notifications remain rejected. This prevents clients from receiving misleading success responses for notifications.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 3 CLI, 11 control, 12 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Added the [M01 execution evidence report](evidence/M01-contracts.md), mapping implemented crates, commands, test counts, supported requirement slices, and explicit untested Windows/security/audio boundaries. The next task is the authorized Windows named-pipe/authentication boundary; no HTTP transport is planned.
 
 ### 2026-09-05 — WSL inventory
 
