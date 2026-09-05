@@ -18,8 +18,8 @@ current process ID and closed/disconnected it at completion.
 
 ## Validation
 
-- `cargo test -p audiorouter-transport`: 3 passed, including native round trip and control-plane dispatch.
-- `cargo test --workspace`: all workspace tests passed (36 unit tests; doc tests passed).
+- `cargo test -p audiorouter-transport`: 4 passed, including native round trip, control-plane dispatch, and peer process identity.
+- `cargo test --workspace`: all workspace tests passed (37 unit tests; doc tests passed).
 - `cargo fmt --all` and `git diff --check`: passed.
 
 ## Security and audio boundary
