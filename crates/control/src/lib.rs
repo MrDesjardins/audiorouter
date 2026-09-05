@@ -5,11 +5,13 @@
 //! authority and that unsupported audio capabilities are discoverable.
 
 use audiorouter_domain::{
-    node_registry, ApiMethodSpec, EntityId, GraphStore, Session, API_METHODS,
+    node_registry, ApiMethodSpec, EntityId, FakeRuntime, GraphStore, RuntimeError, RuntimeState,
+    Session, API_METHODS,
 };
 use audiorouter_protocol::{JsonRpcRequest, JsonRpcResponse, RpcMessage};
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct MethodDescription {
@@ -44,6 +46,7 @@ impl From<audiorouter_domain::StoreError> for ControlError {
 pub struct ControlPlane {
     store: GraphStore,
     build: String,
+    runtimes: HashMap<EntityId, FakeRuntime>,
 }
 
 impl Default for ControlPlane {
@@ -57,6 +60,7 @@ impl ControlPlane {
         Self {
             store: GraphStore::default(),
             build: build.into(),
+            runtimes: HashMap::new(),
         }
     }
 
@@ -105,6 +109,38 @@ impl ControlPlane {
         serde_json::to_value(result).map_err(|error| ControlError::Json(error.to_string()))
     }
 
+    pub fn session_start(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        let session = self.get_session(id)?.clone();
+        let runtime = self.runtimes.entry(id.clone()).or_default();
+        if runtime.state() == RuntimeState::Running {
+            return Ok(
+                json!({ "sessionId": id, "state": "running", "generation": runtime.generation(), "runtime": "fake" }),
+            );
+        }
+        runtime.prepare(&session).map_err(|error| match error {
+            RuntimeError::InvalidGraph(errors) => {
+                ControlError::InvalidRequest(format!("invalid graph: {errors:?}"))
+            }
+            RuntimeError::NotPrepared => {
+                ControlError::InvalidRequest("session was not prepared".into())
+            }
+        })?;
+        let generation = runtime
+            .start()
+            .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
+        Ok(
+            json!({ "sessionId": id, "state": "running", "generation": generation, "runtime": "fake" }),
+        )
+    }
+
+    pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        self.get_session(id)?;
+        if let Some(runtime) = self.runtimes.get_mut(id) {
+            runtime.stop();
+        }
+        Ok(json!({ "sessionId": id, "state": "stopped", "runtime": "fake" }))
+    }
+
     pub fn dispatch(&mut self, request: JsonRpcRequest) -> JsonRpcResponse {
         let id = request.id.clone();
         if request.validate().is_err() {
@@ -128,6 +164,8 @@ impl ControlPlane {
             ),
             "devices.list" | "apps.list" => Ok(json!([])),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
+            "session.start" => self.dispatch_session_start(request.params),
+            "session.stop" => self.dispatch_session_stop(request.params),
             "graph.plan" => self.dispatch_plan(request.params),
             "graph.commit" => self.dispatch_commit(request.params),
             _ => Err(ControlError::InvalidRequest("method not found".into())),
@@ -200,6 +238,28 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         self.commit_graph(&plan_id, base_revision, key)
     }
+
+    fn dispatch_session_start(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let id = session_id_from_params(params)?;
+        self.session_start(&id)
+    }
+
+    fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let id = session_id_from_params(params)?;
+        self.session_stop(&id)
+    }
+}
+
+fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlError> {
+    let params =
+        params.ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+    serde_json::from_value(
+        params
+            .get("sessionId")
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
+    )
+    .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
 }
 
 #[cfg(test)]
@@ -331,5 +391,33 @@ mod tests {
             plane.dispatch(commit_request).result.unwrap()["revision"],
             1
         );
+    }
+
+    #[test]
+    fn fake_session_lifecycle_is_idempotent_and_stoppable() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let first = plane.session_start(&original.id).unwrap();
+        assert_eq!(first["state"], "running");
+        assert_eq!(first["generation"], 1);
+        assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 1);
+        assert_eq!(
+            plane.session_stop(&original.id).unwrap()["state"],
+            "stopped"
+        );
+        assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
+    }
+
+    #[test]
+    fn session_lifecycle_requires_an_existing_session() {
+        let mut plane = ControlPlane::default();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "session.start".into(),
+            params: Some(json!({ "sessionId": "missing" })),
+        };
+        assert_eq!(plane.dispatch(request).error.unwrap().code, -32602);
     }
 }
