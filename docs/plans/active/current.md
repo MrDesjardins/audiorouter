@@ -80,6 +80,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: native transport tests passed after correcting descriptor pointer cleanup; full workspace validation is recorded with this checkpoint. No audio endpoint or persistent Windows configuration was touched.
 - Added a bounded `serve_connections` lifecycle helper and bounded client retry for transient `ERROR_PIPE_BUSY` while rotating pipe instances. The native test now serves two sequential authenticated clients and caught/fixed the instance-rotation race.
 - Checks: `cargo test --workspace` — all 38 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+- Added authorized framed dispatch to `crates/control` and wired the native pipe integration test through `ClientGrant::read_only`. A `graph.commit` request is rejected with `-32001` before parameter parsing or mutation, while `system.describe` remains available.
+- Checks: `cargo test --workspace` — all 40 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
 ### 2026-09-05 — WSL inventory
 

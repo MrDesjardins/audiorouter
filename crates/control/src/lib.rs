@@ -283,9 +283,62 @@ impl ControlPlane {
         }
     }
 
+    /// Dispatch a parsed message through the caller's explicit permission grant.
+    /// Authorization runs before method parameters are interpreted or state is
+    /// mutated, including for batched messages and notifications.
+    pub fn dispatch_message_authorized(
+        &mut self,
+        message: RpcMessage,
+        grant: &ClientGrant,
+    ) -> Vec<JsonRpcResponse> {
+        match message {
+            RpcMessage::Single(request) => {
+                let omit = request.is_notification()
+                    && !matches!(
+                        request.method.as_str(),
+                        "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                    );
+                let response = self.dispatch_authorized(request, grant);
+                if omit {
+                    Vec::new()
+                } else {
+                    vec![response]
+                }
+            }
+            RpcMessage::Batch(requests) => requests
+                .into_iter()
+                .filter_map(|request| {
+                    let omit = request.is_notification()
+                        && !matches!(
+                            request.method.as_str(),
+                            "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                        );
+                    let response = self.dispatch_authorized(request, grant);
+                    if omit {
+                        None
+                    } else {
+                        Some(response)
+                    }
+                })
+                .collect(),
+        }
+    }
+
     pub fn dispatch_frame(&mut self, frame: &[u8]) -> Result<Vec<Vec<u8>>, FrameError> {
         let message = decode_rpc_frame(frame)?;
         self.dispatch_message(message)
+            .into_iter()
+            .map(|response| encode_frame(&response))
+            .collect()
+    }
+
+    pub fn dispatch_frame_authorized(
+        &mut self,
+        frame: &[u8],
+        grant: &ClientGrant,
+    ) -> Result<Vec<Vec<u8>>, FrameError> {
+        let message = decode_rpc_frame(frame)?;
+        self.dispatch_message_authorized(message, grant)
             .into_iter()
             .map(|response| encode_frame(&response))
             .collect()
@@ -577,6 +630,23 @@ mod tests {
         };
         let response = plane.dispatch_authorized(request, &ClientGrant::read_only());
         assert!(response.result.unwrap()["methods"].is_array());
+    }
+
+    #[test]
+    fn authorized_framed_dispatch_denies_mutation_before_parameter_parsing() {
+        let mut plane = ControlPlane::default();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(6)),
+            method: "graph.commit".into(),
+            params: None,
+        };
+        let frame = audiorouter_protocol::encode_frame(&request).unwrap();
+        let responses = plane
+            .dispatch_frame_authorized(&frame, &ClientGrant::read_only())
+            .unwrap();
+        let response: JsonRpcResponse = audiorouter_protocol::decode_frame(&responses[0]).unwrap();
+        assert_eq!(response.error.unwrap().code, -32001);
     }
 
     #[test]

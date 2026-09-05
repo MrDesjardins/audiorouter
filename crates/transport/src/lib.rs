@@ -358,7 +358,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use audiorouter_control::ControlPlane;
+    use audiorouter_control::{ClientGrant, ControlPlane};
     use audiorouter_protocol::encode_frame;
 
     #[test]
@@ -406,7 +406,7 @@ mod tests {
             let mut plane = ControlPlane::new("native-test");
             serve_once(&server_name, |frame| {
                 let responses = plane
-                    .dispatch_frame(frame)
+                    .dispatch_frame_authorized(frame, &ClientGrant::read_only())
                     .map_err(|error| TransportError::Protocol(error.to_string()))?;
                 responses.into_iter().next().ok_or_else(|| {
                     TransportError::Protocol("notification produced no response".into())
@@ -418,6 +418,35 @@ mod tests {
         let response = serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap();
         assert_eq!(response["id"], 9);
         assert_eq!(response["result"]["protocolVersion"]["major"], 1);
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_applies_grants_before_mutation() {
+        let name = format!(r"\\.\pipe\audiorouter-auth-test-{}", std::process::id());
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            let mut plane = ControlPlane::new("native-auth-test");
+            serve_once(&server_name, |frame| {
+                let responses = plane
+                    .dispatch_frame_authorized(frame, &ClientGrant::read_only())
+                    .map_err(|error| TransportError::Protocol(error.to_string()))?;
+                responses.into_iter().next().ok_or_else(|| {
+                    TransportError::Protocol("missing authorization response".into())
+                })
+            })
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let request = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "graph.commit"
+        }))
+        .unwrap();
+        let response = round_trip(&name, &request).unwrap();
+        let response = serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap();
+        assert_eq!(response["error"]["code"], -32001);
         server.join().unwrap().unwrap();
     }
 
