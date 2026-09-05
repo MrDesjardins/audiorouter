@@ -33,6 +33,63 @@ pub enum NodeKind {
     Meter,
 }
 
+impl NodeKind {
+    pub const ALL: [Self; 8] = [
+        Self::PhysicalInput,
+        Self::ApplicationCapture,
+        Self::EndpointLoopback,
+        Self::PhysicalOutput,
+        Self::Mixer,
+        Self::Gain,
+        Self::Mute,
+        Self::Meter,
+    ];
+
+    pub fn type_name(self) -> &'static str {
+        match self {
+            Self::PhysicalInput => "physical-input",
+            Self::ApplicationCapture => "application-capture",
+            Self::EndpointLoopback => "endpoint-loopback",
+            Self::PhysicalOutput => "physical-output",
+            Self::Mixer => "mixer",
+            Self::Gain => "gain",
+            Self::Mute => "mute",
+            Self::Meter => "meter",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CapabilityAvailability {
+    Available,
+    Unavailable(&'static str),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NodeTypeSpec {
+    pub kind: NodeKind,
+    pub version: u32,
+    pub availability: CapabilityAvailability,
+    pub realtime_cost_class: &'static str,
+}
+
+pub fn node_registry() -> [NodeTypeSpec; 8] {
+    NodeKind::ALL.map(|kind| NodeTypeSpec {
+        kind,
+        version: 1,
+        availability: match kind {
+            NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => {
+                CapabilityAvailability::Available
+            }
+            _ => CapabilityAvailability::Unavailable("requires M02 Windows audio adapters"),
+        },
+        realtime_cost_class: match kind {
+            NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => "low",
+            _ => "device-bound",
+        },
+    })
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PortDirection {
     Input,
@@ -491,5 +548,26 @@ mod tests {
         ));
         assert_eq!(runtime.state(), RuntimeState::Failed);
         assert_eq!(runtime.generation(), 1);
+    }
+
+    #[test]
+    fn registry_reports_unimplemented_audio_capabilities_explicitly() {
+        let registry = node_registry();
+        assert_eq!(registry.len(), 8);
+        let physical = registry
+            .iter()
+            .find(|spec| spec.kind == NodeKind::PhysicalInput)
+            .unwrap();
+        assert_eq!(physical.kind.type_name(), "physical-input");
+        assert_eq!(physical.version, 1);
+        assert_eq!(
+            physical.availability,
+            CapabilityAvailability::Unavailable("requires M02 Windows audio adapters")
+        );
+        let gain = registry
+            .iter()
+            .find(|spec| spec.kind == NodeKind::Gain)
+            .unwrap();
+        assert_eq!(gain.availability, CapabilityAvailability::Available);
     }
 }

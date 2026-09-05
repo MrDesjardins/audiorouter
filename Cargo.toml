@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/domain"]
+exclude = ["tools/m00-wasapi-probe"]
 
 [workspace.package]
 edition = "2021"

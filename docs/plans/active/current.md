@@ -34,6 +34,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Added `FakeRuntime` with prepare/start/stop lifecycle, idempotent start, generation identity, and failed-prepare behavior. It never opens audio devices and cannot satisfy M02 Windows evidence.
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 6 tests passed; `git diff --check` passed. A dependency-free implementation was used because crates.io access was unavailable in this environment; JSON/schema derives remain a subsequent M01 task when dependencies can be supplied reproducibly.
 - Evidence boundary: these are portable domain tests only. They do not validate WASAPI, driver, process-loopback, real-time timing, or physical audio.
+- Added the M01 node registry with stable type names/versions, realtime cost classes, and explicit availability. Graph-safe nodes are marked available; physical/application/loopback nodes report `requires M02 Windows audio adapters` rather than pretending to work. The root workspace explicitly excludes the standalone Windows probe so its independent lockfile remains valid.
+- Checks: `cargo fmt --all -- --check`, `cargo test -p audiorouter-domain` — 7 tests passed; `cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml` passed; `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 
