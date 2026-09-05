@@ -1,0 +1,39 @@
+{
+  "id": "session-fixture",
+  "name": "Fixture",
+  "schemaVersion": 1,
+  "revision": 0,
+  "nodes": [
+    {
+      "id": "input",
+      "kind": "physicalInput",
+      "name": "Input",
+      "enabled": true,
+      "bypass": false,
+      "ports": [
+        { "name": "main", "direction": "output", "channels": 1 }
+      ]
+    },
+    {
+      "id": "output",
+      "kind": "physicalOutput",
+      "name": "Output",
+      "enabled": true,
+      "bypass": false,
+      "ports": [
+        { "name": "main", "direction": "input", "channels": 1 }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "sourceNode": "input",
+      "sourcePort": "main",
+      "destinationNode": "output",
+      "destinationPort": "main",
+      "matrix": [1.0],
+      "enabled": true
+    }
+  ]
+}

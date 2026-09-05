@@ -38,6 +38,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all -- --check`, `cargo test -p audiorouter-domain` — 7 tests passed; `cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml` passed; `git diff --check` passed.
 - Added an in-memory `GraphStore` transaction foundation: complete-candidate validation, base-revision checks, plan IDs, atomic revision increment, stale-commit rejection, and idempotency-key replay. This is a portable M01 proof layer; SQLite, named-pipe authorization, and JSON-RPC remain subsequent slices.
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 8 tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Restored pinned `serde`/`serde_json` contract dependencies once the approved build path supplied the crates. Domain structs now serialize using camelCase API fields, and `tests/fixtures/valid-session.json` is a checked-in valid contract fixture.
+- Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 10 tests passed including JSON round-trip and fixture validation; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 

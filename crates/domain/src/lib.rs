@@ -4,12 +4,14 @@
 //! realtime code. It is the authority for the in-memory graph shape used by
 //! later control-plane adapters.
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 pub const MAX_NODES_PER_SESSION: usize = 64;
 pub const MAX_EDGES_PER_SESSION: usize = 128;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct EntityId(String);
 
 impl EntityId {
@@ -21,7 +23,8 @@ impl EntityId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum NodeKind {
     PhysicalInput,
     ApplicationCapture,
@@ -90,20 +93,23 @@ pub fn node_registry() -> [NodeTypeSpec; 8] {
     })
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PortDirection {
     Input,
     Output,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Port {
     pub name: String,
     pub direction: PortDirection,
     pub channels: u8,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Node {
     pub id: EntityId,
     pub kind: NodeKind,
@@ -113,7 +119,8 @@ pub struct Node {
     pub ports: Vec<Port>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Edge {
     pub id: EntityId,
     pub source_node: EntityId,
@@ -124,7 +131,8 @@ pub struct Edge {
     pub enabled: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: EntityId,
     pub name: String,
@@ -722,5 +730,30 @@ mod tests {
                 actual: 1
             })
         );
+    }
+
+    #[test]
+    fn session_json_round_trip_preserves_contract_shape() {
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        let encoded = serde_json::to_string_pretty(&original).unwrap();
+        assert!(encoded.contains("physicalInput"));
+        assert!(encoded.contains("sourceNode"));
+        let decoded: Session = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn checked_fixture_deserializes_and_validates() {
+        let fixture: Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        assert_eq!(fixture.id.as_str(), "session-fixture");
+        assert!(validate_session(&fixture).is_ok());
     }
 }
