@@ -10,7 +10,7 @@ use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::Media::Audio::{
     eAll, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
     AUDCLNT_STREAMFLAGS_LOOPBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE, IAudioClient,
-    IMMDeviceEnumerator, MMDeviceEnumerator, WAVEFORMATEX,
+    IMMDeviceEnumerator, MMDeviceEnumerator, WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
@@ -64,10 +64,46 @@ unsafe fn enumerate() -> Result<()> {
         // isolated from stream lifecycle state on the client used for negotiation.
         let stream_client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
         let stream_format = stream_client.GetMixFormat()?;
+        let stream_extensible = if id_string.starts_with("{0.0.1.") {
+            Some(std::ptr::read_unaligned(
+                stream_format.cast::<WAVEFORMATEXTENSIBLE>(),
+            ))
+        } else {
+            None
+        };
+        let initialize_format = stream_extensible
+            .as_ref()
+            .map_or(stream_format, |format| {
+                std::ptr::addr_of!(format.Format) as *mut WAVEFORMATEX
+            });
+        let mut closest_capture_format = std::ptr::null_mut();
+        let negotiated_format = if id_string.starts_with("{0.0.1.") {
+            let requested = WAVEFORMATEX {
+                wFormatTag: 3,
+                nChannels: channels,
+                nSamplesPerSec: sample_rate,
+                nAvgBytesPerSec: sample_rate * channels as u32 * 4,
+                nBlockAlign: channels * 4,
+                wBitsPerSample: 32,
+                cbSize: 0,
+            };
+            let support = stream_client.IsFormatSupported(
+                AUDCLNT_SHAREMODE_SHARED,
+                &requested,
+                Some(&mut closest_capture_format),
+            );
+            if support.0 == 1 && !closest_capture_format.is_null() {
+                closest_capture_format
+            } else {
+                initialize_format
+            }
+        } else {
+            initialize_format
+        };
         let stream_flags = if id_string.starts_with("{0.0.0.") {
             AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
-            0
+            windows::Win32::Media::Audio::AUDCLNT_STREAMFLAGS_EVENTCALLBACK
         };
         let buffer_duration = if id_string.starts_with("{0.0.0.") {
             0
@@ -84,7 +120,7 @@ unsafe fn enumerate() -> Result<()> {
             stream_flags,
             buffer_duration,
             0,
-            stream_format,
+            negotiated_format,
             None,
         );
         let (initialize_hresult, start_hresult, buffer_frames, stream_latency_100ns) = match stream_result {
@@ -137,6 +173,9 @@ unsafe fn enumerate() -> Result<()> {
             -1
         };
         CoTaskMemFree(Some(stream_format.cast()));
+        if !closest_capture_format.is_null() {
+            CoTaskMemFree(Some(closest_capture_format.cast()));
+        }
         println!(
             "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} block_align={} avg_bytes={} cb_size={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} buffer_frames={} stream_latency_100ns={}",
             state.0,
