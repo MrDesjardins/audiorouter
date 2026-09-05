@@ -63,6 +63,7 @@ dependencies = [
 name = "audiorouter-transport"
 version = "0.1.0"
 dependencies = [
+ "audiorouter-control",
  "audiorouter-protocol",
  "serde_json",
  "windows",
