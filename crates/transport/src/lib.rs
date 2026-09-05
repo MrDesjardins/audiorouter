@@ -32,6 +32,9 @@ mod windows_pipe {
     use windows::Win32::Foundation::{
         CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
     };
+    use windows::Win32::Security::{
+        EqualSid, GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
+    };
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, FlushFileBuffers, ReadFile, WriteFile, FILE_SHARE_NONE, OPEN_EXISTING,
         PIPE_ACCESS_DUPLEX,
@@ -39,6 +42,9 @@ mod windows_pipe {
     use windows::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
         PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+    };
+    use windows::Win32::System::Threading::{
+        OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     fn wide(value: &str) -> Vec<u16> {
@@ -55,6 +61,55 @@ mod windows_pipe {
 
     fn win_error(error: impl std::fmt::Display) -> TransportError {
         TransportError::Windows(error.to_string())
+    }
+
+    fn user_sid(token: HANDLE) -> Result<windows::Win32::Security::PSID, TransportError> {
+        let mut required = 0;
+        let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut required) };
+        if required == 0 {
+            return Err(TransportError::Windows(
+                "token user information size was zero".into(),
+            ));
+        }
+        let mut buffer = vec![0u8; required as usize];
+        unsafe {
+            GetTokenInformation(
+                token,
+                TokenUser,
+                Some(buffer.as_mut_ptr().cast()),
+                buffer.len() as u32,
+                &mut required,
+            )
+        }
+        .map_err(win_error)?;
+        let user = unsafe { &*(buffer.as_ptr().cast::<TOKEN_USER>()) };
+        Ok(user.User.Sid)
+    }
+
+    /// Compare the connected client process token's user SID with this process.
+    /// This is a same-user check, not a replacement for a restrictive pipe ACL.
+    pub fn client_is_same_user(client_process_id: u32) -> Result<bool, TransportError> {
+        let process =
+            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, client_process_id) }
+                .map_err(win_error)?;
+        let process = Handle(process);
+        let mut client_token = INVALID_HANDLE_VALUE;
+        unsafe { OpenProcessToken(process.0, TOKEN_QUERY, &mut client_token) }
+            .map_err(win_error)?;
+        let client_token = Handle(client_token);
+
+        let current_process =
+            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, std::process::id()) }
+                .map_err(win_error)?;
+        let current_process = Handle(current_process);
+        let mut current_token = INVALID_HANDLE_VALUE;
+        unsafe { OpenProcessToken(current_process.0, TOKEN_QUERY, &mut current_token) }
+            .map_err(win_error)?;
+        let current_token = Handle(current_token);
+
+        let client_sid = user_sid(client_token.0)?;
+        let current_sid = user_sid(current_token.0)?;
+        Ok(unsafe { EqualSid(client_sid, current_sid) }.is_ok())
     }
 
     struct Handle(HANDLE);
@@ -196,7 +251,9 @@ mod windows_pipe {
 }
 
 #[cfg(windows)]
-pub use windows_pipe::{echo_handler, round_trip, serve_once, serve_once_with_client};
+pub use windows_pipe::{
+    client_is_same_user, echo_handler, round_trip, serve_once, serve_once_with_client,
+};
 
 #[cfg(not(windows))]
 pub fn round_trip(_: &str, _: &[u8]) -> Result<Vec<u8>, TransportError> {
@@ -208,6 +265,11 @@ pub fn serve_once<F>(_: &str, _: F) -> Result<(), TransportError>
 where
     F: FnOnce(&[u8]) -> Result<Vec<u8>, TransportError>,
 {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn client_is_same_user(_: u32) -> Result<bool, TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -288,6 +350,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             serve_once_with_client(&server_name, |client_pid, frame| {
                 assert_eq!(client_pid, std::process::id());
+                assert!(client_is_same_user(client_pid).unwrap());
                 echo_handler(frame)
             })
         });

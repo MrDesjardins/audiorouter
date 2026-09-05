@@ -18,15 +18,16 @@ current process ID and closed/disconnected it at completion.
 
 ## Validation
 
-- `cargo test -p audiorouter-transport`: 4 passed, including native round trip, control-plane dispatch, and peer process identity.
+- `cargo test -p audiorouter-transport`: 4 passed, including native round trip, control-plane dispatch, peer process identity, and same-user SID comparison.
 - `cargo test --workspace`: all workspace tests passed (37 unit tests; doc tests passed).
 - `cargo fmt --all` and `git diff --check`: passed.
 
 ## Security and audio boundary
 
-This is transport evidence, not authentication evidence. The prototype uses
-the default pipe security descriptor and explicitly documents that production
-must add a same-user ACL/authentication layer. No audio endpoint was opened,
+The transport reads both process-token user SIDs and provides a same-user
+comparison helper. This is still not a replacement for an explicit restrictive
+pipe ACL or production authentication policy. The prototype uses the default
+pipe security descriptor. No audio endpoint was opened,
 no stream was started or read, no driver was installed, and no Windows audio
 configuration was changed.
 
@@ -34,9 +35,9 @@ configuration was changed.
 
 The pipe integration now dispatches a framed `system.describe` request through
 the real `ControlPlane` authority. The server also exposes the connected client
-process ID and the native test verified it against the current process. This is
-an identity primitive only; it is not yet same-user authentication. The next
-transport task is to add an explicit authenticated/same-user security descriptor.
+process ID and the native test verified it against the current process. The next
+transport task is to add an explicit restrictive security descriptor and enforce
+the SID check before sensitive dispatch.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.
