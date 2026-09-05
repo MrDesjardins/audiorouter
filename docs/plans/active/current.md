@@ -68,6 +68,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Corrected JSON-RPC notification semantics in control dispatch: read-only notifications are consumed without response envelopes, while mutating notifications remain rejected. This prevents clients from receiving misleading success responses for notifications.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 3 CLI, 11 control, 12 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 - Added the [M01 execution evidence report](evidence/M01-contracts.md), mapping implemented crates, commands, test counts, supported requirement slices, and explicit untested Windows/security/audio boundaries. The next task is the authorized Windows named-pipe/authentication boundary; no HTTP transport is planned.
+- Added `crates/transport`, a Windows-native named-pipe prototype over the existing bounded protocol framing. It validates local pipe names, rejects remote clients, handles partial I/O, and flushes before disconnecting. The native round-trip test initially exposed a real disconnect race and now passes after the flush fix. Evidence is in [M01 native transport](evidence/M01-native-transport.md).
+- Checks: `cargo test --workspace` — all 35 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. This is transport-only evidence: no audio streams, defaults, drivers, or system configuration were touched. The default pipe security descriptor is not production authentication.
 
 ### 2026-09-05 — WSL inventory
 
