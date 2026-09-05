@@ -459,6 +459,7 @@ pub struct FakeRuntime {
 pub enum StoreError {
     SessionNotFound,
     PlanNotFound,
+    PlanExpired,
     InvalidGraph(Vec<ValidationError>),
     RevisionConflict { expected: u64, actual: u64 },
     EmptyIdempotencyKey,
@@ -476,6 +477,7 @@ struct GraphPlan {
     session_id: EntityId,
     base_revision: u64,
     candidate: Session,
+    expires_at: std::time::Instant,
 }
 
 /// In-memory revision store used to prove M01 transaction semantics before
@@ -505,6 +507,21 @@ impl GraphStore {
         base_revision: u64,
         candidate: Session,
     ) -> Result<EntityId, StoreError> {
+        self.plan_graph_with_ttl(
+            session_id,
+            base_revision,
+            candidate,
+            std::time::Duration::from_secs(30),
+        )
+    }
+
+    pub fn plan_graph_with_ttl(
+        &mut self,
+        session_id: &EntityId,
+        base_revision: u64,
+        candidate: Session,
+        ttl: std::time::Duration,
+    ) -> Result<EntityId, StoreError> {
         let current = self
             .sessions
             .get(session_id)
@@ -527,6 +544,7 @@ impl GraphStore {
                 session_id: session_id.clone(),
                 base_revision,
                 candidate,
+                expires_at: std::time::Instant::now() + ttl,
             },
         );
         Ok(plan_id)
@@ -545,6 +563,14 @@ impl GraphStore {
             let mut replay = result.clone();
             replay.idempotent_replay = true;
             return Ok(replay);
+        }
+        let expires_at = self
+            .plans
+            .get(plan_id)
+            .ok_or(StoreError::PlanNotFound)?
+            .expires_at;
+        if expires_at <= std::time::Instant::now() {
+            return Err(StoreError::PlanExpired);
         }
         let plan = self.plans.remove(plan_id).ok_or(StoreError::PlanNotFound)?;
         let current = self
@@ -806,6 +832,27 @@ mod tests {
                 actual: 1
             })
         );
+    }
+
+    #[test]
+    fn expired_plan_cannot_mutate_session() {
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        let mut store = GraphStore::default();
+        store.insert_session(original.clone()).unwrap();
+        let plan = store
+            .plan_graph_with_ttl(&original.id, 0, original.clone(), std::time::Duration::ZERO)
+            .unwrap();
+        assert_eq!(
+            store.commit_graph(&plan, 0, "expired"),
+            Err(StoreError::PlanExpired)
+        );
+        assert_eq!(store.session(&original.id).unwrap().revision, 0);
     }
 
     #[test]
