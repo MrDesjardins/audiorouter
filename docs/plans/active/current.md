@@ -54,6 +54,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test -p audiorouter-storage` — 2 tests passed; no user database path was opened or modified.
 - Added fake session lifecycle operations to `crates/control`: idempotent start while running, generation advancement only after stop/restart, explicit fake-runtime labeling, and stable missing-session/parameter errors. A test caught and fixed repeated-start generation churn.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 6 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Connected the control plane to SQLite through an explicit storage-backed constructor. Session inserts and graph commits now persist through the same control authority; the default in-memory constructor remains available for deterministic tests and no implicit user database path is opened.
+- Checks: `cargo fmt --all`, `cargo test --workspace` — 7 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 

@@ -9,6 +9,7 @@ use audiorouter_domain::{
     Session, API_METHODS,
 };
 use audiorouter_protocol::{JsonRpcRequest, JsonRpcResponse, RpcMessage};
+use audiorouter_storage::{Storage, StorageError};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -35,6 +36,7 @@ pub enum ControlError {
     InvalidRequest(String),
     Store(audiorouter_domain::StoreError),
     Json(String),
+    Storage(String),
 }
 
 impl From<audiorouter_domain::StoreError> for ControlError {
@@ -47,6 +49,7 @@ pub struct ControlPlane {
     store: GraphStore,
     build: String,
     runtimes: HashMap<EntityId, FakeRuntime>,
+    storage: Option<Storage>,
 }
 
 impl Default for ControlPlane {
@@ -61,11 +64,27 @@ impl ControlPlane {
             store: GraphStore::default(),
             build: build.into(),
             runtimes: HashMap::new(),
+            storage: None,
+        }
+    }
+
+    pub fn with_storage(build: impl Into<String>, storage: Storage) -> Self {
+        Self {
+            store: GraphStore::default(),
+            build: build.into(),
+            runtimes: HashMap::new(),
+            storage: Some(storage),
         }
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
-        self.store.insert_session(session).map_err(Into::into)
+        self.store
+            .insert_session(session.clone())
+            .map_err(ControlError::from)?;
+        if let Some(storage) = &self.storage {
+            storage.save_session(&session).map_err(storage_error)?;
+        }
+        Ok(())
     }
 
     pub fn describe(&self) -> Value {
@@ -106,6 +125,12 @@ impl ControlPlane {
         let result = self
             .store
             .commit_graph(plan_id, base_revision, idempotency_key)?;
+        if let Some(storage) = &self.storage {
+            let session = self.store.session(&result.session_id).ok_or_else(|| {
+                ControlError::InvalidRequest("committed session not found".into())
+            })?;
+            storage.save_session(session).map_err(storage_error)?;
+        }
         serde_json::to_value(result).map_err(|error| ControlError::Json(error.to_string()))
     }
 
@@ -260,6 +285,10 @@ fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlErro
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
     )
     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
+}
+
+fn storage_error(error: StorageError) -> ControlError {
+    ControlError::Storage(format!("{error:?}"))
 }
 
 #[cfg(test)]
@@ -419,5 +448,18 @@ mod tests {
             params: Some(json!({ "sessionId": "missing" })),
         };
         assert_eq!(plane.dispatch(request).error.unwrap().code, -32602);
+    }
+
+    #[test]
+    fn storage_backed_control_persists_session_and_commit() {
+        let storage = Storage::open_memory().unwrap();
+        let mut plane = ControlPlane::with_storage("persistent-test", storage);
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "persisted-change".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "persist-op").unwrap();
+        assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
     }
 }
