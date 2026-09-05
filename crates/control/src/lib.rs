@@ -8,7 +8,9 @@ use audiorouter_domain::{
     node_registry, ApiMethodSpec, EntityId, FakeRuntime, GraphStore, RuntimeError, RuntimeState,
     Session, API_METHODS,
 };
-use audiorouter_protocol::{JsonRpcRequest, JsonRpcResponse, RpcMessage};
+use audiorouter_protocol::{
+    decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
+};
 use audiorouter_storage::{Storage, StorageError};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -215,6 +217,14 @@ impl ControlPlane {
                 .map(|request| self.dispatch(request))
                 .collect(),
         }
+    }
+
+    pub fn dispatch_frame(&mut self, frame: &[u8]) -> Result<Vec<Vec<u8>>, FrameError> {
+        let message = decode_rpc_frame(frame)?;
+        self.dispatch_message(message)
+            .into_iter()
+            .map(|response| encode_frame(&response))
+            .collect()
     }
 
     fn dispatch_plan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -461,5 +471,21 @@ mod tests {
         let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
         plane.commit_graph(&plan, 0, "persist-op").unwrap();
         assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
+    }
+
+    #[test]
+    fn framed_request_round_trips_through_dispatch() {
+        let mut plane = ControlPlane::default();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(9)),
+            method: "system.describe".into(),
+            params: None,
+        };
+        let frame = audiorouter_protocol::encode_frame(&request).unwrap();
+        let responses = plane.dispatch_frame(&frame).unwrap();
+        let response: JsonRpcResponse = audiorouter_protocol::decode_frame(&responses[0]).unwrap();
+        assert_eq!(response.id, Some(json!(9)));
+        assert!(response.result.unwrap()["methods"].is_array());
     }
 }

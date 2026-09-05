@@ -56,6 +56,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 6 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 - Connected the control plane to SQLite through an explicit storage-backed constructor. Session inserts and graph commits now persist through the same control authority; the default in-memory constructor remains available for deterministic tests and no implicit user database path is opened.
 - Checks: `cargo fmt --all`, `cargo test --workspace` — 7 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
+- Connected protocol framing to control dispatch with `decode_rpc_frame` and `dispatch_frame`; framed JSON-RPC requests now produce framed responses through one portable end-to-end path.
+- Checks: `cargo fmt --all`, `cargo test --workspace` — 8 control, 11 domain, 5 protocol, and 2 storage tests passed; standalone WASAPI `cargo check` and `git diff --check` passed.
 
 ### 2026-09-05 — WSL inventory
 

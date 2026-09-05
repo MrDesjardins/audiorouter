@@ -64,6 +64,24 @@ pub fn decode_frame<T: for<'de> Deserialize<'de>>(frame: &[u8]) -> Result<T, Fra
     serde_json::from_slice(&frame[4..]).map_err(|error| FrameError::Json(error.to_string()))
 }
 
+pub fn decode_rpc_frame(frame: &[u8]) -> Result<RpcMessage, FrameError> {
+    if frame.len() < 4 {
+        return Err(FrameError::TooShort);
+    }
+    let declared = u32::from_le_bytes(frame[..4].try_into().unwrap()) as usize;
+    if declared > MAX_FRAME_BYTES {
+        return Err(FrameError::TooLarge {
+            length: declared,
+            maximum: MAX_FRAME_BYTES,
+        });
+    }
+    let actual = frame.len() - 4;
+    if declared != actual {
+        return Err(FrameError::LengthMismatch { declared, actual });
+    }
+    parse_rpc_message(&frame[4..]).map_err(|error| FrameError::Json(format!("{error:?}")))
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
