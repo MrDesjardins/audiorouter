@@ -46,6 +46,13 @@ pub struct ClientGrant {
     scopes: std::collections::HashSet<PermissionScope>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClientRole {
+    Observer,
+    Editor,
+    Operator,
+}
+
 impl ClientGrant {
     pub fn read_only() -> Self {
         Self::with_scopes([PermissionScope::Read])
@@ -54,6 +61,23 @@ impl ClientGrant {
     pub fn with_scopes(scopes: impl IntoIterator<Item = PermissionScope>) -> Self {
         Self {
             scopes: scopes.into_iter().collect(),
+        }
+    }
+
+    /// Map an enrolled role to the narrowest built-in grant for that role.
+    /// Capture, recording, and device administration are never implied by these
+    /// convenience roles and require a separately constructed explicit grant.
+    pub fn for_role(role: ClientRole) -> Self {
+        match role {
+            ClientRole::Observer => Self::read_only(),
+            ClientRole::Editor => {
+                Self::with_scopes([PermissionScope::Read, PermissionScope::GraphWrite])
+            }
+            ClientRole::Operator => Self::with_scopes([
+                PermissionScope::Read,
+                PermissionScope::GraphWrite,
+                PermissionScope::SessionControl,
+            ]),
         }
     }
 
@@ -672,6 +696,18 @@ mod tests {
         assert!(responses[0].result.is_some());
         assert_eq!(responses[1].id, Some(json!(2)));
         assert_eq!(responses[1].error.as_ref().unwrap().code, -32001);
+    }
+
+    #[test]
+    fn built_in_roles_are_deny_by_default_for_sensitive_scopes() {
+        assert!(ClientGrant::for_role(ClientRole::Observer).allows(PermissionScope::Read));
+        assert!(!ClientGrant::for_role(ClientRole::Observer).allows(PermissionScope::GraphWrite));
+        assert!(ClientGrant::for_role(ClientRole::Editor).allows(PermissionScope::GraphWrite));
+        assert!(!ClientGrant::for_role(ClientRole::Editor).allows(PermissionScope::SessionControl));
+        assert!(ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::SessionControl));
+        assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::Capture));
+        assert!(!ClientGrant::for_role(ClientRole::Operator)
+            .allows(PermissionScope::DeviceAdministration));
     }
 
     #[test]

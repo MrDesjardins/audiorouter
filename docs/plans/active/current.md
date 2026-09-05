@@ -110,6 +110,8 @@ This establishes that Codex can continue documentation and portable implementati
 - Checks: `cargo test --workspace` — all 43 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 - Added native malformed-frame coverage: an oversized length header is rejected before control dispatch, and the temporary authenticated pipe closes without leaving a server handle behind.
 - Checks: `cargo test --workspace` — all 44 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
+- Added explicit deny-by-default `ClientRole` mapping (`Observer`, `Editor`, `Operator`) to the control layer. Built-in roles never imply capture, recording, or device administration; sensitive scopes require an explicit grant.
+- Checks: `cargo test --workspace` — all 45 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
 ## Decisions and assumptions
 
