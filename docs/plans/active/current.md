@@ -77,7 +77,9 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 - The probe intentionally does not open streams, change defaults, install drivers, or write outside stdout.
 - `cargo check`, `cargo build`, and `cargo run` pass; the probe reported 34 active endpoints, all with active state and endpoint IDs.
 - The probe now also reports current mix format and device periods: most endpoints are 48 kHz/two-channel/32-bit with 2–3 ms minimum periods; Sonar endpoints include 96 kHz/eight-channel devices; the Focusrite render endpoint reports a 3 ms minimum period.
-- This remains capability metadata only. Shared-mode capture/render, loopback latency, process capture, and physical tone/impulse behavior remain unmeasured.
+- It now performs non-mutating shared-mode `IsFormatSupported` queries for 44.1/48 kHz mono/stereo IEEE-float formats. No streams were initialized and no Windows configuration was changed.
+- Format results: all 34 endpoints returned a closest match for 44.1 kHz mono/stereo; 48 kHz mono was exact on 1/34; 48 kHz stereo was exact on 29/34. `S_FALSE` closest-match results require negotiation rather than rejection.
+- This remains capability metadata only. Actual capture/render, loopback latency, process capture, and physical tone/impulse behavior remain unmeasured.
 
 ## Next authorized implementation task
 

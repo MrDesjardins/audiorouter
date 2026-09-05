@@ -7,7 +7,8 @@
 
 use windows::core::Result;
 use windows::Win32::Media::Audio::{
-    eAll, DEVICE_STATE_ACTIVE, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
+    eAll, AUDCLNT_SHAREMODE_SHARED, DEVICE_STATE_ACTIVE, IAudioClient, IMMDeviceEnumerator,
+    MMDeviceEnumerator, WAVEFORMATEX,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
@@ -46,8 +47,12 @@ unsafe fn enumerate() -> Result<()> {
         let sample_rate =
             std::ptr::read_unaligned(std::ptr::addr_of!(format_value.nSamplesPerSec));
         let bits = std::ptr::read_unaligned(std::ptr::addr_of!(format_value.wBitsPerSample));
+        let support_44100_mono = format_support(&client, 44_100, 1).0;
+        let support_44100_stereo = format_support(&client, 44_100, 2).0;
+        let support_48000_mono = format_support(&client, 48_000, 1).0;
+        let support_48000_stereo = format_support(&client, 48_000, 2).0;
         println!(
-            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={}",
+            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x}",
             state.0,
             id.to_string()?,
             format_tag,
@@ -60,4 +65,26 @@ unsafe fn enumerate() -> Result<()> {
     }
 
     Ok(())
+}
+
+unsafe fn format_support(client: &IAudioClient, sample_rate: u32, channels: u16) -> windows::core::HRESULT {
+    let format = WAVEFORMATEX {
+        wFormatTag: 3,
+        nChannels: channels,
+        nSamplesPerSec: sample_rate,
+        nAvgBytesPerSec: sample_rate * channels as u32 * 4,
+        nBlockAlign: channels * 4,
+        wBitsPerSample: 32,
+        cbSize: 0,
+    };
+    let mut closest: *mut WAVEFORMATEX = std::ptr::null_mut();
+    let result = client.IsFormatSupported(
+        AUDCLNT_SHAREMODE_SHARED,
+        &format,
+        Some(&mut closest),
+    );
+    if !closest.is_null() {
+        CoTaskMemFree(Some(closest.cast()));
+    }
+    result
 }
