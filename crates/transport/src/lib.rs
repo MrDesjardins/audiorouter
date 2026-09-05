@@ -254,6 +254,23 @@ mod windows_pipe {
         Ok(())
     }
 
+    /// Serve a fixed number of sequential authenticated connections.
+    /// A bounded loop makes lifecycle tests deterministic; a production daemon
+    /// can own the outer restart/shutdown policy around `serve_once_with_client`.
+    pub fn serve_connections<F>(
+        name: &str,
+        connections: usize,
+        mut handler: F,
+    ) -> Result<(), TransportError>
+    where
+        F: FnMut(u32, &[u8]) -> Result<Vec<u8>, TransportError>,
+    {
+        for _ in 0..connections {
+            serve_once_with_client(name, |client_pid, frame| handler(client_pid, frame))?;
+        }
+        Ok(())
+    }
+
     /// Connect to a local named pipe and exchange one framed message.
     pub fn round_trip(name: &str, request: &[u8]) -> Result<Vec<u8>, TransportError> {
         check_name(name)?;
@@ -261,18 +278,38 @@ mod windows_pipe {
             return Err(TransportError::Protocol("invalid request frame".into()));
         }
         let name = wide(name);
-        let handle = unsafe {
-            CreateFileW(
-                PCWSTR(name.as_ptr()),
-                (GENERIC_READ | GENERIC_WRITE).0,
-                FILE_SHARE_NONE,
-                None,
-                OPEN_EXISTING,
-                Default::default(),
-                None,
-            )
-        }
-        .map_err(win_error)?;
+        let handle = (0..20)
+            .find_map(|_| {
+                let result = unsafe {
+                    CreateFileW(
+                        PCWSTR(name.as_ptr()),
+                        (GENERIC_READ | GENERIC_WRITE).0,
+                        FILE_SHARE_NONE,
+                        None,
+                        OPEN_EXISTING,
+                        Default::default(),
+                        None,
+                    )
+                };
+                match result {
+                    Ok(handle) => Some(Ok(handle)),
+                    Err(error)
+                        if matches!(
+                            error.code().0,
+                            x if x == 0x8007_00E7u32 as i32 || x == 0x8007_0002u32 as i32
+                        ) =>
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                        None
+                    }
+                    Err(error) => Some(Err(win_error(error))),
+                }
+            })
+            .unwrap_or_else(|| {
+                Err(TransportError::Windows(
+                    "timed out waiting for a free named-pipe instance".into(),
+                ))
+            })?;
         let handle = Handle(handle);
         write_all(handle.0, request)?;
         read_frame(handle.0)
@@ -288,7 +325,8 @@ mod windows_pipe {
 
 #[cfg(windows)]
 pub use windows_pipe::{
-    client_is_same_user, echo_handler, round_trip, serve_once, serve_once_with_client,
+    client_is_same_user, echo_handler, round_trip, serve_connections, serve_once,
+    serve_once_with_client,
 };
 
 #[cfg(not(windows))]
@@ -306,6 +344,14 @@ where
 
 #[cfg(not(windows))]
 pub fn client_is_same_user(_: u32) -> Result<bool, TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn serve_connections<F>(_: &str, _: usize, _: F) -> Result<(), TransportError>
+where
+    F: FnMut(u32, &[u8]) -> Result<Vec<u8>, TransportError>,
+{
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -392,6 +438,30 @@ mod tests {
         });
         std::thread::sleep(std::time::Duration::from_millis(20));
         round_trip(&name, &request).unwrap();
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn authenticated_server_accepts_sequential_connections() {
+        let name = format!(r"\\.\pipe\audiorouter-loop-test-{}", std::process::id());
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_connections(&server_name, 2, |client_pid, frame| {
+                assert!(client_is_same_user(client_pid).unwrap());
+                echo_handler(frame)
+            })
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        for id in [1, 2] {
+            let request = encode_frame(&serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "status.get"
+            }))
+            .unwrap();
+            round_trip(&name, &request).unwrap();
+        }
         server.join().unwrap().unwrap();
     }
 }

@@ -18,8 +18,8 @@ current process ID and closed/disconnected it at completion.
 
 ## Validation
 
-- `cargo test -p audiorouter-transport`: 4 passed, including native round trip, control-plane dispatch, peer process identity, and same-user SID comparison.
-- `cargo test --workspace`: all workspace tests passed (37 unit tests; doc tests passed).
+- `cargo test -p audiorouter-transport`: 5 passed, including sequential authenticated connections and bounded `ERROR_PIPE_BUSY` retry.
+- `cargo test --workspace`: all workspace tests passed (38 unit tests; doc tests passed).
 - `cargo fmt --all` and `git diff --check`: passed.
 
 ## Security and audio boundary
@@ -38,7 +38,9 @@ The pipe integration now dispatches a framed `system.describe` request through
 the real `ControlPlane` authority. The server also exposes the connected client
 process ID and the native test verified it against the current process. The next
 transport task is to integrate this authenticated accept path with a long-lived
-daemon and enforce method-level grants for every request.
+daemon and enforce method-level grants for every request. The bounded
+`serve_connections` loop and transient busy-instance retry now cover the basic
+connection-rotation lifecycle.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

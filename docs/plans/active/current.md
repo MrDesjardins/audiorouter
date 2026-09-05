@@ -78,6 +78,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Checks: `cargo test --workspace` — all 37 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 - Added an owner-only SDDL security descriptor to named-pipe creation and enforced the same-user SID check before request reads. This closes the prototype’s unauthenticated default-descriptor gap; long-lived daemon integration and method-level grant enforcement remain next.
 - Checks: native transport tests passed after correcting descriptor pointer cleanup; full workspace validation is recorded with this checkpoint. No audio endpoint or persistent Windows configuration was touched.
+- Added a bounded `serve_connections` lifecycle helper and bounded client retry for transient `ERROR_PIPE_BUSY` while rotating pipe instances. The native test now serves two sequential authenticated clients and caught/fixed the instance-rotation race.
+- Checks: `cargo test --workspace` — all 38 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
 ### 2026-09-05 — WSL inventory
 
