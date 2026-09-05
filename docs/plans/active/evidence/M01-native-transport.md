@@ -18,8 +18,8 @@ current process ID and closed/disconnected it at completion.
 
 ## Validation
 
-- `cargo test -p audiorouter-transport`: 2 passed, including native round trip.
-- `cargo test --workspace`: all workspace tests passed (35 unit tests; doc tests passed).
+- `cargo test -p audiorouter-transport`: 3 passed, including native round trip and control-plane dispatch.
+- `cargo test --workspace`: all workspace tests passed (36 unit tests; doc tests passed).
 - `cargo fmt --all` and `git diff --check`: passed.
 
 ## Security and audio boundary
@@ -32,7 +32,8 @@ configuration was changed.
 
 ## Follow-up
 
-The next transport task is to connect the pipe server to control-plane JSON-RPC
-dispatch and add an explicit authenticated/same-user security descriptor. The
+The pipe integration now dispatches a framed `system.describe` request through
+the real `ControlPlane` authority. The next transport task is to add an explicit
+authenticated/same-user security descriptor. The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.

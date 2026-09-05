@@ -196,6 +196,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use audiorouter_control::ControlPlane;
     use audiorouter_protocol::encode_frame;
 
     #[test]
@@ -225,6 +226,36 @@ mod tests {
             serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap()["ok"],
             true
         );
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_dispatches_control_plane_json_rpc() {
+        let name = format!(r"\\.\pipe\audiorouter-control-test-{}", std::process::id());
+        let request = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "system.describe"
+        }))
+        .unwrap();
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            let mut plane = ControlPlane::new("native-test");
+            serve_once(&server_name, |frame| {
+                let responses = plane
+                    .dispatch_frame(frame)
+                    .map_err(|error| TransportError::Protocol(error.to_string()))?;
+                responses.into_iter().next().ok_or_else(|| {
+                    TransportError::Protocol("notification produced no response".into())
+                })
+            })
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let response = round_trip(&name, &request).unwrap();
+        let response = serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap();
+        assert_eq!(response["id"], 9);
+        assert_eq!(response["result"]["protocolVersion"]["major"], 1);
         server.join().unwrap().unwrap();
     }
 }

@@ -70,6 +70,8 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Added the [M01 execution evidence report](evidence/M01-contracts.md), mapping implemented crates, commands, test counts, supported requirement slices, and explicit untested Windows/security/audio boundaries. The next task is the authorized Windows named-pipe/authentication boundary; no HTTP transport is planned.
 - Added `crates/transport`, a Windows-native named-pipe prototype over the existing bounded protocol framing. It validates local pipe names, rejects remote clients, handles partial I/O, and flushes before disconnecting. The native round-trip test initially exposed a real disconnect race and now passes after the flush fix. Evidence is in [M01 native transport](evidence/M01-native-transport.md).
 - Checks: `cargo test --workspace` — all 35 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. This is transport-only evidence: no audio streams, defaults, drivers, or system configuration were touched. The default pipe security descriptor is not production authentication.
+- Connected the native pipe test harness to `ControlPlane::dispatch_frame`; a framed `system.describe` request now crosses the actual Windows pipe and returns the control-plane discovery contract. This remains a test harness, not a production daemon or authentication implementation.
+- Checks: `cargo test --workspace` — all 36 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent Windows configuration was touched.
 
 ### 2026-09-05 — WSL inventory
 
