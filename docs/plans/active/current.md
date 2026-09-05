@@ -81,6 +81,7 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 - Format results: all 34 endpoints returned a closest match for 44.1 kHz mono/stereo; 48 kHz mono was exact on 1/34; 48 kHz stereo was exact on 29/34. `S_FALSE` closest-match results require negotiation rather than rejection.
 - Shared-mode initialization test: 20/34 endpoints initialized with their current mix format and `AUTOCONVERTPCM|NOPERSIST`; 13 returned `E_INVALIDARG`, one returned `AUDCLNT_E_EXCLUSIVE_MODE_ONLY`. Successful buffer sizes were 1,056–2,112 frames. Clients were reset/released without being started.
 - Render smoke test: 20 render endpoints started and stopped successfully with no submitted audio; one render endpoint failed initialization with `AUDCLNT_E_EXCLUSIVE_MODE_ONLY`. Capture clients were never started, so no microphone or desktop audio was captured.
+- Capture isolation retry: capture clients were tested with no stream flags and a 100 ms shared buffer request; all 13 still returned `E_INVALIDARG`. This is a reproducible probe limitation/result, not a Windows capture feasibility conclusion.
 - Configuration safety: no defaults, volume, mute, exclusive-mode settings, or device properties changed; no restoration was required. `GetStreamLatency` before start returned zero and is not evidence of latency.
 - This remains capability metadata only. Actual capture/render, loopback latency, process capture, and physical tone/impulse behavior remain unmeasured.
 

@@ -52,10 +52,20 @@ unsafe fn enumerate() -> Result<()> {
         let support_44100_stereo = format_support(&client, 44_100, 2).0;
         let support_48000_mono = format_support(&client, 48_000, 1).0;
         let support_48000_stereo = format_support(&client, 48_000, 2).0;
+        let stream_flags = if id_string.starts_with("{0.0.0.") {
+            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
+        } else {
+            0
+        };
+        let buffer_duration = if id_string.starts_with("{0.0.0.") {
+            0
+        } else {
+            1_000_000
+        };
         let stream_result = client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
-            0,
+            stream_flags,
+            buffer_duration,
             0,
             format,
             None,
