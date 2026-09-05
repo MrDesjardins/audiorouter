@@ -1,6 +1,6 @@
 //! Read-only M00 WASAPI endpoint inventory.
 //!
-//! This probe intentionally does not start streams, alter defaults, install drivers,
+//! This probe intentionally does not capture audio, alter defaults, install drivers,
 //! or write outside stdout. It may initialize a shared-mode client briefly to test
 //! capability and buffer negotiation, then resets and releases it. Stream data and
 //! process-loopback probes remain separate follow-up work.
@@ -36,6 +36,7 @@ unsafe fn enumerate() -> Result<()> {
         let device = devices.Item(index)?;
         let id = device.GetId()?;
         let state = device.GetState()?;
+        let id_string = id.to_string()?;
         let client: IAudioClient = device.Activate(CLSCTX_ALL, None)?;
         let mut default_period = 0i64;
         let mut minimum_period = 0i64;
@@ -59,20 +60,29 @@ unsafe fn enumerate() -> Result<()> {
             format,
             None,
         );
-        let (initialize_hresult, buffer_frames, stream_latency_100ns) = match stream_result {
+        let (initialize_hresult, start_hresult, buffer_frames, stream_latency_100ns) = match stream_result {
             Ok(()) => {
                 let buffer = client.GetBufferSize()?;
                 let latency = client.GetStreamLatency()?;
+                let start_hresult = if id_string.starts_with("{0.0.0.") {
+                    let result = client.Start();
+                    if result.is_ok() {
+                        client.Stop()?;
+                    }
+                    result.map(|()| 0).unwrap_or_else(|error| error.code().0)
+                } else {
+                    0
+                };
                 client.Reset()?;
-                (0, Some(buffer), Some(latency))
+                (0, start_hresult, Some(buffer), Some(latency))
             }
-            Err(error) => (error.code().0, None, None),
+            Err(error) => (error.code().0, -1, None, None),
         };
         CoTaskMemFree(Some(format.cast()));
         println!(
-            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} buffer_frames={} stream_latency_100ns={}",
+            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} buffer_frames={} stream_latency_100ns={}",
             state.0,
-            id.to_string()?,
+            id_string,
             format_tag,
             channels,
             sample_rate,

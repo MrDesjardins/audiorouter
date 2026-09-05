@@ -22,4 +22,8 @@ The probe was extended to call `IAudioClient::Initialize` with `AUDCLNT_SHAREMOD
 
 The initialization test was non-persistent and did not modify existing configuration. It did not change default endpoints, volume, mute, exclusive-mode settings, or device properties. All activated clients were reset/released before the process exited; no restoration action was required.
 
+The probe then performed a render-only start/stop smoke test. Of 21 render endpoints, 20 initialized, started with no submitted audio, stopped, reset, and released successfully. One render endpoint failed initialization with `AUDCLNT_E_EXCLUSIVE_MODE_ONLY`. The 13 capture endpoints were never started, so this run captured no microphone or desktop audio; their initialization failures remained `E_INVALIDARG` as above.
+
+This test changed no persistent configuration and required no restoration. It does not prove audible rendering, capture data flow, loopback latency, process-tree capture, or physical tone/impulse behavior.
+
 It still does not establish shared-mode capture/render behavior, loopback latency, process-tree capture, or physical tone/impulse behavior.
