@@ -2,7 +2,7 @@
 
 ## Status
 
-The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, open audio streams, install drivers, or write outside stdout.
+The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, start audio streams, install drivers, or write outside stdout.
 
 ## Current result
 
@@ -15,5 +15,11 @@ Observed capability summary: most endpoints reported 48,000 Hz, two channels, 32
 The probe also calls `IAudioClient::IsFormatSupported` in shared mode for 44.1/48 kHz mono/stereo IEEE-float formats. This is a capability query only: it does not initialize or run a capture/render stream and does not alter Windows configuration. On this run, all 34 endpoints returned `S_FALSE` (closest-match available) for 44.1 kHz mono and stereo; 48 kHz mono was exact (`S_OK`) on 1/34 and closest-match on 33/34; 48 kHz stereo was exact on 29/34 and closest-match on 5/34. No other HRESULTs occurred. `S_FALSE` is not a failure; the returned closest format must be inspected when implementing negotiation.
 
 No configuration restoration was required: the probe only activated endpoint/client COM objects, queried metadata, and released them. It did not initialize an audio stream, set a format, change a default, mute, or alter a device.
+
+## Shared-mode initialization result
+
+The probe was extended to call `IAudioClient::Initialize` with `AUDCLNT_SHAREMODE_SHARED`, the endpoint's current mix format, `AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST`, and zero duration/period parameters. On the direct run, 20 of 34 endpoints initialized successfully, reported buffer sizes from 1,056 to 2,112 frames, were reset, and were released. Thirteen returned `0x80070057` (`E_INVALIDARG`) and one returned `0x8889000a` (`AUDCLNT_E_EXCLUSIVE_MODE_ONLY`). No client was started; `GetStreamLatency` therefore returned zero and is not a latency measurement.
+
+The initialization test was non-persistent and did not modify existing configuration. It did not change default endpoints, volume, mute, exclusive-mode settings, or device properties. All activated clients were reset/released before the process exited; no restoration action was required.
 
 It still does not establish shared-mode capture/render behavior, loopback latency, process-tree capture, or physical tone/impulse behavior.

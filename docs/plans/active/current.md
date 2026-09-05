@@ -79,6 +79,8 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 - The probe now also reports current mix format and device periods: most endpoints are 48 kHz/two-channel/32-bit with 2–3 ms minimum periods; Sonar endpoints include 96 kHz/eight-channel devices; the Focusrite render endpoint reports a 3 ms minimum period.
 - It now performs non-mutating shared-mode `IsFormatSupported` queries for 44.1/48 kHz mono/stereo IEEE-float formats. No streams were initialized and no Windows configuration was changed.
 - Format results: all 34 endpoints returned a closest match for 44.1 kHz mono/stereo; 48 kHz mono was exact on 1/34; 48 kHz stereo was exact on 29/34. `S_FALSE` closest-match results require negotiation rather than rejection.
+- Shared-mode initialization test: 20/34 endpoints initialized with their current mix format and `AUTOCONVERTPCM|NOPERSIST`; 13 returned `E_INVALIDARG`, one returned `AUDCLNT_E_EXCLUSIVE_MODE_ONLY`. Successful buffer sizes were 1,056–2,112 frames. Clients were reset/released without being started.
+- Configuration safety: no defaults, volume, mute, exclusive-mode settings, or device properties changed; no restoration was required. `GetStreamLatency` before start returned zero and is not evidence of latency.
 - This remains capability metadata only. Actual capture/render, loopback latency, process capture, and physical tone/impulse behavior remain unmeasured.
 
 ## Next authorized implementation task

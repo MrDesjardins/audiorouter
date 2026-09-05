@@ -1,13 +1,14 @@
 //! Read-only M00 WASAPI endpoint inventory.
 //!
-//! This probe intentionally does not open streams, alter defaults, install drivers,
-//! or write outside stdout. It establishes that the selected Windows Rust bindings
-//! can enumerate endpoint identities and states. Stream/format/period and
+//! This probe intentionally does not start streams, alter defaults, install drivers,
+//! or write outside stdout. It may initialize a shared-mode client briefly to test
+//! capability and buffer negotiation, then resets and releases it. Stream data and
 //! process-loopback probes remain separate follow-up work.
 
 use windows::core::Result;
 use windows::Win32::Media::Audio::{
-    eAll, AUDCLNT_SHAREMODE_SHARED, DEVICE_STATE_ACTIVE, IAudioClient, IMMDeviceEnumerator,
+    eAll, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+    AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE, IAudioClient, IMMDeviceEnumerator,
     MMDeviceEnumerator, WAVEFORMATEX,
 };
 use windows::Win32::System::Com::{
@@ -41,7 +42,6 @@ unsafe fn enumerate() -> Result<()> {
         client.GetDevicePeriod(Some(&mut default_period), Some(&mut minimum_period))?;
         let format = client.GetMixFormat()?;
         let format_value = *format;
-        CoTaskMemFree(Some(format.cast()));
         let format_tag = std::ptr::read_unaligned(std::ptr::addr_of!(format_value.wFormatTag));
         let channels = std::ptr::read_unaligned(std::ptr::addr_of!(format_value.nChannels));
         let sample_rate =
@@ -51,8 +51,26 @@ unsafe fn enumerate() -> Result<()> {
         let support_44100_stereo = format_support(&client, 44_100, 2).0;
         let support_48000_mono = format_support(&client, 48_000, 1).0;
         let support_48000_stereo = format_support(&client, 48_000, 2).0;
+        let stream_result = client.Initialize(
+            AUDCLNT_SHAREMODE_SHARED,
+            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+            0,
+            0,
+            format,
+            None,
+        );
+        let (initialize_hresult, buffer_frames, stream_latency_100ns) = match stream_result {
+            Ok(()) => {
+                let buffer = client.GetBufferSize()?;
+                let latency = client.GetStreamLatency()?;
+                client.Reset()?;
+                (0, Some(buffer), Some(latency))
+            }
+            Err(error) => (error.code().0, None, None),
+        };
+        CoTaskMemFree(Some(format.cast()));
         println!(
-            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x}",
+            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} buffer_frames={} stream_latency_100ns={}",
             state.0,
             id.to_string()?,
             format_tag,
@@ -61,6 +79,8 @@ unsafe fn enumerate() -> Result<()> {
             bits,
             default_period,
             minimum_period,
+            buffer_frames.map_or_else(|| "-".to_string(), |value| value.to_string()),
+            stream_latency_100ns.map_or_else(|| "-".to_string(), |value| value.to_string()),
         );
     }
 
