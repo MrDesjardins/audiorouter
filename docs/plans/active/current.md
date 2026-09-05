@@ -20,6 +20,21 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Remaining checklist: endpoint format/period enumeration; shared-mode capture/render; physical loopback latency; process-tree include/exclude and restart/PID reuse; controlled tone harness; managed-driver integration/signing evaluation; DEC-03/06/07 decision update.
 - Rollback: documentation-only changes can be reverted; no system state was changed.
 
+## M01 continuation scope
+
+- Objective: begin the headless domain/contracts foundation permitted while M00's Windows capture and managed-driver gates remain blocked.
+- Requirement IDs: ARCH-01/03/06/10/12, GRAPH-01/02/03/05/06/07/08/09/12/13/14, API-01/02/03/04/05/06/07/08/09/10/11/12, AUTO-01/02/03/04/05/09/10/11/12, STATE-01â€“07/12, SEC-01â€“04/09/10/12, ENG-01/02/04.
+- Ordered checklist: establish a pinned Rust workspace; define domain IDs/session/node/edge contracts; implement bounded graph validation with path-specific errors; add deterministic fake runtime and tests; add machine-readable schema/fixture foundation; document real-audio capability as unavailable until M02.
+- Validation matrix: portable `cargo fmt`, `cargo check`, and `cargo test`; no M01 test is allowed to claim Windows audio, driver, process-loopback, or physical-latency evidence.
+- Rollback: new portable crate/files can be reverted without touching Windows configuration, audio endpoints, drivers, or user data.
+
+### 2026-09-05 — M01 domain foundation
+
+- Added the pinned workspace and `crates/domain` portable crate. It contains opaque entity IDs, session/node/port/edge contracts, graph limits, direction/channel/matrix checks, dangling/duplicate/multiple-input checks, and cycle detection with field-path errors.
+- Added `FakeRuntime` with prepare/start/stop lifecycle, idempotent start, generation identity, and failed-prepare behavior. It never opens audio devices and cannot satisfy M02 Windows evidence.
+- Checks: `cargo fmt --all`, `cargo test -p audiorouter-domain` — 6 tests passed; `git diff --check` passed. A dependency-free implementation was used because crates.io access was unavailable in this environment; JSON/schema derives remain a subsequent M01 task when dependencies can be supplied reproducibly.
+- Evidence boundary: these are portable domain tests only. They do not validate WASAPI, driver, process-loopback, real-time timing, or physical audio.
+
 ### 2026-09-05 — WSL inventory
 
 - Environment: WSL2 Linux kernel `6.6.87.2-microsoft-standard-WSL2`, `x86_64`.

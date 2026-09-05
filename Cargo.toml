@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["crates/domain"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+rust-version = "1.80"
