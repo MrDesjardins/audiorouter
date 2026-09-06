@@ -123,6 +123,8 @@ Application failures now publish stable structured metadata alongside their nume
 
 The contracts package now includes a versioned transport-agnostic `createAudioRouterClient` surface covering all currently implemented methods. It maps method names to typed parameters/results, allocates request IDs, omits absent parameters, and raises `AudioRouterRpcError` with server metadata. `npm run typecheck` passes; native transport wiring remains separate.
 
+`system.describe` now advertises state-event categories, the fact that meter events are not replayed, and the event log’s 10,000-event/15-minute retention bounds. A discovery regression confirms these values against the event-log implementation, with control/domain tests, strict Clippy, and contract typecheck green.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.

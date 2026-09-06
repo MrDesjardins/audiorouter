@@ -462,7 +462,35 @@ impl ControlPlane {
             };
             json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class })
         }).collect();
-        json!({ "protocolVersion": { "major": 1, "minor": 0 }, "schemaVersion": 1, "build": self.build, "methods": methods, "nodeTypes": nodes, "limits": { "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION, "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION, "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL, "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL, "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS } })
+        json!({
+            "protocolVersion": { "major": 1, "minor": 0 },
+            "schemaVersion": 1,
+            "build": self.build,
+            "methods": methods,
+            "nodeTypes": nodes,
+            "limits": {
+                "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION,
+                "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION,
+                "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL,
+                "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
+                "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS
+            },
+            "events": {
+                "stateCategories": [
+                    "session.created",
+                    "session.deleted",
+                    "graph.committed",
+                    "runtime.started",
+                    "runtime.activated",
+                    "runtime.stopped"
+                ],
+                "meterReplay": false,
+                "retention": {
+                    "maxEvents": audiorouter_domain::MAX_RETAINED_EVENTS,
+                    "maxAgeSeconds": 900
+                }
+            }
+        })
     }
 
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
@@ -1682,6 +1710,14 @@ mod tests {
         assert_eq!(description["limits"]["maxNodesGlobal"], 128);
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
         assert_eq!(description["limits"]["maxActiveSessions"], 2);
+        assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
+        assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
+        assert_eq!(description["events"]["meterReplay"], false);
+        assert!(description["events"]["stateCategories"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|category| category == "graph.committed"));
         assert!(description["methods"]
             .as_array()
             .unwrap()

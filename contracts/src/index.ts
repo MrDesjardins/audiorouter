@@ -100,6 +100,11 @@ export interface DiscoveryDocument {
     maxEdgesGlobal: number;
     maxActiveSessions: number;
   };
+  events: {
+    stateCategories: string[];
+    meterReplay: false;
+    retention: { maxEvents: number; maxAgeSeconds: number };
+  };
 }
 
 export interface ApplicationInfo {
