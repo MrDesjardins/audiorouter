@@ -23,6 +23,8 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .lower-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; } .library-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; } .library-grid button { display: grid; text-align: left; gap: .25rem; } .library-grid small { font-size: .72rem; } .badge { color: #9ba8bd; font-size: .8rem; }
 .session-picker { display: grid; gap: .35rem; margin-bottom: .8rem; color: #bdc9dc; font-size: .78rem; }
 .session-picker select { width: 100%; border: 1px solid #384458; border-radius: 6px; color: inherit; background: #1a2130; padding: .45rem; font: inherit; }
+.recording-search { display: grid; gap: .3rem; margin-bottom: .8rem; color: #bdc9dc; font-size: .78rem; }
+.recording-search input { width: 100%; border: 1px solid #384458; border-radius: 6px; color: inherit; background: #1a2130; padding: .45rem; font: inherit; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
 @media (forced-colors: active) { button, .session-picker select { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; } .node-card.selected, .session-item.selected { outline: 2px solid Highlight; outline-offset: 2px; } .status-dot { forced-color-adjust: none; background: Highlight; } }
 @media (max-width: 760px) { .topbar, .workspace-title { align-items: flex-start; flex-direction: column; } .workspace-grid { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid #293344; } .main-content { padding: 1rem; } .lower-grid { grid-template-columns: 1fr; } }

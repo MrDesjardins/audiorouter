@@ -152,6 +152,12 @@ connected-only draft checkbox. This is distinct from the process privacy-mute
 safety action, which remains unavailable in the editor; the parameter still
 flows through the existing plan/commit path. UI coverage is 9 tests with
 typecheck and production build passing.
+
+The recording library Search control is now functional as a bounded local
+filter over authorized metadata (identity, title, artist, comment, and path).
+It reports filtered counts and an explicit no-match state, while never opening
+recording files or changing backend state. UI typecheck, tests, and production
+build pass.
 ## 2026-09-06 â€” Host transport adapter seam
 
 The UI now exposes `createLiveBackendFromTransport`, which builds the shared
