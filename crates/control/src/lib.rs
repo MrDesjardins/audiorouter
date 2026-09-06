@@ -1301,7 +1301,7 @@ impl ControlPlane {
         Ok(json!({
             "planId": plan_id,
             "baseRevision": base_revision,
-            "expiresInMs": 30000,
+            "expiresInMs": 300000,
             "diff": diff,
             "affectedDestinations": affected_destinations,
             "warnings": [],
@@ -1508,7 +1508,7 @@ impl ControlPlane {
             .and_then(Value::as_u64)
             .ok_or_else(|| ControlError::InvalidRequest("baseRevision is required".into()))?;
         let plan_id = self.graph_undo_plan(&session_id, base_revision)?;
-        Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 30000 }))
+        Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 300000 }))
     }
 
     fn dispatch_recordings_list(&self, params: Option<Value>) -> Result<Value, ControlError> {

@@ -12,6 +12,7 @@ pub const MAX_NODES_PER_SESSION: usize = 64;
 pub const MAX_EDGES_PER_SESSION: usize = 128;
 pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
+pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
@@ -1012,12 +1013,7 @@ impl GraphStore {
         base_revision: u64,
         candidate: Session,
     ) -> Result<EntityId, StoreError> {
-        self.plan_graph_with_ttl(
-            session_id,
-            base_revision,
-            candidate,
-            std::time::Duration::from_secs(30),
-        )
+        self.plan_graph_with_ttl(session_id, base_revision, candidate, GRAPH_PLAN_TTL)
     }
 
     pub fn plan_graph_with_ttl(

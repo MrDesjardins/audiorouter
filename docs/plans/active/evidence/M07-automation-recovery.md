@@ -67,6 +67,13 @@ Added `diagnostics [--database <path>]` and `operation get <operation-id> --data
 
 Changed `recordings.list` and `recordings.get` from generic `Read` to explicit `Record` permission because their metadata includes absolute file paths. The MCP focused tool descriptions now disclose the requirement, and a read-only grant regression confirms denial before storage access. Existing control/CLI suites remain green with strict Clippy.
 
+## 2026-09-06 — Graph plan expiry contract
+
+Aligned the default in-memory graph-plan lifetime and control responses with
+API-05: plans now expire after five minutes (`expiresInMs: 300000`). The domain
+TTL override remains available for expiry tests, so deterministic short-lived
+plan coverage is preserved.
+
 ## 2026-09-06 — Recording CLI parity
 
 Added `recordings list`, `recordings get`, and `recordings remove-entry` to the
