@@ -897,7 +897,7 @@ impl ControlPlane {
         Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 30000 }))
     }
 
-    fn dispatch_events_subscribe(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         let after_sequence = params
             .get("afterSequence")

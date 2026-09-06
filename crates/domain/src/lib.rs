@@ -6,6 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::time::{Duration, Instant};
 
 pub const MAX_NODES_PER_SESSION: usize = 64;
 pub const MAX_EDGES_PER_SESSION: usize = 128;
@@ -13,6 +14,7 @@ pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
+const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -481,7 +483,13 @@ pub enum EventReplayError {
 pub struct EventLog {
     backend_epoch: u64,
     next_sequence: u64,
-    events: VecDeque<StateEvent>,
+    events: VecDeque<RetainedEvent>,
+}
+
+#[derive(Clone, Debug)]
+struct RetainedEvent {
+    event: StateEvent,
+    retained_at: Instant,
 }
 
 impl EventLog {
@@ -516,15 +524,35 @@ impl EventLog {
         category: impl Into<String>,
         session_id: Option<EntityId>,
     ) -> u64 {
-        let sequence = self.next_sequence;
-        self.next_sequence = self.next_sequence.saturating_add(1);
-        self.events.push_back(StateEvent {
-            sequence,
-            backend_epoch: self.backend_epoch,
+        self.append_at(
             resource_revision,
             operation_id,
-            category: category.into(),
+            category,
             session_id,
+            Instant::now(),
+        )
+    }
+
+    fn append_at(
+        &mut self,
+        resource_revision: u64,
+        operation_id: Option<String>,
+        category: impl Into<String>,
+        session_id: Option<EntityId>,
+        retained_at: Instant,
+    ) -> u64 {
+        let sequence = self.next_sequence;
+        self.next_sequence = self.next_sequence.saturating_add(1);
+        self.events.push_back(RetainedEvent {
+            event: StateEvent {
+                sequence,
+                backend_epoch: self.backend_epoch,
+                resource_revision,
+                operation_id,
+                category: category.into(),
+                session_id,
+            },
+            retained_at,
         });
         while self.events.len() > MAX_RETAINED_EVENTS {
             self.events.pop_front();
@@ -533,24 +561,33 @@ impl EventLog {
     }
 
     pub fn since(
-        &self,
+        &mut self,
         after_sequence: u64,
         limit: usize,
     ) -> Result<Vec<StateEvent>, EventReplayError> {
         if !(1..=500).contains(&limit) {
             return Err(EventReplayError::InvalidLimit);
         }
+        let now = Instant::now();
+        while self
+            .events
+            .front()
+            .map(|event| now.saturating_duration_since(event.retained_at) >= EVENT_RETENTION)
+            .unwrap_or(false)
+        {
+            self.events.pop_front();
+        }
         if let Some(first) = self.events.front() {
-            if after_sequence.saturating_add(1) < first.sequence {
+            if after_sequence.saturating_add(1) < first.event.sequence {
                 return Err(EventReplayError::ResyncRequired);
             }
         }
         Ok(self
             .events
             .iter()
-            .filter(|event| event.sequence > after_sequence)
+            .filter(|event| event.event.sequence > after_sequence)
             .take(limit)
-            .cloned()
+            .map(|event| event.event.clone())
             .collect())
     }
 }
@@ -1115,8 +1152,24 @@ mod tests {
     }
 
     #[test]
+    fn event_log_expires_entries_after_fifteen_minutes() {
+        let mut log = EventLog::new(1);
+        let now = Instant::now();
+        log.append_at(
+            1,
+            None,
+            "old",
+            None,
+            now - EVENT_RETENTION - Duration::from_secs(1),
+        );
+        log.append_at(2, None, "current", None, now);
+        assert_eq!(log.since(0, 10), Err(EventReplayError::ResyncRequired));
+        assert_eq!(log.since(1, 10).unwrap()[0].category, "current");
+    }
+
+    #[test]
     fn event_log_rejects_unbounded_replay_requests() {
-        let log = EventLog::new(1);
+        let mut log = EventLog::new(1);
         assert_eq!(log.since(0, 0), Err(EventReplayError::InvalidLimit));
         assert_eq!(log.since(0, 501), Err(EventReplayError::InvalidLimit));
     }

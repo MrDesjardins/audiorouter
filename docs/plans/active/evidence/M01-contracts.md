@@ -89,6 +89,8 @@ CLI list dispatch now validates `nodes types|describe` explicitly. Invalid subco
 
 Authenticated control dispatch now enforces the API mutation budget with a per-client token bucket: 40 initial tokens, refilling at 20 requests per second. Rejected requests return JSON-RPC server error `-32000` with `{ "code": "rateLimited", "retryAfterMs": ... }`; Windows transport wiring keys the bucket by the authenticated client SID. Deterministic bucket and end-to-end response coverage pass, with control/transport verification at 27/14 tests and strict Clippy green. Meter-subscription throttling and production daemon lifecycle remain open.
 
+`EventLog` now enforces both retention dimensions from API-08: at most 10,000 state events and no more than 15 minutes of monotonic age. Expired entries are removed before replay, so an old cursor returns the existing explicit resync response. A deterministic expiry regression passes; domain/control verification is 22/27 tests with strict Clippy.
+
 `graph.commit` now hashes the planned session payload with SHA-256, checks the durable journal before domain mutation, and stores the hash in the same SQLite transaction as the session revision. Matching requests replay across a fresh control plane; mismatched reuse is rejected. The combined domain/control/storage verification passed 19, 22, and 16 tests respectively, with strict Clippy green. Expiry/retention policy for journal rows remains future work.
 
 Durable idempotency records now have a 24-hour retention bound. Journal reads and transactional writes prune older rows using an indexed `created_at`; a regression verifies an expired key can be reused while a current mismatched hash still conflicts. Storage coverage is 17 passing tests with strict Clippy.
