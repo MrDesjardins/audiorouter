@@ -87,7 +87,8 @@ storage tests, and strict Clippy pass.
 ## 2026-09-06 — Operation cancellation contract
 
 Added `operations.cancel` to discovery, authorization, strict parameter
-validation, and the CLI's `operation cancel` command. The backend currently
+validation, the CLI's `operation cancel` command, and MCP's
+`cancel_operation` tool. The backend currently
 retains only completed graph-commit outcomes; cancellation therefore reports
 `status: completed`, `cancelled: false`, and `reason: alreadyCompleted` rather
 than claiming to undo a committed side effect. Unknown IDs return an explicit
