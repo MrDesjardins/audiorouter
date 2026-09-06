@@ -157,3 +157,10 @@ an existing graphic band, avoiding abrupt replacement while preserving the
 fixed ten-band storage model. The graphic-EQ regression exercises the ramp and
 checks finite output and final gain state. Fifteen DSP tests and strict Clippy
 pass; graph/API integration and higher-level automation policy remain open.
+
+The compressor now exposes its current gain-reduction meter from the same
+stereo-linked envelope and reduction calculation used for output samples.
+Reset clears the meter, and regression coverage distinguishes quiet
+below-threshold audio from compressed audio. Fifteen DSP tests and strict
+Clippy pass; broader per-channel RMS/peak telemetry and graph/API integration
+remain open.

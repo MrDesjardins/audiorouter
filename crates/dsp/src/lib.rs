@@ -460,6 +460,7 @@ pub struct Compressor {
     params: CompressorParams,
     channels: usize,
     envelope_db: f32,
+    gain_reduction_db: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -727,6 +728,7 @@ impl Compressor {
             params,
             channels,
             envelope_db: -120.0,
+            gain_reduction_db: 0.0,
         })
     }
 
@@ -736,6 +738,11 @@ impl Compressor {
 
     pub fn reset(&mut self) {
         self.envelope_db = -120.0;
+        self.gain_reduction_db = 0.0;
+    }
+
+    pub fn gain_reduction_db(&self) -> f32 {
+        self.gain_reduction_db
     }
 
     /// Applies linked detection and compression in place without allocation.
@@ -760,6 +767,7 @@ impl Compressor {
                 self.params.ratio,
                 self.params.knee_db,
             );
+            self.gain_reduction_db = reduction_db;
             let gain = 10.0_f32.powf((self.params.makeup_db - reduction_db) / 20.0);
             for sample in frame {
                 let input = if sample.is_finite() { *sample } else { 0.0 };
@@ -1131,6 +1139,7 @@ mod tests {
         assert!(quiet_samples
             .iter()
             .all(|sample| (*sample - 0.1).abs() < 1e-4));
+        assert_eq!(quiet.gain_reduction_db(), 0.0);
 
         let mut loud = Compressor::new(base, 2).unwrap();
         let mut loud_samples = [0.0; 128];
@@ -1141,6 +1150,9 @@ mod tests {
         loud.process_interleaved(&mut loud_samples);
         assert!(loud_samples[126] < 1.0);
         assert!((loud_samples[126] / 1.0 - loud_samples[127] / 0.25).abs() < 1e-5);
+        assert!(loud.gain_reduction_db() > 0.0);
+        loud.reset();
+        assert_eq!(loud.gain_reduction_db(), 0.0);
     }
 
     #[test]
