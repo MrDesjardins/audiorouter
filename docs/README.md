@@ -40,6 +40,10 @@ The [release qualification checklist](operations/release-qualification.md)
 records the reproducible unsigned artifact flow, recovery expectations, and
 the native/signing/installer gates that remain open.
 
+The [development release notes](operations/release-notes.md) summarize the
+current tested snapshot, supported boundary, known limitations, and safety
+conditions without claiming a releasable installer.
+
 ## Plans versus specifications
 
 - [Active](plans/active/current.md): execution state, evidence, and next steps. Start here when resuming work.
