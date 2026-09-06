@@ -1,0 +1,53 @@
+name: AudioRouter CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    name: Portable Rust and UI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Test workspace
+        run: cargo test --workspace --locked
+      - name: Strict Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Install contract dependencies
+        working-directory: contracts
+        run: npm ci
+      - name: Check contracts
+        working-directory: contracts
+        run: npm run typecheck
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
+      - name: Test and build UI
+        working-directory: ui
+        run: npm test && npm run build
+
+  windows:
+    name: Windows Rust validation
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Test non-hardware workspace
+        run: cargo test --workspace --locked --exclude audiorouter-windows-audio
+      - name: Check Windows audio adapter
+        run: cargo check -p audiorouter-windows-audio --locked
+      - name: Strict Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings

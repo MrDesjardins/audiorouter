@@ -145,6 +145,13 @@ Canonical plural `sessions.start` and `sessions.stop` methods are now advertised
 
 The same method now returns in-process graph-commit outcomes when the backend is memory-only, with a bounded 100-entry cache and an explicit `durable:false` marker. SQLite outcomes remain durable and are preferred when available; compile and lint validation pass.
 
+Added the first repository CI workflow with separate portable and Windows
+jobs. Ubuntu runs locked workspace tests, strict Clippy, formatting, contract
+typechecking, and UI tests/build; Windows runs the non-hardware workspace test
+set, compiles the Windows audio adapter, and runs strict Clippy. Hardware
+endpoint tests remain deliberately separate so CI does not claim audio
+availability or mutate machine configuration.
+
 `status.get` now returns a dynamic control-plane snapshot rather than only static capability text: storage mode, loaded session count, active runtime IDs/count, and event cursor are reported while unavailable audio remains explicit. The TypeScript contract models the fields and compile/lint checks pass.
 
 Status session counts now come from the durable SQLite table when a storage-backed control plane is used, avoiding false zero counts before lazy hydration; active IDs are sorted for deterministic output. Storage runtime tests pass 20 tests and compile/lint checks remain green.
