@@ -184,3 +184,7 @@ migration. Malformed or damaged files return the explicit `CorruptDatabase`
 error and remain byte-for-byte untouched, directing recovery through the
 existing validated backup/restore workflow. Storage coverage is 27 tests with
 strict Clippy.
+
+The control layer maps this condition to a stable, non-retryable
+`corruptDatabase` response with guidance to open a validated backup or restore
+into a new destination. Control coverage is 52 tests with strict Clippy.

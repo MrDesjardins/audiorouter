@@ -344,6 +344,7 @@ pub enum ControlError {
     Store(audiorouter_domain::StoreError),
     Json(String),
     Storage(String),
+    CorruptDatabase(String),
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -2286,7 +2287,10 @@ fn is_mutating_method(method: &str) -> bool {
 }
 
 fn storage_error(error: StorageError) -> ControlError {
-    ControlError::Storage(format!("{error:?}"))
+    match error {
+        StorageError::CorruptDatabase(message) => ControlError::CorruptDatabase(message),
+        error => ControlError::Storage(format!("{error:?}")),
+    }
 }
 
 fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpcResponse {
@@ -2302,6 +2306,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
             audiorouter_domain::StoreError::IdempotencyConflict => "idempotencyConflict",
         },
         ControlError::Storage(_) => "storageFailure",
+        ControlError::CorruptDatabase(_) => "corruptDatabase",
         ControlError::Json(_) => "internalError",
         ControlError::InvalidRequest(_) => "invalidRequest",
     };
@@ -2323,6 +2328,10 @@ fn application_error_data(code: &str) -> Value {
         "storageFailure" => (
             true,
             "inspect backend health and retry after the failure is resolved",
+        ),
+        "corruptDatabase" => (
+            false,
+            "open a validated backup or restore into a new database destination",
         ),
         "deviceUnavailable" => (
             true,
@@ -3636,5 +3645,17 @@ mod tests {
         assert!(plane
             .dispatch_message(RpcMessage::Single(notification))
             .is_empty());
+    }
+
+    #[test]
+    fn corrupt_database_error_has_non_retryable_recovery_code() {
+        let response = application_error_response(
+            Some(json!(1)),
+            ControlError::CorruptDatabase("integrity check failed".into()),
+        );
+        let error = response.error.unwrap();
+        let data = error.data.unwrap();
+        assert_eq!(data["code"], "corruptDatabase");
+        assert_eq!(data["retryable"], false);
     }
 }
