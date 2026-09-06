@@ -40,6 +40,27 @@ try {
         }
     }
 
+    $withoutNotices = [ordered]@{
+        format = "audiorouter.release-preparation"
+        schemaVersion = 1
+        architecture = "x64"
+        sourceRevision = ("c" * 40)
+        artifacts = @([ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 })
+        signed = $false
+        publicationReady = $false
+        blockers = @("test blocker")
+    }
+    $withoutNoticesPath = Join-Path $root "without-notices-manifest.json"
+    $withoutNotices | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $withoutNoticesPath -Encoding utf8
+    try {
+        & $verifier $withoutNoticesPath | Out-Null
+        throw "verifier accepted a manifest without dependency notices"
+    } catch {
+        if ($_.Exception.Message -eq "verifier accepted a manifest without dependency notices") {
+            throw
+        }
+    }
+
     $linkPath = Join-Path $root "linked.bin"
     try {
         New-Item -ItemType SymbolicLink -Path $linkPath -Target $noticePath -ErrorAction Stop | Out-Null

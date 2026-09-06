@@ -71,5 +71,8 @@ foreach ($entry in @($manifest.artifacts)) {
 if ($names.Count -eq 0) {
     throw "release manifest contains no artifacts"
 }
+if (-not $names.Contains("THIRD-PARTY-NOTICES.txt")) {
+    throw "release manifest does not include THIRD-PARTY-NOTICES.txt"
+}
 
 Write-Output "Verified unsigned artifacts in $root"

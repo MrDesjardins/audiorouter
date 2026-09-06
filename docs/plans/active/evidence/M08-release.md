@@ -149,3 +149,4 @@ The artifact verifier now rejects reparse-point paths before hashing and
 requires `THIRD-PARTY-NOTICES.txt` alongside the SBOM. Its temporary regression
 fixture covers the existing tamper check and conditionally exercises a symbolic
 link artifact when the host permits link creation; no release output is kept.
+The fixture also verifies that a manifest omitting the notice entry is rejected.
