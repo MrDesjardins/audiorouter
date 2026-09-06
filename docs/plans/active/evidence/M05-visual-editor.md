@@ -222,6 +222,11 @@ not participate in the visual path, and the traversal is presentation-only;
 topology and backend state are unchanged. Two pure graph-view regressions were
 added; UI coverage is 44 tests with typecheck and production build passing.
 
+The structured graph list now includes each node's direction, port role, and
+channel count alongside its kind and enabled state. This keeps endpoint
+inspection equivalent for keyboard/select users without requiring the canvas;
+the same 49-test UI suite, typecheck, and production build pass.
+
 The inspector now supports explicit removal of the selected node from the
 draft after confirmation. Its incident edges are removed from the candidate,
 while the session revision and committed state remain unchanged until backend

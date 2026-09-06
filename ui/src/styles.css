@@ -46,6 +46,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .template-picker { display: grid; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #293344; }
 .template-picker label { display: grid; gap: .25rem; }
 .library-search { display: grid; gap: .25rem; margin-bottom: .75rem; }
+.list-port-summary { display: block; margin-top: .2rem; font-size: .72rem; }
 .theme-picker { display: grid; gap: .15rem; color: #bdc9dc; font-size: .72rem; }
 .theme-picker select { border: 1px solid #384458; border-radius: 6px; color: inherit; background: #1a2130; padding: .25rem; font: inherit; }
 .theme-light { color: #172033; background: #f1f4f8; }
