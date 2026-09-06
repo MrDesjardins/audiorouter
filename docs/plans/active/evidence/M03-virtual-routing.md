@@ -43,3 +43,9 @@ availability reason, endpoint identity placeholders, and current lease owner;
 the empty initial registry is returned without activating a stream or creating
 an endpoint. The method is included in domain discovery and the generated
 TypeScript client contract.
+
+CLI and MCP adapter parity now expose the same read-only query as
+`virtual-devices list` and `list_virtual_devices`, respectively. The CLI
+regression confirms an empty initial managed inventory rather than inventing
+third-party cable endpoints. Lifecycle mutation, persistence, and native driver
+integration remain open.

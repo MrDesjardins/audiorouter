@@ -96,7 +96,7 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
         &mut output,
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
     );
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 23);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 24);
 
     let resources = send(
         &mut input,

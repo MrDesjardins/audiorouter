@@ -47,6 +47,7 @@ where
         "schema" => plane.describe(),
         "diagnostics" => diagnostics_command(&command_args)?,
         "devices" => list_subcommand(&command_args, "devices")?,
+        "virtual-devices" => list_subcommand(&command_args, "virtual-devices")?,
         "apps" => list_subcommand(&command_args, "apps")?,
         "applications" => list_subcommand(&command_args, "applications")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
@@ -420,7 +421,7 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
     let expected = subcommand.unwrap();
     let mut plane = ControlPlane::default();
     Ok(match parent {
-        "devices" => {
+        "devices" | "virtual-devices" => {
             let cursor = optional_option_value(args, "--cursor")?;
             let limit = optional_option_value(args, "--limit")?
                 .map(|value| {
@@ -436,7 +437,12 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
                     ));
                 }
             }
-            let mut device_request = request("devices.list");
+            let method = if parent == "devices" {
+                "devices.list"
+            } else {
+                "virtualDevices.list"
+            };
+            let mut device_request = request(method);
             if cursor.is_some() || limit.is_some() {
                 device_request.params = Some(json!({ "cursor": cursor, "limit": limit }));
             }
@@ -1074,6 +1080,10 @@ fn help_value() -> Value {
     value["commands"]
         .as_array_mut()
         .unwrap()
+        .insert(5, json!("virtual-devices list [--limit N] [--cursor ID]"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
         .insert(5, json!("backup prune --directory <path>"));
     value["commands"]
         .as_array_mut()
@@ -1366,6 +1376,7 @@ fn mcp_tools() -> Value {
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_devices", "description": "List authoritative audio endpoint descriptors. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
+        { "name": "list_virtual_devices", "description": "List managed virtual bus desired state without activating endpoints. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
@@ -1411,6 +1422,7 @@ fn mcp_tool_call(
         "describe_capabilities" => ("system.describe", None),
         "get_startup" => ("startup.get", None),
         "list_devices" => ("devices.list", Some(arguments)),
+        "list_virtual_devices" => ("virtualDevices.list", Some(arguments)),
         "list_applications" => ("apps.list", None),
         "get_session" => ("sessions.get", Some(arguments)),
         "inspect_routes" => ("routes.inspect", Some(arguments)),
@@ -1556,6 +1568,7 @@ mod tests {
     fn help_and_json_schema_are_available_offline() {
         let help = run(["help", "--json"]).unwrap();
         assert!(help.contains("devices list"));
+        assert!(help.contains("virtual-devices list"));
         assert!(help.contains("operation get"));
         let schema: Value = serde_json::from_str(&run(["schema", "--json"]).unwrap()).unwrap();
         assert_eq!(schema["protocolVersion"]["major"], 1);
@@ -1589,6 +1602,9 @@ mod tests {
                 && application["audioActivity"].is_string()
                 && application["captureCapability"].is_string()
         }));
+        let virtual_devices: Value =
+            serde_json::from_str(&run(["virtual-devices", "list", "--json"]).unwrap()).unwrap();
+        assert!(virtual_devices.as_array().unwrap().is_empty());
         let nodes: Value =
             serde_json::from_str(&run(["nodes", "types", "--json"]).unwrap()).unwrap();
         assert!(nodes
@@ -2416,7 +2432,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 23);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 24);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()
