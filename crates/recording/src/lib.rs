@@ -1199,12 +1199,7 @@ impl RecordingLibrary {
             RecordingError::Io(error) => RecordingLibraryError::Io(error.kind()),
             _ => RecordingLibraryError::InvalidPath,
         })?;
-        let metadata = match path.extension().and_then(|extension| extension.to_str()) {
-            Some(extension) if extension.eq_ignore_ascii_case("flac") => {
-                read_flac_metadata(&path).unwrap_or_default()
-            }
-            _ => read_wav_metadata(&path).unwrap_or_default(),
-        };
+        let metadata = read_recording_metadata(&path);
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
         self.entries.push(RecordingEntry {
@@ -1228,6 +1223,7 @@ impl RecordingLibrary {
             RecordingError::Io(error) => RecordingLibraryError::Io(error.kind()),
             _ => RecordingLibraryError::InvalidPath,
         })?;
+        entry.metadata = read_recording_metadata(&entry.path);
         Ok(())
     }
 
@@ -1273,6 +1269,15 @@ impl RecordingLibrary {
             return Err(RecordingLibraryError::PathOutsideRoot);
         }
         Ok(parent.join(filename))
+    }
+}
+
+fn read_recording_metadata(path: &Path) -> RecordingMetadata {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some(extension) if extension.eq_ignore_ascii_case("flac") => {
+            read_flac_metadata(path).unwrap_or_default()
+        }
+        _ => read_wav_metadata(path).unwrap_or_default(),
     }
 }
 
@@ -2827,6 +2832,53 @@ mod tests {
             library.register("other", "voice", root.join("..\\escape.wav")),
             Err(RecordingLibraryError::PathOutsideRoot)
         ));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn library_refresh_reloads_file_metadata() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-recording-library-refresh-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let (path, file) = policy.create_file("session", "voice", 0, "wav").unwrap();
+        let mut writer = WavWriter::new(file, WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        writer.write_interleaved(&[0.25]).unwrap();
+        writer
+            .finish_with_metadata(&WavMetadata {
+                title: Some("First title".into()),
+                ..WavMetadata::default()
+            })
+            .unwrap();
+
+        let mut library = RecordingLibrary::new(&policy);
+        let id = library.register("session", "voice", &path).unwrap();
+        assert_eq!(
+            library.list(None)[0].metadata.title.as_deref(),
+            Some("First title")
+        );
+
+        let replacement = root.join("replacement.wav");
+        let replacement_file = std::fs::File::create(&replacement).unwrap();
+        let mut replacement_writer =
+            WavWriter::new(replacement_file, WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        replacement_writer.write_interleaved(&[0.5]).unwrap();
+        replacement_writer
+            .finish_with_metadata(&WavMetadata {
+                title: Some("Second title".into()),
+                ..WavMetadata::default()
+            })
+            .unwrap();
+        std::fs::rename(replacement, &path).unwrap();
+
+        library.refresh(id).unwrap();
+        assert_eq!(
+            library.list(None)[0].metadata.title.as_deref(),
+            Some("Second title")
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
