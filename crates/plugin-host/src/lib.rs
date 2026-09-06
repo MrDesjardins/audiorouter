@@ -1394,13 +1394,19 @@ impl SharedAudioTransport {
         output_path: impl AsRef<Path>,
         layout: SharedAudioLayout,
     ) -> Result<Self, SharedAudioError> {
-        if input_path.as_ref() == output_path.as_ref() {
+        let input_path = input_path.as_ref();
+        let output_path = output_path.as_ref();
+        if input_path == output_path {
             return Err(SharedAudioError::AliasedPaths);
         }
         let input = SharedAudioRegion::create(input_path, layout)?;
         match SharedAudioRegion::create(output_path, layout) {
             Ok(output) => Ok(Self { input, output }),
-            Err(error) => Err(error),
+            Err(error) => {
+                drop(input);
+                let _ = fs::remove_file(input_path);
+                Err(error)
+            }
         }
     }
 
@@ -2184,6 +2190,14 @@ mod tests {
         let output_path = std::env::temp_dir().join(format!("{}-output", stem));
         let _ = fs::remove_file(&input_path);
         let _ = fs::remove_file(&output_path);
+
+        fs::write(&output_path, b"occupied").unwrap();
+        assert!(matches!(
+            SharedAudioTransport::create(&input_path, &output_path, layout),
+            Err(SharedAudioError::Exists)
+        ));
+        assert!(!input_path.exists());
+        fs::remove_file(&output_path).unwrap();
 
         let mut host = SharedAudioTransport::create(&input_path, &output_path, layout).unwrap();
         let mut worker = SharedAudioTransport::open(&input_path, &output_path, layout).unwrap();

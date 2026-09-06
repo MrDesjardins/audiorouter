@@ -270,3 +270,9 @@ buffers across both endpoints, and rejects aliased paths. All plugin-host test
 targets compile and strict Clippy passes; generated test execution remains
 blocked by Windows Application Control OS error 4551. This is shared-memory
 transport wiring, not plugin loading or native realtime scheduling.
+
+Hardened duplex transport construction so a failed output-slot creation removes
+the newly created input slot after its mapping is dropped. This prevents
+partially initialized IPC resources from surviving a failed setup; the
+regression verifies the cleanup path. Formatting, all-target compilation, and
+strict Clippy pass.
