@@ -177,3 +177,8 @@ inspection, history, and bundle round-trip behavior using temporary files.
 The M08 release artifact verifier and qualification-command documentation
 regressions also passed. Temporary state was removed; no audio endpoint,
 driver, or machine configuration was changed.
+The discovery output schema for `nodes.types` and `nodes.describe` now explicitly
+models node type identifiers, availability status/reasons, realtime cost class,
+and parameter descriptors. This matches the serialized control response rather
+than advertising only an unstructured array. The control suite passes 55 tests
+with strict Clippy; the change is transport/domain metadata only.

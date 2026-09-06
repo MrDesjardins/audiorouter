@@ -381,7 +381,11 @@ fn method_output_schema(name: &str) -> Value {
                 ]
             })
         }
-        "nodes.types" | "nodes.describe" | "clients.list" => json!({ "type": "array" }),
+        "nodes.types" | "nodes.describe" => json!({
+            "type": "array",
+            "items": node_type_item_schema()
+        }),
+        "clients.list" => json!({ "type": "array" }),
         "recordings.list" => {
             let item = recording_item_schema();
             json!({
@@ -462,6 +466,43 @@ fn device_item_schema() -> Value {
             }
         },
         "required": ["id", "direction", "state", "format", "periods"],
+        "additionalProperties": false
+    })
+}
+
+fn node_type_item_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "type": { "type": "string", "pattern": "^[a-z0-9-]+@[0-9]+$" },
+            "availability": {
+                "type": "object",
+                "properties": {
+                    "status": { "enum": ["available", "unavailable"] },
+                    "reason": { "type": "string", "minLength": 1 }
+                },
+                "required": ["status"],
+                "additionalProperties": false
+            },
+            "realtimeCostClass": { "type": "string", "minLength": 1 },
+            "parameters": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "minLength": 1 },
+                        "type": { "enum": ["boolean", "number"] },
+                        "unit": { "type": "string", "minLength": 1 },
+                        "minimum": { "type": "number" },
+                        "maximum": { "type": "number" },
+                        "default": {}
+                    },
+                    "required": ["name", "type", "default"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "required": ["type", "availability", "realtimeCostClass", "parameters"],
         "additionalProperties": false
     })
 }
@@ -2884,6 +2925,18 @@ mod tests {
             devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
                 ["format"]["required"],
             json!(["sampleRateHz", "channels", "bitsPerSample", "formatTag"])
+        );
+        let node_types = methods
+            .iter()
+            .find(|method| method["name"] == "nodes.types")
+            .unwrap();
+        assert_eq!(
+            node_types["outputSchema"]["items"]["properties"]["type"]["type"],
+            "string"
+        );
+        assert_eq!(
+            node_types["outputSchema"]["items"]["properties"]["parameters"]["items"]["required"],
+            json!(["name", "type", "default"])
         );
         let applications = methods
             .iter()
