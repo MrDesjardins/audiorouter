@@ -100,3 +100,8 @@ physical routing or latency evidence.
 The temporary executable and object file were removed after testing. The
 probe did not change defaults, volume, mute, privacy policy, driver state, or
 other persistent machine audio configuration.
+
+The probe also completed a 200 ms silent render run on endpoint 0. Shared
+initialization, buffer acquisition, start, submission of 13,920 frames using
+`AUDCLNT_BUFFERFLAGS_SILENT`, stop, and reset all returned success. No tone
+was generated, and no endpoint defaults or persistent audio settings changed.
