@@ -51,6 +51,7 @@ where
         "nodes" => list_subcommand(&command_args, "nodes")?,
         "routes" => routes_subcommand(&command_args)?,
         "history" => history_command(&command_args)?,
+        "watch" => watch_command(&command_args)?,
         "graph" => graph_command(&command_args)?,
         "session" => session_command(&command_args)?,
         "api" => api_subcommand(&command_args)?,
@@ -495,6 +496,58 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
     serde_json::to_value(history).map_err(|error| CliError::InvalidArguments(error.to_string()))
 }
 
+fn watch_command(args: &[&str]) -> Result<Value, CliError> {
+    let session_id = positional(args, 1, "session id")?;
+    let after_sequence = args
+        .iter()
+        .position(|argument| *argument == "--after")
+        .map(|index| {
+            args.get(index + 1)
+                .copied()
+                .ok_or_else(|| CliError::InvalidArguments("--after requires a value".into()))?
+                .parse::<u64>()
+                .map_err(|_| CliError::InvalidArguments("--after must be an integer".into()))
+        })
+        .transpose()?
+        .unwrap_or(0);
+    let limit = args
+        .iter()
+        .position(|argument| *argument == "--limit")
+        .map(|index| {
+            args.get(index + 1)
+                .copied()
+                .ok_or_else(|| CliError::InvalidArguments("--limit requires a value".into()))?
+                .parse::<u64>()
+                .map_err(|_| CliError::InvalidArguments("--limit must be an integer".into()))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    if !(1..=500).contains(&limit) {
+        return Err(CliError::InvalidArguments(
+            "--limit must be between 1 and 500".into(),
+        ));
+    }
+    let response = ControlPlane::with_storage("cli", database(args)?).dispatch(
+        audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "events.subscribe".into(),
+            params: Some(json!({
+                "sessionId": session_id,
+                "afterSequence": after_sequence,
+                "limit": limit
+            })),
+        },
+    );
+    response.result.ok_or_else(|| {
+        CliError::InvalidArguments(
+            response
+                .error
+                .map_or_else(|| "watch failed".into(), |error| error.message),
+        )
+    })
+}
+
 fn graph_command(args: &[&str]) -> Result<Value, CliError> {
     match args.get(1).copied() {
         Some("plan") => graph_plan_command(args),
@@ -817,6 +870,10 @@ fn help_value() -> Value {
         .as_array_mut()
         .unwrap()
         .insert(3, json!("startup get [--database <path>]"));
+    value["commands"].as_array_mut().unwrap().insert(
+        6,
+        json!("watch <session-id> --database <path> [--after N] [--limit N]"),
+    );
     value["commands"].as_array_mut().unwrap().insert(
         14,
         json!("recordings list|get|preview|set-metadata|rename|remove-entry [<recording-id>] --database <path>"),
@@ -1532,6 +1589,51 @@ mod tests {
         .unwrap();
         assert_eq!(result["status"], "available");
         assert_eq!(result["checkpoint"]["state"], "Recording");
+        let _ = std::fs::remove_file(database);
+    }
+
+    #[test]
+    fn watch_command_reads_bounded_event_cursor_without_audio_access() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-watch-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let storage = Storage::open(&database).unwrap();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        storage.save_session(&session).unwrap();
+        let database_arg = database.to_string_lossy().into_owned();
+        let result: Value = serde_json::from_str(
+            &run([
+                "watch",
+                "session-fixture",
+                "--database",
+                &database_arg,
+                "--after",
+                "0",
+                "--limit",
+                "10",
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(result["events"].as_array().unwrap().len(), 0);
+        assert_eq!(result["nextSequence"], 0);
+        assert!(matches!(
+            run([
+                "watch",
+                "session-fixture",
+                "--database",
+                &database_arg,
+                "--limit",
+                "501",
+                "--json",
+            ]),
+            Err(CliError::InvalidArguments(_))
+        ));
         let _ = std::fs::remove_file(database);
     }
 

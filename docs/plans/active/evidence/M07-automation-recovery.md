@@ -171,3 +171,8 @@ and MCP authorization path.
 Removing a recording library entry now removes its associated checkpoint in the
 same SQLite transaction, while leaving the recording path untouched. The
 storage regression verifies checkpoint cleanup and repeated removal behavior.
+
+Added the bounded one-shot `watch` CLI command over `events.subscribe`. It
+forwards the selected session, replay cursor, and validated 1–500 event limit
+through the shared control dispatcher without opening audio or mutating
+configuration. CLI coverage is 13 tests with strict Clippy.
