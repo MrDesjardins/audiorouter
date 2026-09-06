@@ -1,6 +1,6 @@
 use audiorouter_plugin_host::{
-    read_worker_message, write_worker_message, SharedAudioLayout, SharedAudioTransport,
-    WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
+    read_worker_message, worker_clock_tick, write_worker_message, SharedAudioLayout,
+    SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
 };
 use std::io::{self, BufReader, BufWriter};
 use std::path::PathBuf;
@@ -61,7 +61,7 @@ fn run() -> Result<(), String> {
     loop {
         let message = read_worker_message(&mut reader)
             .map_err(|error| format!("message read failed: {error:?}"))?;
-        if let Err(error) = session.accept(&message, 0) {
+        if let Err(error) = session.accept(&message, worker_clock_tick()) {
             write_worker_message(
                 &mut writer,
                 &WorkerMessage::Failure {

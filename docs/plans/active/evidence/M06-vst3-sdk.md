@@ -348,3 +348,9 @@ messages. A process regression confirms that a duplicate sequence is rejected
 with a session failure rather than echoed. The full plugin-host runtime suite
 passes 25 unit tests plus 3 process tests with strict Clippy. The worker still
 uses a placeholder zero-based clock and does not yet enforce OS sandbox policy.
+
+Worker deadline validation now uses a shared Unix-epoch millisecond clock
+instead of a constant zero. Future-dated frames continue to round-trip, while
+the process regression confirms an expired frame returns DeadlineExpired and
+is not processed. The worker suite passes 25 unit tests plus 4 process tests
+with strict Clippy; OS sandboxing and nonblocking frame reads remain open.
