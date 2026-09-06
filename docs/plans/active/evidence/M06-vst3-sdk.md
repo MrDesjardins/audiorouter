@@ -501,3 +501,16 @@ explicit protocol errors, and returns the ledger alongside spawn errors. The
 three-generation regression uses this public API and confirms quarantine is
 still reached after repeated failures. No plugin is loaded and no audio
 endpoint or machine configuration is touched.
+
+## Native loader compile revalidation (2026-09-06)
+
+The checked-in `tools/m06-vst3-loader/build.ps1` compiled successfully with
+Visual Studio Community 2026 (`MSVC 14.51.36231`) and Windows SDK
+`10.0.28000.0`, using the pinned local SDK headers. The invocation required a
+process-scoped PowerShell execution-policy bypass because the machine policy
+does not permit direct script execution; the persistent policy was not
+changed. Generated executable/object outputs were removed immediately.
+
+This is compile evidence only. The loader was not executed, no plugin binary
+was downloaded or loaded, and no audio endpoint or machine configuration was
+changed.
