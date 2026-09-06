@@ -53,8 +53,8 @@ mod windows_pipe {
         OsStr::new(value).encode_wide().chain(once(0)).collect()
     }
 
-    fn singleton_name(pipe_name: &str) -> Vec<u16> {
-        let suffix: String = pipe_name
+    fn singleton_name(pipe_name: &str, user_sid: &str) -> Vec<u16> {
+        let suffix: String = format!("{user_sid}-{pipe_name}")
             .chars()
             .map(|character| {
                 if character.is_ascii_alphanumeric() {
@@ -68,7 +68,7 @@ mod windows_pipe {
     }
 
     fn acquire_singleton(pipe_name: &str) -> Result<Handle, TransportError> {
-        let name = singleton_name(pipe_name);
+        let name = singleton_name(pipe_name, &current_user_sid()?);
         let handle =
             unsafe { CreateMutexW(None, true, PCWSTR(name.as_ptr())) }.map_err(win_error)?;
         if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
