@@ -11,6 +11,76 @@ pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
 
 #[derive(Debug, Eq, PartialEq)]
+pub enum MeterError {
+    InvalidCapacity,
+}
+
+/// Preallocated rolling RMS window. The window stores finite sample energy and
+/// treats non-finite input as silence; pushing samples never allocates.
+pub struct RmsWindow {
+    samples: Vec<f32>,
+    next: usize,
+    len: usize,
+    sum_squares: f64,
+}
+
+impl RmsWindow {
+    pub fn new(capacity_samples: usize) -> Result<Self, MeterError> {
+        if capacity_samples == 0 {
+            return Err(MeterError::InvalidCapacity);
+        }
+        Ok(Self {
+            samples: vec![0.0; capacity_samples],
+            next: 0,
+            len: 0,
+            sum_squares: 0.0,
+        })
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.samples.len()
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    pub fn push_block(&mut self, block: &AudioBlock) {
+        for sample in &block.samples {
+            let sample = if sample.is_finite() { *sample } else { 0.0 };
+            if self.len == self.samples.len() {
+                let old = self.samples[self.next];
+                self.sum_squares -= f64::from(old) * f64::from(old);
+            } else {
+                self.len += 1;
+            }
+            self.samples[self.next] = sample;
+            self.sum_squares += f64::from(sample) * f64::from(sample);
+            self.next = (self.next + 1) % self.samples.len();
+        }
+    }
+
+    pub fn rms(&self) -> f32 {
+        if self.len == 0 {
+            0.0
+        } else {
+            (self.sum_squares / self.len as f64).sqrt() as f32
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.samples.fill(0.0);
+        self.next = 0;
+        self.len = 0;
+        self.sum_squares = 0.0;
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
 pub enum QueueError {
     InvalidCapacity,
 }
@@ -883,6 +953,27 @@ mod tests {
         assert!((block.channel_rms(1).unwrap() - 0.70710677).abs() < 0.000001);
         assert!(block.rms() > 0.0);
         assert_eq!(block.channel_peak_abs(2), None);
+    }
+
+    #[test]
+    fn rolling_rms_window_is_bounded_and_resettable() {
+        assert!(matches!(
+            RmsWindow::new(0),
+            Err(MeterError::InvalidCapacity)
+        ));
+        let mut window = RmsWindow::new(2).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().copy_from_slice(&[1.0, 0.0]);
+        window.push_block(&block);
+        assert_eq!(window.len(), 2);
+        assert!((window.rms() - 0.70710677).abs() < 0.000001);
+        block.channel_mut(0).unwrap().fill(-1.0);
+        window.push_block(&block);
+        assert_eq!(window.len(), 2);
+        assert_eq!(window.rms(), 1.0);
+        window.reset();
+        assert_eq!(window.len(), 0);
+        assert_eq!(window.rms(), 0.0);
     }
 
     #[test]

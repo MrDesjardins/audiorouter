@@ -34,4 +34,6 @@ Queue full/empty events now increment atomic overrun/underrun counters while sti
 
 `AudioBlock` now exposes per-channel sample peak, per-channel RMS, and aggregate RMS without allocation. Non-finite samples are excluded from meter calculations and invalid channels return `None`; the engine suite contains 20 passing tests and strict engine Clippy passes.
 
+`RmsWindow` adds a preallocated rolling RMS window with explicit capacity and reset behavior. It treats non-finite input as silence and performs no allocation while pushing blocks; the engine suite contains 21 passing tests and strict engine Clippy passes.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.
