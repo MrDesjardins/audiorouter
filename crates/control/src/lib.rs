@@ -46,6 +46,13 @@ fn unix_epoch_seconds() -> i64 {
         .as_secs() as i64
 }
 
+fn unix_epoch_millis() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+}
+
 #[derive(Debug)]
 struct MutationBucket {
     tokens: f64,
@@ -1419,6 +1426,25 @@ impl ControlPlane {
         // failure must never silently unmute a capture path.
         let privacy_muted = storage.load_privacy_mute().unwrap_or(true);
         let virtual_buses = storage.load_virtual_buses().unwrap_or_default();
+        let now = unix_epoch_seconds();
+        let mut virtual_bus_plans = HashMap::new();
+        if let Ok(plans) = storage.load_virtual_device_plans() {
+            for (id, operation, expires_at) in plans {
+                let Some(remaining) = expires_at.checked_sub(now) else {
+                    continue;
+                };
+                let Ok(operation) = virtual_bus_operation_from_value(&operation) else {
+                    continue;
+                };
+                virtual_bus_plans.insert(
+                    id,
+                    VirtualBusPlan {
+                        operation,
+                        expires_at: Instant::now() + Duration::from_secs(remaining as u64),
+                    },
+                );
+            }
+        }
         Self {
             store: GraphStore::default(),
             build: build.into(),
@@ -1432,7 +1458,7 @@ impl ControlPlane {
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
-            virtual_bus_plans: HashMap::new(),
+            virtual_bus_plans,
             next_virtual_bus_plan: 1,
         }
     }
@@ -3355,8 +3381,13 @@ impl ControlPlane {
         )?;
         let mut candidate = self.virtual_buses.clone();
         apply_virtual_bus_operation(&mut candidate, &operation)?;
-        let plan_id = EntityId::new(format!("virtual-plan-{}", self.next_virtual_bus_plan));
+        let plan_id = EntityId::new(format!(
+            "virtual-plan-{}-{}",
+            unix_epoch_millis(),
+            self.next_virtual_bus_plan
+        ));
         self.next_virtual_bus_plan = self.next_virtual_bus_plan.saturating_add(1);
+        let expires_at = unix_epoch_seconds() + VIRTUAL_DEVICE_PLAN_TTL.as_secs() as i64;
         self.virtual_bus_plans.insert(
             plan_id.clone(),
             VirtualBusPlan {
@@ -3364,6 +3395,16 @@ impl ControlPlane {
                 expires_at: Instant::now() + VIRTUAL_DEVICE_PLAN_TTL,
             },
         );
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_device_plan(
+                &plan_id,
+                &virtual_bus_operation_value(&operation),
+                expires_at,
+            ) {
+                self.virtual_bus_plans.remove(&plan_id);
+                return Err(storage_error(error));
+            }
+        }
         Ok(json!({
             "planId": plan_id,
             "expiresInMs": VIRTUAL_DEVICE_PLAN_TTL.as_millis(),
@@ -3414,6 +3455,9 @@ impl ControlPlane {
                 self.virtual_buses = checkpoint;
                 return Err(storage_error(error));
             }
+            storage
+                .delete_virtual_device_plan(&EntityId::new(plan_id))
+                .map_err(storage_error)?;
         }
         self.virtual_bus_plans.remove(&EntityId::new(plan_id));
         let result = json!({
@@ -3935,6 +3979,44 @@ mod tests {
             .unwrap();
         assert_eq!(inventory[0]["name"], "Desktop In");
         assert_eq!(inventory[0]["endpointIds"]["render"], Value::Null);
+    }
+
+    #[test]
+    fn storage_backed_virtual_device_plan_survives_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-virtual-plan-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let plan_id = {
+            let mut plane = ControlPlane::with_storage("plan-first", Storage::open(&path).unwrap());
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(7)),
+                method: "virtualDevices.plan".into(),
+                params: Some(json!({
+                    "operation": {
+                        "action": "create",
+                        "id": "bus-1",
+                        "name": "Desktop In"
+                    }
+                })),
+            });
+            response.result.unwrap()["planId"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let mut restarted =
+            ControlPlane::with_storage("plan-second", Storage::open(&path).unwrap());
+        let applied = restarted.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(8)),
+            method: "virtualDevices.apply".into(),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "restart-apply" })),
+        });
+        assert_eq!(applied.result.unwrap()["state"], "applied");
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

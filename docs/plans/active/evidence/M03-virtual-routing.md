@@ -83,6 +83,11 @@ methods, preserving device-administration scope checks and apply idempotency.
 The MCP catalog and process interoperability tests pass with 26 tools; no
 native endpoint is created while the driver capability is unavailable.
 
+Virtual-device plans are now durable SQLite records containing the validated
+operation and bounded expiry. Valid plans reload after a control restart and are
+removed after successful apply; expired plans are hidden. Storage and control
+regressions verify this without opening audio or creating endpoints.
+
 The registry now exposes force-release cleanup for a crashed or disconnected
 owner. Cleanup clears the active owner but preserves the monotonic generation;
 a delayed release from the old owner cannot release a replacement lease. This

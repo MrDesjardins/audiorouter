@@ -7,6 +7,7 @@ use audiorouter_domain::{
 use audiorouter_recording::RecorderCheckpoint;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::File;
@@ -494,6 +495,11 @@ impl Storage {
                  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
                  enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1))
              );
+             CREATE TABLE IF NOT EXISTS virtual_device_plans (
+                 id TEXT PRIMARY KEY,
+                 operation TEXT NOT NULL,
+                 expires_at INTEGER NOT NULL
+             );
              CREATE TABLE IF NOT EXISTS recovery_crashes (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  occurred_at INTEGER NOT NULL
@@ -600,6 +606,55 @@ impl Storage {
         VirtualBusRegistry::from_snapshots(snapshots).map_err(|error| {
             StorageError::InvalidSession(format!("invalid virtual bus: {error:?}"))
         })
+    }
+
+    pub fn save_virtual_device_plan(
+        &self,
+        id: &EntityId,
+        operation: &Value,
+        expires_at: i64,
+    ) -> Result<(), StorageError> {
+        let operation = serde_json::to_string(operation)?;
+        self.connection.execute(
+            "INSERT OR REPLACE INTO virtual_device_plans(id, operation, expires_at)
+             VALUES (?1, ?2, ?3)",
+            params![id.as_str(), operation, expires_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_virtual_device_plans(&self) -> Result<Vec<(EntityId, Value, i64)>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, operation, expires_at FROM virtual_device_plans
+             WHERE expires_at > strftime('%s', 'now') ORDER BY id ASC",
+        )?;
+        let plans = statement
+            .query_map([], |row| {
+                let operation: String = row.get(1)?;
+                let operation = serde_json::from_str(&operation).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        1,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?;
+                Ok((
+                    EntityId::new(row.get::<_, String>(0)?),
+                    operation,
+                    row.get(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::Sql);
+        plans
+    }
+
+    pub fn delete_virtual_device_plan(&self, id: &EntityId) -> Result<(), StorageError> {
+        self.connection.execute(
+            "DELETE FROM virtual_device_plans WHERE id = ?1",
+            params![id.as_str()],
+        )?;
+        Ok(())
     }
 
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
@@ -1913,6 +1968,32 @@ mod tests {
 
     fn bundle_manifest() -> Vec<u8> {
         br#"{"format":"audiorouter.session","schemaVersion":1,"graphPath":"session.json","assets":[]}"#.to_vec()
+    }
+
+    #[test]
+    fn virtual_device_plans_round_trip_and_expired_plans_are_hidden() {
+        let storage = Storage::open_memory().unwrap();
+        let live_id = EntityId::new("virtual-plan-live");
+        storage
+            .save_virtual_device_plan(
+                &live_id,
+                &serde_json::json!({ "action": "create", "id": "bus-1", "name": "Desktop" }),
+                i64::MAX,
+            )
+            .unwrap();
+        storage
+            .save_virtual_device_plan(
+                &EntityId::new("virtual-plan-expired"),
+                &serde_json::json!({ "action": "delete", "id": "bus-1" }),
+                0,
+            )
+            .unwrap();
+        let plans = storage.load_virtual_device_plans().unwrap();
+        assert_eq!(plans.len(), 1);
+        assert_eq!(plans[0].0, live_id);
+        assert_eq!(plans[0].1["action"], "create");
+        storage.delete_virtual_device_plan(&live_id).unwrap();
+        assert!(storage.load_virtual_device_plans().unwrap().is_empty());
     }
 
     #[test]
