@@ -7,9 +7,9 @@ export const demoSession: Session = {
   schemaVersion: 1,
   revision: 7,
   nodes: [
-    { id: "mic", kind: "physicalInput", name: "Microphone", enabled: true, bypass: false, ports: [{ name: "out", direction: "output", channels: 1 }] },
-    { id: "voice", kind: "gain", name: "Voice gain", enabled: true, bypass: false, ports: [{ name: "in", direction: "input", channels: 1 }, { name: "out", direction: "output", channels: 1 }] },
-    { id: "headphones", kind: "physicalOutput", name: "Headphones", enabled: true, bypass: false, ports: [{ name: "in", direction: "input", channels: 2 }] },
+    { id: "mic", kind: "physicalInput", name: "Microphone", enabled: true, bypass: false, parameters: {}, ports: [{ name: "out", direction: "output", channels: 1 }] },
+    { id: "voice", kind: "gain", name: "Voice gain", enabled: true, bypass: false, parameters: { gainDb: 0 }, ports: [{ name: "in", direction: "input", channels: 1 }, { name: "out", direction: "output", channels: 1 }] },
+    { id: "headphones", kind: "physicalOutput", name: "Headphones", enabled: true, bypass: false, parameters: {}, ports: [{ name: "in", direction: "input", channels: 2 }] },
   ],
   edges: [],
 };

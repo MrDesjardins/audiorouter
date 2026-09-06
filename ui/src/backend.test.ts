@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDisconnectedBackend, createLiveBackend, SnapshotCache, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
-import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag } from "./draft";
+import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
 
 describe("disconnected backend", () => {
   it("returns safe local state and an empty event cursor", async () => {
@@ -64,6 +64,15 @@ describe("plan-only drafts", () => {
 
   it("rejects unknown nodes", () => {
     expect(() => setNodeDraftFlag(demoSession, "missing", "enabled", false)).toThrow("Unknown node");
+  });
+
+  it("edits a processor parameter and includes it in the deterministic plan", () => {
+    const candidate = setNodeDraftParameter(demoSession, "voice", "gainDb", -6);
+    expect(candidate.revision).toBe(demoSession.revision);
+    expect(candidate.nodes[1].parameters.gainDb).toBe(-6);
+    expect(describeDraftChanges(demoSession, candidate)).toEqual([
+      { path: "/nodes/1/parameters/gainDb", value: -6 },
+    ]);
   });
 
   it("plans before committing and forwards the revision/key", async () => {

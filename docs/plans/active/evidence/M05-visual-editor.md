@@ -140,3 +140,9 @@ selected node. It calls `UiBackend.inspectRoute`, reports the backend's
 reachable/path result, and shows an explicit not-loaded or unavailable state
 without inferring edges or destinations. The disconnected backend returns no
 route. Seven UI tests, typecheck, production build, and diff checks pass.
+
+The connected editor now exposes a bounded Gain dB input for the selected Gain
+node. It edits only the local candidate, remains disabled in disconnected
+preview mode, and emits a deterministic /nodes/<index>/parameters/gainDb
+change for the existing plan/commit flow. UI tests pass 8 cases with TypeScript
+typecheck and the production build.

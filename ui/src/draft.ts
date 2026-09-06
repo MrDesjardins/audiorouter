@@ -2,8 +2,8 @@ import type { EntityId, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 
 export type DraftChange = {
-  path: `/nodes/${number}/${"enabled" | "bypass"}`;
-  value: boolean;
+  path: `/nodes/${number}/${"enabled" | "bypass"}` | `/nodes/${number}/parameters/${string}`;
+  value: boolean | number | string;
 };
 
 /**
@@ -24,6 +24,22 @@ export function setNodeDraftFlag(
   };
 }
 
+export function setNodeDraftParameter(
+  session: Session,
+  nodeId: EntityId,
+  parameter: string,
+  value: boolean | number | string,
+): Session {
+  const nodeIndex = session.nodes.findIndex((node) => node.id === nodeId);
+  if (nodeIndex < 0) throw new Error(`Unknown node: ${nodeId}`);
+  return {
+    ...session,
+    nodes: session.nodes.map((node, index) => index === nodeIndex
+      ? { ...node, parameters: { ...node.parameters, [parameter]: value } }
+      : node),
+  };
+}
+
 /** Produces deterministic plan inputs for changed node boolean flags. */
 export function describeDraftChanges(base: Session, candidate: Session): DraftChange[] {
   return candidate.nodes.flatMap((node, index) => {
@@ -32,6 +48,12 @@ export function describeDraftChanges(base: Session, candidate: Session): DraftCh
     const changes: DraftChange[] = [];
     if (original.enabled !== node.enabled) changes.push({ path: `/nodes/${index}/enabled`, value: node.enabled });
     if (original.bypass !== node.bypass) changes.push({ path: `/nodes/${index}/bypass`, value: node.bypass });
+    const parameterNames = new Set([...Object.keys(original.parameters), ...Object.keys(node.parameters)].sort());
+    for (const parameter of parameterNames) {
+      if (original.parameters[parameter] !== node.parameters[parameter] && node.parameters[parameter] !== undefined) {
+        changes.push({ path: `/nodes/${index}/parameters/${parameter}`, value: node.parameters[parameter] });
+      }
+    }
     return changes;
   });
 }

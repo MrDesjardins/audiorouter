@@ -28,6 +28,7 @@ export interface Node {
   name: string;
   enabled: boolean;
   bypass: boolean;
+  parameters: Record<string, boolean | number | string>;
   ports: Port[];
 }
 
