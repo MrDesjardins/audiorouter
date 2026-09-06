@@ -65,6 +65,13 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+`Biquad::magnitude_db_at` now computes a control-plane magnitude response from
+the exact normalized coefficients used by the audio path, avoiding a separate
+UI curve model. Reference tests verify flat response, the configured peaking
+gain, notch attenuation, and invalid out-of-band frequencies. Eleven DSP tests
+and strict Clippy pass; ten-band/8-band preset schemas and graph integration
+remain open.
+
 `inspect_recording` wraps that metadata boundary for library listings. It
 returns `Present`, `Missing`, or `Invalid` for the expected file conditions,
 while propagating unrelated I/O failures. A regression confirms deleted and

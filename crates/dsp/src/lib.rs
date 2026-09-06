@@ -76,6 +76,34 @@ impl Biquad {
         self.z2 = [0.0; 2];
     }
 
+    /// Returns the magnitude response in dB from the exact coefficients used
+    /// by `process_interleaved`. This is a control-plane calculation and does
+    /// not inspect or mutate filter state.
+    pub fn magnitude_db_at(&self, frequency_hz: f32) -> Result<f32, BiquadError> {
+        if !frequency_hz.is_finite() {
+            return Err(BiquadError::NonFiniteParameter);
+        }
+        if !(0.0..=self.params.sample_rate * 0.5).contains(&frequency_hz) {
+            return Err(BiquadError::InvalidFrequency);
+        }
+        let omega = 2.0 * PI * frequency_hz / self.params.sample_rate;
+        let cos = omega.cos();
+        let sin = omega.sin();
+        let cos2 = (2.0 * omega).cos();
+        let sin2 = (2.0 * omega).sin();
+        let numerator_real =
+            self.coefficients.b0 + self.coefficients.b1 * cos + self.coefficients.b2 * cos2;
+        let numerator_imag = -self.coefficients.b1 * sin - self.coefficients.b2 * sin2;
+        let denominator_real = 1.0 + self.coefficients.a1 * cos + self.coefficients.a2 * cos2;
+        let denominator_imag = -self.coefficients.a1 * sin - self.coefficients.a2 * sin2;
+        let numerator = numerator_real.hypot(numerator_imag);
+        let denominator = denominator_real.hypot(denominator_imag);
+        if denominator <= f32::EPSILON {
+            return Err(BiquadError::InvalidFrequency);
+        }
+        Ok(20.0 * (numerator / denominator).max(f32::MIN_POSITIVE).log10())
+    }
+
     /// Processes interleaved mono/stereo samples in place without allocation.
     /// Non-finite input is repaired to silence and output is kept finite.
     pub fn process_interleaved(&mut self, samples: &mut [f32]) {
@@ -639,6 +667,37 @@ mod tests {
         let mut cut = [1.0; 8];
         filter.process_interleaved(&mut cut);
         assert_ne!(boosted, cut);
+    }
+
+    #[test]
+    fn response_curve_uses_processing_coefficients() {
+        let flat = Biquad::new(
+            BiquadParams {
+                gain_db: 0.0,
+                ..params(FilterKind::Peaking)
+            },
+            1,
+        )
+        .unwrap();
+        assert!(flat.magnitude_db_at(1_000.0).unwrap().abs() < 1e-4);
+
+        let boosted = Biquad::new(params(FilterKind::Peaking), 1).unwrap();
+        assert!((boosted.magnitude_db_at(1_000.0).unwrap() - 6.0).abs() < 0.02);
+
+        let notch = Biquad::new(
+            BiquadParams {
+                kind: FilterKind::Notch,
+                gain_db: 0.0,
+                ..params(FilterKind::Notch)
+            },
+            1,
+        )
+        .unwrap();
+        assert!(notch.magnitude_db_at(1_000.0).unwrap() < -60.0);
+        assert!(matches!(
+            notch.magnitude_db_at(30_000.0),
+            Err(BiquadError::InvalidFrequency)
+        ));
     }
 
     #[test]
