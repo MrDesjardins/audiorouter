@@ -600,18 +600,37 @@ pub struct StreamingFlacWriter<W> {
 
 impl<W: Write + Seek> StreamingFlacWriter<W> {
     pub fn new(
-        mut output: W,
+        output: W,
         channels: u16,
         sample_rate: u32,
         bits_per_sample: u8,
         dither: bool,
     ) -> Result<Self, RecordingError> {
+        Self::new_with_metadata(
+            output,
+            channels,
+            sample_rate,
+            bits_per_sample,
+            dither,
+            &WavMetadata::default(),
+        )
+    }
+
+    pub fn new_with_metadata(
+        mut output: W,
+        channels: u16,
+        sample_rate: u32,
+        bits_per_sample: u8,
+        dither: bool,
+        metadata: &WavMetadata,
+    ) -> Result<Self, RecordingError> {
         validate_format(WavFormat::Pcm16, channels, sample_rate)?;
         if !matches!(bits_per_sample, 16 | 24) {
             return Err(RecordingError::InvalidSampleCount);
         }
+        metadata.validate()?;
         output.write_all(b"fLaC")?;
-        output.write_all(&[0x80, 0, 0, 0x22])?;
+        output.write_all(&[0x00, 0, 0, 0x22])?;
         let streaminfo_start = 8;
         let mut streaminfo = [0u8; 34];
         streaminfo[0..2].copy_from_slice(&(STREAMING_FLAC_BLOCK_FRAMES as u16).to_be_bytes());
@@ -621,6 +640,18 @@ impl<W: Write + Seek> StreamingFlacWriter<W> {
             | (u64::from(bits_per_sample - 1) << 36);
         streaminfo[10..18].copy_from_slice(&packed.to_be_bytes());
         output.write_all(&streaminfo)?;
+        let comments = encode_vorbis_comments(metadata)?;
+        let length = u32::try_from(comments.len()).map_err(|_| RecordingError::TooManyFrames)?;
+        if length > 0x00ff_ffff {
+            return Err(RecordingError::TooManyFrames);
+        }
+        output.write_all(&[
+            0x84,
+            (length >> 16) as u8,
+            (length >> 8) as u8,
+            length as u8,
+        ])?;
+        output.write_all(&comments)?;
         Ok(Self {
             output,
             streaminfo_start,
@@ -724,6 +755,30 @@ impl<W: Write + Seek> StreamingFlacWriter<W> {
         frame.extend_from_slice(&checksum.to_be_bytes());
         Ok(frame)
     }
+}
+
+fn encode_vorbis_comments(metadata: &WavMetadata) -> Result<Vec<u8>, RecordingError> {
+    let mut comments = Vec::new();
+    let vendor = b"AudioRouter";
+    comments.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
+    comments.extend_from_slice(vendor);
+    let values = [
+        ("TITLE", metadata.title.as_deref()),
+        ("ARTIST", metadata.artist.as_deref()),
+        ("COMMENT", metadata.comment.as_deref()),
+    ];
+    let count = values.iter().filter(|(_, value)| value.is_some()).count() as u32;
+    comments.extend_from_slice(&count.to_le_bytes());
+    for (key, value) in values
+        .into_iter()
+        .filter_map(|(key, value)| value.map(|value| (key, value)))
+    {
+        let entry = format!("{key}={value}");
+        let length = u32::try_from(entry.len()).map_err(|_| RecordingError::TooManyFrames)?;
+        comments.extend_from_slice(&length.to_le_bytes());
+        comments.extend_from_slice(entry.as_bytes());
+    }
+    Ok(comments)
 }
 
 struct BitWriter {
@@ -2639,6 +2694,41 @@ mod tests {
         recorder.stop(13).unwrap();
         let bytes = recorder.finish().unwrap().into_inner();
         assert_eq!(flac_io::info(&bytes).unwrap().total_samples, 3);
+    }
+
+    #[test]
+    fn streaming_flac_writer_preserves_bounded_metadata() {
+        let metadata = WavMetadata {
+            title: Some("Live take".into()),
+            artist: Some("AudioRouter".into()),
+            comment: Some("incremental".into()),
+        };
+        let mut writer = StreamingFlacWriter::new_with_metadata(
+            Cursor::new(Vec::new()),
+            1,
+            44_100,
+            24,
+            false,
+            &metadata,
+        )
+        .unwrap();
+        writer.write_interleaved(&[0.25, -0.25]).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-streaming-flac-metadata-{}.flac",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, writer.finish().unwrap().into_inner()).unwrap();
+        assert_eq!(
+            read_flac_metadata(&path).unwrap(),
+            RecordingMetadata {
+                title: metadata.title.clone(),
+                artist: metadata.artist.clone(),
+                comment: metadata.comment.clone(),
+            }
+        );
+        assert_eq!(inspect_flac_file(&path).unwrap().frames, 2);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

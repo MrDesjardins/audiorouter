@@ -10,6 +10,16 @@ encoder buffer, or file handle. Recording tests (18) and strict Clippy pass.
 Durable scheduling of these snapshots and true incremental FLAC output remain
 open.
 
+## 2026-09-06 — Streaming FLAC metadata
+
+Streaming FLAC now supports the same bounded title, artist, and comment
+metadata through a Vorbis-comment block written before audio frames. A
+metadata regression reads the resulting file back through the library
+inspector and verifies the exact values and frame count. Recording coverage is
+now 26 tests with strict Clippy. The streaming writer uses deterministic
+verbatim frames; compression tuning and native realtime integration remain
+open.
+
 ## 2026-09-06 â€” FLAC metadata tags
 
 The bounded batch FLAC encoder now optionally inserts a standards-shaped
