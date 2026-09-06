@@ -670,12 +670,7 @@ impl Gate {
                 self.open = true;
                 self.hold_frames = 0;
             }
-            let target_db = if self.open {
-                0.0
-            } else {
-                -((self.params.threshold_db - level_db) * (self.params.ratio - 1.0))
-                    .clamp(0.0, self.params.range_db)
-            };
+            let target_db = gate_target_gain_db(level_db, self.params, self.open);
             let coefficient = if target_db > self.gain_db {
                 attack
             } else {
@@ -721,6 +716,14 @@ fn validate_gate(params: GateParams, channels: usize) -> Result<(), BiquadError>
         return Err(BiquadError::InvalidQ);
     }
     Ok(())
+}
+
+fn gate_target_gain_db(level_db: f32, params: GateParams, open: bool) -> f32 {
+    if open {
+        0.0
+    } else {
+        -((params.threshold_db - level_db) * (params.ratio - 1.0)).clamp(0.0, params.range_db)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1365,6 +1368,24 @@ mod tests {
         assert!((compression_reduction(-19.5, threshold, ratio, knee) - 0.125).abs() < 1e-6);
         assert!((compression_reduction(-12.0, threshold, ratio, knee) - 4.0).abs() < 1e-6);
         assert!((compression_reduction(0.0, threshold, ratio, knee) - 12.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn gate_transfer_curve_reference_vectors_are_deterministic() {
+        let params = GateParams {
+            threshold_db: -45.0,
+            hysteresis_db: 3.0,
+            ratio: 4.0,
+            range_db: 60.0,
+            attack_ms: 5.0,
+            hold_ms: 50.0,
+            release_ms: 150.0,
+            sample_rate: 48_000.0,
+        };
+        assert_eq!(gate_target_gain_db(-45.0, params, false), 0.0);
+        assert!((gate_target_gain_db(-50.0, params, false) + 15.0).abs() < 1e-6);
+        assert_eq!(gate_target_gain_db(-100.0, params, false), -60.0);
+        assert_eq!(gate_target_gain_db(-60.0, params, true), 0.0);
     }
 
     #[test]

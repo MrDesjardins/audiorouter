@@ -356,3 +356,10 @@ vectors exercise the same `compression_reduction` function used by processing;
 the DSP suite now has 21 tests and strict Clippy/formatting pass. Dynamic
 detector timing and native scheduler integration remain separate acceptance
 work.
+
+Added deterministic gate/expander transfer vectors for below-threshold
+attenuation, threshold crossover, ratio response, range clamping, and the
+open-state pass-through. The named `gate_target_gain_db` helper is the same
+equation used by processing; the DSP suite now has 22 tests with strict
+Clippy/formatting green. Hysteresis timing and native scheduling remain
+separate acceptance work.
