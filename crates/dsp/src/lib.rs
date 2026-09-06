@@ -244,6 +244,29 @@ impl GraphicEq {
         Ok(())
     }
 
+    pub fn set_gain_db_ramped(
+        &mut self,
+        index: usize,
+        gain_db: f32,
+        frames: usize,
+    ) -> Result<(), BiquadError> {
+        if !gain_db.is_finite() || !(-18.0..=18.0).contains(&gain_db) {
+            return Err(BiquadError::InvalidQ);
+        }
+        let band = self.bands.get_mut(index).ok_or(BiquadError::InvalidBand)?;
+        let band = band.as_mut().ok_or(BiquadError::InvalidBand)?;
+        let params = BiquadParams {
+            kind: FilterKind::Peaking,
+            frequency_hz: GRAPHIC_EQ_FREQUENCIES_HZ[index],
+            q: 1.4,
+            gain_db,
+            sample_rate: self.sample_rate,
+        };
+        band.set_params_ramped(params, frames)?;
+        self.gains_db[index] = gain_db;
+        Ok(())
+    }
+
     pub fn reset(&mut self) {
         for band in self.bands.iter_mut().flatten() {
             band.reset();
@@ -1074,6 +1097,12 @@ mod tests {
         assert!((flat[1] + 0.25).abs() < 1e-4);
         eq.set_gain_db(9, 18.0).unwrap();
         gains[9] = 18.0;
+        assert_eq!(eq.gains_db(), &gains);
+        eq.set_gain_db_ramped(9, -18.0, 16).unwrap();
+        gains[9] = -18.0;
+        let mut ramped = [0.25; 32];
+        eq.process_interleaved(&mut ramped);
+        assert!(ramped.iter().all(|sample| sample.is_finite()));
         assert_eq!(eq.gains_db(), &gains);
         assert!(matches!(
             eq.set_gain_db(10, 0.0),

@@ -151,3 +151,9 @@ snaps to the target exactly without allocating during processing. A reference
 test verifies target response, finite output, and bounded sample-to-sample
 change. Fifteen DSP tests and strict Clippy pass; higher-level automation and
 graph/API integration remain open.
+
+`GraphicEq::set_gain_db_ramped` now applies the shared coefficient transition to
+an existing graphic band, avoiding abrupt replacement while preserving the
+fixed ten-band storage model. The graphic-EQ regression exercises the ramp and
+checks finite output and final gain state. Fifteen DSP tests and strict Clippy
+pass; graph/API integration and higher-level automation policy remain open.
