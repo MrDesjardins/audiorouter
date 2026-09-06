@@ -436,3 +436,13 @@ killed and reaped before the error returns. `WorkerProcess::Drop` uses the same
 cleanup helper. The plugin-host suite passes 27 unit tests plus 4
 worker-process tests with strict Clippy; this does not establish full OS
 filesystem/network sandboxing or plugin execution.
+## 2026-09-06 — Current native loader qualification
+
+The native loader was rebuilt and run with the installed Visual Studio Community
+2026/MSVC and Windows SDK toolchain against the pinned local mda-vst3 bundle.
+The real x64 module loaded and enumerated 68 classes; offline stereo processing
+of 64 frames produced finite output; all five controller parameters were read,
+changed, and restored; and a 180-byte component state payload round-tripped.
+The generated executable/object were removed afterward. No audio endpoint or
+machine configuration was accessed; worker integration, full OS sandboxing,
+and production plugin execution remain open.
