@@ -9,6 +9,8 @@ export type NodeKind =
   | "applicationCapture"
   | "endpointLoopback"
   | "physicalOutput"
+  | "virtualRenderSource"
+  | "virtualCaptureSink"
   | "mixer"
   | "gain"
   | "mute"

@@ -1316,6 +1316,8 @@ pub fn compile_session(
                     | NodeKind::ApplicationCapture
                     | NodeKind::EndpointLoopback
                     | NodeKind::PhysicalOutput
+                    | NodeKind::VirtualRenderSource
+                    | NodeKind::VirtualCaptureSink
                     | NodeKind::Mixer
             ) {
                 stages.push(ProcessingStage::Mute { muted: true });
@@ -1352,6 +1354,8 @@ pub fn compile_session(
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
             | NodeKind::PhysicalOutput
+            | NodeKind::VirtualRenderSource
+            | NodeKind::VirtualCaptureSink
             | NodeKind::Mixer => {}
             NodeKind::Meter => {
                 let index = stages

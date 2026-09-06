@@ -10,6 +10,8 @@ export type LibraryEntry = {
 
 export const libraryEntries: LibraryEntry[] = [
   { id: "physical-input", label: "Physical input", category: "Source", unavailableReason: "Requires the M02 Windows audio adapter" },
+  { id: "virtual-render-source", label: "Virtual render source", category: "Virtual bus", unavailableReason: "Requires the M03 managed virtual driver" },
+  { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", unavailableReason: "Requires the M03 managed virtual driver" },
   { id: "gain", label: "Gain", category: "Effect", kind: "gain" },
   { id: "mixer", label: "Mixer", category: "Routing", kind: "mixer" },
   { id: "recorder", label: "Recorder", category: "Output", unavailableReason: "Requires the M04 runtime integration" },

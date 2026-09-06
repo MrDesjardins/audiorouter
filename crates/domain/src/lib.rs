@@ -39,6 +39,8 @@ pub enum NodeKind {
     ApplicationCapture,
     EndpointLoopback,
     PhysicalOutput,
+    VirtualRenderSource,
+    VirtualCaptureSink,
     Mixer,
     Gain,
     Mute,
@@ -46,11 +48,13 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
         Self::PhysicalOutput,
+        Self::VirtualRenderSource,
+        Self::VirtualCaptureSink,
         Self::Mixer,
         Self::Gain,
         Self::Mute,
@@ -63,6 +67,8 @@ impl NodeKind {
             Self::ApplicationCapture => "application-capture",
             Self::EndpointLoopback => "endpoint-loopback",
             Self::PhysicalOutput => "physical-output",
+            Self::VirtualRenderSource => "virtual-render-source",
+            Self::VirtualCaptureSink => "virtual-capture-sink",
             Self::Mixer => "mixer",
             Self::Gain => "gain",
             Self::Mute => "mute",
@@ -85,7 +91,7 @@ pub struct NodeTypeSpec {
     pub realtime_cost_class: &'static str,
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 8] {
+pub fn node_registry() -> [NodeTypeSpec; 10] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -93,7 +99,15 @@ pub fn node_registry() -> [NodeTypeSpec; 8] {
             NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => {
                 CapabilityAvailability::Available
             }
-            _ => CapabilityAvailability::Unavailable("requires M02 Windows audio adapters"),
+            NodeKind::PhysicalInput
+            | NodeKind::ApplicationCapture
+            | NodeKind::EndpointLoopback
+            | NodeKind::PhysicalOutput => {
+                CapabilityAvailability::Unavailable("requires M02 Windows audio adapters")
+            }
+            NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink => {
+                CapabilityAvailability::Unavailable("requires M03 managed virtual driver")
+            }
         },
         realtime_cost_class: match kind {
             NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => "low",
@@ -1722,7 +1736,7 @@ mod tests {
     #[test]
     fn registry_reports_unimplemented_audio_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 8);
+        assert_eq!(registry.len(), 10);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)
@@ -1738,6 +1752,14 @@ mod tests {
             .find(|spec| spec.kind == NodeKind::Gain)
             .unwrap();
         assert_eq!(gain.availability, CapabilityAvailability::Available);
+        let virtual_source = registry
+            .iter()
+            .find(|spec| spec.kind == NodeKind::VirtualRenderSource)
+            .unwrap();
+        assert_eq!(
+            virtual_source.availability,
+            CapabilityAvailability::Unavailable("requires M03 managed virtual driver")
+        );
     }
 
     #[test]
