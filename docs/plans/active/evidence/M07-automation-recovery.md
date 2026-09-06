@@ -55,7 +55,9 @@ retaining the caller's original operation ID in responses and events. This
 prevents two clients using the same human-readable key from replaying or
 conflicting with one another. Operation lookup/cancel resolves only the
 requesting client's scoped records. A regression proves two clients can each
-commit with the same key; control coverage is 68 tests with strict Clippy.
+commit with the same key, and a SQLite-backed regression verifies the same
+separation survives the durable operation journal; control coverage is 68
+tests with strict Clippy.
 
 The complete `tests/acceptance/m07-headless.ps1` wrapper was rerun from clean
 revision `76b4d2b`. M01 CLI acceptance, MCP stdio interoperability, 68 control
