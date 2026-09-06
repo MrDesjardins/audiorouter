@@ -118,6 +118,9 @@ fn method_description(name: &str) -> &'static str {
         }
         "recordings.rename" => "Rename a recording within its approved directory.",
         "safety.setPrivacyMute" => "Latch or clear process-local privacy mute for capture paths.",
+        "recovery.clearSafeMode" => {
+            "Clear the latched crash-recovery safe mode after an operator confirms stability."
+        }
         "startup.get" => "Report the desired sign-in startup policy and registration capability.",
         "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
         "recordings.recycle" => {
@@ -237,6 +240,7 @@ fn method_input_schema(name: &str) -> Value {
         "safety.setPrivacyMute" => {
             object_schema(json!({ "muted": { "type": "boolean" } }), &["muted"])
         }
+        "recovery.clearSafeMode" => object_schema(json!({}), &[]),
         "startup.get" => object_schema(json!({}), &[]),
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
@@ -1230,6 +1234,7 @@ impl ControlPlane {
                     "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
                     "recordings.recycle" => self.dispatch_recording_recycle(request.params),
                     "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
+                    "recovery.clearSafeMode" => self.dispatch_recovery_clear(),
                     "startup.get" => Ok(json!({
                         "enabled": false,
                         "registration": "unavailable",
@@ -2068,6 +2073,19 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_recovery_clear(&mut self) -> Result<Value, ControlError> {
+        if let Some(storage) = &self.storage {
+            storage.clear_recovery_crashes().map_err(storage_error)?;
+        }
+        self.events
+            .append(0, None, "recovery.safeModeCleared", None);
+        Ok(json!({
+            "safeMode": false,
+            "recentCrashes": 0,
+            "persistence": if self.storage.is_some() { "durable" } else { "memory" }
+        }))
+    }
+
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         if let Some(requested_epoch) = params.get("backendEpoch").and_then(Value::as_u64) {
@@ -2253,6 +2271,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
         "recordings.rename" => &["recordingId", "newPath"],
         "safety.setPrivacyMute" => &["muted"],
+        "recovery.clearSafeMode" => &[],
         "recordings.removeEntry" => &["recordingId"],
         "recordings.recycle" => &["recordingId", "confirm"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get"
@@ -2307,6 +2326,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "recordings.reveal"
             | "recordings.removeEntry"
             | "recordings.recycle"
+            | "recovery.clearSafeMode"
     )
 }
 
@@ -2797,6 +2817,20 @@ mod tests {
         let diagnostics_result = diagnostics.result.unwrap();
         assert_eq!(diagnostics_result["recovery"]["safeMode"], true);
         assert_eq!(diagnostics_result["recovery"]["recentCrashes"], 3);
+        let cleared = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(19)),
+            method: "recovery.clearSafeMode".into(),
+            params: None,
+        });
+        assert_eq!(cleared.result.unwrap()["safeMode"], false);
+        let status_after = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(20)),
+            method: "status.get".into(),
+            params: None,
+        });
+        assert_eq!(status_after.result.unwrap()["recovery"]["recentCrashes"], 0);
         drop(plane);
         let _ = std::fs::remove_file(path);
     }

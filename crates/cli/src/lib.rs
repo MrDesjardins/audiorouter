@@ -58,6 +58,7 @@ where
         "operation" => operation_command(&command_args)?,
         "recordings" => recordings_command(&command_args)?,
         "privacy" => privacy_command(&command_args)?,
+        "recovery" => recovery_command(&command_args)?,
         "startup" => startup_command(&command_args)?,
         "backup" => backup_command(&command_args)?,
         "restore" => restore_command(&command_args)?,
@@ -346,6 +347,25 @@ fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
         })
         .result
         .ok_or_else(|| CliError::InvalidArguments("privacy mute update failed".into()))
+}
+
+fn recovery_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("clear-safe-mode") {
+        return Err(CliError::InvalidArguments(
+            "usage: recovery clear-safe-mode --database <path>".into(),
+        ));
+    }
+    let response = ControlPlane::with_storage("cli", database(args)?).dispatch(
+        audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "recovery.clearSafeMode".into(),
+            params: None,
+        },
+    );
+    response
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("recovery clear failed".into()))
 }
 
 fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
@@ -906,6 +926,10 @@ fn help_value() -> Value {
         .as_array_mut()
         .unwrap()
         .insert(14, json!("privacy mute <on|off> --database <path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
+        .insert(15, json!("recovery clear-safe-mode --database <path>"));
     value
 }
 
@@ -1689,6 +1713,44 @@ mod tests {
             ]),
             Err(CliError::InvalidArguments(_))
         ));
+        let _ = std::fs::remove_file(database);
+    }
+
+    #[test]
+    fn recovery_clear_command_clears_only_the_safe_mode_latch() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-recovery-clear-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let storage = Storage::open(&database).unwrap();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        for offset in 0..3 {
+            storage.record_recovery_crash(now + offset).unwrap();
+        }
+        let database_arg = database.to_string_lossy().into_owned();
+        let cleared: Value = serde_json::from_str(
+            &run([
+                "recovery",
+                "clear-safe-mode",
+                "--database",
+                &database_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(cleared["safeMode"], false);
+        assert_eq!(cleared["recentCrashes"], 0);
+        let status = Storage::open(&database)
+            .unwrap()
+            .recovery_status(now)
+            .unwrap();
+        assert_eq!(status.recent_crashes, 0);
+        assert!(!status.safe_mode);
         let _ = std::fs::remove_file(database);
     }
 

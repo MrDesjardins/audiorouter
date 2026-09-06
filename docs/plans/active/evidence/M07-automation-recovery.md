@@ -321,6 +321,11 @@ and 512 MiB of process memory in addition to kill-on-close containment. This
 is resource-containment evidence only; it does not establish filesystem or
 network isolation for arbitrary plugins.
 
+The explicit recovery maintenance operation is now available as the
+authorized `recovery.clearSafeMode` control method and the matching CLI
+command. It clears only the persisted crash markers and safe-mode latch; it
+does not start sessions, resume routes, or alter audio configuration.
+
 `WorkerSupervisor::record_failure` now lets a native adapter report immediate
 worker faults through the same bounded failure/quarantine policy used for
 heartbeat timeouts. The transition does not restart processes or claim plugin
