@@ -247,3 +247,10 @@ also have explicit schemas and shared result types. Rename, remove, and reveal
 contracts describe their stable identifiers and file-action outcomes, including
 the safe missing-file reveal branch. Discovery tests cover these shapes without
 launching a shell, moving files, or reading audio payloads.
+
+Recording recovery, preview, and recycle now expose explicit result variants as
+well. Recovery distinguishes a missing checkpoint from a validated version-1
+boundary snapshot; preview distinguishes WAV, FLAC, missing, and invalid file
+metadata; recycle distinguishes preview, completed, missing, and unavailable
+outcomes. Discovery coverage checks the variant counts without performing file
+actions or decoding audio.

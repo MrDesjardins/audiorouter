@@ -686,6 +686,69 @@ fn method_output_schema(name: &str) -> Value {
             })
         }
         "recordings.get" => recording_item_schema(),
+        "recordings.recovery" => json!({
+            "type": "object",
+            "properties": {
+                "recordingId": { "type": "string", "minLength": 1 },
+                "status": { "enum": ["missing", "available"] },
+                "checkpoint": {
+                    "type": "object",
+                    "properties": {
+                        "version": { "const": 1 },
+                        "state": { "enum": ["Idle", "Armed", "Recording", "Paused", "Stopping", "Completed", "Failed"] },
+                        "parts": { "type": "array", "items": { "type": "object" } },
+                        "pauses": { "type": "array", "items": { "type": "object" } },
+                        "pauseStart": { "type": ["integer", "null"], "minimum": 0 },
+                        "lastFrame": { "type": ["integer", "null"], "minimum": 0 }
+                    },
+                    "required": ["version", "state", "parts", "pauses", "pauseStart", "lastFrame"],
+                    "additionalProperties": false
+                }
+            },
+            "required": ["recordingId", "status"],
+            "additionalProperties": false
+        }),
+        "recordings.preview" => json!({
+            "type": "object",
+            "properties": {
+                "recordingId": { "type": "string", "minLength": 1 },
+                "preview": {
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {
+                                "status": { "const": "present" },
+                                "format": { "const": "wav" },
+                                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                                "sampleRate": { "type": "integer", "minimum": 1 },
+                                "frames": { "type": "integer", "minimum": 0 },
+                                "dataBytes": { "type": "integer", "minimum": 0 },
+                                "fileBytes": { "type": "integer", "minimum": 0 }
+                            },
+                            "required": ["status", "format", "channels", "sampleRate", "frames", "dataBytes", "fileBytes"],
+                            "additionalProperties": false
+                        },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "status": { "const": "present" },
+                                "format": { "const": "flac" },
+                                "channels": { "type": "integer", "minimum": 1, "maximum": 2 },
+                                "sampleRate": { "type": "integer", "minimum": 1 },
+                                "bitsPerSample": { "type": "integer", "minimum": 1 },
+                                "frames": { "type": "integer", "minimum": 0 },
+                                "fileBytes": { "type": "integer", "minimum": 0 }
+                            },
+                            "required": ["status", "format", "channels", "sampleRate", "bitsPerSample", "frames", "fileBytes"],
+                            "additionalProperties": false
+                        },
+                        { "type": "object", "properties": { "status": { "enum": ["missing", "invalid"] } }, "required": ["status"], "additionalProperties": false }
+                    ]
+                }
+            },
+            "required": ["recordingId", "preview"],
+            "additionalProperties": false
+        }),
         "recordings.setMetadata" => json!({
             "type": "object",
             "properties": {
@@ -742,17 +805,52 @@ fn method_output_schema(name: &str) -> Value {
             ]
         }),
         "recordings.recycle" => json!({
-            "type": "object",
-            "properties": {
-                "recordingId": { "type": "string", "minLength": 1 },
-                "path": { "type": "string", "minLength": 1 },
-                "fileAction": { "enum": ["recycle", "recycled", "none"] },
-                "preview": { "const": true },
-                "missing": { "const": true },
-                "reason": { "enum": ["missing", "recycleUnavailable"] }
-            },
-            "required": ["recordingId", "path", "fileAction"],
-            "additionalProperties": false
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "recordingId": { "type": "string", "minLength": 1 },
+                        "path": { "type": "string", "minLength": 1 },
+                        "fileAction": { "const": "none" },
+                        "reason": { "const": "missing" }
+                    },
+                    "required": ["recordingId", "path", "fileAction", "reason"],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "recordingId": { "type": "string", "minLength": 1 },
+                        "path": { "type": "string", "minLength": 1 },
+                        "fileAction": { "const": "recycle" },
+                        "preview": { "const": true }
+                    },
+                    "required": ["recordingId", "path", "fileAction", "preview"],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "recordingId": { "type": "string", "minLength": 1 },
+                        "path": { "type": "string", "minLength": 1 },
+                        "fileAction": { "const": "recycled" },
+                        "missing": { "const": true }
+                    },
+                    "required": ["recordingId", "path", "fileAction", "missing"],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "recordingId": { "type": "string", "minLength": 1 },
+                        "path": { "type": "string", "minLength": 1 },
+                        "fileAction": { "const": "none" },
+                        "reason": { "const": "recycleUnavailable" }
+                    },
+                    "required": ["recordingId", "path", "fileAction", "reason"],
+                    "additionalProperties": false
+                }
+            ]
         }),
         _ => json!({ "type": "object" }),
     }
@@ -3591,6 +3689,25 @@ mod tests {
             .find(|method| method["name"] == "recordings.reveal")
             .unwrap();
         assert_eq!(reveal["outputSchema"]["oneOf"].as_array().unwrap().len(), 2);
+        let preview = methods
+            .iter()
+            .find(|method| method["name"] == "recordings.preview")
+            .unwrap();
+        assert_eq!(
+            preview["outputSchema"]["properties"]["preview"]["oneOf"]
+                .as_array()
+                .unwrap()
+                .len(),
+            3
+        );
+        let recycle = methods
+            .iter()
+            .find(|method| method["name"] == "recordings.recycle")
+            .unwrap();
+        assert_eq!(
+            recycle["outputSchema"]["oneOf"].as_array().unwrap().len(),
+            4
+        );
         let history = methods
             .iter()
             .find(|method| method["name"] == "graph.history")

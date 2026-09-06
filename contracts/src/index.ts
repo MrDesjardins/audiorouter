@@ -333,6 +333,50 @@ export type RecordingRevealResult =
   | { recordingId: EntityId; path: string; revealed: true }
   | { recordingId: EntityId; path: string; revealed: false; reason: "missing" };
 
+export interface RecordingCheckpoint {
+  version: 1;
+  state: "Idle" | "Armed" | "Recording" | "Paused" | "Stopping" | "Completed" | "Failed";
+  parts: Array<Record<string, unknown>>;
+  pauses: Array<Record<string, unknown>>;
+  pauseStart: number | null;
+  lastFrame: number | null;
+}
+
+export type RecordingRecoveryResult =
+  | { recordingId: EntityId; status: "missing" }
+  | { recordingId: EntityId; status: "available"; checkpoint: RecordingCheckpoint };
+
+export type RecordingPreview =
+  | {
+      status: "present";
+      format: "wav";
+      channels: number;
+      sampleRate: number;
+      frames: number;
+      dataBytes: number;
+      fileBytes: number;
+    }
+  | {
+      status: "present";
+      format: "flac";
+      channels: number;
+      sampleRate: number;
+      bitsPerSample: number;
+      frames: number;
+      fileBytes: number;
+    }
+  | { status: "missing" | "invalid" };
+
+export interface RecordingPreviewResult {
+  recordingId: EntityId;
+  preview: RecordingPreview;
+}
+
+export type RecordingRecycleResult =
+  | { recordingId: EntityId; path: string; fileAction: "none"; reason: "missing" | "recycleUnavailable" }
+  | { recordingId: EntityId; path: string; fileAction: "recycle"; preview: true }
+  | { recordingId: EntityId; path: string; fileAction: "recycled"; missing: true };
+
 export interface StateEvent {
   sequence: number;
   backendEpoch: number;
@@ -521,13 +565,13 @@ export type MethodResult = {
   "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
   "recordings.get": RecordingRow;
-  "recordings.recovery": Record<string, unknown>;
+  "recordings.recovery": RecordingRecoveryResult;
   "recordings.reveal": RecordingRevealResult;
-  "recordings.preview": Record<string, unknown>;
+  "recordings.preview": RecordingPreviewResult;
   "recordings.setMetadata": RecordingMetadataResult;
   "recordings.rename": RecordingRenameResult;
   "recordings.removeEntry": RecordingRemoveResult;
-  "recordings.recycle": Record<string, unknown>;
+  "recordings.recycle": RecordingRecycleResult;
   "recovery.clearSafeMode": { safeMode: false; recentCrashes: number; persistence: "durable" | "memory" };
   "safety.setPrivacyMute": PrivacyMuteResult;
   "startup.get": StartupStatus;
