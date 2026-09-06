@@ -18,6 +18,8 @@ import type {
   Session,
   SessionCreateResult,
   SessionDeleteResult,
+  SessionStartResult,
+  SessionStopResult,
   StatusSnapshot,
   RpcTransport,
 } from "@audiorouter/contracts";
@@ -51,6 +53,8 @@ export interface UiBackend {
   createSession(session: Session): Promise<SessionCreateResult>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<SessionCreateResult>;
   deleteSession(sessionId: string): Promise<SessionDeleteResult>;
+  startSession(sessionId: string): Promise<SessionStartResult>;
+  stopSession(sessionId: string): Promise<SessionStopResult>;
 }
 
 export type UiSnapshotState = {
@@ -155,6 +159,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async deleteSession() {
       throw new Error("The backend is disconnected; session deletion is unavailable.");
     },
+    async startSession() {
+      throw new Error("The backend is disconnected; session start is unavailable.");
+    },
+    async stopSession() {
+      throw new Error("The backend is disconnected; session stop is unavailable.");
+    },
   };
 }
 
@@ -233,6 +243,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async deleteSession(sessionId) {
       return client.request("sessions.delete", { sessionId });
+    },
+    async startSession(startSessionId) {
+      return client.request("session.start", { sessionId: startSessionId });
+    },
+    async stopSession(stopSessionId) {
+      return client.request("session.stop", { sessionId: stopSessionId });
     },
   };
 }

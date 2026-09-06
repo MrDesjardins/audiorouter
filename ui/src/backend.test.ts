@@ -43,6 +43,8 @@ describe("snapshot cache", () => {
       createSession: async () => { throw new Error("not connected"); },
       duplicateSession: async () => { throw new Error("not connected"); },
       deleteSession: async () => { throw new Error("not connected"); },
+      startSession: async () => { throw new Error("not connected"); },
+      stopSession: async () => { throw new Error("not connected"); },
       getRecordingRecovery: async () => { throw new Error("not connected"); },
       setRecordingMetadata: async () => { throw new Error("not connected"); },
     };
@@ -173,6 +175,25 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", path: "C:\\approved\\take.wav", title: "Edited" }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title: "Edited" })).resolves.toMatchObject({ title: "Edited" });
     expect(received).toEqual({ method: "recordings.setMetadata", params: { recordingId: "take-1", title: "Edited" } });
+  });
+
+  it("forwards session lifecycle actions through the shared API", async () => {
+    const received: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received.push({ method, params });
+        return method === "session.start"
+          ? { sessionId: demoSession.id, state: "running", generation: 1, runtime: "fake" }
+          : { sessionId: demoSession.id, state: "stopped", runtime: "fake" };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.startSession(demoSession.id)).resolves.toMatchObject({ state: "running" });
+    await expect(backend.stopSession(demoSession.id)).resolves.toMatchObject({ state: "stopped" });
+    expect(received).toEqual([
+      { method: "session.start", params: { sessionId: demoSession.id } },
+      { method: "session.stop", params: { sessionId: demoSession.id } },
+    ]);
   });
 
   it("creates a stopped session through the shared API", async () => {

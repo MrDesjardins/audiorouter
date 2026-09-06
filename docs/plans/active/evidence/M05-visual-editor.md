@@ -323,3 +323,9 @@ signatures and obsolete preview/recovery field access. The adapter now consumes
 the shared result variants directly; UI typecheck, all 24 Vitest tests, and the
 production build pass. No audio stream or file action is invoked by this
 adapter correction.
+
+The UI now exposes guarded session lifecycle actions through the same typed
+backend adapter: connected mode forwards `session.start` and `session.stop`,
+while disconnected preview rejects both operations. The control is accompanied
+by a forwarding regression; 25 UI tests, typecheck, and the production build
+pass. The current control runtime is fake, so this slice opens no audio stream.
