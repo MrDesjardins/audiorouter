@@ -2162,6 +2162,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "clients.authorize"
             | "clients.revoke"
             | "recordings.setMetadata"
+            | "recordings.reveal"
             | "recordings.removeEntry"
     )
 }
