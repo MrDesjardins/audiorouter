@@ -321,3 +321,9 @@ null host context, and observed 5 parameters before terminating/releasing the
 controller. This confirms a real VST3 parameter surface without opening an
 editor or audio device; host-side parameter automation/state fidelity and
 sandbox enforcement remain open.
+
+The controller probe exercised every one of the 5 discovered parameters by
+reading its normalized value, setting 0.5, validating a finite 0..1 response,
+and restoring the original value. The complete synthetic automation pass
+succeeded before controller shutdown. This does not yet prove AudioRouter
+parameter-event forwarding, state persistence, editor behavior, or sandboxing.

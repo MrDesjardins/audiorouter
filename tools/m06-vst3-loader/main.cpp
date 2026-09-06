@@ -191,6 +191,22 @@ int wmain(int argc, wchar_t** argv) {
                 if (parameter_count <= 0) {
                     throw std::runtime_error("controller exposes no parameters");
                 }
+                for (int32 index = 0; index < parameter_count; ++index) {
+                    Vst::ParameterInfo parameter{};
+                    if (controller->getParameterInfo(index, parameter) != kResultOk) {
+                        throw std::runtime_error("getParameterInfo failed");
+                    }
+                    const auto original = controller->getParamNormalized(parameter.id);
+                    if (!std::isfinite(original) || original < 0.0 || original > 1.0) {
+                        throw std::runtime_error("parameter returned invalid normalized value");
+                    }
+                    controller->setParamNormalized(parameter.id, 0.5);
+                    const auto updated = controller->getParamNormalized(parameter.id);
+                    if (!std::isfinite(updated) || updated < 0.0 || updated > 1.0) {
+                        throw std::runtime_error("parameter automation returned invalid value");
+                    }
+                    controller->setParamNormalized(parameter.id, original);
+                }
                 controller->terminate();
                 controller->release();
                 controller = nullptr;
@@ -199,7 +215,8 @@ int wmain(int argc, wchar_t** argv) {
                 component->release();
                 component = nullptr;
                 std::cout << "processed offline block: channels=" << channels
-                          << " frames=64 finite=true parameters=" << parameter_count << "\n";
+                          << " frames=64 finite=true parameters=" << parameter_count
+                          << " automation=verified\n";
                 break;
             }
         }
