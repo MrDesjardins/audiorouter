@@ -35,4 +35,9 @@ installer, driver, and clean-machine qualification remain release blockers.
 
 ## 2026-09-06 — Headless operations runbook
 
+Added `tools/release/test-verify-artifacts.ps1`, which validates the verifier
+against a temporary valid manifest and then confirms tampering is rejected.
+The harness cleans its temporary directory in `finally`; the positive and
+tamper cases pass without modifying release outputs or machine configuration.
+
 Added `docs/operations/headless-runbook.md` and linked it from the documentation index. It documents commands that exist in the current CLI, the versioned plan-file workflow, non-overwriting recovery backups, staged bundle import, MCP stdio/pipe launch, stale-plan recovery, and explicit limits around native routing, drivers, signing, and installation. The runbook does not present portable tests or an MCP response as evidence of a configured audio system.
