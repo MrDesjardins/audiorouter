@@ -67,6 +67,29 @@ export interface RouteInspection {
   paths: RoutePath[];
 }
 
+export type RecordingState = "armed" | "recording" | "paused" | "completed" | "failed";
+
+export interface RecordingMetadata {
+  title: string | null;
+  artist: string | null;
+  comment: string | null;
+}
+
+export interface RecordingRow extends RecordingMetadata {
+  id: EntityId;
+  sessionId: EntityId;
+  recorderId: EntityId;
+  path: string;
+  format: "wav" | "flac";
+  channels: 1 | 2;
+  sampleRate: 44100 | 48000;
+  frames: number;
+  fileBytes: number;
+  startTime: string;
+  state: RecordingState;
+  missing: boolean;
+}
+
 export interface GraphHistoryPage {
   items: Session[];
   nextCursor: string | null;

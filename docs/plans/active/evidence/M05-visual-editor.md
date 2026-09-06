@@ -85,6 +85,12 @@ disconnected preview still renders safely, while a future failed live refresh
 will retain the last known session and explain the condition. UI typechecking
 and production build pass.
 
+The shared TypeScript contract now defines recording-library row/state shapes
+matching the durable storage fields, including WAV/FLAC format, audio shape,
+frame/byte counts, metadata, missing-file state, and terminal failure state.
+This is schema groundwork only; no renderer file deletion or recording action
+is exposed. Contracts/UI tests, typechecks, production build, and audit pass.
+
 Added Vitest fake-backend coverage in `ui/src/backend.test.ts`: four tests
 verify disconnected read-only snapshots, empty event cursors, stale snapshot
 retention after a failed refresh, revision-preserving node drafts, and unknown
