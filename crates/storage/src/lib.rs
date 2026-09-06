@@ -410,6 +410,15 @@ impl Storage {
         self.list_sessions_after(None, limit)
     }
 
+    pub fn count_sessions(&self) -> Result<usize, StorageError> {
+        self.connection
+            .query_row("SELECT COUNT(*) FROM sessions", [], |row| {
+                row.get::<_, i64>(0)
+            })
+            .map(|count| count as usize)
+            .map_err(Into::into)
+    }
+
     pub fn list_sessions_after(
         &self,
         cursor: Option<&str>,

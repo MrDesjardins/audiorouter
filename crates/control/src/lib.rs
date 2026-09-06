@@ -649,27 +649,33 @@ impl ControlPlane {
         }
     }
 
-    fn status_snapshot(&self) -> Value {
-        let active_session_ids = self
+    fn status_snapshot(&self) -> Result<Value, ControlError> {
+        let mut active_session_ids = self
             .runtimes
             .iter()
             .filter(|(_, runtime)| runtime.state() == RuntimeState::Running)
             .map(|(id, _)| id.as_str().to_owned())
             .collect::<Vec<_>>();
-        json!({
+        active_session_ids.sort();
+        let session_count = if let Some(storage) = &self.storage {
+            storage.count_sessions().map_err(storage_error)?
+        } else {
+            self.store.sessions(500).len()
+        };
+        Ok(json!({
             "build": self.build,
             "audio": "unavailable",
             "deviceDiscovery": "available",
             "reason": "M02 realtime graph engine and routing are not implemented",
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
-            "sessionCount": self.store.sessions(500).len(),
+            "sessionCount": session_count,
             "activeSessionCount": active_session_ids.len(),
             "activeSessionIds": active_session_ids,
             "eventCursor": {
                 "backendEpoch": self.events.backend_epoch(),
                 "latestSequence": self.events.latest_sequence()
             }
-        })
+        }))
     }
 
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
@@ -975,7 +981,7 @@ impl ControlPlane {
                 match request.method.as_str() {
                     "system.describe" => Ok(self.describe()),
                     "system.handshake" => self.dispatch_handshake(request.params),
-                    "status.get" => Ok(self.status_snapshot()),
+                    "status.get" => self.status_snapshot(),
                     "system.diagnostics" => Ok(json!({
                         "build": self.build,
                         "backend": "control-plane",
