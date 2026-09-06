@@ -334,8 +334,26 @@ fn method_input_schema(name: &str) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
-        "devices.list" | "apps.list" | "applications.list" | "nodes.types" | "nodes.describe"
-        | "clients.list" | "recordings.list" => {
+        "apps.list" | "applications.list" => json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "processId": { "type": "integer", "minimum": 1 },
+                    "executable": { "type": "string" },
+                    "creationTime100ns": { "type": ["string", "null"] },
+                    "audioActivity": { "enum": ["active", "inactive", "none"] },
+                    "captureCapability": { "enum": ["observed", "notObserved"] },
+                    "audioSessionCount": { "type": "integer", "minimum": 0 },
+                    "activeAudioSessionCount": { "type": "integer", "minimum": 0 },
+                    "captureSessionCount": { "type": "integer", "minimum": 0 },
+                    "audioDisplayNames": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["processId", "executable", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "audioDisplayNames"],
+                "additionalProperties": false
+            }
+        }),
+        "devices.list" | "nodes.types" | "nodes.describe" | "clients.list" | "recordings.list" => {
             json!({ "type": "array" })
         }
         _ => json!({ "type": "object" }),
@@ -2675,6 +2693,18 @@ mod tests {
             .unwrap();
         assert_eq!(devices["inputSchema"]["additionalProperties"], false);
         assert_eq!(devices["outputSchema"]["type"], "array");
+        let applications = methods
+            .iter()
+            .find(|method| method["name"] == "applications.list")
+            .unwrap();
+        assert_eq!(
+            applications["outputSchema"]["items"]["properties"]["audioActivity"]["enum"][0],
+            "active"
+        );
+        assert_eq!(
+            applications["outputSchema"]["items"]["properties"]["captureSessionCount"]["type"],
+            "integer"
+        );
     }
 
     #[test]
