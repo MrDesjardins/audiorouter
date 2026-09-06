@@ -306,3 +306,8 @@ The application inventory panel now refreshes alongside reconnect and
 event-triggered snapshot refreshes. This keeps the read-only Windows audio
 session observations current in the editor without enabling any capture or
 route mutation; disconnected mode continues to return an empty inventory.
+
+Session list and workspace headings now use `status.get.activeSessionIds` to
+label the selected and listed sessions as Running or Stopped. The UI no longer
+claims a running authoritative session is stopped; disconnected preview still
+uses its safe stopped fixture state.
