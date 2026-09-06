@@ -68,3 +68,8 @@ tests and strict Clippy pass.
 and SHA-256, and verifies both before restore. Empty, oversized, mismatched,
 and tampered state are rejected. Nine plugin-host tests and strict Clippy pass;
 durable asset storage and plugin-specific state serialization remain open.
+
+The scanner no longer labels arbitrary `.dll` files as VST2. DLL candidates
+are retained with `PluginFormat::Unknown`, while only the `.vst3` extension
+receives VST3 classification; this prevents false ReaPlugs/legacy support
+claims. Nine plugin-host tests and strict Clippy pass.

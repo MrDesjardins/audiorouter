@@ -176,7 +176,9 @@ pub fn inspect_binary(
         .as_deref()
     {
         Some("vst3") => PluginFormat::Vst3,
-        Some("dll") => PluginFormat::Vst2,
+        // A DLL extension alone does not prove VST2; retain the binary as an
+        // inspected unknown candidate rather than advertising compatibility.
+        Some("dll") => PluginFormat::Unknown,
         _ => return Err(InspectionError::UnsupportedExtension),
     };
     let metadata =
@@ -468,7 +470,7 @@ mod tests {
             inspect_binary(&vst2, std::slice::from_ref(&root))
                 .unwrap()
                 .format,
-            PluginFormat::Vst2
+            PluginFormat::Unknown
         );
         let invalid = root.join("bad.vst3");
         fs::write(invalid, b"not a pe").unwrap();
