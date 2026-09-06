@@ -414,16 +414,37 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
             _ => "list",
         };
         return Err(CliError::InvalidArguments(format!(
-            "usage: {parent} {expected}"
+            "usage: {parent} {expected} [--limit N] [--cursor ID]"
         )));
     }
     let expected = subcommand.unwrap();
     let mut plane = ControlPlane::default();
     Ok(match parent {
-        "devices" => plane
-            .dispatch(request("devices.list"))
-            .result
-            .unwrap_or_else(|| json!([])),
+        "devices" => {
+            let cursor = optional_option_value(args, "--cursor")?;
+            let limit = optional_option_value(args, "--limit")?
+                .map(|value| {
+                    value.parse::<u64>().map_err(|_| {
+                        CliError::InvalidArguments("--limit must be an integer".into())
+                    })
+                })
+                .transpose()?;
+            if let Some(limit) = limit {
+                if !(1..=500).contains(&limit) {
+                    return Err(CliError::InvalidArguments(
+                        "--limit must be between 1 and 500".into(),
+                    ));
+                }
+            }
+            let mut device_request = request("devices.list");
+            if cursor.is_some() || limit.is_some() {
+                device_request.params = Some(json!({ "cursor": cursor, "limit": limit }));
+            }
+            plane
+                .dispatch(device_request)
+                .result
+                .unwrap_or_else(|| json!([]))
+        }
         "apps" | "applications" => plane
             .dispatch(request("apps.list"))
             .result
@@ -1344,7 +1365,7 @@ fn mcp_tools() -> Value {
     json!([
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
-        { "name": "list_devices", "description": "List authoritative audio endpoint descriptors.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "list_devices", "description": "List authoritative audio endpoint descriptors. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
@@ -1389,7 +1410,7 @@ fn mcp_tool_call(
     let (method, params) = match name {
         "describe_capabilities" => ("system.describe", None),
         "get_startup" => ("startup.get", None),
-        "list_devices" => ("devices.list", None),
+        "list_devices" => ("devices.list", Some(arguments)),
         "list_applications" => ("apps.list", None),
         "get_session" => ("sessions.get", Some(arguments)),
         "inspect_routes" => ("routes.inspect", Some(arguments)),
