@@ -1173,6 +1173,10 @@ pub struct WorkerProcess {
 pub struct SupervisedWorkerProcess {
     process: WorkerProcess,
     supervisor: WorkerSupervisor,
+    executable: PathBuf,
+    identity: PluginIdentity,
+    channels: u16,
+    shared_transport: bool,
 }
 
 impl SupervisedWorkerProcess {
@@ -1197,16 +1201,27 @@ impl SupervisedWorkerProcess {
         mut supervisor: WorkerSupervisor,
         now: Instant,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let executable = match validate_worker_executable(executable.as_ref()) {
+            Ok(path) => path,
+            Err(error) => {
+                supervisor.record_failure(now);
+                return Err((WorkerProcessError::Spawn(error), supervisor));
+            }
+        };
         if let Err(error) = supervisor.start(identity, now) {
             return Err((
                 WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
                 supervisor,
             ));
         }
-        match WorkerProcess::spawn(executable, &identity.sha256, channels) {
+        match WorkerProcess::spawn(&executable, &identity.sha256, channels) {
             Ok(process) => Ok(Self {
                 process,
                 supervisor,
+                executable,
+                identity: identity.clone(),
+                channels,
+                shared_transport: false,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -1226,10 +1241,16 @@ impl SupervisedWorkerProcess {
         supervisor.start(identity, now).map_err(|error| {
             WorkerProcessError::Protocol(format!("worker start rejected: {error:?}"))
         })?;
-        match WorkerProcess::spawn_shared(executable, &identity.sha256, channels, transport) {
+        let executable =
+            validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
+        match WorkerProcess::spawn_shared(&executable, &identity.sha256, channels, transport) {
             Ok(process) => Ok(Self {
                 process,
                 supervisor,
+                executable,
+                identity: identity.clone(),
+                channels,
+                shared_transport: true,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -1335,8 +1356,45 @@ impl SupervisedWorkerProcess {
         let Self {
             process: _process,
             supervisor,
+            executable: _executable,
+            identity: _identity,
+            channels: _channels,
+            shared_transport: _shared_transport,
         } = self;
         supervisor
+    }
+
+    /// Deliberately replace a failed worker while retaining its failure ledger.
+    /// The current process is dropped before the replacement is attempted, so
+    /// this operation never leaves two workers for one supervised slot.
+    pub fn restart(self, now: Instant) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let Self {
+            process,
+            supervisor,
+            executable,
+            identity,
+            channels,
+            shared_transport,
+        } = self;
+        let state = supervisor.state();
+        drop(process);
+        if shared_transport {
+            return Err((
+                WorkerProcessError::Protocol(
+                    "shared worker restart requires transport reconstruction".into(),
+                ),
+                supervisor,
+            ));
+        }
+        if state == WorkerState::Running {
+            return Err((
+                WorkerProcessError::Protocol(
+                    "worker restart requires a failed or stopped worker".into(),
+                ),
+                supervisor,
+            ));
+        }
+        Self::spawn_with_supervisor(executable, &identity, channels, supervisor, now)
     }
 
     fn ensure_running(&self) -> Result<(), WorkerProcessError> {

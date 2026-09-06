@@ -207,30 +207,12 @@ fn supervised_worker_replacement_preserves_quarantine_history() {
         worker.record_failure(start),
         audiorouter_plugin_host::WorkerState::Failed
     );
-    let supervisor = worker.into_supervisor();
-    assert_eq!(supervisor.failure_count(), 1);
-    let mut replacement = SupervisedWorkerProcess::spawn_with_supervisor(
-        &worker_path,
-        &identity,
-        1,
-        supervisor,
-        start,
-    )
-    .expect("spawn replacement");
+    let mut replacement = worker.restart(start).expect("spawn replacement");
     assert_eq!(
         replacement.record_failure(start),
         audiorouter_plugin_host::WorkerState::Failed
     );
-    let supervisor = replacement.into_supervisor();
-    assert_eq!(supervisor.failure_count(), 2);
-    let mut final_worker = SupervisedWorkerProcess::spawn_with_supervisor(
-        &worker_path,
-        &identity,
-        1,
-        supervisor,
-        start,
-    )
-    .expect("spawn final replacement");
+    let mut final_worker = replacement.restart(start).expect("spawn final replacement");
     assert_eq!(
         final_worker.record_failure(start),
         audiorouter_plugin_host::WorkerState::Quarantined

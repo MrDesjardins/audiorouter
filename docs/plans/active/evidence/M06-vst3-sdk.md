@@ -493,3 +493,11 @@ ledger, preserving failure history across worker generations. A regression
 exercises three deliberate generations and confirms the third failure enters
 quarantine rather than resetting the count. The suite passes 29 unit tests and
 8 process/integration tests with strict Clippy.
+
+`SupervisedWorkerProcess::restart` now provides the deliberate replacement
+operation for non-shared workers. It drops the failed process before spawning,
+retains the supervisor ledger, rejects running/shared restart requests with
+explicit protocol errors, and returns the ledger alongside spawn errors. The
+three-generation regression uses this public API and confirms quarantine is
+still reached after repeated failures. No plugin is loaded and no audio
+endpoint or machine configuration is touched.
