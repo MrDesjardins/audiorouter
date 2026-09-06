@@ -105,6 +105,14 @@ The probe also completed a 200 ms silent render run on endpoint 0. Shared
 initialization, buffer acquisition, start, submission of 13,920 frames using
 `AUDCLNT_BUFFERFLAGS_SILENT`, stop, and reset all returned success. No tone
 was generated, and no endpoint defaults or persistent audio settings changed.
+
+## 2026-09-06 — Reproducible native build
+
+The checked-in `tools/m00-native-wasapi-probe/build.ps1` script compiled
+`main.cpp` successfully with the installed Visual Studio Community 2026 MSVC
+toolchain and Windows SDK/WDK libraries. This was a build-only verification;
+the generated executable was not run and no endpoint was opened. The temporary
+executable and object file were removed after compilation.
 ## 2026-09-06 — Native endpoint-format cross-check
 
 The installed Visual Studio/Windows SDK toolchain rebuilt the native probe, and

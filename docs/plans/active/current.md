@@ -16,6 +16,11 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+The checked-in native probe build script was revalidated on 2026-09-06 with
+the installed Visual Studio Community 2026 MSVC and Windows SDK/WDK toolchain.
+This verification compiled only; it did not execute the probe or touch audio
+configuration. Generated build outputs were removed afterward.
+
 ## M00 execution log
 
 ### M00 working scope
