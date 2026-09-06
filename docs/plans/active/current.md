@@ -151,6 +151,12 @@ This establishes that Codex can continue documentation and portable implementati
 - The Windows transport suite passed all 11 tests, including a same-user collision test and two sequential authenticated connections. The mutex is released on server shutdown and no audio or persistent machine configuration is touched.
 - Added bounded eight-client concurrent named-pipe coverage; all clients received intact responses while the singleton server serialized authenticated connections. The transport suite now passes 12 tests.
 
+### 2026-09-05 — Install matching Windows SDK and WDK
+
+- Installed Microsoft Windows SDK `10.0.28000.2526` and Windows Driver Kit `10.1.28000.2526` through WinGet, matching the Visual Studio 2026 toolchain. Verified `km\wdm.h`, KMDF headers, and `km\x64\ntoskrnl.lib` are present.
+- Downloaded Microsoft’s driver samples temporarily. The full SysVAD solution reached MIDL/compiler tasks but MSBuild’s file-tracker subprocess failed because this host shell exposes duplicate case variants of `PATH`; a direct MSVC kernel-mode compile of `EndpointsCommon\NewDelete.cpp` succeeded against the new WDK.
+- No driver was installed, registered, loaded, signed, or used to alter audio configuration. Temporary sample sources and build outputs were removed.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.

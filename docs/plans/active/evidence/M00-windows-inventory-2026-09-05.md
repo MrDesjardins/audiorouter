@@ -25,13 +25,13 @@ Read-only native Windows inventory for M00 tasks 1, 5, and 6. No defaults, drive
 | Cargo | `1.96.0 (30a34c682 2026-05-25)` |
 | Node | `v22.22.3` |
 | npm | `10.9.8` |
-| MSVC `cl.exe` | Not found on PATH |
-| MSBuild | Not found on PATH |
+| MSVC `cl.exe` | Installed in Visual Studio Community 2026; available through `VsDevCmd.bat` |
+| MSBuild | Installed in Visual Studio Community 2026; available through `VsDevCmd.bat` |
 | CMake | Not found on PATH |
 | .NET SDK | `dotnet --version` did not load an SDK; no usable SDK reported |
-| Windows SDK | `10.0.26100.0` and older SDK directories present under `C:\Program Files (x86)\Windows Kits\10` |
-| WDK | Not established; no WDK-specific installation or build environment identified |
-| `signtool.exe` | Present in Windows SDK at `bin\10.0.26100.0\x64\signtool.exe`, but not on PATH |
+| Windows SDK | `10.0.28000.0` and `10.0.26100.0` present under `C:\Program Files (x86)\Windows Kits\10` |
+| WDK | `10.1.28000.2526` installed; `km\wdm.h`, KMDF headers, and `km\x64\ntoskrnl.lib` present |
+| `signtool.exe` | Present in Windows SDK at `bin\10.0.28000.0\x64\signtool.exe` |
 
 Visual Studio presence was checked with `vswhere.exe`; it reported no installed instances. No WDK markers were found under the Windows Kits tree. A Visual Studio C++ toolset/WDK installation or an authorized separate build machine is required before a driver or C++ probe can be built. The SDK supplies supporting tools such as `midl.exe`, `rc.exe`, and `signtool.exe`, but their presence does not establish a usable MSVC/WDK build environment.
 
@@ -74,6 +74,10 @@ Get-Command rustc.exe,cargo.exe,node.exe,npm.cmd,cl.exe,msbuild.exe,cmake.exe,do
 The same WMI/PnP queries returned `Access denied` (`0x80041003`) in the restricted non-elevated shell. The successful result above required the approved elevated read-only invocation. `npm.ps1` was blocked by execution policy; `npm.cmd` was used instead.
 
 ## M00 conclusion
+
+### Post-install correction (2026-09-05)
+
+The initial inventory predates the toolchain installation. Visual Studio Community/Build Tools 2026 `18.9.2`, Windows SDK `10.0.28000.2526`, and WDK `10.1.28000.2526` are now installed. WDK kernel headers and libraries are present, and a direct MSVC kernel-mode compile of SysVAD `EndpointsCommon\NewDelete.cpp` succeeded. The full SysVAD solution reached MIDL/compiler tasks but encountered the host shell’s duplicate `PATH`/`Path` environment-key failure in MSBuild’s file-tracker subprocess. No driver was installed, registered, loaded, or signed.
 
 This machine is a usable Windows inventory/reference candidate, and it has both physical USB audio hardware and interim third-party virtual audio devices. It does not provide evidence for CAP-03/04/05/06/07/08, NFR-01/02/03, or VDEV-02/09: no WASAPI probe, process-loopback probe, controlled tone/impulse harness, physical loopback measurement, driver prototype, signing route, or exact format/period manifest has been run. The existing virtual devices are interim-only under the specification and cannot satisfy the managed-driver gate.
 
