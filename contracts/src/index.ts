@@ -127,6 +127,23 @@ export interface StatusSnapshot {
   eventCursor: { backendEpoch: number; latestSequence: number };
 }
 
+export interface StateEvent {
+  sequence: number;
+  backendEpoch: number;
+  resourceRevision: number;
+  operationId: string | null;
+  category: string;
+  sessionId: EntityId | null;
+}
+
+export interface EventsSubscribeResult {
+  backendEpoch: number;
+  events: StateEvent[];
+  nextSequence: number;
+  resyncRequired?: boolean;
+  snapshot?: { sessions: SessionListPage };
+}
+
 export interface ApplicationInfo {
   processId: number;
   executable: string;
@@ -257,7 +274,7 @@ export type MethodResult = {
   "routes.inspect": Record<string, unknown>;
   "graph.history": GraphHistoryPage;
   "graph.undoPlan": Record<string, unknown>;
-  "events.subscribe": Record<string, unknown>;
+  "events.subscribe": EventsSubscribeResult;
   "nodes.describe": DiscoveryDocument["nodeTypes"];
   "sessions.get": Session;
   "sessions.list": SessionListPage;

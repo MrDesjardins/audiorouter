@@ -46,6 +46,13 @@ updates local presentation state only; it does not call a control method or
 alter audio configuration. TypeScript checking and the production Vite build
 pass.
 
+The shared TypeScript contract now models `StateEvent` and the complete
+`events.subscribe` result, including backend epoch, sequence, filtered events,
+and explicit resync snapshots. `UiBackend.subscribe` exposes this read-only
+replay path; the disconnected implementation returns an empty cursor and the
+live adapter requests the bounded 500-event replay. Contracts and UI
+typechecks, production build, and high-severity audit pass.
+
 `ui/src/draft.ts` adds plan-only candidate editing for node enabled/bypass
 flags and deterministic draft-change descriptions. It clones session data,
 preserves the authoritative revision, rejects unknown node IDs, and leaves

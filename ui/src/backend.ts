@@ -1,6 +1,7 @@
 import type {
   AudioRouterClient,
   DiscoveryDocument,
+  EventsSubscribeResult,
   Session,
   StatusSnapshot,
 } from "@audiorouter/contracts";
@@ -16,6 +17,7 @@ export type UiBackendSnapshot = {
 export interface UiBackend {
   readonly connected: boolean;
   snapshot(): Promise<UiBackendSnapshot>;
+  subscribe(afterSequence?: number, sessionId?: string): Promise<EventsSubscribeResult>;
 }
 
 const disconnectedStatus: StatusSnapshot = {
@@ -37,6 +39,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async snapshot() {
       return { status: disconnectedStatus, session, discovery: null };
     },
+    async subscribe() {
+      return { backendEpoch: 0, events: [], nextSequence: 0 };
+    },
   };
 }
 
@@ -51,6 +56,13 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
         client.request("sessions.get", { sessionId }),
       ]);
       return { status, discovery, session };
+    },
+    async subscribe(afterSequence = 0, sessionId) {
+      return client.request("events.subscribe", {
+        afterSequence,
+        limit: 500,
+        ...(sessionId === undefined ? {} : { sessionId }),
+      });
     },
   };
 }
