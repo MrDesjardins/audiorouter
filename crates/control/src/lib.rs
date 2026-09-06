@@ -14,6 +14,7 @@ use audiorouter_protocol::{
 use audiorouter_storage::{Storage, StorageError};
 use serde::Serialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -302,6 +303,20 @@ impl ControlPlane {
         base_revision: u64,
         idempotency_key: &str,
     ) -> Result<Value, ControlError> {
+        let fingerprint = self.store.plan_fingerprint(plan_id)?;
+        let request_hash = format!("{:x}", Sha256::digest(fingerprint.as_bytes()));
+        if let Some(storage) = &self.storage {
+            if let Some(result) = storage
+                .journal_result_checked(idempotency_key, &request_hash)
+                .map_err(storage_error)?
+            {
+                let mut response: Value = serde_json::from_str(&result)
+                    .map_err(|error| ControlError::Json(error.to_string()))?;
+                response["idempotentReplay"] = json!(true);
+                response["activation"] = json!({ "state": "pending", "runtime": "fake" });
+                return Ok(response);
+            }
+        }
         let result = self
             .store
             .commit_graph(plan_id, base_revision, idempotency_key)?;
@@ -312,11 +327,12 @@ impl ControlPlane {
             let result_document = serde_json::to_string(&result)
                 .map_err(|error| ControlError::Json(error.to_string()))?;
             storage
-                .save_session_with_journal(
+                .save_session_with_journal_with_hash(
                     session,
                     idempotency_key,
                     "graph.commit",
                     &result_document,
+                    &request_hash,
                     None,
                 )
                 .map_err(storage_error)?;

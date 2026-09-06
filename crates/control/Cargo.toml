@@ -12,3 +12,4 @@ audiorouter-storage = { path = "../storage" }
 audiorouter-windows-audio = { path = "../windows-audio" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
