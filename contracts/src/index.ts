@@ -85,6 +85,7 @@ export interface DiscoveryDocument {
     maxEdgesPerSession: number;
     maxNodesGlobal: number;
     maxEdgesGlobal: number;
+    maxActiveSessions: number;
   };
 }
 

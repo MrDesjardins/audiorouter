@@ -214,7 +214,7 @@ impl ControlPlane {
             };
             json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class })
         }).collect();
-        json!({ "protocolVersion": { "major": 1, "minor": 0 }, "schemaVersion": 1, "build": self.build, "methods": methods, "nodeTypes": nodes, "limits": { "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION, "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION, "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL, "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL } })
+        json!({ "protocolVersion": { "major": 1, "minor": 0 }, "schemaVersion": 1, "build": self.build, "methods": methods, "nodeTypes": nodes, "limits": { "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION, "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION, "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL, "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL, "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS } })
     }
 
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
@@ -396,12 +396,25 @@ impl ControlPlane {
     pub fn session_start(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
         let session = self.get_session(id)?.clone();
-        let runtime = self.runtimes.entry(id.clone()).or_default();
-        if runtime.state() == RuntimeState::Running {
-            return Ok(
-                json!({ "sessionId": id, "state": "running", "generation": runtime.generation(), "runtime": "fake" }),
-            );
+        if let Some(runtime) = self.runtimes.get(id) {
+            if runtime.state() == RuntimeState::Running {
+                return Ok(
+                    json!({ "sessionId": id, "state": "running", "generation": runtime.generation(), "runtime": "fake" }),
+                );
+            }
         }
+        if self
+            .runtimes
+            .values()
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .count()
+            >= audiorouter_domain::MAX_ACTIVE_SESSIONS
+        {
+            return Err(ControlError::InvalidRequest(
+                "active session limit reached".into(),
+            ));
+        }
+        let runtime = self.runtimes.entry(id.clone()).or_default();
         runtime.prepare(&session).map_err(|error| match error {
             RuntimeError::InvalidGraph(errors) => {
                 ControlError::InvalidRequest(format!("invalid graph: {errors:?}"))
@@ -980,6 +993,7 @@ mod tests {
         assert_eq!(description["limits"]["maxNodesPerSession"], 64);
         assert_eq!(description["limits"]["maxNodesGlobal"], 128);
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
+        assert_eq!(description["limits"]["maxActiveSessions"], 2);
         assert!(description["methods"]
             .as_array()
             .unwrap()
@@ -1239,6 +1253,22 @@ mod tests {
             params: Some(json!({ "sessionId": "missing" })),
         };
         assert_eq!(plane.dispatch(request).error.unwrap().code, -32602);
+    }
+
+    #[test]
+    fn session_start_enforces_the_two_active_session_limit() {
+        let mut plane = ControlPlane::default();
+        for id in ["one", "two", "three"] {
+            let mut graph = session();
+            graph.id = EntityId::new(id);
+            plane.insert_session(graph).unwrap();
+        }
+        plane.session_start(&EntityId::new("one")).unwrap();
+        plane.session_start(&EntityId::new("two")).unwrap();
+        assert!(matches!(
+            plane.session_start(&EntityId::new("three")),
+            Err(ControlError::InvalidRequest(message)) if message == "active session limit reached"
+        ));
     }
 
     #[test]

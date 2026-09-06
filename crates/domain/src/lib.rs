@@ -11,6 +11,7 @@ pub const MAX_NODES_PER_SESSION: usize = 64;
 pub const MAX_EDGES_PER_SESSION: usize = 128;
 pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
+pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
