@@ -80,6 +80,7 @@ pub enum BiquadError {
     InvalidFrequency,
     InvalidQ,
     InvalidChannels,
+    InvalidBand,
     NonFiniteParameter,
 }
 
@@ -99,6 +100,66 @@ pub struct Biquad {
     channels: usize,
     z1: [f32; 2],
     z2: [f32; 2],
+}
+
+/// Fixed-capacity eight-band parametric EQ. Band state is constructed before
+/// processing; the audio method only visits enabled filters and allocates
+/// nothing.
+#[derive(Clone, Debug)]
+pub struct ParametricEq {
+    bands: [Option<Biquad>; 8],
+    channels: usize,
+}
+
+impl ParametricEq {
+    pub fn new(
+        band_params: [Option<BiquadParams>; 8],
+        channels: usize,
+    ) -> Result<Self, BiquadError> {
+        if channels == 0 || channels > 2 {
+            return Err(BiquadError::InvalidChannels);
+        }
+        let mut bands = [None, None, None, None, None, None, None, None];
+        for (index, params) in band_params.into_iter().enumerate() {
+            bands[index] = params
+                .map(|params| Biquad::new(params, channels))
+                .transpose()?;
+        }
+        Ok(Self { bands, channels })
+    }
+
+    pub fn from_preset(preset: EqPreset, channels: usize) -> Result<Self, BiquadError> {
+        Self::new(preset.bands, channels)
+    }
+
+    pub fn active_bands(&self) -> usize {
+        self.bands.iter().filter(|band| band.is_some()).count()
+    }
+
+    pub fn set_band(
+        &mut self,
+        index: usize,
+        params: Option<BiquadParams>,
+    ) -> Result<(), BiquadError> {
+        let band = params
+            .map(|params| Biquad::new(params, self.channels))
+            .transpose()?;
+        let slot = self.bands.get_mut(index).ok_or(BiquadError::InvalidBand)?;
+        *slot = band;
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        for band in self.bands.iter_mut().flatten() {
+            band.reset();
+        }
+    }
+
+    pub fn process_interleaved(&mut self, samples: &mut [f32]) {
+        for band in self.bands.iter_mut().flatten() {
+            band.process_interleaved(samples);
+        }
+    }
 }
 
 impl Biquad {
@@ -771,6 +832,25 @@ mod tests {
             eq_preset(EqPresetId::Hum50Hz, f32::NAN),
             Err(BiquadError::InvalidSampleRate)
         ));
+    }
+
+    #[test]
+    fn parametric_eq_prebuilds_eight_bands_and_processes_without_growth() {
+        let preset = eq_preset(EqPresetId::Hum50Hz, 48_000.0).unwrap();
+        let mut eq = ParametricEq::from_preset(preset, 2).unwrap();
+        assert_eq!(eq.active_bands(), 1);
+        let mut samples = [0.25, -0.25, f32::NAN, f32::INFINITY];
+        eq.process_interleaved(&mut samples);
+        assert!(samples.iter().all(|sample| sample.is_finite()));
+        eq.set_band(1, Some(params(FilterKind::Peaking))).unwrap();
+        assert_eq!(eq.active_bands(), 2);
+        eq.set_band(0, None).unwrap();
+        assert_eq!(eq.active_bands(), 1);
+        assert!(matches!(
+            eq.set_band(8, None),
+            Err(BiquadError::InvalidBand)
+        ));
+        eq.reset();
     }
 
     #[test]

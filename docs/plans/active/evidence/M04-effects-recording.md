@@ -129,3 +129,10 @@ parameters, exposes its open state, and performs finite-safe interleaved
 processing without allocation. Tests cover quiet-signal attenuation, linked
 loud-signal opening, and hysteresis behavior. Limiter, delay, graph/API
 integration, and measured transfer vectors remain open.
+
+`ParametricEq` now turns the eight-band preset contract into a reusable
+stateful processor. It constructs enabled `Biquad` state before processing,
+supports per-band replacement and reset, and processes interleaved audio with
+no allocation. Tests cover preset construction, active-band accounting, finite
+processing, replacement, reset, and invalid band indices. Graph/API wiring and
+the separate ten-band graphic EQ remain open.
