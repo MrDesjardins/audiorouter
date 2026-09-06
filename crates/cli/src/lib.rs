@@ -795,6 +795,9 @@ fn mcp_tools() -> Value {
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] } }, "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
+        { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
+        { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "control_session", "description": "Start or stop one session through the authorized lifecycle API.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "action": { "enum": ["start", "stop"] } }, "required": ["sessionId", "action"], "additionalProperties": false } },
         { "name": "call_api", "description": "Call one validated permitted AudioRouter API method.", "inputSchema": { "type": "object", "properties": { "method": { "type": "string" }, "params": { "type": ["object", "null"] } }, "required": ["method"], "additionalProperties": false } }
     ])
 }
@@ -827,6 +830,18 @@ fn mcp_tool_call(
         "list_recordings" => ("recordings.list", Some(arguments)),
         "get_recording" => ("recordings.get", Some(arguments)),
         "remove_recording_entry" => ("recordings.removeEntry", Some(arguments)),
+        "plan_graph_change" => ("graph.plan", Some(arguments)),
+        "apply_graph_change" => ("graph.commit", Some(arguments)),
+        "control_session" => {
+            let action = arguments["action"].as_str().unwrap_or_default();
+            let method = match action {
+                "start" => "sessions.start",
+                "stop" => "sessions.stop",
+                _ => return mcp_tool_error(id, "control_session action must be start or stop"),
+            };
+            let params = json!({ "sessionId": arguments["sessionId"] });
+            return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, method, Some(params));
+        }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
             let params = arguments.get("params").cloned();
@@ -1222,7 +1237,21 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 10);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 13);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
+        let denied = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 8,
+                "params": {
+                    "name": "plan_graph_change",
+                    "arguments": { "sessionId": "session-fixture", "baseRevision": 0, "candidate": {} }
+                }
+            }),
+        );
+        assert_eq!(denied["result"]["isError"], true);
     }
 }

@@ -21,6 +21,7 @@ use std::time::Instant;
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
+const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 
 #[derive(Debug)]
 struct MutationBucket {
@@ -347,6 +348,7 @@ pub struct ControlPlane {
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
+    application_snapshot: Option<(Instant, Value)>,
 }
 
 impl Default for ControlPlane {
@@ -366,6 +368,7 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            application_snapshot: None,
         }
     }
 
@@ -379,6 +382,7 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            application_snapshot: None,
         }
     }
 
@@ -1711,17 +1715,24 @@ impl ControlPlane {
             .collect::<Vec<_>>()))
     }
 
-    fn dispatch_apps_list(&self) -> Result<Value, ControlError> {
+    fn dispatch_apps_list(&mut self) -> Result<Value, ControlError> {
+        if let Some((captured_at, snapshot)) = &self.application_snapshot {
+            if captured_at.elapsed() < APPLICATION_SNAPSHOT_TTL {
+                return Ok(snapshot.clone());
+            }
+        }
         let applications = audiorouter_windows_audio::enumerate_applications()
             .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
-        Ok(json!(applications
+        let snapshot = json!(applications
             .into_iter()
             .map(|application| json!({
                 "processId": application.process_id,
                 "executable": application.executable,
                 "creationTime100ns": application.creation_time_100ns.map(|value| value.to_string()),
             }))
-            .collect::<Vec<_>>()))
+            .collect::<Vec<_>>());
+        self.application_snapshot = Some((Instant::now(), snapshot.clone()));
+        Ok(snapshot)
     }
 }
 

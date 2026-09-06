@@ -50,3 +50,11 @@ Added `recordings.setMetadata` with explicit `Record` permission scope and bound
 ## 2026-09-06 — Non-destructive recording entry removal
 
 Added `recordings.removeEntry` with explicit `Record` permission scope and MCP `remove_recording_entry`. It deletes only the library metadata row, reports `fileAction: none`, and leaves the recorded file path outside the operation. Targeted storage/control/CLI tests pass (24/44/7) with strict Clippy.
+
+## 2026-09-06 — Focused MCP graph/session tools
+
+Added `plan_graph_change`, `apply_graph_change`, and `control_session` MCP tools. Each is a thin translation to the existing authorized API dispatcher, preserving complete candidate planning, base-revision checks, idempotency keys, and role-specific graph/session permissions. No MCP-owned state is introduced. CLI tests pass 7 cases and strict Clippy passes.
+
+## 2026-09-06 — Application snapshot alias parity
+
+Fixed a race in adjacent `apps.list` and `applications.list` requests by retaining one live process enumeration for 100 ms in the control plane. Both aliases now return the same coherent snapshot while still refreshing promptly. Control tests pass 44 cases with strict Clippy.
