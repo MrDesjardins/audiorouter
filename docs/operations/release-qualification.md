@@ -10,7 +10,7 @@ production signing, packaging, and clean-machine qualification remain open.
 The reproducible preparation flow is:
 
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\release\prepare-artifacts.ps1 -OutputDirectory <new-absolute-directory>
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\release\verify-artifacts.ps1 -ReleaseDirectory <prepared-directory>
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\release\verify-artifacts.ps1 -ManifestPath <prepared-directory>\release-manifest.json
 
 Preparation requires a clean worktree, locked Cargo inputs, and a new output
 directory. It produces unsigned x64 CLI and disposable-worker artifacts,

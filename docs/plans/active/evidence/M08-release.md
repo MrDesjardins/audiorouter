@@ -138,3 +138,9 @@ storage hardening and release qualification. All unit, integration,
 worker-process, MCP, and doc tests passed, as did strict workspace Clippy,
 formatting, and diff checks. The validation used temporary/local fixtures only;
 it did not open a live audio stream or change machine audio configuration.
+
+Corrected the release-qualification command example: `verify-artifacts.ps1`
+accepts `-ManifestPath`, not the previously documented `-ReleaseDirectory`.
+The new `tools/release/test-runbook-command.ps1` regression checks the exact
+invocation and rejects the obsolete parameter, keeping the unsigned artifact
+workflow executable as documented.
