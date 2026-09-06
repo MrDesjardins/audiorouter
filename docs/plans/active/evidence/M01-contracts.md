@@ -182,3 +182,8 @@ models node type identifiers, availability status/reasons, realtime cost class,
 and parameter descriptors. This matches the serialized control response rather
 than advertising only an unstructured array. The control suite passes 55 tests
 with strict Clippy; the change is transport/domain metadata only.
+
+The `clients.list` output schema is also explicit: each enrollment record has a
+non-empty client ID, one of the built-in roles, and a boolean revocation state.
+The schema correction is covered by control discovery tests and does not alter
+enrollment records.

@@ -385,7 +385,19 @@ fn method_output_schema(name: &str) -> Value {
             "type": "array",
             "items": node_type_item_schema()
         }),
-        "clients.list" => json!({ "type": "array" }),
+        "clients.list" => json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "clientId": { "type": "string", "minLength": 1 },
+                    "role": { "enum": ["observer", "editor", "operator"] },
+                    "revoked": { "type": "boolean" }
+                },
+                "required": ["clientId", "role", "revoked"],
+                "additionalProperties": false
+            }
+        }),
         "recordings.list" => {
             let item = recording_item_schema();
             json!({
@@ -2937,6 +2949,14 @@ mod tests {
         assert_eq!(
             node_types["outputSchema"]["items"]["properties"]["parameters"]["items"]["required"],
             json!(["name", "type", "default"])
+        );
+        let clients = methods
+            .iter()
+            .find(|method| method["name"] == "clients.list")
+            .unwrap();
+        assert_eq!(
+            clients["outputSchema"]["items"]["properties"]["role"]["enum"],
+            json!(["observer", "editor", "operator"])
         );
         let applications = methods
             .iter()
