@@ -42,3 +42,7 @@ Added `recordings.list` to `API_METHODS`, discovery schemas, stable unknown-para
 ## 2026-09-06 — Single recording metadata API
 
 Added `recordings.get` with validated `recordingId` input and storage lookup, plus MCP `get_recording`. Missing IDs return an actionable not-found response; successful results contain the same metadata shape as list entries and never open or modify the recording path. Targeted storage/control/CLI tests pass (24/43/7) with strict Clippy.
+
+## 2026-09-06 — Authorized recording metadata mutation
+
+Added `recordings.setMetadata` with explicit `Record` permission scope and bounded title/artist/comment fields. The control method delegates to the existing transactional storage update, reports not-found cleanly, and never changes recording path or audio content. A read-only grant is denied while an explicit record-scope grant succeeds. Targeted storage/control/CLI tests pass (24/44/7) with strict Clippy.

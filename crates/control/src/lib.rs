@@ -99,6 +99,9 @@ fn method_description(name: &str) -> &'static str {
         "recordings.get" => {
             "Read one persisted recording metadata resource without touching its file."
         }
+        "recordings.setMetadata" => {
+            "Update recording metadata without changing audio content or path."
+        }
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -176,6 +179,15 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "recordings.get" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            &["recordingId"],
+        ),
+        "recordings.setMetadata" => object_schema(
+            json!({
+                "recordingId": { "type": "string", "minLength": 1 },
+                "title": { "type": ["string", "null"], "maxLength": 256 },
+                "artist": { "type": ["string", "null"], "maxLength": 256 },
+                "comment": { "type": ["string", "null"], "maxLength": 256 }
+            }),
             &["recordingId"],
         ),
         "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
@@ -1018,6 +1030,7 @@ impl ControlPlane {
                     "operations.get" => self.dispatch_operation_get(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
+                    "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1556,6 +1569,31 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_recording_metadata(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let recording_id = params
+            .get("recordingId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let updated = storage
+            .update_recording_metadata(
+                recording_id,
+                params.get("title").and_then(Value::as_str),
+                params.get("artist").and_then(Value::as_str),
+                params.get("comment").and_then(Value::as_str),
+            )
+            .map_err(storage_error)?;
+        if !updated {
+            return Err(ControlError::InvalidRequest("recording not found".into()));
+        }
+        Ok(json!({ "recordingId": recording_id, "updated": true }))
+    }
+
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         if let Some(requested_epoch) = params.get("backendEpoch").and_then(Value::as_u64) {
@@ -1724,6 +1762,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "operations.get" => &["operationId"],
         "recordings.list" => &["sessionId"],
         "recordings.get" => &["recordingId"],
+        "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -1771,6 +1810,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "sessions.delete"
             | "clients.authorize"
             | "clients.revoke"
+            | "recordings.setMetadata"
     )
 }
 
@@ -2485,6 +2525,55 @@ mod tests {
             params: Some(json!({ "recordingId": "recording-1" })),
         });
         assert_eq!(response.result.unwrap()["title"], "Test");
+    }
+
+    #[test]
+    fn recording_metadata_mutation_requires_record_scope_and_preserves_file_path() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "recording-edit".into(),
+                session_id: "session".into(),
+                recorder_id: "recorder".into(),
+                path: "C:\\recordings\\keep.wav".into(),
+                format: "wav".into(),
+                channels: 1,
+                sample_rate: 44_100,
+                frames: 10,
+                file_bytes: 44,
+                start_time: "2026-09-06T00:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+            })
+            .unwrap();
+        let mut plane = ControlPlane::with_storage("recording-edit", storage);
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(10)),
+            method: "recordings.setMetadata".into(),
+            params: Some(json!({ "recordingId": "recording-edit", "title": "Edited" })),
+        };
+        assert!(plane
+            .dispatch_authorized(request.clone(), &ClientGrant::read_only())
+            .error
+            .is_some());
+        let response = plane.dispatch_authorized(
+            request,
+            &ClientGrant::with_scopes([PermissionScope::Record]),
+        );
+        assert_eq!(response.result.unwrap()["updated"], true);
+        let record = plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .get_recording("recording-edit")
+            .unwrap()
+            .unwrap();
+        assert_eq!(record.path, "C:\\recordings\\keep.wav");
+        assert_eq!(record.title.as_deref(), Some("Edited"));
     }
 
     #[test]
