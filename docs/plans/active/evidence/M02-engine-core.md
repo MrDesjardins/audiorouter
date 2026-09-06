@@ -104,6 +104,13 @@ The ring-processing tests also cover output-pool starvation: the input block ret
 The linear compiler now honors bypass for compatible processing nodes (`Gain`, `Mute`, and `Meter`) by preserving the surrounding channel-matrix path and omitting the processor stage. A regression proves a bypassed gain passes dry samples unchanged; bypass on device-bound nodes remains rejected. The engine suite passes 35 tests with strict Clippy.
 
 Disabled device-bound nodes in the supported linear subset now insert an explicit silence stage, while disabled compatible processors retain their defined dry bypass. The regression covers both disabled source and disabled sink paths and confirms zero output without allocation or device access; the 35-test engine suite and strict Clippy remain green. Native endpoint lifecycle and disabled-recorder finalization are still open.
+
+`RuntimeProcessor::meter_snapshot` now reads a prepared node meter from the
+currently published immutable graph snapshot, returning `None` when the graph
+is inactive or the index was not prepared. The processor lifecycle regression
+covers publication, per-node readout, missing indices, and deactivation. This
+completes the portable publication boundary; native scheduler/control API
+transport and physical endpoint telemetry remain open.
 The engine now provides preparation-time `calculate_latency_compensation`.
 It computes destination-major delay samples from cumulative path latency,
 validates an 8--192 kHz graph rate, and rejects branch spreads beyond the

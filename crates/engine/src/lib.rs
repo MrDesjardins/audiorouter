@@ -1624,6 +1624,15 @@ impl RuntimeProcessor {
         &self.meter
     }
 
+    /// Read a prepared graph meter from the currently published snapshot.
+    /// `None` means there is no active graph or the requested meter index was
+    /// not prepared in that graph.
+    pub fn meter_snapshot(&self, index: usize) -> Option<BlockMeterSnapshot> {
+        self.publication
+            .load()
+            .and_then(|graph| graph.meter_snapshot(index))
+    }
+
     /// Process one block and return the active generation. Before a graph is
     /// published, the block is cleared and `None` is returned.
     pub fn process(&self, block: &mut AudioBlock) -> Option<RuntimeGeneration> {
@@ -2714,7 +2723,10 @@ mod tests {
 
         processor.publish(RuntimeGraph::prepare(
             RuntimeGeneration::new(9),
-            vec![ProcessingStage::Gain { linear: 2.0 }],
+            vec![
+                ProcessingStage::Meter { index: 0 },
+                ProcessingStage::Gain { linear: 2.0 },
+            ],
         ));
         block.channel_mut(0).unwrap().fill(1.0);
         assert_eq!(
@@ -2724,11 +2736,20 @@ mod tests {
         assert_eq!(block.channel(0).unwrap(), &[2.0; 2]);
         assert_eq!(processor.meter().peak_abs(), 2.0);
         assert_eq!(processor.meter().clipped_samples(), 2);
+        assert_eq!(
+            processor.meter_snapshot(0),
+            Some(BlockMeterSnapshot {
+                peak_abs: 1.0,
+                clipped_samples: 0,
+            })
+        );
+        assert_eq!(processor.meter_snapshot(1), None);
         processor.set_privacy_muted(true);
         processor.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
         assert_eq!(processor.metrics().processed_quanta(), 2);
         processor.deactivate();
+        assert_eq!(processor.meter_snapshot(0), None);
         block.channel_mut(0).unwrap().fill(1.0);
         assert_eq!(processor.process(&mut block), None);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
