@@ -15,6 +15,19 @@ third_party/vst3sdk
 revision: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
 ```
 
+To download or repair the checkout, run the repository-local setup script from
+PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\m06-vst3-sdk\install.ps1
+```
+
+The script is idempotent, initializes the SDK's submodules, and verifies the
+pinned revision and required headers. It refuses to replace a different
+checkout unless `-Force` is supplied. The SDK is source-distributed, so this
+is the supported project-local installation boundary; it does not register a
+system-wide SDK or install anything into Windows.
+
 It includes the SDK submodules and is built with the project-local portable
 CMake cache under `third_party/vst3sdk-build`. The official validator and the
 sample `mda-vst3` bundle have been run successfully. AudioRouter supports the
