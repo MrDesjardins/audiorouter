@@ -91,6 +91,12 @@ frame/byte counts, metadata, missing-file state, and terminal failure state.
 This is schema groundwork only; no renderer file deletion or recording action
 is exposed. Contracts/UI tests, typechecks, production build, and audit pass.
 
+The status strip now renders typed snapshot facts for audio availability,
+storage mode, and session count alongside the disconnected/connected state.
+The values are backend-derived (or the explicit safe preview snapshot), so the
+UI does not infer readiness from the presence of controls. UI tests, typecheck,
+production build, and high-severity audit pass.
+
 Added Vitest fake-backend coverage in `ui/src/backend.test.ts`: four tests
 verify disconnected read-only snapshots, empty event cursors, stale snapshot
 retention after a failed refresh, revision-preserving node drafts, and unknown

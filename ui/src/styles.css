@@ -7,7 +7,7 @@ button:hover, button:focus-visible { border-color: #70a8ff; outline: 2px solid #
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 1.2rem 2rem; border-bottom: 1px solid #293344; background: #141923; }
 h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; } h3 { font-size: 1rem; }
 .eyebrow, .node-kind { color: #8fa5c8; font-size: .7rem; letter-spacing: .11em; text-transform: uppercase; } .muted, .node-card p, small { color: #9ba8bd; }
-.status-cluster { display: flex; align-items: center; gap: .55rem; color: #ffcf87; font-size: .85rem; } .status-dot { width: .6rem; height: .6rem; border-radius: 50%; background: #dc8f35; } .status-cluster button { padding: .35rem .55rem; font-size: .8rem; }
+.status-cluster { display: flex; align-items: center; gap: .55rem; color: #ffcf87; font-size: .85rem; } .status-detail { color: #9ba8bd; font-size: .75rem; } .status-dot { width: .6rem; height: .6rem; border-radius: 50%; background: #dc8f35; } .status-cluster button { padding: .35rem .55rem; font-size: .8rem; }
 .workspace-grid { display: grid; grid-template-columns: 250px 1fr; min-height: calc(100vh - 82px); }
 .sidebar { padding: 1.4rem 1rem; border-right: 1px solid #293344; background: #121722; } .section-heading { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .9rem; }
 .session-item { width: 100%; display: grid; text-align: left; gap: .3rem; margin-bottom: .5rem; } .session-item.selected { border-color: #70a8ff; background: #1d2b45; } .session-item small { font-size: .75rem; }

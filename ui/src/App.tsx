@@ -35,6 +35,7 @@ export function App() {
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
   const selectedNode = session.nodes.find((node) => node.id === selectedNodeId) ?? session.nodes[0];
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
+  const statusSummary = snapshot ? `${snapshot.status.audio} audio · ${snapshot.status.storage} storage · ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot";
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -42,6 +43,7 @@ export function App() {
         <div className="status-cluster" aria-live="polite">
           <span className="status-dot disconnected" aria-hidden="true" />
           <span>{connectionLabel}</span>
+          <span className="status-detail">{statusSummary}</span>
           <button type="button">Reconnect</button>
         </div>
       </header>
