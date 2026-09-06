@@ -11,7 +11,11 @@ Implemented the portable AUTO-04 CLI slice in `crates/cli`:
 
 Regression coverage verifies an independent CLI-process-equivalent plan, inspect, and apply sequence. `cargo test -p audiorouter-cli` passes 6 tests. The implementation is configuration-only: it does not open audio devices, install drivers, or change machine audio settings.
 
-Remaining AUTO-04 work includes parity for the remaining convenience commands and full end-to-end warning-producing operations.
+At this initial slice, remaining AUTO-04 work included parity for convenience
+commands and full end-to-end warning-producing operations. Later entries in
+this evidence report record the implemented CLI parity; native warning-
+producing operations remain unavailable until the corresponding audio/driver
+capabilities exist.
 
 ## 2026-09-06 — Reparse-point scan-root rejection
 
