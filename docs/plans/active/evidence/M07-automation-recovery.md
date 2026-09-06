@@ -279,3 +279,9 @@ SQLite marker persistence. All Rust unit, integration, worker-process, MCP, and
 doc tests passed, including 28 domain and 32 storage tests; strict workspace
 Clippy, formatting, and diff checks also passed. No audio endpoint or machine
 configuration was changed.
+
+File-backed storage coverage now reopens the SQLite database and verifies that
+two recent crash markers persist across the boundary, then clears them through
+the explicit maintenance operation. This strengthens persistence evidence but
+does not claim that a supervisor records crashes or automatically restarts
+audio sessions.

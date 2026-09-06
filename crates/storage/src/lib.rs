@@ -1773,6 +1773,27 @@ mod tests {
     }
 
     #[test]
+    fn recovery_crash_markers_survive_storage_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recovery-markers-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let storage = Storage::open(&path).unwrap();
+            assert_eq!(storage.record_recovery_crash(500).unwrap(), 1);
+            assert_eq!(storage.record_recovery_crash(501).unwrap(), 2);
+        }
+        {
+            let storage = Storage::open(&path).unwrap();
+            assert_eq!(storage.recovery_crash_count(501).unwrap(), 2);
+            storage.clear_recovery_crashes().unwrap();
+            assert_eq!(storage.recovery_crash_count(501).unwrap(), 0);
+        }
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn opening_corrupt_database_returns_explicit_read_only_error() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-corrupt-storage-{}.sqlite",
