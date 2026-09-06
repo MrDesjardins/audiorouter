@@ -49,5 +49,10 @@ jobs:
         run: cargo test --workspace --locked --exclude audiorouter-windows-audio
       - name: Check Windows audio adapter
         run: cargo check -p audiorouter-windows-audio --locked
+      - name: Test release verifier and runbook
+        shell: pwsh
+        run: |
+          ./tools/release/test-verify-artifacts.ps1
+          ./tools/release/test-runbook-command.ps1
       - name: Strict Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings

@@ -150,3 +150,7 @@ requires `THIRD-PARTY-NOTICES.txt` alongside the SBOM. Its temporary regression
 fixture covers the existing tamper check and conditionally exercises a symbolic
 link artifact when the host permits link creation; no release output is kept.
 The fixture also verifies that a manifest omitting the notice entry is rejected.
+
+The Windows CI job now runs both PowerShell regressions on every push and pull
+request, so release-path safety and runbook parameter parity are continuously
+validated without producing a release package.
