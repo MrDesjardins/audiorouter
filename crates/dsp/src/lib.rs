@@ -740,6 +740,151 @@ pub struct MeterSnapshot {
     pub clipping: u64,
 }
 
+/// A bounded rolling telemetry meter. Audio processing only overwrites
+/// preallocated ring slots; RMS is computed over the configured recent window
+/// and peak is held over its own recent window.
+#[derive(Debug)]
+pub struct WindowedSignalMeter {
+    channels: usize,
+    rms_window_frames: usize,
+    peak_hold_frames: usize,
+    rms_cursor: usize,
+    peak_cursor: usize,
+    rms_filled: usize,
+    peak_filled: usize,
+    rms_values: Vec<[f32; 2]>,
+    peak_values: Vec<[f32; 2]>,
+    sum_squares: [f64; 2],
+    clipping: u64,
+}
+
+impl WindowedSignalMeter {
+    pub const DEFAULT_RMS_WINDOW_MS: f32 = 300.0;
+    pub const DEFAULT_PEAK_HOLD_MS: f32 = 1_000.0;
+
+    pub fn new_default(channels: usize, sample_rate: f32) -> Result<Self, BiquadError> {
+        Self::with_windows(
+            channels,
+            sample_rate,
+            Self::DEFAULT_RMS_WINDOW_MS,
+            Self::DEFAULT_PEAK_HOLD_MS,
+        )
+    }
+
+    pub fn with_windows(
+        channels: usize,
+        sample_rate: f32,
+        rms_window_ms: f32,
+        peak_hold_ms: f32,
+    ) -> Result<Self, BiquadError> {
+        if channels == 0 || channels > 2 {
+            return Err(BiquadError::InvalidChannels);
+        }
+        if !sample_rate.is_finite()
+            || !(44_100.0..=192_000.0).contains(&sample_rate)
+            || !rms_window_ms.is_finite()
+            || !peak_hold_ms.is_finite()
+            || !(0.0..=10_000.0).contains(&rms_window_ms)
+            || !(0.0..=10_000.0).contains(&peak_hold_ms)
+            || rms_window_ms == 0.0
+            || peak_hold_ms == 0.0
+        {
+            return Err(BiquadError::InvalidQ);
+        }
+        let frames =
+            |milliseconds: f32| (milliseconds * 0.001 * sample_rate).ceil().max(1.0) as usize;
+        let rms_window_frames = frames(rms_window_ms);
+        let peak_hold_frames = frames(peak_hold_ms);
+        Ok(Self {
+            channels,
+            rms_window_frames,
+            peak_hold_frames,
+            rms_cursor: 0,
+            peak_cursor: 0,
+            rms_filled: 0,
+            peak_filled: 0,
+            rms_values: vec![[0.0; 2]; rms_window_frames],
+            peak_values: vec![[0.0; 2]; peak_hold_frames],
+            sum_squares: [0.0; 2],
+            clipping: 0,
+        })
+    }
+
+    pub fn window_frames(&self) -> usize {
+        self.rms_window_frames
+    }
+
+    pub fn peak_hold_frames(&self) -> usize {
+        self.peak_hold_frames
+    }
+
+    pub fn reset(&mut self) {
+        self.rms_cursor = 0;
+        self.peak_cursor = 0;
+        self.rms_filled = 0;
+        self.peak_filled = 0;
+        self.rms_values.fill([0.0; 2]);
+        self.peak_values.fill([0.0; 2]);
+        self.sum_squares = [0.0; 2];
+        self.clipping = 0;
+    }
+
+    pub fn process_interleaved(&mut self, samples: &[f32]) {
+        for frame in samples.chunks_exact(self.channels) {
+            if self.rms_filled == self.rms_window_frames {
+                for channel in 0..self.channels {
+                    let old = self.rms_values[self.rms_cursor][channel];
+                    self.sum_squares[channel] -= f64::from(old);
+                }
+            } else {
+                self.rms_filled += 1;
+            }
+            let mut rms_slot = [0.0; 2];
+            let mut peak_slot = [0.0; 2];
+            for (channel, sample) in frame.iter().enumerate() {
+                let value = if sample.is_finite() { *sample } else { 0.0 };
+                let magnitude = value.abs();
+                rms_slot[channel] = value * value;
+                peak_slot[channel] = magnitude;
+                self.sum_squares[channel] += f64::from(rms_slot[channel]);
+                if magnitude >= 1.0 {
+                    self.clipping = self.clipping.saturating_add(1);
+                }
+            }
+            self.rms_values[self.rms_cursor] = rms_slot;
+            self.rms_cursor = (self.rms_cursor + 1) % self.rms_window_frames;
+            self.peak_values[self.peak_cursor] = peak_slot;
+            self.peak_cursor = (self.peak_cursor + 1) % self.peak_hold_frames;
+            self.peak_filled = self
+                .peak_filled
+                .saturating_add(1)
+                .min(self.peak_hold_frames);
+        }
+    }
+
+    pub fn snapshot(&self) -> MeterSnapshot {
+        let mut peak = [0.0_f32; 2];
+        for slot in self.peak_values.iter().take(self.peak_filled) {
+            for channel in 0..self.channels {
+                peak[channel] = peak[channel].max(slot[channel]);
+            }
+        }
+        let mut rms = [0.0_f32; 2];
+        if self.rms_filled > 0 {
+            for (channel, value) in rms.iter_mut().enumerate().take(self.channels) {
+                *value = (self.sum_squares[channel] / self.rms_filled as f64).sqrt() as f32;
+            }
+        }
+        MeterSnapshot {
+            peak,
+            rms,
+            peak_db: [db_floor(peak[0]), db_floor(peak[1])],
+            rms_db: [db_floor(rms[0]), db_floor(rms[1])],
+            clipping: self.clipping,
+        }
+    }
+}
+
 /// Per-channel block meter. Peak/RMS values are linear and dB values use a
 /// -120 dBFS floor for silence rather than representing negative infinity.
 #[derive(Clone, Copy, Debug)]
@@ -1618,6 +1763,36 @@ mod tests {
         let silence = meter.snapshot();
         assert_eq!(silence.peak, [0.0, 0.0]);
         assert_eq!(silence.rms_db, [-120.0, -120.0]);
+    }
+
+    #[test]
+    fn windowed_meter_expires_rms_and_peak_history() {
+        let mut meter = WindowedSignalMeter::with_windows(1, 44_100.0, 1.0, 1.0).unwrap();
+        assert_eq!(meter.window_frames(), 45);
+        assert_eq!(meter.peak_hold_frames(), 45);
+        meter.process_interleaved(&[1.0; 45]);
+        let loud = meter.snapshot();
+        assert_eq!(loud.peak, [1.0, 0.0]);
+        assert!((loud.rms[0] - 1.0).abs() < 1e-6);
+        assert_eq!(loud.clipping, 45);
+        meter.process_interleaved(&[0.0; 45]);
+        let quiet = meter.snapshot();
+        assert_eq!(quiet.peak, [0.0, 0.0]);
+        assert_eq!(quiet.rms, [0.0, 0.0]);
+        meter.reset();
+        assert_eq!(meter.snapshot().clipping, 0);
+    }
+
+    #[test]
+    fn windowed_meter_rejects_unbounded_or_empty_windows() {
+        assert!(matches!(
+            WindowedSignalMeter::with_windows(1, 48_000.0, 0.0, 1.0),
+            Err(BiquadError::InvalidQ)
+        ));
+        assert!(matches!(
+            WindowedSignalMeter::with_windows(1, 48_000.0, 1.0, 10_001.0),
+            Err(BiquadError::InvalidQ)
+        ));
     }
 
     #[test]

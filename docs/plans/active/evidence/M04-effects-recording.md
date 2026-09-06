@@ -357,6 +357,13 @@ the DSP suite now has 21 tests and strict Clippy/formatting pass. Dynamic
 detector timing and native scheduler integration remain separate acceptance
 work.
 
+Added bounded `WindowedSignalMeter` telemetry with configurable nonzero
+windows (up to ten seconds), default 300 ms RMS and 1 s peak-hold constants,
+finite-sample repair, clipping counts, and allocation-free processing after
+construction. Regression tests verify rolling expiry, reset, and bounds; the
+DSP suite passes 24 tests with strict Clippy and formatting. Existing
+allocation-free block-meter compatibility is preserved.
+
 Added deterministic gate/expander transfer vectors for below-threshold
 attenuation, threshold crossover, ratio response, range clamping, and the
 open-state pass-through. The named `gate_target_gain_db` helper is the same
