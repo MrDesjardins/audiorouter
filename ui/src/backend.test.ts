@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createDisconnectedBackend, SnapshotCache, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
-import { describeDraftChanges, setNodeDraftFlag } from "./draft";
+import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag } from "./draft";
 
 describe("disconnected backend", () => {
   it("returns safe local state and an empty event cursor", async () => {
@@ -46,5 +46,53 @@ describe("plan-only drafts", () => {
 
   it("rejects unknown nodes", () => {
     expect(() => setNodeDraftFlag(demoSession, "missing", "enabled", false)).toThrow("Unknown node");
+  });
+
+  it("plans before committing and forwards the revision/key", async () => {
+    const calls: string[] = [];
+    const backend: Pick<UiBackend, "planGraph" | "commitGraph"> = {
+      planGraph: async candidate => {
+        calls.push(`plan:${candidate.revision}`);
+        return {
+          planId: "plan-ui",
+          baseRevision: candidate.revision,
+          expiresInMs: 30_000,
+          diff: [],
+          affectedDestinations: [],
+          warnings: [],
+          requiredScopes: ["graph.write"],
+        };
+      },
+      commitGraph: async (planId, revision, key) => {
+        calls.push(`commit:${planId}:${revision}:${key}`);
+        return { sessionId: demoSession.id, revision: revision + 1 };
+      },
+    };
+    await expect(applyGraphDraft(backend, demoSession, "ui-operation")).resolves.toEqual({
+      sessionId: demoSession.id,
+      revision: demoSession.revision + 1,
+    });
+    expect(calls).toEqual([
+      `plan:${demoSession.revision}`,
+      `commit:plan-ui:${demoSession.revision}:ui-operation`,
+    ]);
+  });
+
+  it("rejects a plan whose base revision does not match the draft", async () => {
+    const backend: Pick<UiBackend, "planGraph" | "commitGraph"> = {
+      planGraph: async () => ({
+        planId: "plan-stale",
+        baseRevision: demoSession.revision + 1,
+        expiresInMs: 30_000,
+        diff: [],
+        affectedDestinations: [],
+        warnings: [],
+        requiredScopes: ["graph.write"],
+      }),
+      commitGraph: async () => ({ sessionId: demoSession.id, revision: 1 }),
+    };
+    await expect(applyGraphDraft(backend, demoSession, "stale-operation")).rejects.toThrow(
+      "different session revision",
+    );
   });
 });

@@ -1,4 +1,5 @@
 import type { EntityId, Session } from "@audiorouter/contracts";
+import type { UiBackend } from "./backend";
 
 export type DraftChange = {
   path: `/nodes/${number}/${"enabled" | "bypass"}`;
@@ -33,4 +34,17 @@ export function describeDraftChanges(base: Session, candidate: Session): DraftCh
     if (original.bypass !== node.bypass) changes.push({ path: `/nodes/${index}/bypass`, value: node.bypass });
     return changes;
   });
+}
+
+/** Plans and commits a draft through the authoritative backend in two phases. */
+export async function applyGraphDraft(
+  backend: Pick<UiBackend, "planGraph" | "commitGraph">,
+  candidate: Session,
+  idempotencyKey: string,
+) {
+  const plan = await backend.planGraph(candidate);
+  if (plan.baseRevision !== candidate.revision) {
+    throw new Error("Backend returned a plan for a different session revision");
+  }
+  return backend.commitGraph(plan.planId, plan.baseRevision, idempotencyKey);
 }

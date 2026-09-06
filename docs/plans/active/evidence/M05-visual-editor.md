@@ -108,3 +108,8 @@ revision to `graph.plan` and pass the returned plan data to `graph.commit`;
 the disconnected adapter rejects both operations with an actionable error.
 Vitest (4 tests), TypeScript typecheck, and the production build pass. This is
 an adapter seam; the rendered editor does not yet invoke graph mutations.
+
+`applyGraphDraft` now provides the two-phase UI workflow: it plans the complete
+candidate, verifies the returned base revision matches the draft, and commits
+using the caller's idempotency key. Revision mismatch is rejected before
+commit. UI tests now cover six cases; typecheck and production build pass.
