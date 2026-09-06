@@ -8,3 +8,5 @@ rust-version.workspace = true
 [dependencies]
 crossbeam-queue = "0.3.12"
 flac-io = "0.1.1"
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -148,6 +148,15 @@ and the engine compiler prepares those values instead of hard-coding unity gain
 or mute-on behavior. Invalid and unknown parameters are rejected before
 preparation; the portable domain/engine suites pass with strict Clippy.
 
+## 2026-09-06 — Recording controller checkpoints
+
+`RecorderController` now exports and restores a versioned JSON checkpoint
+containing state, part boundaries, pause intervals, and frame cursors. Restore
+revalidates ordering, bounds, state/pause consistency, and checkpoint version.
+The checkpoint excludes queued samples and file handles, so it is safe as a
+control-plane crash-journal payload. Recording coverage is 18 tests with
+strict Clippy; durable worker journal persistence remains open.
+
 ## Initial built-in DSP slice
 
 The new `audiorouter-dsp` crate provides an allocation-free, caller-owned

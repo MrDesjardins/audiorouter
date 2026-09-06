@@ -3,6 +3,7 @@
 //! The writer only operates on a caller-provided `Write + Seek` destination.
 //! It does not open paths, create files, or perform realtime scheduling.
 
+use serde::{Deserialize, Serialize};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -151,7 +152,7 @@ pub struct RecordingQueue {
     overruns: AtomicU64,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RecorderState {
     Idle,
     Armed,
@@ -162,13 +163,13 @@ pub enum RecorderState {
     Failed,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct FrameInterval {
     pub start_frame: u64,
     pub end_frame: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RecordingPart {
     pub index: u32,
     pub start_frame: u64,
@@ -182,6 +183,17 @@ pub enum RecorderError {
         action: &'static str,
     },
     FrameWentBackwards,
+    InvalidCheckpoint,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RecorderCheckpoint {
+    pub version: u32,
+    pub state: RecorderState,
+    pub parts: Vec<RecordingPart>,
+    pub pauses: Vec<FrameInterval>,
+    pub pause_start: Option<u64>,
+    pub last_frame: Option<u64>,
 }
 
 /// Control-plane recorder state machine. File encoding and queue draining are
@@ -215,6 +227,68 @@ impl RecorderController {
 
     pub fn pause_intervals(&self) -> &[FrameInterval] {
         &self.pauses
+    }
+
+    /// Returns a versioned control-plane snapshot suitable for a crash journal.
+    /// It contains boundaries only; queued audio and file handles are never
+    /// serialized.
+    pub fn checkpoint(&self) -> RecorderCheckpoint {
+        RecorderCheckpoint {
+            version: 1,
+            state: self.state,
+            parts: self.parts.clone(),
+            pauses: self.pauses.clone(),
+            pause_start: self.pause_start,
+            last_frame: self.last_frame,
+        }
+    }
+
+    pub fn restore(checkpoint: RecorderCheckpoint) -> Result<Self, RecorderError> {
+        if checkpoint.version != 1
+            || checkpoint.parts.iter().enumerate().any(|(index, part)| {
+                part.index != index as u32
+                    || part.end_frame.is_some_and(|end| end < part.start_frame)
+            })
+            || checkpoint
+                .pauses
+                .iter()
+                .any(|interval| interval.end_frame < interval.start_frame)
+            || (checkpoint.state == RecorderState::Paused) != checkpoint.pause_start.is_some()
+            || checkpoint.state != RecorderState::Paused && checkpoint.pause_start.is_some()
+        {
+            return Err(RecorderError::InvalidCheckpoint);
+        }
+        if let Some(last_frame) = checkpoint.last_frame {
+            if checkpoint.parts.iter().any(|part| {
+                part.start_frame > last_frame || part.end_frame.is_some_and(|end| end > last_frame)
+            }) || checkpoint
+                .pauses
+                .iter()
+                .any(|interval| interval.end_frame > last_frame)
+                || checkpoint
+                    .pause_start
+                    .is_some_and(|start| start > last_frame)
+            {
+                return Err(RecorderError::InvalidCheckpoint);
+            }
+        }
+        Ok(Self {
+            state: checkpoint.state,
+            parts: checkpoint.parts,
+            pauses: checkpoint.pauses,
+            pause_start: checkpoint.pause_start,
+            last_frame: checkpoint.last_frame,
+        })
+    }
+
+    pub fn checkpoint_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.checkpoint())
+    }
+
+    pub fn restore_json(document: &str) -> Result<Self, RecorderError> {
+        let checkpoint =
+            serde_json::from_str(document).map_err(|_| RecorderError::InvalidCheckpoint)?;
+        Self::restore(checkpoint)
     }
 
     pub fn arm(&mut self) -> Result<(), RecorderError> {
@@ -1328,6 +1402,35 @@ mod tests {
         recorder.start(5).unwrap();
         assert_eq!(recorder.parts().len(), 1);
         assert_eq!(recorder.parts()[0].start_frame, 5);
+    }
+
+    #[test]
+    fn recorder_checkpoint_round_trips_paused_boundaries_without_audio_payload() {
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(100).unwrap();
+        recorder.pause(200).unwrap();
+        let document = recorder.checkpoint_json().unwrap();
+        assert!(!document.contains("samples"));
+        let restored = RecorderController::restore_json(&document).unwrap();
+        assert_eq!(restored.state(), RecorderState::Paused);
+        assert_eq!(restored.parts(), recorder.parts());
+        assert_eq!(restored.pause_intervals(), recorder.pause_intervals());
+        assert_eq!(restored.checkpoint(), recorder.checkpoint());
+    }
+
+    #[test]
+    fn recorder_checkpoint_rejects_corrupt_or_inconsistent_state() {
+        let mut checkpoint = RecorderController::new().checkpoint();
+        checkpoint.version = 2;
+        assert!(matches!(
+            RecorderController::restore(checkpoint),
+            Err(RecorderError::InvalidCheckpoint)
+        ));
+        assert!(matches!(
+            RecorderController::restore_json(r#"{"version":1,"state":"Paused"}"#),
+            Err(RecorderError::InvalidCheckpoint)
+        ));
     }
 
     #[test]
