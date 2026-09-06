@@ -48,6 +48,7 @@ where
         "diagnostics" => diagnostics_command(&command_args)?,
         "devices" => list_subcommand(&command_args, "devices")?,
         "virtual-devices" => list_subcommand(&command_args, "virtual-devices")?,
+        "plugins" => plugins_command(&command_args)?,
         "apps" => list_subcommand(&command_args, "apps")?,
         "applications" => list_subcommand(&command_args, "applications")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
@@ -114,6 +115,54 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
     response
         .result
         .ok_or_else(|| CliError::InvalidArguments("diagnostics unavailable".into()))
+}
+
+fn plugins_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("scan") {
+        return Err(CliError::InvalidArguments(
+            "usage: plugins scan --directory <absolute-path>".into(),
+        ));
+    }
+    let directory = option_value(args, "--directory")?;
+    let root = std::path::Path::new(directory);
+    if !root.is_absolute() {
+        return Err(CliError::InvalidArguments(
+            "--directory path must be absolute".into(),
+        ));
+    }
+    let entries = audiorouter_plugin_host::scan_directory(root)
+        .map_err(|error| CliError::Io(format!("plugin scan failed: {error:?}")))?;
+    Ok(json!({
+        "directory": directory,
+        "entries": entries.into_iter().map(|entry| {
+            let identity = entry.identity.map(|identity| json!({
+                "path": identity.path,
+                "binaryPath": identity.binary_path,
+                "format": match identity.format {
+                    audiorouter_plugin_host::PluginFormat::Vst3 => "vst3",
+                    audiorouter_plugin_host::PluginFormat::Vst2 => "vst2",
+                    audiorouter_plugin_host::PluginFormat::Unknown => "unknown",
+                },
+                "architecture": match identity.architecture {
+                    audiorouter_plugin_host::PeArchitecture::X64 => "x64",
+                    audiorouter_plugin_host::PeArchitecture::X86 => "x86",
+                    audiorouter_plugin_host::PeArchitecture::Arm64 => "arm64",
+                    audiorouter_plugin_host::PeArchitecture::Unknown => "unknown",
+                },
+                "fileBytes": identity.file_bytes,
+                "sha256": identity.sha256,
+                "compatibility": match identity.compatibility() {
+                    audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
+                    audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
+                }
+            }));
+            json!({
+                "path": entry.path,
+                "identity": identity,
+                "error": entry.error.map(|error| format!("{error:?}"))
+            })
+        }).collect::<Vec<_>>()
+    }))
 }
 
 fn backup_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1084,6 +1133,10 @@ fn help_value() -> Value {
     value["commands"]
         .as_array_mut()
         .unwrap()
+        .insert(6, json!("plugins scan --directory <absolute-path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
         .insert(5, json!("backup prune --directory <path>"));
     value["commands"]
         .as_array_mut()
@@ -1573,6 +1626,7 @@ mod tests {
         let help = run(["help", "--json"]).unwrap();
         assert!(help.contains("devices list"));
         assert!(help.contains("virtual-devices list"));
+        assert!(help.contains("plugins scan"));
         assert!(help.contains("operation get"));
         let schema: Value = serde_json::from_str(&run(["schema", "--json"]).unwrap()).unwrap();
         assert_eq!(schema["protocolVersion"]["major"], 1);
@@ -1777,6 +1831,10 @@ mod tests {
         ));
         assert!(matches!(
             run(["node", "oops"]),
+            Err(CliError::InvalidArguments(_))
+        ));
+        assert!(matches!(
+            run(["plugins", "scan", "--directory", "relative"]),
             Err(CliError::InvalidArguments(_))
         ));
     }

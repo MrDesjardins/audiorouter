@@ -23,6 +23,15 @@ returning invalid candidates as visible scan entries. The public single-file
 inspection API is unchanged. Plugin-host unit/integration tests and strict
 Clippy pass; files are read only and no plugin code is loaded or executed.
 
+## 2026-09-06 — Explicit CLI plugin scan
+
+Added `plugins scan --directory <absolute-path>` to the CLI. It invokes the
+existing bounded scanner only for the explicitly supplied local directory and
+returns each candidate's format, architecture, size, SHA-256 identity, support
+classification, or visible inspection error. It never downloads, loads, or
+executes plugins. CLI help/invalid-path coverage and the plugin-host suite
+pass; no audio or machine configuration is touched.
+
 ## 2026-09-06 — Node parameter convenience parity
 
 Added `node set <session-id> <node-id> <parameter> --value <json-scalar>

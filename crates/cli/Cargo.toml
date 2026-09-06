@@ -12,4 +12,5 @@ audiorouter-storage = { path = "../storage" }
 audiorouter-recording = { path = "../recording" }
 audiorouter-protocol = { path = "../protocol" }
 audiorouter-transport = { path = "../transport" }
+audiorouter-plugin-host = { path = "../plugin-host" }
 serde_json = { workspace = true }
