@@ -19,3 +19,11 @@ runner config loader. The UI production build could transform and render but
 Windows returned `EPERM` while creating the configured or alternate output
 directory, so no production-build pass is claimed. No driver, audio endpoint,
 or machine audio configuration was changed.
+
+The control-plane foundation now includes `VirtualBusLease`. A lease accepts
+one non-empty owner, rejects competing acquisition, requires both owner and
+generation for release, and prevents delayed releases from clearing a newer
+owner. `force_release` clears ownership for crash/reconnect cleanup while the
+generation remains monotonic. Two domain regressions cover ownership and stale
+release behavior. This primitive carries no audio and is not a driver or
+endpoint implementation.

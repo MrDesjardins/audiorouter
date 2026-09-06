@@ -116,6 +116,65 @@ pub fn node_registry() -> [NodeTypeSpec; 10] {
     })
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VirtualBusLeaseError {
+    EmptyOwner,
+    AlreadyOwned,
+    NotOwner,
+    StaleLease,
+}
+
+/// Portable ownership state for one future managed virtual bus. This is a
+/// control-plane lease only: it contains no audio buffer and is not consulted
+/// from the realtime callback. A monotonically increasing generation prevents
+/// a delayed release from clearing a newer owner's lease.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct VirtualBusLease {
+    owner: Option<EntityId>,
+    generation: u64,
+}
+
+impl VirtualBusLease {
+    pub fn owner(&self) -> Option<&EntityId> {
+        self.owner.as_ref()
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn acquire(&mut self, owner: EntityId) -> Result<u64, VirtualBusLeaseError> {
+        if owner.as_str().is_empty() {
+            return Err(VirtualBusLeaseError::EmptyOwner);
+        }
+        if self.owner.is_some() {
+            return Err(VirtualBusLeaseError::AlreadyOwned);
+        }
+        self.generation = self.generation.saturating_add(1).max(1);
+        self.owner = Some(owner);
+        Ok(self.generation)
+    }
+
+    pub fn release(
+        &mut self,
+        owner: &EntityId,
+        generation: u64,
+    ) -> Result<(), VirtualBusLeaseError> {
+        if self.owner.as_ref() != Some(owner) {
+            return Err(VirtualBusLeaseError::NotOwner);
+        }
+        if self.generation != generation {
+            return Err(VirtualBusLeaseError::StaleLease);
+        }
+        self.owner = None;
+        Ok(())
+    }
+
+    pub fn force_release(&mut self) {
+        self.owner = None;
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PermissionScope {
@@ -1759,6 +1818,53 @@ mod tests {
         assert_eq!(
             virtual_source.availability,
             CapabilityAvailability::Unavailable("requires M03 managed virtual driver")
+        );
+    }
+
+    #[test]
+    fn virtual_bus_lease_rejects_stale_and_competing_owners() {
+        let mut lease = VirtualBusLease::default();
+        let first = EntityId::new("client-a");
+        let second = EntityId::new("client-b");
+        let generation = lease.acquire(first.clone()).unwrap();
+        assert_eq!(generation, 1);
+        assert_eq!(lease.owner(), Some(&first));
+        assert_eq!(
+            lease.acquire(second.clone()),
+            Err(VirtualBusLeaseError::AlreadyOwned)
+        );
+        assert_eq!(
+            lease.release(&second, generation),
+            Err(VirtualBusLeaseError::NotOwner)
+        );
+        assert_eq!(
+            lease.release(&first, generation + 1),
+            Err(VirtualBusLeaseError::StaleLease)
+        );
+        lease.release(&first, generation).unwrap();
+        let next_generation = lease.acquire(second.clone()).unwrap();
+        assert_eq!(next_generation, 2);
+        assert_eq!(
+            lease.release(&first, next_generation),
+            Err(VirtualBusLeaseError::NotOwner)
+        );
+    }
+
+    #[test]
+    fn virtual_bus_lease_force_release_requires_a_new_generation() {
+        let mut lease = VirtualBusLease::default();
+        assert_eq!(
+            lease.acquire(EntityId::new("")),
+            Err(VirtualBusLeaseError::EmptyOwner)
+        );
+        let owner = EntityId::new("client");
+        let first_generation = lease.acquire(owner.clone()).unwrap();
+        lease.force_release();
+        let second_generation = lease.acquire(owner.clone()).unwrap();
+        assert!(second_generation > first_generation);
+        assert_eq!(
+            lease.release(&owner, first_generation),
+            Err(VirtualBusLeaseError::StaleLease)
         );
     }
 
