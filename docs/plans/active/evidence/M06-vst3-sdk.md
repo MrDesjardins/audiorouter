@@ -182,3 +182,13 @@ latency, exposes sample-to-millisecond conversion, and permits dynamic reports
 while active. Round-trip and bound regressions pass; the plugin-host suite now
 has 21 passing tests with strict Clippy clean. These are declared worker
 values, not measured native plugin latency.
+
+For built-in pitch, `pitch_shift` 2.1.0 was resolved from crates.io and
+identified as MIT-licensed, with repository provenance recorded in its package
+metadata. `PitchShifter` uses its documented phase-vocoder block API, exposes
+the required semitone/cent bounds, preserves offline frame count, reports a
+fixed 1,024-frame warmup/latency boundary, sanitizes non-finite samples, and
+supports bypass. Deterministic tests pass for +12 semitones, exact duration,
+range rejection, and bypass. This implementation is currently an offline
+allocation API; realtime streaming integration and 60-second/voice quality
+acceptance measurements remain open.

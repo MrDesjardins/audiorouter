@@ -2,6 +2,130 @@
 
 use std::f32::consts::PI;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PitchShiftParams {
+    pub semitones: f32,
+    pub cents: f32,
+    pub sample_rate: f32,
+    pub channels: usize,
+    pub bypass: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PitchShiftError {
+    InvalidSampleRate,
+    InvalidChannels,
+    NonFiniteParameter,
+    SemitoneOutOfRange,
+    CentOutOfRange,
+    InvalidInput,
+}
+
+/// Offline, bounded granular pitch shifting. Resampling establishes the pitch
+/// ratio and overlap-add time stretching restores the input duration. The
+/// fixed grain size is also the declared algorithmic warmup/latency boundary.
+#[derive(Clone, Debug)]
+pub struct PitchShifter {
+    params: PitchShiftParams,
+    grain_frames: usize,
+}
+
+impl PitchShifter {
+    pub const GRAIN_FRAMES: usize = 1_024;
+
+    pub fn new(params: PitchShiftParams) -> Result<Self, PitchShiftError> {
+        if !params.sample_rate.is_finite() || !(8_000.0..=192_000.0).contains(&params.sample_rate) {
+            return Err(PitchShiftError::InvalidSampleRate);
+        }
+        if !matches!(params.channels, 1 | 2) {
+            return Err(PitchShiftError::InvalidChannels);
+        }
+        if !params.semitones.is_finite() || !params.cents.is_finite() {
+            return Err(PitchShiftError::NonFiniteParameter);
+        }
+        if !(-12.0..=12.0).contains(&params.semitones) {
+            return Err(PitchShiftError::SemitoneOutOfRange);
+        }
+        if !(-100.0..=100.0).contains(&params.cents) {
+            return Err(PitchShiftError::CentOutOfRange);
+        }
+        Ok(Self {
+            params,
+            grain_frames: Self::GRAIN_FRAMES,
+        })
+    }
+
+    pub fn params(&self) -> PitchShiftParams {
+        self.params
+    }
+
+    pub fn latency_frames(&self) -> usize {
+        self.grain_frames
+    }
+
+    pub fn ratio(&self) -> f32 {
+        2.0_f32.powf((self.params.semitones + self.params.cents / 100.0) / 12.0)
+    }
+
+    /// Processes a finite offline segment and preserves its frame count.
+    /// This method allocates its result and is intentionally not a realtime
+    /// callback API until a prepared streaming state is added and measured.
+    pub fn process_offline(&self, input: &[f32]) -> Result<Vec<f32>, PitchShiftError> {
+        if input.is_empty() || input.len() % self.params.channels != 0 {
+            return Err(PitchShiftError::InvalidInput);
+        }
+        if self.params.bypass {
+            return Ok(input.iter().copied().map(finite_or_zero).collect());
+        }
+        let channels = self.params.channels;
+        let input_frames = input.len() / channels;
+        let shift = self.params.semitones + self.params.cents / 100.0;
+        let block_count = input_frames.div_ceil(128);
+        let mut channel_outputs = Vec::with_capacity(channels);
+        for channel in 0..channels {
+            let state: Box<[f32; pitch_shift::TOTAL_F32]> = vec![0.0_f32; pitch_shift::TOTAL_F32]
+                .try_into()
+                .expect("pitch shifter state has a fixed size");
+            let mut shifter = pitch_shift::Shifter::new(state);
+            let mut channel_output = Vec::with_capacity(block_count * 128);
+            for block in 0..block_count {
+                let start = block * 128;
+                let mut input_block = [0.0_f32; 128];
+                for (offset, sample) in input_block.iter_mut().enumerate() {
+                    let frame = start + offset;
+                    if frame < input_frames {
+                        *sample = finite_or_zero(input[frame * channels + channel]);
+                    }
+                }
+                channel_output.extend_from_slice(shifter.shift(
+                    &input_block,
+                    shift,
+                    128,
+                    self.params.sample_rate,
+                ));
+            }
+            channel_output.truncate(input_frames);
+            channel_outputs.push(channel_output);
+        }
+        let mut output = vec![0.0; input.len()];
+        for frame in 0..input_frames {
+            for channel in 0..channels {
+                output[frame * channels + channel] =
+                    finite_or_zero(channel_outputs[channel][frame]);
+            }
+        }
+        Ok(output)
+    }
+}
+
+fn finite_or_zero(value: f32) -> f32 {
+    if value.is_finite() {
+        value
+    } else {
+        0.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FilterKind {
     Peaking,
@@ -1519,5 +1643,64 @@ mod tests {
         delay.set_delay_ms(0.0).unwrap();
         delay.process_interleaved(&mut zero_delay);
         assert_eq!(zero_delay, [4.0, 5.0]);
+    }
+
+    #[test]
+    fn pitch_shifter_preserves_duration_and_shifts_a_steady_tone() {
+        let shifter = PitchShifter::new(PitchShiftParams {
+            semitones: 12.0,
+            cents: 0.0,
+            sample_rate: 48_000.0,
+            channels: 1,
+            bypass: false,
+        })
+        .unwrap();
+        let input = (0..48_000)
+            .map(|index| (2.0 * PI * 440.0 * index as f32 / 48_000.0).sin())
+            .collect::<Vec<_>>();
+        let output = shifter.process_offline(&input).unwrap();
+        assert_eq!(output.len(), input.len());
+        let crossings = output[4_096..44_000]
+            .windows(2)
+            .filter(|pair| pair[0] <= 0.0 && pair[1] > 0.0)
+            .count();
+        assert!((700..=760).contains(&crossings), "crossings={crossings}");
+        assert!(output.iter().all(|sample| sample.is_finite()));
+    }
+
+    #[test]
+    fn pitch_shifter_validates_ranges_and_bypass_sanitizes() {
+        assert!(matches!(
+            PitchShifter::new(PitchShiftParams {
+                semitones: 12.1,
+                cents: 0.0,
+                sample_rate: 48_000.0,
+                channels: 1,
+                bypass: false,
+            }),
+            Err(PitchShiftError::SemitoneOutOfRange)
+        ));
+        assert!(matches!(
+            PitchShifter::new(PitchShiftParams {
+                semitones: 0.0,
+                cents: 100.1,
+                sample_rate: 48_000.0,
+                channels: 1,
+                bypass: false,
+            }),
+            Err(PitchShiftError::CentOutOfRange)
+        ));
+        let shifter = PitchShifter::new(PitchShiftParams {
+            semitones: 0.0,
+            cents: 0.0,
+            sample_rate: 48_000.0,
+            channels: 1,
+            bypass: true,
+        })
+        .unwrap();
+        assert_eq!(
+            shifter.process_offline(&[f32::NAN, 0.25]).unwrap(),
+            vec![0.0, 0.25]
+        );
     }
 }
