@@ -341,3 +341,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Tightened `bind_application` so an unavailable creation timestamp is rejected rather than treated as a valid identity; PID/name alone can no longer authorize a future loopback binding.
 - Changed control/API serialization of process creation timestamps to exact decimal strings, preventing JavaScript precision loss for Windows `FILETIME` values; control tests, contracts typecheck, and strict control Clippy pass.
 - Corrected the failure taxonomy so undersized caller buffers report `BufferConstraint` rather than being conflated with malformed arguments; seven adapter tests and strict adapter Clippy pass.
+- Added `EndpointMonitor` to combine the coalesced notification dirty flag with a control-thread endpoint resnapshot and explicit `EndpointChange` diff; no automatic rebinding is performed.

@@ -670,6 +670,42 @@ impl Drop for EndpointNotificationSubscription {
     }
 }
 
+/// Control-plane endpoint monitor that turns coalesced WASAPI notifications
+/// into an explicit snapshot diff. It never opens an audio stream or silently
+/// changes a binding.
+pub struct EndpointMonitor {
+    notifications: EndpointNotificationSubscription,
+    snapshot: Vec<EndpointInfo>,
+}
+
+impl EndpointMonitor {
+    pub fn start() -> Result<Self, AudioError> {
+        let snapshot = enumerate_active_endpoints()?;
+        let notifications = EndpointNotificationSubscription::start()?;
+        Ok(Self {
+            notifications,
+            snapshot,
+        })
+    }
+
+    /// Refresh only after a notification and return the explicit metadata
+    /// changes. An empty result means no notification was pending or no fields
+    /// changed in the refreshed snapshot.
+    pub fn poll_changes(&mut self) -> Result<Vec<EndpointChange>, AudioError> {
+        if !self.notifications.take_dirty() {
+            return Ok(Vec::new());
+        }
+        let current = enumerate_active_endpoints()?;
+        let changes = diff_endpoint_snapshots(&self.snapshot, &current);
+        self.snapshot = current;
+        Ok(changes)
+    }
+
+    pub fn snapshot(&self) -> &[EndpointInfo] {
+        &self.snapshot
+    }
+}
+
 /// Enumerate active capture and render endpoints without opening streams.
 pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
     unsafe {
@@ -935,5 +971,13 @@ mod tests {
         assert!(!endpoints.is_empty());
         assert!(endpoints.iter().all(|endpoint| !endpoint.id.is_empty()));
         assert!(endpoints.iter().all(|endpoint| endpoint.sample_rate_hz > 0));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn endpoint_monitor_starts_with_snapshot_and_no_pending_changes() {
+        let mut monitor = EndpointMonitor::start().unwrap();
+        assert!(!monitor.snapshot().is_empty());
+        assert!(monitor.poll_changes().unwrap().is_empty());
     }
 }

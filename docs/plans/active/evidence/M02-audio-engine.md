@@ -24,6 +24,8 @@ Control serialization now exposes creation timestamps as decimal strings rather 
 
 Buffer-capacity failures are now classified separately as `BufferConstraint`, while invalid frame sizes remain `InvalidArgument`. Seven adapter tests and strict adapter Clippy pass.
 
+`EndpointMonitor` now owns an initial active-endpoint snapshot and refreshes it only after an `IMMNotificationClient` notification, returning identity-preserving diffs. Its read-only startup/poll test passes; stream rebinding and graph recovery remain separate work. Eight adapter tests and strict adapter Clippy pass.
+
 Verification on the Windows 11 host:
 
 ```powershell
