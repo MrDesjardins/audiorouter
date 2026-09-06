@@ -210,3 +210,9 @@ cleanup. It does not install an artifact or change machine configuration.
 The wrapper passed from clean revision `ff2fd5e` using the installed VS2026
 toolchain. Both preparation and verification completed, and the temporary
 directory was confirmed removed by the wrapper's cleanup path.
+
+The wrapper was re-run successfully after the plugin scan-root hardening
+revision on 2026-09-06. Optimized CLI/plugin-worker artifacts, SBOM, notices,
+checksums, and manifest were prepared and verified, then the temporary output
+was cleaned up. No installer, driver, signing action, or audio configuration
+was involved.

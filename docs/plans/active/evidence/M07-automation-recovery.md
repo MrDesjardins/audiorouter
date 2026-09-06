@@ -23,6 +23,14 @@ the host permits it and expects `InvalidRoot`; plugin-host tests pass (31 unit
 tests plus 8 worker-process tests). Candidate inspection continues to enforce
 canonical containment and rejects reparse-point binaries.
 
+## 2026-09-06 — Headless acceptance revalidation
+
+`tests/acceptance/m07-headless.ps1` passed from the post-hardening revision.
+The run covered the M01 CLI acceptance, MCP stdio interoperability, 66 control
+tests, 31 plugin-host unit tests, 8 worker-process tests, and strict Clippy.
+The acceptance scope remained configuration-only: no audio device, driver, or
+machine setting was opened or changed.
+
 ## 2026-09-06 — Scan cancellation during bounded binary reads
 
 Plugin discovery now gives each candidate its own ten-second inspection window
