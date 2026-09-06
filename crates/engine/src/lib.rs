@@ -375,6 +375,49 @@ impl AudioBlock {
             .map(|sample| sample.abs())
             .fold(0.0, f32::max)
     }
+
+    pub fn channel_peak_abs(&self, channel: usize) -> Option<f32> {
+        self.channel(channel).map(|samples| {
+            samples
+                .iter()
+                .filter(|sample| sample.is_finite())
+                .map(|sample| sample.abs())
+                .fold(0.0, f32::max)
+        })
+    }
+
+    /// Return RMS over finite samples. Invalid samples are excluded so a bad
+    /// value cannot poison the meter; sanitization remains a separate policy.
+    pub fn channel_rms(&self, channel: usize) -> Option<f32> {
+        self.channel(channel).map(|samples| {
+            let (sum, count) = samples
+                .iter()
+                .filter(|sample| sample.is_finite())
+                .fold((0.0_f64, 0usize), |(sum, count), sample| {
+                    (sum + f64::from(*sample) * f64::from(*sample), count + 1)
+                });
+            if count == 0 {
+                0.0
+            } else {
+                (sum / count as f64).sqrt() as f32
+            }
+        })
+    }
+
+    pub fn rms(&self) -> f32 {
+        let (sum, count) = self
+            .samples
+            .iter()
+            .filter(|sample| sample.is_finite())
+            .fold((0.0_f64, 0usize), |(sum, count), sample| {
+                (sum + f64::from(*sample) * f64::from(*sample), count + 1)
+            });
+        if count == 0 {
+            0.0
+        } else {
+            (sum / count as f64).sqrt() as f32
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -810,6 +853,21 @@ mod tests {
         assert_eq!(block.clamp_unit(), 2);
         assert_eq!(block.channel(0).unwrap(), &[-1.0, 0.5, 1.0, 0.0]);
         assert_eq!(block.peak_abs(), 1.0);
+    }
+
+    #[test]
+    fn meter_primitives_expose_channel_peak_and_rms() {
+        let mut block = AudioBlock::new(2, 4).unwrap();
+        block.channel_mut(0).unwrap().fill(0.5);
+        block
+            .channel_mut(1)
+            .unwrap()
+            .copy_from_slice(&[-1.0, 1.0, 0.0, 0.0]);
+        assert_eq!(block.channel_peak_abs(0), Some(0.5));
+        assert_eq!(block.channel_rms(0), Some(0.5));
+        assert!((block.channel_rms(1).unwrap() - 0.70710677).abs() < 0.000001);
+        assert!(block.rms() > 0.0);
+        assert_eq!(block.channel_peak_abs(2), None);
     }
 
     #[test]
