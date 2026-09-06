@@ -185,6 +185,12 @@ and backend plan/commit. Template regressions cover matrix shape, independent
 snapshots, and distinct names; UI coverage is 41 tests with typecheck and
 production build passing.
 
+Canvas node cards now expose every port's direction, role, and channel count,
+so users can inspect connection endpoints without relying on proximity or
+color. A pure port-label regression was added; UI coverage is 49 tests with
+typecheck and production build passing. The canvas still cannot commit or
+activate a connection directly.
+
 The editor now exposes dark, light, and high-contrast themes through an
 accessible select control. The preference is browser-local, invalid stored
 values fall back to dark, and storage failures are non-fatal. Existing forced

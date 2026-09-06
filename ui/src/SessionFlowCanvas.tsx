@@ -10,7 +10,7 @@ import "@xyflow/react/dist/style.css";
 import { useEffect, useState } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
-import { relatedNodeIds } from "./graphView";
+import { nodePortLabels, relatedNodeIds } from "./graphView";
 
 type SessionFlowCanvasProps = {
   session: Session;
@@ -40,6 +40,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
           <span className="node-kind">{node.kind}</span>
           <strong>{node.name}</strong>
           <small>{node.ports.length} port{node.ports.length === 1 ? "" : "s"} - {node.enabled ? "enabled" : "disabled"}</small>
+          <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
         </div>
       ),
     },

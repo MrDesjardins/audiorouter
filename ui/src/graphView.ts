@@ -1,4 +1,8 @@
-import type { Session } from "@audiorouter/contracts";
+import type { Node, Session } from "@audiorouter/contracts";
+
+export function nodePortLabels(node: Node): string[] {
+  return node.ports.map((port) => `${port.direction}: ${port.name} (${port.channels}ch)`);
+}
 
 /** Returns the enabled upstream/downstream component for presentation highlighting. */
 export function relatedNodeIds(session: Session, selectedNodeId: string): Set<string> {
