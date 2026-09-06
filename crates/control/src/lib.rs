@@ -5925,7 +5925,8 @@ mod tests {
 
     #[test]
     fn authorized_idempotency_keys_are_scoped_to_client_and_method() {
-        let mut plane = ControlPlane::default();
+        let mut plane =
+            ControlPlane::with_storage("scoped-idempotency", Storage::open_memory().unwrap());
         let original = session();
         plane.insert_session(original.clone()).unwrap();
         let grant = ClientGrant::for_role(ClientRole::Editor);
@@ -5973,6 +5974,24 @@ mod tests {
             plane.get_session(&original.id).unwrap().name,
             "second-client-change"
         );
+
+        let mut operation_lookup = |id: i32, client_id: &str| {
+            plane
+                .dispatch_authorized_for_client(
+                    JsonRpcRequest {
+                        jsonrpc: "2.0".into(),
+                        id: Some(json!(id)),
+                        method: "operations.get".into(),
+                        params: Some(json!({ "operationId": same_key })),
+                    },
+                    client_id,
+                    &grant,
+                )
+                .result
+                .unwrap()
+        };
+        assert_eq!(operation_lookup(3, "client-a")["revision"], 1);
+        assert_eq!(operation_lookup(4, "client-b")["revision"], 2);
     }
 
     #[test]
