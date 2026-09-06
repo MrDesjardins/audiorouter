@@ -31,6 +31,10 @@ metadata are exposed through `system.describe`, `presets.list`, and the CLI;
 the control and CLI regressions verify the complete set. Presets remain
 preparation-only and are not applied automatically.
 
+The checked-in `tests/acceptance/m04-dsp-recording.ps1` now packages the M04
+portable gate: format check, DSP/recording tests, strict Clippy, and diff
+validation. It does not open an audio device or change machine configuration.
+
 ## 2026-09-06 â€” Worker checkpoint boundary
 
 `WavRecorder` and `BufferedFlacRecorder` now expose validated controller
