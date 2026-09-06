@@ -672,8 +672,21 @@ pub enum WorkerMessage {
         frame: WorkerFrame,
         parameters: Vec<ParameterEvent>,
     },
+    ProcessShared {
+        sequence: u64,
+        deadline_tick: u64,
+        channels: u16,
+        frames: u32,
+        parameters: Vec<ParameterEvent>,
+    },
     Processed {
         frame: WorkerFrame,
+    },
+    ProcessedShared {
+        sequence: u64,
+        deadline_tick: u64,
+        channels: u16,
+        frames: u32,
     },
     Latency(WorkerLatency),
     Shutdown,
@@ -778,7 +791,28 @@ impl WorkerSession {
                     .map_err(WorkerSessionError::Frame)?;
                 Ok(Some(frame.clone()))
             }
-            (WorkerSessionState::Active, WorkerMessage::Latency(_)) => Ok(None),
+            (
+                WorkerSessionState::Active,
+                WorkerMessage::ProcessShared {
+                    sequence,
+                    deadline_tick,
+                    channels,
+                    frames: _,
+                    parameters: _,
+                },
+            ) => {
+                if *channels != self.channels {
+                    return Err(WorkerSessionError::Frame(WorkerFrameError::InvalidChannels));
+                }
+                self.frame_guard
+                    .accept_metadata(*sequence, *deadline_tick, now_tick)
+                    .map_err(WorkerSessionError::Frame)?;
+                Ok(None)
+            }
+            (
+                WorkerSessionState::Active,
+                WorkerMessage::Latency(_) | WorkerMessage::ProcessedShared { .. },
+            ) => Ok(None),
             (
                 WorkerSessionState::Active,
                 WorkerMessage::Shutdown | WorkerMessage::Failure { .. },
@@ -884,6 +918,7 @@ pub struct WorkerProcess {
     writer: BufWriter<ChildStdin>,
     reader: BufReader<ChildStdout>,
     channels: u16,
+    shared: Option<SharedAudioTransport>,
 }
 
 impl WorkerProcess {
@@ -892,19 +927,46 @@ impl WorkerProcess {
         plugin_sha256: &str,
         channels: u16,
     ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner(executable, plugin_sha256, channels, None)
+    }
+
+    pub fn spawn_shared(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        transport: SharedAudioTransport,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner(executable, plugin_sha256, channels, Some(transport))
+    }
+
+    fn spawn_inner(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        mut shared: Option<SharedAudioTransport>,
+    ) -> Result<Self, WorkerProcessError> {
         if !is_sha256(plugin_sha256) {
             return Err(WorkerProcessError::Protocol("invalid plugin hash".into()));
         }
         if !matches!(channels, 1 | 2) {
             return Err(WorkerProcessError::Protocol("invalid channel count".into()));
         }
-        let mut child = Command::new(executable.as_ref())
-            .args([
-                "--plugin-sha256",
-                plugin_sha256,
-                "--channels",
-                &channels.to_string(),
-            ])
+        let mut command = Command::new(executable.as_ref());
+        command.args([
+            "--plugin-sha256",
+            plugin_sha256,
+            "--channels",
+            &channels.to_string(),
+        ]);
+        if let Some(transport) = shared.as_ref() {
+            command.args([
+                "--input-path",
+                &transport.input_path().to_string_lossy(),
+                "--output-path",
+                &transport.output_path().to_string_lossy(),
+            ]);
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -917,6 +979,7 @@ impl WorkerProcess {
             writer: BufWriter::new(stdin),
             reader: BufReader::new(stdout),
             channels,
+            shared: shared.take(),
         };
         let hello = process.read().map_err(WorkerProcessError::Message)?;
         match hello {
@@ -937,6 +1000,59 @@ impl WorkerProcess {
             .write(&WorkerMessage::Ready)
             .map_err(WorkerProcessError::Message)?;
         Ok(process)
+    }
+
+    pub fn process_shared(
+        &mut self,
+        frame: WorkerFrame,
+        parameters: Vec<ParameterEvent>,
+    ) -> Result<WorkerFrame, WorkerProcessError> {
+        if frame.channels != self.channels {
+            return Err(WorkerProcessError::Protocol(
+                "frame channel count mismatch".into(),
+            ));
+        }
+        {
+            let transport = self.shared.as_mut().ok_or_else(|| {
+                WorkerProcessError::Protocol("shared transport was not configured".into())
+            })?;
+            transport.write_input(&frame).map_err(|error| {
+                WorkerProcessError::Protocol(format!("input write failed: {error:?}"))
+            })?;
+        }
+        self.write(&WorkerMessage::ProcessShared {
+            sequence: frame.sequence,
+            deadline_tick: frame.deadline_tick,
+            channels: frame.channels,
+            frames: frame.frame_count() as u32,
+            parameters,
+        })
+        .map_err(WorkerProcessError::Message)?;
+        let response = self.read().map_err(WorkerProcessError::Message)?;
+        match response {
+            WorkerMessage::ProcessedShared {
+                sequence,
+                deadline_tick,
+                channels,
+                frames,
+            } if sequence == frame.sequence
+                && deadline_tick == frame.deadline_tick
+                && channels == frame.channels
+                && frames == frame.frame_count() as u32 =>
+            {
+                self.shared
+                    .as_ref()
+                    .expect("shared transport was checked before sending")
+                    .read_output()
+                    .map_err(|error| {
+                        WorkerProcessError::Protocol(format!("output read failed: {error:?}"))
+                    })
+            }
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected shared process response".into(),
+            )),
+        }
     }
 
     pub fn process(
@@ -1047,6 +1163,16 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                 .map_err(WorkerMessageError::InvalidParameter)?;
             }
         }
+        WorkerMessage::ProcessShared {
+            sequence,
+            deadline_tick,
+            channels,
+            frames,
+            parameters,
+        } => {
+            validate_shared_frame_shape(*sequence, *deadline_tick, *channels, *frames)?;
+            validate_parameters(parameters)?;
+        }
         WorkerMessage::Processed { frame } => {
             WorkerFrame::new(
                 frame.sequence,
@@ -1056,6 +1182,12 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
             )
             .map_err(WorkerMessageError::InvalidFrame)?;
         }
+        WorkerMessage::ProcessedShared {
+            sequence,
+            deadline_tick,
+            channels,
+            frames,
+        } => validate_shared_frame_shape(*sequence, *deadline_tick, *channels, *frames)?,
         WorkerMessage::Latency(latency) => {
             WorkerLatency::new(latency.samples, latency.sample_rate_hz)?;
         }
@@ -1064,6 +1196,43 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         }
         _ => {}
     }
+    Ok(())
+}
+
+fn validate_parameters(parameters: &[ParameterEvent]) -> Result<(), WorkerMessageError> {
+    if parameters.len() > MAX_PARAMETER_EVENTS {
+        return Err(WorkerMessageError::InvalidParameter(
+            ParameterEventError::OffsetOutOfRange,
+        ));
+    }
+    for parameter in parameters {
+        ParameterEvent::new(
+            parameter.parameter_id,
+            parameter.normalized_value,
+            parameter.sample_offset,
+        )
+        .map_err(WorkerMessageError::InvalidParameter)?;
+    }
+    Ok(())
+}
+
+fn validate_shared_frame_shape(
+    sequence: u64,
+    deadline_tick: u64,
+    channels: u16,
+    frames: u32,
+) -> Result<(), WorkerMessageError> {
+    if !matches!(channels, 1 | 2) {
+        return Err(WorkerMessageError::InvalidFrame(
+            WorkerFrameError::InvalidChannels,
+        ));
+    }
+    if frames == 0 || frames as usize > MAX_WORKER_FRAMES {
+        return Err(WorkerMessageError::InvalidFrame(
+            WorkerFrameError::InvalidFrameCount,
+        ));
+    }
+    let _ = (sequence, deadline_tick);
     Ok(())
 }
 
@@ -1217,7 +1386,7 @@ pub enum SharedAudioError {
     Io(String),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SharedAudioMetadata {
     pub sequence: u64,
     pub deadline_tick: u64,
@@ -1386,6 +1555,8 @@ impl SharedAudioRegion {
 pub struct SharedAudioTransport {
     input: SharedAudioRegion,
     output: SharedAudioRegion,
+    input_path: PathBuf,
+    output_path: PathBuf,
 }
 
 impl SharedAudioTransport {
@@ -1401,7 +1572,12 @@ impl SharedAudioTransport {
         }
         let input = SharedAudioRegion::create(input_path, layout)?;
         match SharedAudioRegion::create(output_path, layout) {
-            Ok(output) => Ok(Self { input, output }),
+            Ok(output) => Ok(Self {
+                input,
+                output,
+                input_path: input_path.to_path_buf(),
+                output_path: output_path.to_path_buf(),
+            }),
             Err(error) => {
                 drop(input);
                 let _ = fs::remove_file(input_path);
@@ -1419,8 +1595,10 @@ impl SharedAudioTransport {
             return Err(SharedAudioError::AliasedPaths);
         }
         Ok(Self {
-            input: SharedAudioRegion::open(input_path, layout)?,
-            output: SharedAudioRegion::open(output_path, layout)?,
+            input: SharedAudioRegion::open(input_path.as_ref(), layout)?,
+            output: SharedAudioRegion::open(output_path.as_ref(), layout)?,
+            input_path: input_path.as_ref().to_path_buf(),
+            output_path: output_path.as_ref().to_path_buf(),
         })
     }
 
@@ -1457,6 +1635,14 @@ impl SharedAudioTransport {
     pub fn flush(&mut self) -> Result<(), SharedAudioError> {
         self.input.flush()?;
         self.output.flush()
+    }
+
+    pub fn input_path(&self) -> &Path {
+        &self.input_path
+    }
+
+    pub fn output_path(&self) -> &Path {
+        &self.output_path
     }
 }
 
@@ -1604,16 +1790,22 @@ impl WorkerFrameGuard {
     }
 
     pub fn accept(&mut self, frame: &WorkerFrame, now_tick: u64) -> Result<(), WorkerFrameError> {
-        if self
-            .last_sequence
-            .is_some_and(|last| frame.sequence <= last)
-        {
+        self.accept_metadata(frame.sequence, frame.deadline_tick, now_tick)
+    }
+
+    pub fn accept_metadata(
+        &mut self,
+        sequence: u64,
+        deadline_tick: u64,
+        now_tick: u64,
+    ) -> Result<(), WorkerFrameError> {
+        if self.last_sequence.is_some_and(|last| sequence <= last) {
             return Err(WorkerFrameError::SequenceRegression);
         }
-        if frame.deadline_tick < now_tick {
+        if deadline_tick < now_tick {
             return Err(WorkerFrameError::DeadlineExpired);
         }
-        self.last_sequence = Some(frame.sequence);
+        self.last_sequence = Some(sequence);
         Ok(())
     }
 }

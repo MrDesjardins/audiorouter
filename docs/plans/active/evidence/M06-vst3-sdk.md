@@ -276,3 +276,12 @@ the newly created input slot after its mapping is dropped. This prevents
 partially initialized IPC resources from surviving a failed setup; the
 regression verifies the cleanup path. Formatting, all-target compilation, and
 strict Clippy pass.
+
+Extended the worker protocol with validated shared-frame metadata messages
+(ProcessShared/ProcessedShared). WorkerProcess::spawn_shared now passes
+explicit slot paths to the disposable worker, which opens the paired mapping,
+reads the host input slot, and writes the output slot before acknowledging the
+frame. The process-level integration suite passes both inline and shared-frame
+round trips (2 tests); all plugin-host targets compile with strict Clippy.
+The worker remains an echo fixture and does not load plugin code or open audio
+devices.

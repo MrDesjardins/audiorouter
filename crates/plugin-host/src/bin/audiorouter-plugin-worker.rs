@@ -1,9 +1,12 @@
 use audiorouter_plugin_host::{
-    read_worker_message, write_worker_message, WorkerMessage, WorkerSession,
-    WORKER_PROTOCOL_VERSION,
+    read_worker_message, write_worker_message, SharedAudioLayout, SharedAudioTransport,
+    WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
 };
 use std::io::{self, BufReader, BufWriter};
+use std::path::PathBuf;
 use std::process::ExitCode;
+
+type WorkerArguments = (String, u16, Option<(PathBuf, PathBuf)>);
 
 fn main() -> ExitCode {
     match run() {
@@ -16,9 +19,19 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let (plugin_sha256, channels) = parse_arguments()?;
+    let (plugin_sha256, channels, shared_paths) = parse_arguments()?;
     let _session = WorkerSession::new(&plugin_sha256, channels)
         .map_err(|error| format!("invalid worker configuration: {error:?}"))?;
+    let mut shared = shared_paths
+        .map(|(input_path, output_path)| {
+            SharedAudioTransport::open(
+                input_path,
+                output_path,
+                SharedAudioLayout::new(channels).map_err(|error| format!("{error:?}"))?,
+            )
+            .map_err(|error| format!("shared transport open failed: {error:?}"))
+        })
+        .transpose()?;
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut reader = BufReader::new(stdin.lock());
@@ -43,6 +56,40 @@ fn run() -> Result<(), String> {
         match read_worker_message(&mut reader)
             .map_err(|error| format!("message read failed: {error:?}"))?
         {
+            WorkerMessage::ProcessShared {
+                sequence,
+                deadline_tick,
+                channels: frame_channels,
+                frames,
+                parameters: _,
+            } => {
+                let transport = shared
+                    .as_mut()
+                    .ok_or_else(|| "shared transport was not configured".to_string())?;
+                let frame = transport
+                    .read_input()
+                    .map_err(|error| format!("shared input read failed: {error:?}"))?;
+                if frame.sequence != sequence
+                    || frame.deadline_tick != deadline_tick
+                    || frame.channels != frame_channels
+                    || frame.frame_count() != frames as usize
+                {
+                    return Err("shared input metadata mismatch".into());
+                }
+                transport
+                    .write_output(&frame)
+                    .map_err(|error| format!("shared output write failed: {error:?}"))?;
+                write_worker_message(
+                    &mut writer,
+                    &WorkerMessage::ProcessedShared {
+                        sequence,
+                        deadline_tick,
+                        channels: frame_channels,
+                        frames,
+                    },
+                )
+                .map_err(|error| format!("processed shared write failed: {error:?}"))?;
+            }
             WorkerMessage::Process { frame, parameters } => {
                 if frame.channels != channels {
                     write_worker_message(
@@ -80,10 +127,12 @@ fn run() -> Result<(), String> {
     }
 }
 
-fn parse_arguments() -> Result<(String, u16), String> {
+fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut arguments = std::env::args().skip(1);
     let mut hash = None;
     let mut channels = None;
+    let mut input_path = None;
+    let mut output_path = None;
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "--plugin-sha256" => hash = arguments.next(),
@@ -96,6 +145,8 @@ fn parse_arguments() -> Result<(String, u16), String> {
                         .map_err(|_| "--channels must be 1 or 2".to_string())?,
                 )
             }
+            "--input-path" => input_path = arguments.next().map(PathBuf::from),
+            "--output-path" => output_path = arguments.next().map(PathBuf::from),
             _ => return Err(format!("unknown argument: {argument}")),
         }
     }
@@ -107,5 +158,9 @@ fn parse_arguments() -> Result<(String, u16), String> {
     if !matches!(channels, 1 | 2) {
         return Err("--channels must be 1 or 2".into());
     }
-    Ok((hash, channels))
+    match (input_path, output_path) {
+        (Some(input), Some(output)) => Ok((hash, channels, Some((input, output)))),
+        (None, None) => Ok((hash, channels, None)),
+        _ => Err("--input-path and --output-path must be supplied together".into()),
+    }
 }
