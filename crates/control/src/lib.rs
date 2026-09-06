@@ -3005,6 +3005,51 @@ mod tests {
     }
 
     #[test]
+    fn recording_recycle_preview_never_moves_the_file_and_missing_is_safe() {
+        let path =
+            std::env::temp_dir().join(format!("audiorouter-recycle-{}.wav", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, b"test recording").unwrap();
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "recording-recycle".into(),
+                session_id: "session".into(),
+                recorder_id: "recorder".into(),
+                path: path.to_string_lossy().into_owned(),
+                format: "wav".into(),
+                channels: 1,
+                sample_rate: 44_100,
+                frames: 10,
+                file_bytes: 14,
+                start_time: "2026-09-06T00:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+            })
+            .unwrap();
+        let mut plane = ControlPlane::with_storage("recording-recycle", storage);
+        let preview = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(11)),
+            method: "recordings.recycle".into(),
+            params: Some(json!({ "recordingId": "recording-recycle" })),
+        });
+        assert_eq!(preview.result.unwrap()["preview"], true);
+        assert!(path.is_file());
+        std::fs::remove_file(&path).unwrap();
+        let missing = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(12)),
+            method: "recordings.recycle".into(),
+            params: Some(json!({ "recordingId": "recording-recycle", "confirm": true })),
+        });
+        assert_eq!(missing.result.unwrap()["reason"], "missing");
+    }
+
+    #[test]
     fn recording_metadata_mutation_requires_record_scope_and_preserves_file_path() {
         let storage = Storage::open_memory().unwrap();
         storage

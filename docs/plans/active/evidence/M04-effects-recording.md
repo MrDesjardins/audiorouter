@@ -278,3 +278,8 @@ through the `trash` library, then mark the persisted row missing; missing
 files and unsupported platforms return explicit non-destructive results. No
 permanent-delete fallback exists. Storage/domain/control/CLI tests and strict
 Clippy pass.
+
+The control regression now verifies that preview mode leaves a generated
+recording file in place and that a confirmed request for an already-missing
+file returns a non-destructive `missing` result. Control coverage is 49 tests;
+the full affected-crate validation and strict Clippy remain green.
