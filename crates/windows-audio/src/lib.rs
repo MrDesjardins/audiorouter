@@ -98,6 +98,16 @@ impl From<windows::core::Error> for AudioError {
 
 struct ComApartment;
 
+struct EventHandle(windows::Win32::Foundation::HANDLE);
+
+impl Drop for EventHandle {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
 impl ComApartment {
     fn initialize() -> Result<Self, AudioError> {
         unsafe {
@@ -125,6 +135,7 @@ pub struct SharedCapture {
     client: windows::Win32::Media::Audio::IAudioClient,
     capture: windows::Win32::Media::Audio::IAudioCaptureClient,
     started: bool,
+    event: EventHandle,
     _com: ComApartment,
 }
 
@@ -136,6 +147,7 @@ pub struct SharedRender {
     render: windows::Win32::Media::Audio::IAudioRenderClient,
     buffer_size: u32,
     started: bool,
+    event: EventHandle,
     _com: ComApartment,
 }
 
@@ -146,7 +158,7 @@ impl SharedCapture {
         use windows::Win32::Media::Audio::{
             eCapture, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
             AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -177,10 +189,15 @@ impl SharedCapture {
         })?;
         let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
         let format = unsafe { client.GetMixFormat()? };
+        let event = EventHandle(unsafe {
+            windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
+        });
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
-                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                    | AUDCLNT_STREAMFLAGS_NOPERSIST,
                 buffer_duration_100ns,
                 0,
                 format,
@@ -189,11 +206,13 @@ impl SharedCapture {
         };
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
         initialized?;
+        unsafe { client.SetEventHandle(event.0)? };
         let capture: IAudioCaptureClient = unsafe { client.GetService()? };
         Ok(Self {
             client,
             capture,
             started: false,
+            event,
             _com: com,
         })
     }
@@ -232,6 +251,21 @@ impl SharedCapture {
         }))
     }
 
+    /// Wait for the event-driven client to signal available data. Packet reads
+    /// remain explicit and bounded; a timeout is reported as `false`.
+    pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
+        let result = unsafe {
+            windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
+        };
+        if result == windows::Win32::Foundation::WAIT_OBJECT_0 {
+            Ok(true)
+        } else if result == windows::Win32::Foundation::WAIT_TIMEOUT {
+            Ok(false)
+        } else {
+            Err(AudioError::Windows(windows::core::Error::from_thread()))
+        }
+    }
+
     pub fn stop(&mut self) -> Result<(), AudioError> {
         if self.started {
             unsafe { self.client.Stop()? };
@@ -255,7 +289,7 @@ impl SharedRender {
         use windows::Win32::Media::Audio::{
             eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
             AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -286,10 +320,15 @@ impl SharedRender {
         })?;
         let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
         let format = unsafe { client.GetMixFormat()? };
+        let event = EventHandle(unsafe {
+            windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
+        });
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
-                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                    | AUDCLNT_STREAMFLAGS_NOPERSIST,
                 buffer_duration_100ns,
                 0,
                 format,
@@ -298,6 +337,7 @@ impl SharedRender {
         };
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
         initialized?;
+        unsafe { client.SetEventHandle(event.0)? };
         let buffer_size = unsafe { client.GetBufferSize()? };
         let render: IAudioRenderClient = unsafe { client.GetService()? };
         Ok(Self {
@@ -305,6 +345,7 @@ impl SharedRender {
             render,
             buffer_size,
             started: false,
+            event,
             _com: com,
         })
     }
@@ -330,6 +371,19 @@ impl SharedRender {
             )?;
         }
         Ok(available)
+    }
+
+    pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
+        let result = unsafe {
+            windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
+        };
+        if result == windows::Win32::Foundation::WAIT_OBJECT_0 {
+            Ok(true)
+        } else if result == windows::Win32::Foundation::WAIT_TIMEOUT {
+            Ok(false)
+        } else {
+            Err(AudioError::Windows(windows::core::Error::from_thread()))
+        }
     }
 
     pub fn stop(&mut self) -> Result<(), AudioError> {

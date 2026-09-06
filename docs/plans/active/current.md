@@ -301,6 +301,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Corrected `status.get` capability reporting to distinguish available device metadata discovery from unavailable realtime graph/routing; this avoids claiming the entire Windows adapter is missing.
 - Added bounded read-only process discovery (`apps.list`) with PID and executable name only, excluding command lines and full paths. This supplies identities for future process-loopback binding but does not claim process-tree audio capture.
 - Added identity-preserving endpoint snapshot diffing for added, removed, and changed metadata. It is a control-plane polling helper and never silently rebinds a missing endpoint; native IMMNotificationClient callbacks remain open.
+- Upgraded `SharedCapture` and `SharedRender` to event-driven initialization with private RAII event handles, `SetEventHandle`, bounded waits, and `EVENTCALLBACK` flags. The normal tests remain non-invasive; actual stream lifecycle evidence stays in the opt-in native diagnostic.
 
 ### 2026-09-05 — Preallocated realtime block core
 
