@@ -452,12 +452,7 @@ impl<W: Write + Seek> WavWriter<W> {
         sample_rate: u32,
         dither: bool,
     ) -> Result<Self, RecordingError> {
-        if !matches!(sample_rate, 44_100 | 48_000) {
-            return Err(RecordingError::InvalidSampleRate);
-        }
-        if !(1..=MAX_CHANNELS).contains(&channels) {
-            return Err(RecordingError::InvalidChannels);
-        }
+        validate_format(format, channels, sample_rate)?;
         write_header(&mut output, format, channels, sample_rate, 0, 0)?;
         Ok(Self {
             output,
@@ -530,6 +525,59 @@ impl<W: Write + Seek> WavWriter<W> {
         self.output.seek(SeekFrom::End(0))?;
         Ok(self.output)
     }
+}
+
+fn validate_format(
+    _format: WavFormat,
+    channels: u16,
+    sample_rate: u32,
+) -> Result<(), RecordingError> {
+    if !matches!(sample_rate, 44_100 | 48_000) {
+        return Err(RecordingError::InvalidSampleRate);
+    }
+    if !(1..=MAX_CHANNELS).contains(&channels) {
+        return Err(RecordingError::InvalidChannels);
+    }
+    Ok(())
+}
+
+/// Repairs a WAV file whose final header patch was interrupted.
+///
+/// Recovery is conservative: only the existing bytes after the 44-byte WAV
+/// header are considered, trailing partial samples are removed, and the
+/// caller-provided format is used to rebuild the header. The file is never
+/// replaced or deleted.
+pub fn recover_wav_file(
+    file: &mut std::fs::File,
+    format: WavFormat,
+    channels: u16,
+    sample_rate: u32,
+) -> Result<u64, RecordingError> {
+    validate_format(format, channels, sample_rate)?;
+    let length = file.metadata()?.len();
+    let data_bytes = length
+        .checked_sub(44)
+        .ok_or(RecordingError::InvalidSampleCount)?;
+    let bytes_per_frame = u64::from(channels) * u64::from(format.bits() / 8);
+    let complete_data_bytes = data_bytes - (data_bytes % bytes_per_frame);
+    let total_length = 44u64
+        .checked_add(complete_data_bytes)
+        .ok_or(RecordingError::TooManyFrames)?;
+    if complete_data_bytes > u64::from(u32::MAX - 36) {
+        return Err(RecordingError::TooManyFrames);
+    }
+    file.set_len(total_length)?;
+    file.seek(SeekFrom::Start(0))?;
+    write_header(
+        file,
+        format,
+        channels,
+        sample_rate,
+        36 + complete_data_bytes as u32,
+        complete_data_bytes as u32,
+    )?;
+    file.seek(SeekFrom::End(0))?;
+    Ok(complete_data_bytes / bytes_per_frame)
 }
 
 /// A worker-side WAV recorder that joins queue draining with recorder state.
@@ -831,6 +879,34 @@ mod tests {
         ));
         drop(_file);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recovery_patches_header_and_drops_partial_frame() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recording-recovery-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        write_header(&mut file, WavFormat::Pcm16, 2, 48_000, 0, 0).unwrap();
+        file.write_all(&[0; 10]).unwrap();
+        file.flush().unwrap();
+        assert_eq!(
+            recover_wav_file(&mut file, WavFormat::Pcm16, 2, 48_000).unwrap(),
+            2
+        );
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(bytes.len(), 52);
+        assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().unwrap()), 44);
+        assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().unwrap()), 8);
+        let _ = std::fs::remove_file(path);
     }
 
     #[cfg(unix)]

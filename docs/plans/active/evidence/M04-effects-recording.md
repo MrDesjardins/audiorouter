@@ -45,3 +45,10 @@ file. Root symlinks/reparse points are rejected before canonicalization; the
 Windows suite covers the reparse attribute path and the portable suite covers
 a Unix symlink root. Nested reparse-point-specific checks, allowlisted token
 templates, library metadata, and recycle operations remain open.
+
+`recover_wav_file` provides an in-place crash-recovery primitive for WAV
+destinations. It validates the known format, truncates trailing partial sample
+frames, rebuilds the RIFF and data sizes, and leaves the same file handle and
+path in place. A temporary-file regression verifies recovery of a ten-byte
+stereo PCM16 payload to two complete frames; journal/startup integration and
+FLAC recovery remain open.
