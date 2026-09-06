@@ -457,3 +457,11 @@ The MCP stdio interoperability regression was updated to account for the
 published `clear_recovery_safe_mode` tool. The catalog now contains 23 tools,
 including the recovery maintenance operation, and the locked workspace test
 suite confirms the process-level catalog remains internally consistent.
+## Operation metadata correction (2026-09-06)
+
+In-memory idempotent outcomes now retain their operation name alongside the
+result. `operations.get` therefore reports `virtualDevices.apply` for cached
+virtual-device lifecycle results instead of incorrectly labeling them as
+`graph.commit`; durable journal outcomes already used their stored operation.
+The control regression passes with 64 tests and strict Clippy, without opening
+audio or changing machine configuration.

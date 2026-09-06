@@ -1401,6 +1401,7 @@ pub struct ControlPlane {
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
+    operation_names: HashMap<String, String>,
     virtual_bus_idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
     privacy_muted: bool,
@@ -1427,6 +1428,7 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            operation_names: HashMap::new(),
             virtual_bus_idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted: false,
@@ -1470,6 +1472,7 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            operation_names: HashMap::new(),
             virtual_bus_idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted,
@@ -1484,6 +1487,7 @@ impl ControlPlane {
         &mut self,
         idempotency_key: &str,
         result: Value,
+        operation: &str,
         virtual_request_hash: Option<&str>,
     ) {
         if self.operation_outcomes.len() >= MAX_MEMORY_OPERATION_OUTCOMES
@@ -1491,11 +1495,14 @@ impl ControlPlane {
         {
             if let Some(oldest) = self.operation_outcomes.keys().next().cloned() {
                 self.operation_outcomes.remove(&oldest);
+                self.operation_names.remove(&oldest);
                 self.virtual_bus_idempotency_hashes.remove(&oldest);
             }
         }
         self.operation_outcomes
             .insert(idempotency_key.to_owned(), result);
+        self.operation_names
+            .insert(idempotency_key.to_owned(), operation.to_owned());
         if let Some(hash) = virtual_request_hash {
             self.virtual_bus_idempotency_hashes
                 .insert(idempotency_key.to_owned(), hash.to_owned());
@@ -1713,9 +1720,14 @@ impl ControlPlane {
             }
         }
         if let Some(result) = self.operation_outcomes.get(operation_id) {
+            let operation = self
+                .operation_names
+                .get(operation_id)
+                .map(String::as_str)
+                .unwrap_or("graph.commit");
             return Ok(json!({
                 "operationId": operation_id,
-                "operation": "graph.commit",
+                "operation": operation,
                 "status": "completed",
                 "durable": false,
                 "revision": result["revision"],
@@ -2254,7 +2266,7 @@ impl ControlPlane {
         } else {
             response["activation"] = json!({ "state": "pending", "runtime": "fake" });
         }
-        self.remember_operation_outcome(idempotency_key, response.clone(), None);
+        self.remember_operation_outcome(idempotency_key, response.clone(), "graph.commit", None);
         Ok(response)
     }
 
@@ -3490,6 +3502,7 @@ impl ControlPlane {
                 self.remember_operation_outcome(
                     idempotency_key,
                     previous.clone(),
+                    "virtualDevices.apply",
                     Some(&request_hash),
                 );
                 return Ok(previous);
@@ -3530,7 +3543,12 @@ impl ControlPlane {
             }
         }
         self.virtual_bus_plans.remove(&EntityId::new(plan_id));
-        self.remember_operation_outcome(idempotency_key, result.clone(), Some(&request_hash));
+        self.remember_operation_outcome(
+            idempotency_key,
+            result.clone(),
+            "virtualDevices.apply",
+            Some(&request_hash),
+        );
         Ok(result)
     }
 
@@ -4037,6 +4055,16 @@ mod tests {
         };
         let applied = plane.dispatch(request(4, &plan_id)).result.unwrap();
         assert_eq!(applied["state"], "applied");
+        let operation = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(4)),
+                method: "operations.get".into(),
+                params: Some(json!({ "operationId": "create-bus-1" })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(operation["operation"], "virtualDevices.apply");
         let replay = plane.dispatch(request(5, &plan_id)).result.unwrap();
         assert_eq!(replay, applied);
         let second_plan = plane
