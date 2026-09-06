@@ -113,3 +113,9 @@ an adapter seam; the rendered editor does not yet invoke graph mutations.
 candidate, verifies the returned base revision matches the draft, and commits
 using the caller's idempotency key. Revision mismatch is rejected before
 commit. UI tests now cover six cases; typecheck and production build pass.
+
+The React shell now accepts an injected `UiBackend` and owns its
+`SnapshotCache` instance, allowing the eventual live transport to be supplied
+without changing the presentation components. The Reconnect action performs a
+bounded snapshot refresh and preserves stale-state behavior on failure. UI
+tests (6) and the production build pass.

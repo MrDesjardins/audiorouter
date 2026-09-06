@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
-import { createDisconnectedBackend, SnapshotCache } from "./backend";
+import { createDisconnectedBackend, SnapshotCache, type UiBackend } from "./backend";
 import { demoSession, demoSessions } from "./fixtures";
 
-const backend = createDisconnectedBackend();
-const snapshotCache = new SnapshotCache();
+const defaultBackend = createDisconnectedBackend();
 
 function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean; onSelect: () => void }) {
   return (
@@ -19,7 +18,8 @@ function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean;
   );
 }
 
-export function App() {
+export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) {
+  const [snapshotCache] = useState(() => new SnapshotCache());
   const [snapshotState, setSnapshotState] = useState(snapshotCache.current());
   const [selectedSessionId, setSelectedSessionId] = useState(demoSession.id);
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
@@ -29,7 +29,10 @@ export function App() {
       if (mounted) setSnapshotState(nextState);
     });
     return () => { mounted = false; };
-  }, []);
+  }, [backend, snapshotCache]);
+  const refresh = () => {
+    void snapshotCache.refresh(backend).then(setSnapshotState);
+  };
   const snapshot = snapshotState.snapshot;
   const availableSessions = snapshot ? [snapshot.session, ...demoSessions.filter((item) => item.id !== snapshot.session.id)] : demoSessions;
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
@@ -44,7 +47,7 @@ export function App() {
           <span className="status-dot disconnected" aria-hidden="true" />
           <span>{connectionLabel}</span>
           <span className="status-detail">{statusSummary}</span>
-          <button type="button">Reconnect</button>
+          <button type="button" onClick={refresh}>Reconnect</button>
         </div>
       </header>
 
