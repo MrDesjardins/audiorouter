@@ -539,6 +539,68 @@ impl Storage {
             == 1)
     }
 
+    /// Rename a recording within its existing canonical directory and update
+    /// only the durable library path. The destination must not already exist.
+    pub fn rename_recording(&self, id: &str, new_path: &str) -> Result<bool, StorageError> {
+        let Some(recording) = self.get_recording(id)? else {
+            return Ok(false);
+        };
+        let source = std::path::Path::new(&recording.path);
+        let destination = std::path::Path::new(new_path);
+        if !destination.is_absolute()
+            || !matches!(
+                destination
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .map(|value| value.to_ascii_lowercase())
+                    .as_deref(),
+                Some("wav") | Some("flac")
+            )
+        {
+            return Err(StorageError::InvalidRecording(
+                "rename destination must be an absolute wav/flac path".into(),
+            ));
+        }
+        let source_metadata = std::fs::symlink_metadata(source)?;
+        if !source_metadata.file_type().is_file() {
+            return Err(StorageError::InvalidRecording(
+                "recording source must be a regular file".into(),
+            ));
+        }
+        if destination.exists() || std::fs::symlink_metadata(destination).is_ok() {
+            return Err(StorageError::InvalidRecording(
+                "rename destination must not already exist".into(),
+            ));
+        }
+        let source_parent = std::fs::canonicalize(source.parent().ok_or_else(|| {
+            StorageError::InvalidRecording("recording source has no parent".into())
+        })?)?;
+        let destination_parent = std::fs::canonicalize(destination.parent().ok_or_else(|| {
+            StorageError::InvalidRecording("rename destination has no parent".into())
+        })?)?;
+        if source_parent != destination_parent {
+            return Err(StorageError::InvalidRecording(
+                "recordings may only be renamed within their existing directory".into(),
+            ));
+        }
+        std::fs::rename(source, destination)?;
+        let updated = self.connection.execute(
+            "UPDATE recordings SET path = ?2 WHERE id = ?1",
+            params![id, new_path],
+        );
+        match updated {
+            Ok(1) => Ok(true),
+            Ok(_) => {
+                let _ = std::fs::rename(destination, source);
+                Ok(false)
+            }
+            Err(error) => {
+                let _ = std::fs::rename(destination, source);
+                Err(StorageError::Sql(error))
+            }
+        }
+    }
+
     pub fn update_recording_metadata(
         &self,
         id: &str,
@@ -1928,6 +1990,50 @@ mod tests {
         assert!(!reopened.remove_recording_entry("rec-1").unwrap());
         assert_eq!(reopened.list_recordings(None).unwrap().len(), 1);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recording_rename_updates_path_only_after_safe_same_directory_move() {
+        let root = std::env::temp_dir();
+        let suffix = format!("audiorouter-recording-rename-{}", std::process::id());
+        let database = root.join(format!("{suffix}.sqlite"));
+        let source = root.join(format!("{suffix}.wav"));
+        let destination = root.join(format!("{suffix}-renamed.wav"));
+        for path in [&database, &source, &destination] {
+            let _ = std::fs::remove_file(path);
+        }
+        std::fs::write(&source, b"recording placeholder").unwrap();
+        let storage = Storage::open(&database).unwrap();
+        storage
+            .save_recording(&RecordingRecord {
+                id: "rename-1".into(),
+                session_id: "session".into(),
+                recorder_id: "voice".into(),
+                path: source.to_string_lossy().into_owned(),
+                format: "wav".into(),
+                channels: 1,
+                sample_rate: 48_000,
+                frames: 0,
+                file_bytes: 20,
+                start_time: "2026-09-06T00:00:00Z".into(),
+                state: "complete".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+            })
+            .unwrap();
+        assert!(storage
+            .rename_recording("rename-1", &destination.to_string_lossy())
+            .unwrap());
+        assert!(!source.exists());
+        assert!(destination.exists());
+        assert_eq!(
+            storage.get_recording("rename-1").unwrap().unwrap().path,
+            destination.to_string_lossy()
+        );
+        let _ = std::fs::remove_file(database);
+        let _ = std::fs::remove_file(destination);
     }
 
     #[test]

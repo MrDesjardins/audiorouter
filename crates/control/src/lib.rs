@@ -112,6 +112,7 @@ fn method_description(name: &str) -> &'static str {
         "recordings.setMetadata" => {
             "Update recording metadata without changing audio content or path."
         }
+        "recordings.rename" => "Rename a recording within its approved directory.",
         "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
@@ -208,6 +209,13 @@ fn method_input_schema(name: &str) -> Value {
                 "comment": { "type": ["string", "null"], "maxLength": 256 }
             }),
             &["recordingId"],
+        ),
+        "recordings.rename" => object_schema(
+            json!({
+                "recordingId": { "type": "string", "minLength": 1 },
+                "newPath": { "type": "string", "minLength": 1 }
+            }),
+            &["recordingId", "newPath"],
         ),
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
@@ -1141,6 +1149,7 @@ impl ControlPlane {
                     "recordings.get" => self.dispatch_recordings_get(request.params),
                     "recordings.preview" => self.dispatch_recordings_preview(request.params),
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
+                    "recordings.rename" => self.dispatch_recording_rename(request.params),
                     "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
@@ -1750,6 +1759,38 @@ impl ControlPlane {
         Ok(json!({ "recordingId": recording_id, "updated": true }))
     }
 
+    fn dispatch_recording_rename(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("recordingId and newPath are required".into())
+        })?;
+        let recording_id = params
+            .get("recordingId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let new_path = params
+            .get("newPath")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("newPath is required".into()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        if !storage
+            .rename_recording(recording_id, new_path)
+            .map_err(storage_error)?
+        {
+            return Err(ControlError::InvalidRequest("recording not found".into()));
+        }
+        Ok(json!({
+            "recordingId": recording_id,
+            "renamed": true,
+            "path": new_path,
+            "fileAction": "renamed"
+        }))
+    }
+
     fn dispatch_recording_remove(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let recording_id = params
             .and_then(|params| {
@@ -1948,6 +1989,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.list" => &["sessionId"],
         "recordings.get" | "recordings.preview" => &["recordingId"],
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
+        "recordings.rename" => &["recordingId", "newPath"],
         "recordings.removeEntry" => &["recordingId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],

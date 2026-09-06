@@ -253,3 +253,13 @@ method. The CLI reads the existing metadata first so omitted fields are
 preserved, while the backend continues to enforce 256-character/control-byte
 limits and never changes the recording path or audio content. Control and CLI
 tests pass with strict Clippy.
+
+## 2026-09-06 — Safe recording rename
+
+Added `recordings.rename`, `recordings rename`, and MCP `rename_recording`.
+The storage boundary requires an absolute WAV/FLAC destination in the same
+canonical parent as the existing regular source file, refuses destination
+collisions, performs the filesystem move before updating the library row, and
+attempts rollback if the row update fails. The regression confirms the source
+disappears, the destination exists, and the durable path is updated; 25 storage
+tests, 46 control tests, and 9 CLI tests pass with strict Clippy.
