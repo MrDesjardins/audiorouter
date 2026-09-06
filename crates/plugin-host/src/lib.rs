@@ -1193,6 +1193,10 @@ impl WorkerProcess {
             return Err(WorkerProcessError::Protocol("invalid channel count".into()));
         }
         let mut command = Command::new(&executable);
+        // Plugin workers must not inherit backend credentials or unrelated
+        // environment configuration. The executable is absolute and the
+        // worker protocol passes all required configuration explicitly.
+        command.env_clear();
         command.args([
             "--plugin-sha256",
             plugin_sha256,

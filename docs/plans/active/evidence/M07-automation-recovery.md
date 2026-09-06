@@ -330,3 +330,8 @@ does not start sessions, resume routes, or alter audio configuration.
 worker faults through the same bounded failure/quarantine policy used for
 heartbeat timeouts. The transition does not restart processes or claim plugin
 execution; those native integration gates remain open.
+
+Worker launch now clears the inherited environment and supplies configuration
+only through validated arguments and owned protocol handles. This reduces
+backend credential/configuration leakage while retaining the Job Object limits;
+it is not a substitute for Windows filesystem/network sandboxing.
