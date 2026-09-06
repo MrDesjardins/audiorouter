@@ -26,6 +26,10 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 
 ## Operational runbooks
 
+The [development quickstart](operations/quickstart.md) gives the safe toolchain,
+acceptance, CLI, UI, MCP, and troubleshooting path for the current repository
+state.
+
 The [headless runbook](operations/headless-runbook.md) documents the implemented CLI/MCP plan, backup, restore, and recovery boundaries. It distinguishes portable control-plane evidence from native audio, driver, signing, and installer requirements.
 
 The [SDK and native toolchain setup](operations/sdk-setup.md) explains the
