@@ -11,6 +11,47 @@ pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
 pub const MAX_MIXER_INPUTS: usize = 8;
 pub const MAX_FANOUT_BRANCHES: usize = 8;
+pub const MAX_EXTRA_COMPENSATION_MS: u32 = 250;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LatencyCompensationError {
+    Empty,
+    InvalidSampleRate,
+    OverBudget {
+        required_samples: u64,
+        maximum_samples: u64,
+    },
+}
+
+/// Returns per-branch delay samples needed to align paths at their mixer.
+/// This is a preparation-time calculation; the realtime callback receives the
+/// resulting fixed delays from a separately prepared graph.
+pub fn calculate_latency_compensation(
+    path_latencies_samples: &[u64],
+    sample_rate_hz: u32,
+) -> Result<Vec<u64>, LatencyCompensationError> {
+    if path_latencies_samples.is_empty() {
+        return Err(LatencyCompensationError::Empty);
+    }
+    if !(8_000..=192_000).contains(&sample_rate_hz) {
+        return Err(LatencyCompensationError::InvalidSampleRate);
+    }
+    let maximum = *path_latencies_samples.iter().max().unwrap();
+    let minimum = *path_latencies_samples.iter().min().unwrap();
+    let required = maximum - minimum;
+    let maximum_allowed =
+        (u64::from(sample_rate_hz) * u64::from(MAX_EXTRA_COMPENSATION_MS)).div_ceil(1_000);
+    if required > maximum_allowed {
+        return Err(LatencyCompensationError::OverBudget {
+            required_samples: required,
+            maximum_samples: maximum_allowed,
+        });
+    }
+    Ok(path_latencies_samples
+        .iter()
+        .map(|latency| maximum - latency)
+        .collect())
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum MeterError {
@@ -2501,5 +2542,28 @@ mod tests {
         assert_eq!(block.channel(0).unwrap(), &[0.5; 2]);
         assert_eq!(processor.process_queued(&queue, &mut block).unwrap(), None);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn latency_compensation_aligns_branches_without_exceeding_budget() {
+        assert_eq!(
+            calculate_latency_compensation(&[240, 480, 4_800], 48_000).unwrap(),
+            vec![4_560, 4_320, 0]
+        );
+        assert_eq!(
+            calculate_latency_compensation(&[0, 12_001], 48_000),
+            Err(LatencyCompensationError::OverBudget {
+                required_samples: 12_001,
+                maximum_samples: 12_000,
+            })
+        );
+        assert_eq!(
+            calculate_latency_compensation(&[], 48_000),
+            Err(LatencyCompensationError::Empty)
+        );
+        assert_eq!(
+            calculate_latency_compensation(&[1, 2], 7_999),
+            Err(LatencyCompensationError::InvalidSampleRate)
+        );
     }
 }
