@@ -334,3 +334,10 @@ setState succeeded before normal termination and unload. No state file or user
 data was written. This is native component state round-trip evidence, not yet
 durable AudioRouter state persistence, editor lifecycle, worker failure
 containment, or sandbox evidence.
+
+WorkerProcess shutdown now has an explicit timeout boundary: it waits for
+graceful exit, kills an unresponsive child after the caller-selected deadline,
+reaps it, and returns a stable Timeout error. The existing default uses five
+seconds. The complete plugin-host suite (25 unit tests plus 2 process tests)
+passes with strict Clippy and formatting. This does not yet make frame reads
+nonblocking or establish OS sandbox restrictions.

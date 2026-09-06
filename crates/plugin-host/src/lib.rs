@@ -908,6 +908,7 @@ pub enum WorkerProcessError {
     Message(WorkerMessageError),
     Protocol(String),
     Exited,
+    Timeout,
 }
 
 /// Control-plane client for one disposable worker process. This owns the
@@ -1097,12 +1098,33 @@ impl WorkerProcess {
         }
     }
 
-    pub fn shutdown(mut self) -> Result<ExitStatus, WorkerProcessError> {
+    pub fn shutdown(self) -> Result<ExitStatus, WorkerProcessError> {
+        self.shutdown_with_timeout(Duration::from_secs(5))
+    }
+
+    pub fn shutdown_with_timeout(
+        mut self,
+        timeout: Duration,
+    ) -> Result<ExitStatus, WorkerProcessError> {
         self.write(&WorkerMessage::Shutdown)
             .map_err(WorkerProcessError::Message)?;
-        self.child
-            .wait()
-            .map_err(|error| WorkerProcessError::Spawn(error.to_string()))
+        let started = Instant::now();
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(status)) => return Ok(status),
+                Ok(None) if started.elapsed() < timeout => {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                Ok(None) => {
+                    self.child
+                        .kill()
+                        .map_err(|error| WorkerProcessError::Spawn(error.to_string()))?;
+                    let _ = self.child.wait();
+                    return Err(WorkerProcessError::Timeout);
+                }
+                Err(error) => return Err(WorkerProcessError::Spawn(error.to_string())),
+            }
+        }
     }
 
     fn read(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
