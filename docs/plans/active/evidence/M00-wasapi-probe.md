@@ -169,3 +169,8 @@ Rust `Initialize` still returned `E_INVALIDARG`. This rules out the
 `WAVEFORMATEXTENSIBLE` payload as the determining factor. No temporary test
 code remains in the adapter, and the native C++ reference path remains the
 only live-initialization implementation qualified on this host.
+
+A fresh Rust process path using the hardcoded endpoint ID directly (without a
+preceding endpoint enumeration) produced the same `E_INVALIDARG`. This rules
+out enumeration/reopen lifetime as the cause; the Rust COM initialization
+boundary remains the unresolved difference from the successful C++ call.
