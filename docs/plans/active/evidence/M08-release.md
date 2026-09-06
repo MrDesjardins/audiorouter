@@ -48,3 +48,10 @@ The harness cleans its temporary directory in `finally`; the positive and
 tamper cases pass without modifying release outputs or machine configuration.
 
 Added `docs/operations/headless-runbook.md` and linked it from the documentation index. It documents commands that exist in the current CLI, the versioned plan-file workflow, non-overwriting recovery backups, staged bundle import, MCP stdio/pipe launch, stale-plan recovery, and explicit limits around native routing, drivers, signing, and installation. The runbook does not present portable tests or an MCP response as evidence of a configured audio system.
+
+Added docs/operations/release-qualification.md and linked it from the
+documentation index. The checklist gives the reproducible unsigned
+prepare/verify commands, requires clean inputs and new destinations, separates
+recording/database recovery from future installation actions, and lists the
+remaining driver, signing, native-routing, sandbox, and clean-machine gates.
+It makes no installer, driver, or machine-configuration claim.

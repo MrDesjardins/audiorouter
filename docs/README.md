@@ -32,6 +32,10 @@ The [SDK and native toolchain setup](operations/sdk-setup.md) explains the
 source-distributed VST3 SDK checkout and the installed Windows SDK/WDK build
 dependencies.
 
+The [release qualification checklist](operations/release-qualification.md)
+records the reproducible unsigned artifact flow, recovery expectations, and
+the native/signing/installer gates that remain open.
+
 ## Plans versus specifications
 
 - [Active](plans/active/current.md): execution state, evidence, and next steps. Start here when resuming work.
