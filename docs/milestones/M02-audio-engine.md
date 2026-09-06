@@ -1,6 +1,6 @@
 # M02 — Realtime engine and Windows capture/output
 
-Status: not started. Prerequisite: M01. Outcome: real mic/app/endpoint audio routed through a backend-owned graph without a UI.
+Status: adapter groundwork implemented; realtime graph engine remains open. Prerequisite: M01. Outcome: real mic/app/endpoint audio routed through a backend-owned graph without a UI.
 
 ## Read first
 

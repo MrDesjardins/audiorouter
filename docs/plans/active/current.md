@@ -289,3 +289,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Added safe `export-bundle <session-id> --database <path> --output <path>` and `import-bundle <bundle-path> --database <path> --staging <directory>` commands. Export refuses existing destinations; import delegates to bounded staged validation and session validation.
 - Extended `tests/acceptance/m01-cli.ps1` to import the checked-in fixture, export a bundle, import it into a separate database through an explicit staging directory, and verify the session identity. Temporary files are removed in a `finally` block.
 - Focused checks: CLI (4) and storage (14) tests passed. No audio or machine configuration was changed.
+
+### 2026-09-05 — Reusable Windows audio adapter groundwork
+
+- Added `crates/windows-audio` to the workspace. Its read-only adapter owns COM setup/teardown and enumerates active capture/render endpoint IDs, directions, periods, and mix-format metadata with safe copying before COM memory release.
+- `cargo test -p audiorouter-windows-audio` passed 2 tests, including live enumeration on this Windows host. This is M02 adapter groundwork, not a claim of live graph routing or realtime safety.
+- No stream was initialized or started by the adapter; no defaults, volume, mute, driver, or persistent machine configuration was changed.

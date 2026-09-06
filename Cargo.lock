@@ -101,6 +101,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiorouter-windows-audio"
+version = "0.1.0"
+dependencies = [
+ "windows",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
