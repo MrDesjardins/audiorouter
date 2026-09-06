@@ -378,9 +378,14 @@ frame in memory, and patches STREAMINFO frame-size and total-sample fields on
 finish. The queue worker preserves contiguous-frame validation, lifecycle
 states, and per-chunk checkpoint hooks. Interoperability tests decode the
 resulting stereo stream and verify a three-frame worker output; recording
-coverage is now 25 tests with strict Clippy. Compression tuning, metadata
-insertion for this streaming path, and native realtime integration remain
-open.
+coverage is now 25 tests with strict Clippy. Compression tuning and native
+realtime integration remain open.
+
+The streaming writer also accepts the bounded title, artist, and comment
+metadata contract before writing the FLAC stream. A regression writes a
+streaming file with all three tags, reopens it through the bounded metadata
+reader, and verifies the tags and frame count. This is file-format evidence;
+durable library/API mutation and native realtime integration remain separate.
 
 Added deterministic compressor transfer-curve reference vectors covering below
 threshold, the soft-knee center and boundary, and the hard-knee ceiling. The
