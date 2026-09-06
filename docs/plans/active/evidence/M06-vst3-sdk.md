@@ -477,3 +477,9 @@ The same supervised boundary now covers the shared-memory transport path via
 refreshes the heartbeat, and shuts down cleanly. This remains process and
 transport evidence only: plugin loading, automatic restart, and full OS
 sandboxing are not claimed.
+
+`SupervisedWorkerProcess` also detects an exited child during `poll` and
+accepts explicit failure reports from an outer adapter. Both paths enter the
+same fail-closed state and prevent subsequent processing; an integration
+regression covers the explicit process-failure report. The suite passes 29
+unit tests and 7 process/integration tests with strict Clippy.

@@ -1221,7 +1221,22 @@ impl SupervisedWorkerProcess {
     }
 
     pub fn poll(&mut self, now: Instant) -> WorkerState {
+        if self.supervisor.state() == WorkerState::Running {
+            match self.process.child.try_wait() {
+                Ok(Some(_)) | Err(_) => {
+                    self.supervisor.record_failure(now);
+                }
+                Ok(None) => {}
+            }
+        }
         self.supervisor.poll(now)
+    }
+
+    /// Record a process exit or other failure observed by an outer runtime
+    /// adapter. The process is not restarted here; callers must discard this
+    /// wrapper and deliberately construct a replacement after policy allows.
+    pub fn record_failure(&mut self, now: Instant) -> WorkerState {
+        self.supervisor.record_failure(now)
     }
 
     pub fn process(

@@ -133,6 +133,48 @@ fn supervised_worker_fails_closed_after_heartbeat_timeout() {
 }
 
 #[test]
+fn supervised_worker_accepts_outer_process_failure_reports() {
+    let hash = "b".repeat(64);
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+    };
+    let start = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn(worker_path, &identity, 1, start)
+        .expect("spawn supervised worker");
+    assert_eq!(
+        worker.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let frame =
+        WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 1, vec![0.5]).unwrap();
+    let error = worker.process(frame, Vec::new(), start).unwrap_err();
+    assert!(
+        matches!(error, audiorouter_plugin_host::WorkerProcessError::Protocol(message) if message.contains("not running under supervision"))
+    );
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[test]
 fn disposable_worker_process_round_trips_shared_audio_frames() {
     let hash = "e".repeat(64);
     let worker_path =
