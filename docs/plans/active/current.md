@@ -1,14 +1,20 @@
 # Active plan
 
-Updated: 2026-09-05.
+Updated: 2026-09-06.
 
 ## Current state
 
-Specification baseline created. Application implementation has not started. The workspace initially contained empty `.agents`, `.codex`, and `.git` directories; `git status` reported that it was not a Git repository. Do not invent a branch/commit or initialize Git unless that becomes part of an authorized implementation workflow.
+The specification baseline has been implemented incrementally on `main`. Portable
+domain, control, storage, engine, DSP, recording, UI, MCP, plugin-worker, and
+release-preparation slices are present and continuously validated. Native
+Windows endpoint, process-loopback, VST3, and SysVAD evaluation evidence is
+recorded below; production routing, owned-driver distribution, signing,
+installer, clean-machine, and manual UI gates remain open. Read the
+[documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The current deliverable is documentation only: product requirements, domain/architecture, feature contracts, non-functional targets, nine sequential milestone definitions, and agent lifecycle instructions. Read the [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
-
-M00 feasibility work has now started with a read-only environment inventory from WSL2. The inventory is evidence about the development shell only; it is not Windows audio evidence.
+M00 feasibility began with a read-only inventory and now includes native
+Windows validation from the installed VS/WDK toolchain. All probes preserve
+the user's audio configuration and do not install drivers or alter defaults.
 
 ## M00 execution log
 
@@ -17,7 +23,7 @@ M00 feasibility work has now started with a read-only environment inventory from
 - Objective: establish Windows feasibility evidence and driver/toolchain decisions before M01.
 - Requirement IDs: CAP-01–08, ARCH-05/07/08, VDEV-02/09, NFR-01–03, and ENG-03/04.
 - Completed in this pass: native machine/OS/toolchain/device inventory and evidence record.
-- Remaining checklist: physical loopback latency; controlled process-tree tone attribution; process restart/PID-reuse runtime evidence; managed-driver integration/signing evaluation; DEC-03/06/07 decision update. Endpoint enumeration, shared capture, and process-loopback include/exclude data paths now have native evidence.
+- Remaining checklist: physical loopback latency; controlled process-tree tone attribution; process restart/PID-reuse runtime evidence; managed-driver production integration/signing evaluation; DEC-03/06/07 decision update. Endpoint enumeration, shared capture, and process-loopback include/exclude data paths now have native evidence.
 - Rollback: documentation-only changes can be reverted; no system state was changed.
 
 ## M01 continuation scope
@@ -231,13 +237,18 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 
 ## Next authorized implementation task
 
-Continue [M00](../../milestones/M00-feasibility.md) in an authorized Visual Studio/WDK environment: build/run the official native process-loopback activation path and a native endpoint capture client, then perform initialization/format checks without starting or reading audio. In parallel, evaluate the managed-driver prototype. No driver install, default change, or capture stream start is authorized by this plan; do not claim the feasibility gate until native evidence is attached.
+Continue [M00](../../milestones/M00-feasibility.md) with the remaining
+non-destructive evidence: process-tree tone attribution, physical latency,
+restart/PID-reuse behavior, and the managed-driver prototype's production
+signing/integration review. Native activation, capture/render lifecycle, and
+process-loopback data-path probes are already recorded. No driver install,
+default change, or new capture stream is authorized by this plan.
 
 ## M00 preparation checklist
 
-- Identify an available Windows 11 x64 test environment and audio hardware. WSL interop is currently blocked as recorded above.
+- Preserve the verified Windows 11 x64 test environment and audio hardware inventory.
 - Review current driver integration/signing options using the source register.
-- Record toolchain/OS/device versions and supported capture probes.
+- Record toolchain/OS/device versions and supported capture probes. This is complete for the current host; preserve failed and unsupported results.
 - Resolve DEC-03/06/07 with evidence before broad implementation.
 - Preserve all failed/unsupported results and distinguish prototype from production-driver capability.
 
