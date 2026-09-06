@@ -524,3 +524,8 @@ convenience coverage. Relative paths fail as CLI argument errors before
 dispatch; invalid absolute candidates remain visible as inspection errors.
 CLI/control tests and strict Clippy pass, preserving adapter parity and the
 explicit `pluginScan` boundary.
+
+The `plugins.inspect` output schema now explicitly describes the nullable
+identity object, its format/architecture enums, byte count, SHA-256, and
+compatibility classification. Discovery regression coverage verifies the
+schema rather than accepting an untyped object.

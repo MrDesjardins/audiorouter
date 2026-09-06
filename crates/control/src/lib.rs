@@ -838,7 +838,20 @@ fn method_output_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "path": { "type": "string", "minLength": 1 },
-                "identity": { "type": ["object", "null"] },
+                "identity": {
+                    "type": ["object", "null"],
+                    "properties": {
+                        "path": { "type": "string", "minLength": 1 },
+                        "binaryPath": { "type": "string", "minLength": 1 },
+                        "format": { "enum": ["vst3", "vst2", "unknown"] },
+                        "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
+                        "fileBytes": { "type": "integer", "minimum": 1 },
+                        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                        "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
+                    },
+                    "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "compatibility"],
+                    "additionalProperties": false
+                },
                 "error": { "type": ["string", "null"] }
             },
             "required": ["path", "identity", "error"],
@@ -4670,6 +4683,29 @@ mod tests {
         assert!(inspected.error.is_none());
         assert!(inspected.result.unwrap()["identity"].is_null());
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_inspect_discovery_has_typed_identity_schema() {
+        let method = ControlPlane::default().describe()["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "plugins.inspect")
+            .unwrap()
+            .clone();
+        assert_eq!(method["permission"], "pluginScan");
+        assert_eq!(
+            method["outputSchema"]["properties"]["identity"]["type"][1],
+            "null"
+        );
+        assert_eq!(
+            method["outputSchema"]["properties"]["identity"]["required"]
+                .as_array()
+                .unwrap()
+                .len(),
+            7
+        );
     }
 
     #[test]
