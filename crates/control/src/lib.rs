@@ -150,6 +150,7 @@ fn method_description(name: &str) -> &'static str {
             "Move a recording to the operating system Recycle Bin after explicit confirmation."
         }
         "devices.list" => "List authoritative audio endpoint descriptors.",
+        "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
@@ -242,6 +243,12 @@ fn method_input_schema(name: &str) -> Value {
                 "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
             }),
             &[],
+        ),
+        "plugins.scan" => object_schema(
+            json!({
+                "directory": { "type": "string", "minLength": 1 }
+            }),
+            &["directory"],
         ),
         "virtualDevices.list" => object_schema(
             json!({
@@ -786,6 +793,40 @@ fn method_output_schema(name: &str) -> Value {
                 ]
             })
         }
+        "plugins.scan" => json!({
+            "type": "object",
+            "properties": {
+                "directory": { "type": "string", "minLength": 1 },
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": { "type": "string", "minLength": 1 },
+                            "identity": {
+                                "type": ["object", "null"],
+                                "properties": {
+                                    "path": { "type": "string", "minLength": 1 },
+                                    "binaryPath": { "type": "string", "minLength": 1 },
+                                    "format": { "enum": ["vst3", "vst2", "unknown"] },
+                                    "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
+                                    "fileBytes": { "type": "integer", "minimum": 1 },
+                                    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                                    "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
+                                },
+                                "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "compatibility"],
+                                "additionalProperties": false
+                            },
+                            "error": { "type": ["string", "null"] }
+                        },
+                        "required": ["path", "identity", "error"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["directory", "entries"],
+            "additionalProperties": false
+        }),
         "virtualDevices.list" => json!({
             "oneOf": [
                 {
@@ -2493,6 +2534,7 @@ impl ControlPlane {
                         "reason": "sign-in startup registration is not implemented in this build"
                     })),
                     "devices.list" => self.dispatch_devices_list(request.params),
+                    "plugins.scan" => self.dispatch_plugins_scan(request.params),
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
                     "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
@@ -3504,6 +3546,55 @@ impl ControlPlane {
         Ok(json!({ "items": devices, "nextCursor": next_cursor }))
     }
 
+    fn dispatch_plugins_scan(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let directory = params
+            .as_ref()
+            .and_then(|value| value.get("directory"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("directory is required".into()))?;
+        let root = std::path::Path::new(directory);
+        if !root.is_absolute() {
+            return Err(ControlError::InvalidRequest(
+                "directory path must be absolute".into(),
+            ));
+        }
+        let entries = audiorouter_plugin_host::scan_directory(root).map_err(|error| {
+            ControlError::InvalidRequest(format!("plugin scan failed: {error:?}"))
+        })?;
+        Ok(json!({
+            "directory": directory,
+            "entries": entries.into_iter().map(|entry| {
+                let identity = entry.identity.map(|identity| json!({
+                    "path": identity.path,
+                    "binaryPath": identity.binary_path,
+                    "format": match identity.format {
+                        audiorouter_plugin_host::PluginFormat::Vst3 => "vst3",
+                        audiorouter_plugin_host::PluginFormat::Vst2 => "vst2",
+                        audiorouter_plugin_host::PluginFormat::Unknown => "unknown",
+                    },
+                    "architecture": match identity.architecture {
+                        audiorouter_plugin_host::PeArchitecture::X64 => "x64",
+                        audiorouter_plugin_host::PeArchitecture::X86 => "x86",
+                        audiorouter_plugin_host::PeArchitecture::Arm64 => "arm64",
+                        audiorouter_plugin_host::PeArchitecture::Unknown => "unknown",
+                    },
+                    "fileBytes": identity.file_bytes,
+                    "sha256": identity.sha256,
+                    "compatibility": match identity.compatibility() {
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
+                        audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
+                    }
+                }));
+                json!({
+                    "path": entry.path,
+                    "identity": identity,
+                    "error": entry.error.map(|error| format!("{error:?}"))
+                })
+            }).collect::<Vec<_>>()
+        }))
+    }
+
     fn dispatch_virtual_devices_plan(
         &mut self,
         params: Option<Value>,
@@ -3886,6 +3977,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.removeEntry" => &["recordingId"],
         "recordings.recycle" => &["recordingId", "confirm"],
         "devices.list" => &["cursor", "limit"],
+        "plugins.scan" => &["directory"],
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
@@ -4464,6 +4556,30 @@ mod tests {
         let result = presets.result.unwrap();
         assert_eq!(result["voiceChains"].as_array().unwrap().len(), 2);
         assert_eq!(result["eq"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn plugin_scan_is_read_only_and_keeps_invalid_candidates_visible() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-control-plugin-scan-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(root.join("candidate.dll"), b"not a PE binary").unwrap();
+        let response = ControlPlane::default().dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "plugins.scan".into(),
+            params: Some(json!({ "directory": root.to_string_lossy() })),
+        });
+        assert!(response.error.is_none());
+        let result = response.result.unwrap();
+        assert_eq!(result["directory"], root.to_string_lossy().to_string());
+        assert_eq!(result["entries"].as_array().unwrap().len(), 1);
+        assert!(result["entries"][0]["identity"].is_null());
+        assert!(result["entries"][0]["error"].is_string());
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

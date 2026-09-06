@@ -70,6 +70,25 @@ export interface RouteInspection {
   paths: RoutePath[];
 }
 
+export interface PluginScanEntry {
+  path: string;
+  identity: {
+    path: string;
+    binaryPath: string;
+    format: "vst3" | "vst2" | "unknown";
+    architecture: "x64" | "x86" | "arm64" | "unknown";
+    fileBytes: number;
+    sha256: string;
+    compatibility: "supportedVst3X64" | "unsupportedFormat";
+  } | null;
+  error: string | null;
+}
+
+export interface PluginScanResult {
+  directory: string;
+  entries: PluginScanEntry[];
+}
+
 export interface GraphPlanResult {
   planId: EntityId;
   baseRevision: number;
@@ -540,6 +559,7 @@ export type ImplementedMethod =
   | "safety.setPrivacyMute"
   | "startup.get"
   | "devices.list"
+  | "plugins.scan"
   | "virtualDevices.list"
   | "virtualDevices.plan"
   | "virtualDevices.apply"
@@ -594,6 +614,7 @@ export type MethodParams = {
   "safety.setPrivacyMute": { muted: boolean };
   "startup.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
+  "plugins.scan": { directory: string };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
   "virtualDevices.apply": { planId: EntityId; idempotencyKey: string };
@@ -658,6 +679,7 @@ export type MethodResult = {
   "safety.setPrivacyMute": PrivacyMuteResult;
   "startup.get": StartupStatus;
   "devices.list": DeviceInfo[] | DeviceListPage;
+  "plugins.scan": PluginScanResult;
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;
   "virtualDevices.apply": VirtualDeviceApplyResult;

@@ -11,6 +11,7 @@ audiorouter-dsp = { path = "../dsp" }
 audiorouter-protocol = { path = "../protocol" }
 audiorouter-storage = { path = "../storage" }
 audiorouter-recording = { path = "../recording" }
+audiorouter-plugin-host = { path = "../plugin-host" }
 audiorouter-windows-audio = { path = "../windows-audio" }
 trash.workspace = true
 serde = { workspace = true }

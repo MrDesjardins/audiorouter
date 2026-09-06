@@ -489,3 +489,13 @@ The restart-backed regression also queries `operations.get` after the virtual
 device apply has been committed and the control plane is reopened. The durable
 journal reports the same `virtualDevices.apply` operation name, confirming
 parity between the memory and SQLite outcome paths.
+
+## Shared plugin scan API (2026-09-06)
+
+The bounded plugin inspection path is now exposed as the read-only
+`plugins.scan` API with an explicit absolute directory parameter and a typed
+result containing every candidate's identity or visible inspection error. It
+uses the existing non-loading scanner; plugin code is never loaded or
+executed. Rust control coverage verifies an invalid candidate remains visible,
+and the TypeScript contract, CLI/MCP generic dispatch, strict Clippy, and UI
+typecheck remain green.
