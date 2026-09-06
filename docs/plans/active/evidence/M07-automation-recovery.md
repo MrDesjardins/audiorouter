@@ -607,3 +607,9 @@ opening an output: missing, non-directory, symbolic-link, and Windows
 reparse-point parents are rejected, while the destination remains exclusive.
 Diagnostics export and graph-plan output therefore share the same redirected
 path protection; focused CLI tests and strict Clippy pass.
+
+The complete `tests/acceptance/m07-headless.ps1` wrapper was rerun at clean
+revision `e7b5ccc`. M01 CLI (21 tests), MCP stdio, 68 control tests, 31
+plugin-host unit tests, 8 worker-process tests, and strict Clippy passed;
+temporary state was cleaned and no audio device, driver, or machine setting was
+accessed.
