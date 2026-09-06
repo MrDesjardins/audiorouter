@@ -4145,6 +4145,16 @@ mod tests {
             params: Some(json!({ "planId": plan_id, "idempotencyKey": "restart-apply" })),
         });
         assert_eq!(applied.result.unwrap()["state"], "applied");
+        let operation = restarted.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(8)),
+            method: "operations.get".into(),
+            params: Some(json!({ "operationId": "restart-apply" })),
+        });
+        assert_eq!(
+            operation.result.unwrap()["operation"],
+            "virtualDevices.apply"
+        );
         let mut replayed = ControlPlane::with_storage("plan-third", Storage::open(&path).unwrap());
         let replay = replayed.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),

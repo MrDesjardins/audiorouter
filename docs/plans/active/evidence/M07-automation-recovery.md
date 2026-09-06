@@ -465,3 +465,8 @@ virtual-device lifecycle results instead of incorrectly labeling them as
 `graph.commit`; durable journal outcomes already used their stored operation.
 The control regression passes with 64 tests and strict Clippy, without opening
 audio or changing machine configuration.
+
+The restart-backed regression also queries `operations.get` after the virtual
+device apply has been committed and the control plane is reopened. The durable
+journal reports the same `virtualDevices.apply` operation name, confirming
+parity between the memory and SQLite outcome paths.
