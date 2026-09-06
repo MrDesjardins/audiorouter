@@ -26,6 +26,7 @@ pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 pub const MAX_PARAMETER_EVENTS: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
+pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -495,6 +496,7 @@ pub enum WorkerMessageError {
     InvalidProtocolVersion,
     InvalidPluginHash,
     InvalidFailureCode,
+    InvalidLatency,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -512,6 +514,7 @@ pub enum WorkerSessionError {
     UnexpectedMessage,
     IdentityMismatch,
     Frame(WorkerFrameError),
+    InvalidLatency,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -669,10 +672,35 @@ pub enum WorkerMessage {
     Processed {
         frame: WorkerFrame,
     },
+    Latency(WorkerLatency),
     Shutdown,
     Failure {
         code: String,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorkerLatency {
+    pub samples: u32,
+    pub sample_rate_hz: u32,
+}
+
+impl WorkerLatency {
+    pub fn new(samples: u32, sample_rate_hz: u32) -> Result<Self, WorkerMessageError> {
+        if !(8_000..=192_000).contains(&sample_rate_hz)
+            || samples > sample_rate_hz.saturating_mul(MAX_WORKER_LATENCY_MS) / 1_000
+        {
+            return Err(WorkerMessageError::InvalidLatency);
+        }
+        Ok(Self {
+            samples,
+            sample_rate_hz,
+        })
+    }
+
+    pub fn milliseconds(self) -> f32 {
+        self.samples as f32 * 1_000.0 / self.sample_rate_hz as f32
+    }
 }
 
 /// Stateful handshake and frame gate for one disposable worker instance.
@@ -716,6 +744,7 @@ impl WorkerSession {
     ) -> Result<Option<WorkerFrame>, WorkerSessionError> {
         validate_worker_message(message).map_err(|error| match error {
             WorkerMessageError::InvalidFrame(error) => WorkerSessionError::Frame(error),
+            WorkerMessageError::InvalidLatency => WorkerSessionError::InvalidLatency,
             _ => WorkerSessionError::UnexpectedMessage,
         })?;
         match (&self.state, message) {
@@ -746,6 +775,7 @@ impl WorkerSession {
                     .map_err(WorkerSessionError::Frame)?;
                 Ok(Some(frame.clone()))
             }
+            (WorkerSessionState::Active, WorkerMessage::Latency(_)) => Ok(None),
             (
                 WorkerSessionState::Active,
                 WorkerMessage::Shutdown | WorkerMessage::Failure { .. },
@@ -848,6 +878,9 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                 frame.samples.clone(),
             )
             .map_err(WorkerMessageError::InvalidFrame)?;
+        }
+        WorkerMessage::Latency(latency) => {
+            WorkerLatency::new(latency.samples, latency.sample_rate_hz)?;
         }
         WorkerMessage::Failure { code } if code.is_empty() => {
             return Err(WorkerMessageError::InvalidFailureCode);
@@ -1465,5 +1498,25 @@ mod tests {
         );
         assert_eq!(session.accept(&WorkerMessage::Shutdown, 10), Ok(None));
         assert_eq!(session.state(), WorkerSessionState::Closed);
+    }
+
+    #[test]
+    fn worker_latency_reports_bounded_sample_rate_and_dynamic_updates() {
+        let first = WorkerLatency::new(240, 48_000).unwrap();
+        assert!((first.milliseconds() - 5.0).abs() < f32::EPSILON);
+        let encoded = encode_worker_message(&WorkerMessage::Latency(first)).unwrap();
+        assert_eq!(
+            decode_worker_message(&encoded).unwrap(),
+            WorkerMessage::Latency(first)
+        );
+
+        assert_eq!(
+            WorkerLatency::new(0, 7_999),
+            Err(WorkerMessageError::InvalidLatency)
+        );
+        assert_eq!(
+            WorkerLatency::new(480_001, 48_000),
+            Err(WorkerMessageError::InvalidLatency)
+        );
     }
 }

@@ -175,3 +175,10 @@ process frames until orderly shutdown or failure. The handshake, identity,
 and sequence regression passes; the plugin-host suite now has 20 passing tests
 with strict Clippy clean. This remains a portable protocol/lifecycle proof;
 native process creation and OS isolation are still open.
+
+Added validated `WorkerLatency` reports and a `Latency` control message. The
+boundary accepts only 8--192 kHz rates and at most ten seconds of declared
+latency, exposes sample-to-millisecond conversion, and permits dynamic reports
+while active. Round-trip and bound regressions pass; the plugin-host suite now
+has 21 passing tests with strict Clippy clean. These are declared worker
+values, not measured native plugin latency.
