@@ -1480,6 +1480,30 @@ impl ControlPlane {
         }
     }
 
+    fn remember_operation_outcome(
+        &mut self,
+        idempotency_key: &str,
+        result: Value,
+        virtual_request_hash: Option<&str>,
+    ) {
+        if self.operation_outcomes.len() >= MAX_MEMORY_OPERATION_OUTCOMES
+            && !self.operation_outcomes.contains_key(idempotency_key)
+        {
+            if let Some(oldest) = self.operation_outcomes.keys().next().cloned() {
+                self.operation_outcomes.remove(&oldest);
+                self.virtual_bus_idempotency_hashes.remove(&oldest);
+            }
+        }
+        self.operation_outcomes
+            .insert(idempotency_key.to_owned(), result);
+        if let Some(hash) = virtual_request_hash {
+            self.virtual_bus_idempotency_hashes
+                .insert(idempotency_key.to_owned(), hash.to_owned());
+        } else {
+            self.virtual_bus_idempotency_hashes.remove(idempotency_key);
+        }
+    }
+
     pub fn create_virtual_bus(
         &mut self,
         id: EntityId,
@@ -2230,13 +2254,7 @@ impl ControlPlane {
         } else {
             response["activation"] = json!({ "state": "pending", "runtime": "fake" });
         }
-        if self.operation_outcomes.len() >= MAX_MEMORY_OPERATION_OUTCOMES {
-            if let Some(oldest) = self.operation_outcomes.keys().next().cloned() {
-                self.operation_outcomes.remove(&oldest);
-            }
-        }
-        self.operation_outcomes
-            .insert(idempotency_key.to_owned(), response.clone());
+        self.remember_operation_outcome(idempotency_key, response.clone(), None);
         Ok(response)
     }
 
@@ -3469,10 +3487,11 @@ impl ControlPlane {
             {
                 let previous: Value = serde_json::from_str(&previous)
                     .map_err(|error| ControlError::Json(error.to_string()))?;
-                self.operation_outcomes
-                    .insert(idempotency_key.to_owned(), previous.clone());
-                self.virtual_bus_idempotency_hashes
-                    .insert(idempotency_key.to_owned(), request_hash.clone());
+                self.remember_operation_outcome(
+                    idempotency_key,
+                    previous.clone(),
+                    Some(&request_hash),
+                );
                 return Ok(previous);
             }
         }
@@ -3511,10 +3530,7 @@ impl ControlPlane {
             }
         }
         self.virtual_bus_plans.remove(&EntityId::new(plan_id));
-        self.operation_outcomes
-            .insert(idempotency_key.to_owned(), result.clone());
-        self.virtual_bus_idempotency_hashes
-            .insert(idempotency_key.to_owned(), request_hash);
+        self.remember_operation_outcome(idempotency_key, result.clone(), Some(&request_hash));
         Ok(result)
     }
 

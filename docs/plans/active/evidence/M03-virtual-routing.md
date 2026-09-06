@@ -113,6 +113,10 @@ stable `idempotencyConflict` code both in memory and after restart; same-request
 replay remains allowed. This closes the request-confusion gap without opening
 audio or changing Windows endpoint configuration.
 
+In-memory operation outcomes now use one bounded retention path for graph and
+virtual-device operations. Evicting a virtual result also evicts its request
+hash, keeping the replay/conflict metadata bounded with the cached outcome.
+
 Virtual-device plans are now durable SQLite records containing the validated
 operation and bounded expiry. Valid plans reload after a control restart and are
 removed after successful apply; expired plans are hidden. Storage and control
