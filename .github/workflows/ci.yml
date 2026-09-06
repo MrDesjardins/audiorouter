@@ -54,6 +54,7 @@ jobs:
       - name: Test release verifier and runbook
         shell: pwsh
         run: |
+          ./tools/release/test-prepare-artifacts.ps1
           ./tools/release/test-verify-artifacts.ps1
           ./tools/release/test-runbook-command.ps1
       - name: Strict Clippy
