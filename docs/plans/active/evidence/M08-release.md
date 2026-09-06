@@ -231,3 +231,9 @@ The release manifest now also records sanitized build provenance: release
 profile, Rust target, compiler release, and Cargo version. The full wrapper was
 rerun from clean revision `f59fe5c`; provenance validation and artifact checks
 passed, and the temporary output was removed.
+
+At clean revision `5670dde`, the broader locked workspace verification passed
+325 unit/integration tests, all doc-tests, strict Clippy, and formatting. The
+M08 wrapper then prepared and verified the optimized unsigned artifacts again,
+asserted the publication blockers, and removed its temporary output. No
+installer, driver, signing action, or audio configuration was involved.
