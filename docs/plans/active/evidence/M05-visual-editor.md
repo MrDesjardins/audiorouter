@@ -134,3 +134,9 @@ cursor are forwarded; any event or `resyncRequired` result triggers an
 authoritative snapshot refresh, while failures retain the last view as stale.
 The disconnected adapter does not poll or mutate. The adapter regression,
 seven UI tests, typecheck, production build, and diff checks pass.
+
+The rendered editor now exposes a read-only Route inspection panel for the
+selected node. It calls `UiBackend.inspectRoute`, reports the backend's
+reachable/path result, and shows an explicit not-loaded or unavailable state
+without inferring edges or destinations. The disconnected backend returns no
+route. Seven UI tests, typecheck, production build, and diff checks pass.
