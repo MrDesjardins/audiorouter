@@ -42,6 +42,8 @@ The mixer compiler now rejects enabled edges outside that exact topology, duplic
 
 `MixerStage` now enforces the specification's maximum of eight converging inputs during preparation and returns an explicit `InputLimit` error above that bound. The regression suite now contains 32 passing engine tests with strict Clippy.
 
+`compile_fanout_session` and `CompiledFanoutGraph` now support the narrow bounded topology of one source to two through eight physical outputs. Each branch owns an independent validated channel matrix and caller-provided destination block; the existing generic single-block compiler still rejects fan-out rather than serializing it. The two-sink regression now proves both branches execute, with 32 engine tests and strict Clippy green.
+
 `AudioBlock` now exposes per-channel sample peak, per-channel RMS, and aggregate RMS without allocation. Non-finite samples are excluded from meter calculations and invalid channels return `None`; the engine suite contains 20 passing tests and strict engine Clippy passes.
 
 `RmsWindow` adds a preallocated rolling RMS window with explicit capacity and reset behavior. It treats non-finite input as silence and performs no allocation while pushing blocks; the engine suite contains 21 passing tests and strict engine Clippy passes.

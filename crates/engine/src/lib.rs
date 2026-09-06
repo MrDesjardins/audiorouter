@@ -10,6 +10,7 @@ pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
 pub const MAX_MIXER_INPUTS: usize = 8;
+pub const MAX_FANOUT_BRANCHES: usize = 8;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum MeterError {
@@ -745,6 +746,12 @@ pub enum MixerError {
     Block(BlockError),
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum FanoutError {
+    BranchCount,
+    Block(BlockError),
+}
+
 /// Prepared bounded mixer convergence. Matrices are owned and validated during
 /// construction; `process` only clears and accumulates caller-owned blocks.
 /// It performs no allocation, locking, I/O, or device access.
@@ -810,6 +817,40 @@ pub struct CompiledMixerGraph {
     generation: RuntimeGeneration,
     mixer: MixerStage,
     output_matrix: Vec<f32>,
+}
+
+/// A prepared bounded fan-out graph. One enabled source feeds up to eight
+/// physical outputs; each branch has its own channel matrix and destination
+/// block supplied by the caller.
+pub struct CompiledFanoutGraph {
+    generation: RuntimeGeneration,
+    matrices: Vec<Vec<f32>>,
+}
+
+impl CompiledFanoutGraph {
+    pub fn generation(&self) -> RuntimeGeneration {
+        self.generation
+    }
+
+    pub fn branch_count(&self) -> usize {
+        self.matrices.len()
+    }
+
+    pub fn process(
+        &self,
+        source: &AudioBlock,
+        destinations: &mut [&mut AudioBlock],
+    ) -> Result<(), FanoutError> {
+        if destinations.len() != self.matrices.len() {
+            return Err(FanoutError::BranchCount);
+        }
+        for (destination, matrix) in destinations.iter_mut().zip(&self.matrices) {
+            destination
+                .map_from(source, matrix)
+                .map_err(FanoutError::Block)?;
+        }
+        Ok(())
+    }
 }
 
 impl CompiledMixerGraph {
@@ -1174,6 +1215,73 @@ pub fn compile_mixer_session(
         generation,
         mixer,
         output_matrix: output_edge.matrix.clone(),
+    })
+}
+
+/// Compile the supported fan-out topology: one enabled source and multiple
+/// physical-output destinations, with no unrelated enabled edges.
+pub fn compile_fanout_session(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+) -> Result<CompiledFanoutGraph, GraphCompileError> {
+    use audiorouter_domain::{validate_session, NodeKind, PortDirection};
+
+    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let enabled_edges = session
+        .edges
+        .iter()
+        .filter(|edge| edge.enabled)
+        .collect::<Vec<_>>();
+    if !(2..=MAX_FANOUT_BRANCHES).contains(&enabled_edges.len()) {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let source_id = enabled_edges[0].source_node.clone();
+    if enabled_edges
+        .iter()
+        .any(|edge| edge.source_node != source_id)
+    {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let source = session
+        .nodes
+        .iter()
+        .find(|node| node.id == source_id)
+        .filter(|node| node.enabled && !node.bypass)
+        .ok_or(GraphCompileError::UnsupportedTopology)?;
+    let mut matrices = Vec::with_capacity(enabled_edges.len());
+    let mut destinations = std::collections::HashSet::with_capacity(enabled_edges.len());
+    for edge in enabled_edges {
+        let source_port = source
+            .ports
+            .iter()
+            .find(|port| port.name == edge.source_port)
+            .filter(|port| port.direction == PortDirection::Output)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        let destination = session
+            .nodes
+            .iter()
+            .find(|node| node.id == edge.destination_node)
+            .filter(|node| node.kind == NodeKind::PhysicalOutput && node.enabled && !node.bypass)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if !destinations.insert(destination.id.clone()) {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        let destination_port = destination
+            .ports
+            .iter()
+            .find(|port| port.name == edge.destination_port)
+            .filter(|port| port.direction == PortDirection::Input)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if edge.matrix.len()
+            != usize::from(destination_port.channels) * usize::from(source_port.channels)
+        {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        matrices.push(edge.matrix.clone());
+    }
+    Ok(CompiledFanoutGraph {
+        generation,
+        matrices,
     })
 }
 
@@ -2007,6 +2115,16 @@ mod tests {
             compile_session(&session, RuntimeGeneration::new(5)),
             Err(GraphCompileError::UnsupportedTopology)
         ));
+        let graph = compile_fanout_session(&session, RuntimeGeneration::new(6)).unwrap();
+        assert_eq!(graph.branch_count(), 2);
+        let mut source = AudioBlock::new(1, 2).unwrap();
+        source.channel_mut(0).unwrap().fill(0.75);
+        let mut left = AudioBlock::new(1, 2).unwrap();
+        let mut right = AudioBlock::new(1, 2).unwrap();
+        let mut destinations: [&mut AudioBlock; 2] = [&mut left, &mut right];
+        graph.process(&source, &mut destinations).unwrap();
+        assert_eq!(left.channel(0).unwrap(), &[0.75, 0.75]);
+        assert_eq!(right.channel(0).unwrap(), &[0.75, 0.75]);
     }
 
     #[test]
