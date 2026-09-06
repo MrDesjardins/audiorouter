@@ -227,3 +227,10 @@ files, retains the newest ten timestamped names, preserves pre-migration and
 unrelated files, and reports removed paths. Temporary-directory storage and
 CLI regressions pass with strict Clippy. Recordings and the SQLite database
 are never pruned by this operation.
+## 2026-09-06 — Storage reparse-point boundaries
+
+Storage recovery boundaries now reject Windows reparse points in addition to
+portable symlinks. Backup destinations, restore sources, bundle files and
+staging roots, and retention directories are checked before their respective
+operations. The storage suite passes 30 tests with strict Clippy; deployment
+filesystem policy beyond these selected roots remains open.

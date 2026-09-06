@@ -9,6 +9,8 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
+#[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
 use zip::ZipArchive;
 
 #[derive(Debug)]
@@ -33,6 +35,17 @@ pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
 pub const GRAPH_PLAN_RETENTION_SECONDS: i64 = 5 * 60;
 pub const DAILY_RECOVERY_BACKUP_LIMIT: usize = 10;
 
@@ -245,11 +258,7 @@ impl Storage {
                 "backup destination parent must already exist".into(),
             ));
         }
-        if destination.exists()
-            && std::fs::symlink_metadata(destination)?
-                .file_type()
-                .is_symlink()
-        {
+        if destination.exists() && is_reparse_point(&std::fs::symlink_metadata(destination)?) {
             return Err(StorageError::InvalidBackupPath(
                 "backup destination cannot be a symbolic link".into(),
             ));
@@ -292,7 +301,7 @@ impl Storage {
             ));
         }
         let metadata = std::fs::symlink_metadata(directory)?;
-        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        if !metadata.is_dir() || is_reparse_point(&metadata) {
             return Err(StorageError::InvalidBackupPath(
                 "backup retention directory must be a regular non-symlink directory".into(),
             ));
@@ -303,7 +312,7 @@ impl Storage {
             let entry = entry?;
             let path = entry.path();
             let metadata = std::fs::symlink_metadata(&path)?;
-            if !metadata.is_file() || metadata.file_type().is_symlink() {
+            if !metadata.is_file() || is_reparse_point(&metadata) {
                 continue;
             }
             let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
@@ -340,7 +349,7 @@ impl Storage {
                 "backup paths must be absolute".into(),
             ));
         }
-        if !source.is_file() || std::fs::symlink_metadata(source)?.file_type().is_symlink() {
+        if !source.is_file() || is_reparse_point(&std::fs::symlink_metadata(source)?) {
             return Err(StorageError::InvalidBackupPath(
                 "backup source must be a regular non-symlink file".into(),
             ));
@@ -1056,16 +1065,12 @@ impl Storage {
                 "bundle and staging paths must be absolute".into(),
             ));
         }
-        if !bundle.is_file() || std::fs::symlink_metadata(bundle)?.file_type().is_symlink() {
+        if !bundle.is_file() || is_reparse_point(&std::fs::symlink_metadata(bundle)?) {
             return Err(StorageError::InvalidBundle(
                 "bundle must be a regular non-symlink file".into(),
             ));
         }
-        if !staging_root.is_dir()
-            || std::fs::symlink_metadata(staging_root)?
-                .file_type()
-                .is_symlink()
-        {
+        if !staging_root.is_dir() || is_reparse_point(&std::fs::symlink_metadata(staging_root)?) {
             return Err(StorageError::InvalidBundle(
                 "staging root must be an existing non-symlink directory".into(),
             ));
