@@ -41,6 +41,12 @@ verifies the first entry is evicted and the next entry remains, and confirms
 the order ledger stays bounded. Control coverage is 67 tests with strict
 Clippy; no audio or machine state is involved.
 
+The complete `tests/acceptance/m07-headless.ps1` wrapper was rerun from clean
+revision `854c6b5`. M01 CLI acceptance, MCP stdio interoperability, 67 control
+tests, 31 plugin-host unit tests, 8 worker-process tests, and strict Clippy all
+passed; the scope remained free of audio-device and machine-configuration
+actions.
+
 ## 2026-09-06 — Scan cancellation during bounded binary reads
 
 Plugin discovery now gives each candidate its own ten-second inspection window
