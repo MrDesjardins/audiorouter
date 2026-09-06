@@ -623,3 +623,8 @@ The complete headless wrapper was rerun at clean revision `fc05361`: M01 CLI
 (21 tests), MCP stdio, 68 control tests, 31 plugin-host tests, 8 worker-process
 tests, and strict Clippy passed. Temporary state was cleaned; no audio device,
 driver, or machine setting was accessed.
+
+After the explicit `diagnostics export` command was added, the complete wrapper
+was rerun at clean revision `c133b23`. M01 CLI (21 tests), MCP stdio, 68
+control tests, 31 plugin-host tests, 8 worker-process tests, and strict Clippy
+passed; graph-plan and diagnostics outputs remained disposable and protected.
