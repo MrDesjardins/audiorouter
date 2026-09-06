@@ -254,6 +254,11 @@ to the UI only after the authoritative response, and leaves lifecycle/audio
 state untouched. The shared contract now models the `{ session, state }`
 response; UI coverage is 19 tests with typecheck and production build passing.
 
+The selected session name is now an editable bounded draft in the connected
+inspector. It travels through the existing graph plan/commit flow, so revision
+conflicts and backend validation remain authoritative; disconnected mode keeps
+the field read-only. UI tests, typecheck, and production build pass.
+
 The connected editor now offers confirmed deletion of the selected stopped
 session through `sessions.delete`. The UI changes selection only after the
 authoritative response; disconnected mode disables the action, and the

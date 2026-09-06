@@ -9,6 +9,8 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .eyebrow, .node-kind { color: #8fa5c8; font-size: .7rem; letter-spacing: .11em; text-transform: uppercase; } .muted, .node-card p, small { color: #9ba8bd; }
 .status-cluster { display: flex; align-items: center; gap: .55rem; color: #ffcf87; font-size: .85rem; } .status-detail { color: #9ba8bd; font-size: .75rem; } .status-dot { width: .6rem; height: .6rem; border-radius: 50%; background: #dc8f35; } .status-cluster button { padding: .35rem .55rem; font-size: .8rem; }
 .workspace-grid { display: grid; grid-template-columns: 250px 1fr; min-height: calc(100vh - 82px); }
+.session-name { display: grid; gap: .3rem; color: #bdc9dc; font-size: .78rem; max-width: 28rem; }
+.session-name input { border: 1px solid #384458; border-radius: 6px; color: inherit; background: #1a2130; padding: .45rem; font: inherit; font-size: 1.35rem; font-weight: 600; }
 .sidebar { padding: 1.4rem 1rem; border-right: 1px solid #293344; background: #121722; } .section-heading { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .9rem; }
 .session-item { width: 100%; display: grid; text-align: left; gap: .3rem; margin-bottom: .5rem; } .session-item.selected { border-color: #70a8ff; background: #1d2b45; } .session-item small { font-size: .75rem; }
 .sidebar-note { margin-top: 2rem; padding: .8rem; border: 1px solid #34435b; border-radius: 8px; color: #bdc9dc; font-size: .82rem; } .sidebar-note p { margin-top: .4rem; line-height: 1.4; }
