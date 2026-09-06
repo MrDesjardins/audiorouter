@@ -441,6 +441,74 @@ static int controlled_process_attribution(DWORD duration_ms) {
     return result == 0 && exit_code == 0 ? 0 : 1;
 }
 
+static int event_capture_initialize_probe(UINT target_index) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator),
+                                  reinterpret_cast<void**>(&enumerator));
+    print_hr("event_co_create_enumerator", hr);
+    if (FAILED(hr)) return 1;
+
+    IMMDeviceCollection* devices = nullptr;
+    hr = enumerator->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &devices);
+    print_hr("event_enum_capture", hr);
+    if (FAILED(hr)) {
+        enumerator->Release();
+        return 1;
+    }
+    UINT count = 0;
+    devices->GetCount(&count);
+    if (target_index >= count) {
+        std::cout << "event_capture_index_out_of_range=" << target_index
+                  << " count=" << count << '\n';
+        devices->Release();
+        enumerator->Release();
+        return 1;
+    }
+
+    IMMDevice* device = nullptr;
+    hr = devices->Item(target_index, &device);
+    print_hr("event_capture_item", hr);
+    if (FAILED(hr)) {
+        devices->Release();
+        enumerator->Release();
+        return 1;
+    }
+    IAudioClient* client = nullptr;
+    hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                          reinterpret_cast<void**>(&client));
+    print_hr("event_capture_activate", hr);
+    WAVEFORMATEX* format = nullptr;
+    if (SUCCEEDED(hr)) hr = client->GetMixFormat(&format);
+    print_hr("event_capture_get_mix_format", hr);
+    HANDLE ready_event = nullptr;
+    if (SUCCEEDED(hr)) {
+        ready_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (!ready_event) {
+            hr = HRESULT_FROM_WIN32(GetLastError());
+            print_hr("event_capture_create_event", hr);
+        }
+    }
+    if (SUCCEEDED(hr)) {
+        // Event-driven shared mode requires zero hnsBufferDuration. The
+        // endpoint-owned mix format is passed unchanged and no conversion is
+        // requested, matching the Rust adapter's production boundary.
+        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED,
+                                AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
+                                    AUDCLNT_STREAMFLAGS_NOPERSIST,
+                                0, 0, format, nullptr);
+        print_hr("event_capture_initialize_exact_zero", hr);
+    }
+    if (SUCCEEDED(hr)) print_hr("event_capture_set_event", client->SetEventHandle(ready_event));
+    if (format) CoTaskMemFree(format);
+    if (ready_event) CloseHandle(ready_event);
+    if (client) client->Release();
+    device->Release();
+    devices->Release();
+    enumerator->Release();
+    return SUCCEEDED(hr) ? 0 : 1;
+}
+
 int main(int argc, char** argv) {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr)) { print_hr("CoInitializeEx", hr); return 1; }
@@ -456,6 +524,12 @@ int main(int argc, char** argv) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
         int result = render_data_probe(target_index, duration_ms, false);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "event-capture-init") == 0) {
+        UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        int result = event_capture_initialize_probe(target_index);
         CoUninitialize();
         return result;
     }

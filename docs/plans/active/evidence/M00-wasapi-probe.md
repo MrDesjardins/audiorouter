@@ -116,3 +116,14 @@ started or read, and the generated executable/object were removed afterward.
 This confirms the earlier `E_INVALIDARG` was specific to the prior requested
 format/flag combination, not ordinary client contention; full application
 capture routing and latency evidence remain open.
+
+## 2026-09-06 — Event-driven exact-format initialization
+
+The native probe was extended with `event-capture-init [endpoint-index]` to
+match the corrected Rust adapter boundary. On capture endpoint 0, activation,
+`GetMixFormat`, shared `IAudioClient::Initialize` with the exact endpoint
+format, `AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST`,
+zero buffer duration, and `SetEventHandle` all returned success. The client was
+never started and no packet was read. This directly validates the request shape
+that previously produced `E_INVALIDARG`; data-path, process attribution, and
+latency evidence remain separate gates.
