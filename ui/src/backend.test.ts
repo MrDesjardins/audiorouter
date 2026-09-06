@@ -32,6 +32,7 @@ describe("snapshot cache", () => {
       commitGraph: async () => { throw new Error("not connected"); },
       listRecordings: async () => [],
       previewRecording: async () => { throw new Error("not connected"); },
+      setPrivacyMute: async () => { throw new Error("not connected"); },
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);
@@ -94,6 +95,13 @@ describe("live event cursor", () => {
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.previewRecording("take-1")).resolves.toEqual({ recordingId: "take-1", status: "present" });
     expect(received).toEqual({ method: "recordings.preview", params: { recordingId: "take-1" } });
+  });
+
+  it("forwards the privacy safety latch through the live API", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { muted: true }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).setPrivacyMute(true)).resolves.toEqual({ muted: true });
+    expect(received).toEqual({ method: "safety.setPrivacyMute", params: { muted: true } });
   });
 });
 

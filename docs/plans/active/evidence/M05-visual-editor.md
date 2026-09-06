@@ -196,3 +196,10 @@ acknowledgment, and sends the acknowledged warning IDs only after the user
 explicitly checks every item. A warning plan cannot be committed by the normal
 single-click path. UI coverage is 13 tests; typecheck and the production build
 pass. No audio endpoint or machine configuration is touched.
+
+The connected inspector now exposes the durable `safety.setPrivacyMute` latch
+as an immediate, explicit safety action. It starts fail-closed as muted,
+remains disabled while disconnected, reports success/failure, and routes only
+through the authorized API; it does not change Windows privacy settings or
+audio defaults. UI coverage is 14 tests with typecheck and production build
+passing.
