@@ -226,3 +226,8 @@ After preparation was tightened to require an existing non-reparse output
 parent, `tests/acceptance/m08-release.ps1` passed again from clean revision
 `ddfa192`. Artifact generation, exact-content verification, unsigned blocker
 assertions, and temporary-directory cleanup all succeeded.
+
+The release manifest now also records sanitized build provenance: release
+profile, Rust target, compiler release, and Cargo version. The full wrapper was
+rerun from clean revision `f59fe5c`; provenance validation and artifact checks
+passed, and the temporary output was removed.
