@@ -267,6 +267,14 @@ impl GraphicEq {
         Ok(())
     }
 
+    pub fn magnitude_db_at(&self, frequency_hz: f32) -> Result<f32, BiquadError> {
+        let mut magnitude_db = 0.0;
+        for band in self.bands.iter().flatten() {
+            magnitude_db += band.magnitude_db_at(frequency_hz)?;
+        }
+        Ok(magnitude_db)
+    }
+
     pub fn reset(&mut self) {
         for band in self.bands.iter_mut().flatten() {
             band.reset();
@@ -1181,9 +1189,11 @@ mod tests {
         eq.process_interleaved(&mut flat);
         assert!((flat[0] - 0.25).abs() < 1e-4);
         assert!((flat[1] + 0.25).abs() < 1e-4);
+        assert!(eq.magnitude_db_at(1_000.0).unwrap().abs() < 1e-3);
         eq.set_gain_db(9, 18.0).unwrap();
         gains[9] = 18.0;
         assert_eq!(eq.gains_db(), &gains);
+        assert!((eq.magnitude_db_at(16_000.0).unwrap() - 18.0).abs() < 0.1);
         eq.set_gain_db_ramped(9, -18.0, 16).unwrap();
         gains[9] = -18.0;
         let mut ramped = [0.25; 32];

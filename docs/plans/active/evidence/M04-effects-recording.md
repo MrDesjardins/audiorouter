@@ -65,6 +65,12 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+`GraphicEq::magnitude_db_at` now exposes the aggregate magnitude response by
+summing the ten exact band responses used during processing. This keeps the
+future response curve tied to effective coefficients; regression coverage
+checks flat response and a configured +18 dB high-frequency band. Sixteen DSP
+tests and strict Clippy pass.
+
 `SignalMeter` now supplies a per-channel telemetry primitive for mono/stereo
 paths. It accumulates finite-safe sample peaks and RMS sums, counts sample
 clipping, exposes linear and finite dB values with a documented -120 dBFS
