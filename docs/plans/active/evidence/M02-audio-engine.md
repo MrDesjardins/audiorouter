@@ -63,3 +63,7 @@ consistent session-count bounds.
 
 The process inventory also excludes Windows' PID-0 system pseudo-process so
 every returned application satisfies the API's positive-PID schema constraint.
+
+Results are sorted case-insensitively by executable and then PID, making
+read-only UI/CLI refreshes deterministic even though Toolhelp enumeration
+order is not guaranteed.

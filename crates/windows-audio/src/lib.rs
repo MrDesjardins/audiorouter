@@ -824,6 +824,12 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
             }
         }
         let _ = CloseHandle(snapshot);
+        applications.sort_by(|left, right| {
+            left.executable
+                .to_ascii_lowercase()
+                .cmp(&right.executable.to_ascii_lowercase())
+                .then_with(|| left.process_id.cmp(&right.process_id))
+        });
         first.map(|_| applications).map_err(AudioError::Windows)
     }
 }
@@ -1169,6 +1175,20 @@ mod tests {
             item.process_id != 0
                 && item.active_session_count <= item.total_session_count
                 && item.capture_session_count <= item.total_session_count
+        }));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn application_inventory_is_deterministically_ordered() {
+        let applications = enumerate_applications().unwrap();
+        assert!(applications.windows(2).all(|pair| {
+            pair[0]
+                .executable
+                .to_ascii_lowercase()
+                .cmp(&pair[1].executable.to_ascii_lowercase())
+                .then_with(|| pair[0].process_id.cmp(&pair[1].process_id))
+                .is_le()
         }));
     }
 
