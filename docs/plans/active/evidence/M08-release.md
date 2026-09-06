@@ -206,3 +206,7 @@ The checked-in `tests/acceptance/m08-release.ps1` now reproduces this flow,
 asserts that unsigned artifacts retain at least the three known release
 blockers, and removes its uniquely named temporary output in a `finally`
 cleanup. It does not install an artifact or change machine configuration.
+
+The wrapper passed from clean revision `ff2fd5e` using the installed VS2026
+toolchain. Both preparation and verification completed, and the temporary
+directory was confirmed removed by the wrapper's cleanup path.
