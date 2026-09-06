@@ -9,6 +9,7 @@ describe("disconnected backend", () => {
     const snapshot = await backend.snapshot();
     expect(backend.connected).toBe(false);
     expect(snapshot.session.id).toBe(demoSession.id);
+    expect(await backend.listRecordings()).toEqual([]);
     expect(await backend.subscribe()).toEqual({ backendEpoch: 0, events: [], nextSequence: 0 });
     await expect(backend.planGraph(demoSession)).rejects.toThrow("backend is disconnected");
     await expect(backend.commitGraph("plan-1", demoSession.revision, "ui-op")).rejects.toThrow(
@@ -28,6 +29,7 @@ describe("snapshot cache", () => {
       inspectRoute: async () => null,
       planGraph: async () => { throw new Error("not connected"); },
       commitGraph: async () => { throw new Error("not connected"); },
+      listRecordings: async () => [],
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);
@@ -64,6 +66,19 @@ describe("live event cursor", () => {
     }, demoSession.id);
     await backend.subscribe();
     expect(method).toBe("events.subscribe");
+  });
+
+  it("lists recordings through the authorized session-scoped API", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return [];
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await backend.listRecordings();
+    expect(received).toEqual({ method: "recordings.list", params: { sessionId: demoSession.id } });
   });
 });
 

@@ -5,6 +5,7 @@ import type {
   EventsSubscribeResult,
   GraphCommitResult,
   GraphPlanResult,
+  RecordingRow,
   RouteInspection,
   Session,
   StatusSnapshot,
@@ -26,6 +27,7 @@ export interface UiBackend {
   inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string): Promise<GraphCommitResult>;
+  listRecordings(sessionId?: string): Promise<RecordingRow[]>;
 }
 
 export type UiSnapshotState = {
@@ -88,6 +90,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async commitGraph() {
       throw new Error("The backend is disconnected; graph changes are unavailable.");
     },
+    async listRecordings() {
+      return [];
+    },
   };
 }
 
@@ -123,6 +128,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async commitGraph(planId, baseRevision, idempotencyKey) {
       return client.request("graph.commit", { planId, baseRevision, idempotencyKey });
+    },
+    async listRecordings(recordingSessionId = sessionId) {
+      return client.request("recordings.list", { sessionId: recordingSessionId });
     },
   };
 }

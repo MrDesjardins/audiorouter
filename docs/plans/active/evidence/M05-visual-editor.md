@@ -166,3 +166,8 @@ recording library/recovery/file-action, privacy-mute, startup, and event-epoch
 parameter/result surfaces. This prevents UI host adapters from falling behind
 Rust discovery. The contracts package typechecks; the dependent UI passes 10
 tests, typecheck, and production build.
+
+The rendered recording panel now requests the authorized session-scoped
+`recordings.list` result and displays persisted title, state, missing status,
+and path metadata. Disconnected mode returns an empty list and performs no
+mutation. UI coverage is 11 tests with typecheck and production build passing.
