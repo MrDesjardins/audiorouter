@@ -319,6 +319,16 @@ impl ScanControl {
         self.cancelled.store(true, Ordering::Release);
     }
 
+    fn for_candidate(&self) -> Self {
+        let candidate_deadline = Instant::now()
+            .checked_add(DEFAULT_SCAN_DEADLINE)
+            .unwrap_or(self.deadline);
+        Self {
+            deadline: self.deadline.min(candidate_deadline),
+            cancelled: Arc::clone(&self.cancelled),
+        }
+    }
+
     fn check(&self) -> Result<(), ScanError> {
         if self.cancelled.load(Ordering::Acquire) {
             return Err(ScanError::Cancelled);
@@ -480,8 +490,13 @@ pub fn scan_directory_with_control(
     let mut entries = Vec::with_capacity(candidates.len());
     for path in candidates {
         control.check()?;
+        let candidate_control = control.for_candidate();
         entries.push(
-            match inspect_binary_with_control(&path, &[root.to_path_buf()], Some(control)) {
+            match inspect_binary_with_control(
+                &path,
+                &[root.to_path_buf()],
+                Some(&candidate_control),
+            ) {
                 Ok(identity) => ScanEntry {
                     path,
                     identity: Some(identity),
