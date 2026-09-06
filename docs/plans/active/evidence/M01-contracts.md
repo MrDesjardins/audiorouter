@@ -79,6 +79,8 @@ Durable idempotency records now have a 24-hour retention bound. Journal reads an
 
 The durable commit hash is derived from the operation, plan ID, and base revision rather than requiring the candidate to remain in memory. This permits replay from a fresh control process before plan lookup; a regression verifies the persisted result is returned without a second mutation. The affected suites pass 23 control, 19 domain, and 17 storage tests with strict Clippy.
 
+When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
+
 ## Next action
 
-Implement transport-level event subscriber lifetime and snapshot-resync behavior over the tested local framing boundary. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.
+Implement transport-level event subscriber lifetime and reconnect ownership over the tested local framing boundary. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.

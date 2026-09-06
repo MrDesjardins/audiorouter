@@ -785,25 +785,31 @@ impl ControlPlane {
                     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
             })
             .transpose()?;
-        let events = self
-            .events
-            .since(after_sequence, limit as usize)
-            .map_err(|error| match error {
-                EventReplayError::InvalidLimit => {
-                    ControlError::InvalidRequest("limit must be between 1 and 500".into())
-                }
-                EventReplayError::ResyncRequired => {
-                    ControlError::InvalidRequest("resyncRequired".into())
-                }
-            })?
-            .into_iter()
-            .filter(|event| {
-                session_filter
-                    .as_ref()
-                    .map(|id| event.session_id.as_ref() == Some(id))
-                    .unwrap_or(true)
-            })
-            .collect::<Vec<_>>();
+        let events = match self.events.since(after_sequence, limit as usize) {
+            Ok(events) => events,
+            Err(EventReplayError::InvalidLimit) => {
+                return Err(ControlError::InvalidRequest(
+                    "limit must be between 1 and 500".into(),
+                ));
+            }
+            Err(EventReplayError::ResyncRequired) => {
+                return Ok(json!({
+                    "backendEpoch": self.events.backend_epoch(),
+                    "resyncRequired": true,
+                    "snapshot": { "sessions": self.sessions_list(500)? },
+                    "events": [],
+                    "nextSequence": self.events.latest_sequence()
+                }));
+            }
+        }
+        .into_iter()
+        .filter(|event| {
+            session_filter
+                .as_ref()
+                .map(|id| event.session_id.as_ref() == Some(id))
+                .unwrap_or(true)
+        })
+        .collect::<Vec<_>>();
         Ok(json!({
             "backendEpoch": self.events.backend_epoch(),
             "events": events,
@@ -1097,6 +1103,26 @@ mod tests {
         assert_eq!(result["backendEpoch"], 1);
         assert_eq!(result["events"].as_array().unwrap().len(), 2);
         assert_eq!(result["events"][1]["operationId"], "event-commit");
+    }
+
+    #[test]
+    fn events_subscribe_returns_snapshot_when_cursor_expired() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        for _ in 0..=audiorouter_domain::MAX_RETAINED_EVENTS {
+            plane.events.append(0, None, "state.test", None);
+        }
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(5)),
+            method: "events.subscribe".into(),
+            params: Some(json!({ "afterSequence": 1 })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["resyncRequired"], true);
+        assert_eq!(result["snapshot"]["sessions"].as_array().unwrap().len(), 1);
+        assert!(result["events"].as_array().unwrap().is_empty());
     }
 
     #[test]
