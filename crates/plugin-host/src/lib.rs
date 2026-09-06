@@ -995,7 +995,11 @@ impl WorkerSandbox {
             return Err("CreateJobObjectW failed".into());
         }
         let mut limits = JobObjectExtendedLimitInformation::default();
-        limits.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        limits.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+            | JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+        limits.basic.active_process_limit = WORKER_MAX_ACTIVE_PROCESSES;
+        limits.process_memory_limit = WORKER_MAX_PROCESS_MEMORY_BYTES;
         let configured = unsafe {
             set_information_job_object(
                 handle,
@@ -1032,6 +1036,14 @@ impl Drop for WorkerSandbox {
 const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: u32 = 9;
 #[cfg(windows)]
 const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x0000_2000;
+#[cfg(windows)]
+const JOB_OBJECT_LIMIT_ACTIVE_PROCESS: u32 = 0x0000_0008;
+#[cfg(windows)]
+const JOB_OBJECT_LIMIT_PROCESS_MEMORY: u32 = 0x0000_0100;
+#[cfg(windows)]
+const WORKER_MAX_ACTIVE_PROCESSES: u32 = 1;
+#[cfg(windows)]
+const WORKER_MAX_PROCESS_MEMORY_BYTES: usize = 512 * 1024 * 1024;
 
 #[cfg(windows)]
 #[repr(C)]

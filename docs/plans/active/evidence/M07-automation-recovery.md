@@ -315,3 +315,8 @@ The control plane now publishes that snapshot through both `status.get` and
 `system.diagnostics`, including the bounded `recentCrashes` count and durable
 `safeMode` latch. The control regression verifies both fields without opening
 audio or resuming sessions; process supervision remains unimplemented.
+
+The Windows plugin worker now applies Job Object limits for one active process
+and 512 MiB of process memory in addition to kill-on-close containment. This
+is resource-containment evidence only; it does not establish filesystem or
+network isolation for arbitrary plugins.
