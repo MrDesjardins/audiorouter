@@ -30,6 +30,11 @@ The [development quickstart](operations/quickstart.md) gives the safe toolchain,
 acceptance, CLI, UI, MCP, and troubleshooting path for the current repository
 state.
 
+Documentation can be checked without dependencies or writes with
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\docs.ps1`.
+The check validates local link targets, heading anchors, and balanced fenced
+code blocks.
+
 The [headless runbook](operations/headless-runbook.md) documents the implemented CLI/MCP plan, backup, restore, and recovery boundaries. It distinguishes portable control-plane evidence from native audio, driver, signing, and installer requirements.
 
 The [SDK and native toolchain setup](operations/sdk-setup.md) explains the

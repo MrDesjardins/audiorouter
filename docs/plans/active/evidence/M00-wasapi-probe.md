@@ -2,7 +2,7 @@
 
 ## Status
 
-The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, start audio streams, install drivers, or write outside stdout.
+The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, start audio streams, install drivers, or write outside stdout.
 
 ## Current result
 
@@ -69,7 +69,7 @@ The same harness now accepts `process-capture-exclude [pid] [milliseconds]`, sel
 Using the installed Visual Studio/WDK toolchain and the checked-in build script, the probe ran without changing machine audio configuration. Endpoint 0 completed shared capture start/read/stop/reset with 10 packets and 4,800 frames over 200 ms. Process-loopback include and exclude modes each completed activation, initialization, 20 packet reads, stop, and reset with 8,820 frames and nonzero payload bytes (6,064 and 27,569 respectively). The temporary executable and object file were removed afterward. This strengthens the native data-path evidence but still does not establish controlled per-process tone attribution or physical latency.
 ## 2026-09-05 native toolchain correction
 
-The host now has Visual Studio Community 2026 `18.9.2`, MSVC `14.51.36231`, Windows SDK `10.0.28000.2526` (headers/libs under `10.0.28000.0`), and WDK `10.1.28000.2526`. The reproducible build entry point is [`tools/m00-native-wasapi-probe/build.ps1`](../../../tools/m00-native-wasapi-probe/build.ps1). It uses explicit toolchain paths and does not modify environment or audio settings.
+The host now has Visual Studio Community 2026 `18.9.2`, MSVC `14.51.36231`, Windows SDK `10.0.28000.2526` (headers/libs under `10.0.28000.0`), and WDK `10.1.28000.2526`. The reproducible build entry point is [`tools/m00-native-wasapi-probe/build.ps1`](../../../../tools/m00-native-wasapi-probe/build.ps1). It uses explicit toolchain paths and does not modify environment or audio settings.
 
 The native C++ probe was built successfully and run on the current Windows user session. For all 13 active capture endpoints, native `Activate`, `GetMixFormat`, shared-mode `IsFormatSupported`, and shared-mode `IAudioClient::Initialize` with `AUDCLNT_STREAMFLAGS_NOPERSIST` returned success. This corrects the earlier Rust-only `E_INVALIDARG` result: the native path demonstrates that capture client initialization is available on this machine and that ordinary device contention was not the cause of the Rust probe failures.
 
