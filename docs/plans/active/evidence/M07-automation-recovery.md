@@ -211,3 +211,9 @@ The process client also attempts the plan_graph_change tool as an observer.
 The server returns an error result over stdio while the authorized read-only
 resource and startup calls succeed, proving the grant boundary is preserved
 through the external MCP process rather than only in an in-process unit test.
+
+Workspace checkpoint: the complete Rust workspace test run passes after the
+MCP and worker changes, including the CLI process-level MCP test, all control
+and storage recovery coverage, and the plugin-host worker tests. Strict
+formatting/Clippy checks remain green. This checkpoint does not claim native
+pipe interoperability, live audio routing, driver lifecycle, or signing.
