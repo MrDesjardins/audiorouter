@@ -254,3 +254,11 @@ sequence and reject regressions before replacing a valid frame. The state is
 restored after rejection, so a stale producer cannot silently displace newer
 audio data. The regression and full 24-test plugin-host suite pass with strict
 Clippy clean.
+
+Added caller-owned `read_into` decoding for both the raw layout and mapped
+region. It validates the version, channels, frame bounds, and finite samples,
+fills preallocated sample storage, returns sequence/deadline metadata, and
+retains the acquire/release epoch comparison for mapped reads. The regression,
+24 library tests, worker integration, and strict Clippy pass. This removes
+sample-vector allocation from the transport read boundary but does not claim
+realtime scheduler integration or plugin execution.

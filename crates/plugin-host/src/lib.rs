@@ -1216,6 +1216,14 @@ pub enum SharedAudioError {
     Io(String),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SharedAudioMetadata {
+    pub sequence: u64,
+    pub deadline_tick: u64,
+    pub channels: u16,
+    pub frames: usize,
+}
+
 /// File-backed shared memory for one bounded audio slot. The file is an
 /// explicit caller-owned IPC endpoint; this type never chooses a machine-wide
 /// name and never touches audio or plugin state.
@@ -1330,6 +1338,22 @@ impl SharedAudioRegion {
         Ok(frame)
     }
 
+    pub fn read_into(&self, samples: &mut [f32]) -> Result<SharedAudioMetadata, SharedAudioError> {
+        let state = self.state();
+        let before = state.load(std::sync::atomic::Ordering::Acquire);
+        if before == 0 {
+            return Err(SharedAudioError::Empty);
+        }
+        if before & 1 != 0 {
+            return Err(SharedAudioError::Busy);
+        }
+        let metadata = self.layout.read_into(&self.map, samples)?;
+        if state.load(std::sync::atomic::Ordering::Acquire) != before {
+            return Err(SharedAudioError::TornRead);
+        }
+        Ok(metadata)
+    }
+
     pub fn flush(&mut self) -> Result<(), SharedAudioError> {
         self.map
             .flush()
@@ -1440,6 +1464,48 @@ impl SharedAudioLayout {
             .collect::<Vec<_>>();
         WorkerFrame::new(sequence, deadline_tick, self.channels, samples)
             .map_err(SharedAudioError::InvalidFrame)
+    }
+
+    pub fn read_into(
+        &self,
+        source: &[u8],
+        samples: &mut [f32],
+    ) -> Result<SharedAudioMetadata, SharedAudioError> {
+        if source.len() < self.buffer_len() {
+            return Err(SharedAudioError::BufferTooSmall);
+        }
+        if &source[..4] != b"ARSH" {
+            return Err(SharedAudioError::InvalidMagic);
+        }
+        if u16::from_le_bytes(source[4..6].try_into().unwrap()) != 1 {
+            return Err(SharedAudioError::InvalidVersion);
+        }
+        if u16::from_le_bytes(source[6..8].try_into().unwrap()) != self.channels {
+            return Err(SharedAudioError::InvalidChannels);
+        }
+        let frames = u32::from_le_bytes(source[8..12].try_into().unwrap()) as usize;
+        if frames == 0 || frames > MAX_WORKER_FRAMES {
+            return Err(SharedAudioError::InvalidFrameCount);
+        }
+        let sample_count = frames * self.channels as usize;
+        if samples.len() < sample_count {
+            return Err(SharedAudioError::BufferTooSmall);
+        }
+        for (index, destination) in samples[..sample_count].iter_mut().enumerate() {
+            let offset = SHARED_AUDIO_HEADER_BYTES + index * 4;
+            *destination = f32::from_le_bytes(source[offset..offset + 4].try_into().unwrap());
+            if !destination.is_finite() {
+                return Err(SharedAudioError::InvalidFrame(
+                    WorkerFrameError::NonFiniteSample,
+                ));
+            }
+        }
+        Ok(SharedAudioMetadata {
+            sequence: u64::from_le_bytes(source[12..20].try_into().unwrap()),
+            deadline_tick: u64::from_le_bytes(source[20..28].try_into().unwrap()),
+            channels: self.channels,
+            frames,
+        })
     }
 }
 
@@ -1986,6 +2052,17 @@ mod tests {
         let mut slot = vec![0u8; layout.buffer_len()];
         layout.write(&mut slot, &frame).unwrap();
         assert_eq!(layout.read(&slot).unwrap(), frame);
+        let mut samples = [0.0; 4];
+        assert_eq!(
+            layout.read_into(&slot, &mut samples).unwrap(),
+            SharedAudioMetadata {
+                sequence: 9,
+                deadline_tick: 100,
+                channels: 2,
+                frames: 2
+            }
+        );
+        assert_eq!(&samples, &frame.samples[..]);
         slot[0] = b'X';
         assert_eq!(layout.read(&slot), Err(SharedAudioError::InvalidMagic));
         assert_eq!(
@@ -2012,6 +2089,9 @@ mod tests {
         drop(writer);
         let reader = SharedAudioRegion::open(&path, layout).unwrap();
         assert_eq!(reader.read().unwrap(), frame);
+        let mut samples = [0.0; 2];
+        assert_eq!(reader.read_into(&mut samples).unwrap().frames, 2);
+        assert_eq!(&samples, &frame.samples[..]);
         assert!(matches!(
             SharedAudioRegion::open("relative-slot", layout),
             Err(SharedAudioError::InvalidPath)
