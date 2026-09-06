@@ -22,6 +22,203 @@ pub struct RecordingQueue {
     overruns: AtomicU64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecorderState {
+    Idle,
+    Armed,
+    Recording,
+    Paused,
+    Stopping,
+    Completed,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FrameInterval {
+    pub start_frame: u64,
+    pub end_frame: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordingPart {
+    pub index: u32,
+    pub start_frame: u64,
+    pub end_frame: Option<u64>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum RecorderError {
+    InvalidTransition {
+        state: RecorderState,
+        action: &'static str,
+    },
+    FrameWentBackwards,
+}
+
+/// Control-plane recorder state machine. File encoding and queue draining are
+/// separate worker responsibilities; this type only records exact boundaries.
+pub struct RecorderController {
+    state: RecorderState,
+    parts: Vec<RecordingPart>,
+    pauses: Vec<FrameInterval>,
+    pause_start: Option<u64>,
+    last_frame: Option<u64>,
+}
+
+impl RecorderController {
+    pub fn new() -> Self {
+        Self {
+            state: RecorderState::Idle,
+            parts: Vec::new(),
+            pauses: Vec::new(),
+            pause_start: None,
+            last_frame: None,
+        }
+    }
+
+    pub fn state(&self) -> RecorderState {
+        self.state
+    }
+
+    pub fn parts(&self) -> &[RecordingPart] {
+        &self.parts
+    }
+
+    pub fn pause_intervals(&self) -> &[FrameInterval] {
+        &self.pauses
+    }
+
+    pub fn arm(&mut self) -> Result<(), RecorderError> {
+        match self.state {
+            RecorderState::Idle => {
+                self.state = RecorderState::Armed;
+                Ok(())
+            }
+            RecorderState::Completed => {
+                self.parts.clear();
+                self.pauses.clear();
+                self.pause_start = None;
+                self.last_frame = None;
+                self.state = RecorderState::Armed;
+                Ok(())
+            }
+            state => Err(RecorderError::InvalidTransition {
+                state,
+                action: "arm",
+            }),
+        }
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.require_frame(frame)?;
+        if self.state != RecorderState::Armed {
+            return Err(RecorderError::InvalidTransition {
+                state: self.state,
+                action: "start",
+            });
+        }
+        self.parts.push(RecordingPart {
+            index: self.parts.len() as u32,
+            start_frame: frame,
+            end_frame: None,
+        });
+        self.state = RecorderState::Recording;
+        Ok(())
+    }
+
+    pub fn pause(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.require_frame(frame)?;
+        if self.state != RecorderState::Recording {
+            return Err(RecorderError::InvalidTransition {
+                state: self.state,
+                action: "pause",
+            });
+        }
+        self.pause_start = Some(frame);
+        self.state = RecorderState::Paused;
+        Ok(())
+    }
+
+    pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.require_frame(frame)?;
+        if self.state != RecorderState::Paused {
+            return Err(RecorderError::InvalidTransition {
+                state: self.state,
+                action: "resume",
+            });
+        }
+        let start = self.pause_start.take().unwrap();
+        self.pauses.push(FrameInterval {
+            start_frame: start,
+            end_frame: frame,
+        });
+        self.state = RecorderState::Recording;
+        Ok(())
+    }
+
+    pub fn split(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.require_frame(frame)?;
+        if !matches!(self.state, RecorderState::Recording | RecorderState::Paused) {
+            return Err(RecorderError::InvalidTransition {
+                state: self.state,
+                action: "split",
+            });
+        }
+        self.close_current_part(frame);
+        self.parts.push(RecordingPart {
+            index: self.parts.len() as u32,
+            start_frame: frame,
+            end_frame: None,
+        });
+        Ok(())
+    }
+
+    pub fn stop(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.require_frame(frame)?;
+        if !matches!(self.state, RecorderState::Recording | RecorderState::Paused) {
+            return Err(RecorderError::InvalidTransition {
+                state: self.state,
+                action: "stop",
+            });
+        }
+        if let Some(start) = self.pause_start.take() {
+            self.pauses.push(FrameInterval {
+                start_frame: start,
+                end_frame: frame,
+            });
+        }
+        self.state = RecorderState::Stopping;
+        self.close_current_part(frame);
+        self.state = RecorderState::Completed;
+        Ok(())
+    }
+
+    pub fn fail(&mut self) {
+        self.state = RecorderState::Failed;
+        self.pause_start = None;
+    }
+
+    fn require_frame(&mut self, frame: u64) -> Result<(), RecorderError> {
+        if self.last_frame.is_some_and(|last| frame < last) {
+            return Err(RecorderError::FrameWentBackwards);
+        }
+        self.last_frame = Some(frame);
+        Ok(())
+    }
+
+    fn close_current_part(&mut self, frame: u64) {
+        if let Some(part) = self.parts.last_mut() {
+            part.end_frame = Some(frame);
+        }
+    }
+}
+
+impl Default for RecorderController {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RecordingQueue {
     pub fn new(capacity: usize) -> Result<Self, RecordingError> {
         if capacity == 0 {
@@ -323,5 +520,47 @@ mod tests {
             RecordingQueue::new(0),
             Err(RecordingError::InvalidQueueCapacity)
         ));
+    }
+
+    #[test]
+    fn recorder_tracks_pause_and_split_frame_boundaries() {
+        let mut recorder = RecorderController::new();
+        assert!(matches!(
+            recorder.start(0),
+            Err(RecorderError::InvalidTransition {
+                state: RecorderState::Idle,
+                action: "start"
+            })
+        ));
+        recorder.arm().unwrap();
+        recorder.start(100).unwrap();
+        recorder.pause(200).unwrap();
+        recorder.resume(240).unwrap();
+        recorder.split(300).unwrap();
+        recorder.stop(400).unwrap();
+        assert_eq!(recorder.state(), RecorderState::Completed);
+        assert_eq!(
+            recorder.pause_intervals(),
+            &[FrameInterval {
+                start_frame: 200,
+                end_frame: 240
+            }]
+        );
+        assert_eq!(recorder.parts()[0].end_frame, Some(300));
+        assert_eq!(recorder.parts()[1].start_frame, 300);
+        assert_eq!(recorder.parts()[1].end_frame, Some(400));
+    }
+
+    #[test]
+    fn recorder_rejects_backwards_frames_and_restarts_with_new_parts() {
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        assert_eq!(recorder.pause(9), Err(RecorderError::FrameWentBackwards));
+        recorder.stop(20).unwrap();
+        recorder.arm().unwrap();
+        recorder.start(5).unwrap();
+        assert_eq!(recorder.parts().len(), 1);
+        assert_eq!(recorder.parts()[0].start_frame, 5);
     }
 }

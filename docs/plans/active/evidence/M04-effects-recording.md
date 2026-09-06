@@ -19,3 +19,11 @@ interleaved chunks. A full queue returns the chunk to its producer and
 increments an overrun counter; queue operations perform no encoding or file
 I/O. A fourth in-memory test covers capacity, ownership return, and counters.
 The queue is not yet connected to a recorder worker.
+
+`RecorderController` now models the REC-04 state transitions independently of
+encoding: unarmed start is rejected, pause intervals are recorded by exact
+frame, split closes one part and starts the next, stop finalizes the active
+part, failures are explicit, and a completed recorder can be re-armed for a
+new part set. Two additional in-memory tests bring the crate to six tests.
+This remains control metadata only and does not claim file-worker, crash
+recovery, or recorder API integration.
