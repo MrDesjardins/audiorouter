@@ -34,3 +34,8 @@ read-only protocol calls needed to hydrate that snapshot. The default
 mutation surface, preserving safe disconnected startup. The React shell now
 uses that backend state for its connection label. TypeScript checking and the
 production Vite build pass.
+
+The shell now hydrates its selected-node view from the backend snapshot on
+mount, with local fixture data as the safe initial state. Snapshot completion
+is guarded against an unmounted React tree; no mutation or device call is
+introduced. TypeScript checking and the production Vite build pass.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import { createDisconnectedBackend } from "./backend";
 import { demoSession } from "./fixtures";
@@ -19,8 +19,17 @@ function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean;
 }
 
 export function App() {
+  const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof backend.snapshot>> | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
-  const selectedNode = demoSession.nodes.find((node) => node.id === selectedNodeId) ?? demoSession.nodes[0];
+  useEffect(() => {
+    let mounted = true;
+    void backend.snapshot().then((nextSnapshot) => {
+      if (mounted) setSnapshot(nextSnapshot);
+    });
+    return () => { mounted = false; };
+  }, []);
+  const session = snapshot?.session ?? demoSession;
+  const selectedNode = session.nodes.find((node) => node.id === selectedNodeId) ?? session.nodes[0];
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
   return (
     <div className="app-shell">
