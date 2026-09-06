@@ -228,6 +228,11 @@ authorized backend succeeds and reports that the underlying audio file was
 preserved. Disconnected mode keeps the action disabled. UI coverage is 15
 tests with typecheck and production build passing.
 
+Route inspection now presents the backend result as “Receives audio from,”
+resolving node IDs to current names and displaying edge counts plus channel
+maps for each reported path. It remains read-only and does not infer or alter
+connections. UI tests, typecheck, and production build pass.
+
 Connected recording rows now expose read-only recovery inspection through
 `recordings.recovery`. The UI reports whether a validated lifecycle checkpoint
 exists and its state, while disconnected mode keeps the action disabled; no
