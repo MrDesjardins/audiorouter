@@ -174,3 +174,10 @@ A fresh Rust process path using the hardcoded endpoint ID directly (without a
 preceding endpoint enumeration) produced the same `E_INVALIDARG`. This rules
 out enumeration/reopen lifetime as the cause; the Rust COM initialization
 boundary remains the unresolved difference from the successful C++ call.
+
+A temporary direct `IAudioClient` vtable invocation from Rust, bypassing the
+generated `Initialize` method wrapper while using the same ABI argument types,
+also returned `E_INVALIDARG`. The diagnostic code was removed after the run.
+This rules out a defect limited to the generated method wrapper; the remaining
+difference is the Rust process/runtime ABI context or its interaction with the
+Windows binding, and the native C++ shim remains the verified fallback boundary.
