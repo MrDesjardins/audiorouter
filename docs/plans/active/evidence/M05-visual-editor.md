@@ -209,3 +209,9 @@ Connected recording rows now also offer an explicit-confirmation
 authorized backend succeeds and reports that the underlying audio file was
 preserved. Disconnected mode keeps the action disabled. UI coverage is 15
 tests with typecheck and production build passing.
+
+Connected recording rows now expose read-only recovery inspection through
+`recordings.recovery`. The UI reports whether a validated lifecycle checkpoint
+exists and its state, while disconnected mode keeps the action disabled; no
+audio payload, file handle, or machine configuration is accessed. UI coverage
+is 16 tests with typecheck and production build passing.

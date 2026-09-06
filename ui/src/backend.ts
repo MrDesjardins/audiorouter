@@ -29,6 +29,7 @@ export interface UiBackend {
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   previewRecording(recordingId: string): Promise<Record<string, unknown>>;
+  getRecordingRecovery(recordingId: string): Promise<Record<string, unknown>>;
   setPrivacyMute(muted: boolean): Promise<Record<string, unknown>>;
   removeRecordingEntry(recordingId: string): Promise<Record<string, unknown>>;
 }
@@ -99,6 +100,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async previewRecording() {
       throw new Error("The backend is disconnected; recording preview is unavailable.");
     },
+    async getRecordingRecovery() {
+      throw new Error("The backend is disconnected; recording recovery is unavailable.");
+    },
     async setPrivacyMute() {
       throw new Error("The backend is disconnected; privacy mute is unavailable.");
     },
@@ -151,6 +155,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async previewRecording(recordingId) {
       return client.request("recordings.preview", { recordingId });
+    },
+    async getRecordingRecovery(recordingId) {
+      return client.request("recordings.recovery", { recordingId });
     },
     async setPrivacyMute(muted) {
       return client.request("safety.setPrivacyMute", { muted });
