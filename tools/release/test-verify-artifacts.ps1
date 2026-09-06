@@ -10,9 +10,11 @@ try {
     [IO.File]::WriteAllBytes($artifactPath, [byte[]](1, 2, 3, 5, 8))
     $noticePath = Join-Path $root "THIRD-PARTY-NOTICES.txt"
     Set-Content -LiteralPath $noticePath -Value "- sample 1.0 - MIT - workspace" -Encoding utf8
-    @{ packages = @() } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root "sbom.cargo.json") -Encoding utf8
+    $sbomPath = Join-Path $root "sbom.cargo.json"
+    @{ packages = @() } | ConvertTo-Json | Set-Content -LiteralPath $sbomPath -Encoding utf8
     $hash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $noticeHash = (Get-FileHash -LiteralPath $noticePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sbomHash = (Get-FileHash -LiteralPath $sbomPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
@@ -20,6 +22,7 @@ try {
         sourceRevision = ("a" * 40)
         artifacts = @(
             [ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 }
+            [ordered]@{ file = "sbom.cargo.json"; sha256 = $sbomHash; bytes = (Get-Item -LiteralPath $sbomPath).Length }
             [ordered]@{ file = "THIRD-PARTY-NOTICES.txt"; sha256 = $noticeHash; bytes = (Get-Item -LiteralPath $noticePath).Length }
         )
         signed = $false
@@ -38,6 +41,19 @@ try {
         if ($_.Exception.Message -eq "verifier accepted a tampered artifact") {
             throw
         }
+    }
+
+    $extraPath = Join-Path $root "unlisted.bin"
+    [IO.File]::WriteAllBytes($extraPath, [byte[]](13, 21, 34))
+    try {
+        & $verifier $manifestPath | Out-Null
+        throw "verifier accepted an unlisted package entry"
+    } catch {
+        if ($_.Exception.Message -eq "verifier accepted an unlisted package entry") {
+            throw
+        }
+    } finally {
+        Remove-Item -LiteralPath $extraPath -Force
     }
 
     $withoutNotices = [ordered]@{

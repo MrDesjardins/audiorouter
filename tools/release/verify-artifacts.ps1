@@ -75,4 +75,15 @@ if (-not $names.Contains("THIRD-PARTY-NOTICES.txt")) {
     throw "release manifest does not include THIRD-PARTY-NOTICES.txt"
 }
 
+$allowed = [Collections.Generic.HashSet[string]]::new($names, [StringComparer]::OrdinalIgnoreCase)
+$null = $allowed.Add("release-manifest.json")
+foreach ($entry in Get-ChildItem -LiteralPath $root -Force) {
+    if ($entry.Name -notin $allowed) {
+        throw "release directory contains an unlisted entry: $($entry.Name)"
+    }
+    if ($entry.PSIsContainer) {
+        throw "release directory must not contain nested directories: $($entry.Name)"
+    }
+}
+
 Write-Output "Verified unsigned artifacts in $root"
