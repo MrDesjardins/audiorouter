@@ -22,3 +22,13 @@ SDK CMake configure/example build is explicitly pending CMake installation;
 this is a toolchain gap, not evidence that the SDK or plugins are compatible.
 No audio endpoint, driver, default, volume, mute, or persistent machine audio
 setting was changed.
+
+## Portable inspection boundary
+
+`crates/plugin-host` now provides non-executing binary inspection for the
+future disposable worker: configured-root containment after canonicalization,
+VST3/VST2 extension classification, bounded file size, PE signature and x64
+architecture checks, SHA-256 identity fingerprints, and a three-failure
+quarantine ledger requiring deliberate retry. Three crate tests and strict
+Clippy pass. Loading, scanning code execution, worker IPC, and plugin state
+remain intentionally separate follow-up work.

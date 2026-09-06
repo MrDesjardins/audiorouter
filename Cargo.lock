@@ -96,6 +96,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiorouter-plugin-host"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+]
+
+[[package]]
 name = "audiorouter-protocol"
 version = "0.1.0"
 dependencies = [
