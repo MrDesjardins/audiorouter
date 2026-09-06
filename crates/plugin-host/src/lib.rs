@@ -19,6 +19,7 @@ pub const MAX_WORKER_FRAMES: usize = 2048;
 pub const MAX_SCAN_CANDIDATES: usize = 256;
 pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
+pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -351,6 +352,95 @@ pub struct WorkerFailurePolicy {
     protected_path: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerState {
+    Stopped,
+    Running,
+    Failed,
+    Quarantined,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerStartError {
+    UnsupportedPlugin,
+    Quarantined,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerSupervisor {
+    state: WorkerState,
+    last_heartbeat: Option<Instant>,
+    failures: FailureLedger,
+}
+
+impl WorkerSupervisor {
+    pub fn new() -> Self {
+        Self {
+            state: WorkerState::Stopped,
+            last_heartbeat: None,
+            failures: FailureLedger::new(),
+        }
+    }
+
+    pub fn state(&self) -> WorkerState {
+        self.state
+    }
+
+    /// Records lifecycle policy only; process creation belongs to the native worker adapter.
+    pub fn start(
+        &mut self,
+        identity: &PluginIdentity,
+        now: Instant,
+    ) -> Result<(), WorkerStartError> {
+        if self.failures.quarantined() {
+            self.state = WorkerState::Quarantined;
+            return Err(WorkerStartError::Quarantined);
+        }
+        if identity.format != PluginFormat::Vst3 || identity.architecture != PeArchitecture::X64 {
+            return Err(WorkerStartError::UnsupportedPlugin);
+        }
+        self.state = WorkerState::Running;
+        self.last_heartbeat = Some(now);
+        Ok(())
+    }
+
+    pub fn heartbeat(&mut self, now: Instant) -> bool {
+        if self.state != WorkerState::Running {
+            return false;
+        }
+        self.last_heartbeat = Some(now);
+        true
+    }
+
+    pub fn poll(&mut self, now: Instant) -> WorkerState {
+        if self.state == WorkerState::Running
+            && self
+                .last_heartbeat
+                .is_some_and(|last| now.saturating_duration_since(last) > WORKER_HEARTBEAT_TIMEOUT)
+        {
+            self.failures.record_failure_at(now);
+            self.state = if self.failures.quarantined() {
+                WorkerState::Quarantined
+            } else {
+                WorkerState::Failed
+            };
+        }
+        self.state
+    }
+
+    pub fn deliberate_retry(&mut self) {
+        self.failures.deliberate_retry();
+        self.state = WorkerState::Stopped;
+        self.last_heartbeat = None;
+    }
+}
+
+impl Default for WorkerSupervisor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkerFailurePolicy {
     pub fn new(protected_path: bool) -> Self {
         Self { protected_path }
@@ -614,5 +704,26 @@ mod tests {
         ledger.record_failure_at(start + Duration::from_secs(FAILURE_WINDOW.as_secs() + 1));
         assert_eq!(ledger.failures(), 1);
         assert!(!ledger.quarantined());
+    }
+
+    #[test]
+    fn worker_supervisor_requires_vst3_x64_and_expires_heartbeats() {
+        let identity = PluginIdentity {
+            path: PathBuf::from("effect.vst3"),
+            format: PluginFormat::Vst3,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "0".repeat(64),
+        };
+        let now = Instant::now();
+        let mut supervisor = WorkerSupervisor::new();
+        assert_eq!(supervisor.start(&identity, now), Ok(()));
+        assert_eq!(
+            supervisor.poll(now + WORKER_HEARTBEAT_TIMEOUT + Duration::from_millis(1)),
+            WorkerState::Failed
+        );
+        assert!(!supervisor.heartbeat(now));
+        supervisor.deliberate_retry();
+        assert_eq!(supervisor.state(), WorkerState::Stopped);
     }
 }

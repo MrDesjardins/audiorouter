@@ -76,6 +76,11 @@ test executable twice with OS error 4551 before test execution. The prior nine
 plugin-host tests passed before this policy block; this new runtime regression
 remains pending execution-policy remediation.
 
+`WorkerSupervisor` now models launch eligibility (VST3/x64 only), heartbeat
+refresh, timeout-to-failure, quarantine integration, and deliberate retry
+reset. The new lifecycle test compiles and strict Clippy passes; runtime test
+launch remains blocked by Windows Application Control OS error 4551.
+
 The scanner no longer labels arbitrary `.dll` files as VST2. DLL candidates
 are retained with `PluginFormat::Unknown`, while only the `.vst3` extension
 receives VST3 classification; this prevents false ReaPlugs/legacy support
