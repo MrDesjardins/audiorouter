@@ -65,6 +65,10 @@ The UI backend now has a direct regression for a paged recording response and
 normalizes its items into the established row-list contract. UI coverage is 23
 tests with typecheck passing.
 
+The focused MCP `list_recordings` tool now advertises the same optional cursor
+and 1–500 limit fields as the shared API. Its catalog regression verifies the
+schema, while CLI/MCP interoperability and strict Clippy remain green.
+
 ## 2026-09-06 — Session-list CLI cursor parity
 
 `session list` now accepts optional `--cursor ID` in addition to its bounded
