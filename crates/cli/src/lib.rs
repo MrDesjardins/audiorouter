@@ -508,7 +508,10 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
         .copied()
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
-            CliError::InvalidArguments("usage: history <session-id> --database <path>".into())
+            CliError::InvalidArguments(
+                "usage: history <session-id> --database <path> [--limit N] [--cursor REVISION]"
+                    .into(),
+            )
         })?;
     let limit = args
         .iter()
@@ -528,6 +531,31 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
         ));
     }
     let storage = database(args)?;
+    if let Some(cursor) = optional_option_value(args, "--cursor")? {
+        if limit > 100 {
+            return Err(CliError::InvalidArguments(
+                "cursor history pages require --limit between 1 and 100".into(),
+            ));
+        }
+        let mut plane = ControlPlane::with_storage("cli", storage);
+        let response = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "graph.history".into(),
+            params: Some(json!({
+                "sessionId": id,
+                "cursor": cursor,
+                "limit": limit
+            })),
+        });
+        return response.result.ok_or_else(|| {
+            CliError::InvalidArguments(
+                response
+                    .error
+                    .map_or_else(|| "history unavailable".into(), |error| error.message),
+            )
+        });
+    }
     let history = storage
         .load_history(&EntityId::new(id), limit)
         .map_err(|error| CliError::Storage(format!("{error:?}")))?;
@@ -968,7 +996,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N] [--cursor REVISION]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
     value["commands"]
         .as_array_mut()
         .unwrap()

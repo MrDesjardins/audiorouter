@@ -34,6 +34,15 @@ interoperability; no audio endpoint or machine configuration is touched.
 shape for compatibility. A two-session regression verifies the second page
 and cursor. CLI coverage passes 17 unit tests plus MCP interoperability.
 
+## 2026-09-06 — Graph-history CLI cursor parity
+
+`history <session-id>` now accepts optional `--cursor REVISION` and routes
+cursor requests through the authoritative `graph.history` dispatcher. Pages
+are bounded to the API's 100-entry history limit and return `items` plus
+`nextCursor`; the existing flat response remains available when no cursor is
+provided. Limits above 100 are rejected for cursor mode instead of being
+silently changed. The CLI suite and MCP interoperability regression pass.
+
 ## 2026-09-06 — Event epoch reconnect guard
 
 `events.subscribe` now accepts an optional `backendEpoch`. A mismatched epoch immediately returns `resyncRequired: true`, the current epoch, a bounded session snapshot, and the next event sequence. This prevents a restarted backend from replaying a cursor from a previous process epoch. The request schema and strict unknown-parameter validation include the new field. `cargo test -p audiorouter-control` passes 42 tests and strict Clippy passes.
