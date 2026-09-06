@@ -483,3 +483,7 @@ accepts explicit failure reports from an outer adapter. Both paths enter the
 same fail-closed state and prevent subsequent processing; an integration
 regression covers the explicit process-failure report. The suite passes 29
 unit tests and 7 process/integration tests with strict Clippy.
+
+The lifecycle documentation was corrected to distinguish the portable
+`WorkerSession` handshake state machine from the native `WorkerProcess` and
+its Job Object containment; neither layer claims actual plugin execution.

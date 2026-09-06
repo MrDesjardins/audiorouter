@@ -800,7 +800,8 @@ impl WorkerLatency {
 }
 
 /// Stateful handshake and frame gate for one disposable worker instance.
-/// Process creation and OS-level isolation remain outside this portable type.
+/// Process creation and OS-level isolation are provided by `WorkerProcess`;
+/// this portable state machine remains independent of the operating system.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkerSession {
     expected_plugin_sha256: String,
