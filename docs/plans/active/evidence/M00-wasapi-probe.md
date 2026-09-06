@@ -63,4 +63,6 @@ The native C++ probe was built successfully and run on the current Windows user 
 
 The same executable's process-loopback path, targeting the current Explorer process tree, returned success for `ActivateAudioInterfaceAsync`, the completion result, `QueryInterface(IAudioClient)`, 44.1 kHz PCM shared-mode initialization with loopback/event/autoconvert flags, and `SetEventHandle`. The client was reset and released without `Start`, `GetBuffer`, or audio reads. This proves activation/configuration, not audible process capture or latency.
 
+The opt-in `capture 0 200` command then exercised the native capture data path on active capture endpoint 0. `Start`, ten packet reads, and 4,800 frames over 200 ms returned success; samples were counted and discarded, followed by successful `Stop` and `Reset`. This confirms native shared-mode capture data flow for that endpoint without persisting audio or changing the user's configuration. It does not establish all-endpoint behavior, process-tree capture data, render-to-capture routing, or physical/loopback latency.
+
 No endpoint was started, no buffer was read, no default device/volume/mute/format setting was changed, and no driver was installed or loaded.

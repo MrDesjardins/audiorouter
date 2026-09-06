@@ -271,3 +271,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Native capture cross-check: all 13 active capture endpoints returned success for activation, `GetMixFormat`, shared-mode `IsFormatSupported`, and non-starting `IAudioClient::Initialize` with `NOPERSIST`. This supersedes the earlier Rust-only all-`E_INVALIDARG` observation as a probe/binding issue, not a device-busy conclusion.
 - Native process-loopback cross-check: Explorer process-tree activation, `IAudioClient` query, 44.1 kHz shared loopback/event/autoconvert initialization, and event-handle setup all returned `S_OK`. The client was reset/released; no stream was started or read.
 - Evidence is in [M00 WASAPI probe](evidence/M00-wasapi-probe.md). The M00 gate remains open for actual process-tree data capture, render/capture data-path validation, latency, and driver lifecycle/signing evidence.
+
+### 2026-09-05 — Native capture data path
+
+- Extended the native diagnostic with an explicit `capture [endpoint-index] [milliseconds]` mode. It starts one selected shared capture client, counts packets/frames without retaining samples, then stops/resets/releases it.
+- Run: `capture 0 200` returned successful activation, mix-format retrieval, initialization, capture service lookup, `Start`, ten packet reads totaling 4,800 frames, `Stop`, and `Reset`; process exit was zero.
+- This is endpoint capture data-flow evidence only. Process-tree capture data, render/loopback data, latency, two-device synchronization, and driver lifecycle/signing remain open. No defaults, volumes, mutes, drivers, or persistent settings were changed, so no configuration restoration was required.

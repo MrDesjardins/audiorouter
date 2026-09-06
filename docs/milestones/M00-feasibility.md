@@ -1,6 +1,6 @@
 # M00 — Windows feasibility and architecture decisions
 
-Status: not started. Prerequisite: specification baseline. Outcome: evidence-backed implementation choices before a large application is generated.
+Status: evidence collected; feasibility gate remains open. Prerequisite: specification baseline. Outcome: evidence-backed implementation choices before a large application is generated.
 
 ## Read first
 
