@@ -4,6 +4,9 @@ import type {
   ApplicationInfo,
   DeviceInfo,
   VirtualDeviceInfo,
+  VirtualDeviceApplyResult,
+  VirtualDeviceOperation,
+  VirtualDevicePlanResult,
   DiscoveryDocument,
   EventsSubscribeResult,
   GraphCommitResult,
@@ -47,6 +50,8 @@ export interface UiBackend {
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
+  planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
+  applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
   getRecordingRecovery(recordingId: string): Promise<RecordingRecoveryResult>;
   setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<RecordingMetadataResult>;
@@ -139,6 +144,19 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async listVirtualDevices() {
       return [];
     },
+    async planVirtualDevice(operation) {
+      return {
+        planId: "unavailable",
+        expiresInMs: 1,
+        operation,
+        availability: { status: "unavailable", reason: "demo backend has no managed virtual driver" },
+        requiredScopes: ["deviceAdministration"],
+        warnings: ["demo backend cannot provision virtual endpoints"],
+      };
+    },
+    async applyVirtualDevice() {
+      throw new Error("demo backend has no managed virtual driver");
+    },
     async previewRecording() {
       throw new Error("The backend is disconnected; recording preview is unavailable.");
     },
@@ -230,6 +248,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     async listVirtualDevices() {
       const result = await client.request("virtualDevices.list", { limit: 500 });
       return Array.isArray(result) ? result : result.items;
+    },
+    async planVirtualDevice(operation) {
+      return client.request("virtualDevices.plan", { operation });
+    },
+    async applyVirtualDevice(planId, idempotencyKey) {
+      return client.request("virtualDevices.apply", { planId, idempotencyKey });
     },
     async previewRecording(recordingId) {
       return client.request("recordings.preview", { recordingId });

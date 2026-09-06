@@ -37,6 +37,8 @@ describe("snapshot cache", () => {
       listApplications: async () => [],
       listDevices: async () => [],
       listVirtualDevices: async () => [],
+      planVirtualDevice: async () => { throw new Error("not connected"); },
+      applyVirtualDevice: async () => { throw new Error("not connected"); },
       previewRecording: async () => { throw new Error("not connected"); },
       setPrivacyMute: async () => { throw new Error("not connected"); },
       clearRecoverySafeMode: async () => { throw new Error("not connected"); },
@@ -142,6 +144,26 @@ describe("live event cursor", () => {
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listVirtualDevices()).resolves.toEqual([bus]);
     expect(received).toEqual({ method: "virtualDevices.list", params: { limit: 500 } });
+  });
+
+  it("forwards virtual-device lifecycle plans and applies through typed methods", async () => {
+    const operation = { action: "create", id: "bus-1", name: "Desktop In" } as const;
+    const calls: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        calls.push({ method, params });
+        return method === "virtualDevices.plan"
+          ? { planId: "plan-1", expiresInMs: 300000, operation, availability: { status: "unavailable", reason: "driver" }, requiredScopes: ["deviceAdministration"], warnings: [] }
+          : { planId: "plan-1", state: "applied", operation, availability: { status: "unavailable", reason: "driver" } };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.planVirtualDevice(operation)).resolves.toMatchObject({ planId: "plan-1" });
+    await expect(backend.applyVirtualDevice("plan-1", "key-1")).resolves.toMatchObject({ state: "applied" });
+    expect(calls).toEqual([
+      { method: "virtualDevices.plan", params: { operation } },
+      { method: "virtualDevices.apply", params: { planId: "plan-1", idempotencyKey: "key-1" } },
+    ]);
   });
 
   it("forwards recording preview through the read-only API", async () => {
