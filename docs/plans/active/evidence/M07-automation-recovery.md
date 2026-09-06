@@ -34,3 +34,7 @@ Added `resources/list` and `resources/read` for `audiorouter://capabilities`, `a
 ## 2026-09-06 — MCP backend pipe proxy
 
 Added optional `--pipe <\\.\\pipe\\name>` mode to MCP serve. API tool and capability/diagnostic resource requests are encoded with the existing 4-byte framed protocol and sent through `audiorouter-transport::round_trip` to the local backend; the backend remains responsible for authenticated authorization and state. No network listener, audio endpoint, or machine configuration is introduced. The changed CLI compiles and strict Clippy passes. Runtime test launch was blocked by Windows Application Control OS error 4551, so native pipe interoperability remains pending.
+
+## 2026-09-06 — Recording metadata API parity
+
+Added `recordings.list` to `API_METHODS`, discovery schemas, stable unknown-parameter validation, and control dispatch. Storage-backed results expose recording identity, session/recorder association, format/shape, frame/file counts, lifecycle state, missing flag, and user metadata; the method performs no file or audio action. The MCP adapter exposes the same operation as `list_recordings`. Control tests pass 43 cases, CLI tests pass 7 cases, and strict Clippy passes.

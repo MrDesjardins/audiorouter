@@ -792,6 +792,7 @@ fn mcp_tools() -> Value {
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
+        { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] } }, "additionalProperties": false } },
         { "name": "call_api", "description": "Call one validated permitted AudioRouter API method.", "inputSchema": { "type": "object", "properties": { "method": { "type": "string" }, "params": { "type": ["object", "null"] } }, "required": ["method"], "additionalProperties": false } }
     ])
 }
@@ -821,6 +822,7 @@ fn mcp_tool_call(
         "get_session" => ("sessions.get", Some(arguments)),
         "inspect_routes" => ("routes.inspect", Some(arguments)),
         "get_operation" => ("operations.get", Some(arguments)),
+        "list_recordings" => ("recordings.list", Some(arguments)),
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
             let params = arguments.get("params").cloned();
@@ -850,7 +852,15 @@ fn mcp_resource_read(
             } else {
                 "system.diagnostics"
             };
-            let payload = match mcp_api_value(plane, client_id, grant, pipe_name, method, None) {
+            let payload = match mcp_api_value(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                Some(json!(1)),
+                method,
+                None,
+            ) {
                 Ok(payload) => payload,
                 Err(error) => return mcp_error(id, -32003, &error),
             };
@@ -874,7 +884,15 @@ fn mcp_dispatch_tool(
     method: &str,
     params: Option<Value>,
 ) -> Value {
-    let payload = match mcp_api_value(plane, client_id, grant, pipe_name, method, params) {
+    let payload = match mcp_api_value(
+        plane,
+        client_id,
+        grant,
+        pipe_name,
+        id.clone(),
+        method,
+        params,
+    ) {
         Ok(payload) => payload,
         Err(error) => return mcp_error(id, -32003, &error),
     };
@@ -887,12 +905,13 @@ fn mcp_api_value(
     client_id: &str,
     grant: &audiorouter_control::ClientGrant,
     pipe_name: Option<&str>,
+    request_id: Option<Value>,
     method: &str,
     params: Option<Value>,
 ) -> Result<Value, String> {
     let request = audiorouter_protocol::JsonRpcRequest {
         jsonrpc: "2.0".into(),
-        id: Some(json!(1)),
+        id: request_id,
         method: method.into(),
         params,
     };
@@ -1199,7 +1218,7 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 7);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 8);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
     }
 }

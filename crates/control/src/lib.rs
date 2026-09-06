@@ -95,6 +95,7 @@ fn method_description(name: &str) -> &'static str {
         "clients.authorize" => "Authorize a client with an explicit built-in role.",
         "clients.revoke" => "Revoke a client enrollment without deleting its audit record.",
         "operations.get" => "Read the durable outcome of an idempotent operation.",
+        "recordings.list" => "List persisted recording metadata without touching audio files.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -165,6 +166,10 @@ fn method_input_schema(name: &str) -> Value {
         "operations.get" => object_schema(
             json!({ "operationId": { "type": "string", "minLength": 1 } }),
             &["operationId"],
+        ),
+        "recordings.list" => object_schema(
+            json!({ "sessionId": { "type": ["string", "null"], "minLength": 1 } }),
+            &[],
         ),
         "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
         | "session.stop" | "sessions.stop" => object_schema(
@@ -243,7 +248,7 @@ fn method_input_schema(name: &str) -> Value {
 fn method_output_schema(name: &str) -> Value {
     match name {
         "devices.list" | "apps.list" | "applications.list" | "nodes.types" | "nodes.describe"
-        | "clients.list" => {
+        | "clients.list" | "recordings.list" => {
             json!({ "type": "array" })
         }
         _ => json!({ "type": "object" }),
@@ -1004,6 +1009,7 @@ impl ControlPlane {
                     "clients.authorize" => self.dispatch_client_authorize(request.params),
                     "clients.revoke" => self.dispatch_client_revoke(request.params),
                     "operations.get" => self.dispatch_operation_get(request.params),
+                    "recordings.list" => self.dispatch_recordings_list(request.params),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1474,6 +1480,39 @@ impl ControlPlane {
         Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 30000 }))
     }
 
+    fn dispatch_recordings_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
+        let session_id = params.get("sessionId").and_then(Value::as_str);
+        let Some(storage) = &self.storage else {
+            return Ok(json!([]));
+        };
+        let records = storage
+            .list_recordings(session_id)
+            .map_err(storage_error)?
+            .into_iter()
+            .map(|record| {
+                json!({
+                    "id": record.id,
+                    "sessionId": record.session_id,
+                    "recorderId": record.recorder_id,
+                    "path": record.path,
+                    "format": record.format,
+                    "channels": record.channels,
+                    "sampleRate": record.sample_rate,
+                    "frames": record.frames,
+                    "fileBytes": record.file_bytes,
+                    "startTime": record.start_time,
+                    "state": record.state,
+                    "missing": record.missing,
+                    "title": record.title,
+                    "artist": record.artist,
+                    "comment": record.comment
+                })
+            })
+            .collect::<Vec<_>>();
+        Ok(json!(records))
+    }
+
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         if let Some(requested_epoch) = params.get("backendEpoch").and_then(Value::as_u64) {
@@ -1640,6 +1679,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "clients.authorize" => &["clientId", "role"],
         "clients.revoke" => &["clientId"],
         "operations.get" => &["operationId"],
+        "recordings.list" => &["sessionId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -2359,6 +2399,41 @@ mod tests {
         assert_eq!(result["reason"], "backendEpochChanged");
         assert_eq!(result["backendEpoch"], 1);
         assert_eq!(result["snapshot"]["sessions"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn recordings_list_dispatch_exposes_storage_metadata_without_file_actions() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "recording-1".into(),
+                session_id: "session".into(),
+                recorder_id: "recorder".into(),
+                path: "C:\\recordings\\one.wav".into(),
+                format: "wav".into(),
+                channels: 2,
+                sample_rate: 48_000,
+                frames: 96_000,
+                file_bytes: 384_000,
+                start_time: "2026-09-06T00:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: Some("Test".into()),
+                artist: None,
+                comment: None,
+            })
+            .unwrap();
+        let mut plane = ControlPlane::with_storage("recordings", storage);
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(8)),
+            method: "recordings.list".into(),
+            params: Some(json!({ "sessionId": "session" })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result.as_array().unwrap().len(), 1);
+        assert_eq!(result[0]["id"], "recording-1");
+        assert_eq!(result[0]["missing"], false);
     }
 
     #[test]

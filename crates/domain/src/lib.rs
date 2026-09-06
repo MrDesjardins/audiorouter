@@ -127,7 +127,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 28] = [
+pub const API_METHODS: [ApiMethodSpec; 29] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -165,6 +165,11 @@ pub const API_METHODS: [ApiMethodSpec; 28] = [
     },
     ApiMethodSpec {
         name: "operations.get",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "recordings.list",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
