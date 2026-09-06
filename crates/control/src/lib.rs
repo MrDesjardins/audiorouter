@@ -5711,6 +5711,49 @@ mod tests {
     }
 
     #[test]
+    fn virtual_device_lifecycle_requires_explicit_device_administration_scope() {
+        let request = |method: &str, params: Option<Value>| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(40)),
+            method: method.into(),
+            params,
+        };
+        for grant in [
+            ClientGrant::read_only(),
+            ClientGrant::for_role(ClientRole::Editor),
+            ClientGrant::for_role(ClientRole::Operator),
+        ] {
+            let mut plane = ControlPlane::default();
+            let plan = plane.dispatch_authorized(
+                request(
+                    "virtualDevices.plan",
+                    Some(json!({ "operation": { "action": "create", "id": "bus-1", "name": "Desktop" } })),
+                ),
+                &grant,
+            );
+            assert_eq!(plan.error.unwrap().code, -32001);
+            let apply = plane.dispatch_authorized(
+                request(
+                    "virtualDevices.apply",
+                    Some(json!({ "planId": "plan-1", "idempotencyKey": "key-1" })),
+                ),
+                &grant,
+            );
+            assert_eq!(apply.error.unwrap().code, -32001);
+        }
+        let mut plane = ControlPlane::default();
+        let grant = ClientGrant::with_scopes([PermissionScope::DeviceAdministration]);
+        let response = plane.dispatch_authorized(
+            request(
+                "virtualDevices.plan",
+                Some(json!({ "operation": { "action": "create", "id": "bus-1", "name": "Desktop" } })),
+            ),
+            &grant,
+        );
+        assert!(response.result.is_some());
+    }
+
+    #[test]
     fn scoped_authorization_allows_discovery_read() {
         let mut plane = ControlPlane::default();
         let request = JsonRpcRequest {

@@ -94,6 +94,13 @@ All render/capture capabilities and endpoint IDs remain unavailable until the
 managed driver exists, preventing callers from mistaking desired state for
 provisioned Windows devices.
 
+Lifecycle authorization is explicitly scoped to `deviceAdministration`; the
+read-only, editor, and operator convenience grants cannot plan or apply bus
+changes. The regression target compiles and strict Clippy passes. Execution of
+that rebuilt control test was blocked before launch by Windows Application
+Control OS error 4551, so this checkpoint records compile/static evidence rather
+than a runtime test pass.
+
 Virtual-device plans are now durable SQLite records containing the validated
 operation and bounded expiry. Valid plans reload after a control restart and are
 removed after successful apply; expired plans are hidden. Storage and control
