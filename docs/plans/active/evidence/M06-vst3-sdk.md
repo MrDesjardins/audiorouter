@@ -415,3 +415,8 @@ it and verifies that a file beneath that directory is rejected. This covers the
 case where the leaf itself is regular but an intermediate component redirects
 outside the approved root; link creation is conditional because Windows may
 require a separate developer-mode or privilege setting.
+
+State reads additionally require the canonical asset to be a direct child of
+the approved root, matching the flat layout produced by `write_state_asset`.
+This removes nested path ambiguity and reduces the state-file TOCTOU surface;
+full OS filesystem/network sandboxing for plugin execution remains open.

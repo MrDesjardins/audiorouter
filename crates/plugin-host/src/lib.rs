@@ -198,6 +198,9 @@ pub fn read_state_asset(
     if !canonical_path.starts_with(&canonical_root) {
         return Err(StateFileError::OutsideRoot);
     }
+    if canonical_path.parent() != Some(canonical_root.as_path()) {
+        return Err(StateFileError::OutsideRoot);
+    }
     let metadata =
         fs::metadata(&canonical_path).map_err(|error| StateFileError::Io(error.to_string()))?;
     if metadata.len() > MAX_PLUGIN_STATE_BYTES as u64 {
