@@ -11,6 +11,7 @@ describe("disconnected backend", () => {
     expect(snapshot.session.id).toBe(demoSession.id);
     expect(await backend.listRecordings()).toEqual([]);
     await expect(backend.previewRecording("recording")).rejects.toThrow("recording preview is unavailable");
+    await expect(backend.clearRecoverySafeMode()).rejects.toThrow("recovery safe-mode clearing is unavailable");
     expect(await backend.subscribe()).toEqual({ backendEpoch: 0, events: [], nextSequence: 0 });
     await expect(backend.planGraph(demoSession)).rejects.toThrow("backend is disconnected");
     await expect(backend.commitGraph("plan-1", demoSession.revision, "ui-op")).rejects.toThrow(
@@ -33,6 +34,7 @@ describe("snapshot cache", () => {
       listRecordings: async () => [],
       previewRecording: async () => { throw new Error("not connected"); },
       setPrivacyMute: async () => { throw new Error("not connected"); },
+      clearRecoverySafeMode: async () => { throw new Error("not connected"); },
       removeRecordingEntry: async () => { throw new Error("not connected"); },
       createSession: async () => { throw new Error("not connected"); },
       duplicateSession: async () => { throw new Error("not connected"); },
@@ -108,6 +110,13 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { muted: true }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).setPrivacyMute(true)).resolves.toEqual({ muted: true });
     expect(received).toEqual({ method: "safety.setPrivacyMute", params: { muted: true } });
+  });
+
+  it("forwards authorized recovery safe-mode clearing through the live API", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { safeMode: false, recentCrashes: 0, persistence: "durable" }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).clearRecoverySafeMode()).resolves.toMatchObject({ safeMode: false });
+    expect(received).toEqual({ method: "recovery.clearSafeMode", params: undefined });
   });
 
   it("forwards metadata-only recording entry removal", async () => {

@@ -177,6 +177,11 @@ export interface StatusSnapshot {
   sessionCount: number;
   activeSessionCount: number;
   activeSessionIds: EntityId[];
+  recovery: {
+    safeMode: boolean;
+    recentCrashes: number;
+    persistence: "durable" | "memory";
+  };
   eventCursor: { backendEpoch: number; latestSequence: number };
 }
 
@@ -258,6 +263,7 @@ export type ImplementedMethod =
   | "recordings.rename"
   | "recordings.removeEntry"
   | "recordings.recycle"
+  | "recovery.clearSafeMode"
   | "safety.setPrivacyMute"
   | "startup.get"
   | "devices.list"
@@ -305,6 +311,7 @@ export type MethodParams = {
   "recordings.rename": { recordingId: EntityId; newPath: string };
   "recordings.removeEntry": { recordingId: EntityId };
   "recordings.recycle": { recordingId: EntityId; confirm?: boolean };
+  "recovery.clearSafeMode": undefined;
   "safety.setPrivacyMute": { muted: boolean };
   "startup.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
@@ -364,6 +371,7 @@ export type MethodResult = {
   "recordings.rename": Record<string, unknown>;
   "recordings.removeEntry": Record<string, unknown>;
   "recordings.recycle": Record<string, unknown>;
+  "recovery.clearSafeMode": { safeMode: false; recentCrashes: number; persistence: "durable" | "memory" };
   "safety.setPrivacyMute": Record<string, unknown>;
   "startup.get": Record<string, unknown>;
   "devices.list": unknown[];

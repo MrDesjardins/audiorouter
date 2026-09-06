@@ -286,3 +286,12 @@ session through `sessions.delete`. The UI changes selection only after the
 authoritative response; disconnected mode disables the action, and the
 backend's active-resource protection remains in force. UI coverage is 20
 tests with typecheck and production build passing.
+
+The connected editor now displays the backend's persisted crash-recovery
+status and exposes `recovery.clearSafeMode` only when the backend is connected
+and reports an active latch. Disconnected preview includes an explicit
+in-memory normal state, keeps the clear control disabled, and rejects direct
+clear calls. The live adapter forwards the exact no-parameter RPC request.
+UI coverage is 21 tests; typecheck and production build pass. This operation
+clears recovery markers/latch state only and does not start audio or alter
+machine configuration.

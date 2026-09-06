@@ -32,6 +32,7 @@ export interface UiBackend {
   getRecordingRecovery(recordingId: string): Promise<Record<string, unknown>>;
   setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<Record<string, unknown>>;
   setPrivacyMute(muted: boolean): Promise<Record<string, unknown>>;
+  clearRecoverySafeMode(): Promise<Record<string, unknown>>;
   removeRecordingEntry(recordingId: string): Promise<Record<string, unknown>>;
   createSession(session: Session): Promise<{ session: Session; state: string }>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<{ session: Session; state: string }>;
@@ -76,6 +77,7 @@ const disconnectedStatus: StatusSnapshot = {
   sessionCount: 1,
   activeSessionCount: 0,
   activeSessionIds: [],
+  recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
   eventCursor: { backendEpoch: 0, latestSequence: 0 },
 };
 
@@ -112,6 +114,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async setPrivacyMute() {
       throw new Error("The backend is disconnected; privacy mute is unavailable.");
+    },
+    async clearRecoverySafeMode() {
+      throw new Error("The backend is disconnected; recovery safe-mode clearing is unavailable.");
     },
     async removeRecordingEntry() {
       throw new Error("The backend is disconnected; recording removal is unavailable.");
@@ -180,6 +185,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async setPrivacyMute(muted) {
       return client.request("safety.setPrivacyMute", { muted });
+    },
+    async clearRecoverySafeMode() {
+      return client.request("recovery.clearSafeMode", undefined);
     },
     async removeRecordingEntry(recordingId) {
       return client.request("recordings.removeEntry", { recordingId });
