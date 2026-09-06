@@ -766,6 +766,85 @@ fn parse_info_metadata(payload: &[u8], metadata: &mut RecordingMetadata) {
     }
 }
 
+/// Reads only Vorbis comments from FLAC metadata blocks. Audio frames are
+/// skipped entirely, and malformed comments are ignored without invalidating
+/// the otherwise indexable recording.
+pub fn read_flac_metadata(path: impl AsRef<Path>) -> Result<RecordingMetadata, RecordingError> {
+    let mut file = std::fs::File::open(path)?;
+    let mut signature = [0u8; 4];
+    file.read_exact(&mut signature)?;
+    if &signature != b"fLaC" {
+        return Err(RecordingError::FlacEncode("invalid FLAC signature".into()));
+    }
+    let mut metadata = RecordingMetadata::default();
+    loop {
+        let mut block_header = [0u8; 4];
+        file.read_exact(&mut block_header)?;
+        let is_last = block_header[0] & 0x80 != 0;
+        let block_type = block_header[0] & 0x7f;
+        let length = (usize::from(block_header[1]) << 16)
+            | (usize::from(block_header[2]) << 8)
+            | usize::from(block_header[3]);
+        if block_type == 4 && length <= 64 * 1024 {
+            let mut payload = vec![0u8; length];
+            file.read_exact(&mut payload)?;
+            parse_vorbis_comments(&payload, &mut metadata);
+        } else {
+            file.seek(SeekFrom::Current(
+                i64::try_from(length).map_err(|_| RecordingError::TooManyFrames)?,
+            ))?;
+        }
+        if is_last {
+            break;
+        }
+    }
+    Ok(metadata)
+}
+
+fn parse_vorbis_comments(payload: &[u8], metadata: &mut RecordingMetadata) {
+    if payload.len() < 4 {
+        return;
+    }
+    let vendor_length = u32::from_le_bytes(payload[..4].try_into().unwrap()) as usize;
+    let mut offset = 4usize;
+    let Some(vendor_end) = offset.checked_add(vendor_length) else {
+        return;
+    };
+    if vendor_end > payload.len() || vendor_end + 4 > payload.len() {
+        return;
+    }
+    offset = vendor_end;
+    let count = u32::from_le_bytes(payload[offset..offset + 4].try_into().unwrap()) as usize;
+    offset += 4;
+    for _ in 0..count {
+        if offset + 4 > payload.len() {
+            return;
+        }
+        let length = u32::from_le_bytes(payload[offset..offset + 4].try_into().unwrap()) as usize;
+        offset += 4;
+        if length > payload.len().saturating_sub(offset) {
+            return;
+        }
+        let Some(comment) = std::str::from_utf8(&payload[offset..offset + length]).ok() else {
+            offset += length;
+            continue;
+        };
+        if let Some((name, value)) = comment.split_once('=') {
+            if value.chars().count() <= 256
+                && !value.chars().any(|character| character.is_control())
+            {
+                match name.to_ascii_uppercase().as_str() {
+                    "TITLE" => metadata.title = Some(value.to_owned()),
+                    "ARTIST" => metadata.artist = Some(value.to_owned()),
+                    "COMMENT" => metadata.comment = Some(value.to_owned()),
+                    _ => {}
+                }
+            }
+        }
+        offset += length;
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RecordingEntry {
     pub id: u64,
@@ -807,7 +886,12 @@ impl RecordingLibrary {
             RecordingError::Io(error) => RecordingLibraryError::Io(error.kind()),
             _ => RecordingLibraryError::InvalidPath,
         })?;
-        let metadata = read_wav_metadata(&path).unwrap_or_default();
+        let metadata = match path.extension().and_then(|extension| extension.to_str()) {
+            Some(extension) if extension.eq_ignore_ascii_case("flac") => {
+                read_flac_metadata(&path).unwrap_or_default()
+            }
+            _ => read_wav_metadata(&path).unwrap_or_default(),
+        };
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
         self.entries.push(RecordingEntry {
@@ -1782,6 +1866,20 @@ mod tests {
         assert!(bytes.windows(12).any(|window| window == b"TITLE=Take 2"));
         assert!(bytes.windows(13).any(|window| window == b"COMMENT=clean"));
         assert_eq!(flac_io::info(&bytes).unwrap().total_samples, 2);
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-flac-metadata-{}.flac",
+            std::process::id()
+        ));
+        std::fs::write(&path, &bytes).unwrap();
+        assert_eq!(
+            read_flac_metadata(&path).unwrap(),
+            RecordingMetadata {
+                title: Some("Take 2".into()),
+                artist: None,
+                comment: Some("clean".into()),
+            }
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

@@ -336,3 +336,8 @@ tags without loading the audio data chunk. Malformed or oversized tag values
 are ignored while the valid recording remains indexable. The regression proves
 metadata survives writer finalization and library registration; recording
 runtime coverage is 21 tests with strict Clippy.
+
+FLAC registration now follows the same boundary: it reads only bounded Vorbis
+comment blocks before the audio frames, maps title/artist/comment values, and
+ignores malformed comments without rejecting the recording. Encode, parse, and
+registration regression coverage passes in the 21-test recording suite.
