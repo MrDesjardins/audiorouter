@@ -314,3 +314,10 @@ all 128 output samples were finite, and shut down processing cleanly. This is
 bounded plugin-DSP execution evidence only; parameter automation, state/editor
 behavior, worker integration, failure containment, and sandbox enforcement
 remain open.
+
+The probe also resolved the component's controller class through
+getControllerClassId, created the IEditController, initialized it with the
+null host context, and observed 5 parameters before terminating/releasing the
+controller. This confirms a real VST3 parameter surface without opening an
+editor or audio device; host-side parameter automation/state fidelity and
+sandbox enforcement remain open.

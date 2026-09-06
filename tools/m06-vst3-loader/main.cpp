@@ -11,6 +11,7 @@
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
+#include "pluginterfaces/vst/ivsteditcontroller.h"
 
 namespace fs = std::filesystem;
 using namespace Steinberg;
@@ -46,6 +47,7 @@ int wmain(int argc, wchar_t** argv) {
     IPluginFactory* factory = nullptr;
     Vst::IComponent* component = nullptr;
     Vst::IAudioProcessor* processor = nullptr;
+    Vst::IEditController* controller = nullptr;
     bool component_initialized = false;
     bool component_active = false;
     bool processor_active = false;
@@ -175,12 +177,29 @@ int wmain(int argc, wchar_t** argv) {
                 component_active = false;
                 processor->release();
                 processor = nullptr;
+                TUID controller_id{};
+                if (component->getControllerClassId(controller_id) != kResultOk ||
+                    factory->createInstance(
+                        controller_id, Vst::IEditController_iid,
+                        reinterpret_cast<void**>(&controller)) != kResultOk) {
+                    throw std::runtime_error("controller createInstance failed");
+                }
+                if (controller->initialize(nullptr) != kResultOk) {
+                    throw std::runtime_error("controller initialize failed");
+                }
+                const auto parameter_count = controller->getParameterCount();
+                if (parameter_count <= 0) {
+                    throw std::runtime_error("controller exposes no parameters");
+                }
+                controller->terminate();
+                controller->release();
+                controller = nullptr;
                 component->terminate();
                 component_initialized = false;
                 component->release();
                 component = nullptr;
                 std::cout << "processed offline block: channels=" << channels
-                          << " frames=64 finite=true\n";
+                          << " frames=64 finite=true parameters=" << parameter_count << "\n";
                 break;
             }
         }
@@ -194,6 +213,10 @@ int wmain(int argc, wchar_t** argv) {
         }
         if (processor) {
             processor->release();
+        }
+        if (controller) {
+            controller->terminate();
+            controller->release();
         }
         if (component_active) {
             component->setActive(false);
