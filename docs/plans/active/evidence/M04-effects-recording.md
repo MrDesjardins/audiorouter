@@ -218,3 +218,9 @@ metadata. Save/list/update/remove-entry methods preserve row-only removal; a
 file-backed test reopens the database and verifies persistence and ordering.
 Storage coverage is 21 tests with strict Clippy. Control/API integration,
 embedded file tags, rename, preview, and recycle remain open.
+FLAC library inspection is now implemented alongside the existing WAV
+inspection. `inspect_flac_file` reads and validates the FLAC marker and
+STREAMINFO block without decoding audio frames, and `inspect_recording` reports
+valid `.flac` entries with channels, sample rate, bit depth, frame count, and
+file size. The recording suite has 15 passing tests and strict Clippy passes;
+streaming FLAC worker integration remains open.

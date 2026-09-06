@@ -456,6 +456,15 @@ pub struct WavFileInfo {
     pub file_bytes: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FlacFileInfo {
+    pub channels: u8,
+    pub sample_rate: u32,
+    pub bits_per_sample: u8,
+    pub frames: u64,
+    pub file_bytes: u64,
+}
+
 /// Batch FLAC encoder for completed in-memory segments. It is intentionally
 /// separate from `WavRecorder`: the current dependency API returns one encoded
 /// buffer, so it must not be used for unbounded live recording yet.
@@ -532,6 +541,7 @@ impl FlacBufferEncoder {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RecordingFileStatus {
     Present(WavFileInfo),
+    FlacPresent(FlacFileInfo),
     Missing,
     Invalid,
 }
@@ -736,6 +746,21 @@ pub fn inspect_wav_file(path: impl AsRef<std::path::Path>) -> Result<WavFileInfo
 pub fn inspect_recording(
     path: impl AsRef<std::path::Path>,
 ) -> Result<RecordingFileStatus, RecordingError> {
+    if path
+        .as_ref()
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("flac"))
+    {
+        return match inspect_flac_file(path) {
+            Ok(info) => Ok(RecordingFileStatus::FlacPresent(info)),
+            Err(RecordingError::InvalidWav) => Ok(RecordingFileStatus::Invalid),
+            Err(RecordingError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(RecordingFileStatus::Missing)
+            }
+            Err(error) => Err(error),
+        };
+    }
     match inspect_wav_file(path) {
         Ok(info) => Ok(RecordingFileStatus::Present(info)),
         Err(RecordingError::InvalidWav) => Ok(RecordingFileStatus::Invalid),
@@ -744,6 +769,63 @@ pub fn inspect_recording(
         }
         Err(error) => Err(error),
     }
+}
+
+/// Inspects FLAC's STREAMINFO metadata without decoding audio frames.
+pub fn inspect_flac_file(
+    path: impl AsRef<std::path::Path>,
+) -> Result<FlacFileInfo, RecordingError> {
+    let mut file = std::fs::File::open(path)?;
+    let file_bytes = file.metadata()?.len();
+    let mut marker = [0u8; 4];
+    file.read_exact(&mut marker)?;
+    if &marker != b"fLaC" {
+        return Err(RecordingError::InvalidWav);
+    }
+    let mut stream_info = None;
+    loop {
+        let mut block_header = [0u8; 4];
+        file.read_exact(&mut block_header)?;
+        let block_type = block_header[0] & 0x7f;
+        let is_last = block_header[0] & 0x80 != 0;
+        let length =
+            u32::from_be_bytes([0, block_header[1], block_header[2], block_header[3]]) as usize;
+        if block_type == 0 {
+            if length != 34 {
+                return Err(RecordingError::InvalidWav);
+            }
+            let mut bytes = [0u8; 34];
+            file.read_exact(&mut bytes)?;
+            let packed = u64::from_be_bytes(bytes[10..18].try_into().unwrap());
+            let sample_rate = (packed >> 44) as u32;
+            let channels = ((packed >> 41) & 0x07) as u8 + 1;
+            let bits_per_sample = ((packed >> 36) & 0x1f) as u8 + 1;
+            let frames = packed & 0x0000_ffff_ffff;
+            if !matches!(channels, 1 | 2)
+                || !matches!(sample_rate, 44_100 | 48_000)
+                || !matches!(bits_per_sample, 16 | 24)
+                || frames == 0
+            {
+                return Err(RecordingError::InvalidWav);
+            }
+            stream_info = Some(FlacFileInfo {
+                channels,
+                sample_rate,
+                bits_per_sample,
+                frames,
+                file_bytes,
+            });
+        } else {
+            std::io::copy(
+                &mut std::io::Read::by_ref(&mut file).take(length as u64),
+                &mut std::io::sink(),
+            )?;
+        }
+        if is_last {
+            break;
+        }
+    }
+    stream_info.ok_or(RecordingError::InvalidWav)
 }
 
 impl<W: Write + Seek> WavWriter<W> {
@@ -1386,6 +1468,46 @@ mod tests {
             empty.finish(),
             Err(RecordingError::InvalidSampleCount)
         ));
+    }
+
+    #[test]
+    fn flac_inspection_reads_streaminfo_and_library_status() {
+        let encoder = {
+            let mut encoder = FlacBufferEncoder::new(2, 48_000, 16).unwrap();
+            encoder.write_interleaved(&[0.0, 0.25, -0.5, 0.75]).unwrap();
+            encoder.finish().unwrap()
+        };
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recording-inspect-{}.flac",
+            std::process::id()
+        ));
+        std::fs::write(&path, encoder).unwrap();
+        assert_eq!(
+            inspect_flac_file(&path).unwrap(),
+            FlacFileInfo {
+                channels: 2,
+                sample_rate: 48_000,
+                bits_per_sample: 16,
+                frames: 2,
+                file_bytes: std::fs::metadata(&path).unwrap().len(),
+            }
+        );
+        assert!(matches!(
+            inspect_recording(&path),
+            Ok(RecordingFileStatus::FlacPresent(FlacFileInfo {
+                channels: 2,
+                sample_rate: 48_000,
+                bits_per_sample: 16,
+                frames: 2,
+                ..
+            }))
+        ));
+        std::fs::write(&path, b"not flac").unwrap();
+        assert_eq!(
+            inspect_recording(&path).unwrap(),
+            RecordingFileStatus::Invalid
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[cfg(unix)]
