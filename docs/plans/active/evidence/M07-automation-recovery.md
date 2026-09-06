@@ -340,3 +340,7 @@ MCP now exposes the same maintenance operation as
 `clear_recovery_safe_mode`. An operator-scope grant succeeds while a read-only
 grant is rejected, and the tool routes through the shared control dispatcher;
 no session or audio restart is performed.
+The MCP stdio interoperability regression was updated to account for the
+published `clear_recovery_safe_mode` tool. The catalog now contains 23 tools,
+including the recovery maintenance operation, and the locked workspace test
+suite confirms the process-level catalog remains internally consistent.
