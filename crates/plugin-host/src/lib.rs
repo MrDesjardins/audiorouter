@@ -143,6 +143,10 @@ pub fn write_state_asset(
     asset
         .verify_for_restore(asset.version)
         .map_err(StateFileError::InvalidState)?;
+    let root_metadata = fs::symlink_metadata(root).map_err(|_| StateFileError::InvalidRoot)?;
+    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+        return Err(StateFileError::InvalidRoot);
+    }
     let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
     if !canonical_root.is_dir() {
         return Err(StateFileError::InvalidRoot);
@@ -174,7 +178,16 @@ pub fn read_state_asset(
     version: u32,
     expected_sha256: &str,
 ) -> Result<PluginStateAsset, StateFileError> {
+    let root_metadata = fs::symlink_metadata(root).map_err(|_| StateFileError::InvalidRoot)?;
+    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+        return Err(StateFileError::InvalidRoot);
+    }
     let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
+    let path_metadata =
+        fs::symlink_metadata(path).map_err(|error| StateFileError::Io(error.to_string()))?;
+    if path_metadata.file_type().is_symlink() {
+        return Err(StateFileError::OutsideRoot);
+    }
     let canonical_path =
         fs::canonicalize(path).map_err(|error| StateFileError::Io(error.to_string()))?;
     if !canonical_path.starts_with(&canonical_root) {
@@ -2305,6 +2318,18 @@ mod tests {
             read_state_asset(&root, &path, 4, &asset.sha256),
             Err(StateFileError::InvalidState(StateError::IntegrityMismatch))
         );
+        let link = root.join("state-link.bin");
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_file(&path, &link);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&path, &link);
+        if link_result.is_ok() {
+            assert_eq!(
+                read_state_asset(&root, &link, 4, &asset.sha256),
+                Err(StateFileError::OutsideRoot)
+            );
+            fs::remove_file(&link).unwrap();
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

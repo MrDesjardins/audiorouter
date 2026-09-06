@@ -381,3 +381,12 @@ after the wrapper is gone; job creation/assignment failure rejects the spawn.
 The native worker process tests pass with this containment active. This is
 process-lifetime containment only; filesystem/network sandbox policy and real
 plugin execution remain open.
+
+## 2026-09-06 — Plugin state path hardening
+
+Hardened plugin state file safety by checking root and asset symlink metadata
+before canonicalization. Symlink roots are rejected and a symlink asset cannot
+be followed into an approved directory; the existing exclusive-write and hash
+validation rules remain intact. The Windows plugin-host suite passes 26 unit
+tests plus 4 worker-process tests with strict Clippy. Reparse-point coverage
+and full filesystem/network sandbox policy remain separate native work.
