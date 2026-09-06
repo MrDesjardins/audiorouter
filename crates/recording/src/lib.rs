@@ -4,9 +4,117 @@
 //! It does not open paths, create files, or perform realtime scheduling.
 
 use std::io::{Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const MAX_CHANNELS: u16 = 2;
+
+#[derive(Debug)]
+pub enum PathPolicyError {
+    RootNotAbsolute,
+    NetworkRoot,
+    RootUnavailable(std::io::Error),
+    RootNotDirectory,
+    PathEscapesRoot,
+    FileExists,
+    Io(std::io::Error),
+}
+
+/// Validates a user-approved local recording root and creates non-overwriting
+/// recording files beneath its canonical directory.
+pub struct RecordingPathPolicy {
+    root: PathBuf,
+}
+
+impl RecordingPathPolicy {
+    pub fn new(root: impl AsRef<Path>) -> Result<Self, PathPolicyError> {
+        let root = root.as_ref();
+        if !root.is_absolute() {
+            return Err(PathPolicyError::RootNotAbsolute);
+        }
+        let text = root.as_os_str().to_string_lossy();
+        if text.starts_with("\\\\") || text.starts_with("//") {
+            return Err(PathPolicyError::NetworkRoot);
+        }
+        let root = root
+            .canonicalize()
+            .map_err(PathPolicyError::RootUnavailable)?;
+        if !root.is_dir() {
+            return Err(PathPolicyError::RootNotDirectory);
+        }
+        Ok(Self { root })
+    }
+
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn create_file(
+        &self,
+        session: &str,
+        recorder: &str,
+        sequence: u64,
+        extension: &str,
+    ) -> Result<(PathBuf, std::fs::File), PathPolicyError> {
+        let extension = sanitize_component(extension);
+        if extension.is_empty() {
+            return Err(PathPolicyError::PathEscapesRoot);
+        }
+        let filename = format!(
+            "{}-{}-{}.{}",
+            sanitize_component(session),
+            sanitize_component(recorder),
+            sequence,
+            extension
+        );
+        let path = self.root.join(filename);
+        let parent = path
+            .parent()
+            .and_then(|parent| parent.canonicalize().ok())
+            .ok_or(PathPolicyError::PathEscapesRoot)?;
+        if !parent.starts_with(&self.root) {
+            return Err(PathPolicyError::PathEscapesRoot);
+        }
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    PathPolicyError::FileExists
+                } else {
+                    PathPolicyError::Io(error)
+                }
+            })?;
+        Ok((path, file))
+    }
+}
+
+pub fn sanitize_component(value: &str) -> String {
+    let mut sanitized = value
+        .chars()
+        .map(|character| match character {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            character if character.is_control() => '_',
+            character => character,
+        })
+        .collect::<String>();
+    while sanitized.ends_with([' ', '.']) {
+        sanitized.pop();
+    }
+    if sanitized.is_empty() {
+        sanitized.push('_');
+    }
+    let stem = sanitized.split('.').next().unwrap_or_default();
+    let upper = stem.to_ascii_uppercase();
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (upper.starts_with("COM") && upper[3..].parse::<u8>().is_ok())
+        || (upper.starts_with("LPT") && upper[3..].parse::<u8>().is_ok())
+    {
+        sanitized.insert(0, '_');
+    }
+    sanitized.chars().take(80).collect()
+}
 
 /// Caller-owned interleaved samples ready for an off-thread encoder.
 #[derive(Debug)]
@@ -681,5 +789,23 @@ mod tests {
         recorder.stop(13).unwrap();
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn path_policy_sanitizes_components_and_never_overwrites() {
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-recording-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        assert_eq!(sanitize_component("CON:take?.wav"), "CON_take_.wav");
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let (path, _file) = policy.create_file("voice/main", "CON", 1, "wav").unwrap();
+        assert!(path.starts_with(policy.root()));
+        assert!(matches!(
+            policy.create_file("voice/main", "CON", 1, "wav"),
+            Err(PathPolicyError::FileExists)
+        ));
+        drop(_file);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

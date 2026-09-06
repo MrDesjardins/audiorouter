@@ -34,3 +34,10 @@ rejects non-recording drains and frame discontinuities, and finalizes the
 caller-owned WAV destination only after a completed stop. A seventh in-memory
 test verifies chunk draining and finalized data size. Filesystem policy,
 crash recovery, FLAC, and public recorder APIs remain open.
+
+`RecordingPathPolicy` validates an absolute local recording root, rejects UNC
+roots, sanitizes reserved/invalid Windows filename components, confirms the
+canonical parent remains under the approved root, and creates files with
+exclusive `create_new` semantics. A temp-directory test verifies sanitization
+and collision rejection. Reparse-point-specific Windows checks, allowlisted
+token templates, library metadata, and recycle operations remain open.
