@@ -876,7 +876,7 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
-        json!("recordings list|get|preview|set-metadata|rename|remove-entry [<recording-id>] --database <path>"),
+        json!("recordings list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle [<recording-id>] --database <path>"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
