@@ -20,6 +20,7 @@ try {
         schemaVersion = 1
         architecture = "x64"
         sourceRevision = ("a" * 40)
+        build = [ordered]@{ profile = "release"; target = "x86_64-pc-windows-msvc"; rustc = "1.96.0"; cargo = "cargo 1.96.0" }
         artifacts = @(
             [ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 }
             [ordered]@{ file = "sbom.cargo.json"; sha256 = $sbomHash; bytes = (Get-Item -LiteralPath $sbomPath).Length }

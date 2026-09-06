@@ -76,11 +76,27 @@ try {
     if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[0-9a-f]{40}$') {
         throw "could not determine the source revision for release provenance"
     }
+    $rustcDetails = & rustc -vV
+    if ($LASTEXITCODE -ne 0) {
+        throw "could not determine the Rust compiler provenance"
+    }
+    $rustcVersion = ($rustcDetails | Where-Object { $_ -like "release: *" } | Select-Object -First 1) -replace '^release:\s*', ''
+    $rustcHost = ($rustcDetails | Where-Object { $_ -like "host: *" } | Select-Object -First 1) -replace '^host:\s*', ''
+    $cargoVersion = (& cargo --version).Trim()
+    if ([string]::IsNullOrWhiteSpace($rustcVersion) -or [string]::IsNullOrWhiteSpace($rustcHost) -or [string]::IsNullOrWhiteSpace($cargoVersion)) {
+        throw "Rust toolchain provenance is incomplete"
+    }
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
         architecture = "x64"
         sourceRevision = $revision
+        build = [ordered]@{
+            profile = "release"
+            target = $rustcHost
+            rustc = $rustcVersion
+            cargo = $cargoVersion
+        }
         artifacts = $checksums
         signed = $false
         publicationReady = $false

@@ -31,6 +31,12 @@ if ($manifest.signed -ne $false -or $manifest.publicationReady -ne $false) {
 if (@($manifest.blockers).Count -eq 0) {
     throw "unsigned preparation manifest must retain explicit blockers"
 }
+if ($null -eq $manifest.build -or $manifest.build.profile -ne "release" -or
+    [string]::IsNullOrWhiteSpace($manifest.build.target) -or
+    [string]::IsNullOrWhiteSpace($manifest.build.rustc) -or
+    [string]::IsNullOrWhiteSpace($manifest.build.cargo)) {
+    throw "release manifest has incomplete build provenance"
+}
 
 $sbom = Join-Path $root "sbom.cargo.json"
 if (-not (Test-Path -LiteralPath $sbom -PathType Leaf)) {
