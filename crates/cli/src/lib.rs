@@ -118,7 +118,7 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
 fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: recordings <list|get|preview|remove-entry> [<recording-id>] --database <path>"
+            "usage: recordings <list|get|preview|set-metadata|remove-entry> [<recording-id>] --database <path>"
                 .into(),
         )
     })?;
@@ -153,6 +153,26 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
                 "recordingId": positional(args, 2, "recording id")?
             })),
         ),
+        "set-metadata" => {
+            let recording_id = positional(args, 2, "recording id")?;
+            let title = optional_option_value(args, "--title")?;
+            let artist = optional_option_value(args, "--artist")?;
+            let comment = optional_option_value(args, "--comment")?;
+            if title.is_none() && artist.is_none() && comment.is_none() {
+                return Err(CliError::InvalidArguments(
+                    "set-metadata requires --title, --artist, or --comment".into(),
+                ));
+            }
+            (
+                "recordings.setMetadata",
+                Some(json!({
+                    "recordingId": recording_id,
+                    "title": title,
+                    "artist": artist,
+                    "comment": comment
+                })),
+            )
+        }
         "remove-entry" => (
             "recordings.removeEntry",
             Some(json!({
@@ -160,11 +180,35 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
             })),
         ),
         _ => return Err(CliError::InvalidArguments(
-            "usage: recordings <list|get|preview|remove-entry> [<recording-id>] --database <path>"
+            "usage: recordings <list|get|preview|set-metadata|remove-entry> [<recording-id>] --database <path>"
                 .into(),
         )),
     };
     let mut plane = ControlPlane::with_storage("cli", database(args)?);
+    let mut params = params;
+    if method == "recordings.setMetadata" {
+        let recording_id = params
+            .as_ref()
+            .and_then(|value| value.get("recordingId"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| CliError::InvalidArguments("recording id is required".into()))?;
+        let current = plane
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "recordings.get".into(),
+                params: Some(json!({ "recordingId": recording_id })),
+            })
+            .result
+            .ok_or_else(|| CliError::InvalidArguments("recording not found".into()))?;
+        if let Some(params) = params.as_mut() {
+            for field in ["title", "artist", "comment"] {
+                if params.get(field).is_some_and(Value::is_null) {
+                    params[field] = current[field].clone();
+                }
+            }
+        }
+    }
     let response = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -479,6 +523,17 @@ fn positional<'a>(args: &'a [&str], index: usize, name: &str) -> Result<&'a str,
         .ok_or_else(|| CliError::InvalidArguments(format!("{name} is required")))
 }
 
+fn optional_option_value<'a>(args: &'a [&str], option: &str) -> Result<Option<&'a str>, CliError> {
+    let Some(index) = args.iter().position(|argument| *argument == option) else {
+        return Ok(None);
+    };
+    args.get(index + 1)
+        .copied()
+        .filter(|value| !value.is_empty() && !value.starts_with('-'))
+        .map(Some)
+        .ok_or_else(|| CliError::InvalidArguments(format!("{option} requires a value")))
+}
+
 fn positional_path(
     args: &[&str],
     index: usize,
@@ -646,7 +701,7 @@ fn help_value() -> Value {
     let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
     value["commands"].as_array_mut().unwrap().insert(
         14,
-        json!("recordings list|get|preview|remove-entry [<recording-id>] --database <path>"),
+        json!("recordings list|get|preview|set-metadata|remove-entry [<recording-id>] --database <path>"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
@@ -911,6 +966,7 @@ fn mcp_tools() -> Value {
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] } }, "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "preview_recording", "description": "Inspect recording file metadata without decoding audio; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
+        { "name": "set_recording_metadata", "description": "Update recording metadata without changing its audio or path; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "title": { "type": ["string", "null"], "maxLength": 256 }, "artist": { "type": ["string", "null"], "maxLength": 256 }, "comment": { "type": ["string", "null"], "maxLength": 256 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
         { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
@@ -948,6 +1004,7 @@ fn mcp_tool_call(
         "list_recordings" => ("recordings.list", Some(arguments)),
         "get_recording" => ("recordings.get", Some(arguments)),
         "preview_recording" => ("recordings.preview", Some(arguments)),
+        "set_recording_metadata" => ("recordings.setMetadata", Some(arguments)),
         "remove_recording_entry" => ("recordings.removeEntry", Some(arguments)),
         "plan_graph_change" => ("graph.plan", Some(arguments)),
         "apply_graph_change" => ("graph.commit", Some(arguments)),
@@ -1169,6 +1226,35 @@ mod tests {
         )
         .unwrap();
         assert_eq!(preview["preview"]["status"], "missing");
+        let updated: Value = serde_json::from_str(
+            &run([
+                "recordings",
+                "set-metadata",
+                "recording-cli",
+                "--title",
+                "Updated title",
+                "--database",
+                &database,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(updated["updated"], true);
+        let fetched: Value = serde_json::from_str(
+            &run([
+                "recordings",
+                "get",
+                "recording-cli",
+                "--database",
+                &database,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(fetched["title"], "Updated title");
+        assert_eq!(fetched["path"], "C:\\Audio\\recording.wav");
         let removed: Value = serde_json::from_str(
             &run([
                 "recordings",
@@ -1450,7 +1536,7 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 15);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 16);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
             &mut plane,

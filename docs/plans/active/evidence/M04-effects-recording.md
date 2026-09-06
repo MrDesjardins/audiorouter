@@ -244,3 +244,12 @@ Exposed the existing non-decoding WAV/FLAC header inspector through the
 files and include format/frame metadata where available. The operation is
 read-only and requires recording scope; 16 recording, 46 control, and 9 CLI
 tests pass with strict Clippy.
+
+## 2026-09-06 — Recording metadata editing parity
+
+Added the typed `recordings set-metadata` CLI command and MCP
+`set_recording_metadata` tool over the authorized `recordings.setMetadata`
+method. The CLI reads the existing metadata first so omitted fields are
+preserved, while the backend continues to enforce 256-character/control-byte
+limits and never changes the recording path or audio content. Control and CLI
+tests pass with strict Clippy.
