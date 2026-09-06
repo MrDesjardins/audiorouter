@@ -274,3 +274,8 @@ Restore and bundle export now have conditional dangling-link regressions in
 addition to backup coverage. When link creation is available, each operation
 rejects the broken destination before SQLite or ZIP output is created. All 30
 storage tests and strict Clippy pass.
+The complete locked workspace was rerun after the latched-policy correction and
+SQLite marker persistence. All Rust unit, integration, worker-process, MCP, and
+doc tests passed, including 28 domain and 32 storage tests; strict workspace
+Clippy, formatting, and diff checks also passed. No audio endpoint or machine
+configuration was changed.
