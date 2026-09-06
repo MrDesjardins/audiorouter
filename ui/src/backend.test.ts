@@ -95,6 +95,19 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "recordings.list", params: { sessionId: demoSession.id } });
   });
 
+  it("maps application inventory to the canonical read method", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return [];
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    expect(await backend.listApplications()).toEqual([]);
+    expect(received).toEqual({ method: "applications.list", params: undefined });
+  });
+
   it("forwards recording preview through the read-only API", async () => {
     let received: unknown;
     const client = {
