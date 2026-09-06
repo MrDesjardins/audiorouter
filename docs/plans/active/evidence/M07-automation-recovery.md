@@ -250,3 +250,7 @@ Bundle export now validates its parent with reparse metadata and checks
 destination presence through `symlink_metadata`, preventing a dangling link or
 redirected parent from bypassing the new-file policy. The complete storage suite
 passes 30 tests with strict Clippy.
+Restore and bundle export now have conditional dangling-link regressions in
+addition to backup coverage. When link creation is available, each operation
+rejects the broken destination before SQLite or ZIP output is created. All 30
+storage tests and strict Clippy pass.

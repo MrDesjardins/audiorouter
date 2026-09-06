@@ -2003,6 +2003,21 @@ mod tests {
             imported_storage.import_bundle(&bundle, &staging).unwrap(),
             original
         );
+        std::fs::remove_file(&bundle).unwrap();
+        let dangling_target = std::env::temp_dir().join(format!("{suffix}-missing.audiorouter"));
+        let _ = std::fs::remove_file(&dangling_target);
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_file(&dangling_target, &bundle);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&dangling_target, &bundle);
+        if link_result.is_ok() {
+            assert!(matches!(
+                storage.export_bundle(&original.id, &bundle),
+                Err(StorageError::InvalidBackupPath(_))
+            ));
+            std::fs::remove_file(&bundle).unwrap();
+        }
+        let _ = std::fs::remove_file(dangling_target);
         let _ = std::fs::remove_file(bundle);
         let _ = std::fs::remove_dir_all(staging);
     }
@@ -2127,6 +2142,21 @@ mod tests {
             Err(StorageError::InvalidBackupPath(_))
         ));
         drop(restored_storage);
+        std::fs::remove_file(&restored).unwrap();
+        let dangling_target = std::env::temp_dir().join(format!("{suffix}-missing.sqlite"));
+        let _ = std::fs::remove_file(&dangling_target);
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_file(&dangling_target, &restored);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&dangling_target, &restored);
+        if link_result.is_ok() {
+            assert!(matches!(
+                Storage::restore_backup(&backup, &restored),
+                Err(StorageError::InvalidBackupPath(_))
+            ));
+            std::fs::remove_file(&restored).unwrap();
+        }
+        let _ = std::fs::remove_file(dangling_target);
         drop(storage);
         for path in [&source, &backup, &restored] {
             let _ = std::fs::remove_file(path);
