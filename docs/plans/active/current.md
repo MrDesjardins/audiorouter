@@ -124,6 +124,8 @@ This establishes that Codex can continue documentation and portable implementati
 - Checks: `cargo test --workspace` — all 48 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No user database path was opened.
 - Added explicit SQLite client enrollment/revocation records with constrained roles, auditable revoked state, and re-enrollment reset semantics. Control-plane integration remains the next authorization slice.
 - Checks: `cargo test --workspace` — all 49 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory or uniquely named temporary project databases.
+- Connected control-plane enrollment APIs to durable storage and grant lookup: unknown/revoked clients receive no grant, enrolled roles map to explicit scopes, and re-enrollment clears revocation. Native PID-to-enrollment identity binding remains a follow-up.
+- Checks: `cargo test --workspace` — all 51 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory or uniquely named temporary project databases.
 
 ## Decisions and assumptions
 

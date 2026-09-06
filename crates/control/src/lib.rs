@@ -97,6 +97,7 @@ pub struct ControlPlane {
     build: String,
     runtimes: HashMap<EntityId, FakeRuntime>,
     storage: Option<Storage>,
+    enrollments: HashMap<String, (ClientRole, bool)>,
 }
 
 impl Default for ControlPlane {
@@ -112,6 +113,7 @@ impl ControlPlane {
             build: build.into(),
             runtimes: HashMap::new(),
             storage: None,
+            enrollments: HashMap::new(),
         }
     }
 
@@ -121,7 +123,62 @@ impl ControlPlane {
             build: build.into(),
             runtimes: HashMap::new(),
             storage: Some(storage),
+            enrollments: HashMap::new(),
         }
+    }
+
+    pub fn enroll_client(
+        &mut self,
+        client_id: impl Into<String>,
+        role: ClientRole,
+    ) -> Result<(), ControlError> {
+        let client_id = client_id.into();
+        if client_id.is_empty() {
+            return Err(ControlError::InvalidRequest("client_id is required".into()));
+        }
+        if let Some(storage) = &self.storage {
+            storage
+                .save_client_enrollment(&client_id, role_name(role))
+                .map_err(storage_error)?;
+        }
+        self.enrollments.insert(client_id, (role, false));
+        Ok(())
+    }
+
+    pub fn revoke_client(&mut self, client_id: &str) -> Result<bool, ControlError> {
+        let changed = if let Some(storage) = &self.storage {
+            storage
+                .revoke_client_enrollment(client_id)
+                .map_err(storage_error)?
+        } else {
+            self.enrollments
+                .get_mut(client_id)
+                .map(|entry| {
+                    let changed = !entry.1;
+                    entry.1 = true;
+                    changed
+                })
+                .unwrap_or(false)
+        };
+        if let Some(entry) = self.enrollments.get_mut(client_id) {
+            entry.1 = true;
+        }
+        Ok(changed)
+    }
+
+    pub fn grant_for_client(&self, client_id: &str) -> Result<Option<ClientGrant>, ControlError> {
+        let enrollment = self.enrollments.get(client_id).copied();
+        let enrollment = match (enrollment, &self.storage) {
+            (Some(value), _) => Some(value),
+            (None, Some(storage)) => storage
+                .load_client_enrollment(client_id)
+                .map_err(storage_error)?
+                .and_then(|(role, revoked)| role_from_name(&role).map(|role| (role, revoked))),
+            (None, None) => None,
+        };
+        Ok(enrollment
+            .filter(|(_, revoked)| !revoked)
+            .map(|(role, _)| ClientGrant::for_role(role)))
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
@@ -438,6 +495,23 @@ fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlErro
     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
 }
 
+fn role_name(role: ClientRole) -> &'static str {
+    match role {
+        ClientRole::Observer => "observer",
+        ClientRole::Editor => "editor",
+        ClientRole::Operator => "operator",
+    }
+}
+
+fn role_from_name(name: &str) -> Option<ClientRole> {
+    match name {
+        "observer" => Some(ClientRole::Observer),
+        "editor" => Some(ClientRole::Editor),
+        "operator" => Some(ClientRole::Operator),
+        _ => None,
+    }
+}
+
 fn storage_error(error: StorageError) -> ControlError {
     ControlError::Storage(format!("{error:?}"))
 }
@@ -708,6 +782,31 @@ mod tests {
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::Capture));
         assert!(!ClientGrant::for_role(ClientRole::Operator)
             .allows(PermissionScope::DeviceAdministration));
+    }
+
+    #[test]
+    fn enrollment_lookup_denies_unknown_and_revoked_clients() {
+        let mut plane = ControlPlane::new("enrollment-test");
+        assert!(plane.grant_for_client("unknown").unwrap().is_none());
+        plane.enroll_client("client", ClientRole::Editor).unwrap();
+        let grant = plane.grant_for_client("client").unwrap().unwrap();
+        assert!(grant.allows(PermissionScope::GraphWrite));
+        assert!(!grant.allows(PermissionScope::SessionControl));
+        assert!(plane.revoke_client("client").unwrap());
+        assert!(plane.grant_for_client("client").unwrap().is_none());
+        assert!(!plane.revoke_client("client").unwrap());
+    }
+
+    #[test]
+    fn storage_backed_enrollment_persists_and_revokes() {
+        let storage = Storage::open_memory().unwrap();
+        let mut first = ControlPlane::with_storage("enrollment-persist", storage);
+        first
+            .enroll_client("operator", ClientRole::Operator)
+            .unwrap();
+        assert!(first.grant_for_client("operator").unwrap().is_some());
+        assert!(first.revoke_client("operator").unwrap());
+        assert!(first.grant_for_client("operator").unwrap().is_none());
     }
 
     #[test]
