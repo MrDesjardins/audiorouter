@@ -1840,6 +1840,26 @@ mod tests {
     }
 
     #[test]
+    fn plugin_scan_cli_keeps_invalid_candidates_visible() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-cli-plugin-scan-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("candidate.vst3"), b"not a portable executable").unwrap();
+        let directory = root.to_string_lossy().into_owned();
+        let scanned: Value = serde_json::from_str(
+            &run(["plugins", "scan", "--directory", &directory, "--json"]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(scanned["entries"].as_array().unwrap().len(), 1);
+        assert!(scanned["entries"][0]["identity"].is_null());
+        assert!(scanned["entries"][0]["error"].is_string());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn node_set_uses_plan_commit_and_preserves_revision_safety() {
         let suffix = format!("audiorouter-cli-node-set-{}", std::process::id());
         let database = std::env::temp_dir().join(format!("{suffix}.sqlite"));
