@@ -264,3 +264,10 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Extended the v1 bundle manifest asset form to accept either a path string or `{path, size, sha256}` metadata. Staged bytes are hashed with SHA-256 and optional declared size/hash values are checked before the session is committed.
 - Added a mismatch test proving rejected bundles do not create an imported session. The `zip` and `sha2` dependencies are pinned through the workspace lockfile.
 - Check: `cargo test -p audiorouter-storage` passed 13 tests plus doc tests. No audio streams, defaults, drivers, or machine configuration were changed.
+
+### 2026-09-05 — Native WASAPI toolchain and activation correction
+
+- Added [`tools/m00-native-wasapi-probe/build.ps1`](../../../tools/m00-native-wasapi-probe/build.ps1), which builds the existing C++ diagnostic against the installed VS2026 MSVC, Windows SDK, and WDK paths without changing global environment variables.
+- Native capture cross-check: all 13 active capture endpoints returned success for activation, `GetMixFormat`, shared-mode `IsFormatSupported`, and non-starting `IAudioClient::Initialize` with `NOPERSIST`. This supersedes the earlier Rust-only all-`E_INVALIDARG` observation as a probe/binding issue, not a device-busy conclusion.
+- Native process-loopback cross-check: Explorer process-tree activation, `IAudioClient` query, 44.1 kHz shared loopback/event/autoconvert initialization, and event-handle setup all returned `S_OK`. The client was reset/released; no stream was started or read.
+- Evidence is in [M00 WASAPI probe](evidence/M00-wasapi-probe.md). The M00 gate remains open for actual process-tree data capture, render/capture data-path validation, latency, and driver lifecycle/signing evidence.

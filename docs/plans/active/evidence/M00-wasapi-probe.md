@@ -55,3 +55,12 @@ A Rust scaffold for the documented asynchronous process-loopback activation ABI 
 ### Native process-loopback result (2026-09-05)
 
 The native harness now uses an agile WRL `FtmBase` completion handler and correctly distinguishes `GetActivateResult` from the callback method HRESULT. `ActivateAudioInterfaceAsync` for the current Explorer process returned `S_OK`; the callback retrieved the activation result and queried `IAudioClient` successfully. Shared-mode initialization with 44.1 kHz stereo PCM plus `LOOPBACK|EVENTCALLBACK|AUTOCONVERTPCM` returned `S_OK`, and `SetEventHandle` returned `S_OK`. The harness did not start or read the stream, so this is activation/initialization evidence rather than captured-audio or latency evidence. This supersedes the earlier minimal-harness runtime result; the Rust path remains disabled pending an equivalent COM interop fix.
+## 2026-09-05 native toolchain correction
+
+The host now has Visual Studio Community 2026 `18.9.2`, MSVC `14.51.36231`, Windows SDK `10.0.28000.2526` (headers/libs under `10.0.28000.0`), and WDK `10.1.28000.2526`. The reproducible build entry point is [`tools/m00-native-wasapi-probe/build.ps1`](../../../tools/m00-native-wasapi-probe/build.ps1). It uses explicit toolchain paths and does not modify environment or audio settings.
+
+The native C++ probe was built successfully and run on the current Windows user session. For all 13 active capture endpoints, native `Activate`, `GetMixFormat`, shared-mode `IsFormatSupported`, and shared-mode `IAudioClient::Initialize` with `AUDCLNT_STREAMFLAGS_NOPERSIST` returned success. This corrects the earlier Rust-only `E_INVALIDARG` result: the native path demonstrates that capture client initialization is available on this machine and that ordinary device contention was not the cause of the Rust probe failures.
+
+The same executable's process-loopback path, targeting the current Explorer process tree, returned success for `ActivateAudioInterfaceAsync`, the completion result, `QueryInterface(IAudioClient)`, 44.1 kHz PCM shared-mode initialization with loopback/event/autoconvert flags, and `SetEventHandle`. The client was reset and released without `Start`, `GetBuffer`, or audio reads. This proves activation/configuration, not audible process capture or latency.
+
+No endpoint was started, no buffer was read, no default device/volume/mute/format setting was changed, and no driver was installed or loaded.
