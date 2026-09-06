@@ -2326,6 +2326,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "recordings.reveal"
             | "recordings.removeEntry"
             | "recordings.recycle"
+            | "safety.setPrivacyMute"
             | "recovery.clearSafeMode"
     )
 }
@@ -3335,6 +3336,16 @@ mod tests {
             params: None,
         };
         assert_eq!(plane.dispatch(notification).error.unwrap().code, -32600);
+        let privacy_notification = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: None,
+            method: "safety.setPrivacyMute".into(),
+            params: Some(json!({ "muted": true })),
+        };
+        assert_eq!(
+            plane.dispatch(privacy_notification).error.unwrap().code,
+            -32600
+        );
         let unknown = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
