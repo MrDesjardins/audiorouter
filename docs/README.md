@@ -24,6 +24,10 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 | [14 Quality](spec/14-quality.md) | Measurable budgets, test matrix, release evidence | M00–M08 |
 | [15 Delivery](spec/15-delivery.md) | Sequence, traceability, decisions, risks, sources | M00–M08 |
 
+## Operational runbooks
+
+The [headless runbook](operations/headless-runbook.md) documents the implemented CLI/MCP plan, backup, restore, and recovery boundaries. It distinguishes portable control-plane evidence from native audio, driver, signing, and installer requirements.
+
 ## Plans versus specifications
 
 - [Active](plans/active/current.md): execution state, evidence, and next steps. Start here when resuming work.
