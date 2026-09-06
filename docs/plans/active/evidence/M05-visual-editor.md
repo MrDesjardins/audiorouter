@@ -495,3 +495,16 @@ which is denied by the current Windows Application Control policy, while
 retaining the existing TypeScript Vite configuration. The full UI suite passes
 58 tests and the UI TypeScript check passes; no application or audio state is
 changed.
+
+The production `build` script also passes Vite's `--configLoader runner`, so
+the bundled-config temp write is avoided. TypeScript checking and a Vite
+production build directed to a disposable temporary directory pass (three
+files generated). The current host still denies writing/deleting the existing
+`ui/dist` tree, so a normal default-output build remains blocked by that
+filesystem policy; the temporary output was removed and no audio/application
+state changed.
+
+The checked-in `tests/acceptance/m05-ui.ps1` now automates this host-safe
+verification. It passed UI typecheck, all 58 Vitest tests, and a disposable
+three-file production build, then removed the temporary output. The script
+does not touch audio, driver, or machine configuration.
