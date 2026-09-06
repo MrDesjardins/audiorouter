@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 pub const MAX_PLUGIN_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_FAILURES_BEFORE_QUARANTINE: u32 = 3;
 pub const MAX_WORKER_FRAMES: usize = 2048;
+pub const MAX_SCAN_CANDIDATES: usize = 256;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -44,6 +45,20 @@ pub struct PluginIdentity {
     pub architecture: PeArchitecture,
     pub file_bytes: u64,
     pub sha256: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScanEntry {
+    pub path: PathBuf,
+    pub identity: Option<PluginIdentity>,
+    pub error: Option<InspectionError>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScanError {
+    InvalidRoot,
+    TooManyCandidates,
+    Io(String),
 }
 
 pub fn inspect_binary(
@@ -91,6 +106,45 @@ pub fn inspect_binary(
         file_bytes: metadata.len(),
         sha256: digest.iter().map(|byte| format!("{byte:02x}")).collect(),
     })
+}
+
+/// Enumerates one explicitly selected directory without executing its files.
+/// Every candidate is returned, including unsupported/error entries.
+pub fn scan_directory(root: &Path) -> Result<Vec<ScanEntry>, ScanError> {
+    if !root.is_dir() {
+        return Err(ScanError::InvalidRoot);
+    }
+    let mut candidates = Vec::new();
+    for entry in fs::read_dir(root).map_err(|error| ScanError::Io(error.to_string()))? {
+        let entry = entry.map_err(|error| ScanError::Io(error.to_string()))?;
+        let path = entry.path();
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase());
+        if matches!(extension.as_deref(), Some("vst3") | Some("dll")) {
+            candidates.push(path);
+            if candidates.len() > MAX_SCAN_CANDIDATES {
+                return Err(ScanError::TooManyCandidates);
+            }
+        }
+    }
+    candidates.sort();
+    Ok(candidates
+        .into_iter()
+        .map(|path| match inspect_binary(&path, &[root.to_path_buf()]) {
+            Ok(identity) => ScanEntry {
+                path,
+                identity: Some(identity),
+                error: None,
+            },
+            Err(error) => ScanEntry {
+                path,
+                identity: None,
+                error: Some(error),
+            },
+        })
+        .collect())
 }
 
 fn root_contains(root: &Path, candidate: &Path) -> bool {
@@ -330,5 +384,20 @@ mod tests {
             WorkerFrame::new(3, 20, 2, vec![f32::NAN, 0.0]),
             Err(WorkerFrameError::NonFiniteSample)
         );
+    }
+
+    #[test]
+    fn scans_explicit_root_and_keeps_invalid_entries_visible() {
+        let root = temp_root();
+        fs::write(root.join("good.vst3"), pe_x64()).unwrap();
+        fs::write(root.join("bad.vst3"), b"not a pe").unwrap();
+        fs::write(root.join("notes.txt"), b"ignored").unwrap();
+        let entries = scan_directory(&root).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|entry| entry.identity.is_some()));
+        assert!(entries
+            .iter()
+            .any(|entry| entry.error == Some(InspectionError::NotPe)));
+        fs::remove_dir_all(root).unwrap();
     }
 }

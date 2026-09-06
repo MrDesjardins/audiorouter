@@ -39,6 +39,11 @@ checked, sequence regressions are rejected, and expired deadlines are
 reported. Four plugin-host tests and strict Clippy pass. This validates the
 message boundary without claiming shared-memory transport or plugin execution.
 
+`scan_directory` now performs a bounded, explicit-root enumeration of VST3/DLL
+candidates and returns invalid entries visibly alongside valid identities. It
+does not recurse or execute binaries and rejects more than 256 candidates.
+Five plugin-host tests and strict Clippy pass.
+
 The post-integration `cargo test --workspace` run passes across CLI (5),
 control (41), domain (23), DSP (17), engine (36), plugin-host (3), protocol
 (5), recording (14), storage (21), transport (14), and Windows-audio (8)
