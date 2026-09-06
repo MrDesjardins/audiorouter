@@ -170,12 +170,12 @@ pub const API_METHODS: [ApiMethodSpec; 32] = [
     },
     ApiMethodSpec {
         name: "recordings.list",
-        permission: PermissionScope::Read,
+        permission: PermissionScope::Record,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
         name: "recordings.get",
-        permission: PermissionScope::Read,
+        permission: PermissionScope::Record,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {

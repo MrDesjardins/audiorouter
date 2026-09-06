@@ -62,3 +62,7 @@ Fixed a race in adjacent `apps.list` and `applications.list` requests by retaini
 ## 2026-09-06 — Typed CLI read parity
 
 Added `diagnostics [--database <path>]` and `operation get <operation-id> --database <path>` convenience commands. Both use the shared dispatcher and preserve read-only semantics; help now advertises their exact forms. CLI tests pass 8 cases with strict Clippy.
+
+## 2026-09-06 — Recording path privacy boundary
+
+Changed `recordings.list` and `recordings.get` from generic `Read` to explicit `Record` permission because their metadata includes absolute file paths. The MCP focused tool descriptions now disclose the requirement, and a read-only grant regression confirms denial before storage access. Existing control/CLI suites remain green with strict Clippy.

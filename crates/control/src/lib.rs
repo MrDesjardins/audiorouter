@@ -2549,6 +2549,19 @@ mod tests {
             })
             .unwrap();
         let mut plane = ControlPlane::with_storage("recordings", storage);
+        let denied = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(7)),
+                method: "recordings.list".into(),
+                params: Some(json!({ "sessionId": "session" })),
+            },
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(
+            denied.error.unwrap().data.unwrap()["code"],
+            "permissionDenied"
+        );
         let response = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(8)),
