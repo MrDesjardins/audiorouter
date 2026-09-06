@@ -183,6 +183,12 @@ revision remain unchanged until backend plan/commit; disconnected mode disables
 the action. UI coverage is 36 tests with typecheck and production build
 passing.
 
+Draft connections in the canvas view can now be explicitly enabled or
+disabled without deleting their topology. The text state and control action
+remain local to the candidate until backend planning/commit, and unknown edge
+IDs are rejected by the shared draft helper. UI coverage is 37 tests with
+typecheck and production build passing.
+
 The recording library Search control is now functional as a bounded local
 filter over authorized metadata (identity, title, artist, comment, and path).
 It reports filtered counts and an explicit no-match state, while never opening

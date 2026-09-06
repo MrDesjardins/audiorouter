@@ -156,6 +156,12 @@ export function duplicateDraftNode(session: Session, nodeId: EntityId): Session 
   };
 }
 
+/** Changes only a draft edge's enabled state; topology and revision are preserved. */
+export function setDraftConnectionEnabled(session: Session, edgeId: EntityId, enabled: boolean): Session {
+  if (!session.edges.some((edge) => edge.id === edgeId)) throw new Error(`Unknown draft connection: ${edgeId}`);
+  return { ...session, edges: session.edges.map((edge) => edge.id === edgeId ? { ...edge, enabled } : edge) };
+}
+
 /**
  * Creates a UI candidate without changing the authoritative session revision.
  * Validation and commit remain backend responsibilities.

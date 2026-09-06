@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, removeDraftConnection } from "./draft";
+import { appendDraftConnection, removeDraftConnection, setDraftConnectionEnabled } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendDraftConnection", () => {
@@ -30,5 +30,13 @@ describe("appendDraftConnection", () => {
     expect(restored.edges).toEqual([]);
     expect(restored.revision).toBe(demoSession.revision);
     expect(() => removeDraftConnection(restored, "edge-1")).toThrow("Unknown draft connection");
+  });
+
+  it("toggles edge state without changing topology or revision", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const disabled = setDraftConnectionEnabled(connected, "edge-1", false);
+    expect(disabled.edges[0]).toMatchObject({ id: "edge-1", enabled: false, sourceNode: "mic", destinationNode: "voice" });
+    expect(disabled.revision).toBe(demoSession.revision);
+    expect(() => setDraftConnectionEnabled(disabled, "missing", true)).toThrow("Unknown draft connection");
   });
 });
