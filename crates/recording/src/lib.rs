@@ -475,6 +475,10 @@ pub struct FlacBufferEncoder {
     samples: Vec<i32>,
 }
 
+/// The batch encoder is not the live recorder. Keep its temporary sample
+/// buffer bounded until a true incremental FLAC worker is available.
+pub const MAX_FLAC_BUFFER_FRAMES: u64 = 48_000 * 60 * 10;
+
 impl FlacBufferEncoder {
     pub fn new(
         channels: usize,
@@ -506,6 +510,11 @@ impl FlacBufferEncoder {
         if samples.len() % self.channels != 0 {
             return Err(RecordingError::InvalidSampleCount);
         }
+        let added_frames = u64::try_from(samples.len() / self.channels)
+            .map_err(|_| RecordingError::TooManyFrames)?;
+        if self.frames().saturating_add(added_frames) > MAX_FLAC_BUFFER_FRAMES {
+            return Err(RecordingError::TooManyFrames);
+        }
         let scale = if self.bits_per_sample == 16 {
             32_767.0
         } else {
@@ -515,7 +524,7 @@ impl FlacBufferEncoder {
             let value = if sample.is_finite() { *sample } else { 0.0 };
             (value.clamp(-1.0, 1.0) * scale).round() as i32
         }));
-        Ok((samples.len() / self.channels) as u64)
+        Ok(added_frames)
     }
 
     pub fn finish(self) -> Result<Vec<u8>, RecordingError> {

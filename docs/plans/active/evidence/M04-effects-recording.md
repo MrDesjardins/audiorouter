@@ -224,3 +224,8 @@ STREAMINFO block without decoding audio frames, and `inspect_recording` reports
 valid `.flac` entries with channels, sample rate, bit depth, frame count, and
 file size. The recording suite has 15 passing tests and strict Clippy passes;
 streaming FLAC worker integration remains open.
+
+The temporary sample buffer in `FlacBufferEncoder` now has a ten-minute frame
+limit and returns `TooManyFrames` before extending, keeping the explicitly
+batch-only path bounded. The 15-test recording suite and strict Clippy remain
+green; this does not claim incremental FLAC output.
