@@ -16,4 +16,6 @@ Optional `CallbackMetrics` records processed quanta and repaired sample counts u
 
 `RuntimeProcessor` integrates the prepared publication slot, safe silence before activation, callback metrics, and privacy mute into one bounded processing boundary. The integration test confirms generation reporting and silence policy; physical endpoint scheduling and durable privacy-latch recovery remain open. The engine suite now contains 15 passing tests.
 
+`AudioBlock::mix_mapped_from` adds destination-major matrix accumulation for explicit fan-out and mixer inputs without overwriting existing destination samples or allocating. Its mono-to-stereo accumulation test passes; node-level scheduling and mixer parameter semantics remain open. The engine suite now contains 16 passing tests.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.

@@ -204,6 +204,34 @@ impl AudioBlock {
         Ok(())
     }
 
+    /// Accumulate a source block through an explicit destination-major channel
+    /// matrix. This is the primitive used by fan-out and explicit mixer inputs;
+    /// it preserves the destination's existing samples and allocates nothing.
+    pub fn mix_mapped_from(&mut self, source: &Self, matrix: &[f32]) -> Result<(), BlockError> {
+        if self.frames != source.frames
+            || matrix.len() != self.channels.saturating_mul(source.channels)
+        {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for destination_channel in 0..self.channels {
+            let destination = self.channel_mut(destination_channel).unwrap();
+            for (frame, sample) in destination.iter_mut().enumerate() {
+                let mut value = 0.0;
+                for source_channel in 0..source.channels {
+                    let coefficient =
+                        matrix[destination_channel * source.channels + source_channel];
+                    let coefficient = coefficient
+                        .is_finite()
+                        .then_some(coefficient)
+                        .unwrap_or(0.0);
+                    value += source.channel(source_channel).unwrap()[frame] * coefficient;
+                }
+                *sample += value;
+            }
+        }
+        Ok(())
+    }
+
     /// Linearly resample a same-channel source into this preallocated block.
     /// This is a bounded format-conversion primitive; clock-drift correction
     /// and cross-block phase management belong to the later stream scheduler.
@@ -616,6 +644,18 @@ mod tests {
         let mut downmix = AudioBlock::new(1, 2).unwrap();
         downmix.map_from(&stereo, &[0.5, 0.5]).unwrap();
         assert_eq!(downmix.channel(0).unwrap(), &[0.25, -0.5]);
+    }
+
+    #[test]
+    fn mapped_mix_accumulates_without_overwriting_existing_audio() {
+        let mut source = AudioBlock::new(1, 2).unwrap();
+        source.channel_mut(0).unwrap().fill(0.5);
+        let mut destination = AudioBlock::new(2, 2).unwrap();
+        destination.channel_mut(0).unwrap().fill(0.25);
+        destination.channel_mut(1).unwrap().fill(-0.25);
+        destination.mix_mapped_from(&source, &[1.0, 1.0]).unwrap();
+        assert_eq!(destination.channel(0).unwrap(), &[0.75; 2]);
+        assert_eq!(destination.channel(1).unwrap(), &[0.25; 2]);
     }
 
     #[test]
