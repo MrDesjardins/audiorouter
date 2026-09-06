@@ -16,6 +16,8 @@ The adapter now classifies retained Windows HRESULTs into stable `AudioFailureKi
 
 Application discovery now attempts `PROCESS_QUERY_LIMITED_INFORMATION` and records an optional process creation timestamp alongside PID and executable name. This is sufficient identity material for a future PID-reuse check without exposing command lines or paths. The adapter and contracts checks pass; process-loopback binding has not yet been wired to enforce this identity.
 
+`bind_application` now enforces that identity material before a future process-loopback activation: PID, executable name, and creation timestamp must all match, otherwise binding is rejected. The Windows identity test passes without opening an audio stream; the native loopback harness remains a separate data-path implementation.
+
 Verification on the Windows 11 host:
 
 ```powershell

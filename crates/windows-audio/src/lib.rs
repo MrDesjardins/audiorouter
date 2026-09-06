@@ -84,6 +84,8 @@ pub enum AudioError {
     InvalidUtf16,
     BufferTooSmall { required: usize, available: usize },
     InvalidFrameSize,
+    ApplicationNotFound { process_id: u32 },
+    ApplicationIdentityChanged { process_id: u32 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -105,7 +107,10 @@ impl AudioError {
     pub fn kind(&self) -> AudioFailureKind {
         let code = match self {
             Self::Windows(error) => error.code().0 as u32,
-            Self::InvalidUtf16 | Self::InvalidFrameSize => 0x80070057,
+            Self::InvalidUtf16
+            | Self::InvalidFrameSize
+            | Self::ApplicationNotFound { .. }
+            | Self::ApplicationIdentityChanged { .. } => 0x80070057,
             Self::BufferTooSmall { .. } => 0x80070057,
         };
         match code {
@@ -136,6 +141,15 @@ impl fmt::Display for AudioError {
                 )
             }
             Self::InvalidFrameSize => formatter.write_str("audio frame size was invalid"),
+            Self::ApplicationNotFound { process_id } => {
+                write!(formatter, "application process {process_id} was not found")
+            }
+            Self::ApplicationIdentityChanged { process_id } => {
+                write!(
+                    formatter,
+                    "application process {process_id} identity changed"
+                )
+            }
         }
     }
 }
@@ -723,6 +737,26 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
     }
 }
 
+/// Resolve an application only when its PID, executable name, and creation
+/// timestamp still match the previously observed identity. This prevents a
+/// restarted process from inheriting a prior process-loopback binding.
+pub fn bind_application(
+    process_id: u32,
+    expected_executable: &str,
+    expected_creation_time_100ns: Option<u64>,
+) -> Result<ApplicationInfo, AudioError> {
+    let application = enumerate_applications()?
+        .into_iter()
+        .find(|application| application.process_id == process_id)
+        .ok_or(AudioError::ApplicationNotFound { process_id })?;
+    if application.executable != expected_executable
+        || application.creation_time_100ns != expected_creation_time_100ns
+    {
+        return Err(AudioError::ApplicationIdentityChanged { process_id });
+    }
+    Ok(application)
+}
+
 unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
     use windows::Win32::Media::Audio::{
         eCapture, eRender, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -830,6 +864,28 @@ mod tests {
             AudioError::InvalidFrameSize.kind(),
             AudioFailureKind::InvalidArgument
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn application_binding_requires_the_observed_identity() {
+        let process_id = std::process::id();
+        let application = enumerate_applications()
+            .unwrap()
+            .into_iter()
+            .find(|application| application.process_id == process_id)
+            .unwrap();
+        let bound = bind_application(
+            process_id,
+            &application.executable,
+            application.creation_time_100ns,
+        )
+        .unwrap();
+        assert_eq!(bound, application);
+        assert!(matches!(
+            bind_application(process_id, "different.exe", application.creation_time_100ns),
+            Err(AudioError::ApplicationIdentityChanged { .. })
+        ));
     }
 
     #[cfg(windows)]
