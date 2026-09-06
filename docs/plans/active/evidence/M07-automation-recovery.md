@@ -69,6 +69,11 @@ tests, 31 plugin-host unit tests, 8 worker-process tests, and strict Clippy all
 passed. The run remained configuration-only and did not open audio devices,
 install drivers, or change machine audio settings.
 
+The same wrapper was rerun at `e1e72f9` after adding diagnostics export. M01 CLI
+now passes 21 tests, alongside MCP stdio, 68 control tests, 31 plugin-host unit
+tests, 8 worker-process tests, and strict Clippy; no audio device, driver, or
+machine configuration action occurred.
+
 ## 2026-09-06 — Scan cancellation during bounded binary reads
 
 Plugin discovery now gives each candidate its own ten-second inspection window
