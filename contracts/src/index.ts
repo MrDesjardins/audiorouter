@@ -141,6 +141,8 @@ export type ImplementedMethod =
   | "nodes.describe"
   | "sessions.get"
   | "sessions.list"
+  | "sessions.create"
+  | "sessions.delete"
   | "graph.plan"
   | "graph.commit"
   | "session.start"

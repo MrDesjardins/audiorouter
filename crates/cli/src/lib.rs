@@ -182,9 +182,9 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
             "usage: session <get|list|start|stop> [<session-id>] --database <path>".into(),
         )
     })?;
-    if !matches!(action, "get" | "list" | "start" | "stop") {
+    if !matches!(action, "get" | "list" | "start" | "stop" | "delete") {
         return Err(CliError::InvalidArguments(
-            "usage: session <get|list|start|stop> [<session-id>] --database <path>".into(),
+            "usage: session <get|list|start|stop|delete> [<session-id>] --database <path>".into(),
         ));
     }
     let storage = database(args)?;
@@ -219,7 +219,8 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
             CliError::InvalidArguments(
-                "usage: session <get|list|start|stop> [<session-id>] --database <path>".into(),
+                "usage: session <get|list|start|stop|delete> [<session-id>] --database <path>"
+                    .into(),
             )
         })?;
     let id = EntityId::new(id);
@@ -235,6 +236,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
     match action {
         "start" => plane.session_start(&id),
         "stop" => plane.session_stop(&id),
+        "delete" => plane.delete_session(&id),
         _ => unreachable!(),
     }
     .map_err(|error| CliError::Storage(format!("{error:?}")))
@@ -250,7 +252,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|start|stop> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|start|stop|delete> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -502,6 +504,16 @@ mod tests {
         ])
         .unwrap();
         assert!(imported_bundle.contains("session-fixture"));
+        let deleted = run([
+            "session",
+            "delete",
+            "session-fixture",
+            "--database",
+            &database_arg,
+            "--json",
+        ])
+        .unwrap();
+        assert!(deleted.contains("\"deleted\":true"));
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(document);
         let _ = std::fs::remove_file(bundle);

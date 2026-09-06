@@ -127,7 +127,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 16] = [
+pub const API_METHODS: [ApiMethodSpec; 18] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -187,6 +187,16 @@ pub const API_METHODS: [ApiMethodSpec; 16] = [
         name: "sessions.list",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "sessions.create",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "sessions.delete",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "graph.plan",
@@ -765,6 +775,18 @@ pub struct GraphStore {
 }
 
 impl GraphStore {
+    pub fn remove_session(&mut self, id: &EntityId) -> Result<Session, StoreError> {
+        let session = self
+            .sessions
+            .remove(id)
+            .ok_or(StoreError::SessionNotFound)?;
+        self.history.remove(id);
+        self.plans.retain(|_, plan| plan.session_id != *id);
+        self.committed_keys
+            .retain(|_, (result, _)| result.session_id != *id);
+        Ok(session)
+    }
+
     pub fn insert_session(&mut self, session: Session) -> Result<(), StoreError> {
         validate_session(&session).map_err(StoreError::InvalidGraph)?;
         let (nodes, edges) = self
@@ -1109,6 +1131,27 @@ mod tests {
             vec![edge("e", "in", "out")]
         ))
         .is_ok());
+    }
+
+    #[test]
+    fn removing_session_clears_current_history_and_plans() {
+        let mut store = GraphStore::default();
+        let graph = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        store.insert_session(graph.clone()).unwrap();
+        assert_eq!(store.remove_session(&graph.id).unwrap(), graph);
+        assert!(store.session(&EntityId::new("session")).is_none());
+        assert_eq!(store.sessions(10), Vec::new());
+        assert_eq!(store.history(&EntityId::new("session"), 10), Vec::new());
+        assert_eq!(
+            store.remove_session(&EntityId::new("session")),
+            Err(StoreError::SessionNotFound)
+        );
     }
 
     #[test]

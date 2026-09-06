@@ -338,6 +338,18 @@ impl Storage {
         Ok(())
     }
 
+    pub fn delete_session(&self, id: &EntityId) -> Result<bool, StorageError> {
+        let transaction = self.connection.unchecked_transaction()?;
+        let changed =
+            transaction.execute("DELETE FROM sessions WHERE id = ?1", params![id.as_str()])?;
+        transaction.execute(
+            "DELETE FROM session_history WHERE session_id = ?1",
+            params![id.as_str()],
+        )?;
+        transaction.commit()?;
+        Ok(changed != 0)
+    }
+
     pub fn load_history(&self, id: &EntityId, limit: usize) -> Result<Vec<Session>, StorageError> {
         self.load_history_before(id, None, limit)
     }
@@ -983,6 +995,17 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn deleting_session_removes_current_and_history_rows() {
+        let storage = Storage::open_memory().unwrap();
+        let original = session();
+        storage.save_session(&original).unwrap();
+        assert!(storage.delete_session(&original.id).unwrap());
+        assert!(!storage.delete_session(&original.id).unwrap());
+        assert!(storage.load_session(&original.id).unwrap().is_none());
+        assert!(storage.load_history(&original.id, 10).unwrap().is_empty());
     }
 
     #[test]

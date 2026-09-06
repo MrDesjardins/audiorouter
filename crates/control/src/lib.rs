@@ -251,6 +251,43 @@ impl ControlPlane {
         Ok(())
     }
 
+    pub fn create_session(&mut self, session: Session) -> Result<Value, ControlError> {
+        if session.revision != 0 {
+            return Err(ControlError::InvalidRequest(
+                "new sessions must start at revision 0".into(),
+            ));
+        }
+        self.insert_session(session.clone())?;
+        Ok(json!({ "session": session, "state": "stopped" }))
+    }
+
+    pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        self.ensure_session_loaded(id)?;
+        let session = self.get_session(id)?.clone();
+        if self
+            .runtimes
+            .get(id)
+            .map(|runtime| runtime.state() == RuntimeState::Running)
+            .unwrap_or(false)
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the session before deleting it".into(),
+            ));
+        }
+        let checkpoint = self.store.clone();
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.delete_session(id) {
+                self.store = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        self.store.remove_session(id).map_err(ControlError::from)?;
+        self.runtimes.remove(id);
+        self.events
+            .append(session.revision, None, "session.deleted", Some(id.clone()));
+        Ok(json!({ "sessionId": id, "deleted": true }))
+    }
+
     pub fn describe(&self) -> Value {
         let methods: Vec<MethodDescription> = API_METHODS.iter().copied().map(Into::into).collect();
         let nodes: Vec<Value> = node_registry().into_iter().map(|spec| {
@@ -546,10 +583,7 @@ impl ControlPlane {
         if request.validate().is_err() {
             return JsonRpcResponse::failure(id, -32600, "invalid request");
         }
-        let mutating = matches!(
-            request.method.as_str(),
-            "graph.plan" | "graph.undoPlan" | "graph.commit" | "session.start" | "session.stop"
-        );
+        let mutating = is_mutating_method(&request.method);
         if request.is_notification() && mutating {
             return JsonRpcResponse::failure(
                 None,
@@ -568,6 +602,8 @@ impl ControlPlane {
             "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
             "sessions.get" => self.dispatch_session_get(request.params),
             "sessions.list" => self.dispatch_sessions_list(request.params),
+            "sessions.create" => self.dispatch_session_create(request.params),
+            "sessions.delete" => self.dispatch_session_delete(request.params),
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "graph.history" => self.dispatch_graph_history(request.params),
             "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
@@ -861,6 +897,24 @@ impl ControlPlane {
             .map_err(|error| ControlError::Json(error.to_string()))
     }
 
+    fn dispatch_session_create(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("session is required".into()))?;
+        let session: Session = serde_json::from_value(
+            params
+                .get("session")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("session is required".into()))?,
+        )
+        .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        self.create_session(session)
+    }
+
+    fn dispatch_session_delete(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let id = session_id_from_params(params)?;
+        self.delete_session(&id)
+    }
+
     fn dispatch_sessions_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let cursor = params
             .as_ref()
@@ -1101,7 +1155,13 @@ fn role_from_name(name: &str) -> Option<ClientRole> {
 fn is_mutating_method(method: &str) -> bool {
     matches!(
         method,
-        "graph.plan" | "graph.undoPlan" | "graph.commit" | "session.start" | "session.stop"
+        "graph.plan"
+            | "graph.undoPlan"
+            | "graph.commit"
+            | "session.start"
+            | "session.stop"
+            | "sessions.create"
+            | "sessions.delete"
     )
 }
 
@@ -1185,6 +1245,31 @@ mod tests {
         assert_eq!(second["items"].as_array().unwrap().len(), 1);
         assert_eq!(second["items"][0]["id"], "c");
         assert!(second["nextCursor"].is_null());
+    }
+
+    #[test]
+    fn session_create_and_delete_protect_running_resources() {
+        let mut plane = ControlPlane::default();
+        let mut created = session();
+        created.id = EntityId::new("created");
+        let result = plane.create_session(created.clone()).unwrap();
+        assert_eq!(result["state"], "stopped");
+        assert_eq!(plane.delete_session(&created.id).unwrap()["deleted"], true);
+        assert!(matches!(
+            plane.delete_session(&created.id),
+            Err(ControlError::InvalidRequest(message)) if message == "session not found"
+        ));
+
+        let mut running = session();
+        running.id = EntityId::new("running");
+        plane.create_session(running.clone()).unwrap();
+        plane.session_start(&running.id).unwrap();
+        assert!(matches!(
+            plane.delete_session(&running.id),
+            Err(ControlError::InvalidRequest(message)) if message == "stop the session before deleting it"
+        ));
+        plane.session_stop(&running.id).unwrap();
+        assert_eq!(plane.delete_session(&running.id).unwrap()["deleted"], true);
     }
 
     fn session() -> Session {
