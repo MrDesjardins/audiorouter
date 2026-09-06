@@ -3450,6 +3450,18 @@ impl ControlPlane {
         if let Some(previous) = self.operation_outcomes.get(idempotency_key) {
             return Ok(previous.clone());
         }
+        if let Some(storage) = &self.storage {
+            if let Some(previous) = storage
+                .journal_result(idempotency_key)
+                .map_err(storage_error)?
+            {
+                let previous: Value = serde_json::from_str(&previous)
+                    .map_err(|error| ControlError::Json(error.to_string()))?;
+                self.operation_outcomes
+                    .insert(idempotency_key.to_owned(), previous.clone());
+                return Ok(previous);
+            }
+        }
         let plan = self
             .virtual_bus_plans
             .get(&EntityId::new(plan_id))
@@ -3463,15 +3475,6 @@ impl ControlPlane {
         }
         let checkpoint = self.virtual_buses.clone();
         apply_virtual_bus_operation(&mut self.virtual_buses, &plan.operation)?;
-        if let Some(storage) = &self.storage {
-            if let Err(error) = storage
-                .save_virtual_buses_and_delete_plan(&self.virtual_buses, &EntityId::new(plan_id))
-            {
-                self.virtual_buses = checkpoint;
-                return Err(storage_error(error));
-            }
-        }
-        self.virtual_bus_plans.remove(&EntityId::new(plan_id));
         let result = json!({
             "planId": plan_id,
             "state": "applied",
@@ -3481,6 +3484,18 @@ impl ControlPlane {
             },
             "operation": virtual_bus_operation_value(&plan.operation)
         });
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses_and_journal(
+                &self.virtual_buses,
+                &EntityId::new(plan_id),
+                idempotency_key,
+                &result,
+            ) {
+                self.virtual_buses = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        self.virtual_bus_plans.remove(&EntityId::new(plan_id));
         self.operation_outcomes
             .insert(idempotency_key.to_owned(), result.clone());
         Ok(result)
@@ -4039,6 +4054,16 @@ mod tests {
             params: Some(json!({ "planId": plan_id, "idempotencyKey": "restart-apply" })),
         });
         assert_eq!(applied.result.unwrap()["state"], "applied");
+        let mut replayed = ControlPlane::with_storage("plan-third", Storage::open(&path).unwrap());
+        let replay = replayed.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(9)),
+            method: "virtualDevices.apply".into(),
+            params: Some(
+                json!({ "planId": "no-longer-needed", "idempotencyKey": "restart-apply" }),
+            ),
+        });
+        assert_eq!(replay.result.unwrap()["state"], "applied");
         let _ = std::fs::remove_file(path);
     }
 
