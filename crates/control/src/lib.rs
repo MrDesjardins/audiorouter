@@ -241,6 +241,16 @@ impl ControlPlane {
         serde_json::to_value(history).map_err(|error| ControlError::Json(error.to_string()))
     }
 
+    pub fn graph_undo_plan(
+        &mut self,
+        session_id: &EntityId,
+        base_revision: u64,
+    ) -> Result<EntityId, ControlError> {
+        self.store
+            .undo_plan(session_id, base_revision)
+            .map_err(Into::into)
+    }
+
     pub fn plan_graph(
         &mut self,
         session_id: &EntityId,
@@ -319,7 +329,7 @@ impl ControlPlane {
         }
         let mutating = matches!(
             request.method.as_str(),
-            "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+            "graph.plan" | "graph.undoPlan" | "graph.commit" | "session.start" | "session.stop"
         );
         if request.is_notification() && mutating {
             return JsonRpcResponse::failure(
@@ -338,6 +348,7 @@ impl ControlPlane {
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "graph.history" => self.dispatch_graph_history(request.params),
+            "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
             "session.start" => self.dispatch_session_start(request.params),
             "session.stop" => self.dispatch_session_stop(request.params),
             "graph.plan" => self.dispatch_plan(request.params),
@@ -381,7 +392,11 @@ impl ControlPlane {
                 let omit = request.is_notification()
                     && !matches!(
                         request.method.as_str(),
-                        "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                        "graph.plan"
+                            | "graph.undoPlan"
+                            | "graph.commit"
+                            | "session.start"
+                            | "session.stop"
                     );
                 let response = self.dispatch(request);
                 if omit {
@@ -396,7 +411,11 @@ impl ControlPlane {
                     let omit = request.is_notification()
                         && !matches!(
                             request.method.as_str(),
-                            "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                            "graph.plan"
+                                | "graph.undoPlan"
+                                | "graph.commit"
+                                | "session.start"
+                                | "session.stop"
                         );
                     let response = self.dispatch(request);
                     if omit {
@@ -422,7 +441,11 @@ impl ControlPlane {
                 let omit = request.is_notification()
                     && !matches!(
                         request.method.as_str(),
-                        "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                        "graph.plan"
+                            | "graph.undoPlan"
+                            | "graph.commit"
+                            | "session.start"
+                            | "session.stop"
                     );
                 let response = self.dispatch_authorized(request, grant);
                 if omit {
@@ -437,7 +460,11 @@ impl ControlPlane {
                     let omit = request.is_notification()
                         && !matches!(
                             request.method.as_str(),
-                            "graph.plan" | "graph.commit" | "session.start" | "session.stop"
+                            "graph.plan"
+                                | "graph.undoPlan"
+                                | "graph.commit"
+                                | "session.start"
+                                | "session.stop"
                         );
                     let response = self.dispatch_authorized(request, grant);
                     if omit {
@@ -564,6 +591,25 @@ impl ControlPlane {
             ));
         }
         self.graph_history(&session_id, limit as usize)
+    }
+
+    fn dispatch_graph_undo_plan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("graph.undoPlan params are required".into())
+        })?;
+        let session_id: EntityId = serde_json::from_value(
+            params
+                .get("sessionId")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
+        )
+        .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let base_revision = params
+            .get("baseRevision")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| ControlError::InvalidRequest("baseRevision is required".into()))?;
+        let plan_id = self.graph_undo_plan(&session_id, base_revision)?;
+        Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 30000 }))
     }
 
     fn dispatch_devices_list(&self) -> Result<Value, ControlError> {
@@ -748,6 +794,26 @@ mod tests {
         assert_eq!(history.as_array().unwrap().len(), 1);
         assert_eq!(history[0]["revision"], 1);
         assert_eq!(history[0]["name"], "revision-one");
+    }
+
+    #[test]
+    fn graph_undo_plan_dispatches_through_revision_checked_planning() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "revision-one".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "undo-api").unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "graph.undoPlan".into(),
+            params: Some(json!({ "sessionId": "session", "baseRevision": 1 })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["baseRevision"], 1);
+        assert!(result["planId"].as_str().unwrap().starts_with("plan-"));
     }
 
     #[test]

@@ -120,6 +120,7 @@ export type ImplementedMethod =
   | "nodes.types"
   | "routes.inspect"
   | "graph.history"
+  | "graph.undoPlan"
   | "graph.plan"
   | "graph.commit"
   | "session.start"

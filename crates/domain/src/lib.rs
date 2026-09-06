@@ -121,7 +121,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 11] = [
+pub const API_METHODS: [ApiMethodSpec; 12] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -156,6 +156,11 @@ pub const API_METHODS: [ApiMethodSpec; 11] = [
         name: "graph.history",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "graph.undoPlan",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::PlanOnly,
     },
     ApiMethodSpec {
         name: "graph.plan",
@@ -567,6 +572,7 @@ pub enum StoreError {
     InvalidGraph(Vec<ValidationError>),
     RevisionConflict { expected: u64, actual: u64 },
     EmptyIdempotencyKey,
+    NoUndoAvailable,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -619,6 +625,20 @@ impl GraphStore {
             .take(limit.min(100))
             .cloned()
             .collect()
+    }
+
+    pub fn undo_plan(
+        &mut self,
+        session_id: &EntityId,
+        base_revision: u64,
+    ) -> Result<EntityId, StoreError> {
+        let candidate = self
+            .history
+            .get(session_id)
+            .and_then(|entries| entries.iter().rev().nth(1))
+            .cloned()
+            .ok_or(StoreError::NoUndoAvailable)?;
+        self.plan_graph(session_id, base_revision, candidate)
     }
 
     pub fn plan_graph(

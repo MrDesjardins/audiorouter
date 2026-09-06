@@ -43,6 +43,8 @@ The CLI exposes the same read-only inspection through `routes inspect <session-i
 
 `graph.history` is now advertised as a read-only method with a bounded `limit` (default 100, maximum 500). The domain store retains at least the newest 100 in-memory snapshots, and the control method uses durable SQLite history when the session is not loaded in memory. Tests verify newest-first ordering and bounded retrieval; undo planning and event replay remain separate plan items.
 
+`graph.undoPlan` now creates a normal expiring graph plan from the immediately prior retained snapshot, requiring the caller's current base revision and GraphWrite permission. It never commits automatically; a caller must review/acknowledge and invoke `graph.commit`. No prior snapshot returns `NoUndoAvailable`, while intervening revision conflicts are checked by the same plan/commit authority.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.
