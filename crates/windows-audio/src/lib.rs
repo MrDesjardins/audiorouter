@@ -24,6 +24,14 @@ pub struct EndpointInfo {
     pub format_tag: u16,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CapturePacket {
+    pub frames: u32,
+    pub flags: u32,
+    pub device_position: u64,
+    pub qpc_position: u64,
+}
+
 #[derive(Debug)]
 pub enum AudioError {
     Windows(windows::core::Error),
@@ -44,6 +52,147 @@ impl std::error::Error for AudioError {}
 impl From<windows::core::Error> for AudioError {
     fn from(error: windows::core::Error) -> Self {
         Self::Windows(error)
+    }
+}
+
+struct ComApartment;
+
+impl ComApartment {
+    fn initialize() -> Result<Self, AudioError> {
+        unsafe {
+            windows::Win32::System::Com::CoInitializeEx(
+                None,
+                windows::Win32::System::Com::COINIT_MULTITHREADED,
+            )
+            .ok()?;
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        unsafe { windows::Win32::System::Com::CoUninitialize() }
+    }
+}
+
+/// A shared-mode capture client whose packet API never exposes a borrowed
+/// device buffer. Callers must copy/process data inside their own bounded
+/// realtime design; this adapter only returns packet metadata in M02's first
+/// lifecycle slice.
+pub struct SharedCapture {
+    client: windows::Win32::Media::Audio::IAudioClient,
+    capture: windows::Win32::Media::Audio::IAudioCaptureClient,
+    started: bool,
+    _com: ComApartment,
+}
+
+impl SharedCapture {
+    /// Open an exact active capture endpoint using its opaque endpoint ID.
+    /// The stream is initialized but remains stopped until `start` is called.
+    pub fn open(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+        use windows::Win32::Media::Audio::{
+            eCapture, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
+            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+        };
+        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+        let com = ComApartment::initialize()?;
+        let enumerator: IMMDeviceEnumerator =
+            unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
+        let devices = unsafe { enumerator.EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE)? };
+        let count = unsafe { devices.GetCount()? };
+        let mut selected = None;
+        for index in 0..count {
+            let device = unsafe { devices.Item(index)? };
+            let id = unsafe {
+                device
+                    .GetId()?
+                    .to_string()
+                    .map_err(|_| AudioError::InvalidUtf16)?
+            };
+            if id == endpoint_id {
+                selected = Some(device);
+                break;
+            }
+        }
+        let device = selected.ok_or_else(|| {
+            AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80070490u32 as i32),
+                "capture endpoint not found",
+            ))
+        })?;
+        let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
+        let format = unsafe { client.GetMixFormat()? };
+        let initialized = unsafe {
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                buffer_duration_100ns,
+                0,
+                format,
+                None,
+            )
+        };
+        unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
+        initialized?;
+        let capture: IAudioCaptureClient = unsafe { client.GetService()? };
+        Ok(Self {
+            client,
+            capture,
+            started: false,
+            _com: com,
+        })
+    }
+
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        unsafe { self.client.Start()? };
+        self.started = true;
+        Ok(())
+    }
+
+    pub fn next_packet(&self) -> Result<Option<CapturePacket>, AudioError> {
+        let frames = unsafe { self.capture.GetNextPacketSize()? };
+        if frames == 0 {
+            return Ok(None);
+        }
+        let mut data = std::ptr::null_mut();
+        let mut packet_frames = frames;
+        let mut flags = 0;
+        let mut device_position = 0;
+        let mut qpc_position = 0;
+        unsafe {
+            self.capture.GetBuffer(
+                &mut data,
+                &mut packet_frames,
+                &mut flags,
+                Some(&mut device_position),
+                Some(&mut qpc_position),
+            )?;
+            self.capture.ReleaseBuffer(packet_frames)?;
+        }
+        Ok(Some(CapturePacket {
+            frames: packet_frames,
+            flags,
+            device_position,
+            qpc_position,
+        }))
+    }
+
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        if self.started {
+            unsafe { self.client.Stop()? };
+            self.started = false;
+        }
+        unsafe { self.client.Reset()? };
+        Ok(())
+    }
+}
+
+impl Drop for SharedCapture {
+    fn drop(&mut self) {
+        let _ = self.stop();
     }
 }
 
@@ -123,6 +272,13 @@ mod tests {
         };
         assert_eq!(info.direction, EndpointDirection::Capture);
         assert!(info.minimum_period_100ns <= info.default_period_100ns);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn opening_an_unknown_capture_endpoint_fails_without_starting_audio() {
+        let error = SharedCapture::open("audiorouter-missing-endpoint", 1_000_000);
+        assert!(matches!(error, Err(AudioError::Windows(_))));
     }
 
     #[cfg(windows)]
