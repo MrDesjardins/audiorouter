@@ -222,6 +222,11 @@ impl Storage {
                 "backup destination cannot be a symbolic link".into(),
             ));
         }
+        if destination.exists() {
+            return Err(StorageError::InvalidBackupPath(
+                "backup destination must not already exist".into(),
+            ));
+        }
         if let Some(source) = &self.database_path {
             let source = std::fs::canonicalize(source)?;
             let existing = destination
@@ -1692,6 +1697,30 @@ mod tests {
         ));
         drop(storage);
         let _ = std::fs::remove_file(source);
+    }
+
+    #[test]
+    fn backup_never_overwrites_an_existing_recovery_copy() {
+        let suffix = format!("audiorouter-storage-backup-existing-{}", std::process::id());
+        let source = std::env::temp_dir().join(format!("{suffix}-source.sqlite"));
+        let destination = std::env::temp_dir().join(format!("{suffix}-destination.sqlite"));
+        for path in [&source, &destination] {
+            let _ = std::fs::remove_file(path);
+        }
+        let storage = Storage::open(&source).unwrap();
+        storage.save_session(&session()).unwrap();
+        std::fs::write(&destination, b"preserve this recovery copy").unwrap();
+        assert!(matches!(
+            storage.backup_to(&destination),
+            Err(StorageError::InvalidBackupPath(message)) if message.contains("must not already exist")
+        ));
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"preserve this recovery copy"
+        );
+        drop(storage);
+        let _ = std::fs::remove_file(source);
+        let _ = std::fs::remove_file(destination);
     }
 
     #[test]
