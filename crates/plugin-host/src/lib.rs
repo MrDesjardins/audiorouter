@@ -2619,6 +2619,20 @@ mod tests {
     }
 
     #[test]
+    fn controlled_binary_inspection_propagates_cancel_during_read() {
+        let root = temp_root();
+        let candidate = root.join("effect.vst3");
+        fs::write(&candidate, pe_x64()).unwrap();
+        let cancelled = ScanControl::default_deadline();
+        cancelled.cancel();
+        assert_eq!(
+            inspect_binary_with_control(&candidate, std::slice::from_ref(&root), Some(&cancelled)),
+            Err(InspectionError::Cancelled)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn refuses_more_than_the_candidate_budget() {
         let root = temp_root();
         for index in 0..=MAX_SCAN_CANDIDATES {
