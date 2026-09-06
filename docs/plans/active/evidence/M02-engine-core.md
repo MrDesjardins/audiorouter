@@ -20,4 +20,6 @@ Optional `CallbackMetrics` records processed quanta and repaired sample counts u
 
 `AudioBlock::clamp_unit` and `peak_abs` provide explicit output-boundary clipping and peak-meter primitives. Clipping is counted while non-finite values become silence, and internal processing is not implicitly clamped so mixer headroom is preserved. The engine suite now contains 17 passing tests.
 
+`CallbackMetrics` now exposes atomic clipping and xrun counters in addition to processed-quantum and repaired-sample counts. Tests verify caller recording; hardware xrun detection and latency evidence remain Windows scheduler work.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.

@@ -381,6 +381,8 @@ pub enum ProcessingStage {
 pub struct CallbackMetrics {
     processed_quanta: AtomicU64,
     repaired_samples: AtomicU64,
+    clipped_samples: AtomicU64,
+    xruns: AtomicU64,
 }
 
 impl CallbackMetrics {
@@ -390,6 +392,23 @@ impl CallbackMetrics {
 
     pub fn repaired_samples(&self) -> u64 {
         self.repaired_samples.load(Ordering::Relaxed)
+    }
+
+    pub fn clipped_samples(&self) -> u64 {
+        self.clipped_samples.load(Ordering::Relaxed)
+    }
+
+    pub fn xruns(&self) -> u64 {
+        self.xruns.load(Ordering::Relaxed)
+    }
+
+    pub fn record_clipping(&self, samples: usize) {
+        self.clipped_samples
+            .fetch_add(samples as u64, Ordering::Relaxed);
+    }
+
+    pub fn record_xrun(&self) {
+        self.xruns.fetch_add(1, Ordering::Relaxed);
     }
 
     fn record(&self, repaired: usize) {
@@ -816,6 +835,10 @@ mod tests {
         assert_eq!(graph.process_instrumented(&mut block, &metrics), 1);
         assert_eq!(metrics.processed_quanta(), 1);
         assert_eq!(metrics.repaired_samples(), 1);
+        metrics.record_clipping(2);
+        metrics.record_xrun();
+        assert_eq!(metrics.clipped_samples(), 2);
+        assert_eq!(metrics.xruns(), 1);
     }
 
     #[test]
