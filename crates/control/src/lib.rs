@@ -1164,6 +1164,7 @@ impl ControlPlane {
         .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
         let name = params
             .get("name")
+            .filter(|value| !value.is_null())
             .map(|value| {
                 value
                     .as_str()
@@ -1183,6 +1184,7 @@ impl ControlPlane {
         let cursor = params
             .as_ref()
             .and_then(|value| value.get("cursor"))
+            .filter(|value| !value.is_null())
             .map(|value| {
                 value
                     .as_str()
@@ -1240,6 +1242,7 @@ impl ControlPlane {
         }
         let before_revision = params
             .get("cursor")
+            .filter(|value| !value.is_null())
             .map(|value| {
                 value
                     .as_str()
@@ -1839,6 +1842,32 @@ mod tests {
             params: None,
         });
         assert_eq!(legacy.result, canonical.result);
+    }
+
+    #[test]
+    fn nullable_optional_parameters_are_treated_as_omitted() {
+        let mut plane = ControlPlane::default();
+        let mut source = session();
+        source.id = EntityId::new("source");
+        plane.insert_session(source).unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(7)),
+            method: "sessions.duplicate".into(),
+            params: Some(json!({
+                "sourceSessionId": "source",
+                "sessionId": "copy",
+                "name": null
+            })),
+        });
+        assert!(response.result.is_some());
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(8)),
+            method: "sessions.list".into(),
+            params: Some(json!({ "cursor": null })),
+        });
+        assert!(response.result.is_some());
     }
 
     #[test]

@@ -133,6 +133,8 @@ Node discovery now includes parameter descriptors for implemented built-in proce
 
 Checked-in golden fixtures now cover a protocol handshake request and exact response. The control regression deserializes both fixtures and compares the actual dispatcher response, providing a parity anchor for future CLI/UI/MCP adapters. Compilation and strict Clippy pass; execution remains blocked by the host Application Control policy.
 
+Optional nullable `cursor` and duplicate `name` fields now honor the published schema by treating explicit `null` as omitted rather than returning an invalid-params error. The regression is compile-validated with strict Clippy; executable control tests remain blocked by host Application Control.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.
