@@ -410,6 +410,15 @@ separate acceptance work.
 
 ## 2026-09-06 — Incremental FLAC recovery
 
+## 2026-09-06 — Checkpoint flush ordering
+
+Both the WAV and incremental-FLAC queue workers now flush their underlying
+`Write` destination immediately after encoding each chunk and before invoking
+the caller's durable checkpoint hook. A flush failure transitions the worker to
+`Failed`, so a checkpoint cannot report a boundary that remains buffered in the
+writer. The recording suite passes 27 tests with strict Clippy; OS-level
+`sync_all` policy and native realtime integration remain separate work.
+
 Added recover_streaming_flac_file for conservative crash recovery of the
 incremental writer's verbatim layout. It validates the FLAC metadata chain,
 scans complete bounded frames and CRCs without decoding the audio payload,

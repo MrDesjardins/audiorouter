@@ -1925,6 +1925,10 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
                 self.controller.fail();
                 return Err(error);
             }
+            if let Err(error) = self.writer.output.flush() {
+                self.controller.fail();
+                return Err(RecordingError::Io(error));
+            }
             let end = expected
                 .checked_add(frames as u64)
                 .ok_or(RecordingError::TooManyFrames)?;
@@ -2170,6 +2174,10 @@ impl<W: Write + Seek> WavRecorder<W> {
             if let Err(error) = self.writer.write_interleaved(&chunk.samples) {
                 self.controller.fail();
                 return Err(error);
+            }
+            if let Err(error) = self.writer.output.flush() {
+                self.controller.fail();
+                return Err(RecordingError::Io(error));
             }
             let end = expected
                 .checked_add(frames as u64)
