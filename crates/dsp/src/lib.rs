@@ -1703,4 +1703,28 @@ mod tests {
             vec![0.0, 0.25]
         );
     }
+
+    #[test]
+    fn pitch_shifter_preserves_sixty_second_duration_at_both_extremes() {
+        let frames = 48_000 * 60;
+        let input = (0..frames)
+            .map(|index| (2.0 * PI * 220.0 * index as f32 / 48_000.0).sin())
+            .collect::<Vec<_>>();
+        for semitones in [-12.0, 12.0] {
+            let shifter = PitchShifter::new(PitchShiftParams {
+                semitones,
+                cents: 0.0,
+                sample_rate: 48_000.0,
+                channels: 1,
+                bypass: false,
+            })
+            .unwrap();
+            let output = shifter.process_offline(&input).unwrap();
+            assert_eq!(output.len(), input.len());
+            assert!(output
+                .iter()
+                .step_by(4_096)
+                .all(|sample| sample.is_finite()));
+        }
+    }
 }

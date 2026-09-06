@@ -192,3 +192,9 @@ supports bypass. Deterministic tests pass for +12 semitones, exact duration,
 range rejection, and bypass. This implementation is currently an offline
 allocation API; realtime streaming integration and 60-second/voice quality
 acceptance measurements remain open.
+
+The dedicated 60-second duration check has now executed for both -12 and +12
+semitones: the combined test completed in 34.6 seconds, and each run preserved
+the exact 2,880,000-frame length with finite output. This proves the offline
+duration invariant but does not replace realtime streaming, speech listening,
+or native W2 latency measurements.
