@@ -866,6 +866,25 @@ impl RuntimeProcessor {
         self.meter.observe(block);
         Some(graph.generation())
     }
+
+    /// Consume one queued block into caller-owned output storage. An empty
+    /// queue produces safe silence and leaves the queue's underrun counter as
+    /// the authoritative indication of missing input.
+    pub fn process_queued(
+        &self,
+        queue: &AudioBlockQueue,
+        output: &mut AudioBlock,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        let Some(input) = queue.try_pop() else {
+            output.clear();
+            return Ok(None);
+        };
+        if let Err(error) = output.copy_from(&input) {
+            output.clear();
+            return Err(error);
+        }
+        Ok(self.process(output))
+    }
 }
 
 impl RuntimeGraph {
@@ -1265,6 +1284,23 @@ mod tests {
         processor.deactivate();
         block.channel_mut(0).unwrap().fill(1.0);
         assert_eq!(processor.process(&mut block), None);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+
+        let queue = AudioBlockQueue::new_for_shape(1, 1, 2).unwrap();
+        let mut queued = AudioBlock::new(1, 2).unwrap();
+        queued.channel_mut(0).unwrap().fill(0.5);
+        processor.set_privacy_muted(false);
+        queue.try_push(queued).unwrap();
+        processor.publish(RuntimeGraph::prepare(RuntimeGeneration::new(10), vec![]));
+        assert_eq!(
+            processor
+                .process_queued(&queue, &mut block)
+                .unwrap()
+                .map(RuntimeGeneration::value),
+            Some(10)
+        );
+        assert_eq!(block.channel(0).unwrap(), &[0.5; 2]);
+        assert_eq!(processor.process_queued(&queue, &mut block).unwrap(), None);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
     }
 }

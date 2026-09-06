@@ -43,3 +43,5 @@ Queue full/empty events now increment atomic overrun/underrun counters while sti
 The original nine-test baseline is retained in the history above; the current engine suite contains 21 deterministic tests. The portable crate now covers preallocated blocks, explicit mapping/accumulation, bounded queues, rolling and instantaneous metering, resampling/drift primitives, de-click ramps, privacy gating, domain preparation, immutable publication, and callback instrumentation. It still does not claim end-to-end node buffer scheduling, physical endpoint routing, latency evidence, or driver behavior.
 
 `RuntimePublication::clear` and `RuntimeProcessor::deactivate` now provide explicit stop behavior: future readers receive no active graph and are silenced, while existing retained snapshots remain safe until released. The lifecycle test passes without device access.
+
+`RuntimeProcessor::process_queued` connects the bounded block queue to processing: it consumes one block without waiting, clears output on empty queues or shape errors, and processes only caller-owned preallocated storage. The integration test passes; native capture/render scheduler wiring remains open.
