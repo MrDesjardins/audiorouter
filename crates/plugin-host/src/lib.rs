@@ -466,7 +466,8 @@ pub fn scan_directory_with_control(
     root: &Path,
     control: &ScanControl,
 ) -> Result<Vec<ScanEntry>, ScanError> {
-    if !root.is_dir() {
+    let root_metadata = fs::symlink_metadata(root).map_err(|_| ScanError::InvalidRoot)?;
+    if !root_metadata.is_dir() || is_reparse_point(&root_metadata) {
         return Err(ScanError::InvalidRoot);
     }
     control.check()?;
@@ -2630,6 +2631,24 @@ mod tests {
             scan_directory_with_control(&root, &expired),
             Err(ScanError::DeadlineExceeded)
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_reparse_point_scan_root() {
+        let root = temp_root();
+        let target = root.join("target");
+        fs::create_dir(&target).unwrap();
+        let link = root.join("scan-link");
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_dir(&target, &link);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&target, &link);
+
+        if link_result.is_ok() {
+            assert_eq!(scan_directory(&link), Err(ScanError::InvalidRoot));
+            fs::remove_dir(&link).unwrap();
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

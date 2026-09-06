@@ -13,6 +13,16 @@ Regression coverage verifies an independent CLI-process-equivalent plan, inspect
 
 Remaining AUTO-04 work includes parity for the remaining convenience commands and full end-to-end warning-producing operations.
 
+## 2026-09-06 — Reparse-point scan-root rejection
+
+Plugin discovery now validates the explicitly selected root with
+`symlink_metadata` before enumeration and rejects directory symlinks and
+Windows reparse-point roots. This prevents a trusted scan root from silently
+redirecting discovery elsewhere. The regression creates a directory link when
+the host permits it and expects `InvalidRoot`; plugin-host tests pass (31 unit
+tests plus 8 worker-process tests). Candidate inspection continues to enforce
+canonical containment and rejects reparse-point binaries.
+
 ## 2026-09-06 — Scan cancellation during bounded binary reads
 
 Plugin discovery now gives each candidate its own ten-second inspection window
