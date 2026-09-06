@@ -486,3 +486,12 @@ before they enter the local candidate. The session ID and revision remain
 unchanged until the backend plan/commit flow; a pure regression covers the
 normalization and 120-character bound. UI coverage is 52 tests with typecheck
 and production build passing.
+
+## Host-safe Vitest configuration (2026-09-06)
+
+The UI test script now passes Vitest's `--configLoader runner` option. This
+avoids Vite's bundled-config temporary write under `node_modules/.vite-temp`,
+which is denied by the current Windows Application Control policy, while
+retaining the existing TypeScript Vite configuration. The full UI suite passes
+58 tests and the UI TypeScript check passes; no application or audio state is
+changed.
