@@ -1212,6 +1212,7 @@ pub enum SharedAudioError {
     Empty,
     Busy,
     TornRead,
+    SequenceRegression,
     Io(String),
 }
 
@@ -1293,6 +1294,13 @@ impl SharedAudioRegion {
             )
         }
         .map_err(|_| SharedAudioError::Busy)?;
+        if current != 0 {
+            let previous = u64::from_le_bytes(self.map[12..20].try_into().unwrap());
+            if frame.sequence <= previous {
+                unsafe { (*state).store(current, std::sync::atomic::Ordering::Release) };
+                return Err(SharedAudioError::SequenceRegression);
+            }
+        }
         if let Err(error) = self.layout.write(&mut self.map, frame) {
             unsafe { (*state).store(current, std::sync::atomic::Ordering::Release) };
             return Err(error);
@@ -1997,6 +2005,10 @@ mod tests {
         assert!(matches!(writer.read(), Err(SharedAudioError::Empty)));
         writer.write(&frame).unwrap();
         writer.flush().unwrap();
+        assert_eq!(
+            writer.write(&frame),
+            Err(SharedAudioError::SequenceRegression)
+        );
         drop(writer);
         let reader = SharedAudioRegion::open(&path, layout).unwrap();
         assert_eq!(reader.read().unwrap(), frame);

@@ -248,3 +248,9 @@ Readers reject empty or busy slots and compare the epoch after decoding to
 detect a concurrent overwrite. This establishes single-writer/torn-read
 semantics for the mapping; bounded worker queue integration, OS security
 policy, and plugin execution remain open.
+
+Writers now also compare the incoming frame sequence with the published slot
+sequence and reject regressions before replacing a valid frame. The state is
+restored after rejection, so a stale producer cannot silently displace newer
+audio data. The regression and full 24-test plugin-host suite pass with strict
+Clippy clean.
