@@ -134,3 +134,9 @@ The inspector now resolves VST3 bundle directories to their single
 identity. The bundle-layout regression compiles and strict Clippy passes; the
 plugin-host test executable remains blocked by Windows Application Control OS
 error 4551.
+
+`ParameterEvent` and `BoundedParameterQueue` now provide bounded worker-side
+automation: normalized values must be finite and within 0..1, sample offsets
+must fit the 2048-frame block, and queue overflow returns ownership with a
+counter. The new test compiles and strict Clippy passes; runtime plugin-host
+execution remains blocked by OS error 4551.

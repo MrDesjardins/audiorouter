@@ -22,6 +22,7 @@ pub const MAX_SCAN_CANDIDATES: usize = 256;
 pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
+pub const MAX_PARAMETER_EVENTS: usize = 128;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -598,6 +599,77 @@ pub struct BoundedFrameQueue {
     overflow_count: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ParameterEvent {
+    pub parameter_id: u32,
+    pub normalized_value: f32,
+    pub sample_offset: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ParameterEventError {
+    NonFiniteValue,
+    ValueOutOfRange,
+    OffsetOutOfRange,
+}
+
+impl ParameterEvent {
+    pub fn new(
+        parameter_id: u32,
+        normalized_value: f32,
+        sample_offset: usize,
+    ) -> Result<Self, ParameterEventError> {
+        if !normalized_value.is_finite() {
+            return Err(ParameterEventError::NonFiniteValue);
+        }
+        if !(0.0..=1.0).contains(&normalized_value) {
+            return Err(ParameterEventError::ValueOutOfRange);
+        }
+        if sample_offset >= MAX_WORKER_FRAMES {
+            return Err(ParameterEventError::OffsetOutOfRange);
+        }
+        Ok(Self {
+            parameter_id,
+            normalized_value,
+            sample_offset,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoundedParameterQueue {
+    events: VecDeque<ParameterEvent>,
+    capacity: usize,
+    overflow_count: u64,
+}
+
+impl BoundedParameterQueue {
+    pub fn new(capacity: usize) -> Self {
+        assert!(capacity > 0, "parameter queue capacity must be positive");
+        Self {
+            events: VecDeque::with_capacity(capacity),
+            capacity,
+            overflow_count: 0,
+        }
+    }
+
+    pub fn push(&mut self, event: ParameterEvent) -> Result<(), ParameterEvent> {
+        if self.events.len() >= self.capacity {
+            self.overflow_count = self.overflow_count.saturating_add(1);
+            return Err(event);
+        }
+        self.events.push_back(event);
+        Ok(())
+    }
+
+    pub fn pop(&mut self) -> Option<ParameterEvent> {
+        self.events.pop_front()
+    }
+    pub fn overflow_count(&self) -> u64 {
+        self.overflow_count
+    }
+}
+
 impl BoundedFrameQueue {
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "worker frame queue capacity must be positive");
@@ -962,5 +1034,27 @@ mod tests {
             identity.compatibility(),
             PluginCompatibility::UnsupportedFormat
         );
+    }
+
+    #[test]
+    fn parameter_events_are_bounded_finite_and_nonblocking() {
+        let event = ParameterEvent::new(4, 0.5, 127).unwrap();
+        assert_eq!(
+            ParameterEvent::new(4, f32::NAN, 0),
+            Err(ParameterEventError::NonFiniteValue)
+        );
+        assert_eq!(
+            ParameterEvent::new(4, 1.1, 0),
+            Err(ParameterEventError::ValueOutOfRange)
+        );
+        assert_eq!(
+            ParameterEvent::new(4, 0.5, MAX_WORKER_FRAMES),
+            Err(ParameterEventError::OffsetOutOfRange)
+        );
+        let mut queue = BoundedParameterQueue::new(1);
+        assert!(queue.push(event).is_ok());
+        assert_eq!(queue.push(event), Err(event));
+        assert_eq!(queue.overflow_count(), 1);
+        assert_eq!(queue.pop(), Some(event));
     }
 }
