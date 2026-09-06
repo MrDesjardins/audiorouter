@@ -3451,13 +3451,12 @@ impl ControlPlane {
         let checkpoint = self.virtual_buses.clone();
         apply_virtual_bus_operation(&mut self.virtual_buses, &plan.operation)?;
         if let Some(storage) = &self.storage {
-            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+            if let Err(error) = storage
+                .save_virtual_buses_and_delete_plan(&self.virtual_buses, &EntityId::new(plan_id))
+            {
                 self.virtual_buses = checkpoint;
                 return Err(storage_error(error));
             }
-            storage
-                .delete_virtual_device_plan(&EntityId::new(plan_id))
-                .map_err(storage_error)?;
         }
         self.virtual_bus_plans.remove(&EntityId::new(plan_id));
         let result = json!({

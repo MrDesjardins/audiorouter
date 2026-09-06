@@ -590,6 +590,37 @@ impl Storage {
         Ok(())
     }
 
+    pub fn save_virtual_buses_and_delete_plan(
+        &self,
+        registry: &VirtualBusRegistry,
+        plan_id: &EntityId,
+    ) -> Result<(), StorageError> {
+        let snapshots = registry.snapshots();
+        if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
+            return Err(StorageError::InvalidSession(
+                "too many virtual buses".into(),
+            ));
+        }
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute("DELETE FROM virtual_buses", [])?;
+        for snapshot in snapshots {
+            transaction.execute(
+                "INSERT INTO virtual_buses(id, name, enabled) VALUES (?1, ?2, ?3)",
+                params![
+                    snapshot.id.as_str(),
+                    snapshot.name,
+                    i64::from(snapshot.enabled)
+                ],
+            )?;
+        }
+        transaction.execute(
+            "DELETE FROM virtual_device_plans WHERE id = ?1",
+            params![plan_id.as_str()],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn load_virtual_buses(&self) -> Result<VirtualBusRegistry, StorageError> {
         let mut statement = self
             .connection

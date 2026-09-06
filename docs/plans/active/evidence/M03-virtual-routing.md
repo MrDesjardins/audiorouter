@@ -83,6 +83,11 @@ methods, preserving device-administration scope checks and apply idempotency.
 The MCP catalog and process interoperability tests pass with 26 tools; no
 native endpoint is created while the driver capability is unavailable.
 
+Apply cleanup is atomic at the storage boundary: replacement of the desired
+bus rows and deletion of the durable lifecycle plan occur in one transaction.
+This prevents a crash between those steps from replaying an already-applied
+plan. Focused storage/control tests and strict Clippy pass.
+
 Virtual-device plans are now durable SQLite records containing the validated
 operation and bounded expiry. Valid plans reload after a control restart and are
 removed after successful apply; expired plans are hidden. Storage and control
