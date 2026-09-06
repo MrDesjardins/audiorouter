@@ -228,3 +228,9 @@ types. `operations.get` distinguishes completed durable/in-memory outcomes from
 unknown in-memory operations, while `operations.cancel` reports the existing
 completed operation without undoing it; no operation state was changed by the
 schema work.
+
+The `sessions.get` result now advertises the same full session graph descriptor
+as the paginated session/history responses. Its schema covers session identity
+and revision, node and port descriptors, edge endpoints, and channel matrices;
+the discovery regression verifies the graph fields rather than accepting a
+generic object. The lookup remains read-only.

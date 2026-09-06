@@ -379,6 +379,7 @@ fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             })
         }
+        "sessions.get" => session_item_schema(),
         "events.subscribe" => json!({
             "type": "object",
             "properties": {
@@ -3332,6 +3333,20 @@ mod tests {
             sessions["outputSchema"]["properties"]["items"]["items"]["properties"]["revision"]
                 ["minimum"],
             0
+        );
+        let session_get = methods
+            .iter()
+            .find(|method| method["name"] == "sessions.get")
+            .unwrap();
+        assert_eq!(session_get["outputSchema"]["type"], "object");
+        assert_eq!(
+            session_get["outputSchema"]["properties"]["nodes"]["type"],
+            "array"
+        );
+        assert_eq!(
+            session_get["outputSchema"]["properties"]["edges"]["items"]["properties"]["sourceNode"]
+                ["type"],
+            "string"
         );
         let history = methods
             .iter()
