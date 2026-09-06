@@ -3,6 +3,7 @@
 use audiorouter_domain::{validate_session, EntityId, Session};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
@@ -52,7 +53,35 @@ struct BundleManifest {
     #[serde(rename = "graphPath")]
     graph_path: String,
     #[serde(default)]
-    assets: Vec<String>,
+    assets: Vec<BundleAsset>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum BundleAsset {
+    Path(String),
+    Metadata {
+        path: String,
+        #[serde(default)]
+        sha256: Option<String>,
+        #[serde(default)]
+        size: Option<u64>,
+    },
+}
+
+impl BundleAsset {
+    fn path(&self) -> &str {
+        match self {
+            Self::Path(path) | Self::Metadata { path, .. } => path,
+        }
+    }
+
+    fn metadata(&self) -> (Option<&str>, Option<u64>) {
+        match self {
+            Self::Path(_) => (None, None),
+            Self::Metadata { sha256, size, .. } => (sha256.as_deref(), *size),
+        }
+    }
 }
 
 impl From<rusqlite::Error> for StorageError {
@@ -393,6 +422,7 @@ impl Storage {
         staging: &std::path::Path,
     ) -> Result<BundleManifest, StorageError> {
         let mut paths = HashSet::new();
+        let mut hashes = std::collections::HashMap::new();
         let mut expanded = 0u64;
         let mut manifest = None;
         for index in 0..archive.len() {
@@ -474,6 +504,8 @@ impl Storage {
             use std::io::Write;
             let mut target = target.open(&output)?;
             target.write_all(&bytes)?;
+            let hash = Sha256::digest(&bytes);
+            hashes.insert(name.clone(), (actual_size, format!("{hash:x}")));
             if name == "manifest.json" {
                 manifest = Some(serde_json::from_slice::<BundleManifest>(&bytes)?);
             }
@@ -485,7 +517,8 @@ impl Storage {
                 "unsupported bundle manifest".into(),
             ));
         }
-        for path in std::iter::once(&manifest.graph_path).chain(manifest.assets.iter()) {
+        for asset in &manifest.assets {
+            let path = asset.path();
             if !paths.contains(path)
                 || path.starts_with('/')
                 || path.contains(':')
@@ -495,6 +528,35 @@ impl Storage {
                     "manifest references unsafe or missing path: {path}"
                 )));
             }
+            let (expected_hash, expected_size) = asset.metadata();
+            let (actual_size, actual_hash) = hashes.get(path).ok_or_else(|| {
+                StorageError::InvalidBundle(format!("manifest asset is not a file: {path}"))
+            })?;
+            if expected_size.is_some_and(|size| size != *actual_size) {
+                return Err(StorageError::InvalidBundle(format!(
+                    "asset size mismatch: {path}"
+                )));
+            }
+            if let Some(expected_hash) = expected_hash {
+                if expected_hash.len() != 64
+                    || !expected_hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    || !expected_hash.eq_ignore_ascii_case(actual_hash)
+                {
+                    return Err(StorageError::InvalidBundle(format!(
+                        "asset hash mismatch: {path}"
+                    )));
+                }
+            }
+        }
+        if !paths.contains(&manifest.graph_path)
+            || manifest.graph_path.starts_with('/')
+            || manifest.graph_path.contains(':')
+            || manifest.graph_path.contains("..")
+        {
+            return Err(StorageError::InvalidBundle(format!(
+                "manifest references unsafe or missing path: {}",
+                manifest.graph_path
+            )));
         }
         Ok(manifest)
     }
@@ -802,6 +864,43 @@ mod tests {
             .import_bundle(&bundle, &staging);
         assert!(matches!(error, Err(StorageError::DocumentTooLarge { .. })));
         assert_eq!(std::fs::read_dir(&staging).unwrap().count(), 0);
+        let _ = std::fs::remove_file(bundle);
+        let _ = std::fs::remove_dir_all(staging);
+    }
+
+    #[test]
+    fn bundle_import_rejects_asset_hash_mismatch_before_commit() {
+        let suffix = format!("audiorouter-bundle-hash-{}", std::process::id());
+        let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
+        let staging = std::env::temp_dir().join(format!("{suffix}-staging"));
+        let _ = std::fs::remove_file(&bundle);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir(&staging).unwrap();
+        let manifest = serde_json::to_vec(&serde_json::json!({
+            "format": "audiorouter.session",
+            "schemaVersion": 1,
+            "graphPath": "session.json",
+            "assets": [{"path": "state.bin", "size": 5, "sha256": "00".repeat(32)}]
+        }))
+        .unwrap();
+        let document = serde_json::to_vec(&session()).unwrap();
+        write_bundle(
+            &bundle,
+            &[
+                ("manifest.json", &manifest),
+                ("session.json", &document),
+                ("state.bin", b"state"),
+            ],
+        );
+        let storage = Storage::open_memory().unwrap();
+        let error = storage.import_bundle(&bundle, &staging);
+        assert!(
+            matches!(error, Err(StorageError::InvalidBundle(message)) if message.contains("hash mismatch"))
+        );
+        assert!(storage
+            .load_session(&EntityId::new("session"))
+            .unwrap()
+            .is_none());
         let _ = std::fs::remove_file(bundle);
         let _ = std::fs::remove_dir_all(staging);
     }

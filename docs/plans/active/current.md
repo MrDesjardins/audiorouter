@@ -258,3 +258,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Added a 32-client concurrent named-pipe stress test over the owner-only, same-user transport. Each client sends a framed JSON request concurrently; every response remains independently decodable and complete.
 - The test initially caught only an assertion mismatch with the echo handler’s documented `{ok:true}` response shape; the transport itself remained intact. After correcting the assertion, all 13 transport tests passed.
 - Check: `cargo test -p audiorouter-transport` passed 13 tests plus doc tests. No audio stream, default, driver, or machine configuration was touched.
+
+### 2026-09-05 — Bundle asset integrity
+
+- Extended the v1 bundle manifest asset form to accept either a path string or `{path, size, sha256}` metadata. Staged bytes are hashed with SHA-256 and optional declared size/hash values are checked before the session is committed.
+- Added a mismatch test proving rejected bundles do not create an imported session. The `zip` and `sha2` dependencies are pinned through the workspace lockfile.
+- Check: `cargo test -p audiorouter-storage` passed 13 tests plus doc tests. No audio streams, defaults, drivers, or machine configuration were changed.
