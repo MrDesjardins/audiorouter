@@ -96,3 +96,9 @@ claims. Nine plugin-host tests and strict Clippy pass.
 returns the rejected frame to its caller on overflow, and exposes an overflow
 counter without waiting. The queue test compiles and strict Clippy passes;
 runtime execution remains blocked by OS error 4551.
+
+`write_state_asset`/`read_state_asset` now provide the bounded asset-file
+boundary: safe IDs, approved-root canonical containment, exclusive creation,
+flush-to-disk, size limits, and version/hash verification on read. The new
+asset-file test compiles and strict Clippy passes; plugin-host runtime launch
+remains blocked by Windows Application Control OS error 4551.

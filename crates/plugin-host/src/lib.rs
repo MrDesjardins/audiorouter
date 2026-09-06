@@ -6,6 +6,7 @@
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -57,6 +58,17 @@ pub enum StateError {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StateFileError {
+    InvalidRoot,
+    InvalidAssetId,
+    OutsideRoot,
+    Exists,
+    TooLarge,
+    Io(String),
+    InvalidState(StateError),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PluginStateAsset {
     pub version: u32,
     pub bytes: Vec<u8>,
@@ -95,6 +107,72 @@ impl PluginStateAsset {
         }
         Ok(&self.bytes)
     }
+}
+
+pub fn write_state_asset(
+    root: &Path,
+    asset_id: &str,
+    asset: &PluginStateAsset,
+) -> Result<PathBuf, StateFileError> {
+    let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
+    if !canonical_root.is_dir() {
+        return Err(StateFileError::InvalidRoot);
+    }
+    if !is_safe_asset_id(asset_id) {
+        return Err(StateFileError::InvalidAssetId);
+    }
+    let path = canonical_root.join(format!("{asset_id}.bin"));
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                StateFileError::Exists
+            } else {
+                StateFileError::Io(error.to_string())
+            }
+        })?;
+    file.write_all(&asset.bytes)
+        .and_then(|_| file.sync_all())
+        .map_err(|error| StateFileError::Io(error.to_string()))?;
+    Ok(path)
+}
+
+pub fn read_state_asset(
+    root: &Path,
+    path: &Path,
+    version: u32,
+) -> Result<PluginStateAsset, StateFileError> {
+    let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
+    let canonical_path =
+        fs::canonicalize(path).map_err(|error| StateFileError::Io(error.to_string()))?;
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(StateFileError::OutsideRoot);
+    }
+    let metadata =
+        fs::metadata(&canonical_path).map_err(|error| StateFileError::Io(error.to_string()))?;
+    if metadata.len() > MAX_PLUGIN_STATE_BYTES as u64 {
+        return Err(StateFileError::TooLarge);
+    }
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    fs::File::open(canonical_path)
+        .map_err(|error| StateFileError::Io(error.to_string()))?
+        .read_to_end(&mut bytes)
+        .map_err(|error| StateFileError::Io(error.to_string()))?;
+    let asset = PluginStateAsset::new(version, bytes).map_err(StateFileError::InvalidState)?;
+    asset
+        .verify_for_restore(version)
+        .map_err(StateFileError::InvalidState)?;
+    Ok(asset)
+}
+
+fn is_safe_asset_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -778,5 +856,22 @@ mod tests {
         assert_eq!(queue.overflow_count(), 1);
         assert_eq!(queue.pop(), Some(first));
         assert!(queue.is_empty());
+    }
+
+    #[test]
+    fn state_assets_use_exclusive_safe_paths_and_verify_on_read() {
+        let root = temp_root();
+        let asset = PluginStateAsset::new(4, vec![7, 8, 9]).unwrap();
+        let path = write_state_asset(&root, "plugin_state-1", &asset).unwrap();
+        assert_eq!(read_state_asset(&root, &path, 4).unwrap(), asset);
+        assert_eq!(
+            write_state_asset(&root, "plugin_state-1", &asset),
+            Err(StateFileError::Exists)
+        );
+        assert_eq!(
+            write_state_asset(&root, "..\\escape", &asset),
+            Err(StateFileError::InvalidAssetId)
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 }
