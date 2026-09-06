@@ -64,3 +64,8 @@ block alignment, and data bounds, returning exact frame, data-byte, and file-byt
 counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
+
+`inspect_recording` wraps that metadata boundary for library listings. It
+returns `Present`, `Missing`, or `Invalid` for the expected file conditions,
+while propagating unrelated I/O failures. A regression confirms deleted and
+malformed paths remain representable without terminating enumeration.

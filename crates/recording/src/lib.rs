@@ -455,6 +455,13 @@ pub struct WavFileInfo {
     pub file_bytes: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecordingFileStatus {
+    Present(WavFileInfo),
+    Missing,
+    Invalid,
+}
+
 /// Reads the canonical WAV files produced by this crate for library indexing.
 /// It validates the fixed PCM/IEEE-float header and exact data bounds but does
 /// not decode samples or touch any audio device.
@@ -503,6 +510,22 @@ pub fn inspect_wav_file(path: impl AsRef<std::path::Path>) -> Result<WavFileInfo
         data_bytes,
         file_bytes,
     })
+}
+
+/// Returns a non-fatal library status for a recording path. Missing and
+/// malformed files are represented as data so a library listing can continue
+/// across stale entries; unrelated I/O failures remain errors.
+pub fn inspect_recording(
+    path: impl AsRef<std::path::Path>,
+) -> Result<RecordingFileStatus, RecordingError> {
+    match inspect_wav_file(path) {
+        Ok(info) => Ok(RecordingFileStatus::Present(info)),
+        Err(RecordingError::InvalidWav) => Ok(RecordingFileStatus::Invalid),
+        Err(RecordingError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(RecordingFileStatus::Missing)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 impl<W: Write + Seek> WavWriter<W> {
@@ -1036,6 +1059,29 @@ mod tests {
             Err(RecordingError::InvalidWav)
         ));
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recording_status_keeps_missing_and_invalid_files_listable() {
+        let missing = std::env::temp_dir().join(format!(
+            "audiorouter-recording-missing-{}.wav",
+            std::process::id()
+        ));
+        let invalid = std::env::temp_dir().join(format!(
+            "audiorouter-recording-invalid-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&missing);
+        std::fs::write(&invalid, b"not a wav").unwrap();
+        assert_eq!(
+            inspect_recording(&missing).unwrap(),
+            RecordingFileStatus::Missing
+        );
+        assert_eq!(
+            inspect_recording(&invalid).unwrap(),
+            RecordingFileStatus::Invalid
+        );
+        let _ = std::fs::remove_file(invalid);
     }
 
     #[cfg(unix)]
