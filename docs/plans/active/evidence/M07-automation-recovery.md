@@ -299,3 +299,9 @@ two recent crash markers persist across the boundary, then clears them through
 the explicit maintenance operation. This strengthens persistence evidence but
 does not claim that a supervisor records crashes or automatically restarts
 audio sessions.
+
+`CrashRecoveryTracker::decide_recovery` now returns the policy mode and its
+automatic-restore session set as one deterministic result. This gives the
+future supervisor an atomic decision boundary: safe mode cannot be observed
+alongside a stale restore list. It remains portable policy evidence; process
+creation, crash recording, and native route restart are still unimplemented.

@@ -872,6 +872,15 @@ pub enum RecoveryMode {
     SafeMode,
 }
 
+/// The supervisor-facing result of one crash-recovery evaluation. The mode
+/// and session list are computed from the same bounded snapshot so callers do
+/// not accidentally restore routes after observing a separate safe-mode read.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecoveryDecision {
+    pub mode: RecoveryMode,
+    pub session_ids: Vec<EntityId>,
+}
+
 /// Bounded, deterministic crash-loop policy for a future process supervisor.
 /// Timestamps are supplied by the supervisor so policy tests do not depend on
 /// wall-clock behavior. Recording sessions are never eligible for automatic
@@ -908,15 +917,29 @@ impl CrashRecoveryTracker {
         timestamp_seconds: u64,
         sessions: &[RecoverySession],
     ) -> Vec<EntityId> {
+        self.decide_recovery(timestamp_seconds, sessions)
+            .session_ids
+    }
+
+    /// Evaluate safe-mode and automatic-restore policy as one decision.
+    /// Recording sessions are never returned for automatic restart.
+    pub fn decide_recovery(
+        &mut self,
+        timestamp_seconds: u64,
+        sessions: &[RecoverySession],
+    ) -> RecoveryDecision {
         self.prune(timestamp_seconds);
-        if self.mode() == RecoveryMode::SafeMode || self.crash_times.is_empty() {
-            return Vec::new();
-        }
-        sessions
-            .iter()
-            .filter(|session| session.was_running && !session.recording)
-            .map(|session| session.id.clone())
-            .collect()
+        let mode = self.mode();
+        let session_ids = if mode == RecoveryMode::SafeMode || self.crash_times.is_empty() {
+            Vec::new()
+        } else {
+            sessions
+                .iter()
+                .filter(|session| session.was_running && !session.recording)
+                .map(|session| session.id.clone())
+                .collect()
+        };
+        RecoveryDecision { mode, session_ids }
     }
 
     pub fn clear_after_stable_run(&mut self) {
@@ -1617,6 +1640,29 @@ mod tests {
             tracker.eligible_sessions(100, &sessions),
             vec![EntityId::new("live")]
         );
+    }
+
+    #[test]
+    fn crash_recovery_decision_keeps_mode_and_restore_set_consistent() {
+        let sessions = vec![RecoverySession {
+            id: EntityId::new("live"),
+            was_running: true,
+            recording: false,
+        }];
+        let mut tracker = CrashRecoveryTracker::default();
+        tracker.record_crash(100);
+        assert_eq!(
+            tracker.decide_recovery(100, &sessions),
+            RecoveryDecision {
+                mode: RecoveryMode::RestoreEligible,
+                session_ids: vec![EntityId::new("live")],
+            }
+        );
+        tracker.record_crash(101);
+        tracker.record_crash(102);
+        let decision = tracker.decide_recovery(103, &sessions);
+        assert_eq!(decision.mode, RecoveryMode::SafeMode);
+        assert!(decision.session_ids.is_empty());
     }
 
     #[test]
