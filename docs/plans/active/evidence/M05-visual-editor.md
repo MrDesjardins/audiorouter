@@ -204,6 +204,12 @@ through the authorized API; it does not change Windows privacy settings or
 audio defaults. UI coverage is 14 tests with typecheck and production build
 passing.
 
+The canvas `List view` control is now functional. It presents keyboard-focusable
+nodes with selection state plus an explicit connection list resolving node and
+port names from the current draft; empty edges are reported distinctly. The
+view remains presentation-only and cannot rewire audio. UI tests, typecheck,
+and production build pass.
+
 Connected recording rows now also offer an explicit-confirmation
 `recordings.removeEntry` action. The UI removes only the library row after the
 authorized backend succeeds and reports that the underlying audio file was
