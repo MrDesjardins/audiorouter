@@ -469,4 +469,14 @@ mod tests {
         );
         fs::remove_dir_all(root).unwrap();
     }
+
+    #[test]
+    fn refuses_more_than_the_candidate_budget() {
+        let root = temp_root();
+        for index in 0..=MAX_SCAN_CANDIDATES {
+            fs::write(root.join(format!("effect-{index}.vst3")), b"not inspected").unwrap();
+        }
+        assert_eq!(scan_directory(&root), Err(ScanError::TooManyCandidates));
+        fs::remove_dir_all(root).unwrap();
+    }
 }

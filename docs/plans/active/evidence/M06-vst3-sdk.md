@@ -50,6 +50,10 @@ while enumerating candidates, and before inspection; an empty root therefore
 honors cancellation and expiry too. Six plugin-host tests and strict Clippy
 pass.
 
+The candidate-budget regression creates 257 temporary VST3-shaped entries and
+confirms scanning returns `TooManyCandidates` before binary inspection. Seven
+plugin-host tests and strict Clippy pass.
+
 The post-integration `cargo test --workspace` run passes across CLI (5),
 control (41), domain (23), DSP (17), engine (36), plugin-host (3), protocol
 (5), recording (14), storage (21), transport (14), and Windows-audio (8)
