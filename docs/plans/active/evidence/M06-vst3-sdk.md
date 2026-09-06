@@ -514,3 +514,19 @@ changed. Generated executable/object outputs were removed immediately.
 This is compile evidence only. The loader was not executed, no plugin binary
 was downloaded or loaded, and no audio endpoint or machine configuration was
 changed.
+
+## Native loader fixture run (2026-09-06)
+
+The loader was then rebuilt and run against the existing local SDK fixture
+`third_party/vst3sdk-build/VST3/Release/mda-vst3.vst3`. It loaded the bundle's
+factory and enumerated 68 classes, including audio-module/controller pairs. It
+initialized the first audio component, processed a bounded 64-frame stereo
+offline block with `finite=true`, verified five normalized parameter
+set/readbacks, and completed a 180-byte component state save/restore.
+
+This is controlled local-fixture evidence, not production compatibility
+evidence: it covers one SDK sample/vendor and offline processing only. The
+three-available-effects/two-vendor gate, realtime worker integration, crash/
+hang/NaN/dynamic-latency fixtures, and editor lifecycle remain open. No audio
+device was opened and no machine configuration was changed. Generated loader
+outputs were removed after the run.
