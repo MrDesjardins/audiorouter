@@ -806,6 +806,7 @@ impl MixerStage {
                 .mix_mapped_from(source, matrix)
                 .map_err(MixerError::Block)?;
         }
+        destination.sanitize_non_finite();
         Ok(())
     }
 }
@@ -848,6 +849,7 @@ impl CompiledFanoutGraph {
             destination
                 .map_from(source, matrix)
                 .map_err(FanoutError::Block)?;
+            destination.sanitize_non_finite();
         }
         Ok(())
     }
@@ -869,9 +871,12 @@ impl CompiledMixerGraph {
         destination: &mut AudioBlock,
     ) -> Result<(), MixerError> {
         self.mixer.process(mixer_scratch, sources)?;
+        mixer_scratch.sanitize_non_finite();
         destination
             .map_from(mixer_scratch, &self.output_matrix)
-            .map_err(MixerError::Block)
+            .map_err(MixerError::Block)?;
+        destination.sanitize_non_finite();
+        Ok(())
     }
 }
 
@@ -1537,6 +1542,32 @@ mod tests {
             MixerStage::new(1, matrices),
             Err(MixerError::InputLimit)
         ));
+    }
+
+    #[test]
+    fn compiled_branch_paths_sanitize_non_finite_sink_samples() {
+        let mixer = MixerStage::new(1, vec![vec![1.0]]).unwrap();
+        let mut source = AudioBlock::new(1, 2).unwrap();
+        source
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[f32::NAN, f32::INFINITY]);
+        let mut destination = AudioBlock::new(1, 2).unwrap();
+        mixer
+            .process(&mut destination, std::slice::from_ref(&source))
+            .unwrap();
+        assert_eq!(destination.channel(0).unwrap(), &[0.0, 0.0]);
+
+        let mut fanout_destination = AudioBlock::new(1, 2).unwrap();
+        let fanout = CompiledFanoutGraph {
+            generation: RuntimeGeneration::new(1),
+            matrices: vec![vec![1.0]],
+        };
+        let mut destinations = [&mut fanout_destination];
+        fanout
+            .process(&source, &mut destinations)
+            .expect("valid fan-out shape");
+        assert_eq!(fanout_destination.channel(0).unwrap(), &[0.0, 0.0]);
     }
 
     #[test]
