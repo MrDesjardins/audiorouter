@@ -845,6 +845,16 @@ impl CompiledFanoutGraph {
         if destinations.len() != self.matrices.len() {
             return Err(FanoutError::BranchCount);
         }
+        if destinations
+            .iter()
+            .zip(&self.matrices)
+            .any(|(destination, matrix)| {
+                destination.frames() != source.frames()
+                    || matrix.len() != destination.channels() * source.channels()
+            })
+        {
+            return Err(FanoutError::Block(BlockError::ShapeMismatch));
+        }
         for (destination, matrix) in destinations.iter_mut().zip(&self.matrices) {
             destination
                 .map_from(source, matrix)
@@ -1568,6 +1578,20 @@ mod tests {
             .process(&source, &mut destinations)
             .expect("valid fan-out shape");
         assert_eq!(fanout_destination.channel(0).unwrap(), &[0.0, 0.0]);
+
+        let fanout = CompiledFanoutGraph {
+            generation: RuntimeGeneration::new(2),
+            matrices: vec![vec![1.0], vec![1.0]],
+        };
+        let mut first = AudioBlock::new(1, 2).unwrap();
+        first.channel_mut(0).unwrap().fill(9.0);
+        let mut wrong = AudioBlock::new(2, 2).unwrap();
+        let mut destinations = [&mut first, &mut wrong];
+        assert_eq!(
+            fanout.process(&source, &mut destinations),
+            Err(FanoutError::Block(BlockError::ShapeMismatch))
+        );
+        assert_eq!(first.channel(0).unwrap(), &[9.0, 9.0]);
     }
 
     #[test]
