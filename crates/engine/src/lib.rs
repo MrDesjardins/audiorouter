@@ -908,6 +908,7 @@ pub enum ProcessingStage {
     Gain { linear: f32 },
     Mute { muted: bool },
     ChannelMatrix { coefficients: Vec<f32> },
+    Meter { index: usize },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1338,8 +1339,18 @@ pub fn compile_session(
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
             | NodeKind::PhysicalOutput
-            | NodeKind::Mixer
-            | NodeKind::Meter => {}
+            | NodeKind::Mixer => {}
+            NodeKind::Meter => {
+                let index = stages
+                    .iter()
+                    .filter_map(|stage| match stage {
+                        ProcessingStage::Meter { index } => Some(*index),
+                        _ => None,
+                    })
+                    .max()
+                    .map_or(0, |index| index + 1);
+                stages.push(ProcessingStage::Meter { index });
+            }
         }
         previous_node = Some(node_id);
     }
@@ -1523,6 +1534,7 @@ pub fn compile_fanout_session(
 pub struct RuntimeGraph {
     stages: Vec<ProcessingStage>,
     generation: RuntimeGeneration,
+    meters: Vec<BlockMeter>,
 }
 
 /// Publication point for prepared immutable graphs. Preparation and stores
@@ -1679,11 +1691,30 @@ impl RuntimeProcessor {
 
 impl RuntimeGraph {
     pub fn prepare(generation: RuntimeGeneration, stages: Vec<ProcessingStage>) -> Self {
-        Self { stages, generation }
+        let meter_count = stages
+            .iter()
+            .filter_map(|stage| match stage {
+                ProcessingStage::Meter { index } => Some(*index),
+                _ => None,
+            })
+            .max()
+            .map_or(0, |index| index + 1);
+        Self {
+            stages,
+            generation,
+            meters: (0..meter_count).map(|_| BlockMeter::default()).collect(),
+        }
     }
 
     pub fn generation(&self) -> RuntimeGeneration {
         self.generation
+    }
+
+    /// Return the lock-free meter for a prepared Meter node. Meter storage is
+    /// allocated during graph preparation and remains valid while the graph
+    /// snapshot is retained by its reader.
+    pub fn meter(&self, index: usize) -> Option<&BlockMeter> {
+        self.meters.get(index)
     }
 
     pub fn process(&self, block: &mut AudioBlock) -> usize {
@@ -1705,6 +1736,11 @@ impl RuntimeGraph {
                 ProcessingStage::ChannelMatrix { coefficients } => {
                     if block.apply_channel_matrix(coefficients).is_err() {
                         block.clear();
+                    }
+                }
+                ProcessingStage::Meter { index } => {
+                    if let Some(meter) = self.meters.get(*index) {
+                        meter.observe(block);
                     }
                 }
             }
@@ -2562,6 +2598,27 @@ mod tests {
         publication.publish(second);
         assert_eq!(old_reader.generation().value(), 1);
         assert_eq!(publication.load().unwrap().generation().value(), 2);
+    }
+
+    #[test]
+    fn prepared_meter_stages_publish_each_boundary_without_allocating() {
+        let graph = RuntimeGraph::prepare(
+            RuntimeGeneration::new(3),
+            vec![
+                ProcessingStage::Meter { index: 0 },
+                ProcessingStage::Gain { linear: 2.0 },
+                ProcessingStage::Meter { index: 1 },
+            ],
+        );
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().copy_from_slice(&[0.5, -1.5]);
+        graph.process(&mut block);
+
+        assert_eq!(graph.meter(0).unwrap().peak_abs(), 1.5);
+        assert_eq!(graph.meter(0).unwrap().clipped_samples(), 1);
+        assert_eq!(graph.meter(1).unwrap().peak_abs(), 3.0);
+        assert_eq!(graph.meter(1).unwrap().clipped_samples(), 1);
+        assert!(graph.meter(2).is_none());
     }
 
     #[test]

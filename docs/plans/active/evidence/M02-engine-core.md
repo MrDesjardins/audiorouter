@@ -56,6 +56,12 @@ Prepared mixer construction now applies the domain contract's finite coefficient
 
 `RuntimeProcessor` now observes active processed blocks through `BlockMeter`, exposing peak and clipping health without changing the no-graph silence behavior. The integration test verifies the meter sees processed output; per-node API publication remains open.
 
+`RuntimeGraph` now prepares lock-free `BlockMeter` instances for enabled Meter
+stages and exposes them through the retained graph snapshot. Meter stages
+observe the block at their exact processing boundary without allocating or
+locking; a two-boundary regression verifies distinct pre- and post-gain peaks
+and clipping counts. Native scheduler/API transport publication remains open.
+
 ## 2026-09-06 — Graph processor parameter integration
 
 The domain `Node` contract now carries a backward-compatible parameter map.
