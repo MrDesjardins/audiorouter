@@ -14,6 +14,7 @@ use std::io::Read;
 use std::io::Write;
 #[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
+use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
 #[derive(Debug)]
@@ -1617,6 +1618,16 @@ impl Storage {
     pub fn prune_expired_recovery(&self) -> Result<(), StorageError> {
         self.prune_expired_journal()?;
         self.prune_expired_graph_plans()?;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|error| StorageError::Io(std::io::Error::other(error)))?
+            .as_secs();
+        let now = i64::try_from(now).map_err(|_| StorageError::InvalidRecoveryTimestamp)?;
+        let cutoff = now.saturating_sub(RECOVERY_CRASH_WINDOW_SECONDS as i64);
+        self.connection.execute(
+            "DELETE FROM recovery_crashes WHERE occurred_at < ?1",
+            params![cutoff],
+        )?;
         Ok(())
     }
 
@@ -1807,21 +1818,45 @@ mod tests {
             std::process::id()
         ));
         let _ = std::fs::remove_file(&path);
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         {
             let storage = Storage::open(&path).unwrap();
-            assert_eq!(storage.record_recovery_crash(500).unwrap(), 1);
-            assert_eq!(storage.record_recovery_crash(501).unwrap(), 2);
-            assert_eq!(storage.record_recovery_crash(502).unwrap(), 3);
+            assert_eq!(storage.record_recovery_crash(timestamp).unwrap(), 1);
+            assert_eq!(storage.record_recovery_crash(timestamp + 1).unwrap(), 2);
+            assert_eq!(storage.record_recovery_crash(timestamp + 2).unwrap(), 3);
         }
         {
             let storage = Storage::open(&path).unwrap();
-            assert_eq!(storage.recovery_crash_count(502).unwrap(), 3);
+            assert_eq!(storage.recovery_crash_count(timestamp + 2).unwrap(), 3);
             assert!(storage.recovery_safe_mode().unwrap());
             storage.clear_recovery_crashes().unwrap();
-            assert_eq!(storage.recovery_crash_count(502).unwrap(), 0);
+            assert_eq!(storage.recovery_crash_count(timestamp + 2).unwrap(), 0);
             assert!(!storage.recovery_safe_mode().unwrap());
         }
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recovery_retention_prunes_old_markers_but_keeps_safe_mode_latch() {
+        let storage = Storage::open_memory().unwrap();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        storage
+            .record_recovery_crash(now - RECOVERY_CRASH_WINDOW_SECONDS - 1)
+            .unwrap();
+        storage.record_recovery_crash(now).unwrap();
+        storage.record_recovery_crash(now + 1).unwrap();
+        storage.record_recovery_crash(now + 2).unwrap();
+        assert!(storage.recovery_safe_mode().unwrap());
+
+        storage.prune_expired_recovery().unwrap();
+        assert_eq!(storage.recovery_crash_count(now + 2).unwrap(), 3);
+        assert!(storage.recovery_safe_mode().unwrap());
     }
 
     #[test]
