@@ -211,6 +211,12 @@ export interface ApplicationInfo {
   processId: number;
   executable: string;
   creationTime100ns: string | null;
+  audioActivity: "active" | "inactive" | "none";
+  captureCapability: "observed" | "notObserved";
+  audioSessionCount: number;
+  activeAudioSessionCount: number;
+  captureSessionCount: number;
+  audioDisplayNames: string[];
 }
 
 export interface JsonRpcRequest<Params = unknown> {

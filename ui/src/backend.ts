@@ -1,6 +1,7 @@
 import { createAudioRouterClient } from "@audiorouter/contracts";
 import type {
   AudioRouterClient,
+  ApplicationInfo,
   DiscoveryDocument,
   EventsSubscribeResult,
   GraphCommitResult,
@@ -12,6 +13,8 @@ import type {
   RpcTransport,
 } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
+
+export type ApplicationRow = ApplicationInfo;
 
 export type UiBackendSnapshot = {
   status: StatusSnapshot;
@@ -28,6 +31,7 @@ export interface UiBackend {
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
+  listApplications(): Promise<ApplicationRow[]>;
   previewRecording(recordingId: string): Promise<Record<string, unknown>>;
   getRecordingRecovery(recordingId: string): Promise<Record<string, unknown>>;
   setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<Record<string, unknown>>;
@@ -108,6 +112,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async listRecordings() {
       return [];
     },
+    async listApplications() {
+      return [];
+    },
     async previewRecording() {
       throw new Error("The backend is disconnected; recording preview is unavailable.");
     },
@@ -178,6 +185,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async listRecordings(recordingSessionId = sessionId) {
       return client.request("recordings.list", { sessionId: recordingSessionId });
+    },
+    async listApplications() {
+      return client.request("applications.list", undefined);
     },
     async previewRecording(recordingId) {
       return client.request("recordings.preview", { recordingId });
