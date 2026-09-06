@@ -34,6 +34,7 @@ describe("snapshot cache", () => {
       previewRecording: async () => { throw new Error("not connected"); },
       setPrivacyMute: async () => { throw new Error("not connected"); },
       removeRecordingEntry: async () => { throw new Error("not connected"); },
+      createSession: async () => { throw new Error("not connected"); },
       getRecordingRecovery: async () => { throw new Error("not connected"); },
       setRecordingMetadata: async () => { throw new Error("not connected"); },
     };
@@ -126,6 +127,14 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", path: "C:\\approved\\take.wav", title: "Edited" }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title: "Edited" })).resolves.toMatchObject({ title: "Edited" });
     expect(received).toEqual({ method: "recordings.setMetadata", params: { recordingId: "take-1", title: "Edited" } });
+  });
+
+  it("creates a stopped session through the shared API", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { session: { ...demoSession, id: "new-session", name: "New", revision: 0 }, state: "stopped" }; } } as never;
+    const candidate = { ...demoSession, id: "new-session", name: "New", revision: 0 };
+    await expect(createLiveBackend(client, demoSession.id).createSession(candidate)).resolves.toMatchObject({ state: "stopped" });
+    expect(received).toEqual({ method: "sessions.create", params: { session: candidate } });
   });
 });
 

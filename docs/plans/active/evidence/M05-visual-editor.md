@@ -240,3 +240,10 @@ session state, expose `aria-current`, and show each session's revision; the
 create control remains disabled until a connected backend is available. UI
 typecheck, tests, and production build pass, with no lifecycle/audio action
 performed by navigation.
+
+The connected session sidebar `+` action now creates a revision-0 stopped
+session through `sessions.create` using an explicit user-provided name. The
+new resource is added to the local view only after the authoritative response;
+offline mode keeps creation disabled, and creation never starts audio. The
+shared TypeScript result contract now accurately models `{ session, state }`.
+UI coverage is 18 tests with typecheck and production build passing.

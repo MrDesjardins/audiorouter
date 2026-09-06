@@ -377,7 +377,7 @@ export type MethodResult = {
   "nodes.describe": DiscoveryDocument["nodeTypes"];
   "sessions.get": Session;
   "sessions.list": SessionListPage;
-  "sessions.create": Record<string, unknown>;
+  "sessions.create": { session: Session; state: "stopped" };
   "sessions.duplicate": Record<string, unknown>;
   "sessions.delete": Record<string, unknown>;
   "graph.plan": GraphPlanResult;
