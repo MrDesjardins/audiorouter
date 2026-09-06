@@ -2313,6 +2313,7 @@ fn is_mutating_method(method: &str) -> bool {
         "graph.plan"
             | "graph.undoPlan"
             | "graph.commit"
+            | "operations.cancel"
             | "session.start"
             | "sessions.start"
             | "session.stop"
@@ -2323,6 +2324,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "clients.authorize"
             | "clients.revoke"
             | "recordings.setMetadata"
+            | "recordings.rename"
             | "recordings.reveal"
             | "recordings.removeEntry"
             | "recordings.recycle"
@@ -3346,6 +3348,15 @@ mod tests {
             plane.dispatch(privacy_notification).error.unwrap().code,
             -32600
         );
+        for method in ["operations.cancel", "recordings.rename"] {
+            let notification = JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: None,
+                method: method.into(),
+                params: None,
+            };
+            assert_eq!(plane.dispatch(notification).error.unwrap().code, -32600);
+        }
         let unknown = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
