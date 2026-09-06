@@ -529,3 +529,8 @@ The `plugins.inspect` output schema now explicitly describes the nullable
 identity object, its format/architecture enums, byte count, SHA-256, and
 compatibility classification. Discovery regression coverage verifies the
 schema rather than accepting an untyped object.
+
+The checked-in `tests/acceptance/m07-headless.ps1` now packages the headless
+gate: control/CLI/plugin-host tests, strict Clippy, the M01 CLI acceptance
+workflow, and diff validation. It covers shared API/adapter behavior without
+opening audio, installing a driver, or changing machine configuration.
