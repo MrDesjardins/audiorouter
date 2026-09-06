@@ -452,6 +452,30 @@ impl SharedRender {
         Ok(available)
     }
 
+    /// Copy caller-owned interleaved bytes into the currently available
+    /// render frames and release the WASAPI buffer. The caller must supply the
+    /// endpoint's mix-format bytes per frame; partial frames are rejected.
+    /// This method never allocates and never submits more than the available
+    /// device capacity.
+    pub fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
+        if bytes_per_frame == 0 || source.len() % bytes_per_frame != 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let padding = unsafe { self.client.GetCurrentPadding()? };
+        let available = self.buffer_size.saturating_sub(padding);
+        let frames = available.min((source.len() / bytes_per_frame) as u32);
+        if frames == 0 {
+            return Ok(0);
+        }
+        let bytes = frames as usize * bytes_per_frame;
+        unsafe {
+            let data = self.render.GetBuffer(frames)?;
+            std::ptr::copy_nonoverlapping(source.as_ptr(), data.cast::<u8>(), bytes);
+            self.render.ReleaseBuffer(frames, 0)?;
+        }
+        Ok(frames)
+    }
+
     pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
         let result = unsafe {
             windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
