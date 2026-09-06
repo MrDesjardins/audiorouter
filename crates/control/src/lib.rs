@@ -649,6 +649,29 @@ impl ControlPlane {
         }
     }
 
+    fn status_snapshot(&self) -> Value {
+        let active_session_ids = self
+            .runtimes
+            .iter()
+            .filter(|(_, runtime)| runtime.state() == RuntimeState::Running)
+            .map(|(id, _)| id.as_str().to_owned())
+            .collect::<Vec<_>>();
+        json!({
+            "build": self.build,
+            "audio": "unavailable",
+            "deviceDiscovery": "available",
+            "reason": "M02 realtime graph engine and routing are not implemented",
+            "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
+            "sessionCount": self.store.sessions(500).len(),
+            "activeSessionCount": active_session_ids.len(),
+            "activeSessionIds": active_session_ids,
+            "eventCursor": {
+                "backendEpoch": self.events.backend_epoch(),
+                "latestSequence": self.events.latest_sequence()
+            }
+        })
+    }
+
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
         self.store
             .session(id)
@@ -947,50 +970,53 @@ impl ControlPlane {
                 "mutating notifications are not supported",
             );
         }
-        let result = validate_method_params(&request.method, request.params.as_ref()).and_then(|_| match request.method.as_str() {
-        "system.describe" => Ok(self.describe()),
-            "system.handshake" => self.dispatch_handshake(request.params),
-            "status.get" => Ok(
-                json!({ "build": self.build, "audio": "unavailable", "deviceDiscovery": "available", "reason": "M02 realtime graph engine and routing are not implemented" }),
-            ),
-            "system.diagnostics" => Ok(json!({
-                "build": self.build,
-                "backend": "control-plane",
-                "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
-                "audio": {
-                    "state": "unavailable",
-                    "reason": "M02 realtime graph engine and routing are not implemented"
-                },
-                "nativeAdapter": "not activated",
-                "eventLog": {
-                    "latestSequence": self.events.latest_sequence(),
-                    "retained": self.events.len()
-                },
-                "redacted": true
-            })),
-            "clients.list" => self.dispatch_clients_list(),
-            "clients.authorize" => self.dispatch_client_authorize(request.params),
-            "clients.revoke" => self.dispatch_client_revoke(request.params),
-            "operations.get" => self.dispatch_operation_get(request.params),
-            "devices.list" => self.dispatch_devices_list(),
-            "apps.list" | "applications.list" => self.dispatch_apps_list(),
-            "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
-            "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
-            "sessions.get" => self.dispatch_session_get(request.params),
-            "sessions.list" => self.dispatch_sessions_list(request.params),
-            "sessions.create" => self.dispatch_session_create(request.params),
-            "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
-            "sessions.delete" => self.dispatch_session_delete(request.params),
-            "routes.inspect" => self.dispatch_routes_inspect(request.params),
-            "graph.history" => self.dispatch_graph_history(request.params),
-            "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
-            "events.subscribe" => self.dispatch_events_subscribe(request.params),
-            "session.start" | "sessions.start" => self.dispatch_session_start(request.params),
-            "session.stop" | "sessions.stop" => self.dispatch_session_stop(request.params),
-            "graph.plan" => self.dispatch_plan(request.params),
-            "graph.commit" => self.dispatch_commit(request.params),
-            _ => Err(ControlError::InvalidRequest("method not found".into())),
-        });
+        let result =
+            validate_method_params(&request.method, request.params.as_ref()).and_then(|_| {
+                match request.method.as_str() {
+                    "system.describe" => Ok(self.describe()),
+                    "system.handshake" => self.dispatch_handshake(request.params),
+                    "status.get" => Ok(self.status_snapshot()),
+                    "system.diagnostics" => Ok(json!({
+                        "build": self.build,
+                        "backend": "control-plane",
+                        "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
+                        "audio": {
+                            "state": "unavailable",
+                            "reason": "M02 realtime graph engine and routing are not implemented"
+                        },
+                        "nativeAdapter": "not activated",
+                        "eventLog": {
+                            "latestSequence": self.events.latest_sequence(),
+                            "retained": self.events.len()
+                        },
+                        "redacted": true
+                    })),
+                    "clients.list" => self.dispatch_clients_list(),
+                    "clients.authorize" => self.dispatch_client_authorize(request.params),
+                    "clients.revoke" => self.dispatch_client_revoke(request.params),
+                    "operations.get" => self.dispatch_operation_get(request.params),
+                    "devices.list" => self.dispatch_devices_list(),
+                    "apps.list" | "applications.list" => self.dispatch_apps_list(),
+                    "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
+                    "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
+                    "sessions.get" => self.dispatch_session_get(request.params),
+                    "sessions.list" => self.dispatch_sessions_list(request.params),
+                    "sessions.create" => self.dispatch_session_create(request.params),
+                    "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
+                    "sessions.delete" => self.dispatch_session_delete(request.params),
+                    "routes.inspect" => self.dispatch_routes_inspect(request.params),
+                    "graph.history" => self.dispatch_graph_history(request.params),
+                    "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
+                    "events.subscribe" => self.dispatch_events_subscribe(request.params),
+                    "session.start" | "sessions.start" => {
+                        self.dispatch_session_start(request.params)
+                    }
+                    "session.stop" | "sessions.stop" => self.dispatch_session_stop(request.params),
+                    "graph.plan" => self.dispatch_plan(request.params),
+                    "graph.commit" => self.dispatch_commit(request.params),
+                    _ => Err(ControlError::InvalidRequest("method not found".into())),
+                }
+            });
         match result {
             Ok(value) => JsonRpcResponse::success(id, value),
             Err(ControlError::InvalidRequest(message)) if message == "method not found" => {
@@ -2062,6 +2088,30 @@ mod tests {
         assert_eq!(result["storage"], "memory");
         assert_eq!(result["redacted"], true);
         assert!(result.get("path").is_none());
+    }
+
+    #[test]
+    fn status_snapshot_tracks_sessions_and_event_cursor() {
+        let mut plane = ControlPlane::default();
+        let initial = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(15)),
+            method: "status.get".into(),
+            params: None,
+        });
+        assert_eq!(initial.result.as_ref().unwrap()["sessionCount"], 0);
+        let value = session();
+        plane.insert_session(value.clone()).unwrap();
+        let status = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(16)),
+            method: "status.get".into(),
+            params: None,
+        });
+        let result = status.result.unwrap();
+        assert_eq!(result["sessionCount"], 1);
+        assert_eq!(result["activeSessionCount"], 0);
+        assert_eq!(result["eventCursor"]["latestSequence"], 1);
     }
 
     #[test]

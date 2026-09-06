@@ -115,6 +115,18 @@ export interface DiscoveryDocument {
   };
 }
 
+export interface StatusSnapshot {
+  build: string;
+  audio: "unavailable";
+  deviceDiscovery: "available";
+  reason: string;
+  storage: "memory" | "sqlite";
+  sessionCount: number;
+  activeSessionCount: number;
+  activeSessionIds: EntityId[];
+  eventCursor: { backendEpoch: number; latestSequence: number };
+}
+
 export interface ApplicationInfo {
   processId: number;
   executable: string;
@@ -232,7 +244,7 @@ export type MethodResult = {
     negotiated: { major: 1; minor: 0 };
     schemaVersion: number;
   };
-  "status.get": Record<string, unknown>;
+  "status.get": StatusSnapshot;
   "system.diagnostics": Record<string, unknown>;
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
   "clients.authorize": Record<string, unknown>;

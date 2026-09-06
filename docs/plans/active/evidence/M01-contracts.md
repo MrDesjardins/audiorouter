@@ -145,6 +145,8 @@ Canonical plural `sessions.start` and `sessions.stop` methods are now advertised
 
 The same method now returns in-process graph-commit outcomes when the backend is memory-only, with a bounded 100-entry cache and an explicit `durable:false` marker. SQLite outcomes remain durable and are preferred when available; compile and lint validation pass.
 
+`status.get` now returns a dynamic control-plane snapshot rather than only static capability text: storage mode, loaded session count, active runtime IDs/count, and event cursor are reported while unavailable audio remains explicit. The TypeScript contract models the fields and compile/lint checks pass.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.
