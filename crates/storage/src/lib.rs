@@ -433,6 +433,10 @@ impl Storage {
             "DELETE FROM session_history WHERE session_id = ?1",
             params![id.as_str()],
         )?;
+        transaction.execute(
+            "DELETE FROM graph_plans WHERE session_id = ?1",
+            params![id.as_str()],
+        )?;
         transaction.commit()?;
         Ok(changed != 0)
     }
@@ -1378,10 +1382,20 @@ mod tests {
         let storage = Storage::open_memory().unwrap();
         let original = session();
         storage.save_session(&original).unwrap();
+        storage
+            .save_graph_plan(&GraphPlanRecord {
+                id: "plan-delete".into(),
+                session_id: original.id.as_str().into(),
+                base_revision: original.revision,
+                candidate: original.clone(),
+                expires_at: i64::MAX,
+            })
+            .unwrap();
         assert!(storage.delete_session(&original.id).unwrap());
         assert!(!storage.delete_session(&original.id).unwrap());
         assert!(storage.load_session(&original.id).unwrap().is_none());
         assert!(storage.load_history(&original.id, 10).unwrap().is_empty());
+        assert!(storage.load_graph_plan("plan-delete").unwrap().is_none());
     }
 
     #[test]

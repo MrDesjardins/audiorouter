@@ -94,6 +94,13 @@ retains only completed graph-commit outcomes; cancellation therefore reports
 than claiming to undo a committed side effect. Unknown IDs return an explicit
 not-found error. Domain/control/CLI tests pass (23/46/9) with strict Clippy.
 
+## 2026-09-06 — Session deletion invalidates durable plans
+
+Session deletion now removes all SQLite-retained graph plans for that session
+within the same transaction as the session and history deletion. A storage
+regression verifies that a retained plan is absent after deletion; control
+coverage remains green at 46 tests, with strict Clippy and formatting passing.
+
 ## 2026-09-06 — Recording CLI parity
 
 Added `recordings list`, `recordings get`, and `recordings remove-entry` to the
