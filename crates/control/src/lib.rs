@@ -108,6 +108,7 @@ fn method_description(name: &str) -> &'static str {
         "recordings.get" => {
             "Read one persisted recording metadata resource without touching its file."
         }
+        "recordings.preview" => "Inspect recording file format metadata without decoding audio.",
         "recordings.setMetadata" => {
             "Update recording metadata without changing audio content or path."
         }
@@ -192,6 +193,10 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "recordings.get" => object_schema(
+            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            &["recordingId"],
+        ),
+        "recordings.preview" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
         ),
@@ -1134,6 +1139,7 @@ impl ControlPlane {
                     "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
+                    "recordings.preview" => self.dispatch_recordings_preview(request.params),
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
                     "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
                     "devices.list" => self.dispatch_devices_list(),
@@ -1674,6 +1680,51 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_recordings_preview(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let recording_id = params
+            .and_then(|params| {
+                params
+                    .get("recordingId")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let record = storage
+            .get_recording(&recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let status = audiorouter_recording::inspect_recording(&record.path).map_err(|error| {
+            ControlError::InvalidRequest(format!("recording preview failed: {error:?}"))
+        })?;
+        let result = match status {
+            audiorouter_recording::RecordingFileStatus::Present(info) => json!({
+                "status": "present",
+                "format": "wav",
+                "channels": info.channels,
+                "sampleRate": info.sample_rate,
+                "frames": info.frames,
+                "dataBytes": info.data_bytes,
+                "fileBytes": info.file_bytes
+            }),
+            audiorouter_recording::RecordingFileStatus::FlacPresent(info) => json!({
+                "status": "present",
+                "format": "flac",
+                "channels": info.channels,
+                "sampleRate": info.sample_rate,
+                "bitsPerSample": info.bits_per_sample,
+                "frames": info.frames,
+                "fileBytes": info.file_bytes
+            }),
+            audiorouter_recording::RecordingFileStatus::Missing => json!({ "status": "missing" }),
+            audiorouter_recording::RecordingFileStatus::Invalid => json!({ "status": "invalid" }),
+        };
+        Ok(json!({ "recordingId": recording_id, "preview": result }))
+    }
+
     fn dispatch_recording_metadata(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let params =
             params.ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
@@ -1895,7 +1946,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "clients.revoke" => &["clientId"],
         "operations.get" | "operations.cancel" => &["operationId"],
         "recordings.list" => &["sessionId"],
-        "recordings.get" => &["recordingId"],
+        "recordings.get" | "recordings.preview" => &["recordingId"],
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
         "recordings.removeEntry" => &["recordingId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"

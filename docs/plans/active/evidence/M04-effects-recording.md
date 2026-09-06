@@ -236,3 +236,11 @@ frame validation, terminal errors, bounded accumulation, and emits a valid
 FLAC stream on finish. The recording suite now has 16 passing tests with
 strict Clippy clean. This is deliberately not claimed as incremental FLAC file
 output; a true streaming encoder remains open.
+# 2026-09-06 — Recording preview API parity
+
+Exposed the existing non-decoding WAV/FLAC header inspector through the
+`recordings.preview` API, `recordings preview` CLI command, and MCP
+`preview_recording` tool. Results distinguish present, missing, and invalid
+files and include format/frame metadata where available. The operation is
+read-only and requires recording scope; 16 recording, 46 control, and 9 CLI
+tests pass with strict Clippy.
