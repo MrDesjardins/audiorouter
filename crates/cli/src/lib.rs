@@ -48,6 +48,7 @@ where
         "diagnostics" => diagnostics_command(&command_args)?,
         "devices" => list_subcommand(&command_args, "devices")?,
         "apps" => list_subcommand(&command_args, "apps")?,
+        "applications" => list_subcommand(&command_args, "applications")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
         "routes" => routes_subcommand(&command_args)?,
         "history" => history_command(&command_args)?,
@@ -392,7 +393,7 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
             .dispatch(request("devices.list"))
             .result
             .unwrap_or_else(|| json!([])),
-        "apps" => plane
+        "apps" | "applications" => plane
             .dispatch(request("apps.list"))
             .result
             .unwrap_or_else(|| json!([])),
@@ -893,7 +894,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
     value["commands"]
         .as_array_mut()
         .unwrap()
@@ -1388,6 +1389,9 @@ mod tests {
             .all(|device| { device["state"] == "active" && device["id"].as_str().is_some() }));
         let apps: Value = serde_json::from_str(&run(["apps", "list", "--json"]).unwrap()).unwrap();
         assert!(!apps.as_array().unwrap().is_empty());
+        let applications: Value =
+            serde_json::from_str(&run(["applications", "list", "--json"]).unwrap()).unwrap();
+        assert_eq!(applications, apps);
         let nodes: Value =
             serde_json::from_str(&run(["nodes", "types", "--json"]).unwrap()).unwrap();
         assert!(nodes
