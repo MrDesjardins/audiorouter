@@ -1195,6 +1195,7 @@ fn mcp_tools() -> Value {
         { "name": "set_recording_metadata", "description": "Update recording metadata without changing its audio or path; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "title": { "type": ["string", "null"], "maxLength": 256 }, "artist": { "type": ["string", "null"], "maxLength": 256 }, "comment": { "type": ["string", "null"], "maxLength": 256 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "rename_recording", "description": "Rename a recording within its approved directory; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "newPath": { "type": "string", "minLength": 1 } }, "required": ["recordingId", "newPath"], "additionalProperties": false } },
         { "name": "set_privacy_mute", "description": "Latch or clear process-local privacy mute; requires capture scope.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" } }, "required": ["muted"], "additionalProperties": false } },
+        { "name": "clear_recovery_safe_mode", "description": "Clear the latched crash-recovery safe mode after stability is confirmed; requires session-control scope.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "recycle_recording", "description": "Preview or explicitly recycle a recording through the OS Recycle Bin; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "confirm": { "type": "boolean" } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
@@ -1239,6 +1240,7 @@ fn mcp_tool_call(
         "set_recording_metadata" => ("recordings.setMetadata", Some(arguments)),
         "rename_recording" => ("recordings.rename", Some(arguments)),
         "set_privacy_mute" => ("safety.setPrivacyMute", Some(arguments)),
+        "clear_recovery_safe_mode" => ("recovery.clearSafeMode", None),
         "remove_recording_entry" => ("recordings.removeEntry", Some(arguments)),
         "recycle_recording" => ("recordings.recycle", Some(arguments)),
         "plan_graph_change" => ("graph.plan", Some(arguments)),
@@ -2020,7 +2022,31 @@ mod tests {
         let recovery_content = recovery["result"]["content"][0]["text"].as_str().unwrap();
         let recovery_payload: Value = serde_json::from_str(recovery_content).unwrap();
         assert!(recovery_payload["error"].is_object());
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 22);
+        let operator =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let cleared = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &operator,
+            None,
+            &json!({
+                "id": 11,
+                "params": { "name": "clear_recovery_safe_mode", "arguments": {} }
+            }),
+        );
+        assert_eq!(cleared["result"]["isError"], false);
+        let denied_clear = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 12,
+                "params": { "name": "clear_recovery_safe_mode", "arguments": {} }
+            }),
+        );
+        assert_eq!(denied_clear["result"]["isError"], true);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 23);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
             &mut plane,
