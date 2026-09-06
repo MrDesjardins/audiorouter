@@ -465,3 +465,9 @@ existing failure/quarantine policy. The wrapper exposes explicit polling and
 shutdown but deliberately does not restart workers, load plugin code, or open
 audio. The plugin-host suite passes 29 unit tests and 5 process/integration
 tests with strict Clippy.
+
+The supervised wrapper now fails closed after a heartbeat timeout or prior
+worker failure: process, shared-process, and latency calls are rejected until
+an outer supervisor deliberately creates a replacement. A regression covers
+the timeout boundary; the plugin-host suite passes 29 unit tests and 6
+process/integration tests with strict Clippy.

@@ -1207,6 +1207,7 @@ impl SupervisedWorkerProcess {
         parameters: Vec<ParameterEvent>,
         now: Instant,
     ) -> Result<WorkerFrame, WorkerProcessError> {
+        self.ensure_running()?;
         match self.process.process(frame, parameters) {
             Ok(frame) => {
                 self.supervisor.heartbeat(now);
@@ -1225,6 +1226,7 @@ impl SupervisedWorkerProcess {
         parameters: Vec<ParameterEvent>,
         now: Instant,
     ) -> Result<WorkerFrame, WorkerProcessError> {
+        self.ensure_running()?;
         match self.process.process_shared(frame, parameters) {
             Ok(frame) => {
                 self.supervisor.heartbeat(now);
@@ -1242,6 +1244,7 @@ impl SupervisedWorkerProcess {
         latency: WorkerLatency,
         now: Instant,
     ) -> Result<WorkerLatency, WorkerProcessError> {
+        self.ensure_running()?;
         match self.process.report_latency(latency) {
             Ok(latency) => {
                 self.supervisor.heartbeat(now);
@@ -1263,6 +1266,17 @@ impl SupervisedWorkerProcess {
         timeout: Duration,
     ) -> Result<ExitStatus, WorkerProcessError> {
         self.process.shutdown_with_timeout(timeout)
+    }
+
+    fn ensure_running(&self) -> Result<(), WorkerProcessError> {
+        if self.supervisor.state() == WorkerState::Running {
+            Ok(())
+        } else {
+            Err(WorkerProcessError::Protocol(format!(
+                "worker is not running under supervision: {:?}",
+                self.supervisor.state()
+            )))
+        }
     }
 }
 
