@@ -53,6 +53,14 @@ The control regression now persists two recordings and traverses both pages,
 verifying that the first page returns the first recording plus its ID cursor and
 the cursor request returns the second recording with no further cursor.
 
+## 2026-09-06 — Recording discovery schemas
+
+API discovery now describes recording list/get outputs instead of exposing
+generic array/object placeholders. The schema includes recording identity,
+format and sample-rate enums, lifecycle states, frame/file bounds, bounded
+metadata, absolute-path field presence, and the paged list envelope. Discovery
+assertions pass with 54 control tests and strict Clippy; contracts typecheck.
+
 The UI backend now has a direct regression for a paged recording response and
 normalizes its items into the established row-list contract. UI coverage is 23
 tests with typecheck passing.

@@ -360,22 +360,55 @@ fn method_output_schema(name: &str) -> Value {
         "devices.list" | "nodes.types" | "nodes.describe" | "clients.list" => {
             json!({ "type": "array" })
         }
-        "recordings.list" => json!({
-            "oneOf": [
-                { "type": "array" },
-                {
-                    "type": "object",
-                    "properties": {
-                        "items": { "type": "array" },
-                        "nextCursor": { "type": ["string", "null"] }
-                    },
-                    "required": ["items", "nextCursor"],
-                    "additionalProperties": false
-                }
-            ]
-        }),
+        "recordings.list" => {
+            let item = recording_item_schema();
+            json!({
+                "oneOf": [
+                    { "type": "array", "items": item.clone() },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "items": { "type": "array", "items": item },
+                            "nextCursor": { "type": ["string", "null"] }
+                        },
+                        "required": ["items", "nextCursor"],
+                        "additionalProperties": false
+                    }
+                ]
+            })
+        }
+        "recordings.get" => recording_item_schema(),
         _ => json!({ "type": "object" }),
     }
+}
+
+fn recording_item_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "sessionId": { "type": "string", "minLength": 1 },
+            "recorderId": { "type": "string", "minLength": 1 },
+            "path": { "type": "string", "minLength": 1 },
+            "format": { "enum": ["wav", "flac"] },
+            "channels": { "enum": [1, 2] },
+            "sampleRate": { "enum": [44100, 48000] },
+            "frames": { "type": "integer", "minimum": 0 },
+            "fileBytes": { "type": "integer", "minimum": 0 },
+            "startTime": { "type": "string", "minLength": 1 },
+            "state": { "enum": ["armed", "recording", "paused", "completed", "failed"] },
+            "missing": { "type": "boolean" },
+            "title": { "type": ["string", "null"], "maxLength": 256 },
+            "artist": { "type": ["string", "null"], "maxLength": 256 },
+            "comment": { "type": ["string", "null"], "maxLength": 256 }
+        },
+        "required": [
+            "id", "sessionId", "recorderId", "path", "format", "channels",
+            "sampleRate", "frames", "fileBytes", "startTime", "state",
+            "missing", "title", "artist", "comment"
+        ],
+        "additionalProperties": false
+    })
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -2761,6 +2794,27 @@ mod tests {
         assert_eq!(
             applications["outputSchema"]["items"]["properties"]["captureSessionCount"]["type"],
             "integer"
+        );
+        let recordings = methods
+            .iter()
+            .find(|method| method["name"] == "recordings.list")
+            .unwrap();
+        assert_eq!(
+            recordings["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
+                ["format"]["enum"],
+            json!(["wav", "flac"])
+        );
+        assert_eq!(
+            recordings["outputSchema"]["oneOf"][1]["properties"]["nextCursor"]["type"],
+            json!(["string", "null"])
+        );
+        let recording = methods
+            .iter()
+            .find(|method| method["name"] == "recordings.get")
+            .unwrap();
+        assert_eq!(
+            recording["outputSchema"]["properties"]["sampleRate"]["enum"],
+            json!([44100, 48000])
         );
     }
 
