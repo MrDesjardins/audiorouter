@@ -886,6 +886,9 @@ impl CrashRecoveryTracker {
     pub fn record_crash(&mut self, timestamp_seconds: u64) -> RecoveryMode {
         self.prune(timestamp_seconds);
         self.crash_times.push_back(timestamp_seconds);
+        while self.crash_times.len() > RECOVERY_SAFE_MODE_CRASHES {
+            self.crash_times.pop_front();
+        }
         if self.crash_times.len() >= RECOVERY_SAFE_MODE_CRASHES {
             self.safe_mode = true;
         }
@@ -1642,6 +1645,16 @@ mod tests {
         assert_eq!(tracker.mode(), RecoveryMode::SafeMode);
         tracker.clear_after_stable_run();
         assert_eq!(tracker.mode(), RecoveryMode::RestoreEligible);
+    }
+
+    #[test]
+    fn crash_recovery_retains_only_the_bounded_recent_markers() {
+        let mut tracker = CrashRecoveryTracker::default();
+        for timestamp in 100..110 {
+            tracker.record_crash(timestamp);
+        }
+        assert_eq!(tracker.crash_count(109), RECOVERY_SAFE_MODE_CRASHES);
+        assert_eq!(tracker.mode(), RecoveryMode::SafeMode);
     }
 
     #[test]

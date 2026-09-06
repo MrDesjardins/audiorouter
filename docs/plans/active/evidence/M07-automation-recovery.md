@@ -280,6 +280,10 @@ doc tests passed, including 28 domain and 32 storage tests; strict workspace
 Clippy, formatting, and diff checks also passed. No audio endpoint or machine
 configuration was changed.
 
+The in-memory recovery policy now caps its retained crash timestamps at three,
+matching the SQLite persistence bound. A crash-storm regression verifies that
+the tracker remains bounded while still entering latched safe mode.
+
 File-backed storage coverage now reopens the SQLite database and verifies that
 two recent crash markers persist across the boundary, then clears them through
 the explicit maintenance operation. This strengthens persistence evidence but
