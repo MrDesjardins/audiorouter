@@ -55,3 +55,24 @@ prepare/verify commands, requires clean inputs and new destinations, separates
 recording/database recovery from future installation actions, and lists the
 remaining driver, signing, native-routing, sandbox, and clean-machine gates.
 It makes no installer, driver, or machine-configuration claim.
+
+## 2026-09-06 — Unsigned artifact qualification
+
+Ran tools/release/prepare-artifacts.ps1 and
+tools/release/verify-artifacts.ps1 from clean revision
+5258346cf4002367723f05efd11a9bf1692507c0, using a newly generated
+temporary output directory. The locked release build completed successfully,
+the manifest and Cargo SBOM parsed, and verification matched all recorded
+SHA-256 hashes and byte counts:
+
+- audiorouter-cli.exe — 4,768,768 bytes —
+  fcc87ae280f799ac768d616a08eb739fac82c82b93e5ffcc1c7c02804cd0f326
+- audiorouter-plugin-worker.exe — 415,744 bytes —
+  94e4d25813b8c53c0e1ed02ca618b482d1d679a5e6c8cb5f30f56dfbcec4406a
+- sbom.cargo.json — 674,254 bytes —
+  42558e44ebe7cdb0314151f8ed2f30a7e9fb15f9068942d95c75867ddc397dd4
+
+The temporary output directory was removed after verification. This validates
+the unsigned preparation workflow only; production signing, driver package
+and signing, installer, and clean-machine acceptance remain open. No audio
+endpoint or machine configuration was changed.
