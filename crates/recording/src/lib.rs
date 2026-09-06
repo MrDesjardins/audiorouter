@@ -633,6 +633,13 @@ impl<W: Write + Seek> WavRecorder<W> {
         self.controller.stop(frame)
     }
 
+    /// Marks the recorder failed after an unrecoverable worker or I/O error.
+    /// The destination remains caller-owned so it can be recovered or moved
+    /// to quarantine by a higher-level library.
+    pub fn fail(&mut self) {
+        self.controller.fail();
+    }
+
     pub fn drain_queue(
         &mut self,
         queue: &RecordingQueue,
@@ -648,13 +655,17 @@ impl<W: Write + Seek> WavRecorder<W> {
             };
             let expected = self.next_frame.unwrap_or(chunk.start_frame);
             if chunk.start_frame != expected {
+                self.controller.fail();
                 return Err(RecordingError::FrameDiscontinuity {
                     expected,
                     actual: chunk.start_frame,
                 });
             }
             let frames = chunk.samples.len() / usize::from(self.writer.channels);
-            self.writer.write_interleaved(&chunk.samples)?;
+            if let Err(error) = self.writer.write_interleaved(&chunk.samples) {
+                self.controller.fail();
+                return Err(error);
+            }
             self.next_frame = Some(expected + frames as u64);
             drained += 1;
         }
@@ -907,6 +918,31 @@ mod tests {
         assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().unwrap()), 44);
         assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().unwrap()), 8);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn worker_failure_is_terminal_and_prevents_finalization() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(1).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 99,
+                samples: vec![0.0],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(100).unwrap();
+        assert!(matches!(
+            recorder.drain_queue(&queue, 1),
+            Err(RecordingError::FrameDiscontinuity { .. })
+        ));
+        assert_eq!(recorder.state(), RecorderState::Failed);
+        assert!(matches!(
+            recorder.finish(),
+            Err(RecordingError::NotRecording)
+        ));
     }
 
     #[cfg(unix)]

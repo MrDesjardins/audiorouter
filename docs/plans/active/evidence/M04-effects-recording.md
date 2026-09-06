@@ -52,3 +52,8 @@ frames, rebuilds the RIFF and data sizes, and leaves the same file handle and
 path in place. A temporary-file regression verifies recovery of a ten-byte
 stereo PCM16 payload to two complete frames; journal/startup integration and
 FLAC recovery remain open.
+
+`WavRecorder` now transitions to `Failed` when a worker observes a frame
+discontinuity or encoder/I/O error. Failed recorders cannot be finalized, while
+their caller-owned destination remains available for the recovery or quarantine
+policy. A regression verifies the terminal state and finalization refusal.
