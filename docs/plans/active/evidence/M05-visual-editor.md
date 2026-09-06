@@ -365,3 +365,10 @@ Removing an edge updates only the local candidate, reports the action to the
 user, and leaves the committed graph unchanged until the existing plan/commit
 step. The structured list view remains available; UI coverage is 31 tests with
 typecheck, production build, and diff checks passing.
+
+Canvas node positions are now draggable and persist separately from audio
+topology under a per-session browser-local key. Malformed or unbounded stored
+coordinates are discarded, persistence failures are non-fatal, and positions
+are never sent to the backend graph planner. Layout persistence has two pure
+regressions; UI coverage is 33 tests with typecheck and production build
+passing.

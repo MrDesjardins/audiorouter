@@ -7,7 +7,9 @@ import {
   type Node as FlowNode,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { useEffect, useState } from "react";
 import type { Session } from "@audiorouter/contracts";
+import { readLayout, writeLayout, type LayoutPositions } from "./layout";
 
 type SessionFlowCanvasProps = {
   session: Session;
@@ -24,9 +26,12 @@ function positionFor(index: number) {
 }
 
 export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: SessionFlowCanvasProps) {
+  const layoutKey = `audiorouter.ui.layout.${session.id}`;
+  const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
+  useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
   const nodes: FlowNode[] = session.nodes.map((node, index) => ({
     id: node.id,
-    position: positionFor(index),
+    position: positions[node.id] ?? positionFor(index),
     data: {
       label: (
         <div className="flow-node-content" aria-label={`${node.name}, ${node.kind}`}>
@@ -36,7 +41,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
         </div>
       ),
     },
-    draggable: false,
+    draggable: true,
     selectable: true,
     style: {
       border: node.id === selectedNodeId ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
@@ -63,8 +68,9 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
         edges={edges}
         fitView
         nodesConnectable={false}
-        nodesDraggable={false}
+        nodesDraggable
         onNodeClick={(_, node) => onSelect(node.id)}
+        onNodeDragStop={(_, node) => { const next = { ...positions, [node.id]: node.position }; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >
         <Background gap={24} size={1} color="#2e4057" />
