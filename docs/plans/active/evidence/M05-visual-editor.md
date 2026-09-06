@@ -118,6 +118,14 @@ the disconnected adapter rejects both operations with an actionable error.
 Vitest (4 tests), TypeScript typecheck, and the production build pass. This is
 an adapter seam; the rendered editor does not yet invoke graph mutations.
 
+## 2026-09-06 — Current UI validation
+
+The UI test suite passed all 20 tests at the current revision. TypeScript
+typechecking and the Vite production build also passed, with local dependencies
+only and no backend, audio endpoint, or machine configuration access. Manual
+visual/accessibility acceptance and host-provided live transport injection
+remain open.
+
 `applyGraphDraft` now provides the two-phase UI workflow: it plans the complete
 candidate, verifies the returned base revision matches the draft, and commits
 using the caller's idempotency key. Revision mismatch is rejected before
