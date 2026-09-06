@@ -291,3 +291,11 @@ the shared-frame integration and all 25 tests passed. This includes the
 previously blocked quarantine/state/transport cases; the generated library test
 binary was executable on the current host. The remaining M06 gaps are actual
 VST3 plugin loading, sandbox policy, and production worker integration.
+
+Added and executed tools/m06-vst3-loader, a native non-audio loading probe
+against the pinned SDK and locally built mda-vst3 bundle. The probe resolved
+the bundle's x86_64-win binary, loaded it with LoadLibraryW, obtained the
+GetPluginFactory export, enumerated 68 factory classes, released the factory,
+and unloaded the module successfully. The generated executable and object file
+were removed afterward. This proves module/factory loading only; it does not
+claim processor activation, plugin DSP, editor behavior, or OS sandboxing.
