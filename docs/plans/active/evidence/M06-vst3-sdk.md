@@ -585,3 +585,8 @@ Release SDK build, all 51 SDK self-tests, the official validator (1,598 passed,
 0 failed), and the offline native loader. The run used Visual Studio Community
 2026, MSVC 14.51.36231, and Windows SDK 10.0.28000.0. Generated outputs were
 cleaned; no system plugin registration or audio configuration changed.
+
+The same acceptance was rerun from the current post-hardening tip on
+2026-09-06. The repository-local checkout remained at revision
+`3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`; the Release build, 51 SDK tests,
+1,598/0 official validator result, and offline loader all passed again.
