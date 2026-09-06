@@ -835,7 +835,7 @@ fn write_new_file(path: &std::path::Path, contents: &[u8]) -> Result<(), CliErro
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
+            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]".into(),
         )
     })?;
     if !matches!(
@@ -843,7 +843,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         "get" | "list" | "create" | "start" | "stop" | "delete" | "duplicate"
     ) {
         return Err(CliError::InvalidArguments(
-            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
+            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]".into(),
         ));
     }
     let storage = database(args)?;
@@ -864,6 +864,22 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
             return Err(CliError::InvalidArguments(
                 "--limit must be between 1 and 500".into(),
             ));
+        }
+        if let Some(cursor) = optional_option_value(args, "--cursor")? {
+            let mut plane = ControlPlane::with_storage("cli", storage);
+            let response = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "sessions.list".into(),
+                params: Some(json!({ "cursor": cursor, "limit": limit })),
+            });
+            return response.result.ok_or_else(|| {
+                CliError::InvalidArguments(
+                    response
+                        .error
+                        .map_or_else(|| "session list unavailable".into(), |error| error.message),
+                )
+            });
         }
         return serde_json::to_value(
             storage
@@ -903,7 +919,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
             CliError::InvalidArguments(
-                "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>"
+                "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]"
                     .into(),
             )
         })?;
@@ -952,7 +968,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
     value["commands"]
         .as_array_mut()
         .unwrap()
@@ -1665,6 +1681,43 @@ mod tests {
             .unwrap();
         assert_eq!(session.nodes[0].parameters["gainDb"], -6);
         assert_eq!(session.revision, 1);
+        let _ = std::fs::remove_file(database);
+    }
+
+    #[test]
+    fn session_list_exposes_backend_cursor_pages() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-session-page-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let storage = Storage::open(&database).unwrap();
+        for id in ["page-a", "page-b"] {
+            let mut session: audiorouter_domain::Session =
+                serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                    .unwrap();
+            session.id = EntityId::new(id);
+            storage.save_session(&session).unwrap();
+        }
+        drop(storage);
+        let database_arg = database.to_string_lossy().into_owned();
+        let page: Value = serde_json::from_str(
+            &run([
+                "session",
+                "list",
+                "--cursor",
+                "page-a",
+                "--limit",
+                "1",
+                "--database",
+                &database_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(page["items"][0]["id"], "page-b");
+        assert_eq!(page["nextCursor"], "page-b");
         let _ = std::fs::remove_file(database);
     }
 

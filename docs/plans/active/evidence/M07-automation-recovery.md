@@ -25,6 +25,15 @@ Gain parameter update increments the session revision and persists the value.
 `cargo test -p audiorouter-cli --locked` passes 16 unit tests plus MCP
 interoperability; no audio endpoint or machine configuration is touched.
 
+## 2026-09-06 — Session-list CLI cursor parity
+
+`session list` now accepts optional `--cursor ID` in addition to its bounded
+`--limit` option. Cursor requests are sent through the authoritative
+`sessions.list` control dispatcher and return the backend page envelope with
+`items` and `nextCursor`; calls without a cursor retain the existing flat list
+shape for compatibility. A two-session regression verifies the second page
+and cursor. CLI coverage passes 17 unit tests plus MCP interoperability.
+
 ## 2026-09-06 — Event epoch reconnect guard
 
 `events.subscribe` now accepts an optional `backendEpoch`. A mismatched epoch immediately returns `resyncRequired: true`, the current epoch, a bounded session snapshot, and the next event sequence. This prevents a restarted backend from replaying a cursor from a previous process epoch. The request schema and strict unknown-parameter validation include the new field. `cargo test -p audiorouter-control` passes 42 tests and strict Clippy passes.
