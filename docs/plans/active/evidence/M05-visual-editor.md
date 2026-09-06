@@ -233,3 +233,10 @@ Connected recording rows now expose read-only recovery inspection through
 exists and its state, while disconnected mode keeps the action disabled; no
 audio payload, file handle, or machine configuration is accessed. UI coverage
 is 16 tests with typecheck and production build passing.
+
+The session sidebar now renders the available session resources rather than
+hard-coded entries. Dropdown and keyboard-focusable buttons share one selected
+session state, expose `aria-current`, and show each session's revision; the
+create control remains disabled until a connected backend is available. UI
+typecheck, tests, and production build pass, with no lifecycle/audio action
+performed by navigation.
