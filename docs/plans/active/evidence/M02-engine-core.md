@@ -85,3 +85,9 @@ validates an 8--192 kHz graph rate, and rejects branch spreads beyond the
 declared 250 ms extra-compensation budget. A 37-test engine suite and strict
 Clippy pass. This calculates a plan only; runtime delay insertion and native
 latency measurement remain open.
+
+`FixedDelay` now applies those prepared sample delays through a preallocated
+per-channel ring directly on `AudioBlock`, with reset and shape/bound checks.
+The engine suite has 38 passing tests with strict Clippy clean. This proves the
+portable delay stage; scheduler graph insertion and physical latency evidence
+remain open.

@@ -23,6 +23,84 @@ pub enum LatencyCompensationError {
     },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FixedDelayError {
+    InvalidChannels,
+    InvalidCapacity,
+    InvalidDelay,
+    ShapeMismatch,
+}
+
+/// Prepared sample delay for one compensated branch. Processing reuses the
+/// ring and `AudioBlock` storage, so it performs no heap allocation.
+pub struct FixedDelay {
+    channels: usize,
+    capacity_frames: usize,
+    delay_frames: usize,
+    buffer: Vec<f32>,
+    write_frame: usize,
+}
+
+impl FixedDelay {
+    pub fn new(channels: usize, maximum_delay_frames: usize) -> Result<Self, FixedDelayError> {
+        if !(1..=MAX_CHANNELS).contains(&channels) {
+            return Err(FixedDelayError::InvalidChannels);
+        }
+        if maximum_delay_frames == 0 {
+            return Err(FixedDelayError::InvalidCapacity);
+        }
+        let capacity_frames = maximum_delay_frames + 1;
+        Ok(Self {
+            channels,
+            capacity_frames,
+            delay_frames: 0,
+            buffer: vec![0.0; capacity_frames * channels],
+            write_frame: 0,
+        })
+    }
+
+    pub fn delay_frames(&self) -> usize {
+        self.delay_frames
+    }
+
+    pub fn set_delay_frames(&mut self, delay_frames: usize) -> Result<(), FixedDelayError> {
+        if delay_frames >= self.capacity_frames {
+            return Err(FixedDelayError::InvalidDelay);
+        }
+        self.delay_frames = delay_frames;
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        self.buffer.fill(0.0);
+        self.write_frame = 0;
+    }
+
+    pub fn process(&mut self, block: &mut AudioBlock) -> Result<(), FixedDelayError> {
+        if block.channels() != self.channels {
+            return Err(FixedDelayError::ShapeMismatch);
+        }
+        for frame in 0..block.frames() {
+            let read_frame = (self.write_frame + self.capacity_frames - self.delay_frames)
+                % self.capacity_frames;
+            for channel in 0..self.channels {
+                let input = block.channel(channel).unwrap()[frame];
+                let input = if input.is_finite() { input } else { 0.0 };
+                let index = self.write_frame * self.channels + channel;
+                let delayed = self.buffer[read_frame * self.channels + channel];
+                self.buffer[index] = input;
+                block.channel_mut(channel).unwrap()[frame] = if self.delay_frames == 0 {
+                    input
+                } else {
+                    delayed
+                };
+            }
+            self.write_frame = (self.write_frame + 1) % self.capacity_frames;
+        }
+        Ok(())
+    }
+}
+
 /// Returns per-branch delay samples needed to align paths at their mixer.
 /// This is a preparation-time calculation; the realtime callback receives the
 /// resulting fixed delays from a separately prepared graph.
@@ -2564,6 +2642,28 @@ mod tests {
         assert_eq!(
             calculate_latency_compensation(&[1, 2], 7_999),
             Err(LatencyCompensationError::InvalidSampleRate)
+        );
+    }
+
+    #[test]
+    fn fixed_delay_applies_compensation_without_allocating_and_resets() {
+        let mut delay = FixedDelay::new(1, 2).unwrap();
+        delay.set_delay_frames(2).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().copy_from_slice(&[1.0, 2.0]);
+        delay.process(&mut block).unwrap();
+        assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
+        let mut next = AudioBlock::new(1, 2).unwrap();
+        next.channel_mut(0).unwrap().copy_from_slice(&[3.0, 4.0]);
+        delay.process(&mut next).unwrap();
+        assert_eq!(next.channel(0).unwrap(), &[1.0, 2.0]);
+        delay.reset();
+        next.channel_mut(0).unwrap().copy_from_slice(&[5.0, 6.0]);
+        delay.process(&mut next).unwrap();
+        assert_eq!(next.channel(0).unwrap(), &[0.0, 0.0]);
+        assert_eq!(
+            delay.set_delay_frames(3),
+            Err(FixedDelayError::InvalidDelay)
         );
     }
 }
