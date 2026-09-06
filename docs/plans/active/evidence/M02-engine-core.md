@@ -75,3 +75,5 @@ The negative topology coverage includes a valid source-to-two-sinks fan-out and 
 Pool release now clears the block before returning it to the free set. The test verifies that samples written before release are silent on the next acquire, closing a stale-audio ownership hazard without adding work to the allocation path.
 
 The ring-processing tests also cover output-pool starvation: the input block returns to its free pool, no output is published, and one xrun is recorded. No fallback allocation or silent ownership loss is used.
+
+The linear compiler now honors bypass for compatible processing nodes (`Gain`, `Mute`, and `Meter`) by preserving the surrounding channel-matrix path and omitting the processor stage. A regression proves a bypassed gain passes dry samples unchanged; bypass on device-bound nodes remains rejected. The engine suite passes 35 tests with strict Clippy.

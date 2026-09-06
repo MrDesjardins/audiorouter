@@ -991,8 +991,8 @@ pub enum GraphCompileError {
 /// graph. The currently supported edge form is one same-channel linear path;
 /// it uses in-place channel matrices. Fan-out, mixer convergence, device
 /// activation, and disabled-node routing remain owned by the Windows
-/// scheduler milestone. Gain has no scalar field in the v1 domain contract
-/// yet, so a non-bypassed gain is unity.
+/// scheduler milestone. Compatible processing nodes may be bypassed and
+/// preserve the dry path; device-bound bypass remains unsupported.
 pub fn compile_session(
     session: &audiorouter_domain::Session,
     generation: RuntimeGeneration,
@@ -1029,7 +1029,20 @@ pub fn compile_session(
                 .iter()
                 .find(|node| node.id == edge.destination_node)
                 .unwrap();
-            if !source.enabled || source.bypass || !destination.enabled || destination.bypass {
+            if !source.enabled || !destination.enabled {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            if (source.bypass
+                && !matches!(
+                    source.kind,
+                    NodeKind::Gain | NodeKind::Mute | NodeKind::Meter
+                ))
+                || (destination.bypass
+                    && !matches!(
+                        destination.kind,
+                        NodeKind::Gain | NodeKind::Mute | NodeKind::Meter
+                    ))
+            {
                 return Err(GraphCompileError::UnsupportedTopology);
             }
             let source_port = source
@@ -1101,7 +1114,7 @@ pub fn compile_session(
             .iter()
             .find(|node| node.id == node_id)
             .unwrap();
-        if !node.enabled || node.bypass {
+        if !node.enabled {
             continue;
         }
         if let Some(edge) = enabled_edges
@@ -1114,6 +1127,11 @@ pub fn compile_session(
             stages.push(ProcessingStage::ChannelMatrix {
                 coefficients: edge.matrix.clone(),
             });
+        }
+        if node.bypass {
+            // Surrounding edge matrix stages preserve the dry signal.
+            previous_node = Some(node_id);
+            continue;
         }
         match node.kind {
             NodeKind::Gain => stages.push(ProcessingStage::Gain { linear: 1.0 }),
@@ -2121,6 +2139,86 @@ mod tests {
         block.channel_mut(0).unwrap().fill(1.0);
         graph.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.5, 0.5]);
+    }
+
+    #[test]
+    fn compiler_preserves_dry_path_through_bypassed_processing_node() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let source = Node {
+            id: EntityId::new("source"),
+            kind: NodeKind::PhysicalInput,
+            name: "source".into(),
+            enabled: true,
+            bypass: false,
+            ports: vec![Port {
+                name: "main".into(),
+                direction: PortDirection::Output,
+                channels: 1,
+            }],
+        };
+        let gain = Node {
+            id: EntityId::new("gain"),
+            kind: NodeKind::Gain,
+            name: "gain".into(),
+            enabled: true,
+            bypass: true,
+            ports: vec![
+                Port {
+                    name: "in".into(),
+                    direction: PortDirection::Input,
+                    channels: 1,
+                },
+                Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 1,
+                },
+            ],
+        };
+        let sink = Node {
+            id: EntityId::new("sink"),
+            kind: NodeKind::PhysicalOutput,
+            name: "sink".into(),
+            enabled: true,
+            bypass: false,
+            ports: vec![Port {
+                name: "main".into(),
+                direction: PortDirection::Input,
+                channels: 1,
+            }],
+        };
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "bypass-route".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![source, gain, sink],
+            edges: vec![
+                Edge {
+                    id: EntityId::new("source-gain"),
+                    source_node: EntityId::new("source"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("gain"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("gain-sink"),
+                    source_node: EntityId::new("gain"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("sink"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+            ],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(9)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().copy_from_slice(&[0.25, -0.5]);
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.25, -0.5]);
     }
 
     #[test]
