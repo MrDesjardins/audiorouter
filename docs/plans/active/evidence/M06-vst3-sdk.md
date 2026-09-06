@@ -576,3 +576,12 @@ Selector rejection paths were also verified. Selecting the controller at index
 1 and a nonexistent index 999 both returned exit code 1 with
 `factory exposes no compatible audio effect`; neither path loaded a component
 or produced a success-shaped result.
+
+## Acceptance revalidation with VS2026 (2026-09-06)
+
+After rerunning with elevated build-tool access to permit MSBuild file
+tracking, `tests/acceptance/m06-vst3-sdk.ps1` passed the pinned checkout and
+Release SDK build, all 51 SDK self-tests, the official validator (1,598 passed,
+0 failed), and the offline native loader. The run used Visual Studio Community
+2026, MSVC 14.51.36231, and Windows SDK 10.0.28000.0. Generated outputs were
+cleaned; no system plugin registration or audio configuration changed.
