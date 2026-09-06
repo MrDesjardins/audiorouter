@@ -22,6 +22,13 @@ metadata command passes after the local Cargo cache is available. This still
 does not claim signed artifacts, an installer, driver packaging, or clean-
 machine qualification.
 
+On 2026-09-06, unsigned release preparation completed successfully with the
+installed Visual Studio 2026 toolchain: locked optimized CLI and plugin-worker
+builds completed, `release-manifest.json` and `sbom.cargo.json` were generated,
+and `verify-artifacts.ps1` accepted the output. The output directory was under
+the user temp path and was removed after verification. This does not close
+production signing, driver packaging, installer, or clean-machine gates.
+
 The preparation script also refuses any tracked or untracked working-tree
 changes before invoking Cargo, so the manifest and SBOM cannot describe an
 uncommitted source state. PowerShell parsing and diff validation pass.
