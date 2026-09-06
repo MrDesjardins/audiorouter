@@ -16,6 +16,8 @@ pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(3
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
+pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
+pub const RECOVERY_SAFE_MODE_CRASHES: usize = 3;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -857,6 +859,84 @@ pub enum RuntimeError {
     NotPrepared,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecoverySession {
+    pub id: EntityId,
+    pub was_running: bool,
+    pub recording: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecoveryMode {
+    RestoreEligible,
+    SafeMode,
+}
+
+/// Bounded, deterministic crash-loop policy for a future process supervisor.
+/// Timestamps are supplied by the supervisor so policy tests do not depend on
+/// wall-clock behavior. Recording sessions are never eligible for automatic
+/// restart, and the tracker does not itself start audio or mutate storage.
+#[derive(Clone, Debug, Default)]
+pub struct CrashRecoveryTracker {
+    crash_times: VecDeque<u64>,
+    safe_mode: bool,
+}
+
+impl CrashRecoveryTracker {
+    pub fn record_crash(&mut self, timestamp_seconds: u64) -> RecoveryMode {
+        self.prune(timestamp_seconds);
+        self.crash_times.push_back(timestamp_seconds);
+        if self.crash_times.len() >= RECOVERY_SAFE_MODE_CRASHES {
+            self.safe_mode = true;
+        }
+        self.mode()
+    }
+
+    pub fn mode(&self) -> RecoveryMode {
+        if self.safe_mode {
+            RecoveryMode::SafeMode
+        } else {
+            RecoveryMode::RestoreEligible
+        }
+    }
+
+    pub fn eligible_sessions(
+        &mut self,
+        timestamp_seconds: u64,
+        sessions: &[RecoverySession],
+    ) -> Vec<EntityId> {
+        self.prune(timestamp_seconds);
+        if self.mode() == RecoveryMode::SafeMode || self.crash_times.is_empty() {
+            return Vec::new();
+        }
+        sessions
+            .iter()
+            .filter(|session| session.was_running && !session.recording)
+            .map(|session| session.id.clone())
+            .collect()
+    }
+
+    pub fn clear_after_stable_run(&mut self) {
+        self.crash_times.clear();
+        self.safe_mode = false;
+    }
+
+    pub fn crash_count(&mut self, timestamp_seconds: u64) -> usize {
+        self.prune(timestamp_seconds);
+        self.crash_times.len()
+    }
+
+    fn prune(&mut self, timestamp_seconds: u64) {
+        self.crash_times.retain(|crash| {
+            timestamp_seconds < *crash
+                || timestamp_seconds.saturating_sub(*crash) <= RECOVERY_CRASH_WINDOW_SECONDS
+        });
+        if self.crash_times.len() < RECOVERY_SAFE_MODE_CRASHES {
+            self.safe_mode = false;
+        }
+    }
+}
+
 /// Deterministic control-plane runtime used by M01 tests. It never opens an
 /// endpoint and has no audio callback; M02 owns the real adapter.
 #[derive(Debug, Default)]
@@ -1510,6 +1590,57 @@ mod tests {
         ));
         assert_eq!(runtime.state(), RuntimeState::Failed);
         assert_eq!(runtime.generation(), 1);
+    }
+
+    #[test]
+    fn crash_recovery_restores_only_non_recording_sessions() {
+        let mut tracker = CrashRecoveryTracker::default();
+        assert_eq!(tracker.record_crash(100), RecoveryMode::RestoreEligible);
+        let sessions = vec![
+            RecoverySession {
+                id: EntityId::new("live"),
+                was_running: true,
+                recording: false,
+            },
+            RecoverySession {
+                id: EntityId::new("recording"),
+                was_running: true,
+                recording: true,
+            },
+            RecoverySession {
+                id: EntityId::new("stopped"),
+                was_running: false,
+                recording: false,
+            },
+        ];
+        assert_eq!(
+            tracker.eligible_sessions(100, &sessions),
+            vec![EntityId::new("live")]
+        );
+    }
+
+    #[test]
+    fn crash_recovery_enters_safe_mode_on_three_recent_crashes() {
+        let mut tracker = CrashRecoveryTracker::default();
+        assert_eq!(tracker.record_crash(100), RecoveryMode::RestoreEligible);
+        assert_eq!(tracker.record_crash(200), RecoveryMode::RestoreEligible);
+        assert_eq!(tracker.record_crash(300), RecoveryMode::SafeMode);
+        assert_eq!(tracker.crash_count(300), 3);
+        assert!(tracker.eligible_sessions(300, &[]).is_empty());
+        tracker.clear_after_stable_run();
+        assert_eq!(tracker.crash_count(300), 0);
+        assert_eq!(tracker.mode(), RecoveryMode::RestoreEligible);
+    }
+
+    #[test]
+    fn crash_recovery_expires_old_crashes_before_counting() {
+        let mut tracker = CrashRecoveryTracker::default();
+        assert_eq!(tracker.record_crash(100), RecoveryMode::RestoreEligible);
+        assert_eq!(
+            tracker.crash_count(100 + RECOVERY_CRASH_WINDOW_SECONDS + 1),
+            0
+        );
+        assert_eq!(tracker.mode(), RecoveryMode::RestoreEligible);
     }
 
     #[test]

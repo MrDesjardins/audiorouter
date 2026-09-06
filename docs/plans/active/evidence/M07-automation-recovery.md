@@ -234,6 +234,16 @@ portable symlinks. Backup destinations, restore sources, bundle files and
 staging roots, and retention directories are checked before their respective
 operations. The storage suite passes 30 tests with strict Clippy; deployment
 filesystem policy beyond these selected roots remains open.
+
+## 2026-09-06 — Portable crash-loop policy
+
+The domain crate now contains a deterministic `CrashRecoveryTracker` for the
+STATE-10 supervisor boundary. It retains only crashes in a ten-minute window,
+enters safe mode after three recent crashes, and returns only previously
+running, non-recording sessions as automatic recovery candidates. Stable-run
+reset and expiry are covered by domain tests; this is policy evidence only and
+does not claim persisted crash markers, process restart orchestration, Windows
+startup integration, or automatic audio restart.
 Backup and restore destinations now use `symlink_metadata` presence checks
 instead of relying on `Path::exists()`. This rejects dangling symlinks before
 SQLite creates or restores a file, closing a path-safety bypass; the regression
