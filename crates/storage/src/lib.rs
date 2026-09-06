@@ -626,6 +626,7 @@ impl Storage {
         registry: &VirtualBusRegistry,
         plan_id: &EntityId,
         idempotency_key: &str,
+        request_hash: &str,
         result: &Value,
     ) -> Result<(), StorageError> {
         let snapshots = registry.snapshots();
@@ -654,8 +655,8 @@ impl Storage {
         transaction.execute(
             "INSERT OR IGNORE INTO operation_journal
              (idempotency_key, operation, result, committed_revision, request_hash)
-             VALUES (?1, 'virtualDevices.apply', ?2, 0, '')",
-            params![idempotency_key, result],
+             VALUES (?1, 'virtualDevices.apply', ?2, 0, ?3)",
+            params![idempotency_key, result, request_hash],
         )?;
         transaction.commit()?;
         Ok(())

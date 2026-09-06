@@ -1334,6 +1334,7 @@ fn session_item_schema() -> Value {
 #[derive(Debug, Eq, PartialEq)]
 pub enum ControlError {
     InvalidRequest(String),
+    IdempotencyConflict,
     Store(audiorouter_domain::StoreError),
     Json(String),
     Storage(String),
@@ -1400,6 +1401,7 @@ pub struct ControlPlane {
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
+    virtual_bus_idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
@@ -1425,6 +1427,7 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            virtual_bus_idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
@@ -1467,6 +1470,7 @@ impl ControlPlane {
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
+            virtual_bus_idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
@@ -3447,18 +3451,28 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let request_hash = virtual_device_request_hash(plan_id);
         if let Some(previous) = self.operation_outcomes.get(idempotency_key) {
-            return Ok(previous.clone());
+            if self
+                .virtual_bus_idempotency_hashes
+                .get(idempotency_key)
+                .is_some_and(|hash| hash == &request_hash)
+            {
+                return Ok(previous.clone());
+            }
+            return Err(ControlError::IdempotencyConflict);
         }
         if let Some(storage) = &self.storage {
             if let Some(previous) = storage
-                .journal_result(idempotency_key)
+                .journal_result_checked(idempotency_key, &request_hash)
                 .map_err(storage_error)?
             {
                 let previous: Value = serde_json::from_str(&previous)
                     .map_err(|error| ControlError::Json(error.to_string()))?;
                 self.operation_outcomes
                     .insert(idempotency_key.to_owned(), previous.clone());
+                self.virtual_bus_idempotency_hashes
+                    .insert(idempotency_key.to_owned(), request_hash.clone());
                 return Ok(previous);
             }
         }
@@ -3489,6 +3503,7 @@ impl ControlPlane {
                 &self.virtual_buses,
                 &EntityId::new(plan_id),
                 idempotency_key,
+                &request_hash,
                 &result,
             ) {
                 self.virtual_buses = checkpoint;
@@ -3498,6 +3513,8 @@ impl ControlPlane {
         self.virtual_bus_plans.remove(&EntityId::new(plan_id));
         self.operation_outcomes
             .insert(idempotency_key.to_owned(), result.clone());
+        self.virtual_bus_idempotency_hashes
+            .insert(idempotency_key.to_owned(), request_hash);
         Ok(result)
     }
 
@@ -3791,12 +3808,18 @@ fn is_mutating_method(method: &str) -> bool {
 fn storage_error(error: StorageError) -> ControlError {
     match error {
         StorageError::CorruptDatabase(message) => ControlError::CorruptDatabase(message),
+        StorageError::IdempotencyConflict => ControlError::IdempotencyConflict,
         error => ControlError::Storage(format!("{error:?}")),
     }
 }
 
 fn virtual_bus_control_error(error: audiorouter_domain::VirtualBusError) -> ControlError {
     ControlError::InvalidRequest(format!("virtual bus operation rejected: {error:?}"))
+}
+
+fn virtual_device_request_hash(plan_id: &str) -> String {
+    let fingerprint = format!("virtualDevices.apply:{plan_id}");
+    format!("{:x}", Sha256::digest(fingerprint.as_bytes()))
 }
 
 fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpcResponse {
@@ -3814,6 +3837,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::Storage(_) => "storageFailure",
         ControlError::CorruptDatabase(_) => "corruptDatabase",
         ControlError::Json(_) => "internalError",
+        ControlError::IdempotencyConflict => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
     };
     let message = format!("{error:?}");
@@ -3999,10 +4023,33 @@ mod tests {
         assert_eq!(applied["state"], "applied");
         let replay = plane.dispatch(request(5, &plan_id)).result.unwrap();
         assert_eq!(replay, applied);
+        let second_plan = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(5)),
+                method: "virtualDevices.plan".into(),
+                params: Some(json!({
+                    "operation": {
+                        "action": "create",
+                        "id": "bus-2",
+                        "name": "Desktop Out"
+                    }
+                })),
+            })
+            .result
+            .unwrap()["planId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let conflict = plane.dispatch(request(6, &second_plan));
+        assert_eq!(
+            conflict.error.as_ref().unwrap().data.as_ref().unwrap()["code"],
+            "idempotencyConflict"
+        );
         let inventory = plane
             .dispatch(JsonRpcRequest {
                 jsonrpc: "2.0".into(),
-                id: Some(json!(6)),
+                id: Some(json!(7)),
                 method: "virtualDevices.list".into(),
                 params: None,
             })
@@ -4059,11 +4106,22 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(9)),
             method: "virtualDevices.apply".into(),
-            params: Some(
-                json!({ "planId": "no-longer-needed", "idempotencyKey": "restart-apply" }),
-            ),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "restart-apply" })),
         });
         assert_eq!(replay.result.unwrap()["state"], "applied");
+        let conflict = replayed.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(10)),
+            method: "virtualDevices.apply".into(),
+            params: Some(json!({
+                "planId": "different-plan",
+                "idempotencyKey": "restart-apply"
+            })),
+        });
+        assert_eq!(
+            conflict.error.as_ref().unwrap().data.as_ref().unwrap()["code"],
+            "idempotencyConflict"
+        );
         let _ = std::fs::remove_file(path);
     }
 

@@ -107,6 +107,12 @@ with the same idempotency key returns the completed result even when the plan
 row is gone. The control restart regression passes in available runs, and
 storage/control strict Clippy checks remain green.
 
+The journal entry is now bound to a deterministic hash of the apply method and
+plan ID. A reused idempotency key with a different plan is rejected with the
+stable `idempotencyConflict` code both in memory and after restart; same-request
+replay remains allowed. This closes the request-confusion gap without opening
+audio or changing Windows endpoint configuration.
+
 Virtual-device plans are now durable SQLite records containing the validated
 operation and bounded expiry. Valid plans reload after a control restart and are
 removed after successful apply; expired plans are hidden. Storage and control
