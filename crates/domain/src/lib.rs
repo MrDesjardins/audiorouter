@@ -351,6 +351,18 @@ impl VirtualBusRegistry {
                 VirtualBusLeaseError::StaleLease => VirtualBusError::StaleLease,
             })
     }
+
+    /// Clear a crashed owner's lease while retaining the monotonic lease
+    /// generation, so delayed cleanup cannot release a future owner.
+    pub fn force_release_lease(&mut self, id: &EntityId) -> Result<(), VirtualBusError> {
+        self.buses
+            .iter_mut()
+            .find(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?
+            .lease
+            .force_release();
+        Ok(())
+    }
 }
 
 fn validate_virtual_bus_name(name: String) -> Result<String, VirtualBusError> {
@@ -2117,6 +2129,26 @@ mod tests {
             registry.create(EntityId::new("bus-overflow"), "Overflow"),
             Err(VirtualBusError::LimitReached)
         );
+    }
+
+    #[test]
+    fn virtual_bus_registry_force_release_preserves_generation_safety() {
+        let mut registry = VirtualBusRegistry::default();
+        let id = EntityId::new("bus-1");
+        let owner = EntityId::new("session-a");
+        let replacement = EntityId::new("session-b");
+        registry.create(id.clone(), "Desktop").unwrap();
+        let generation = registry.acquire_lease(&id, owner.clone()).unwrap();
+        registry.force_release_lease(&id).unwrap();
+        let replacement_generation = registry.acquire_lease(&id, replacement.clone()).unwrap();
+        assert!(replacement_generation > generation);
+        assert_eq!(
+            registry.release_lease(&id, &owner, generation),
+            Err(VirtualBusError::NotOwner)
+        );
+        registry
+            .release_lease(&id, &replacement, replacement_generation)
+            .unwrap();
     }
 
     #[test]

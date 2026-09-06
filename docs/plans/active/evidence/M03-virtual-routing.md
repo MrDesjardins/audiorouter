@@ -55,3 +55,9 @@ normalizing the bounded page shape for React consumers. Its regression confirms
 the client requests `virtualDevices.list` and preserves the unavailable/empty
 state; the UI does not offer a provisioning side effect. UI tests pass 57 tests
 and typecheck passes.
+
+The registry now exposes force-release cleanup for a crashed or disconnected
+owner. Cleanup clears the active owner but preserves the monotonic generation;
+a delayed release from the old owner cannot release a replacement lease. This
+is portable ownership evidence only: bridge heartbeat detection, buffer reset,
+and native endpoint silence/recovery remain unimplemented.
