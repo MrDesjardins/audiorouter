@@ -14,7 +14,7 @@ do not create a fake bus or bypass resource validation. M03 driver installation,
 bridge ownership, endpoint identity, and Windows routing remain open.
 
 Validation: all locked Rust workspace tests and strict Clippy passed; the
-contracts TypeScript check passed; UI Vitest passed 55 tests using Vite's
+contracts TypeScript check passed; UI Vitest passed 56 tests using Vite's
 runner config loader. The UI production build could transform and render but
 Windows returned `EPERM` while creating the configured or alternate output
 directory, so no production-build pass is claimed. No driver, audio endpoint,
