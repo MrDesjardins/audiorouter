@@ -193,6 +193,12 @@ own settings. Two pure checklist regressions were added; UI coverage is 54
 tests with typecheck and production build passing. The checklist performs no
 audio, endpoint, or external-application action.
 
+The readiness checklist now aligns with the typed status contract by treating
+both `memory` and `sqlite` storage as available, while labeling memory storage
+as non-durable. This prevents a valid backend state from being reported as
+unavailable; a focused regression was added and UI coverage is 55 tests with
+typecheck and production build passing.
+
 Route explanations now annotate each reported node with its authoritative
 enabled, bypassed, muted, or disabled state. Unknown node IDs remain visible
 instead of being silently dropped. A pure formatter regression was added; UI
