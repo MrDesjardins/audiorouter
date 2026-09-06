@@ -1,6 +1,6 @@
 # M05 — React visual editor and guided setup
 
-Status: not started. Prerequisite: M04. Outcome: the primary workflow is understandable and configurable entirely through the desktop UI and guided external-app steps.
+Status: React/UI foundation implemented; native shell injection and manual acceptance remain open. Prerequisite: M04. Outcome: the primary workflow is understandable and configurable entirely through the desktop UI and guided external-app steps.
 
 ## Read first
 

@@ -1,6 +1,6 @@
 # M06 — Isolated VST3 effects and pitch shift
 
-Status: not started. Prerequisite: M05. Outcome: extensible effects and pitch processing with explicit compatibility, latency, and failure containment.
+Status: SDK, DSP, and worker-boundary foundation implemented; production plugin execution and sandbox acceptance remain open. Prerequisite: M05. Outcome: extensible effects and pitch processing with explicit compatibility, latency, and failure containment.
 
 ## Read first
 

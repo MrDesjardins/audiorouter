@@ -1,6 +1,6 @@
 # M08 — Windows release qualification and delivery
 
-Status: not started. Prerequisite: M07 and available production driver-signing/distribution prerequisites. Outcome: a verified, signed, installable Windows 11 x64 v1 with clear operating and recovery instructions.
+Status: unsigned release-preparation foundation implemented; driver, signing, installer, and clean-machine gates remain open. Prerequisite: M07 and available production driver-signing/distribution prerequisites. Outcome: a verified, signed, installable Windows 11 x64 v1 with clear operating and recovery instructions.
 
 ## Read first
 
