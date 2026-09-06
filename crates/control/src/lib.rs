@@ -645,7 +645,7 @@ impl ControlPlane {
             Err(ControlError::InvalidRequest(message)) => {
                 JsonRpcResponse::failure(id, -32602, message)
             }
-            Err(error) => JsonRpcResponse::failure(id, -32000, format!("{error:?}")),
+            Err(error) => application_error_response(id, error),
         }
     }
 
@@ -680,11 +680,15 @@ impl ControlPlane {
             return self.dispatch(request);
         };
         if !grant.allows(spec.permission) {
-            return JsonRpcResponse::failure(
+            let mut response = JsonRpcResponse::failure(
                 id,
                 -32001,
                 format!("permission denied: {:?}", spec.permission),
             );
+            if let Some(error) = response.error.as_mut() {
+                error.data = Some(json!({ "code": "permissionDenied" }));
+            }
+            return response;
         }
         if is_mutating_method(&request.method) {
             if let Some(client_id) = client_id {
@@ -706,15 +710,7 @@ impl ControlPlane {
     pub fn dispatch_message(&mut self, message: RpcMessage) -> Vec<JsonRpcResponse> {
         match message {
             RpcMessage::Single(request) => {
-                let omit = request.is_notification()
-                    && !matches!(
-                        request.method.as_str(),
-                        "graph.plan"
-                            | "graph.undoPlan"
-                            | "graph.commit"
-                            | "session.start"
-                            | "session.stop"
-                    );
+                let omit = request.is_notification() && !is_mutating_method(&request.method);
                 let response = self.dispatch(request);
                 if omit {
                     Vec::new()
@@ -725,15 +721,7 @@ impl ControlPlane {
             RpcMessage::Batch(requests) => requests
                 .into_iter()
                 .filter_map(|request| {
-                    let omit = request.is_notification()
-                        && !matches!(
-                            request.method.as_str(),
-                            "graph.plan"
-                                | "graph.undoPlan"
-                                | "graph.commit"
-                                | "session.start"
-                                | "session.stop"
-                        );
+                    let omit = request.is_notification() && !is_mutating_method(&request.method);
                     let response = self.dispatch(request);
                     if omit {
                         None
@@ -1221,6 +1209,30 @@ fn storage_error(error: StorageError) -> ControlError {
     ControlError::Storage(format!("{error:?}"))
 }
 
+fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpcResponse {
+    let code = match &error {
+        ControlError::Store(error) => match error {
+            audiorouter_domain::StoreError::SessionNotFound => "notFound",
+            audiorouter_domain::StoreError::PlanNotFound => "notFound",
+            audiorouter_domain::StoreError::PlanExpired => "planExpired",
+            audiorouter_domain::StoreError::InvalidGraph(_) => "invalidGraph",
+            audiorouter_domain::StoreError::RevisionConflict { .. } => "revisionConflict",
+            audiorouter_domain::StoreError::EmptyIdempotencyKey => "invalidRequest",
+            audiorouter_domain::StoreError::NoUndoAvailable => "noUndoAvailable",
+            audiorouter_domain::StoreError::IdempotencyConflict => "idempotencyConflict",
+        },
+        ControlError::Storage(_) => "storageFailure",
+        ControlError::Json(_) => "internalError",
+        ControlError::InvalidRequest(_) => "invalidRequest",
+    };
+    let message = format!("{error:?}");
+    let mut response = JsonRpcResponse::failure(id, -32000, message);
+    if let Some(error) = response.error.as_mut() {
+        error.data = Some(json!({ "code": code }));
+    }
+    response
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1341,6 +1353,31 @@ mod tests {
         ));
         plane.session_stop(&running.id).unwrap();
         assert_eq!(plane.delete_session(&running.id).unwrap()["deleted"], true);
+    }
+
+    #[test]
+    fn application_errors_include_stable_codes() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "changed".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "graph.commit".into(),
+            params: Some(json!({
+                "planId": plan,
+                "baseRevision": 1,
+                "idempotencyKey": "conflict"
+            })),
+        });
+        assert_eq!(response.error.as_ref().unwrap().code, -32000);
+        assert_eq!(
+            response.error.as_ref().unwrap().data,
+            Some(json!({ "code": "revisionConflict" }))
+        );
     }
 
     fn session() -> Session {

@@ -99,6 +99,8 @@ The session resource lifecycle now includes `sessions.create` and `sessions.dele
 
 `sessions.duplicate` now clones a source session through the backend into a new revision-0 stopped resource, permits an explicit replacement name, and rejects an existing destination ID. Control and CLI regressions cover cloning and collision handling; the affected suites pass (29 domain, 20 storage, 23 control, 4 CLI) with strict Clippy and contract typecheck green.
 
+Application JSON-RPC failures now include stable `error.data.code` categories for domain, storage, permission, and internal failures, including `revisionConflict`, `planExpired`, `notFound`, and `idempotencyConflict`. Mutating notification rejection is applied consistently to session create/duplicate/delete as well as graph/session operations; a revision-conflict regression passes in the 30-test control suite with strict Clippy.
+
 `graph.commit` now hashes the planned session payload with SHA-256, checks the durable journal before domain mutation, and stores the hash in the same SQLite transaction as the session revision. Matching requests replay across a fresh control plane; mismatched reuse is rejected. The combined domain/control/storage verification passed 19, 22, and 16 tests respectively, with strict Clippy green. Expiry/retention policy for journal rows remains future work.
 
 Durable idempotency records now have a 24-hour retention bound. Journal reads and transactional writes prune older rows using an indexed `created_at`; a regression verifies an expired key can be reused while a current mismatched hash still conflicts. Storage coverage is 17 passing tests with strict Clippy.
