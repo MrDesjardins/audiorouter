@@ -396,6 +396,18 @@ impl RecorderController {
         Ok(())
     }
 
+    /// Advances the durable boundary after a worker has committed audio.
+    /// This does not change lifecycle state or part boundaries.
+    pub fn advance(&mut self, frame: u64) -> Result<(), RecorderError> {
+        if self.state != RecorderState::Recording {
+            return Err(RecorderError::InvalidTransition {
+                state: self.state,
+                action: "advance",
+            });
+        }
+        self.require_frame(frame)
+    }
+
     pub fn fail(&mut self) {
         self.state = RecorderState::Failed;
         self.pause_start = None;
@@ -497,6 +509,7 @@ pub enum RecordingError {
     InvalidQueueCapacity,
     NotRecording,
     FrameDiscontinuity { expected: u64, actual: u64 },
+    Controller(RecorderError),
     InvalidWav,
     FlacEncode(String),
     Io(std::io::Error),
@@ -1081,6 +1094,12 @@ impl BufferedFlacRecorder {
         self.controller.state()
     }
 
+    /// Returns the validated control-plane boundary snapshot for durable
+    /// recovery. Audio samples and encoder buffers are intentionally omitted.
+    pub fn checkpoint(&self) -> RecorderCheckpoint {
+        self.controller.checkpoint()
+    }
+
     pub fn arm(&mut self) -> Result<(), RecorderError> {
         self.controller.arm()
     }
@@ -1135,7 +1154,13 @@ impl BufferedFlacRecorder {
                 self.controller.fail();
                 return Err(error);
             }
-            self.next_frame = Some(expected + frames as u64);
+            let end = expected
+                .checked_add(frames as u64)
+                .ok_or(RecordingError::TooManyFrames)?;
+            self.controller
+                .advance(end)
+                .map_err(RecordingError::Controller)?;
+            self.next_frame = Some(end);
             drained += 1;
         }
         Ok(drained)
@@ -1164,6 +1189,13 @@ impl<W: Write + Seek> WavRecorder<W> {
 
     pub fn controller(&self) -> &RecorderController {
         &self.controller
+    }
+
+    /// Returns the validated control-plane boundary snapshot for durable
+    /// recovery. Audio samples and the destination handle are intentionally
+    /// omitted.
+    pub fn checkpoint(&self) -> RecorderCheckpoint {
+        self.controller.checkpoint()
     }
 
     pub fn arm(&mut self) -> Result<(), RecorderError> {
@@ -1227,7 +1259,13 @@ impl<W: Write + Seek> WavRecorder<W> {
                 self.controller.fail();
                 return Err(error);
             }
-            self.next_frame = Some(expected + frames as u64);
+            let end = expected
+                .checked_add(frames as u64)
+                .ok_or(RecordingError::TooManyFrames)?;
+            self.controller
+                .advance(end)
+                .map_err(RecordingError::Controller)?;
+            self.next_frame = Some(end);
             drained += 1;
         }
         Ok(drained)
@@ -1454,8 +1492,10 @@ mod tests {
         recorder.arm().unwrap();
         recorder.start(10).unwrap();
         assert_eq!(recorder.drain_queue(&queue, 1).unwrap(), 1);
+        assert_eq!(recorder.checkpoint().last_frame, Some(12));
         assert_eq!(recorder.drain_queue(&queue, 8).unwrap(), 1);
         recorder.stop(13).unwrap();
+        assert_eq!(recorder.checkpoint().state, RecorderState::Completed);
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
     }
@@ -1479,6 +1519,7 @@ mod tests {
         recorder.arm().unwrap();
         recorder.start(10).unwrap();
         assert_eq!(recorder.drain_queue(&queue, 8).unwrap(), 2);
+        assert_eq!(recorder.checkpoint().last_frame, Some(13));
         recorder.stop(13).unwrap();
         let bytes = recorder.finish().unwrap();
         let info = flac_io::info(&bytes).unwrap();

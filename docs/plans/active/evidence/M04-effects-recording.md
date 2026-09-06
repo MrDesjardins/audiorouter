@@ -1,5 +1,15 @@
 # M04 effects and recording evidence
 
+## 2026-09-06 â€” Worker checkpoint boundary
+
+`WavRecorder` and `BufferedFlacRecorder` now expose validated controller
+checkpoints. After each successfully encoded queue chunk, the worker advances
+the checkpoint to that chunk's end frame, so recovery metadata cannot lag the
+bytes already committed by the worker. The snapshot contains no samples,
+encoder buffer, or file handle. Recording tests (18) and strict Clippy pass.
+Durable scheduling of these snapshots and true incremental FLAC output remain
+open.
+
 ## Initial recorder slice
 
 The new `crates/recording` crate provides a seekable WAV writer for PCM16,
