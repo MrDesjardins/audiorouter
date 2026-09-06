@@ -1,3 +1,4 @@
+import { createAudioRouterClient } from "@audiorouter/contracts";
 import type {
   AudioRouterClient,
   DiscoveryDocument,
@@ -7,6 +8,7 @@ import type {
   RouteInspection,
   Session,
   StatusSnapshot,
+  RpcTransport,
 } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
 
@@ -123,4 +125,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
       return client.request("graph.commit", { planId, baseRevision, idempotencyKey });
     },
   };
+}
+
+/** Build the live UI backend directly from the host-provided framed transport. */
+export function createLiveBackendFromTransport(transport: RpcTransport, sessionId: string): UiBackend {
+  return createLiveBackend(createAudioRouterClient(transport), sessionId);
 }

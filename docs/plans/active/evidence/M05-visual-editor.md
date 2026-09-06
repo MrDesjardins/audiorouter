@@ -152,3 +152,10 @@ connected-only draft checkbox. This is distinct from the process privacy-mute
 safety action, which remains unavailable in the editor; the parameter still
 flows through the existing plan/commit path. UI coverage is 9 tests with
 typecheck and production build passing.
+## 2026-09-06 â€” Host transport adapter seam
+
+The UI now exposes `createLiveBackendFromTransport`, which builds the shared
+typed `AudioRouterClient` from a host-provided framed `RpcTransport` before
+creating the live backend. React remains independent of named-pipe and native
+WebView details, while the disconnected backend remains the safe default. Ten
+Vitest tests, TypeScript typecheck, and the production Vite build pass.

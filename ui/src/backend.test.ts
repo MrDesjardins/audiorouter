@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDisconnectedBackend, createLiveBackend, SnapshotCache, type UiBackend } from "./backend";
+import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, SnapshotCache, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
 
@@ -52,6 +52,18 @@ describe("live event cursor", () => {
       method: "events.subscribe",
       params: { afterSequence: 7, limit: 500, backendEpoch: 8, sessionId: demoSession.id },
     });
+  });
+
+  it("constructs the typed live backend from a host transport", async () => {
+    let method = "";
+    const backend = createLiveBackendFromTransport({
+      send: async request => {
+        method = request.method;
+        return { jsonrpc: "2.0", id: request.id ?? null, result: { backendEpoch: 1, events: [], nextSequence: 0 } };
+      },
+    }, demoSession.id);
+    await backend.subscribe();
+    expect(method).toBe("events.subscribe");
   });
 });
 
