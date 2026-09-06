@@ -32,3 +32,8 @@ architecture checks, SHA-256 identity fingerprints, and a three-failure
 quarantine ledger requiring deliberate retry. Three crate tests and strict
 Clippy pass. Loading, scanning code execution, worker IPC, and plugin state
 remain intentionally separate follow-up work.
+
+The post-integration `cargo test --workspace` run passes across CLI (5),
+control (41), domain (23), DSP (17), engine (36), plugin-host (3), protocol
+(5), recording (14), storage (21), transport (14), and Windows-audio (8)
+tests, plus all doc tests. Strict plugin-host Clippy remains green.
