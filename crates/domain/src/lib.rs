@@ -417,6 +417,7 @@ pub enum PermissionScope {
     SessionControl,
     Capture,
     Record,
+    PluginScan,
     DeviceAdministration,
 }
 
@@ -550,7 +551,7 @@ pub const API_METHODS: [ApiMethodSpec; 46] = [
     },
     ApiMethodSpec {
         name: "plugins.scan",
-        permission: PermissionScope::Read,
+        permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {

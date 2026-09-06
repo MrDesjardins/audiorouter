@@ -499,3 +499,9 @@ uses the existing non-loading scanner; plugin code is never loaded or
 executed. Rust control coverage verifies an invalid candidate remains visible,
 and the TypeScript contract, CLI/MCP generic dispatch, strict Clippy, and UI
 typecheck remain green.
+
+Plugin scanning now uses a distinct `pluginScan` permission scope rather than
+generic read access. Built-in observer/editor/operator roles do not receive
+that scope implicitly; an explicit grant is required and covered by the
+control authorization regression. This preserves the security contract while
+keeping scan results read-only.

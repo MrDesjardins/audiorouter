@@ -6183,6 +6183,9 @@ mod tests {
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::Capture));
         assert!(!ClientGrant::for_role(ClientRole::Operator)
             .allows(PermissionScope::DeviceAdministration));
+        assert!(!ClientGrant::read_only().allows(PermissionScope::PluginScan));
+        assert!(ClientGrant::with_scopes([PermissionScope::PluginScan])
+            .allows(PermissionScope::PluginScan));
     }
 
     #[test]
