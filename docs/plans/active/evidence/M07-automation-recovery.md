@@ -239,3 +239,10 @@ instead of relying on `Path::exists()`. This rejects dangling symlinks before
 SQLite creates or restores a file, closing a path-safety bypass; the regression
 suite verifies a broken backup destination is preserved/rejected when link
 creation is available. Storage coverage is 30 tests with strict Clippy.
+## 2026-09-06 — Reparse-point parent protection
+
+Backup and restore now validate their destination parent directories with
+reparse metadata before invoking SQLite. Recording rename similarly validates
+the source file and both parent directories before moving a path. Existing
+relative/missing/existing-destination and non-destructive recovery tests remain
+green: storage coverage is 30 tests with strict Clippy.

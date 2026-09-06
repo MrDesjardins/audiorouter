@@ -258,6 +258,12 @@ impl Storage {
                 "backup destination parent must already exist".into(),
             ));
         }
+        let parent_metadata = std::fs::symlink_metadata(parent)?;
+        if !parent_metadata.is_dir() || is_reparse_point(&parent_metadata) {
+            return Err(StorageError::InvalidBackupPath(
+                "backup destination parent must be a regular non-reparse directory".into(),
+            ));
+        }
         match std::fs::symlink_metadata(destination) {
             Ok(metadata) => {
                 if is_reparse_point(&metadata) {
@@ -371,6 +377,12 @@ impl Storage {
         if !parent.is_dir() {
             return Err(StorageError::InvalidBackupPath(
                 "restore destination parent must already exist".into(),
+            ));
+        }
+        let parent_metadata = std::fs::symlink_metadata(parent)?;
+        if !parent_metadata.is_dir() || is_reparse_point(&parent_metadata) {
+            return Err(StorageError::InvalidBackupPath(
+                "restore destination parent must be a regular non-reparse directory".into(),
             ));
         }
         match std::fs::symlink_metadata(destination) {
@@ -734,7 +746,7 @@ impl Storage {
             ));
         }
         let source_metadata = std::fs::symlink_metadata(source)?;
-        if !source_metadata.file_type().is_file() {
+        if !source_metadata.is_file() || is_reparse_point(&source_metadata) {
             return Err(StorageError::InvalidRecording(
                 "recording source must be a regular file".into(),
             ));
@@ -744,12 +756,25 @@ impl Storage {
                 "rename destination must not already exist".into(),
             ));
         }
-        let source_parent = std::fs::canonicalize(source.parent().ok_or_else(|| {
+        let source_parent_path = source.parent().ok_or_else(|| {
             StorageError::InvalidRecording("recording source has no parent".into())
-        })?)?;
-        let destination_parent = std::fs::canonicalize(destination.parent().ok_or_else(|| {
+        })?;
+        let destination_parent_path = destination.parent().ok_or_else(|| {
             StorageError::InvalidRecording("rename destination has no parent".into())
-        })?)?;
+        })?;
+        let source_parent_metadata = std::fs::symlink_metadata(source_parent_path)?;
+        let destination_parent_metadata = std::fs::symlink_metadata(destination_parent_path)?;
+        if !source_parent_metadata.is_dir()
+            || is_reparse_point(&source_parent_metadata)
+            || !destination_parent_metadata.is_dir()
+            || is_reparse_point(&destination_parent_metadata)
+        {
+            return Err(StorageError::InvalidRecording(
+                "recording directories must be regular non-reparse directories".into(),
+            ));
+        }
+        let source_parent = std::fs::canonicalize(source_parent_path)?;
+        let destination_parent = std::fs::canonicalize(destination_parent_path)?;
         if source_parent != destination_parent {
             return Err(StorageError::InvalidRecording(
                 "recordings may only be renamed within their existing directory".into(),
