@@ -223,3 +223,11 @@ integration test now exercises this client against the disposable fixture;
 the 22 library tests, process test, and strict Clippy pass. This is still
 stdio IPC with an echo fixture: plugin loading, OS sandbox policy, and actual
 shared-memory audio transport are not claimed.
+
+Added `SharedAudioLayout`, a fixed-size versioned slot contract for future
+shared memory. It bounds slots to the supported mono/stereo frame capacity,
+stores sequence/deadline/channel/frame metadata, encodes samples in
+little-endian form, and rejects bad magic/version/counts, non-finite samples,
+and malformed frames. The round-trip/corruption regression passes; the
+plugin-host suite now has 23 tests with strict Clippy clean. OS mapping,
+cross-process synchronization, and plugin execution remain open.

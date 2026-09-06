@@ -1195,6 +1195,106 @@ impl WorkerFrame {
     }
 }
 
+pub const SHARED_AUDIO_HEADER_BYTES: usize = 32;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SharedAudioError {
+    InvalidChannels,
+    BufferTooSmall,
+    InvalidMagic,
+    InvalidVersion,
+    InvalidFrameCount,
+    InvalidFrame(WorkerFrameError),
+}
+
+/// Describes one fixed-capacity audio slot for a future OS shared mapping.
+/// The slot itself is fixed-size and endian-stable; decoding returns an owned
+/// validated frame for the control boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SharedAudioLayout {
+    channels: u16,
+}
+
+impl SharedAudioLayout {
+    pub fn new(channels: u16) -> Result<Self, SharedAudioError> {
+        if !matches!(channels, 1 | 2) {
+            return Err(SharedAudioError::InvalidChannels);
+        }
+        Ok(Self { channels })
+    }
+
+    pub fn channels(self) -> u16 {
+        self.channels
+    }
+
+    pub fn buffer_len(self) -> usize {
+        SHARED_AUDIO_HEADER_BYTES + MAX_WORKER_FRAMES * self.channels as usize * 4
+    }
+
+    pub fn write(
+        &self,
+        destination: &mut [u8],
+        frame: &WorkerFrame,
+    ) -> Result<(), SharedAudioError> {
+        if destination.len() < self.buffer_len() {
+            return Err(SharedAudioError::BufferTooSmall);
+        }
+        WorkerFrame::new(
+            frame.sequence,
+            frame.deadline_tick,
+            frame.channels,
+            frame.samples.clone(),
+        )
+        .map_err(SharedAudioError::InvalidFrame)?;
+        if frame.channels != self.channels {
+            return Err(SharedAudioError::InvalidChannels);
+        }
+        let frame_count = frame.frame_count();
+        destination[..self.buffer_len()].fill(0);
+        destination[..4].copy_from_slice(b"ARSH");
+        destination[4..6].copy_from_slice(&1u16.to_le_bytes());
+        destination[6..8].copy_from_slice(&self.channels.to_le_bytes());
+        destination[8..12].copy_from_slice(&(frame_count as u32).to_le_bytes());
+        destination[12..20].copy_from_slice(&frame.sequence.to_le_bytes());
+        destination[20..28].copy_from_slice(&frame.deadline_tick.to_le_bytes());
+        for (index, sample) in frame.samples.iter().enumerate() {
+            let offset = SHARED_AUDIO_HEADER_BYTES + index * 4;
+            destination[offset..offset + 4].copy_from_slice(&sample.to_le_bytes());
+        }
+        Ok(())
+    }
+
+    pub fn read(&self, source: &[u8]) -> Result<WorkerFrame, SharedAudioError> {
+        if source.len() < self.buffer_len() {
+            return Err(SharedAudioError::BufferTooSmall);
+        }
+        if &source[..4] != b"ARSH" {
+            return Err(SharedAudioError::InvalidMagic);
+        }
+        if u16::from_le_bytes(source[4..6].try_into().unwrap()) != 1 {
+            return Err(SharedAudioError::InvalidVersion);
+        }
+        if u16::from_le_bytes(source[6..8].try_into().unwrap()) != self.channels {
+            return Err(SharedAudioError::InvalidChannels);
+        }
+        let frame_count = u32::from_le_bytes(source[8..12].try_into().unwrap()) as usize;
+        if frame_count == 0 || frame_count > MAX_WORKER_FRAMES {
+            return Err(SharedAudioError::InvalidFrameCount);
+        }
+        let sample_count = frame_count * self.channels as usize;
+        let sequence = u64::from_le_bytes(source[12..20].try_into().unwrap());
+        let deadline_tick = u64::from_le_bytes(source[20..28].try_into().unwrap());
+        let samples = (0..sample_count)
+            .map(|index| {
+                let offset = SHARED_AUDIO_HEADER_BYTES + index * 4;
+                f32::from_le_bytes(source[offset..offset + 4].try_into().unwrap())
+            })
+            .collect::<Vec<_>>();
+        WorkerFrame::new(sequence, deadline_tick, self.channels, samples)
+            .map_err(SharedAudioError::InvalidFrame)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkerFrameGuard {
     last_sequence: Option<u64>,
@@ -1728,6 +1828,21 @@ mod tests {
         assert_eq!(
             WorkerLatency::new(480_001, 48_000),
             Err(WorkerMessageError::InvalidLatency)
+        );
+    }
+
+    #[test]
+    fn shared_audio_layout_round_trips_and_rejects_corruption() {
+        let layout = SharedAudioLayout::new(2).unwrap();
+        let frame = WorkerFrame::new(9, 100, 2, vec![0.25, -0.5, 1.0, 0.0]).unwrap();
+        let mut slot = vec![0u8; layout.buffer_len()];
+        layout.write(&mut slot, &frame).unwrap();
+        assert_eq!(layout.read(&slot).unwrap(), frame);
+        slot[0] = b'X';
+        assert_eq!(layout.read(&slot), Err(SharedAudioError::InvalidMagic));
+        assert_eq!(
+            layout.write(&mut slot[..31], &frame),
+            Err(SharedAudioError::BufferTooSmall)
         );
     }
 }
