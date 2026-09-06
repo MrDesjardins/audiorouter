@@ -2183,13 +2183,24 @@ impl ControlPlane {
         }
         let applications = audiorouter_windows_audio::enumerate_applications()
             .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        let audio = audiorouter_windows_audio::enumerate_application_audio()
+            .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
         let snapshot = json!(applications
             .into_iter()
-            .map(|application| json!({
-                "processId": application.process_id,
-                "executable": application.executable,
-                "creationTime100ns": application.creation_time_100ns.map(|value| value.to_string()),
-            }))
+            .map(|application| {
+                let session = audio.iter().find(|item| item.process_id == application.process_id);
+                json!({
+                    "processId": application.process_id,
+                    "executable": application.executable,
+                    "creationTime100ns": application.creation_time_100ns.map(|value| value.to_string()),
+                    "audioActivity": session.map_or("none", |item| if item.active_session_count > 0 { "active" } else { "inactive" }),
+                    "captureCapability": session.map_or("notObserved", |item| if item.capture_session_count > 0 { "observed" } else { "notObserved" }),
+                    "audioSessionCount": session.map_or(0, |item| item.total_session_count),
+                    "activeAudioSessionCount": session.map_or(0, |item| item.active_session_count),
+                    "captureSessionCount": session.map_or(0, |item| item.capture_session_count),
+                    "audioDisplayNames": session.map_or_else(Vec::new, |item| item.display_names.clone()),
+                })
+            })
             .collect::<Vec<_>>());
         self.application_snapshot = Some((Instant::now(), snapshot.clone()));
         Ok(snapshot)

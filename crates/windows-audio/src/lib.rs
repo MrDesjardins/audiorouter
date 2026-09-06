@@ -78,6 +78,18 @@ pub struct ApplicationInfo {
     pub creation_time_100ns: Option<u64>,
 }
 
+/// Read-only audio-session facts associated with a process. These facts are
+/// observed from Windows session managers; they are not a promise that a
+/// future process-loopback binding will succeed.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApplicationAudioInfo {
+    pub process_id: u32,
+    pub active_session_count: u32,
+    pub total_session_count: u32,
+    pub capture_session_count: u32,
+    pub display_names: Vec<String>,
+}
+
 #[derive(Debug)]
 pub enum AudioError {
     Windows(windows::core::Error),
@@ -810,6 +822,80 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
     }
 }
 
+/// Enumerate Windows audio sessions without opening or starting an audio
+/// client. Render and capture endpoint session managers are both inspected;
+/// a process with a capture session is an observed capture, not a guarantee
+/// that every protected or future capture can be looped back.
+pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioError> {
+    use std::collections::BTreeMap;
+    use windows::Win32::Media::Audio::{
+        eCapture, eRender, AudioSessionStateActive, IAudioSessionControl2, IAudioSessionManager2,
+        IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
+    };
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, CLSCTX_ALL,
+        COINIT_MULTITHREADED,
+    };
+    use windows_core::Interface;
+
+    unsafe {
+        let initialized = CoInitializeEx(None, COINIT_MULTITHREADED);
+        initialized.ok()?;
+        let result = (|| {
+            let enumerator: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            let mut by_process = BTreeMap::<u32, ApplicationAudioInfo>::new();
+            for (flow, is_capture) in [(eRender, false), (eCapture, true)] {
+                let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
+                for index in 0..devices.GetCount()? {
+                    let device = devices.Item(index)?;
+                    let manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
+                    let sessions = manager.GetSessionEnumerator()?;
+                    let count = sessions.GetCount()?.max(0);
+                    for session_index in 0..count {
+                        let session = sessions.GetSession(session_index)?;
+                        let control: IAudioSessionControl2 = session.cast()?;
+                        let process_id = control.GetProcessId()?;
+                        if process_id == 0 {
+                            continue;
+                        }
+                        let state = session.GetState()?;
+                        let entry =
+                            by_process
+                                .entry(process_id)
+                                .or_insert_with(|| ApplicationAudioInfo {
+                                    process_id,
+                                    active_session_count: 0,
+                                    total_session_count: 0,
+                                    capture_session_count: 0,
+                                    display_names: Vec::new(),
+                                });
+                        entry.total_session_count += 1;
+                        if state == AudioSessionStateActive {
+                            entry.active_session_count += 1;
+                        }
+                        if is_capture {
+                            entry.capture_session_count += 1;
+                        }
+                        let display_name = session.GetDisplayName()?;
+                        if !display_name.is_null() {
+                            if let Ok(name) = display_name.to_string() {
+                                if !name.is_empty() && !entry.display_names.contains(&name) {
+                                    entry.display_names.push(name);
+                                }
+                            }
+                            CoTaskMemFree(Some(display_name.0 as *const core::ffi::c_void));
+                        }
+                    }
+                }
+            }
+            Ok(by_process.into_values().collect())
+        })();
+        CoUninitialize();
+        result
+    }
+}
+
 /// Resolve an application only when its PID, executable name, and creation
 /// timestamp still match the previously observed identity. This prevents a
 /// restarted process from inheriting a prior process-loopback binding.
@@ -1049,6 +1135,17 @@ mod tests {
             bind_application(process_id, &application.executable, None),
             Err(AudioError::ApplicationIdentityUnavailable { .. })
         ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn application_audio_inventory_is_read_only() {
+        let inventory = enumerate_application_audio().unwrap();
+        assert!(inventory.iter().all(|item| {
+            item.process_id != 0
+                && item.active_session_count <= item.total_session_count
+                && item.capture_session_count <= item.total_session_count
+        }));
     }
 
     #[cfg(windows)]

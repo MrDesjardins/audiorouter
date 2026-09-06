@@ -31,7 +31,7 @@ M01 shall produce machine-readable method and node schemas, golden request/respo
 | --- | --- |
 | `system.describe`, `system.status`, `system.diagnostics` | Discovery; backend/audio health; redacted diagnostic report |
 | `clients.list`, `clients.authorize`, `clients.revoke` | Local enrollment/grants; authorization only by an already authorized owner context |
-| `devices.list`, `applications.list` | Paged endpoint/application descriptors and binding candidates |
+| `devices.list`, `applications.list` | Paged endpoint/application descriptors and binding candidates. Application entries include PID, executable, creation identity, observed audio activity/session counts, display names, and capture-session observations; `notObserved` is not a claim that protected or future capture is impossible. |
 | `sessions.list/get/create/duplicate/delete` | Versioned session resources; create stopped; delete refuses active resources unless a separate stop completed |
 | `sessions.start/stop` | Idempotent lifecycle operations with per-node/recorder outcomes |
 | `sessions.export`, `sessions.importPlan`, `sessions.importCommit` | Portable bundle and stopped import with rebind report |
