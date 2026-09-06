@@ -83,14 +83,17 @@ impl RmsWindow {
 #[derive(Debug, Eq, PartialEq)]
 pub enum QueueError {
     InvalidCapacity,
+    InvalidShape,
 }
 
 /// Fixed-capacity nonblocking queue for preallocated audio blocks. The queue
 /// allocates its slots during construction; push/pop never wait or allocate.
 pub struct AudioBlockQueue {
     blocks: crossbeam_queue::ArrayQueue<AudioBlock>,
+    shape: Option<(usize, usize)>,
     overruns: AtomicU64,
     underruns: AtomicU64,
+    invalid_blocks: AtomicU64,
 }
 
 impl AudioBlockQueue {
@@ -100,8 +103,32 @@ impl AudioBlockQueue {
         }
         Ok(Self {
             blocks: crossbeam_queue::ArrayQueue::new(capacity),
+            shape: None,
             overruns: AtomicU64::new(0),
             underruns: AtomicU64::new(0),
+            invalid_blocks: AtomicU64::new(0),
+        })
+    }
+
+    pub fn new_for_shape(
+        capacity: usize,
+        channels: usize,
+        frames: usize,
+    ) -> Result<Self, QueueError> {
+        if capacity == 0 {
+            return Err(QueueError::InvalidCapacity);
+        }
+        if !(1..=MAX_CHANNELS).contains(&channels)
+            || !(1..=PROCESSING_QUANTUM_FRAMES).contains(&frames)
+        {
+            return Err(QueueError::InvalidShape);
+        }
+        Ok(Self {
+            blocks: crossbeam_queue::ArrayQueue::new(capacity),
+            shape: Some((channels, frames)),
+            overruns: AtomicU64::new(0),
+            underruns: AtomicU64::new(0),
+            invalid_blocks: AtomicU64::new(0),
         })
     }
 
@@ -125,7 +152,17 @@ impl AudioBlockQueue {
         self.underruns.load(Ordering::Relaxed)
     }
 
+    pub fn invalid_blocks(&self) -> u64 {
+        self.invalid_blocks.load(Ordering::Relaxed)
+    }
+
     pub fn try_push(&self, block: AudioBlock) -> Result<(), AudioBlock> {
+        if let Some((channels, frames)) = self.shape {
+            if block.channels() != channels || block.frames() != frames {
+                self.invalid_blocks.fetch_add(1, Ordering::Relaxed);
+                return Err(block);
+            }
+        }
         match self.blocks.push(block) {
             Ok(()) => Ok(()),
             Err(block) => {
@@ -912,6 +949,14 @@ mod tests {
         assert_eq!(queue.drain(), 1);
         assert!(queue.is_empty());
         assert_eq!(queue.underruns(), 1);
+
+        assert!(matches!(
+            AudioBlockQueue::new_for_shape(1, 0, 128),
+            Err(QueueError::InvalidShape)
+        ));
+        let shaped = AudioBlockQueue::new_for_shape(1, 1, 2).unwrap();
+        assert!(shaped.try_push(AudioBlock::new(2, 2).unwrap()).is_err());
+        assert_eq!(shaped.invalid_blocks(), 1);
     }
 
     #[test]

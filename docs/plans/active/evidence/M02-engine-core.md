@@ -20,6 +20,8 @@ Privacy mute is applied before the published graph runs, preventing muted physic
 
 `AudioBlockQueue::drain` now provides explicit stop/reconnect cleanup so pending blocks are discarded rather than replayed into a new generation. The queue test confirms intentional draining leaves underrun counters unchanged; 20 engine tests and strict engine Clippy pass.
 
+`AudioBlockQueue::new_for_shape` can enforce a fixed channel/frame shape at the queue boundary. Mismatched blocks are returned immediately and counted as invalid rather than being processed; the engine suite contains 21 passing tests and strict engine Clippy passes.
+
 `AudioBlock::mix_mapped_from` adds destination-major matrix accumulation for explicit fan-out and mixer inputs without overwriting existing destination samples or allocating. Its mono-to-stereo accumulation test passes; node-level scheduling and mixer parameter semantics remain open. The engine suite now contains 16 passing tests.
 
 `AudioBlock::clamp_unit` and `peak_abs` provide explicit output-boundary clipping and peak-meter primitives. Clipping is counted while non-finite values become silence, and internal processing is not implicitly clamped so mixer headroom is preserved. The engine suite now contains 17 passing tests.
