@@ -87,6 +87,7 @@ impl From<ApiMethodSpec> for MethodDescription {
 fn method_description(name: &str) -> &'static str {
     match name {
         "system.describe" => "Describe protocol capabilities, methods, node types, and limits.",
+        "system.handshake" => "Negotiate a compatible protocol version before requests.",
         "status.get" => "Return backend, runtime, and audio availability status.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" => "List discoverable application identities for binding.",
@@ -124,6 +125,20 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
 
 fn method_input_schema(name: &str) -> Value {
     match name {
+        "system.handshake" => object_schema(
+            json!({
+                "protocolVersion": {
+                    "type": "object",
+                    "properties": {
+                        "major": { "type": "integer", "minimum": 0 },
+                        "minor": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["major", "minor"],
+                    "additionalProperties": false
+                }
+            }),
+            &["protocolVersion"],
+        ),
         "sessions.get" | "sessions.delete" | "session.start" | "session.stop" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1 } }),
             &["sessionId"],
@@ -742,7 +757,8 @@ impl ControlPlane {
             );
         }
         let result = validate_method_params(&request.method, request.params.as_ref()).and_then(|_| match request.method.as_str() {
-            "system.describe" => Ok(self.describe()),
+        "system.describe" => Ok(self.describe()),
+            "system.handshake" => self.dispatch_handshake(request.params),
             "status.get" => Ok(
                 json!({ "build": self.build, "audio": "unavailable", "deviceDiscovery": "available", "reason": "M02 realtime graph engine and routing are not implemented" }),
             ),
@@ -999,6 +1015,34 @@ impl ControlPlane {
             "affectedDestinations": affected_destinations,
             "warnings": [],
             "requiredScopes": ["graph.write"]
+        }))
+    }
+
+    fn dispatch_handshake(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params
+            .ok_or_else(|| ControlError::InvalidRequest("protocolVersion is required".into()))?;
+        let version = params
+            .get("protocolVersion")
+            .and_then(Value::as_object)
+            .ok_or_else(|| ControlError::InvalidRequest("protocolVersion is required".into()))?;
+        let major = version
+            .get("major")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| ControlError::InvalidRequest("protocol major is required".into()))?;
+        let minor = version
+            .get("minor")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| ControlError::InvalidRequest("protocol minor is required".into()))?;
+        if major != 1 {
+            return Err(ControlError::InvalidRequest(format!(
+                "unsupported protocol major: {major}"
+            )));
+        }
+        Ok(json!({
+            "compatible": true,
+            "requested": { "major": major, "minor": minor },
+            "negotiated": { "major": 1, "minor": 0 },
+            "schemaVersion": 1
         }))
     }
 
@@ -1322,6 +1366,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "events.subscribe" => &["afterSequence", "limit", "sessionId"],
         "graph.plan" => &["sessionId", "baseRevision", "candidate"],
         "graph.commit" => &["planId", "baseRevision", "idempotencyKey"],
+        "system.handshake" => &["protocolVersion"],
         "system.describe" | "status.get" | "devices.list" | "apps.list" | "nodes.types"
         | "nodes.describe" => &[],
         _ => return Ok(()),
@@ -1663,6 +1708,28 @@ mod tests {
             id: Some(json!(2)),
             method: "devices.list".into(),
             params: Some(json!([])),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
+    }
+
+    #[test]
+    fn handshake_negotiates_minor_versions_and_rejects_unknown_major() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "system.handshake".into(),
+            params: Some(json!({ "protocolVersion": { "major": 1, "minor": 99 } })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["compatible"], true);
+        assert_eq!(result["negotiated"], json!({ "major": 1, "minor": 0 }));
+
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "system.handshake".into(),
+            params: Some(json!({ "protocolVersion": { "major": 2, "minor": 0 } })),
         });
         assert_eq!(response.error.unwrap().code, -32602);
     }

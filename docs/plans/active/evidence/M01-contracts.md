@@ -117,6 +117,8 @@ Each discovered method now also carries a human-readable `description`, keeping 
 
 The control dispatcher now enforces the published request-object boundaries: array/scalar params and unknown properties are rejected as `-32602` invalid parameters. This prevents clients from receiving success after sending fields that the discovery schema does not define; the control suite passes 32 tests with strict Clippy.
 
+The read-only `system.handshake` method now negotiates protocol major/minor versions independently of persisted session schema. Minor versions are additive-compatible with the current implementation, while an unknown major is rejected before method dispatch; control/domain tests and strict Clippy pass.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.

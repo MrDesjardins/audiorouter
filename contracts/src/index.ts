@@ -133,6 +133,7 @@ export type JsonRpcResponse<Result = unknown> =
 
 export type ImplementedMethod =
   | "system.describe"
+  | "system.handshake"
   | "status.get"
   | "devices.list"
   | "apps.list"
@@ -145,6 +146,7 @@ export type ImplementedMethod =
   | "sessions.get"
   | "sessions.list"
   | "sessions.create"
+  | "sessions.duplicate"
   | "sessions.delete"
   | "graph.plan"
   | "graph.commit"
