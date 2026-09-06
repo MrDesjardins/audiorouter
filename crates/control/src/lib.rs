@@ -20,6 +20,7 @@ use std::time::Instant;
 
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
+const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 
 #[derive(Debug)]
 struct MutationBucket {
@@ -315,6 +316,7 @@ pub struct ControlPlane {
     enrollments: HashMap<String, (ClientRole, bool)>,
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
+    operation_outcomes: HashMap<String, Value>,
 }
 
 impl Default for ControlPlane {
@@ -333,6 +335,7 @@ impl ControlPlane {
             enrollments: HashMap::new(),
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
+            operation_outcomes: HashMap::new(),
         }
     }
 
@@ -345,6 +348,7 @@ impl ControlPlane {
             enrollments: HashMap::new(),
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
+            operation_outcomes: HashMap::new(),
         }
     }
 
@@ -470,6 +474,17 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        if let Some(result) = self.operation_outcomes.get(operation_id) {
+            return Ok(json!({
+                "operationId": operation_id,
+                "operation": "graph.commit",
+                "status": "completed",
+                "durable": false,
+                "revision": result["revision"],
+                "createdAt": Value::Null,
+                "result": result
+            }));
+        }
         let Some(storage) = &self.storage else {
             return Ok(json!({
                 "operationId": operation_id,
@@ -843,6 +858,13 @@ impl ControlPlane {
         } else {
             response["activation"] = json!({ "state": "pending", "runtime": "fake" });
         }
+        if self.operation_outcomes.len() >= MAX_MEMORY_OPERATION_OUTCOMES {
+            if let Some(oldest) = self.operation_outcomes.keys().next().cloned() {
+                self.operation_outcomes.remove(&oldest);
+            }
+        }
+        self.operation_outcomes
+            .insert(idempotency_key.to_owned(), response.clone());
         Ok(response)
     }
 
@@ -2410,6 +2432,27 @@ mod tests {
         assert_eq!(result["status"], "completed");
         assert_eq!(result["durable"], true);
         assert_eq!(result["revision"], 1);
+        assert_eq!(result["result"]["revision"], 1);
+    }
+
+    #[test]
+    fn operations_get_returns_live_memory_outcome_without_claiming_durability() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "memory-operation".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "memory-operation-id").unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(14)),
+            method: "operations.get".into(),
+            params: Some(json!({ "operationId": "memory-operation-id" })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["status"], "completed");
+        assert_eq!(result["durable"], false);
         assert_eq!(result["result"]["revision"], 1);
     }
 
