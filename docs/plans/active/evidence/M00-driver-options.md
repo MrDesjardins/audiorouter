@@ -28,3 +28,9 @@ direct SysVAD kernel-source compile succeeded; the full reference solution
 still requires a clean MSBuild environment and WIL dependency resolution.
 No driver was copied into AudioRouter, installed, registered, loaded, or
 changed, and production signing remains unresolved.
+
+On 2026-09-06 the checked-in native probe build was rerun successfully with
+Visual Studio Community 2026, MSVC 14.51, Windows SDK/WDK 10.0.28000.0, and
+the C++20 toolchain. The generated executable/object were removed immediately
+after compilation. This is toolchain evidence only; no driver was installed,
+loaded, signed, or changed, and no machine audio configuration was touched.
