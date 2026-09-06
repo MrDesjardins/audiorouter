@@ -17,9 +17,11 @@ binaries were downloaded or installed.
 
 The repository checkout and every declared submodule resolved successfully.
 The installed Visual Studio 18 Community tree contains MSVC 14.51 and MSBuild,
-but no `cmake.exe` was found on PATH or inside that installation. Therefore the
-SDK CMake configure/example build is explicitly pending CMake installation;
-this is a toolchain gap, not evidence that the SDK or plugins are compatible.
+but no `cmake.exe` was found on PATH or inside that installation. The repository
+provides an ignored portable CMake 4.4.0 cache, so the SDK CMake
+configure/example build is available through the project-local toolchain
+documented below; this remains build/validator evidence, not proof of general
+plugin compatibility.
 No audio endpoint, driver, default, volume, mute, or persistent machine audio
 setting was changed.
 

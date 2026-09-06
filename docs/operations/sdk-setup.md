@@ -29,8 +29,10 @@ is the supported project-local installation boundary; it does not register a
 system-wide SDK or install anything into Windows.
 
 It includes the SDK submodules and is built with the project-local portable
-CMake cache under `third_party/vst3sdk-build`. The official validator and the
-sample `mda-vst3` bundle have been run successfully. AudioRouter supports the
+CMake cache under `third_party/vst3sdk-build`. If CMake is not on PATH, use the
+ignored `third_party/cmake-4.4.0/bin/cmake.exe` cache already provisioned for
+the repository. The official validator and the sample `mda-vst3` bundle have
+been run successfully. AudioRouter supports the
 VST3 x64 boundary; VST2 and x86 plugins are not part of this setup.
 
 ## Windows SDK and WDK
