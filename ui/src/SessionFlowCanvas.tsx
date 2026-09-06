@@ -9,7 +9,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useEffect, useState } from "react";
 import type { Session } from "@audiorouter/contracts";
-import { readLayout, writeLayout, type LayoutPositions } from "./layout";
+import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 
 type SessionFlowCanvasProps = {
   session: Session;
@@ -63,6 +63,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
 
   return (
     <div className="session-flow-canvas" aria-label="Signal-flow graph">
+      <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); setPositions({}); }}>Reset layout</button></div>
       <ReactFlow
         nodes={nodes}
         edges={edges}

@@ -185,6 +185,12 @@ and backend plan/commit. Template regressions cover matrix shape, independent
 snapshots, and distinct names; UI coverage is 41 tests with typecheck and
 production build passing.
 
+The canvas toolbar now provides a Reset layout action. It removes only the
+selected session's browser-local presentation coordinates and restores the
+automatic layout; it does not alter graph topology, backend state, or audio
+configuration. A pure regression covers the clear operation; UI coverage is 42
+tests with typecheck and production build passing.
+
 The inspector now supports explicit removal of the selected node from the
 draft after confirmation. Its incident edges are removed from the candidate,
 while the session revision and committed state remain unchanged until backend

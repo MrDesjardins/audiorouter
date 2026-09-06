@@ -30,3 +30,11 @@ export function writeLayout(storage: Pick<Storage, "setItem"> | null, key: strin
     // Layout persistence is optional presentation state and must never block editing.
   }
 }
+
+export function clearLayout(storage: Pick<Storage, "removeItem"> | null, key: string): void {
+  try {
+    storage?.removeItem(key);
+  } catch {
+    // Layout persistence is optional presentation state.
+  }
+}
