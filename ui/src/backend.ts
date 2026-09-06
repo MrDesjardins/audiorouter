@@ -35,6 +35,7 @@ export interface UiBackend {
   removeRecordingEntry(recordingId: string): Promise<Record<string, unknown>>;
   createSession(session: Session): Promise<{ session: Session; state: string }>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<{ session: Session; state: string }>;
+  deleteSession(sessionId: string): Promise<Record<string, unknown>>;
 }
 
 export type UiSnapshotState = {
@@ -121,6 +122,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async duplicateSession() {
       throw new Error("The backend is disconnected; session duplication is unavailable.");
     },
+    async deleteSession() {
+      throw new Error("The backend is disconnected; session deletion is unavailable.");
+    },
   };
 }
 
@@ -185,6 +189,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async duplicateSession(sourceSessionId, sessionId, name) {
       return client.request("sessions.duplicate", { sourceSessionId, sessionId, ...(name === undefined ? {} : { name }) });
+    },
+    async deleteSession(sessionId) {
+      return client.request("sessions.delete", { sessionId });
     },
   };
 }

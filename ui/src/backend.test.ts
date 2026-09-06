@@ -36,6 +36,7 @@ describe("snapshot cache", () => {
       removeRecordingEntry: async () => { throw new Error("not connected"); },
       createSession: async () => { throw new Error("not connected"); },
       duplicateSession: async () => { throw new Error("not connected"); },
+      deleteSession: async () => { throw new Error("not connected"); },
       getRecordingRecovery: async () => { throw new Error("not connected"); },
       setRecordingMetadata: async () => { throw new Error("not connected"); },
     };
@@ -143,6 +144,13 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { session: { ...demoSession, id: "copy", name: "Copy", revision: 0 }, state: "stopped" }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).duplicateSession(demoSession.id, "copy", "Copy")).resolves.toMatchObject({ state: "stopped" });
     expect(received).toEqual({ method: "sessions.duplicate", params: { sourceSessionId: demoSession.id, sessionId: "copy", name: "Copy" } });
+  });
+
+  it("deletes a session through the shared API", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { deleted: true, state: "stopped" }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).deleteSession("copy")).resolves.toEqual({ deleted: true, state: "stopped" });
+    expect(received).toEqual({ method: "sessions.delete", params: { sessionId: "copy" } });
   });
 });
 

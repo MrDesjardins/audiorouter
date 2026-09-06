@@ -253,3 +253,9 @@ The connected editor now offers session duplication through
 to the UI only after the authoritative response, and leaves lifecycle/audio
 state untouched. The shared contract now models the `{ session, state }`
 response; UI coverage is 19 tests with typecheck and production build passing.
+
+The connected editor now offers confirmed deletion of the selected stopped
+session through `sessions.delete`. The UI changes selection only after the
+authoritative response; disconnected mode disables the action, and the
+backend's active-resource protection remains in force. UI coverage is 20
+tests with typecheck and production build passing.
