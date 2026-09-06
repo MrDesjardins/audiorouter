@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendLibraryNode } from "./draft";
+import { appendLibraryNode, setNodeDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -26,5 +26,15 @@ describe("appendLibraryNode", () => {
     const once = appendLibraryNode(demoSession, "meter");
     const twice = appendLibraryNode(once, "meter");
     expect(twice.nodes.slice(-2).map((node) => node.id)).toEqual(["meter-1", "meter-2"]);
+  });
+
+  it("renames without changing identity, revision, or topology", () => {
+    const renamed = setNodeDraftName(demoSession, "voice", "  Voice processing  ");
+    expect(renamed.nodes.find((node) => node.id === "voice")?.name).toBe("Voice processing");
+    expect(renamed.id).toBe(demoSession.id);
+    expect(renamed.revision).toBe(demoSession.revision);
+    expect(renamed.edges).toEqual(demoSession.edges);
+    expect(() => setNodeDraftName(demoSession, "voice", " ")).toThrow("cannot be empty");
+    expect(() => setNodeDraftName(demoSession, "voice", "x".repeat(121))).toThrow("120");
   });
 });

@@ -227,6 +227,12 @@ through the authorized API; it does not change Windows privacy settings or
 audio defaults. UI coverage is 14 tests with typecheck and production build
 passing.
 
+The selected-node inspector now supports bounded draft renaming. Empty names
+and names over 120 characters are rejected locally with an actionable status,
+while valid names preserve node identity, session revision, and graph edges
+until the authoritative plan/commit flow. UI coverage is 34 tests with
+typecheck and production build passing.
+
 Recording rows now support bounded title editing through the authorized
 `recordings.setMetadata` API. The UI updates its local row only after backend
 success and explicitly reports that the audio path/content remain unchanged;

@@ -142,6 +142,15 @@ export function setNodeDraftFlag(
   };
 }
 
+/** Renames a node in the local candidate while preserving its identity and topology. */
+export function setNodeDraftName(session: Session, nodeId: EntityId, name: string): Session {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) throw new Error("Node name cannot be empty");
+  if (trimmed.length > 120) throw new Error("Node name cannot exceed 120 characters");
+  if (!session.nodes.some((node) => node.id === nodeId)) throw new Error(`Unknown node: ${nodeId}`);
+  return { ...session, nodes: session.nodes.map((node) => node.id === nodeId ? { ...node, name: trimmed } : node) };
+}
+
 export function setNodeDraftParameter(
   session: Session,
   nodeId: EntityId,
