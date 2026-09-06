@@ -1160,6 +1160,112 @@ pub struct WorkerProcess {
     shared: Option<SharedAudioTransport>,
 }
 
+/// A worker process coupled to the bounded lifecycle policy. Successful
+/// protocol exchanges refresh the heartbeat; spawn, processing, and latency
+/// failures are recorded immediately. This wrapper deliberately does not
+/// restart a process or open an audio device: an outer runtime supervisor
+/// still owns restart and route-recovery decisions.
+pub struct SupervisedWorkerProcess {
+    process: WorkerProcess,
+    supervisor: WorkerSupervisor,
+}
+
+impl SupervisedWorkerProcess {
+    pub fn spawn(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        let mut supervisor = WorkerSupervisor::new();
+        supervisor.start(identity, now).map_err(|error| {
+            WorkerProcessError::Protocol(format!("worker start rejected: {error:?}"))
+        })?;
+        match WorkerProcess::spawn(executable, &identity.sha256, channels) {
+            Ok(process) => Ok(Self {
+                process,
+                supervisor,
+            }),
+            Err(error) => {
+                supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn state(&self) -> WorkerState {
+        self.supervisor.state()
+    }
+
+    pub fn poll(&mut self, now: Instant) -> WorkerState {
+        self.supervisor.poll(now)
+    }
+
+    pub fn process(
+        &mut self,
+        frame: WorkerFrame,
+        parameters: Vec<ParameterEvent>,
+        now: Instant,
+    ) -> Result<WorkerFrame, WorkerProcessError> {
+        match self.process.process(frame, parameters) {
+            Ok(frame) => {
+                self.supervisor.heartbeat(now);
+                Ok(frame)
+            }
+            Err(error) => {
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn process_shared(
+        &mut self,
+        frame: WorkerFrame,
+        parameters: Vec<ParameterEvent>,
+        now: Instant,
+    ) -> Result<WorkerFrame, WorkerProcessError> {
+        match self.process.process_shared(frame, parameters) {
+            Ok(frame) => {
+                self.supervisor.heartbeat(now);
+                Ok(frame)
+            }
+            Err(error) => {
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn report_latency(
+        &mut self,
+        latency: WorkerLatency,
+        now: Instant,
+    ) -> Result<WorkerLatency, WorkerProcessError> {
+        match self.process.report_latency(latency) {
+            Ok(latency) => {
+                self.supervisor.heartbeat(now);
+                Ok(latency)
+            }
+            Err(error) => {
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn shutdown(self) -> Result<ExitStatus, WorkerProcessError> {
+        self.process.shutdown()
+    }
+
+    pub fn shutdown_with_timeout(
+        self,
+        timeout: Duration,
+    ) -> Result<ExitStatus, WorkerProcessError> {
+        self.process.shutdown_with_timeout(timeout)
+    }
+}
+
 impl WorkerProcess {
     pub fn spawn(
         executable: impl AsRef<Path>,

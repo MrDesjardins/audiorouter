@@ -455,3 +455,13 @@ revision `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`, recursive submodules are
 initialized, and the required hosting headers are available. This is a
 project-local source SDK, not a global installer; no system plugin, audio
 configuration, or machine-wide SDK setting was changed.
+
+## 2026-09-06 - Supervised worker lifecycle bridge
+
+Added `SupervisedWorkerProcess`, which couples the existing worker protocol
+client to `WorkerSupervisor`. Successful process, shared-process, and latency
+exchanges refresh the bounded heartbeat; spawn and protocol failures enter the
+existing failure/quarantine policy. The wrapper exposes explicit polling and
+shutdown but deliberately does not restart workers, load plugin code, or open
+audio. The plugin-host suite passes 29 unit tests and 5 process/integration
+tests with strict Clippy.

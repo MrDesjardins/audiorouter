@@ -1,7 +1,10 @@
 use audiorouter_plugin_host::{
-    decode_worker_message, encode_worker_message, worker_clock_tick, SharedAudioLayout,
-    SharedAudioTransport, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    decode_worker_message, encode_worker_message, worker_clock_tick, PeArchitecture, PluginFormat,
+    PluginIdentity, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess, WorkerFrame,
+    WorkerLatency, WorkerMessage, WorkerProcess,
 };
+use std::path::PathBuf;
+use std::time::Instant;
 
 #[test]
 fn disposable_worker_process_round_trips_control_and_audio_frames() {
@@ -35,6 +38,52 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
         decode_worker_message(&encoded).unwrap(),
         WorkerMessage::Ready
     );
+}
+
+#[test]
+fn supervised_worker_refreshes_heartbeat_on_successful_processing() {
+    let hash = "f".repeat(64);
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+    };
+    let start = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn(worker_path, &identity, 1, start)
+        .expect("spawn supervised worker");
+    let frame =
+        WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 1, vec![0.5]).unwrap();
+    assert_eq!(
+        worker.process(frame.clone(), Vec::new(), start).unwrap(),
+        frame
+    );
+    assert_eq!(
+        worker.state(),
+        audiorouter_plugin_host::WorkerState::Running
+    );
+    assert_eq!(
+        worker.poll(start + audiorouter_plugin_host::WORKER_HEARTBEAT_TIMEOUT),
+        audiorouter_plugin_host::WorkerState::Running
+    );
+    assert!(worker.shutdown().unwrap().success());
 }
 
 #[test]
