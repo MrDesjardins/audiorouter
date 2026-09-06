@@ -143,6 +143,7 @@ This establishes that Codex can continue documentation and portable implementati
 - Corrected the native harness to use an agile WRL `FtmBase` completion handler and to distinguish `GetActivateResult` from the callback method’s HRESULT. `ActivateAudioInterfaceAsync` for Explorer, `IAudioClient` query, shared-mode 44.1 kHz PCM initialization, and event-handle setup all returned `S_OK`.
 - This is a real native activation/initialization pass but not an audio-data or latency pass: the harness did not call `Start`, `GetBuffer`, or read samples. The official sample solution was inspected and its build is blocked by its WIL NuGet dependency; the local dependency-free harness compiles with the installed MSVC/SDK.
 - No default endpoint, volume, mute, privacy, or persistent audio configuration was changed. Generated executable/object files were removed after testing.
+- The Rust scaffold was updated to call `GetActivateResult` and remains compile-validated, but its opt-in runtime still aborts in COM teardown with heap corruption. It is not enabled in the normal probe and is not counted as a runtime pass; the native WRL harness remains the safe reference path.
 
 ## Decisions and assumptions
 
