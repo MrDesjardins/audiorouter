@@ -514,6 +514,5 @@ does not touch audio, driver, or machine configuration.
 The local draft editor now mirrors the authoritative -60 to +24 dB gain range
 and rejects non-finite or out-of-range gain values before they enter a draft.
 Boundary and rejection regressions pass; UI typecheck and all 59 Vitest tests
-pass. The existing single-line inspector markup still has a stale HTML `max`
-attribute and should be refreshed during the next UI formatting pass; backend
-and draft validation remain authoritative.
+pass. The single-line inspector markup now advertises the same +24 dB maximum;
+backend and draft validation remain authoritative.
