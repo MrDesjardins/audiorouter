@@ -931,9 +931,6 @@ impl CrashRecoveryTracker {
             timestamp_seconds < *crash
                 || timestamp_seconds.saturating_sub(*crash) <= RECOVERY_CRASH_WINDOW_SECONDS
         });
-        if self.crash_times.len() < RECOVERY_SAFE_MODE_CRASHES {
-            self.safe_mode = false;
-        }
     }
 }
 
@@ -1629,6 +1626,21 @@ mod tests {
         assert!(tracker.eligible_sessions(300, &[]).is_empty());
         tracker.clear_after_stable_run();
         assert_eq!(tracker.crash_count(300), 0);
+        assert_eq!(tracker.mode(), RecoveryMode::RestoreEligible);
+    }
+
+    #[test]
+    fn crash_recovery_safe_mode_stays_latched_until_stable_clear() {
+        let mut tracker = CrashRecoveryTracker::default();
+        tracker.record_crash(100);
+        tracker.record_crash(101);
+        assert_eq!(tracker.record_crash(102), RecoveryMode::SafeMode);
+        assert_eq!(
+            tracker.crash_count(102 + RECOVERY_CRASH_WINDOW_SECONDS + 1),
+            0
+        );
+        assert_eq!(tracker.mode(), RecoveryMode::SafeMode);
+        tracker.clear_after_stable_run();
         assert_eq!(tracker.mode(), RecoveryMode::RestoreEligible);
     }
 

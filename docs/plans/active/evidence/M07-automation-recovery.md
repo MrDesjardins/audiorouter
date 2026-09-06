@@ -250,6 +250,10 @@ expiry, a three-marker cap, count, and explicit clear operations. Storage tests
 cover expiry and invalid timestamp rejection. The control/supervisor integration
 still remains to be implemented; no automatic restart or audio resume is
 claimed.
+
+The policy regression also verifies that safe mode remains latched after the
+ten-minute crash timestamps expire and is released only by an explicit stable
+run. This prevents an elapsed wall-clock window from silently rearming routes.
 Backup and restore destinations now use `symlink_metadata` presence checks
 instead of relying on `Path::exists()`. This rejects dangling symlinks before
 SQLite creates or restores a file, closing a path-safety bypass; the regression
