@@ -385,6 +385,54 @@ pub struct CallbackMetrics {
     xruns: AtomicU64,
 }
 
+/// Lock-free peak/clipping meter for a prepared node boundary. The maximum
+/// uses the monotonic positive-f32 bit representation, so observation never
+/// takes a mutex or allocates.
+#[derive(Debug, Default)]
+pub struct BlockMeter {
+    peak_bits: std::sync::atomic::AtomicU32,
+    clipped_samples: AtomicU64,
+}
+
+impl BlockMeter {
+    pub fn observe(&self, block: &AudioBlock) {
+        let peak = block.peak_abs();
+        let mut current = self.peak_bits.load(Ordering::Relaxed);
+        while peak.to_bits() > current {
+            match self.peak_bits.compare_exchange_weak(
+                current,
+                peak.to_bits(),
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
+        self.clipped_samples.fetch_add(
+            block
+                .samples
+                .iter()
+                .filter(|sample| sample.abs() > 1.0)
+                .count() as u64,
+            Ordering::Relaxed,
+        );
+    }
+
+    pub fn peak_abs(&self) -> f32 {
+        f32::from_bits(self.peak_bits.load(Ordering::Relaxed))
+    }
+
+    pub fn clipped_samples(&self) -> u64 {
+        self.clipped_samples.load(Ordering::Relaxed)
+    }
+
+    pub fn reset(&self) {
+        self.peak_bits.store(0, Ordering::Relaxed);
+        self.clipped_samples.store(0, Ordering::Relaxed);
+    }
+}
+
 impl CallbackMetrics {
     pub fn processed_quanta(&self) -> u64 {
         self.processed_quanta.load(Ordering::Relaxed)
@@ -683,6 +731,22 @@ mod tests {
         assert_eq!(block.clamp_unit(), 2);
         assert_eq!(block.channel(0).unwrap(), &[-1.0, 0.5, 1.0, 0.0]);
         assert_eq!(block.peak_abs(), 1.0);
+    }
+
+    #[test]
+    fn block_meter_tracks_peak_and_clipping_until_reset() {
+        let meter = BlockMeter::default();
+        let mut block = AudioBlock::new(1, 3).unwrap();
+        block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.5, -1.5, 0.25]);
+        meter.observe(&block);
+        assert_eq!(meter.peak_abs(), 1.5);
+        assert_eq!(meter.clipped_samples(), 1);
+        meter.reset();
+        assert_eq!(meter.peak_abs(), 0.0);
+        assert_eq!(meter.clipped_samples(), 0);
     }
 
     #[test]

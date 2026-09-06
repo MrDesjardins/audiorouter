@@ -323,3 +323,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Added `AudioBlock::mix_mapped_from` for allocation-free destination-major matrix accumulation, preserving existing destination audio for explicit fan-out/mixer inputs. The engine suite now has 16 passing tests; full node scheduling remains open.
 - Added allocation-free `AudioBlock::clamp_unit` and `peak_abs` primitives for output-boundary clipping counts and peak metering. Internal graph processing still retains headroom; the caller explicitly chooses when to clamp.
 - Extended `CallbackMetrics` with caller-recorded clipping and xrun counters. The counters are atomic and deliberately do not infer hardware failures; the Windows scheduler will record those events when implemented.
+- Added lock-free `BlockMeter` peak and clipping observation with reset semantics. It is a portable Meter-node primitive; per-node runtime wiring and external health publication remain open.
