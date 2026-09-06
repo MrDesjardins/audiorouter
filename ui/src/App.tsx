@@ -39,9 +39,13 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [createdSessions, setCreatedSessions] = useState<import("@audiorouter/contracts").Session[]>([]);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
+  const refreshApplications = () => {
+    void backend.listApplications().then((items) => { setApplications(items); setApplicationsError(null); }).catch((error) => { setApplications([]); setApplicationsError(error instanceof Error ? error.message : "Application inventory unavailable"); });
+  };
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
     void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(error instanceof Error ? error.message : "Recording library unavailable"); });
+    refreshApplications();
   };
   const snapshot = snapshotState.snapshot;
   useEffect(() => { if (snapshot) setPrivacyMuted(snapshot.status.privacyMute.muted); }, [snapshot]);
@@ -72,6 +76,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           const nextState = await snapshotCache.refresh(backend);
           if (active) {
             setSnapshotState(nextState);
+            refreshApplications();
             if (!nextState.stale) eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
           }
         } else {
