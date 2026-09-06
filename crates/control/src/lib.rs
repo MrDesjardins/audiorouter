@@ -1072,6 +1072,32 @@ mod tests {
             .is_ok());
     }
 
+    #[test]
+    fn authenticated_dispatch_returns_rate_limit_metadata() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original).unwrap();
+        let grant = ClientGrant::for_role(ClientRole::Operator);
+        let request = || JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "session.start".into(),
+            params: Some(json!({ "sessionId": "session" })),
+        };
+        for _ in 0..40 {
+            assert!(plane
+                .dispatch_authorized_for_client(request(), "client", &grant)
+                .result
+                .is_some());
+        }
+        let response = plane.dispatch_authorized_for_client(request(), "client", &grant);
+        assert_eq!(response.error.as_ref().unwrap().code, -32000);
+        assert_eq!(
+            response.error.as_ref().unwrap().data,
+            Some(json!({ "code": "rateLimited", "retryAfterMs": 50 }))
+        );
+    }
+
     fn session() -> Session {
         Session {
             id: EntityId::new("session"),
