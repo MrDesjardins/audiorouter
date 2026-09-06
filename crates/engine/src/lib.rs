@@ -278,6 +278,35 @@ impl AudioBlock {
     pub fn all_finite(&self) -> bool {
         self.samples.iter().all(|sample| sample.is_finite())
     }
+
+    /// Clamp finite samples to the interleaved output boundary [-1, 1] and
+    /// return the number clipped. Non-finite values are first converted to
+    /// silence and are not counted as over-range clipping.
+    pub fn clamp_unit(&mut self) -> usize {
+        let mut clipped = 0;
+        for sample in &mut self.samples {
+            if !sample.is_finite() {
+                *sample = 0.0;
+            } else if *sample > 1.0 {
+                *sample = 1.0;
+                clipped += 1;
+            } else if *sample < -1.0 {
+                *sample = -1.0;
+                clipped += 1;
+            }
+        }
+        clipped
+    }
+
+    /// Return the largest absolute finite sample, or zero for an empty
+    /// conceptual block. This is a bounded meter primitive with no allocation.
+    pub fn peak_abs(&self) -> f32 {
+        self.samples
+            .iter()
+            .filter(|sample| sample.is_finite())
+            .map(|sample| sample.abs())
+            .fold(0.0, f32::max)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -622,6 +651,19 @@ mod tests {
         assert_eq!(block.sanitize_non_finite(), 2);
         assert!(block.all_finite());
         assert_eq!(block.channel(0).unwrap(), &[1.0, 0.0, 0.0, -1.0]);
+    }
+
+    #[test]
+    fn output_clamp_counts_overrange_samples_and_measures_peak() {
+        let mut block = AudioBlock::new(1, 4).unwrap();
+        block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[-2.0, 0.5, 1.5, f32::NAN]);
+        assert_eq!(block.peak_abs(), 2.0);
+        assert_eq!(block.clamp_unit(), 2);
+        assert_eq!(block.channel(0).unwrap(), &[-1.0, 0.5, 1.0, 0.0]);
+        assert_eq!(block.peak_abs(), 1.0);
     }
 
     #[test]
