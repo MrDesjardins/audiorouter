@@ -71,6 +71,53 @@ export function appendLibraryNode(
   };
 }
 
+/** Adds a topology edge to a local draft; backend validation still gates commit. */
+export function appendDraftConnection(
+  session: Session,
+  sourceNodeId: EntityId,
+  sourcePortName: string,
+  destinationNodeId: EntityId,
+  destinationPortName: string,
+): Session {
+  if (sourceNodeId === destinationNodeId) throw new Error("A node cannot connect to itself");
+  const sourceNode = session.nodes.find((node) => node.id === sourceNodeId);
+  const destinationNode = session.nodes.find((node) => node.id === destinationNodeId);
+  if (!sourceNode || !destinationNode) throw new Error("Both connection nodes are required");
+  const sourcePort = sourceNode.ports.find((port) => port.name === sourcePortName);
+  const destinationPort = destinationNode.ports.find((port) => port.name === destinationPortName);
+  if (!sourcePort || sourcePort.direction !== "output") throw new Error("Choose an output source port");
+  if (!destinationPort || destinationPort.direction !== "input") throw new Error("Choose an input destination port");
+  if (session.edges.some((edge) => edge.sourceNode === sourceNodeId && edge.sourcePort === sourcePortName && edge.destinationNode === destinationNodeId && edge.destinationPort === destinationPortName)) {
+    throw new Error("That connection is already in the draft");
+  }
+  if (destinationNode.kind !== "mixer" && session.edges.some((edge) => edge.destinationNode === destinationNodeId && edge.destinationPort === destinationPortName)) {
+    throw new Error("That input already has a connection");
+  }
+  const matrix = Array.from({ length: destinationPort.channels * sourcePort.channels }, () => 0);
+  for (let destinationChannel = 0; destinationChannel < destinationPort.channels; destinationChannel += 1) {
+    const sourceChannel = Math.min(destinationChannel, sourcePort.channels - 1);
+    matrix[destinationChannel * sourcePort.channels + sourceChannel] = 1;
+  }
+  let suffix = 1;
+  let id = `edge-${suffix}`;
+  while (session.edges.some((edge) => edge.id === id)) {
+    suffix += 1;
+    id = `edge-${suffix}`;
+  }
+  return {
+    ...session,
+    edges: [...session.edges, {
+      id,
+      sourceNode: sourceNodeId,
+      sourcePort: sourcePortName,
+      destinationNode: destinationNodeId,
+      destinationPort: destinationPortName,
+      matrix,
+      enabled: true,
+    }],
+  };
+}
+
 /**
  * Creates a UI candidate without changing the authoritative session revision.
  * Validation and commit remain backend responsibilities.

@@ -352,3 +352,10 @@ entries are disabled with explanatory labels until their required native/runtime
 integration exists. The added node never changes the authoritative revision or
 edges and still requires the existing plan/commit flow. UI coverage is 28
 tests; typecheck, production build, and diff checks pass.
+
+Topology editing now has a non-drag path: the editor derives output/input
+choices from the draft, creates deterministic edge IDs and bounded identity or
+mono-to-stereo matrices, and reports duplicate or occupied non-mixer inputs
+before a plan is submitted. The operation changes only the local draft; graph
+cycle and remaining semantic validation stay in the backend. UI coverage is 30
+tests with typecheck, production build, and diff checks passing.
