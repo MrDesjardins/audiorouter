@@ -77,6 +77,12 @@ methods. The live adapter forwards the shared API contracts, while the demo
 adapter returns an explicit unavailable plan or rejects apply. UI tests cover
 both request shapes; 58 UI tests and typecheck pass.
 
+The MCP adapter now exposes `plan_virtual_device` and `apply_virtual_device`
+alongside the inventory tool. They use the same authorized control-plane
+methods, preserving device-administration scope checks and apply idempotency.
+The MCP catalog and process interoperability tests pass with 26 tools; no
+native endpoint is created while the driver capability is unavailable.
+
 The registry now exposes force-release cleanup for a crashed or disconnected
 owner. Cleanup clears the active owner but preserves the monotonic generation;
 a delayed release from the old owner cannot release a replacement lease. This
