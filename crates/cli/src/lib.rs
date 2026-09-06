@@ -257,6 +257,8 @@ mod tests {
             .unwrap()
             .iter()
             .all(|device| { device["state"] == "active" && device["id"].as_str().is_some() }));
+        let apps: Value = serde_json::from_str(&run(["apps", "list", "--json"]).unwrap()).unwrap();
+        assert!(!apps.as_array().unwrap().is_empty());
         let nodes: Value =
             serde_json::from_str(&run(["nodes", "types", "--json"]).unwrap()).unwrap();
         assert!(nodes

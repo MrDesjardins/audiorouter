@@ -32,6 +32,12 @@ pub struct CapturePacket {
     pub qpc_position: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApplicationInfo {
+    pub process_id: u32,
+    pub executable: String,
+}
+
 #[derive(Debug)]
 pub enum AudioError {
     Windows(windows::core::Error),
@@ -318,6 +324,47 @@ pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
         let result = enumerate_after_com_init();
         windows::Win32::System::Com::CoUninitialize();
         result
+    }
+}
+
+/// Enumerate process identities suitable for a later process-loopback binding.
+/// Only PID and executable name are returned; command lines and full paths are
+/// intentionally excluded from this discovery surface.
+pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)?;
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        let mut applications = Vec::new();
+        let first = Process32FirstW(snapshot, &mut entry);
+        if first.is_ok() {
+            loop {
+                let length = entry
+                    .szExeFile
+                    .iter()
+                    .position(|character| *character == 0)
+                    .unwrap_or(entry.szExeFile.len());
+                let executable = String::from_utf16(&entry.szExeFile[..length])
+                    .map_err(|_| AudioError::InvalidUtf16)?;
+                applications.push(ApplicationInfo {
+                    process_id: entry.th32ProcessID,
+                    executable,
+                });
+                if applications.len() >= 4096 || Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+        first.map(|_| applications).map_err(AudioError::Windows)
     }
 }
 

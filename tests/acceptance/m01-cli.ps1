@@ -16,6 +16,10 @@ try {
     if ($devices.Count -eq 0) { throw "Windows device discovery returned no active endpoints" }
     if ($null -eq ($devices | Where-Object { $_.state -eq "active" -and $_.id })) { throw "Active endpoint metadata missing" }
 
+    $apps = cargo run --quiet -p audiorouter-cli -- --json apps list | ConvertFrom-Json
+    if ($apps.Count -eq 0) { throw "Windows process discovery returned no applications" }
+    if ($null -eq ($apps | Where-Object { $_.processId -gt 0 -and $_.executable })) { throw "Application identity metadata missing" }
+
     $nodes = cargo run --quiet -p audiorouter-cli -- --json nodes types | ConvertFrom-Json
     $physicalInput = $nodes | Where-Object { $_.type -eq "physical-input@1" }
     if ($null -eq $physicalInput -or $physicalInput.availability.status -ne "unavailable") { throw "Physical input availability boundary missing" }

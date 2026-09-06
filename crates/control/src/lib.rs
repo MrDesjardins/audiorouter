@@ -302,7 +302,7 @@ impl ControlPlane {
                 json!({ "build": self.build, "audio": "unavailable", "deviceDiscovery": "available", "reason": "M02 realtime graph engine and routing are not implemented" }),
             ),
             "devices.list" => self.dispatch_devices_list(),
-            "apps.list" => Ok(json!([])),
+            "apps.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
             "session.start" => self.dispatch_session_start(request.params),
             "session.stop" => self.dispatch_session_stop(request.params),
@@ -515,6 +515,18 @@ impl ControlPlane {
                     "default100ns": endpoint.default_period_100ns,
                     "minimum100ns": endpoint.minimum_period_100ns,
                 },
+            }))
+            .collect::<Vec<_>>()))
+    }
+
+    fn dispatch_apps_list(&self) -> Result<Value, ControlError> {
+        let applications = audiorouter_windows_audio::enumerate_applications()
+            .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        Ok(json!(applications
+            .into_iter()
+            .map(|application| json!({
+                "processId": application.process_id,
+                "executable": application.executable,
             }))
             .collect::<Vec<_>>()))
     }
