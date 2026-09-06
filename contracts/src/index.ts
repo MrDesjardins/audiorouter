@@ -161,6 +161,7 @@ export type ImplementedMethod =
   | "system.describe"
   | "system.handshake"
   | "status.get"
+  | "system.diagnostics"
   | "devices.list"
   | "apps.list"
   | "applications.list"
@@ -184,6 +185,7 @@ export type MethodParams = {
   "system.describe": undefined;
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
+  "system.diagnostics": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "apps.list": undefined;
   "applications.list": undefined;
@@ -219,6 +221,7 @@ export type MethodResult = {
     schemaVersion: number;
   };
   "status.get": Record<string, unknown>;
+  "system.diagnostics": Record<string, unknown>;
   "devices.list": unknown[];
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];

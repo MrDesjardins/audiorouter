@@ -135,6 +135,8 @@ Checked-in golden fixtures now cover a protocol handshake request and exact resp
 
 Optional nullable `cursor` and duplicate `name` fields now honor the published schema by treating explicit `null` as omitted rather than returning an invalid-params error. The regression is compile-validated with strict Clippy; executable control tests remain blocked by host Application Control.
 
+The specified read-only `system.diagnostics` method is now available and included in discovery/client mappings. Its response reports only redacted control-plane, storage mode, audio capability, and event-log counters; a regression verifies that no path field is exposed. Compilation, strict Clippy, and contract typecheck pass.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.

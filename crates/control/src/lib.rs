@@ -89,6 +89,7 @@ fn method_description(name: &str) -> &'static str {
         "system.describe" => "Describe protocol capabilities, methods, node types, and limits.",
         "system.handshake" => "Negotiate a compatible protocol version before requests.",
         "status.get" => "Return backend, runtime, and audio availability status.",
+        "system.diagnostics" => "Return a redacted backend diagnostic snapshot.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -811,6 +812,21 @@ impl ControlPlane {
             "status.get" => Ok(
                 json!({ "build": self.build, "audio": "unavailable", "deviceDiscovery": "available", "reason": "M02 realtime graph engine and routing are not implemented" }),
             ),
+            "system.diagnostics" => Ok(json!({
+                "build": self.build,
+                "backend": "control-plane",
+                "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
+                "audio": {
+                    "state": "unavailable",
+                    "reason": "M02 realtime graph engine and routing are not implemented"
+                },
+                "nativeAdapter": "not activated",
+                "eventLog": {
+                    "latestSequence": self.events.latest_sequence(),
+                    "retained": self.events.len()
+                },
+                "redacted": true
+            })),
             "devices.list" => self.dispatch_devices_list(),
             "apps.list" | "applications.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1423,8 +1439,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "graph.plan" => &["sessionId", "baseRevision", "candidate"],
         "graph.commit" => &["planId", "baseRevision", "idempotencyKey"],
         "system.handshake" => &["protocolVersion"],
-        "system.describe" | "status.get" | "devices.list" | "apps.list" | "applications.list"
-        | "nodes.types" | "nodes.describe" => &[],
+        "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
+        | "applications.list" | "nodes.types" | "nodes.describe" => &[],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -1762,6 +1778,11 @@ mod tests {
             .unwrap()
             .iter()
             .any(|method| method["name"] == "applications.list"));
+        assert!(description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|method| method["name"] == "system.diagnostics"));
         assert!(description["nodeTypes"]
             .as_array()
             .unwrap()
@@ -1868,6 +1889,22 @@ mod tests {
             params: Some(json!({ "cursor": null })),
         });
         assert!(response.result.is_some());
+    }
+
+    #[test]
+    fn diagnostics_are_redacted_and_report_backend_state() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(9)),
+            method: "system.diagnostics".into(),
+            params: None,
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["backend"], "control-plane");
+        assert_eq!(result["storage"], "memory");
+        assert_eq!(result["redacted"], true);
+        assert!(result.get("path").is_none());
     }
 
     #[test]
