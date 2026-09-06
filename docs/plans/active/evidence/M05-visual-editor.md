@@ -16,3 +16,10 @@ unarmed. `npm run build` passes, including TypeScript checking and Vite output;
 the production-only dependency audit reports no vulnerabilities. Native shell,
 transport wiring, live snapshots/events, graph editing, and accessibility
 manual testing remain open.
+
+The shell now supports local presentation-only node selection through mouse or
+keyboard Enter/Space. The selected card and inspector are exposed with
+accessible labels and `aria-current`; mutation controls stay disabled while
+disconnected and explain that a backend connection is required. This preserves
+the rule that the UI cannot duplicate or bypass graph authority. The
+production build and full dependency audit pass.
