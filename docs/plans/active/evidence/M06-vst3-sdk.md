@@ -322,6 +322,18 @@ controller. This confirms a real VST3 parameter surface without opening an
 editor or audio device; host-side parameter automation/state fidelity and
 sandbox enforcement remain open.
 
+## 2026-09-06 — Native SDK probe revalidated
+
+Rebuilt and ran tools/m06-vst3-loader/build.ps1 with the installed Visual
+Studio Community 2026/MSVC and Windows SDK toolchain against the pinned local
+SDK's mda-vst3 bundle. The probe loaded the x64 module, enumerated 68 factory
+classes, processed a bounded 48 kHz/64-frame stereo block with finite output,
+verified all five normalized parameter read/write/restore operations, and
+completed the 180-byte component state round trip. Generated executable and
+object files were removed afterward. The probe opened no audio device and
+changed no machine configuration; production worker integration, sandbox
+enforcement, and realtime scheduling remain open.
+
 The controller probe exercised every one of the 5 discovered parameters by
 reading its normalized value, setting 0.5, validating a finite 0..1 response,
 and restoring the original value. The complete synthetic automation pass
