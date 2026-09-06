@@ -310,3 +310,8 @@ creation, crash recording, and native route restart are still unimplemented.
 durable safe-mode latch in one SQLite transaction, giving supervisor wiring a
 consistent persisted snapshot. This remains storage evidence only; it does
 not record crashes, create processes, or restart audio routes.
+
+The control plane now publishes that snapshot through both `status.get` and
+`system.diagnostics`, including the bounded `recentCrashes` count and durable
+`safeMode` latch. The control regression verifies both fields without opening
+audio or resuming sessions; process supervision remains unimplemented.

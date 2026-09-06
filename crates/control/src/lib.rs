@@ -779,9 +779,12 @@ impl ControlPlane {
         }
     }
 
-    fn recovery_safe_mode(&self) -> Result<bool, ControlError> {
-        self.storage.as_ref().map_or(Ok(false), |storage| {
-            storage.recovery_safe_mode().map_err(storage_error)
+    fn recovery_status(&self) -> Result<(usize, bool), ControlError> {
+        self.storage.as_ref().map_or(Ok((0, false)), |storage| {
+            let status = storage
+                .recovery_status(unix_epoch_seconds() as u64)
+                .map_err(storage_error)?;
+            Ok((status.recent_crashes, status.safe_mode))
         })
     }
 
@@ -798,7 +801,7 @@ impl ControlPlane {
         } else {
             self.store.sessions(500).len()
         };
-        let recovery_safe_mode = self.recovery_safe_mode()?;
+        let (recent_recovery_crashes, recovery_safe_mode) = self.recovery_status()?;
         Ok(json!({
             "build": self.build,
             "audio": "unavailable",
@@ -815,6 +818,7 @@ impl ControlPlane {
             },
             "recovery": {
                 "safeMode": recovery_safe_mode,
+                "recentCrashes": recent_recovery_crashes,
                 "persistence": if self.storage.is_some() { "durable" } else { "memory" }
             },
             "eventCursor": {
@@ -1183,7 +1187,10 @@ impl ControlPlane {
                     "system.describe" => Ok(self.describe()),
                     "system.handshake" => self.dispatch_handshake(request.params),
                     "status.get" => self.status_snapshot(),
-                    "system.diagnostics" => Ok(json!({
+                    "system.diagnostics" => {
+                        let (recent_recovery_crashes, recovery_safe_mode) =
+                            self.recovery_status()?;
+                        Ok(json!({
                         "build": self.build,
                         "backend": "control-plane",
                         "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
@@ -1197,7 +1204,8 @@ impl ControlPlane {
                             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
                         },
                         "recovery": {
-                            "safeMode": self.recovery_safe_mode()?,
+                            "safeMode": recovery_safe_mode,
+                            "recentCrashes": recent_recovery_crashes,
                             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
                         },
                         "eventLog": {
@@ -1205,7 +1213,8 @@ impl ControlPlane {
                             "retained": self.events.len()
                         },
                         "redacted": true
-                    })),
+                        }))
+                    }
                     "clients.list" => self.dispatch_clients_list(),
                     "clients.authorize" => self.dispatch_client_authorize(request.params),
                     "clients.revoke" => self.dispatch_client_revoke(request.params),
@@ -2765,8 +2774,9 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&path);
         let storage = Storage::open(&path).unwrap();
-        for timestamp in 100..103 {
-            storage.record_recovery_crash(timestamp).unwrap();
+        let timestamp = unix_epoch_seconds() as u64;
+        for offset in 0..3 {
+            storage.record_recovery_crash(timestamp + offset).unwrap();
         }
         let mut plane = ControlPlane::with_storage("recovery", storage);
         let status = plane.dispatch(JsonRpcRequest {
@@ -2775,14 +2785,18 @@ mod tests {
             method: "status.get".into(),
             params: None,
         });
-        assert_eq!(status.result.unwrap()["recovery"]["safeMode"], true);
+        let status_result = status.result.unwrap();
+        assert_eq!(status_result["recovery"]["safeMode"], true);
+        assert_eq!(status_result["recovery"]["recentCrashes"], 3);
         let diagnostics = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(18)),
             method: "system.diagnostics".into(),
             params: None,
         });
-        assert_eq!(diagnostics.result.unwrap()["recovery"]["safeMode"], true);
+        let diagnostics_result = diagnostics.result.unwrap();
+        assert_eq!(diagnostics_result["recovery"]["safeMode"], true);
+        assert_eq!(diagnostics_result["recovery"]["recentCrashes"], 3);
         drop(plane);
         let _ = std::fs::remove_file(path);
     }
