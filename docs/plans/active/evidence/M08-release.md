@@ -216,3 +216,8 @@ revision on 2026-09-06. Optimized CLI/plugin-worker artifacts, SBOM, notices,
 checksums, and manifest were prepared and verified, then the temporary output
 was cleaned up. No installer, driver, signing action, or audio configuration
 was involved.
+
+After the verifier was tightened to reject unlisted package entries, the full
+`tests/acceptance/m08-release.ps1` wrapper passed again from clean revision
+`1b5094e`. The generated package's listed binaries, SBOM, notices, and
+manifest were verified and the disposable directory was removed.
