@@ -248,6 +248,7 @@ export interface EventsSubscribeResult {
   events: StateEvent[];
   nextSequence: number;
   resyncRequired?: boolean;
+  reason?: "backendEpochChanged";
   snapshot?: { sessions: SessionListPage };
 }
 

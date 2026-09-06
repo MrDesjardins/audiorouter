@@ -379,6 +379,49 @@ fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             })
         }
+        "events.subscribe" => json!({
+            "type": "object",
+            "properties": {
+                "backendEpoch": { "type": "integer", "minimum": 0 },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "sequence": { "type": "integer", "minimum": 1 },
+                            "backendEpoch": { "type": "integer", "minimum": 0 },
+                            "resourceRevision": { "type": "integer", "minimum": 0 },
+                            "operationId": { "type": ["string", "null"] },
+                            "category": { "type": "string", "minLength": 1 },
+                            "sessionId": { "type": ["string", "null"] }
+                        },
+                        "required": ["sequence", "backendEpoch", "resourceRevision", "operationId", "category", "sessionId"],
+                        "additionalProperties": false
+                    }
+                },
+                "nextSequence": { "type": "integer", "minimum": 0 },
+                "resyncRequired": { "type": "boolean" },
+                "reason": { "type": "string", "minLength": 1 },
+                "snapshot": {
+                    "type": "object",
+                    "properties": {
+                        "sessions": {
+                            "type": "object",
+                            "properties": {
+                                "items": { "type": "array", "items": session_item_schema() },
+                                "nextCursor": { "type": ["string", "null"] }
+                            },
+                            "required": ["items", "nextCursor"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "required": ["sessions"],
+                    "additionalProperties": false
+                }
+            },
+            "required": ["backendEpoch", "events", "nextSequence"],
+            "additionalProperties": false
+        }),
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -2500,7 +2543,7 @@ impl ControlPlane {
                     "backendEpoch": self.events.backend_epoch(),
                     "resyncRequired": true,
                     "reason": "backendEpochChanged",
-                    "snapshot": { "sessions": self.sessions_list(500)? },
+                    "snapshot": { "sessions": self.sessions_list_page(None, 500)? },
                     "events": [],
                     "nextSequence": self.events.latest_sequence()
                 }));
@@ -2534,7 +2577,7 @@ impl ControlPlane {
                 return Ok(json!({
                     "backendEpoch": self.events.backend_epoch(),
                     "resyncRequired": true,
-                    "snapshot": { "sessions": self.sessions_list(500)? },
+                    "snapshot": { "sessions": self.sessions_list_page(None, 500)? },
                     "events": [],
                     "nextSequence": self.events.latest_sequence()
                 }));
@@ -3691,7 +3734,13 @@ mod tests {
         });
         let result = response.result.unwrap();
         assert_eq!(result["resyncRequired"], true);
-        assert_eq!(result["snapshot"]["sessions"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            result["snapshot"]["sessions"]["items"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
         assert!(result["events"].as_array().unwrap().is_empty());
     }
 
@@ -3709,7 +3758,13 @@ mod tests {
         assert_eq!(result["resyncRequired"], true);
         assert_eq!(result["reason"], "backendEpochChanged");
         assert_eq!(result["backendEpoch"], 1);
-        assert_eq!(result["snapshot"]["sessions"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            result["snapshot"]["sessions"]["items"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]

@@ -207,3 +207,8 @@ The paged `sessions.list` and `graph.history` responses now advertise explicit
 page envelopes and serialized session snapshots, including graph nodes, ports,
 edges, and channel matrices. Discovery assertions cover the cursor and revision
 fields; the change is contract-only and does not mutate sessions.
+
+The `events.subscribe` resynchronization snapshot now matches the shared
+`SessionListPage` contract. Both backend-epoch mismatch and expired-cursor
+paths return `snapshot.sessions.items` plus `nextCursor`, preventing clients
+from receiving two incompatible snapshot shapes.
