@@ -1743,6 +1743,10 @@ mod tests {
             Err(CliError::InvalidArguments(_))
         ));
         assert!(matches!(
+            run(["devices", "list", "--limit", "0"]),
+            Err(CliError::InvalidArguments(_))
+        ));
+        assert!(matches!(
             run(["nodes", "oops"]),
             Err(CliError::InvalidArguments(_))
         ));

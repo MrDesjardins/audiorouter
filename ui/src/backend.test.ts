@@ -117,6 +117,16 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "applications.list", params: undefined });
   });
 
+  it("normalizes a paged device response through the bounded discovery API", async () => {
+    const device = { id: "device-1", direction: "render", state: "active", format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 65534 }, periods: { default100ns: 100000, minimum100ns: 20000 } };
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => { received = { method, params }; return { items: [device], nextCursor: null }; },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listDevices()).resolves.toEqual([device]);
+    expect(received).toEqual({ method: "devices.list", params: { limit: 500 } });
+  });
+
   it("forwards recording preview through the read-only API", async () => {
     let received: unknown;
     const client = {
