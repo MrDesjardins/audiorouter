@@ -1217,6 +1217,22 @@ mod tests {
     }
 
     #[test]
+    fn processor_recycles_input_when_output_pool_is_empty() {
+        let input = AudioBlockRing::new(1, 1, 2).unwrap();
+        let output = AudioBlockRing::new(1, 1, 2).unwrap();
+        let held_output = output.try_acquire().unwrap();
+        let block = input.try_acquire().unwrap();
+        input.try_submit(block).unwrap();
+
+        let processor = RuntimeProcessor::default();
+        assert_eq!(processor.process_ring_once(&input, &output).unwrap(), None);
+        assert_eq!(input.available(), 1);
+        assert_eq!(output.ready(), 0);
+        assert_eq!(processor.metrics().xruns(), 1);
+        output.try_recycle(held_output).unwrap();
+    }
+
+    #[test]
     fn non_finite_samples_are_silenced_and_counted() {
         let mut block = AudioBlock::new(1, 4).unwrap();
         block
