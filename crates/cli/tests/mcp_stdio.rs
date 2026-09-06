@@ -135,6 +135,25 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     );
     assert_eq!(startup["result"]["isError"], false);
 
+    let denied = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "tools/call",
+            "params": {
+                "name": "plan_graph_change",
+                "arguments": {
+                    "sessionId": "missing",
+                    "baseRevision": 0,
+                    "candidate": {}
+                }
+            }
+        }),
+    );
+    assert_eq!(denied["result"]["isError"], true);
+
     drop(input);
     assert!(child.wait().unwrap().success());
     std::fs::remove_file(database).unwrap();

@@ -206,3 +206,8 @@ The same process client now reads audiorouter://diagnostics and invokes the
 read-only get_startup tool after initialization and discovery. Both responses
 are validated over the real stdio stream, extending interoperability coverage
 beyond listing. The test remains non-audio and temporary-state-only.
+
+The process client also attempts the plan_graph_change tool as an observer.
+The server returns an error result over stdio while the authorized read-only
+resource and startup calls succeed, proving the grant boundary is preserved
+through the external MCP process rather than only in an in-process unit test.
