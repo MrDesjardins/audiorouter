@@ -61,6 +61,8 @@ Read parity now includes `sessions.get` and `session get <session-id> --database
 
 Session resource listing now includes `sessions.list` and `session list --database <absolute-path> [--limit N]`. Storage returns sessions in stable ID order with a 1–500 bound; the acceptance script verifies the imported fixture is listed. Cursor pagination and create/duplicate/delete operations remain future API work.
 
+`graph.plan` now returns a deterministic preview containing changed `/name`, `/nodes`, or `/edges` entries, physical-output destinations, warnings, required scope, and expiry duration in addition to its plan ID. The control test verifies the diff and scope fields; capability resolution, external-resource activation, and full typed-operation semantics remain open.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

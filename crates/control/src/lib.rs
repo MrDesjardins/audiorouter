@@ -574,8 +574,24 @@ impl ControlPlane {
                 .ok_or_else(|| ControlError::InvalidRequest("candidate is required".into()))?,
         )
         .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        let existing = self.get_session(&session_id)?.clone();
+        let diff = graph_diff(&existing, &candidate);
+        let affected_destinations = candidate
+            .nodes
+            .iter()
+            .filter(|node| node.kind == audiorouter_domain::NodeKind::PhysicalOutput)
+            .map(|node| node.name.clone())
+            .collect::<Vec<_>>();
         let plan_id = self.plan_graph(&session_id, base_revision, candidate)?;
-        Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 30000 }))
+        Ok(json!({
+            "planId": plan_id,
+            "baseRevision": base_revision,
+            "expiresInMs": 30000,
+            "diff": diff,
+            "affectedDestinations": affected_destinations,
+            "warnings": [],
+            "requiredScopes": ["graph.write"]
+        }))
     }
 
     fn dispatch_commit(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -779,6 +795,32 @@ fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlErro
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
     )
     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
+}
+
+fn graph_diff(before: &Session, after: &Session) -> Vec<Value> {
+    let mut diff = Vec::new();
+    if before.name != after.name {
+        diff.push(json!({
+            "path": "/name",
+            "before": &before.name,
+            "after": &after.name,
+        }));
+    }
+    if before.nodes != after.nodes {
+        diff.push(json!({
+            "path": "/nodes",
+            "before": &before.nodes,
+            "after": &after.nodes,
+        }));
+    }
+    if before.edges != after.edges {
+        diff.push(json!({
+            "path": "/edges",
+            "before": &before.edges,
+            "after": &after.edges,
+        }));
+    }
+    diff
 }
 
 fn role_name(role: ClientRole) -> &'static str {
@@ -1011,7 +1053,10 @@ mod tests {
                 json!({ "sessionId": "session", "baseRevision": 0, "candidate": candidate }),
             ),
         };
-        let plan_id = plane.dispatch(plan_request).result.unwrap()["planId"].clone();
+        let plan_result = plane.dispatch(plan_request).result.unwrap();
+        assert_eq!(plan_result["diff"][0]["path"], "/name");
+        assert_eq!(plan_result["requiredScopes"], json!(["graph.write"]));
+        let plan_id = plan_result["planId"].clone();
         let commit_request = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(2)),
