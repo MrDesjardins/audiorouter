@@ -3233,6 +3233,25 @@ mod tests {
                 comment: None,
             })
             .unwrap();
+        storage
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "recording-2".into(),
+                session_id: "session".into(),
+                recorder_id: "recorder".into(),
+                path: "C:\\recordings\\two.wav".into(),
+                format: "wav".into(),
+                channels: 2,
+                sample_rate: 48_000,
+                frames: 48_000,
+                file_bytes: 192_000,
+                start_time: "2026-09-06T01:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+            })
+            .unwrap();
         let mut plane = ControlPlane::with_storage("recordings", storage);
         let denied = plane.dispatch_authorized(
             JsonRpcRequest {
@@ -3254,7 +3273,7 @@ mod tests {
             params: Some(json!({ "sessionId": "session" })),
         });
         let result = response.result.unwrap();
-        assert_eq!(result.as_array().unwrap().len(), 1);
+        assert_eq!(result.as_array().unwrap().len(), 2);
         assert_eq!(result[0]["id"], "recording-1");
         assert_eq!(result[0]["missing"], false);
         let response = plane.dispatch(JsonRpcRequest {
@@ -3265,6 +3284,19 @@ mod tests {
         });
         let page = response.result.unwrap();
         assert_eq!(page["items"][0]["id"], "recording-1");
+        assert_eq!(page["nextCursor"], "recording-1");
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(11)),
+            method: "recordings.list".into(),
+            params: Some(json!({
+                "sessionId": "session",
+                "cursor": "recording-1",
+                "limit": 1
+            })),
+        });
+        let page = response.result.unwrap();
+        assert_eq!(page["items"][0]["id"], "recording-2");
         assert_eq!(page["nextCursor"], Value::Null);
         let response = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),

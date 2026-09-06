@@ -49,6 +49,10 @@ regression verifies `recordings list --limit 1` returns the page envelope while
 the existing unpaged command continues to return its legacy array. CLI and
 control suites, contracts/UI typechecks, and UI tests pass.
 
+The control regression now persists two recordings and traverses both pages,
+verifying that the first page returns the first recording plus its ID cursor and
+the cursor request returns the second recording with no further cursor.
+
 The UI backend now has a direct regression for a paged recording response and
 normalizes its items into the established row-list contract. UI coverage is 23
 tests with typecheck passing.
