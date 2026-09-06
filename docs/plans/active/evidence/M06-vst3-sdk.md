@@ -285,3 +285,9 @@ frame. The process-level integration suite passes both inline and shared-frame
 round trips (2 tests); all plugin-host targets compile with strict Clippy.
 The worker remains an echo fixture and does not load plugin code or open audio
 devices.
+
+Superseding runtime correction: the plugin-host library suite was rerun after
+the shared-frame integration and all 25 tests passed. This includes the
+previously blocked quarantine/state/transport cases; the generated library test
+binary was executable on the current host. The remaining M06 gaps are actual
+VST3 plugin loading, sandbox policy, and production worker integration.
