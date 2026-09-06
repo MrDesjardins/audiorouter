@@ -444,6 +444,11 @@ is present, evaluates the durable safe-mode latch, and returns a single bounded
 Memory and SQLite-backed control regressions cover restore eligibility and the
 three-crash safe-mode transition. This method does not create processes, restart
 sessions, or open audio streams; native supervisor orchestration remains open.
+
+Recovery candidates are sorted by stable opaque-ID text before the decision is
+returned, avoiding `HashMap` iteration order leaking into supervisor behavior.
+A two-session control regression verifies deterministic ordering; the control
+suite now passes 58 tests with strict Clippy.
 The MCP stdio interoperability regression was updated to account for the
 published `clear_recovery_safe_mode` tool. The catalog now contains 23 tools,
 including the recovery maintenance operation, and the locked workspace test

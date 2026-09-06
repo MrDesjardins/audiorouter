@@ -1661,7 +1661,7 @@ impl ControlPlane {
             let recent_crashes = self.recovery_tracker.crash_count(timestamp_seconds);
             (mode, recent_crashes)
         };
-        let session_ids = if mode == RecoveryMode::SafeMode || recent_crashes == 0 {
+        let mut session_ids = if mode == RecoveryMode::SafeMode || recent_crashes == 0 {
             Vec::new()
         } else {
             self.runtimes
@@ -1670,6 +1670,7 @@ impl ControlPlane {
                 .map(|(id, _)| id.clone())
                 .collect()
         };
+        session_ids.sort_by(|left, right| left.as_str().cmp(right.as_str()));
         Ok(RecoveryDecision { mode, session_ids })
     }
 
@@ -4069,6 +4070,25 @@ mod tests {
         let third = plane.record_runtime_crash(102).unwrap();
         assert_eq!(third.mode, RecoveryMode::SafeMode);
         assert!(third.session_ids.is_empty());
+    }
+
+    #[test]
+    fn runtime_crash_recovery_candidates_are_sorted() {
+        let mut plane = ControlPlane::default();
+        let mut first = session();
+        first.id = EntityId::new("z-session");
+        let mut second = session();
+        second.id = EntityId::new("a-session");
+        plane.insert_session(first).unwrap();
+        plane.insert_session(second).unwrap();
+        plane.session_start(&EntityId::new("z-session")).unwrap();
+        plane.session_start(&EntityId::new("a-session")).unwrap();
+
+        let decision = plane.record_runtime_crash(100).unwrap();
+        assert_eq!(
+            decision.session_ids,
+            vec![EntityId::new("a-session"), EntityId::new("z-session")]
+        );
     }
 
     #[test]
