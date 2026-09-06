@@ -359,3 +359,9 @@ mono-to-stereo matrices, and reports duplicate or occupied non-mixer inputs
 before a plan is submitted. The operation changes only the local draft; graph
 cycle and remaining semantic validation stay in the backend. UI coverage is 30
 tests with typecheck, production build, and diff checks passing.
+
+The canvas view also exposes explicit removal controls for draft connections.
+Removing an edge updates only the local candidate, reports the action to the
+user, and leaves the committed graph unchanged until the existing plan/commit
+step. The structured list view remains available; UI coverage is 31 tests with
+typecheck, production build, and diff checks passing.

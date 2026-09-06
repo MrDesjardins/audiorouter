@@ -118,6 +118,12 @@ export function appendDraftConnection(
   };
 }
 
+/** Removes one draft edge while leaving the authoritative graph untouched. */
+export function removeDraftConnection(session: Session, edgeId: EntityId): Session {
+  if (!session.edges.some((edge) => edge.id === edgeId)) throw new Error(`Unknown draft connection: ${edgeId}`);
+  return { ...session, edges: session.edges.filter((edge) => edge.id !== edgeId) };
+}
+
 /**
  * Creates a UI candidate without changing the authoritative session revision.
  * Validation and commit remain backend responsibilities.
