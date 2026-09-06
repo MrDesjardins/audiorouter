@@ -1019,6 +1019,47 @@ pub struct VoiceChainConfig {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VoiceChainPresetId {
+    VoiceNeutral,
+    VoiceGateAndCompression,
+}
+
+/// Return one of the documented conservative voice-chain starting points.
+/// Presets only prepare processor configuration; they never arm recording,
+/// enable monitoring, or alter a caller's active graph.
+pub fn voice_chain_preset(id: VoiceChainPresetId, sample_rate: f32) -> VoiceChainConfig {
+    let gate = (id == VoiceChainPresetId::VoiceGateAndCompression).then_some(GateParams {
+        threshold_db: -45.0,
+        hysteresis_db: 3.0,
+        ratio: 4.0,
+        range_db: 60.0,
+        attack_ms: 5.0,
+        hold_ms: 50.0,
+        release_ms: 150.0,
+        sample_rate,
+    });
+    let compressor =
+        (id == VoiceChainPresetId::VoiceGateAndCompression).then_some(CompressorParams {
+            threshold_db: -18.0,
+            ratio: 3.0,
+            attack_ms: 10.0,
+            release_ms: 150.0,
+            knee_db: 6.0,
+            makeup_db: 0.0,
+            sample_rate,
+        });
+    VoiceChainConfig {
+        sample_rate,
+        eq: Some(EqPresetId::VoiceNeutral),
+        gate,
+        compressor,
+        delay_max_ms: None,
+        delay_ms: 0.0,
+        limiter: LimiterParams { ceiling_db: -1.0 },
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VoiceChainError {
     Biquad(BiquadError),
     Delay(DelayError),
@@ -1833,6 +1874,23 @@ mod tests {
         assert!(chain.meter().peak[0] <= 10.0_f32.powf(-1.0 / 20.0));
         chain.reset();
         assert_eq!(chain.meter().peak, [0.0, 0.0]);
+    }
+
+    #[test]
+    fn voice_chain_presets_match_documented_conservative_defaults() {
+        let neutral = voice_chain_preset(VoiceChainPresetId::VoiceNeutral, 48_000.0);
+        assert_eq!(neutral.eq, Some(EqPresetId::VoiceNeutral));
+        assert!(neutral.gate.is_none());
+        assert!(neutral.compressor.is_none());
+        assert_eq!(neutral.limiter.ceiling_db, -1.0);
+        assert!(VoiceChain::new(neutral, 1).is_ok());
+
+        let processed = voice_chain_preset(VoiceChainPresetId::VoiceGateAndCompression, 48_000.0);
+        assert_eq!(processed.gate.as_ref().unwrap().threshold_db, -45.0);
+        assert_eq!(processed.gate.as_ref().unwrap().range_db, 60.0);
+        assert_eq!(processed.compressor.as_ref().unwrap().threshold_db, -18.0);
+        assert_eq!(processed.compressor.as_ref().unwrap().ratio, 3.0);
+        assert!(VoiceChain::new(processed, 2).is_ok());
     }
 
     #[test]

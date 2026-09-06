@@ -1,5 +1,14 @@
 # M04 effects and recording evidence
 
+## 2026-09-06 — Named conservative voice presets
+
+Added `VoiceChainPresetId` and `voice_chain_preset` to the DSP boundary. The
+`VoiceNeutral` preset uses flat EQ, no gate/compressor, and the documented
+-1 dBFS sample-peak ceiling. `VoiceGateAndCompression` adds the specified
+-45 dBFS gate and -18 dBFS, 3:1 compressor defaults. Both are preparation-only
+configuration and never arm recording, enable monitoring, or mutate an active
+graph. DSP construction and behavior tests plus strict Clippy pass.
+
 ## 2026-09-06 â€” Worker checkpoint boundary
 
 `WavRecorder` and `BufferedFlacRecorder` now expose validated controller
