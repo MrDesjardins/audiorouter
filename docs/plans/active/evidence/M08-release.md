@@ -237,3 +237,11 @@ At clean revision `5670dde`, the broader locked workspace verification passed
 M08 wrapper then prepared and verified the optimized unsigned artifacts again,
 asserted the publication blockers, and removed its temporary output. No
 installer, driver, signing action, or audio configuration was involved.
+
+The complete wrapper was requalified at clean revision `e5f240b` with the
+installed Visual Studio 2026 toolchain. Optimized locked CLI and plugin-worker
+artifacts, the full dependency SBOM, third-party notices, sanitized toolchain
+provenance, checksums, and exact-content verification all passed in a unique
+temporary directory. The wrapper asserted that the result remains unsigned
+and not publication-ready, then removed the temporary directory. No installer,
+driver, signing action, or audio configuration was involved.
