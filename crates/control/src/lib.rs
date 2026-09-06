@@ -830,7 +830,7 @@ impl ControlPlane {
                 format!("permission denied: {:?}", spec.permission),
             );
             if let Some(error) = response.error.as_mut() {
-                error.data = Some(json!({ "code": "permissionDenied" }));
+                error.data = Some(application_error_data("permissionDenied"));
             }
             return response;
         }
@@ -841,6 +841,10 @@ impl ControlPlane {
                     if let Some(error) = response.error.as_mut() {
                         error.data = Some(json!({
                             "code": "rateLimited",
+                            "fieldPath": Value::Null,
+                            "resourceIds": [],
+                            "retryable": true,
+                            "remediation": "wait for the retry hint before sending another mutation",
                             "retryAfterMs": retry_after_ms
                         }));
                     }
@@ -1436,9 +1440,45 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
     let message = format!("{error:?}");
     let mut response = JsonRpcResponse::failure(id, -32000, message);
     if let Some(error) = response.error.as_mut() {
-        error.data = Some(json!({ "code": code }));
+        error.data = Some(application_error_data(code));
     }
     response
+}
+
+fn application_error_data(code: &str) -> Value {
+    let (retryable, remediation) = match code {
+        "revisionConflict" => (
+            true,
+            "read the latest session revision and create a new plan",
+        ),
+        "planExpired" => (true, "create a new plan from the current session revision"),
+        "storageFailure" => (
+            true,
+            "inspect backend health and retry after the failure is resolved",
+        ),
+        "deviceUnavailable" => (
+            true,
+            "inspect device availability and rebind the affected resource",
+        ),
+        "permissionDenied" => (
+            false,
+            "request the required permission scope for the target operation",
+        ),
+        "invalidRequest" | "invalidGraph" => {
+            (false, "correct the request using the discovered schema")
+        }
+        _ => (
+            false,
+            "inspect the error code and correct or explicitly retry the operation",
+        ),
+    };
+    json!({
+        "code": code,
+        "fieldPath": Value::Null,
+        "resourceIds": [],
+        "retryable": retryable,
+        "remediation": remediation
+    })
 }
 
 #[cfg(test)]
@@ -1479,10 +1519,10 @@ mod tests {
         }
         let response = plane.dispatch_authorized_for_client(request(), "client", &grant);
         assert_eq!(response.error.as_ref().unwrap().code, -32000);
-        assert_eq!(
-            response.error.as_ref().unwrap().data,
-            Some(json!({ "code": "rateLimited", "retryAfterMs": 50 }))
-        );
+        let data = response.error.as_ref().unwrap().data.as_ref().unwrap();
+        assert_eq!(data["code"], "rateLimited");
+        assert_eq!(data["retryAfterMs"], 50);
+        assert_eq!(data["retryable"], true);
     }
 
     #[test]
@@ -1582,10 +1622,10 @@ mod tests {
             })),
         });
         assert_eq!(response.error.as_ref().unwrap().code, -32000);
-        assert_eq!(
-            response.error.as_ref().unwrap().data,
-            Some(json!({ "code": "revisionConflict" }))
-        );
+        let data = response.error.as_ref().unwrap().data.as_ref().unwrap();
+        assert_eq!(data["code"], "revisionConflict");
+        assert_eq!(data["retryable"], true);
+        assert!(data["remediation"].as_str().unwrap().contains("new plan"));
     }
 
     fn session() -> Session {

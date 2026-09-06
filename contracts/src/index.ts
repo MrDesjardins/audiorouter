@@ -124,7 +124,20 @@ export interface JsonRpcSuccess<Result = unknown> {
 export interface JsonRpcError {
   jsonrpc: "2.0";
   id: string | number | null;
-  error: { code: number; message: string; data?: unknown };
+  error: {
+    code: number;
+    message: string;
+    data?: ApplicationErrorData;
+  };
+}
+
+export interface ApplicationErrorData {
+  code: string;
+  fieldPath: string | null;
+  resourceIds: EntityId[];
+  retryable: boolean;
+  remediation: string;
+  retryAfterMs?: number;
 }
 
 export type JsonRpcResponse<Result = unknown> =
