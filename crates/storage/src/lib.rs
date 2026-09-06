@@ -28,6 +28,7 @@ pub const MAX_BUNDLE_COMPRESSED_BYTES: u64 = 100 * 1024 * 1024;
 pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
+pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
 fn is_executable_name(name: &str) -> bool {
     matches!(
@@ -313,6 +314,11 @@ impl Storage {
                 [],
             )?;
         }
+        self.connection.execute(
+            "CREATE INDEX IF NOT EXISTS operation_journal_created_at
+             ON operation_journal(created_at)",
+            [],
+        )?;
         Ok(())
     }
 
@@ -754,6 +760,7 @@ impl Storage {
         revision: u64,
         request_hash: &str,
     ) -> Result<bool, StorageError> {
+        self.prune_expired_journal()?;
         let inserted = self.connection.execute(
             "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![key, operation, result, revision as i64, request_hash],
@@ -766,6 +773,7 @@ impl Storage {
         key: &str,
         request_hash: &str,
     ) -> Result<Option<String>, StorageError> {
+        self.prune_expired_journal()?;
         let row: Option<(String, String)> = self
             .connection
             .query_row(
@@ -779,6 +787,15 @@ impl Storage {
             Some(_) => Err(StorageError::IdempotencyConflict),
             None => Ok(None),
         }
+    }
+
+    fn prune_expired_journal(&self) -> Result<(), StorageError> {
+        self.connection.execute(
+            "DELETE FROM operation_journal
+             WHERE created_at < datetime('now', ?1)",
+            params![format!("-{} seconds", IDEMPOTENCY_RETENTION_SECONDS)],
+        )?;
+        Ok(())
     }
 
     /// Persist the current session and its idempotency record as one SQLite
@@ -805,6 +822,7 @@ impl Storage {
         failure: Option<JournalFailureStage>,
     ) -> Result<(), StorageError> {
         let document = serde_json::to_string(session)?;
+        self.prune_expired_journal()?;
         let transaction = self.connection.unchecked_transaction()?;
         if failure == Some(JournalFailureStage::BeforeHistory) {
             return Err(StorageError::InvalidSession(
@@ -954,6 +972,28 @@ mod tests {
             storage.journal_result_checked("hashed", "hash-b"),
             Err(StorageError::IdempotencyConflict)
         ));
+    }
+
+    #[test]
+    fn expired_journal_entries_are_pruned_before_replay() {
+        let storage = Storage::open_memory().unwrap();
+        assert!(storage
+            .journal_commit_with_hash("expired", "graph.commit", "old", 1, "hash")
+            .unwrap());
+        storage
+            .connection
+            .execute(
+                "UPDATE operation_journal SET created_at = datetime('now', '-2 days') WHERE idempotency_key = 'expired'",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            storage.journal_result_checked("expired", "hash").unwrap(),
+            None
+        );
+        assert!(storage
+            .journal_commit_with_hash("expired", "graph.commit", "new", 2, "new-hash")
+            .unwrap());
     }
 
     #[test]

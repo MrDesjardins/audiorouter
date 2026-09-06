@@ -75,6 +75,8 @@ The SQLite operation journal now persists a request hash and exposes checked rep
 
 `graph.commit` now hashes the planned session payload with SHA-256, checks the durable journal before domain mutation, and stores the hash in the same SQLite transaction as the session revision. Matching requests replay across a fresh control plane; mismatched reuse is rejected. The combined domain/control/storage verification passed 19, 22, and 16 tests respectively, with strict Clippy green. Expiry/retention policy for journal rows remains future work.
 
+Durable idempotency records now have a 24-hour retention bound. Journal reads and transactional writes prune older rows using an indexed `created_at`; a regression verifies an expired key can be reused while a current mismatched hash still conflicts. Storage coverage is 17 passing tests with strict Clippy.
+
 ## Next action
 
 Implement durable idempotency request hashing and bounded expiry across control-process restarts using the existing SQLite journal transaction. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.
