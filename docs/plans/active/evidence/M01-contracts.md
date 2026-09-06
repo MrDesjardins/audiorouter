@@ -79,6 +79,8 @@ Control mutations now checkpoint the in-memory `GraphStore` before changing it. 
 
 The request-hash migration is now tested against a pre-hash SQLite schema. Existing journal rows receive an empty legacy hash and replay only for an explicitly empty hash; a new hash returns `IdempotencyConflict`. The temporary migration database is cleaned up, and storage coverage is 18 passing tests with strict Clippy.
 
+History restoration now applies the global 128-node/256-edge budgets after hydration and restores the prior `GraphStore` checkpoint if the aggregate exceeds a cap. A regression uses two valid full sessions plus a third restored session and verifies no partial state remains; 21 domain and 24 control tests pass with strict Clippy.
+
 `graph.commit` now hashes the planned session payload with SHA-256, checks the durable journal before domain mutation, and stores the hash in the same SQLite transaction as the session revision. Matching requests replay across a fresh control plane; mismatched reuse is rejected. The combined domain/control/storage verification passed 19, 22, and 16 tests respectively, with strict Clippy green. Expiry/retention policy for journal rows remains future work.
 
 Durable idempotency records now have a 24-hour retention bound. Journal reads and transactional writes prune older rows using an indexed `created_at`; a regression verifies an expired key can be reused while a current mismatched hash still conflicts. Storage coverage is 17 passing tests with strict Clippy.
