@@ -373,3 +373,11 @@ EOF, disconnect, and timeout into stable worker-message errors instead of
 blocking indefinitely. A timeout regression and the complete 26-test
 plugin-host suite pass with strict Clippy; OS sandbox policy and production
 plugin execution remain open.
+
+WorkerProcess now attaches every Windows child to a fail-closed Job Object
+configured with KILL_ON_JOB_CLOSE. The job handle is owned by the process
+wrapper, so normal shutdown and Drop cannot leave a worker process running
+after the wrapper is gone; job creation/assignment failure rejects the spawn.
+The native worker process tests pass with this containment active. This is
+process-lifetime containment only; filesystem/network sandbox policy and real
+plugin execution remain open.

@@ -9,6 +9,8 @@ use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
+#[cfg(windows)]
+use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::{
@@ -930,11 +932,149 @@ pub enum WorkerProcessError {
     Timeout,
 }
 
+#[cfg(windows)]
+struct WorkerSandbox {
+    handle: *mut std::ffi::c_void,
+}
+
+#[cfg(not(windows))]
+struct WorkerSandbox;
+
+#[cfg(windows)]
+impl WorkerSandbox {
+    fn attach(child: &Child) -> Result<Self, String> {
+        let handle = unsafe { create_job_object() };
+        if handle.is_null() {
+            return Err("CreateJobObjectW failed".into());
+        }
+        let mut limits = JobObjectExtendedLimitInformation::default();
+        limits.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let configured = unsafe {
+            set_information_job_object(
+                handle,
+                JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                &limits as *const _ as *const std::ffi::c_void,
+                std::mem::size_of::<JobObjectExtendedLimitInformation>() as u32,
+            )
+        };
+        let assigned =
+            configured && unsafe { assign_process_to_job_object(handle, child.as_raw_handle()) };
+        if !assigned {
+            unsafe { close_handle(handle) };
+            return Err("could not assign worker to a kill-on-close job".into());
+        }
+        Ok(Self { handle })
+    }
+}
+
+#[cfg(not(windows))]
+impl WorkerSandbox {
+    fn attach(_: &Child) -> Result<Self, String> {
+        Ok(Self)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for WorkerSandbox {
+    fn drop(&mut self) {
+        unsafe { close_handle(self.handle) };
+    }
+}
+
+#[cfg(windows)]
+const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: u32 = 9;
+#[cfg(windows)]
+const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x0000_2000;
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Default)]
+struct JobObjectBasicLimitInformation {
+    per_process_user_time_limit: i64,
+    per_job_user_time_limit: i64,
+    limit_flags: u32,
+    minimum_working_set_size: usize,
+    maximum_working_set_size: usize,
+    active_process_limit: u32,
+    affinity: usize,
+    priority_class: u32,
+    scheduling_class: u32,
+}
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Default)]
+struct IoCounters {
+    read_operation_count: u64,
+    write_operation_count: u64,
+    other_operation_count: u64,
+    read_transfer_count: u64,
+    write_transfer_count: u64,
+    other_transfer_count: u64,
+}
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Default)]
+struct JobObjectExtendedLimitInformation {
+    basic: JobObjectBasicLimitInformation,
+    io: IoCounters,
+    process_memory_limit: usize,
+    job_memory_limit: usize,
+    peak_process_memory_used: usize,
+    peak_job_memory_used: usize,
+}
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn CreateJobObjectW(
+        attributes: *const std::ffi::c_void,
+        name: *const u16,
+    ) -> *mut std::ffi::c_void;
+    fn SetInformationJobObject(
+        job: *mut std::ffi::c_void,
+        class: u32,
+        information: *const std::ffi::c_void,
+        length: u32,
+    ) -> i32;
+    fn AssignProcessToJobObject(job: *mut std::ffi::c_void, process: *mut std::ffi::c_void) -> i32;
+    fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+}
+
+#[cfg(windows)]
+unsafe fn create_job_object() -> *mut std::ffi::c_void {
+    CreateJobObjectW(std::ptr::null(), std::ptr::null())
+}
+
+#[cfg(windows)]
+unsafe fn set_information_job_object(
+    job: *mut std::ffi::c_void,
+    class: u32,
+    information: *const std::ffi::c_void,
+    length: u32,
+) -> bool {
+    SetInformationJobObject(job, class, information, length) != 0
+}
+
+#[cfg(windows)]
+unsafe fn assign_process_to_job_object(
+    job: *mut std::ffi::c_void,
+    process: *mut std::ffi::c_void,
+) -> bool {
+    AssignProcessToJobObject(job, process) != 0
+}
+
+#[cfg(windows)]
+unsafe fn close_handle(handle: *mut std::ffi::c_void) {
+    let _ = CloseHandle(handle);
+}
+
 /// Control-plane client for one disposable worker process. This owns the
 /// process and pipes; realtime callers must exchange frames through a
 /// preallocated transport rather than calling these blocking methods.
 pub struct WorkerProcess {
     child: Child,
+    _sandbox: WorkerSandbox,
     writer: BufWriter<ChildStdin>,
     reader: Receiver<Result<WorkerMessage, WorkerMessageError>>,
     channels: u16,
@@ -992,6 +1132,7 @@ impl WorkerProcess {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|error| WorkerProcessError::Spawn(error.to_string()))?;
+        let sandbox = WorkerSandbox::attach(&child).map_err(WorkerProcessError::Spawn)?;
         let stdin = child.stdin.take().ok_or(WorkerProcessError::Exited)?;
         let stdout = child.stdout.take().ok_or(WorkerProcessError::Exited)?;
         let (reader_sender, reader) = mpsc::sync_channel(4);
@@ -1007,6 +1148,7 @@ impl WorkerProcess {
         });
         let mut process = Self {
             child,
+            _sandbox: sandbox,
             writer: BufWriter::new(stdin),
             reader,
             channels,
