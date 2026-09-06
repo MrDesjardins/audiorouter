@@ -345,6 +345,7 @@ fn method_input_schema(name: &str) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "status.get" => status_output_schema(),
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -418,6 +419,53 @@ fn method_output_schema(name: &str) -> Value {
         "recordings.get" => recording_item_schema(),
         _ => json!({ "type": "object" }),
     }
+}
+
+fn status_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "build": { "type": "string" },
+            "audio": { "const": "unavailable" },
+            "deviceDiscovery": { "const": "available" },
+            "reason": { "type": "string", "minLength": 1 },
+            "storage": { "enum": ["memory", "sqlite"] },
+            "sessionCount": { "type": "integer", "minimum": 0 },
+            "activeSessionCount": { "type": "integer", "minimum": 0 },
+            "activeSessionIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "privacyMute": {
+                "type": "object",
+                "properties": {
+                    "muted": { "type": "boolean" },
+                    "persistence": { "enum": ["durable", "memory"] },
+                    "audioEffect": { "type": "string", "minLength": 1 }
+                },
+                "required": ["muted", "persistence", "audioEffect"],
+                "additionalProperties": false
+            },
+            "recovery": {
+                "type": "object",
+                "properties": {
+                    "safeMode": { "type": "boolean" },
+                    "recentCrashes": { "type": "integer", "minimum": 0 },
+                    "persistence": { "enum": ["durable", "memory"] }
+                },
+                "required": ["safeMode", "recentCrashes", "persistence"],
+                "additionalProperties": false
+            },
+            "eventCursor": {
+                "type": "object",
+                "properties": {
+                    "backendEpoch": { "type": "integer", "minimum": 0 },
+                    "latestSequence": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["backendEpoch", "latestSequence"],
+                "additionalProperties": false
+            }
+        },
+        "required": ["build", "audio", "deviceDiscovery", "reason", "storage", "sessionCount", "activeSessionCount", "activeSessionIds", "privacyMute", "recovery", "eventCursor"],
+        "additionalProperties": false
+    })
 }
 
 fn recording_item_schema() -> Value {
@@ -2957,6 +3005,18 @@ mod tests {
         assert_eq!(
             clients["outputSchema"]["items"]["properties"]["role"]["enum"],
             json!(["observer", "editor", "operator"])
+        );
+        let status = methods
+            .iter()
+            .find(|method| method["name"] == "status.get")
+            .unwrap();
+        assert_eq!(
+            status["outputSchema"]["properties"]["audio"]["const"],
+            "unavailable"
+        );
+        assert_eq!(
+            status["outputSchema"]["properties"]["eventCursor"]["required"],
+            json!(["backendEpoch", "latestSequence"])
         );
         let applications = methods
             .iter()

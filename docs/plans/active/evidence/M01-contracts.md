@@ -187,3 +187,8 @@ The `clients.list` output schema is also explicit: each enrollment record has a
 non-empty client ID, one of the built-in roles, and a boolean revocation state.
 The schema correction is covered by control discovery tests and does not alter
 enrollment records.
+
+The `status.get` output schema now models the stable snapshot returned by the
+control plane, including capability strings, session counters/IDs, privacy and
+recovery state, and event cursors. The schema is covered by control discovery
+tests and remains a read-only contract.
