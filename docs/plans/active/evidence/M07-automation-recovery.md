@@ -30,6 +30,9 @@ an idempotency key or creating a durable plan. The regression confirms the
 candidate contains the requested value while the persisted session revision
 and parameter remain unchanged.
 
+Invalid object/array/null values are rejected before validation, and normal
+non-dry-run calls still require a bounded idempotency key.
+
 ## 2026-09-06 — Session-list CLI cursor parity
 
 `session list` now accepts optional `--cursor ID` in addition to its bounded
