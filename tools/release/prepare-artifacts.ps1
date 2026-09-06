@@ -33,7 +33,7 @@ try {
         Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary)
     }
 
-    $metadata = & cargo metadata --locked --format-version 1 --no-deps
+    $metadata = & cargo metadata --locked --format-version 1
     if ($LASTEXITCODE -ne 0) {
         throw "cargo metadata failed with exit code $LASTEXITCODE"
     }
@@ -44,10 +44,15 @@ try {
         $hash = Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256
         [ordered]@{ file = $file.Name; sha256 = $hash.Hash.ToLowerInvariant(); bytes = $file.Length }
     }
+    $revision = (& git rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $revision -notmatch '^[0-9a-f]{40}$') {
+        throw "could not determine the source revision for release provenance"
+    }
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
         architecture = "x64"
+        sourceRevision = $revision
         artifacts = $checksums
         signed = $false
         publicationReady = $false

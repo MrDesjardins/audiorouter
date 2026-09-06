@@ -13,6 +13,15 @@ Added `tools/release/prepare-artifacts.ps1`, which:
 
 PowerShell parser validation, `cargo fmt --all -- --check`, and `git diff --check` pass. An actual release build was attempted, but Windows Application Control blocked the generated `getrandom` build helper with OS error 4551. No signed artifact, installer, driver, or machine configuration was produced or changed.
 
+## 2026-09-06 â€” Complete SBOM provenance
+
+Release preparation now runs locked full `cargo metadata` (including the
+dependency graph) and records the exact Git source revision in the release
+manifest. The PowerShell script parses successfully and the complete locked
+metadata command passes after the local Cargo cache is available. This still
+does not claim signed artifacts, an installer, driver packaging, or clean-
+machine qualification.
+
 ## 2026-09-06 — Headless operations runbook
 
 Added `docs/operations/headless-runbook.md` and linked it from the documentation index. It documents commands that exist in the current CLI, the versioned plan-file workflow, non-overwriting recovery backups, staged bundle import, MCP stdio/pipe launch, stale-plan recovery, and explicit limits around native routing, drivers, signing, and installation. The runbook does not present portable tests or an MCP response as evidence of a configured audio system.
