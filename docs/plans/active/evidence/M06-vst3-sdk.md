@@ -307,3 +307,10 @@ and unload the module. This completed successfully against mda-vst3 without
 opening an audio device or processing live/user audio. It is component
 activation evidence only; audio-process callbacks, parameter/state behavior,
 worker integration, and sandbox enforcement remain open.
+
+The same probe then configured the real component for offline 32-bit processing
+at 48 kHz with a 64-frame block, submitted a synthetic stereo buffer, verified
+all 128 output samples were finite, and shut down processing cleanly. This is
+bounded plugin-DSP execution evidence only; parameter automation, state/editor
+behavior, worker integration, failure containment, and sandbox enforcement
+remain open.
