@@ -14,6 +14,13 @@ if (Test-Path -LiteralPath $output) {
 
 Push-Location $workspace
 try {
+    $dirty = & git status --porcelain --untracked-files=all
+    if ($LASTEXITCODE -ne 0) {
+        throw "could not inspect Git working-tree state"
+    }
+    if ($dirty) {
+        throw "release inputs must come from a clean Git working tree"
+    }
     & cargo build --release --locked -p audiorouter-cli -p audiorouter-plugin-host
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
