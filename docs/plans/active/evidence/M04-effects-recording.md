@@ -10,6 +10,16 @@ encoder buffer, or file handle. Recording tests (18) and strict Clippy pass.
 Durable scheduling of these snapshots and true incremental FLAC output remain
 open.
 
+## 2026-09-06 â€” FLAC metadata tags
+
+The bounded batch FLAC encoder now optionally inserts a standards-shaped
+Vorbis-comment metadata block containing title, artist, and comment fields.
+The existing no-metadata stream layout is preserved, and the implementation
+retains the ten-minute batch limit. The buffered FLAC worker exposes the same
+finalization seam. Compilation and strict Clippy pass; Windows Application
+Control blocked the rebuilt test executable with OS error 4551, so runtime
+tag/decoder evidence remains pending.
+
 ## 2026-09-06 â€” WAV metadata tags
 
 WAV finalization now optionally writes bounded UTF-8 title, artist, and

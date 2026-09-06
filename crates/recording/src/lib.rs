@@ -640,6 +640,11 @@ impl FlacBufferEncoder {
     }
 
     pub fn finish(self) -> Result<Vec<u8>, RecordingError> {
+        self.finish_with_metadata(&WavMetadata::default())
+    }
+
+    pub fn finish_with_metadata(self, metadata: &WavMetadata) -> Result<Vec<u8>, RecordingError> {
+        metadata.validate()?;
         if self.samples.is_empty() {
             return Err(RecordingError::InvalidSampleCount);
         }
@@ -649,13 +654,14 @@ impl FlacBufferEncoder {
                 planar[channel].push(*sample);
             }
         }
-        flac_io::encode(&flac_io::FlacAudio {
+        let encoded = flac_io::encode(&flac_io::FlacAudio {
             sample_rate: self.sample_rate,
             channels: self.channels as u8,
             bits_per_sample: self.bits_per_sample,
             samples: planar,
         })
-        .map_err(|error| RecordingError::FlacEncode(error.to_string()))
+        .map_err(|error| RecordingError::FlacEncode(error.to_string()))?;
+        add_flac_comments(encoded, metadata)
     }
 }
 
@@ -1042,6 +1048,70 @@ impl<W: Write + Seek> WavWriter<W> {
     }
 }
 
+fn add_flac_comments(
+    mut encoded: Vec<u8>,
+    metadata: &WavMetadata,
+) -> Result<Vec<u8>, RecordingError> {
+    let values = [
+        ("TITLE", metadata.title.as_deref()),
+        ("ARTIST", metadata.artist.as_deref()),
+        ("COMMENT", metadata.comment.as_deref()),
+    ];
+    if values.iter().all(|(_, value)| value.is_none()) {
+        return Ok(encoded);
+    }
+    if encoded.len() < 8 || &encoded[..4] != b"fLaC" {
+        return Err(RecordingError::FlacEncode(
+            "encoder returned an invalid FLAC signature".into(),
+        ));
+    }
+    let header = encoded[4];
+    let block_type = header & 0x7f;
+    let block_length =
+        (usize::from(encoded[5]) << 16) | (usize::from(encoded[6]) << 8) | usize::from(encoded[7]);
+    if header & 0x80 == 0 || block_type != 0 || block_length != 34 {
+        return Err(RecordingError::FlacEncode(
+            "encoder returned an unexpected FLAC metadata layout".into(),
+        ));
+    }
+    let stream_info_end = 8usize
+        .checked_add(block_length)
+        .ok_or(RecordingError::TooManyFrames)?;
+    if encoded.len() < stream_info_end {
+        return Err(RecordingError::FlacEncode(
+            "encoder returned truncated FLAC streaminfo".into(),
+        ));
+    }
+    let mut payload = Vec::new();
+    let vendor = b"audiorouter";
+    payload.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
+    payload.extend_from_slice(vendor);
+    let comments = values
+        .into_iter()
+        .filter_map(|(name, value)| value.map(|value| format!("{name}={value}")))
+        .collect::<Vec<_>>();
+    payload.extend_from_slice(&(comments.len() as u32).to_le_bytes());
+    for comment in comments {
+        let bytes = comment.as_bytes();
+        let length = u32::try_from(bytes.len()).map_err(|_| RecordingError::TooManyFrames)?;
+        payload.extend_from_slice(&length.to_le_bytes());
+        payload.extend_from_slice(bytes);
+    }
+    let length = u32::try_from(payload.len()).map_err(|_| RecordingError::TooManyFrames)?;
+    if length > 0x00ff_ffff {
+        return Err(RecordingError::TooManyFrames);
+    }
+    encoded[4] &= 0x7f;
+    let mut block = Vec::with_capacity(4 + payload.len());
+    block.push(0x84);
+    block.push((length >> 16) as u8);
+    block.push((length >> 8) as u8);
+    block.push(length as u8);
+    block.extend_from_slice(&payload);
+    encoded.splice(stream_info_end..stream_info_end, block);
+    Ok(encoded)
+}
+
 fn encode_info_chunk(metadata: &WavMetadata) -> Result<Vec<u8>, RecordingError> {
     let fields = [
         (*b"INAM", metadata.title.as_deref()),
@@ -1235,10 +1305,14 @@ impl BufferedFlacRecorder {
     }
 
     pub fn finish(self) -> Result<Vec<u8>, RecordingError> {
+        self.finish_with_metadata(&WavMetadata::default())
+    }
+
+    pub fn finish_with_metadata(self, metadata: &WavMetadata) -> Result<Vec<u8>, RecordingError> {
         if self.controller.state() != RecorderState::Completed {
             return Err(RecordingError::NotRecording);
         }
-        self.encoder.finish()
+        self.encoder.finish_with_metadata(metadata)
     }
 }
 
@@ -1630,6 +1704,22 @@ mod tests {
         assert_eq!(info.channels, 1);
         assert_eq!(info.bits_per_sample, 16);
         assert_eq!(info.total_samples, 3);
+    }
+
+    #[test]
+    fn flac_metadata_is_written_as_vorbis_comments() {
+        let mut encoder = FlacBufferEncoder::new(1, 44_100, 16).unwrap();
+        encoder.write_interleaved(&[0.0, 0.25]).unwrap();
+        let metadata = WavMetadata {
+            title: Some("Take 2".into()),
+            artist: None,
+            comment: Some("clean".into()),
+        };
+        let bytes = encoder.finish_with_metadata(&metadata).unwrap();
+        assert!(bytes.windows(11).any(|window| window == b"audiorouter"));
+        assert!(bytes.windows(12).any(|window| window == b"TITLE=Take 2"));
+        assert!(bytes.windows(13).any(|window| window == b"COMMENT=clean"));
+        assert_eq!(flac_io::info(&bytes).unwrap().total_samples, 2);
     }
 
     #[test]
