@@ -278,3 +278,8 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Run: `capture 0 200` returned successful activation, mix-format retrieval, initialization, capture service lookup, `Start`, ten packet reads totaling 4,800 frames, `Stop`, and `Reset`; process exit was zero.
 - This is endpoint capture data-flow evidence only. Process-tree capture data, render/loopback data, latency, two-device synchronization, and driver lifecycle/signing remain open. No defaults, volumes, mutes, drivers, or persistent settings were changed, so no configuration restoration was required.
 - Added an opt-in silent render data-path implementation that submits `AUDCLNT_BUFFERFLAGS_SILENT` buffers and cleans up deterministically. The newly rebuilt unsigned executable was blocked at runtime by Windows Application Control; no security-policy bypass was attempted. Render runtime evidence remains open.
+
+### 2026-09-05 — Shared TypeScript contracts
+
+- Added the pinned `contracts` package with strict TypeScript types for JSON-RPC requests/responses, sessions, nodes, edges, ports, permissions, side effects, discovery, and the currently implemented method set.
+- Added a package lock and local `typescript@5.9.2`; `npm --prefix contracts run typecheck` passed. The package is transport-only and has no native/audio permissions.
