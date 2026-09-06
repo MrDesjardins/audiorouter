@@ -330,3 +330,9 @@ The control regression now verifies that preview mode leaves a generated
 recording file in place and that a confirmed request for an already-missing
 file returns a non-destructive `missing` result. Control coverage is 49 tests;
 the full affected-crate validation and strict Clippy remain green.
+
+WAV library registration now reads RIFF `LIST/INFO` title, artist, and comment
+tags without loading the audio data chunk. Malformed or oversized tag values
+are ignored while the valid recording remains indexable. The regression proves
+metadata survives writer finalization and library registration; recording
+runtime coverage is 21 tests with strict Clippy.

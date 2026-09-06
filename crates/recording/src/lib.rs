@@ -704,6 +704,68 @@ impl RecordingMetadata {
     }
 }
 
+/// Reads only RIFF INFO metadata from a WAV file. Audio data chunks are
+/// skipped without being loaded, and malformed/oversized tag values are
+/// ignored so a valid recording remains indexable.
+pub fn read_wav_metadata(path: impl AsRef<Path>) -> Result<RecordingMetadata, RecordingError> {
+    let mut file = std::fs::File::open(path)?;
+    let mut header = [0u8; 12];
+    file.read_exact(&mut header)?;
+    if &header[..4] != b"RIFF" || &header[8..] != b"WAVE" {
+        return Err(RecordingError::InvalidWav);
+    }
+    let mut metadata = RecordingMetadata::default();
+    loop {
+        let mut chunk_header = [0u8; 8];
+        match file.read_exact(&mut chunk_header) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(error) => return Err(error.into()),
+        }
+        let length = u64::from(u32::from_le_bytes(chunk_header[4..].try_into().unwrap()));
+        if &chunk_header[..4] == b"LIST" && length <= 64 * 1024 {
+            let mut payload = vec![0u8; length as usize];
+            file.read_exact(&mut payload)?;
+            parse_info_metadata(&payload, &mut metadata);
+        } else {
+            file.seek(SeekFrom::Current(
+                i64::try_from(length).map_err(|_| RecordingError::TooManyFrames)?
+                    + i64::try_from(length % 2).unwrap(),
+            ))?;
+        }
+    }
+    Ok(metadata)
+}
+
+fn parse_info_metadata(payload: &[u8], metadata: &mut RecordingMetadata) {
+    if payload.len() < 4 || &payload[..4] != b"INFO" {
+        return;
+    }
+    let mut offset = 4;
+    while offset + 8 <= payload.len() {
+        let id = &payload[offset..offset + 4];
+        let length =
+            u32::from_le_bytes(payload[offset + 4..offset + 8].try_into().unwrap()) as usize;
+        offset += 8;
+        if length > payload.len().saturating_sub(offset) {
+            return;
+        }
+        let value = payload[offset..offset + length]
+            .split(|byte| *byte == 0)
+            .next()
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .filter(|value| value.chars().count() <= 256 && !value.chars().any(|c| c.is_control()))
+            .map(str::to_owned);
+        match (id, value) {
+            (b"INAM", Some(value)) => metadata.title = Some(value),
+            (b"IART", Some(value)) => metadata.artist = Some(value),
+            (b"ICMT", Some(value)) => metadata.comment = Some(value),
+            _ => {}
+        }
+        offset += length + length % 2;
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RecordingEntry {
     pub id: u64,
@@ -745,7 +807,7 @@ impl RecordingLibrary {
             RecordingError::Io(error) => RecordingLibraryError::Io(error.kind()),
             _ => RecordingLibraryError::InvalidPath,
         })?;
-        let metadata = RecordingMetadata::default();
+        let metadata = read_wav_metadata(&path).unwrap_or_default();
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
         self.entries.push(RecordingEntry {
@@ -1864,7 +1926,13 @@ mod tests {
         let (path, file) = policy.create_file("session", "voice", 0, "wav").unwrap();
         let mut writer = WavWriter::new(file, WavFormat::Pcm16, 1, 48_000, false).unwrap();
         writer.write_interleaved(&[0.25, -0.25]).unwrap();
-        writer.finish().unwrap();
+        writer
+            .finish_with_metadata(&WavMetadata {
+                title: Some("Tagged take".into()),
+                artist: Some("AudioRouter".into()),
+                comment: Some("from RIFF INFO".into()),
+            })
+            .unwrap();
 
         let mut library = RecordingLibrary::new(&policy);
         let id = library.register("session", "voice", &path).unwrap();
@@ -1875,6 +1943,14 @@ mod tests {
             library.list(Some("session"))[0].status,
             RecordingFileStatus::Present(_)
         ));
+        assert_eq!(
+            library.list(Some("session"))[0].metadata,
+            RecordingMetadata {
+                title: Some("Tagged take".into()),
+                artist: Some("AudioRouter".into()),
+                comment: Some("from RIFF INFO".into()),
+            }
+        );
         assert_eq!(
             library.list(Some("session"))[1].status,
             RecordingFileStatus::Missing
