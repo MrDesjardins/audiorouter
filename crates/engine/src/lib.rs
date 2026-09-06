@@ -1316,8 +1316,24 @@ pub fn compile_session(
             continue;
         }
         match node.kind {
-            NodeKind::Gain => stages.push(ProcessingStage::Gain { linear: 1.0 }),
-            NodeKind::Mute => stages.push(ProcessingStage::Mute { muted: true }),
+            NodeKind::Gain => {
+                let gain_db = node
+                    .parameters
+                    .get("gainDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(0.0) as f32;
+                stages.push(ProcessingStage::Gain {
+                    linear: 10.0_f32.powf(gain_db / 20.0),
+                });
+            }
+            NodeKind::Mute => {
+                let muted = node
+                    .parameters
+                    .get("muted")
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(true);
+                stages.push(ProcessingStage::Mute { muted });
+            }
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -1822,6 +1838,7 @@ mod tests {
             name: id.into(),
             enabled: true,
             bypass: false,
+            parameters: Default::default(),
             ports,
         };
         let session = Session {
@@ -2284,6 +2301,7 @@ mod tests {
                 name: "Mute".into(),
                 enabled: true,
                 bypass: false,
+                parameters: Default::default(),
                 ports: vec![],
             }],
             edges: vec![],
@@ -2312,6 +2330,7 @@ mod tests {
                     name: "Source".into(),
                     enabled: true,
                     bypass: false,
+                    parameters: Default::default(),
                     ports: vec![Port {
                         name: "main".into(),
                         direction: PortDirection::Output,
@@ -2324,6 +2343,7 @@ mod tests {
                     name: "Sink".into(),
                     enabled: true,
                     bypass: false,
+                    parameters: Default::default(),
                     ports: vec![Port {
                         name: "main".into(),
                         direction: PortDirection::Input,
@@ -2357,6 +2377,7 @@ mod tests {
             name: "source".into(),
             enabled: true,
             bypass: false,
+            parameters: Default::default(),
             ports: vec![Port {
                 name: "main".into(),
                 direction: PortDirection::Output,
@@ -2369,6 +2390,7 @@ mod tests {
             name: "gain".into(),
             enabled: true,
             bypass: true,
+            parameters: Default::default(),
             ports: vec![
                 Port {
                     name: "in".into(),
@@ -2388,6 +2410,7 @@ mod tests {
             name: "sink".into(),
             enabled: true,
             bypass: false,
+            parameters: Default::default(),
             ports: vec![Port {
                 name: "main".into(),
                 direction: PortDirection::Input,
@@ -2427,6 +2450,17 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.25, -0.5]);
 
+        let mut configured = session.clone();
+        configured.nodes[1].bypass = false;
+        configured.nodes[1]
+            .parameters
+            .insert("gainDb".into(), serde_json::json!(-6.0));
+        let graph = compile_session(&configured, RuntimeGeneration::new(12)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        graph.process(&mut block);
+        assert!((block.channel(0).unwrap()[0] - 0.5011872).abs() < 0.00001);
+
         let mut disabled_source = session.clone();
         disabled_source.nodes[0].enabled = false;
         let graph = compile_session(&disabled_source, RuntimeGeneration::new(10)).unwrap();
@@ -2453,6 +2487,7 @@ mod tests {
             name: id.into(),
             enabled: true,
             bypass: false,
+            parameters: Default::default(),
             ports: vec![Port {
                 name: "main".into(),
                 direction: PortDirection::Input,
@@ -2471,6 +2506,7 @@ mod tests {
                     name: "Source".into(),
                     enabled: true,
                     bypass: false,
+                    parameters: Default::default(),
                     ports: vec![Port {
                         name: "main".into(),
                         direction: PortDirection::Output,

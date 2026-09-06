@@ -349,6 +349,8 @@ pub struct Node {
     pub name: String,
     pub enabled: bool,
     pub bypass: bool,
+    #[serde(default)]
+    pub parameters: serde_json::Map<String, serde_json::Value>,
     pub ports: Vec<Port>,
 }
 
@@ -405,6 +407,9 @@ pub enum ValidationError {
         path: String,
         channels: u8,
     },
+    InvalidParameter {
+        path: String,
+    },
     InvalidMatrix {
         path: String,
     },
@@ -460,6 +465,20 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 errors.push(ValidationError::InvalidChannels {
                     path: format!("{path}.ports.{}", port.name),
                     channels: port.channels,
+                });
+            }
+        }
+        for (name, value) in &node.parameters {
+            let valid = match (node.kind, name.as_str()) {
+                (NodeKind::Gain, "gainDb") => value
+                    .as_f64()
+                    .is_some_and(|gain| gain.is_finite() && (-60.0..=12.0).contains(&gain)),
+                (NodeKind::Mute, "muted") => value.is_boolean(),
+                _ => false,
+            };
+            if !valid {
+                errors.push(ValidationError::InvalidParameter {
+                    path: format!("{path}.parameters.{name}"),
                 });
             }
         }
@@ -1231,6 +1250,7 @@ mod tests {
             name: id.into(),
             enabled: true,
             bypass: false,
+            parameters: Default::default(),
             ports: vec![Port {
                 name: "main".into(),
                 direction,
@@ -1270,6 +1290,26 @@ mod tests {
             vec![edge("e", "in", "out")]
         ))
         .is_ok());
+    }
+
+    #[test]
+    fn validates_processor_parameters_and_rejects_unknown_values() {
+        let mut gain = node("gain", NodeKind::Gain, PortDirection::Input);
+        gain.parameters
+            .insert("gainDb".into(), serde_json::json!(13.0));
+        let errors = validate_session(&session(vec![gain], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::InvalidParameter { path } if path == "nodes[0].parameters.gainDb"
+        )));
+
+        let mut mute = node("mute", NodeKind::Mute, PortDirection::Input);
+        mute.parameters
+            .insert("gainDb".into(), serde_json::json!(0.0));
+        assert!(validate_session(&session(vec![mute], vec![]))
+            .unwrap_err()
+            .iter()
+            .any(|error| matches!(error, ValidationError::InvalidParameter { .. })));
     }
 
     #[test]

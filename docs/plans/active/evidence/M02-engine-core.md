@@ -56,6 +56,15 @@ Prepared mixer construction now applies the domain contract's finite coefficient
 
 `RuntimeProcessor` now observes active processed blocks through `BlockMeter`, exposing peak and clipping health without changing the no-graph silence behavior. The integration test verifies the meter sees processed output; per-node API publication remains open.
 
+## 2026-09-06 — Graph processor parameter integration
+
+The domain `Node` contract now carries a backward-compatible parameter map.
+Validation accepts only bounded `gainDb` for Gain and boolean `muted` for Mute,
+rejecting unknown or invalid processor parameters. `compile_session` consumes
+those values when preparing runtime stages, defaulting Gain to 0 dB and Mute to
+muted when omitted. Domain and engine tests cover validation and a compiled
+−6 dB Gain path; this remains portable preparation, not native scheduling.
+
 The original nine-test baseline is retained in the history above; the current engine suite contains 21 deterministic tests. The portable crate now covers preallocated blocks, explicit mapping/accumulation, bounded queues, rolling and instantaneous metering, resampling/drift primitives, de-click ramps, privacy gating, domain preparation, immutable publication, and callback instrumentation. It still does not claim end-to-end node buffer scheduling, physical endpoint routing, latency evidence, or driver behavior.
 
 `RuntimePublication::clear` and `RuntimeProcessor::deactivate` now provide explicit stop behavior: future readers receive no active graph and are silenced, while existing retained snapshots remain safe until released. The lifecycle test passes without device access.

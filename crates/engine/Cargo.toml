@@ -10,3 +10,4 @@ arc-swap = "1.7.1"
 audiorouter-domain = { path = "../domain" }
 audiorouter-dsp = { path = "../dsp" }
 crossbeam-queue = "0.3.12"
+serde_json = { workspace = true }
