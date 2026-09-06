@@ -84,3 +84,19 @@ The opt-in `capture 0 200` command then exercised the native capture data path o
 The probe source also contains an opt-in silent `render [endpoint-index] [milliseconds]` path that compiles against the same toolchain and submits only `AUDCLNT_BUFFERFLAGS_SILENT` buffers before stopping/resetting. Runtime execution of the newly built unsigned binary was blocked by the host's Windows Application Control policy, so render data-path success is not claimed. No security policy or signing setting was changed to bypass this block.
 
 No endpoint was started, no buffer was read, no default device/volume/mute/format setting was changed, and no driver was installed or loaded.
+
+## 2026-09-06 — Installed toolchain native data-path validation
+
+Using the installed Visual Studio Community 2026, Windows SDK 10.0.28000.0,
+and WDK toolchain, the checked-in build script compiled the native probe.
+Endpoint 0 completed shared capture activation, initialization, start, ten
+packet reads totaling 4,800 frames over 200 ms, stop, and reset. Process
+loopback then completed asynchronous activation, 44.1 kHz shared
+initialization, start, 50 packet reads totaling 22,050 frames over 500 ms,
+stop, and reset; no packets were marked silent and 15,217 nonzero payload
+bytes were observed. These are successful native data-path checks, not
+physical routing or latency evidence.
+
+The temporary executable and object file were removed after testing. The
+probe did not change defaults, volume, mute, privacy policy, driver state, or
+other persistent machine audio configuration.
