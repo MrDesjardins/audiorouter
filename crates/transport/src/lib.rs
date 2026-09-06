@@ -80,6 +80,19 @@ mod windows_pipe {
         Ok(Handle(handle))
     }
 
+    #[must_use = "the singleton handle must stay alive while serving"]
+    pub struct ServerSingleton(Handle);
+
+    impl Drop for ServerSingleton {
+        fn drop(&mut self) {
+            let _ = &self.0;
+        }
+    }
+
+    pub fn acquire_server_singleton(pipe_name: &str) -> Result<ServerSingleton, TransportError> {
+        Ok(ServerSingleton(acquire_singleton(pipe_name)?))
+    }
+
     fn check_name(name: &str) -> Result<(), TransportError> {
         if !name.starts_with(r"\\.\pipe\") || name.len() <= 9 || name.contains('\0') {
             Err(TransportError::InvalidPipeName)
@@ -571,9 +584,9 @@ mod windows_pipe {
 
 #[cfg(windows)]
 pub use windows_pipe::{
-    client_is_same_user, client_user_sid, current_user_sid, echo_handler, round_trip,
-    round_trip_many, round_trip_session, send_oneway, serve_connections, serve_once,
-    serve_once_with_client, serve_once_with_client_optional, serve_session,
+    acquire_server_singleton, client_is_same_user, client_user_sid, current_user_sid, echo_handler,
+    round_trip, round_trip_many, round_trip_session, send_oneway, serve_connections, serve_once,
+    serve_once_with_client, serve_once_with_client_optional, serve_session, ServerSingleton,
 };
 
 #[cfg(windows)]
@@ -583,6 +596,7 @@ pub fn serve_control_connections(
     mut plane: audiorouter_control::ControlPlane,
     grant: audiorouter_control::ClientGrant,
 ) -> Result<(), TransportError> {
+    let _singleton = acquire_server_singleton(name)?;
     for _ in 0..connections {
         serve_once_with_client_optional(name, |client_pid, frame| {
             let client_id = client_user_sid(client_pid)?;
@@ -616,6 +630,7 @@ pub fn serve_control_sessions(
     mut plane: audiorouter_control::ControlPlane,
     grant: audiorouter_control::ClientGrant,
 ) -> Result<(), TransportError> {
+    let _singleton = acquire_server_singleton(name)?;
     for _ in 0..sessions {
         serve_session(name, frames_per_session, |client_pid, frame| {
             let client_id = client_user_sid(client_pid)?;

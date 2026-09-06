@@ -68,3 +68,12 @@ process-loopback harness now passes activation and initialization. Physical
 capture remains blocked at native `IAudioClient::Initialize` with
 `E_INVALIDARG` on all 13 tested capture endpoints; driver and signing gates
 remain open.
+
+## 2026-09-06 — Control-server singleton ownership
+
+The control-plane named-pipe entry points now retain a per-user singleton mutex
+for their entire bounded connection or persistent-session serving interval. This
+aligns their ownership behavior with the generic transport server and prevents
+two control backends from claiming the same user pipe concurrently. The native
+transport suite passes 14 tests with strict Clippy. Production daemon restart
+and unbounded subscription lifetime remain separate lifecycle work.
