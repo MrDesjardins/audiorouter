@@ -113,9 +113,26 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
     } else {
         ControlPlane::default().dispatch(request)
     };
-    response
+    let diagnostics = response
         .result
-        .ok_or_else(|| CliError::InvalidArguments("diagnostics unavailable".into()))
+        .ok_or_else(|| CliError::InvalidArguments("diagnostics unavailable".into()))?;
+    let Some(output) = optional_option_value(args, "--output")? else {
+        return Ok(diagnostics);
+    };
+    let output = std::path::Path::new(output);
+    if !output.is_absolute() {
+        return Err(CliError::InvalidArguments(
+            "--output path must be absolute".into(),
+        ));
+    }
+    let contents = serde_json::to_vec_pretty(&diagnostics)
+        .map_err(|error| CliError::InvalidArguments(error.to_string()))?;
+    write_new_file(output, &contents)?;
+    Ok(json!({
+        "output": output,
+        "written": true,
+        "redacted": diagnostics["redacted"]
+    }))
 }
 
 fn plugins_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1125,6 +1142,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 
 fn help_value() -> Value {
     let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list [--limit N] [--cursor ID]", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N] [--cursor REVISION]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> [--idempotency-key <key>] [--dry-run] --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    value["commands"][2] = json!("diagnostics [--database <path>] [--output <absolute-path>]");
     value["commands"]
         .as_array_mut()
         .unwrap()
@@ -2048,6 +2066,26 @@ mod tests {
             serde_json::from_str(&run(["diagnostics", "--json"]).unwrap()).unwrap();
         assert_eq!(diagnostics["redacted"], true);
         assert_eq!(diagnostics["audio"]["state"], "unavailable");
+    }
+
+    #[test]
+    fn diagnostics_export_is_redacted_and_exclusive() {
+        let output = std::env::temp_dir().join(format!(
+            "audiorouter-cli-diagnostics-{}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&output);
+        let output_arg = output.to_string_lossy().into_owned();
+        let response: Value =
+            serde_json::from_str(&run(["diagnostics", "--output", &output_arg, "--json"]).unwrap())
+                .unwrap();
+        assert_eq!(response["written"], true);
+        assert_eq!(response["redacted"], true);
+        let saved: Value =
+            serde_json::from_str(&std::fs::read_to_string(&output).unwrap()).unwrap();
+        assert_eq!(saved["redacted"], true);
+        assert!(run(["diagnostics", "--output", &output_arg]).is_err());
+        let _ = std::fs::remove_file(output);
     }
 
     #[test]
