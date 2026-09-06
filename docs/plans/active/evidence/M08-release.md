@@ -96,3 +96,8 @@ all unit, integration, worker-process, MCP, and doc tests. Workspace
 format checking, and `git diff --check` also passed. No audio endpoint,
 default device, volume, mute, privacy, driver, or other machine configuration
 was changed by this validation.
+
+The same workspace validation was rerun at the later current tip after the
+control-pipe singleton and UI event-cursor reliability changes. The complete
+locked test suite and strict workspace Clippy, format, and diff checks remained
+green; no audio endpoint or machine configuration was touched.
