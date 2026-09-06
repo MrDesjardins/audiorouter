@@ -50,6 +50,8 @@ where
         "api" => list_subcommand(&command_args, "api")?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
+        "export-bundle" => export_bundle(&command_args)?,
+        "import-bundle" => import_bundle(&command_args)?,
         other => return Err(CliError::UnknownCommand(other.into())),
     };
     match mode {
@@ -107,7 +109,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -160,6 +162,59 @@ fn import_session(args: &[&str]) -> Result<Value, CliError> {
     let storage = database(args)?;
     let session = storage
         .import_session(&document)
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?;
+    serde_json::to_value(session).map_err(|error| CliError::InvalidArguments(error.to_string()))
+}
+
+fn absolute_option(args: &[&str], option: &str) -> Result<std::path::PathBuf, CliError> {
+    let value = option_value(args, option)?;
+    let path = std::path::PathBuf::from(value);
+    if !path.is_absolute() {
+        return Err(CliError::InvalidArguments(format!(
+            "{option} path must be absolute"
+        )));
+    }
+    Ok(path)
+}
+
+fn export_bundle(args: &[&str]) -> Result<Value, CliError> {
+    let id = args
+        .get(1)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| {
+            CliError::InvalidArguments(
+                "usage: export-bundle <session-id> --database <path> --output <path>".into(),
+            )
+        })?;
+    let output = absolute_option(args, "--output")?;
+    let storage = database(args)?;
+    storage
+        .export_bundle(&EntityId::new(id), &output)
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?;
+    Ok(json!({ "sessionId": id, "output": output }))
+}
+
+fn import_bundle(args: &[&str]) -> Result<Value, CliError> {
+    let input = args
+        .get(1)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| {
+            CliError::InvalidArguments(
+                "usage: import-bundle <bundle-path> --database <path> --staging <directory>".into(),
+            )
+        })?;
+    let input = std::path::Path::new(input);
+    if !input.is_absolute() {
+        return Err(CliError::InvalidArguments(
+            "bundle path must be absolute".into(),
+        ));
+    }
+    let staging = absolute_option(args, "--staging")?;
+    let storage = database(args)?;
+    let session = storage
+        .import_bundle(input, &staging)
         .map_err(|error| CliError::Storage(format!("{error:?}")))?;
     serde_json::to_value(session).map_err(|error| CliError::InvalidArguments(error.to_string()))
 }
@@ -248,7 +303,41 @@ mod tests {
         .unwrap();
         let exported: Value = serde_json::from_str(&exported).unwrap();
         assert_eq!(exported["id"], "session-fixture");
+        let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
+        let staging = std::env::temp_dir().join(format!("{suffix}-staging"));
+        let imported_database = std::env::temp_dir().join(format!("{suffix}-imported.sqlite"));
+        let _ = std::fs::remove_file(&bundle);
+        let _ = std::fs::remove_file(&imported_database);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir(&staging).unwrap();
+        let bundle_arg = bundle.to_string_lossy().into_owned();
+        let staging_arg = staging.to_string_lossy().into_owned();
+        let imported_database_arg = imported_database.to_string_lossy().into_owned();
+        run([
+            "export-bundle",
+            "session-fixture",
+            "--database",
+            &database_arg,
+            "--output",
+            &bundle_arg,
+            "--json",
+        ])
+        .unwrap();
+        let imported_bundle = run([
+            "import-bundle",
+            &bundle_arg,
+            "--database",
+            &imported_database_arg,
+            "--staging",
+            &staging_arg,
+            "--json",
+        ])
+        .unwrap();
+        assert!(imported_bundle.contains("session-fixture"));
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(document);
+        let _ = std::fs::remove_file(bundle);
+        let _ = std::fs::remove_file(imported_database);
+        let _ = std::fs::remove_dir_all(staging);
     }
 }

@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
+use std::io::Write;
 use zip::ZipArchive;
 
 #[derive(Debug)]
@@ -54,6 +55,18 @@ struct BundleManifest {
     graph_path: String,
     #[serde(default)]
     assets: Vec<BundleAsset>,
+}
+
+#[derive(serde::Serialize)]
+struct ExportBundleManifest<'a> {
+    format: &'a str,
+    #[serde(rename = "schemaVersion")]
+    schema_version: u32,
+    #[serde(rename = "createdWith")]
+    created_with: &'a str,
+    #[serde(rename = "graphPath")]
+    graph_path: &'a str,
+    assets: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -329,6 +342,63 @@ impl Storage {
         self.load_session(id)?
             .map(|session| serde_json::to_string(&session).map_err(StorageError::Json))
             .transpose()
+    }
+
+    /// Export a stopped session document as a v1 `.audiorouter` ZIP bundle.
+    /// The destination must be an absolute, new regular file; this method
+    /// never overwrites a file or follows a destination symbolic link.
+    pub fn export_bundle(
+        &self,
+        id: &EntityId,
+        destination: impl AsRef<std::path::Path>,
+    ) -> Result<(), StorageError> {
+        let destination = destination.as_ref();
+        if !destination.is_absolute() {
+            return Err(StorageError::InvalidBackupPath(
+                "bundle destination must be absolute".into(),
+            ));
+        }
+        let parent = destination.parent().ok_or_else(|| {
+            StorageError::InvalidBackupPath("bundle destination must have a parent".into())
+        })?;
+        if !parent.is_dir() || destination.exists() {
+            return Err(StorageError::InvalidBackupPath(
+                "bundle destination parent must exist and destination must be new".into(),
+            ));
+        }
+        let document = self
+            .export_session(id)?
+            .ok_or_else(|| StorageError::InvalidBundle("session not found".into()))?;
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(destination)?;
+        let mut archive = zip::ZipWriter::new(file);
+        let manifest = ExportBundleManifest {
+            format: "audiorouter.session",
+            schema_version: 1,
+            created_with: "0.1.0",
+            graph_path: "session.json",
+            assets: Vec::new(),
+        };
+        let result = (|| -> Result<(), StorageError> {
+            archive
+                .start_file("manifest.json", zip::write::SimpleFileOptions::default())
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+            archive.write_all(&serde_json::to_vec(&manifest)?)?;
+            archive
+                .start_file("session.json", zip::write::SimpleFileOptions::default())
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+            archive.write_all(document.as_bytes())?;
+            archive
+                .finish()
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(destination);
+        }
+        result
     }
 
     /// Validate and persist an imported session document. Validation happens
@@ -824,6 +894,31 @@ mod tests {
             Some(session())
         );
         drop(storage);
+        let _ = std::fs::remove_file(bundle);
+        let _ = std::fs::remove_dir_all(staging);
+    }
+
+    #[test]
+    fn bundle_export_round_trips_and_never_overwrites() {
+        let suffix = format!("audiorouter-bundle-export-{}", std::process::id());
+        let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
+        let staging = std::env::temp_dir().join(format!("{suffix}-staging"));
+        let _ = std::fs::remove_file(&bundle);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir(&staging).unwrap();
+        let original = session();
+        let storage = Storage::open_memory().unwrap();
+        storage.save_session(&original).unwrap();
+        storage.export_bundle(&original.id, &bundle).unwrap();
+        assert!(matches!(
+            storage.export_bundle(&original.id, &bundle),
+            Err(StorageError::InvalidBackupPath(_))
+        ));
+        let imported_storage = Storage::open_memory().unwrap();
+        assert_eq!(
+            imported_storage.import_bundle(&bundle, &staging).unwrap(),
+            original
+        );
         let _ = std::fs::remove_file(bundle);
         let _ = std::fs::remove_dir_all(staging);
     }

@@ -19,6 +19,27 @@ try {
     $physicalInput = $nodes | Where-Object { $_.type -eq "physical-input@1" }
     if ($null -eq $physicalInput -or $physicalInput.availability.status -ne "unavailable") { throw "Physical input availability boundary missing" }
 
+    $suffix = "audiorouter-acceptance-$PID"
+    $database = Join-Path ([IO.Path]::GetTempPath()) "$suffix.sqlite"
+    $document = Join-Path ([IO.Path]::GetTempPath()) "$suffix.json"
+    $bundle = Join-Path ([IO.Path]::GetTempPath()) "$suffix.audiorouter"
+    $importedDatabase = Join-Path ([IO.Path]::GetTempPath()) "$suffix-imported.sqlite"
+    $staging = Join-Path ([IO.Path]::GetTempPath()) "$suffix-staging"
+    try {
+        Remove-Item -LiteralPath $database,$document,$bundle,$importedDatabase -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item -LiteralPath (Join-Path $repoRoot "tests/fixtures/valid-session.json") -Destination $document
+        cargo run --quiet -p audiorouter-cli -- import $document --database $database | Out-Null
+        cargo run --quiet -p audiorouter-cli -- export-bundle session-fixture --database $database --output $bundle | Out-Null
+        New-Item -ItemType Directory -Path $staging | Out-Null
+        $imported = cargo run --quiet -p audiorouter-cli -- --json import-bundle $bundle --database $importedDatabase --staging $staging | ConvertFrom-Json
+        if ($imported.id -ne "session-fixture") { throw "Bundle round trip returned the wrong session" }
+    }
+    finally {
+        Remove-Item -LiteralPath $database,$document,$bundle,$importedDatabase -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
     Write-Output "M01 CLI acceptance passed"
 }
 finally {

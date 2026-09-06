@@ -10,7 +10,7 @@ This report covers the portable M01 foundation implemented while M00 Windows cap
 - `crates/control`: discovery metadata; session reads; graph plan/commit; storage-backed construction; fake session start/stop; JSON-RPC dispatch; batch handling; scoped grants; explicit role enrollment/revocation lookup; notification semantics.
 - `crates/protocol`: 4-byte little-endian framing, 4 MiB maximum frame, JSON-RPC request/response types, 32-request batch limit, malformed/version/method validation.
 - `crates/storage`: SQLite schema migration, transactional session JSON/history writes, validated bounded import/export, safe staged ZIP bundle import with optional asset size/SHA-256 verification, online SQLite backups, client enrollment/revocation records, and idempotent operation journal.
-- `crates/cli`: offline `help`, `status`, `schema`, `devices list`, `apps list`, `nodes types`, and `api methods` commands with human and `--json` output.
+- `crates/cli`: offline discovery commands plus validated persistent JSON and `.audiorouter` bundle import/export commands with human and `--json` output.
 - `contracts`: strict TypeScript JSON-RPC/domain contract package with pinned compiler and shared session/node/edge/discovery/response types.
 - `tests/fixtures/valid-session.json`: checked-in camelCase contract fixture.
 - `tests/acceptance/m01-cli.ps1`: offline CLI acceptance script.
@@ -27,7 +27,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m01-c
 npm --prefix contracts run typecheck
 ```
 
-On 2026-09-05, the workspace suite passed 4 CLI, 16 control, 12 domain, 5 protocol, 13 storage, and 13 transport tests. The standalone WASAPI probe checked successfully. The CLI acceptance script reported `M01 CLI acceptance passed`, and the strict TypeScript contract package passed `npm run typecheck`. The script-policy bypass was process-scoped; Windows execution policy was not changed.
+On 2026-09-05, the workspace suite passed 4 CLI, 16 control, 12 domain, 5 protocol, 14 storage, and 13 transport tests. The standalone WASAPI probe checked successfully. The CLI acceptance script now exercises a bundle round trip and reported `M01 CLI acceptance passed`; the strict TypeScript contract package passed `npm run typecheck`. The script-policy bypass was process-scoped; Windows execution policy was not changed.
 
 ## Requirement evidence
 

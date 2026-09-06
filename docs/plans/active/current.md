@@ -283,3 +283,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Added the pinned `contracts` package with strict TypeScript types for JSON-RPC requests/responses, sessions, nodes, edges, ports, permissions, side effects, discovery, and the currently implemented method set.
 - Added a package lock and local `typescript@5.9.2`; `npm --prefix contracts run typecheck` passed. The package is transport-only and has no native/audio permissions.
+
+### 2026-09-05 — CLI bundle round trip
+
+- Added safe `export-bundle <session-id> --database <path> --output <path>` and `import-bundle <bundle-path> --database <path> --staging <directory>` commands. Export refuses existing destinations; import delegates to bounded staged validation and session validation.
+- Extended `tests/acceptance/m01-cli.ps1` to import the checked-in fixture, export a bundle, import it into a separate database through an explicit staging directory, and verify the session identity. Temporary files are removed in a `finally` block.
+- Focused checks: CLI (4) and storage (14) tests passed. No audio or machine configuration was changed.
