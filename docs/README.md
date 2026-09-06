@@ -1,6 +1,6 @@
 # Documentation map
 
-Status: proposed implementation baseline, created 2026-09-05. Requirements describe intended behavior, not implemented capability. Numeric budgets are acceptance targets until measured. Product scope changes must update the corresponding requirement and milestone gate.
+Status: implementation baseline with partial portable foundations, updated 2026-09-06. Requirements describe intended behavior unless the active plan/evidence explicitly records implementation and verification. Numeric budgets remain acceptance targets until measured. Native audio, driver, signing, packaging, and hardware gates are not implied by portable tests.
 
 ## How to read the specification
 
@@ -35,4 +35,4 @@ The repository-level [AGENTS.md](../AGENTS.md) governs the entire development li
 
 ## Starting implementation
 
-Ask an implementation agent: “Implement M00 from `docs/milestones/M00-feasibility.md`. Follow `AGENTS.md`, update the active plan, and report measured Windows evidence separately from unverified assumptions.” Repeat for each next milestone only after reviewing the preceding gate. No application packages or toolchains are installed by this specification task.
+To continue implementation, read `AGENTS.md`, the relevant milestone, and the [active plan](plans/active/current.md). Report measured Windows evidence separately from portable or simulated evidence. Do not infer driver installation, signing, or machine audio changes from a successful compile or unit test.
