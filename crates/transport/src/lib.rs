@@ -32,10 +32,10 @@ mod windows_pipe {
     use windows::Win32::Foundation::{
         CloseHandle, LocalFree, GENERIC_READ, GENERIC_WRITE, HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
     };
-    use windows::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
-    use windows::Win32::Security::{
-        EqualSid, GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
+    use windows::Win32::Security::Authorization::{
+        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
     };
+    use windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, FlushFileBuffers, ReadFile, WriteFile, FILE_SHARE_NONE, OPEN_EXISTING,
         PIPE_ACCESS_DUPLEX,
@@ -64,7 +64,7 @@ mod windows_pipe {
         TransportError::Windows(error.to_string())
     }
 
-    fn user_sid(token: HANDLE) -> Result<windows::Win32::Security::PSID, TransportError> {
+    fn token_user_sid_string(token: HANDLE) -> Result<String, TransportError> {
         let mut required = 0;
         let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut required) };
         if required == 0 {
@@ -84,7 +84,37 @@ mod windows_pipe {
         }
         .map_err(win_error)?;
         let user = unsafe { &*(buffer.as_ptr().cast::<TOKEN_USER>()) };
-        Ok(user.User.Sid)
+        let mut string_sid = windows::core::PWSTR::null();
+        unsafe { ConvertSidToStringSidW(user.User.Sid, &mut string_sid) }.map_err(win_error)?;
+        if string_sid.is_null() {
+            return Err(TransportError::Windows(
+                "Windows returned a null SID string".into(),
+            ));
+        }
+        let text = unsafe {
+            let mut length = 0;
+            while *string_sid.0.add(length) != 0 {
+                length += 1;
+            }
+            String::from_utf16_lossy(std::slice::from_raw_parts(string_sid.0, length))
+        };
+        unsafe { LocalFree(Some(HLOCAL(string_sid.0.cast()))) };
+        Ok(text)
+    }
+
+    pub fn client_user_sid(client_process_id: u32) -> Result<String, TransportError> {
+        let process =
+            unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, client_process_id) }
+                .map_err(win_error)?;
+        let process = Handle(process);
+        let mut token = INVALID_HANDLE_VALUE;
+        unsafe { OpenProcessToken(process.0, TOKEN_QUERY, &mut token) }.map_err(win_error)?;
+        let token = Handle(token);
+        token_user_sid_string(token.0)
+    }
+
+    pub fn current_user_sid() -> Result<String, TransportError> {
+        client_user_sid(std::process::id())
     }
 
     struct SecurityDescriptor(windows::Win32::Security::PSECURITY_DESCRIPTOR);
@@ -131,9 +161,7 @@ mod windows_pipe {
             .map_err(win_error)?;
         let current_token = Handle(current_token);
 
-        let client_sid = user_sid(client_token.0)?;
-        let current_sid = user_sid(current_token.0)?;
-        Ok(unsafe { EqualSid(client_sid, current_sid) }.is_ok())
+        Ok(token_user_sid_string(client_token.0)? == token_user_sid_string(current_token.0)?)
     }
 
     struct Handle(HANDLE);
@@ -427,8 +455,9 @@ mod windows_pipe {
 
 #[cfg(windows)]
 pub use windows_pipe::{
-    client_is_same_user, echo_handler, round_trip, round_trip_many, send_oneway, serve_connections,
-    serve_once, serve_once_with_client, serve_once_with_client_optional,
+    client_is_same_user, client_user_sid, current_user_sid, echo_handler, round_trip,
+    round_trip_many, send_oneway, serve_connections, serve_once, serve_once_with_client,
+    serve_once_with_client_optional,
 };
 
 #[cfg(windows)]
@@ -473,6 +502,20 @@ pub fn serve_control_connections_as_role(
     )
 }
 
+#[cfg(windows)]
+pub fn serve_control_connections_for_current_user(
+    name: &str,
+    connections: usize,
+    plane: audiorouter_control::ControlPlane,
+) -> Result<(), TransportError> {
+    let sid = current_user_sid()?;
+    let grant = plane
+        .grant_for_client(&sid)
+        .map_err(|error| TransportError::Protocol(format!("enrollment lookup failed: {error:?}")))?
+        .ok_or_else(|| TransportError::Windows("current user is not enrolled".into()))?;
+    serve_control_connections(name, connections, plane, grant)
+}
+
 #[cfg(not(windows))]
 pub fn round_trip(_: &str, _: &[u8]) -> Result<Vec<u8>, TransportError> {
     Err(TransportError::UnsupportedPlatform)
@@ -506,6 +549,25 @@ pub fn round_trip_many(_: &str, _: &[u8], _: usize) -> Result<Vec<Vec<u8>>, Tran
 
 #[cfg(not(windows))]
 pub fn client_is_same_user(_: u32) -> Result<bool, TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn client_user_sid(_: u32) -> Result<String, TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn current_user_sid() -> Result<String, TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn serve_control_connections_for_current_user(
+    _: &str,
+    _: usize,
+    _: audiorouter_control::ControlPlane,
+) -> Result<(), TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -737,6 +799,30 @@ mod tests {
         });
         std::thread::sleep(std::time::Duration::from_millis(20));
         round_trip(&name, &request).unwrap();
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_binds_current_user_enrollment_to_authenticated_sid() {
+        let name = format!(r"\\.\pipe\audiorouter-enrolled-test-{}", std::process::id());
+        let sid = current_user_sid().unwrap();
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            let mut plane = ControlPlane::new("native-enrolled-test");
+            plane.enroll_client(sid, ClientRole::Observer).unwrap();
+            serve_control_connections_for_current_user(&server_name, 1, plane)
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let request = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 31,
+            "method": "system.describe"
+        }))
+        .unwrap();
+        let response = round_trip(&name, &request).unwrap();
+        let response = serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap();
+        assert_eq!(response["id"], 31);
         server.join().unwrap().unwrap();
     }
 

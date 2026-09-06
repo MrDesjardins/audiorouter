@@ -127,6 +127,11 @@ This establishes that Codex can continue documentation and portable implementati
 - Connected control-plane enrollment APIs to durable storage and grant lookup: unknown/revoked clients receive no grant, enrolled roles map to explicit scopes, and re-enrollment clears revocation. Native PID-to-enrollment identity binding remains a follow-up.
 - Checks: `cargo test --workspace` — all 51 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory or uniquely named temporary project databases.
 
+### 2026-09-05 — Native enrollment identity binding
+
+- Bound native pipe authorization to the authenticated Windows user SID: `current_user_sid` resolves the durable enrollment grant, and an un-enrolled same-user client is rejected before dispatch. Fixed a real SID-buffer lifetime bug discovered by the native test.
+- Checks: `cargo test --workspace` — all 52 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent machine configuration was touched.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.

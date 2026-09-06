@@ -53,6 +53,9 @@ administration; those sensitive scopes require separately constructed policy.
 The native server exposes `serve_control_connections_as_role`, which maps an
 authenticated connection to one of those explicit roles without reconstructing
 scope sets at the transport call site.
+`serve_control_connections_for_current_user` binds the current Windows user SID
+to the durable enrollment lookup before accepting requests; the native test
+verifies an enrolled same-user client can dispatch discovery.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.
