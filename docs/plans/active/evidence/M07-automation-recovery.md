@@ -595,3 +595,9 @@ The checked-in `tests/acceptance/m07-headless.ps1` now packages the headless
 gate: control/CLI/plugin-host tests, strict Clippy, the M01 CLI acceptance
 workflow, and diff validation. It covers shared API/adapter behavior without
 opening audio, installing a driver, or changing machine configuration.
+
+The documentation validator now also compares the readable API reference with
+the Rust `API_METHODS` table, rejecting missing, extra, or duplicate method
+rows. Documentation acceptance passes with 51 Markdown files and 150 local
+links; this is a documentation-integrity check and does not exercise audio or
+machine configuration.

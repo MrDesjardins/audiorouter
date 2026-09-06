@@ -47,6 +47,32 @@ const contents = new Map(files.map((file) => [file, fs.readFileSync(file, "utf8"
 const errors = [];
 let linkCount = 0;
 
+function methodNamesFromSource(source) {
+  return [...source.matchAll(/ApiMethodSpec\s*\{\s*name:\s*"([^"]+)"/g)].map((match) => match[1]);
+}
+
+function methodNamesFromReference(reference) {
+  const section = reference.match(/## Methods\r?\n([\s\S]*?)(?:\r?\n## |$)/)?.[1] ?? "";
+  return [...section.matchAll(/^\| `([^`]+)` \|/gm)].map((match) => match[1]);
+}
+
+const apiSourcePath = path.join(workspace, "crates", "domain", "src", "lib.rs");
+const apiReferencePath = path.join(workspace, "docs", "operations", "api-reference.md");
+if (fs.existsSync(apiSourcePath) && fs.existsSync(apiReferencePath)) {
+  const sourceMethods = methodNamesFromSource(fs.readFileSync(apiSourcePath, "utf8"));
+  const referenceMethods = methodNamesFromReference(fs.readFileSync(apiReferencePath, "utf8"));
+  const sourceSet = new Set(sourceMethods);
+  const referenceSet = new Set(referenceMethods);
+  for (const method of sourceSet) {
+    if (!referenceSet.has(method)) errors.push(`docs/operations/api-reference.md: missing API method ${method}`);
+  }
+  for (const method of referenceSet) {
+    if (!sourceSet.has(method)) errors.push(`docs/operations/api-reference.md: undocumented API method ${method}`);
+  }
+  if (sourceMethods.length !== sourceSet.size) errors.push("crates/domain/src/lib.rs: duplicate API method definitions");
+  if (referenceMethods.length !== referenceSet.size) errors.push("docs/operations/api-reference.md: duplicate API method rows");
+}
+
 for (const [file, content] of contents) {
   const fenceCount = (content.match(/^\s*(```|~~~)/gm) ?? []).length;
   if (fenceCount % 2 !== 0) errors.push(`${path.relative(workspace, file)}: unbalanced code fences`);
