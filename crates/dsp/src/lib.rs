@@ -596,6 +596,84 @@ pub struct LimiterParams {
     pub ceiling_db: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MeterSnapshot {
+    pub peak: [f32; 2],
+    pub rms: [f32; 2],
+    pub peak_db: [f32; 2],
+    pub rms_db: [f32; 2],
+    pub clipping: u64,
+}
+
+/// Per-channel block meter. Peak/RMS values are linear and dB values use a
+/// -120 dBFS floor for silence rather than representing negative infinity.
+#[derive(Clone, Copy, Debug)]
+pub struct SignalMeter {
+    channels: usize,
+    peak: [f32; 2],
+    sum_squares: [f64; 2],
+    samples: u64,
+    clipping: u64,
+}
+
+impl SignalMeter {
+    pub fn new(channels: usize) -> Result<Self, BiquadError> {
+        if channels == 0 || channels > 2 {
+            return Err(BiquadError::InvalidChannels);
+        }
+        Ok(Self {
+            channels,
+            peak: [0.0; 2],
+            sum_squares: [0.0; 2],
+            samples: 0,
+            clipping: 0,
+        })
+    }
+
+    pub fn reset(&mut self) {
+        self.peak = [0.0; 2];
+        self.sum_squares = [0.0; 2];
+        self.samples = 0;
+        self.clipping = 0;
+    }
+
+    pub fn process_interleaved(&mut self, samples: &[f32]) {
+        for frame in samples.chunks_exact(self.channels) {
+            for (channel, sample) in frame.iter().enumerate() {
+                let value = if sample.is_finite() { *sample } else { 0.0 };
+                let magnitude = value.abs();
+                self.peak[channel] = self.peak[channel].max(magnitude);
+                self.sum_squares[channel] += f64::from(value) * f64::from(value);
+                if magnitude >= 1.0 {
+                    self.clipping = self.clipping.saturating_add(1);
+                }
+            }
+            self.samples = self.samples.saturating_add(1);
+        }
+    }
+
+    pub fn snapshot(&self) -> MeterSnapshot {
+        let mut rms = [0.0; 2];
+        if self.samples != 0 {
+            let count = self.samples as f64;
+            for (channel, value) in rms.iter_mut().enumerate().take(self.channels) {
+                *value = (self.sum_squares[channel] / count).sqrt() as f32;
+            }
+        }
+        MeterSnapshot {
+            peak: self.peak,
+            rms,
+            peak_db: [db_floor(self.peak[0]), db_floor(self.peak[1])],
+            rms_db: [db_floor(rms[0]), db_floor(rms[1])],
+            clipping: self.clipping,
+        }
+    }
+}
+
+fn db_floor(value: f32) -> f32 {
+    20.0 * value.max(1.0e-6).log10()
+}
+
 /// A sample-peak safety limiter. It deliberately makes no true-peak or
 /// lookahead claim; the ceiling is enforced on every emitted sample.
 #[derive(Clone, Copy, Debug)]
@@ -1242,6 +1320,23 @@ mod tests {
         let ceiling = 10.0_f32.powf(-1.0 / 20.0);
         assert_eq!(samples, [ceiling, -ceiling, 0.0, 0.0]);
         assert!((limiter.ceiling_db() + 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn signal_meter_reports_separate_finite_peak_rms_and_clipping() {
+        let mut meter = SignalMeter::new(2).unwrap();
+        meter.process_interleaved(&[1.0, 0.5, -1.0, f32::NAN]);
+        let snapshot = meter.snapshot();
+        assert_eq!(snapshot.peak, [1.0, 0.5]);
+        assert!((snapshot.rms[0] - 1.0).abs() < 1e-6);
+        assert!((snapshot.rms[1] - 0.35355338).abs() < 1e-5);
+        assert!(snapshot.peak_db[0].abs() < 1e-5);
+        assert!(snapshot.rms_db[1] < -8.0);
+        assert_eq!(snapshot.clipping, 2);
+        meter.reset();
+        let silence = meter.snapshot();
+        assert_eq!(silence.peak, [0.0, 0.0]);
+        assert_eq!(silence.rms_db, [-120.0, -120.0]);
     }
 
     #[test]

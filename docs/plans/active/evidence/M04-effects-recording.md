@@ -65,6 +65,14 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+`SignalMeter` now supplies a per-channel telemetry primitive for mono/stereo
+paths. It accumulates finite-safe sample peaks and RMS sums, counts sample
+clipping, exposes linear and finite dB values with a documented -120 dBFS
+silence floor, and resets without allocation. A regression verifies channel
+separation, RMS values, clipping, non-finite repair, and silence. Sixteen DSP
+tests and strict Clippy pass; configured RMS windows/peak hold, graph/API
+integration, and live publication remain open.
+
 The DSP crate now exposes fixed, explainable EQ starting points: an all-disabled
 `VoiceNeutral` preset and Q8 notch presets at 50 Hz and 60 Hz. Presets return
 the same bounded `BiquadParams` values used by processing and response-curve
