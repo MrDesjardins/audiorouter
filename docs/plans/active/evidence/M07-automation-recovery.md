@@ -144,6 +144,14 @@ does not change machine configuration. Domain, control, and CLI validation is
 covered by the workspace test suite (50 control tests, 23 domain tests, and
 10 CLI tests).
 
+## 2026-09-06 — Durable recording checkpoints
+
+SQLite now stores versioned `RecorderController` checkpoints separately from
+recording metadata. Save validates and atomically replaces a checkpoint; load
+restores it through the recording validator and surfaces corruption as an
+explicit error; clear removes it idempotently. Storage coverage is 26 tests
+with strict Clippy. No audio payloads or file handles are persisted.
+
 ## 2026-09-06 — Recovery CLI parity
 
 Added `backup --database <path> --output <new-path>` and

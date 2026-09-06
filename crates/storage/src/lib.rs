@@ -1,6 +1,7 @@
 //! SQLite persistence boundary for M01.
 
 use audiorouter_domain::{node_registry, validate_session, EntityId, Session};
+use audiorouter_recording::RecorderCheckpoint;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -382,6 +383,11 @@ impl Storage {
                  comment TEXT
              );
              CREATE INDEX IF NOT EXISTS recordings_session_id ON recordings(session_id);
+             CREATE TABLE IF NOT EXISTS recording_checkpoints (
+                 recording_id TEXT PRIMARY KEY,
+                 checkpoint TEXT NOT NULL,
+                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );
              CREATE TABLE IF NOT EXISTS plugin_states (
                  id TEXT PRIMARY KEY,
                  plugin_id TEXT NOT NULL,
@@ -491,6 +497,65 @@ impl Storage {
             ],
         )?;
         Ok(())
+    }
+
+    /// Persist only a validated recorder state checkpoint. Audio samples,
+    /// queues, and file handles remain outside SQLite.
+    pub fn save_recording_checkpoint(
+        &self,
+        recording_id: &str,
+        checkpoint: &RecorderCheckpoint,
+    ) -> Result<(), StorageError> {
+        if recording_id.is_empty() {
+            return Err(StorageError::InvalidRecording(
+                "recording checkpoint ID is empty".into(),
+            ));
+        }
+        let checkpoint = audiorouter_recording::RecorderController::restore(checkpoint.clone())
+            .map_err(|_| StorageError::InvalidRecording("invalid recording checkpoint".into()))?;
+        let document = checkpoint
+            .checkpoint_json()
+            .map_err(|error| StorageError::InvalidRecording(error.to_string()))?;
+        self.connection.execute(
+            "INSERT INTO recording_checkpoints(recording_id, checkpoint)
+             VALUES (?1, ?2)
+             ON CONFLICT(recording_id) DO UPDATE SET
+               checkpoint=excluded.checkpoint, updated_at=CURRENT_TIMESTAMP",
+            params![recording_id, document],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_recording_checkpoint(
+        &self,
+        recording_id: &str,
+    ) -> Result<Option<RecorderCheckpoint>, StorageError> {
+        let document = self
+            .connection
+            .query_row(
+                "SELECT checkpoint FROM recording_checkpoints WHERE recording_id = ?1",
+                params![recording_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        document
+            .map(|document| {
+                audiorouter_recording::RecorderController::restore_json(&document)
+                    .map(|controller| controller.checkpoint())
+                    .map_err(|_| {
+                        StorageError::InvalidRecording(
+                            "persisted recording checkpoint is invalid".into(),
+                        )
+                    })
+            })
+            .transpose()
+    }
+
+    pub fn clear_recording_checkpoint(&self, recording_id: &str) -> Result<bool, StorageError> {
+        Ok(self.connection.execute(
+            "DELETE FROM recording_checkpoints WHERE recording_id = ?1",
+            params![recording_id],
+        )? == 1)
     }
 
     pub fn list_recordings(
@@ -1951,6 +2016,36 @@ mod tests {
             );
             assert_eq!(storage.journal_result("crash-op").unwrap(), None);
         }
+    }
+
+    #[test]
+    fn recording_checkpoint_persists_and_surfaces_corruption() {
+        let storage = Storage::open_memory().unwrap();
+        let mut recorder = audiorouter_recording::RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        recorder.pause(20).unwrap();
+        let checkpoint = recorder.checkpoint();
+        storage
+            .save_recording_checkpoint("recording", &checkpoint)
+            .unwrap();
+        assert_eq!(
+            storage.load_recording_checkpoint("recording").unwrap(),
+            Some(checkpoint.clone())
+        );
+        storage
+            .connection
+            .execute(
+                "UPDATE recording_checkpoints SET checkpoint = ?1 WHERE recording_id = 'recording'",
+                params![r#"{"version":1,"state":"Paused"}"#],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.load_recording_checkpoint("recording"),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(storage.clear_recording_checkpoint("recording").unwrap());
+        assert!(!storage.clear_recording_checkpoint("recording").unwrap());
     }
 
     #[test]
