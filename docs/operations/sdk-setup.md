@@ -54,6 +54,9 @@ git -C third_party\vst3sdk rev-parse HEAD
 ```
 
 Native build scripts locate Visual Studio and the Windows SDK without requiring
-global PATH changes. See `tools/m00-native-wasapi-probe/build.ps1` for the
-native probe and `docs/plans/active/evidence/M06-vst3-sdk.md` for measured SDK
-validation evidence.
+global PATH changes. The VST3 loader accepts optional `-SdkInclude` and
+`-Output` overrides, while default discovery selects the newest installed
+MSVC toolset and Windows SDK containing the required headers. See
+`tools/m00-native-wasapi-probe/build.ps1` for the native probe and
+`docs/plans/active/evidence/M06-vst3-sdk.md` for measured SDK validation
+evidence.
