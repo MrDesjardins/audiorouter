@@ -108,3 +108,19 @@ only an inspected VST3/x64 identity is supported, while unknown/legacy
 formats remain unsupported even if their PE structure is valid. The new test
 compiles and strict Clippy passes; runtime launch remains blocked by OS error
 4551.
+
+## Portable CMake and SDK build correction (2026-09-06)
+
+The official portable CMake 4.4.0 Windows x64 ZIP was extracted into the
+ignored `third_party/cmake-4.4.0` cache. It configured the SDK with the
+`Visual Studio 18 2026` x64 generator, MSVC 19.51.36256.0, and Windows SDK
+10.0.28000.0. The Release build completed successfully after reconfiguration;
+the SDK validator self-test reported 51 tests passed and the built VST3
+validator reported 94 tests passed.
+
+The build emitted upstream VSTGUI deprecation/narrowing warnings and noted
+optional EXPAT/LIBJACK/AAX components were unavailable or embedded; these did
+not fail the build. The SDK examples and validator binaries are local build
+artifacts only and were not installed as system plugins. No audio endpoint,
+driver, default, volume, mute, or persistent machine audio setting was
+changed.
