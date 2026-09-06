@@ -105,3 +105,14 @@ The probe also completed a 200 ms silent render run on endpoint 0. Shared
 initialization, buffer acquisition, start, submission of 13,920 frames using
 `AUDCLNT_BUFFERFLAGS_SILENT`, stop, and reset all returned success. No tone
 was generated, and no endpoint defaults or persistent audio settings changed.
+## 2026-09-06 — Native endpoint-format cross-check
+
+The installed Visual Studio/Windows SDK toolchain rebuilt the native probe, and
+the read-only inventory path ran against all 13 active capture endpoints. Every
+endpoint returned success for activation, `GetMixFormat`, shared-mode
+`IsFormatSupported` using that exact mix format, and
+`IAudioClient::Initialize` with `AUDCLNT_STREAMFLAGS_NOPERSIST`. No endpoint was
+started or read, and the generated executable/object were removed afterward.
+This confirms the earlier `E_INVALIDARG` was specific to the prior requested
+format/flag combination, not ordinary client contention; full application
+capture routing and latency evidence remain open.
