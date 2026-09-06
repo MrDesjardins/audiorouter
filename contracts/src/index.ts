@@ -55,6 +55,18 @@ export interface SessionListPage {
   nextCursor: EntityId | null;
 }
 
+export interface RoutePath {
+  nodes: EntityId[];
+  edges: EntityId[];
+  channelMaps: number[][];
+}
+
+export interface RouteInspection {
+  destinationNode: EntityId;
+  reachable: boolean;
+  paths: RoutePath[];
+}
+
 export interface GraphHistoryPage {
   items: Session[];
   nextCursor: string | null;
@@ -271,7 +283,7 @@ export type MethodResult = {
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];
   "nodes.types": DiscoveryDocument["nodeTypes"];
-  "routes.inspect": Record<string, unknown>;
+  "routes.inspect": RouteInspection;
   "graph.history": GraphHistoryPage;
   "graph.undoPlan": Record<string, unknown>;
   "events.subscribe": EventsSubscribeResult;

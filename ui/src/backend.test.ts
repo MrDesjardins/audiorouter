@@ -21,6 +21,7 @@ describe("snapshot cache", () => {
       connected: true,
       snapshot: async () => { throw new Error("pipe closed"); },
       subscribe: async () => ({ backendEpoch: 0, events: [], nextSequence: 0 }),
+      inspectRoute: async () => null,
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);

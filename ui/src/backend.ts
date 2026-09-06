@@ -2,6 +2,7 @@ import type {
   AudioRouterClient,
   DiscoveryDocument,
   EventsSubscribeResult,
+  RouteInspection,
   Session,
   StatusSnapshot,
 } from "@audiorouter/contracts";
@@ -18,6 +19,7 @@ export interface UiBackend {
   readonly connected: boolean;
   snapshot(): Promise<UiBackendSnapshot>;
   subscribe(afterSequence?: number, sessionId?: string): Promise<EventsSubscribeResult>;
+  inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
 }
 
 export type UiSnapshotState = {
@@ -71,6 +73,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async subscribe() {
       return { backendEpoch: 0, events: [], nextSequence: 0 };
     },
+    async inspectRoute() {
+      return null;
+    },
   };
 }
 
@@ -92,6 +97,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
         limit: 500,
         ...(sessionId === undefined ? {} : { sessionId }),
       });
+    },
+    async inspectRoute(destinationNode) {
+      return client.request("routes.inspect", { sessionId, destinationNode });
     },
   };
 }

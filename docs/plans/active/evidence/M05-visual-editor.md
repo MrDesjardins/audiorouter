@@ -73,6 +73,12 @@ validation/commit to the backend. This is UI preparation only and is not
 wired to disconnected controls. TypeScript checking and the production Vite
 build pass.
 
+The TypeScript contract now models `RouteInspection` and `RoutePath` from the
+authoritative Rust route explanation, and `UiBackend.inspectRoute` exposes the
+read-only destination query. The disconnected adapter returns no invented
+paths; the live adapter forwards the selected session and destination node.
+Contracts/UI tests, typechecks, production build, and high-severity audit pass.
+
 The React shell now consumes `SnapshotCache` state and exposes an accessible
 status message when the retained backend snapshot is stale. The initial
 disconnected preview still renders safely, while a future failed live refresh
