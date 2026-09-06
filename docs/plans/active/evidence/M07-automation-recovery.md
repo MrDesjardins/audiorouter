@@ -449,6 +449,10 @@ Recovery candidates are sorted by stable opaque-ID text before the decision is
 returned, avoiding `HashMap` iteration order leaking into supervisor behavior.
 A two-session control regression verifies deterministic ordering; the control
 suite now passes 58 tests with strict Clippy.
+Memory-backed control recovery now applies the same explicit clear invariant:
+`recovery.clearSafeMode` resets the in-memory crash tracker, so a subsequent
+crash begins a fresh bounded sequence. The regression passes with the 59-test
+control suite; persistent storage clearing remains unchanged.
 The MCP stdio interoperability regression was updated to account for the
 published `clear_recovery_safe_mode` tool. The catalog now contains 23 tools,
 including the recovery maintenance operation, and the locked workspace test

@@ -2995,6 +2995,7 @@ impl ControlPlane {
         if let Some(storage) = &self.storage {
             storage.clear_recovery_crashes().map_err(storage_error)?;
         }
+        self.recovery_tracker.clear_after_stable_run();
         self.events
             .append(0, None, "recovery.safeModeCleared", None);
         Ok(json!({
@@ -4089,6 +4090,27 @@ mod tests {
             decision.session_ids,
             vec![EntityId::new("a-session"), EntityId::new("z-session")]
         );
+    }
+
+    #[test]
+    fn clearing_memory_safe_mode_resets_the_crash_tracker() {
+        let mut plane = ControlPlane::default();
+        plane.record_runtime_crash(100).unwrap();
+        plane.record_runtime_crash(101).unwrap();
+        assert_eq!(
+            plane.record_runtime_crash(102).unwrap().mode,
+            RecoveryMode::SafeMode
+        );
+
+        let cleared = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(88)),
+            method: "recovery.clearSafeMode".into(),
+            params: None,
+        });
+        assert_eq!(cleared.result.unwrap()["safeMode"], false);
+        let decision = plane.record_runtime_crash(103).unwrap();
+        assert_eq!(decision.mode, RecoveryMode::RestoreEligible);
     }
 
     #[test]
