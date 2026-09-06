@@ -154,3 +154,11 @@ initialization boundary or its request marshalling, rather than endpoint
 enumeration, format support, or ordinary device contention. The temporary
 failing test and diagnostics were removed; the stable adapter suite remains
 portable/metadata-only until this live-open discrepancy is resolved.
+
+Further isolation tried a caller-owned copy of the complete 40-byte
+`WAVEFORMATEXTENSIBLE` payload and separately removed the event and conversion
+flags while retaining shared initialization. Both Rust variants still returned
+`E_INVALIDARG`, so the failure is not caused by the endpoint allocation,
+event-handle creation, or the `AUTOCONVERTPCM` flag. Temporary diagnostics were
+removed after the run; the next fix must address the generated COM call/ABI
+boundary or replace that binding path with a verified native shim.
