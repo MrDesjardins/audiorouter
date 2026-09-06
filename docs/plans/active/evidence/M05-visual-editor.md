@@ -247,3 +247,9 @@ new resource is added to the local view only after the authoritative response;
 offline mode keeps creation disabled, and creation never starts audio. The
 shared TypeScript result contract now accurately models `{ session, state }`.
 UI coverage is 18 tests with typecheck and production build passing.
+
+The connected editor now offers session duplication through
+`sessions.duplicate`. It creates a fresh revision-0 stopped resource, adds it
+to the UI only after the authoritative response, and leaves lifecycle/audio
+state untouched. The shared contract now models the `{ session, state }`
+response; UI coverage is 19 tests with typecheck and production build passing.
