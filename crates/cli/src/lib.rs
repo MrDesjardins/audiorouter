@@ -997,12 +997,45 @@ fn read_json_object(path: &std::path::Path) -> Result<Value, CliError> {
 
 fn write_new_file(path: &std::path::Path, contents: &[u8]) -> Result<(), CliError> {
     use std::fs::OpenOptions;
+    let parent = path.parent().ok_or_else(|| {
+        CliError::Io(format!(
+            "cannot determine output parent for {}",
+            path.display()
+        ))
+    })?;
+    let parent_metadata = std::fs::symlink_metadata(parent).map_err(|error| {
+        CliError::Io(format!(
+            "cannot inspect output parent {}: {error}",
+            parent.display()
+        ))
+    })?;
+    if !parent_metadata.is_dir() || is_reparse_point(&parent_metadata) {
+        return Err(CliError::Io(format!(
+            "output parent must be a regular non-reparse directory: {}",
+            parent.display()
+        )));
+    }
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(path)
         .map_err(|error| CliError::Io(format!("cannot create {}: {error}", path.display())))?;
     std::io::Write::write_all(&mut file, contents).map_err(|error| CliError::Io(error.to_string()))
+}
+
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 fn session_command(args: &[&str]) -> Result<Value, CliError> {

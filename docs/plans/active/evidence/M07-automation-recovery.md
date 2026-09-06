@@ -601,3 +601,9 @@ the Rust `API_METHODS` table, rejecting missing, extra, or duplicate method
 rows. Documentation acceptance passes with 51 Markdown files and 150 local
 links; this is a documentation-integrity check and does not exercise audio or
 machine configuration.
+
+The shared CLI `write_new_file` path now inspects its existing parent before
+opening an output: missing, non-directory, symbolic-link, and Windows
+reparse-point parents are rejected, while the destination remains exclusive.
+Diagnostics export and graph-plan output therefore share the same redirected
+path protection; focused CLI tests and strict Clippy pass.
