@@ -143,3 +143,11 @@ registration as unavailable in this build; it performs no registration and
 does not change machine configuration. Domain, control, and CLI validation is
 covered by the workspace test suite (50 control tests, 23 domain tests, and
 10 CLI tests).
+
+## 2026-09-06 — Recovery CLI parity
+
+Added `backup --database <path> --output <new-path>` and
+`restore --backup <path> --database <new-path>`. Both commands require
+absolute paths and new destinations; restore validates SQLite integrity before
+writing. The commands use the existing storage safeguards and do not open
+audio devices or change machine configuration.

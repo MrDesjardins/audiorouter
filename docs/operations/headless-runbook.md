@@ -39,6 +39,14 @@ Apply rereads the current revision and refuses a stale plan. If the caller loses
 Backups require a new destination; the storage layer refuses to overwrite an existing recovery copy. Bundle imports are staged and validated before persistence:
 
 ```powershell
+audiorouter backup --database C:\path\audiorouter.sqlite --output C:\path\recovery.sqlite --json
+audiorouter restore --backup C:\path\recovery.sqlite --database C:\path\restored.sqlite --json
+```
+
+The backup and restore commands require absolute paths and refuse existing
+destinations. Restore validates SQLite integrity before writing the new file.
+
+```powershell
 audiorouter export-bundle session-id --database C:\path\audiorouter.sqlite --output C:\path\session.audiorouter --json
 audiorouter import-bundle C:\path\session.audiorouter --database C:\path\new.sqlite --staging C:\path\staging --json
 ```

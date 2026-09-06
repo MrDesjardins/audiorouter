@@ -58,6 +58,8 @@ where
         "recordings" => recordings_command(&command_args)?,
         "privacy" => privacy_command(&command_args)?,
         "startup" => startup_command(&command_args)?,
+        "backup" => backup_command(&command_args)?,
+        "restore" => restore_command(&command_args)?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
         "export-bundle" => export_bundle(&command_args)?,
@@ -107,6 +109,38 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
     response
         .result
         .ok_or_else(|| CliError::InvalidArguments("diagnostics unavailable".into()))
+}
+
+fn backup_command(args: &[&str]) -> Result<Value, CliError> {
+    let source = option_value(args, "--database")?;
+    let destination = option_value(args, "--output")?;
+    let source_path = std::path::Path::new(source);
+    let destination_path = std::path::Path::new(destination);
+    if !source_path.is_absolute() || !destination_path.is_absolute() {
+        return Err(CliError::InvalidArguments(
+            "--database and --output paths must be absolute".into(),
+        ));
+    }
+    Storage::open(source_path)
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?
+        .backup_to(destination_path)
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?;
+    Ok(json!({ "source": source, "destination": destination, "created": true }))
+}
+
+fn restore_command(args: &[&str]) -> Result<Value, CliError> {
+    let source = option_value(args, "--backup")?;
+    let destination = option_value(args, "--database")?;
+    let source_path = std::path::Path::new(source);
+    let destination_path = std::path::Path::new(destination);
+    if !source_path.is_absolute() || !destination_path.is_absolute() {
+        return Err(CliError::InvalidArguments(
+            "--backup and --database paths must be absolute".into(),
+        ));
+    }
+    Storage::restore_backup(source_path, destination_path)
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?;
+    Ok(json!({ "source": source, "destination": destination, "restored": true }))
 }
 
 fn operation_command(args: &[&str]) -> Result<Value, CliError> {
@@ -768,6 +802,14 @@ fn help_value() -> Value {
     value["commands"]
         .as_array_mut()
         .unwrap()
+        .insert(4, json!("backup --database <path> --output <new-path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
+        .insert(5, json!("restore --backup <path> --database <new-path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
         .insert(3, json!("startup get [--database <path>]"));
     value["commands"].as_array_mut().unwrap().insert(
         14,
@@ -1396,6 +1438,61 @@ mod tests {
             serde_json::from_str(&run(["startup", "get", "--json"]).unwrap()).unwrap();
         assert_eq!(startup["enabled"], false);
         assert_eq!(startup["registration"], "unavailable");
+    }
+
+    #[test]
+    fn backup_and_restore_commands_round_trip_without_overwriting() {
+        let suffix = format!("audiorouter-cli-recovery-{}", std::process::id());
+        let source = std::env::temp_dir().join(format!("{suffix}-source.sqlite"));
+        let backup = std::env::temp_dir().join(format!("{suffix}-backup.sqlite"));
+        let restored = std::env::temp_dir().join(format!("{suffix}-restored.sqlite"));
+        for path in [&source, &backup, &restored] {
+            let _ = std::fs::remove_file(path);
+        }
+        let source_arg = source.to_string_lossy().into_owned();
+        let backup_arg = backup.to_string_lossy().into_owned();
+        let restored_arg = restored.to_string_lossy().into_owned();
+        let created: Value = serde_json::from_str(
+            &run([
+                "backup",
+                "--database",
+                &source_arg,
+                "--output",
+                &backup_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(created["created"], true);
+        let restored_result: Value = serde_json::from_str(
+            &run([
+                "restore",
+                "--backup",
+                &backup_arg,
+                "--database",
+                &restored_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(restored_result["restored"], true);
+        assert!(restored.is_file());
+        assert!(matches!(
+            run([
+                "restore",
+                "--backup",
+                &backup_arg,
+                "--database",
+                &restored_arg,
+                "--json"
+            ]),
+            Err(CliError::Storage(_))
+        ));
+        for path in [&source, &backup, &restored] {
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     #[test]
