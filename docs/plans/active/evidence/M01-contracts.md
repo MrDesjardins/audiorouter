@@ -216,3 +216,9 @@ from receiving two incompatible snapshot shapes.
 The `routes.inspect` output schema now explicitly models destination identity,
 reachability, route paths, edge IDs, and channel maps. Discovery assertions
 cover the structured result without opening or changing any audio resource.
+
+The graph transaction outputs now have explicit schemas: plans expose bounded
+expiry, diff, affected destinations, warnings, and required scopes; commits
+expose session/revision identity and optional activation metadata. These are
+covered by discovery assertions and preserve the existing plan-only/native-
+audio-unavailable boundary.

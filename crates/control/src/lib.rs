@@ -444,6 +444,31 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["destinationNode", "reachable", "paths"],
             "additionalProperties": false
         }),
+        "graph.plan" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string", "minLength": 1 },
+                "baseRevision": { "type": "integer", "minimum": 0 },
+                "expiresInMs": { "type": "integer", "minimum": 1 },
+                "diff": { "type": "array" },
+                "affectedDestinations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "warnings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "requiredScopes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            },
+            "required": ["planId", "baseRevision", "expiresInMs", "diff", "affectedDestinations", "warnings", "requiredScopes"],
+            "additionalProperties": false
+        }),
+        "graph.commit" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1 },
+                "revision": { "type": "integer", "minimum": 0 },
+                "idempotentReplay": { "type": "boolean" },
+                "activation": { "type": "object" }
+            },
+            "required": ["sessionId", "revision"],
+            "additionalProperties": false
+        }),
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -3288,6 +3313,26 @@ mod tests {
         assert_eq!(
             routes["outputSchema"]["properties"]["paths"]["items"]["required"],
             json!(["nodes", "edges", "channelMaps"])
+        );
+        let plan = methods
+            .iter()
+            .find(|method| method["name"] == "graph.plan")
+            .unwrap();
+        assert_eq!(
+            plan["outputSchema"]["properties"]["expiresInMs"]["minimum"],
+            1
+        );
+        assert_eq!(
+            plan["outputSchema"]["properties"]["warnings"]["type"],
+            "array"
+        );
+        let commit = methods
+            .iter()
+            .find(|method| method["name"] == "graph.commit")
+            .unwrap();
+        assert_eq!(
+            commit["outputSchema"]["properties"]["revision"]["minimum"],
+            0
         );
         let applications = methods
             .iter()
