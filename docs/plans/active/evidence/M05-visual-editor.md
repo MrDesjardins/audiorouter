@@ -185,6 +185,14 @@ and backend plan/commit. Template regressions cover matrix shape, independent
 snapshots, and distinct names; UI coverage is 41 tests with typecheck and
 production build passing.
 
+The editor now presents a guided readiness checklist derived from backend
+connectivity, status snapshots, endpoint inventory, and application
+observations. It distinguishes ready, attention-needed, and unavailable states
+and explicitly tells users to select Discord/OBS through those applications'
+own settings. Two pure checklist regressions were added; UI coverage is 54
+tests with typecheck and production build passing. The checklist performs no
+audio, endpoint, or external-application action.
+
 Route explanations now annotate each reported node with its authoritative
 enabled, bypassed, muted, or disabled state. Unknown node IDs remain visible
 instead of being silently dropped. A pure formatter regression was added; UI
