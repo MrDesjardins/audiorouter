@@ -154,3 +154,8 @@ The fixture also verifies that a manifest omitting the notice entry is rejected.
 The Windows CI job now runs both PowerShell regressions on every push and pull
 request, so release-path safety and runbook parameter parity are continuously
 validated without producing a release package.
+## 2026-09-06 — Qualification regression rerun
+
+The artifact verifier regression and release qualification command-documentation
+regression both passed at the current branch. These checks use disposable
+fixtures and do not produce a signed package or alter audio/driver state.

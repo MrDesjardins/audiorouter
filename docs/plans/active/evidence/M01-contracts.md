@@ -169,3 +169,11 @@ configuration was changed.
 ## Next action
 
 Implement application-loopback data-path validation and controlled process attribution in the native Windows probe. Preserve the existing no-default-change policy and keep driver installation/signing out of scope until isolated target and signing evidence exists.
+## 2026-09-06 — Current acceptance rerun
+
+The checked-in `tests/acceptance/m01-cli.ps1` completed successfully against
+the current branch. It verified discovery, persisted session lifecycle, route
+inspection, history, and bundle round-trip behavior using temporary files.
+The M08 release artifact verifier and qualification-command documentation
+regressions also passed. Temporary state was removed; no audio endpoint,
+driver, or machine configuration was changed.
