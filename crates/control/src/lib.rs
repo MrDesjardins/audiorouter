@@ -1952,7 +1952,7 @@ impl ControlPlane {
                 "type": "number",
                 "unit": "dB",
                 "minimum": -60.0,
-                "maximum": 12.0,
+                "maximum": 24.0,
                 "default": 0.0
             }]),
             audiorouter_domain::NodeKind::Mute => json!([{
@@ -4405,7 +4405,7 @@ mod tests {
             .unwrap();
         assert_eq!(gain["parameters"][0]["name"], "gainDb");
         assert_eq!(gain["parameters"][0]["minimum"], -60.0);
-        assert_eq!(gain["parameters"][0]["maximum"], 12.0);
+        assert_eq!(gain["parameters"][0]["maximum"], 24.0);
         assert_eq!(
             description["presets"]["voiceChains"][0]["id"],
             "voiceNeutral"

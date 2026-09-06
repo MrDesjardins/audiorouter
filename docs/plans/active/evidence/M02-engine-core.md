@@ -75,7 +75,7 @@ process-local until a live scheduler/API authorizes its publication.
 ## 2026-09-06 — Graph processor parameter integration
 
 The domain `Node` contract now carries a backward-compatible parameter map.
-Validation accepts only bounded `gainDb` for Gain and boolean `muted` for Mute,
+Validation accepts only bounded `gainDb` (−60 to +24 dB) for Gain and boolean `muted` for Mute,
 rejecting unknown or invalid processor parameters. `compile_session` consumes
 those values when preparing runtime stages, defaulting Gain to 0 dB and Mute to
 muted when omitted. Domain and engine tests cover validation and a compiled

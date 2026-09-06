@@ -811,7 +811,7 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
             let valid = match (node.kind, name.as_str()) {
                 (NodeKind::Gain, "gainDb") => value
                     .as_f64()
-                    .is_some_and(|gain| gain.is_finite() && (-60.0..=12.0).contains(&gain)),
+                    .is_some_and(|gain| gain.is_finite() && (-60.0..=24.0).contains(&gain)),
                 (NodeKind::Mute, "muted") => value.is_boolean(),
                 _ => false,
             };
@@ -1736,7 +1736,7 @@ mod tests {
     fn validates_processor_parameters_and_rejects_unknown_values() {
         let mut gain = node("gain", NodeKind::Gain, PortDirection::Input);
         gain.parameters
-            .insert("gainDb".into(), serde_json::json!(13.0));
+            .insert("gainDb".into(), serde_json::json!(25.0));
         let errors = validate_session(&session(vec![gain], vec![])).unwrap_err();
         assert!(errors.iter().any(|error| matches!(
             error,

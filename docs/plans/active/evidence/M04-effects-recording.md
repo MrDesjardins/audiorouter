@@ -209,7 +209,7 @@ strict Clippy pass. Durable metadata/file tags and API wiring remain open.
 ## 2026-09-06 — Graph parameter wiring
 
 Graph nodes now carry a serde-defaulted parameter map. Domain validation
-enforces the published Gain (`gainDb`, −60..12 dB) and Mute (`muted`) contracts,
+enforces the published Gain (`gainDb`, −60..24 dB) and Mute (`muted`) contracts,
 and the engine compiler prepares those values instead of hard-coding unity gain
 or mute-on behavior. Invalid and unknown parameters are rejected before
 preparation; the portable domain/engine suites pass with strict Clippy.
