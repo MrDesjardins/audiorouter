@@ -191,6 +191,12 @@ automatic layout; it does not alter graph topology, backend state, or audio
 configuration. A pure regression covers the clear operation; UI coverage is 42
 tests with typecheck and production build passing.
 
+The node library now supports bounded local search across entry names,
+categories, and unavailable-capability explanations. Search never changes the
+draft; supported processors retain the connected-only add action and unavailable
+entries remain explicit when matched. Two pure filtering regressions were
+added; UI coverage is 46 tests with typecheck and production build passing.
+
 Selecting a node now highlights its complete enabled upstream/downstream
 component in the canvas and dims unrelated nodes and edges. Disabled edges do
 not participate in the visual path, and the traversal is presentation-only;
