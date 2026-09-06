@@ -1202,6 +1202,7 @@ const SHARED_AUDIO_STATE_OFFSET: usize = 32;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SharedAudioError {
     InvalidChannels,
+    AliasedPaths,
     BufferTooSmall,
     InvalidMagic,
     InvalidVersion,
@@ -1375,6 +1376,81 @@ impl SharedAudioRegion {
             &*(self.map.as_ptr().add(SHARED_AUDIO_STATE_OFFSET)
                 as *const std::sync::atomic::AtomicU64)
         }
+    }
+}
+
+/// A caller-owned pair of mapped audio slots for a host/worker exchange.
+/// `input_path` is written by the host and read by the worker; the output
+/// direction is the reverse. The paths and lifecycle remain explicit so this
+/// transport never creates a machine-wide IPC name or accesses audio devices.
+pub struct SharedAudioTransport {
+    input: SharedAudioRegion,
+    output: SharedAudioRegion,
+}
+
+impl SharedAudioTransport {
+    pub fn create(
+        input_path: impl AsRef<Path>,
+        output_path: impl AsRef<Path>,
+        layout: SharedAudioLayout,
+    ) -> Result<Self, SharedAudioError> {
+        if input_path.as_ref() == output_path.as_ref() {
+            return Err(SharedAudioError::AliasedPaths);
+        }
+        let input = SharedAudioRegion::create(input_path, layout)?;
+        match SharedAudioRegion::create(output_path, layout) {
+            Ok(output) => Ok(Self { input, output }),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn open(
+        input_path: impl AsRef<Path>,
+        output_path: impl AsRef<Path>,
+        layout: SharedAudioLayout,
+    ) -> Result<Self, SharedAudioError> {
+        if input_path.as_ref() == output_path.as_ref() {
+            return Err(SharedAudioError::AliasedPaths);
+        }
+        Ok(Self {
+            input: SharedAudioRegion::open(input_path, layout)?,
+            output: SharedAudioRegion::open(output_path, layout)?,
+        })
+    }
+
+    pub fn write_input(&mut self, frame: &WorkerFrame) -> Result<(), SharedAudioError> {
+        self.input.write(frame)
+    }
+
+    pub fn read_input(&self) -> Result<WorkerFrame, SharedAudioError> {
+        self.input.read()
+    }
+
+    pub fn read_input_into(
+        &self,
+        samples: &mut [f32],
+    ) -> Result<SharedAudioMetadata, SharedAudioError> {
+        self.input.read_into(samples)
+    }
+
+    pub fn write_output(&mut self, frame: &WorkerFrame) -> Result<(), SharedAudioError> {
+        self.output.write(frame)
+    }
+
+    pub fn read_output(&self) -> Result<WorkerFrame, SharedAudioError> {
+        self.output.read()
+    }
+
+    pub fn read_output_into(
+        &self,
+        samples: &mut [f32],
+    ) -> Result<SharedAudioMetadata, SharedAudioError> {
+        self.output.read_into(samples)
+    }
+
+    pub fn flush(&mut self) -> Result<(), SharedAudioError> {
+        self.input.flush()?;
+        self.output.flush()
     }
 }
 
@@ -2098,5 +2174,41 @@ mod tests {
         ));
         drop(reader);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn shared_audio_transport_exchanges_input_and_output_slots() {
+        let layout = SharedAudioLayout::new(2).unwrap();
+        let stem = format!("audiorouter-shared-transport-{}", std::process::id());
+        let input_path = std::env::temp_dir().join(format!("{}-input", stem));
+        let output_path = std::env::temp_dir().join(format!("{}-output", stem));
+        let _ = fs::remove_file(&input_path);
+        let _ = fs::remove_file(&output_path);
+
+        let mut host = SharedAudioTransport::create(&input_path, &output_path, layout).unwrap();
+        let mut worker = SharedAudioTransport::open(&input_path, &output_path, layout).unwrap();
+        let input = WorkerFrame::new(1, 100, 2, vec![0.25, -0.25, 0.0, 0.1]).unwrap();
+        host.write_input(&input).unwrap();
+
+        let mut input_samples = [0.0; 4];
+        let input_metadata = worker.read_input_into(&mut input_samples).unwrap();
+        assert_eq!(input_metadata.sequence, input.sequence);
+        assert_eq!(&input_samples, &input.samples[..]);
+
+        let output = WorkerFrame::new(1, 100, 2, vec![0.5, -0.5, 0.0, 0.2]).unwrap();
+        worker.write_output(&output).unwrap();
+        let mut output_samples = [0.0; 4];
+        let output_metadata = host.read_output_into(&mut output_samples).unwrap();
+        assert_eq!(output_metadata.sequence, output.sequence);
+        assert_eq!(&output_samples, &output.samples[..]);
+
+        assert!(matches!(
+            SharedAudioTransport::create(&input_path, &input_path, layout),
+            Err(SharedAudioError::AliasedPaths)
+        ));
+        drop(worker);
+        drop(host);
+        fs::remove_file(input_path).unwrap();
+        fs::remove_file(output_path).unwrap();
     }
 }

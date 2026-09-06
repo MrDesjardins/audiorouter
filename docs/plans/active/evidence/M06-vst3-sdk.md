@@ -262,3 +262,11 @@ retains the acquire/release epoch comparison for mapped reads. The regression,
 24 library tests, worker integration, and strict Clippy pass. This removes
 sample-vector allocation from the transport read boundary but does not claim
 realtime scheduler integration or plugin execution.
+
+Added SharedAudioTransport, a paired caller-owned input/output mapping that
+lets a host and worker open the same two explicit slot files with opposite
+directions. The exchange regression verifies metadata and caller-owned sample
+buffers across both endpoints, and rejects aliased paths. All plugin-host test
+targets compile and strict Clippy passes; generated test execution remains
+blocked by Windows Application Control OS error 4551. This is shared-memory
+transport wiring, not plugin loading or native realtime scheduling.
