@@ -1024,6 +1024,28 @@ pub enum VoiceChainPresetId {
     VoiceGateAndCompression,
 }
 
+impl VoiceChainPresetId {
+    pub const ALL: [Self; 2] = [Self::VoiceNeutral, Self::VoiceGateAndCompression];
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::VoiceNeutral => "Voice neutral",
+            Self::VoiceGateAndCompression => "Voice gate and compression",
+        }
+    }
+
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::VoiceNeutral => {
+                "Flat voice chain with a conservative -1 dBFS sample peak ceiling."
+            }
+            Self::VoiceGateAndCompression => {
+                "Voice neutral with a -45 dBFS gate and moderate 3:1 compression."
+            }
+        }
+    }
+}
+
 /// Return one of the documented conservative voice-chain starting points.
 /// Presets only prepare processor configuration; they never arm recording,
 /// enable monitoring, or alter a caller's active graph.
@@ -1878,6 +1900,11 @@ mod tests {
 
     #[test]
     fn voice_chain_presets_match_documented_conservative_defaults() {
+        assert_eq!(VoiceChainPresetId::ALL.len(), 2);
+        assert_eq!(VoiceChainPresetId::VoiceNeutral.name(), "Voice neutral");
+        assert!(!VoiceChainPresetId::VoiceGateAndCompression
+            .description()
+            .is_empty());
         let neutral = voice_chain_preset(VoiceChainPresetId::VoiceNeutral, 48_000.0);
         assert_eq!(neutral.eq, Some(EqPresetId::VoiceNeutral));
         assert!(neutral.gate.is_none());

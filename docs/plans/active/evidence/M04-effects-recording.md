@@ -9,6 +9,10 @@ Added `VoiceChainPresetId` and `voice_chain_preset` to the DSP boundary. The
 configuration and never arm recording, enable monitoring, or mutate an active
 graph. DSP construction and behavior tests plus strict Clippy pass.
 
+The preset IDs also expose stable user-facing names and short descriptions so
+clients can explain the starting point before applying it; the DSP layer does
+not apply presets to a session by itself.
+
 ## 2026-09-06 â€” Worker checkpoint boundary
 
 `WavRecorder` and `BufferedFlacRecorder` now expose validated controller
