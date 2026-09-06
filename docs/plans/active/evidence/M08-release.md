@@ -120,6 +120,14 @@ It is generated from the exact metadata used for `sbom.cargo.json`, included in
 the manifest's checksum/byte-count list, and therefore cannot be omitted from
 the prepared artifact set without verifier failure.
 
+The updated flow was executed from the clean current revision. Both optimized
+binaries built successfully, `verify-artifacts.ps1` accepted the manifest and
+all hashes/byte counts, and an additional check confirmed the notice contains
+the expected workspace package entries. The temporary output contained
+`THIRD-PARTY-NOTICES.txt` (15,231 bytes) and was removed afterward. The result
+remains an unsigned preparation set; signing, driver, installer, and
+clean-machine gates are unchanged.
+
 The complete locked workspace was also rerun at the current revision after the
 storage hardening and release qualification. All unit, integration,
 worker-process, MCP, and doc tests passed, as did strict workspace Clippy,
