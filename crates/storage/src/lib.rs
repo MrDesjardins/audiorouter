@@ -7,8 +7,10 @@ use rusqlite::{params, Connection, OptionalExtension};
 pub enum StorageError {
     Sql(rusqlite::Error),
     Json(serde_json::Error),
+    Io(std::io::Error),
     InvalidSession(String),
     DocumentTooLarge { bytes: usize, maximum: usize },
+    InvalidBackupPath(String),
 }
 
 pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
@@ -25,22 +27,40 @@ impl From<serde_json::Error> for StorageError {
     }
 }
 
+impl From<std::io::Error> for StorageError {
+    fn from(error: std::io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
 pub struct Storage {
     connection: Connection,
+    database_path: Option<std::path::PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum JournalFailureStage {
+    BeforeHistory,
+    AfterHistory,
+    AfterCurrent,
+    AfterJournal,
 }
 
 impl Storage {
     pub fn open_memory() -> Result<Self, StorageError> {
         let storage = Self {
             connection: Connection::open_in_memory()?,
+            database_path: None,
         };
         storage.migrate()?;
         Ok(storage)
     }
 
     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
+        let path = path.as_ref();
         let storage = Self {
             connection: Connection::open(path)?,
+            database_path: Some(path.to_path_buf()),
         };
         storage.migrate()?;
         Ok(storage)
@@ -48,6 +68,41 @@ impl Storage {
 
     /// Create a consistent SQLite backup while the source connection remains open.
     pub fn backup_to(&self, destination: impl AsRef<std::path::Path>) -> Result<(), StorageError> {
+        let destination = destination.as_ref();
+        if !destination.is_absolute() {
+            return Err(StorageError::InvalidBackupPath(
+                "backup destination must be absolute".into(),
+            ));
+        }
+        let parent = destination.parent().ok_or_else(|| {
+            StorageError::InvalidBackupPath("backup destination must have a parent".into())
+        })?;
+        if !parent.is_dir() {
+            return Err(StorageError::InvalidBackupPath(
+                "backup destination parent must already exist".into(),
+            ));
+        }
+        if destination.exists()
+            && std::fs::symlink_metadata(destination)?
+                .file_type()
+                .is_symlink()
+        {
+            return Err(StorageError::InvalidBackupPath(
+                "backup destination cannot be a symbolic link".into(),
+            ));
+        }
+        if let Some(source) = &self.database_path {
+            let source = std::fs::canonicalize(source)?;
+            let existing = destination
+                .exists()
+                .then(|| std::fs::canonicalize(destination))
+                .transpose()?;
+            if existing.as_ref() == Some(&source) {
+                return Err(StorageError::InvalidBackupPath(
+                    "backup destination cannot be the live database".into(),
+                ));
+            }
+        }
         self.connection
             .backup(rusqlite::DatabaseName::Main, destination, None)
             .map_err(StorageError::Sql)
@@ -222,6 +277,56 @@ impl Storage {
         )?;
         Ok(inserted == 1)
     }
+
+    /// Persist the current session and its idempotency record as one SQLite
+    /// transaction. The failure stage is test-only infrastructure used to
+    /// prove that partial journal writes cannot survive a restart.
+    pub fn save_session_with_journal(
+        &self,
+        session: &Session,
+        key: &str,
+        operation: &str,
+        result: &str,
+        failure: Option<JournalFailureStage>,
+    ) -> Result<(), StorageError> {
+        let document = serde_json::to_string(session)?;
+        let transaction = self.connection.unchecked_transaction()?;
+        if failure == Some(JournalFailureStage::BeforeHistory) {
+            return Err(StorageError::InvalidSession(
+                "injected journal failure".into(),
+            ));
+        }
+        transaction.execute(
+            "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
+            params![session.id.as_str(), session.revision as i64, &document],
+        )?;
+        if failure == Some(JournalFailureStage::AfterHistory) {
+            return Err(StorageError::InvalidSession(
+                "injected journal failure".into(),
+            ));
+        }
+        transaction.execute(
+            "INSERT INTO sessions(id, revision, document) VALUES (?1, ?2, ?3)
+             ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
+            params![session.id.as_str(), session.revision as i64, &document],
+        )?;
+        if failure == Some(JournalFailureStage::AfterCurrent) {
+            return Err(StorageError::InvalidSession(
+                "injected journal failure".into(),
+            ));
+        }
+        transaction.execute(
+            "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision) VALUES (?1, ?2, ?3, ?4)",
+            params![key, operation, result, session.revision as i64],
+        )?;
+        if failure == Some(JournalFailureStage::AfterJournal) {
+            return Err(StorageError::InvalidSession(
+                "injected journal failure".into(),
+            ));
+        }
+        transaction.commit()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -355,6 +460,67 @@ mod tests {
         drop(storage);
         let _ = std::fs::remove_file(source);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn backup_rejects_relative_missing_parent_and_live_database_targets() {
+        let suffix = format!("audiorouter-storage-policy-{}", std::process::id());
+        let source = std::env::temp_dir().join(format!("{suffix}-source.sqlite"));
+        let missing = std::env::temp_dir()
+            .join(format!("{suffix}-missing"))
+            .join("backup.sqlite");
+        let _ = std::fs::remove_file(&source);
+        let _ = std::fs::remove_dir_all(missing.parent().unwrap());
+        let storage = Storage::open(&source).unwrap();
+        assert!(matches!(
+            storage.backup_to("relative.sqlite"),
+            Err(StorageError::InvalidBackupPath(_))
+        ));
+        assert!(matches!(
+            storage.backup_to(&missing),
+            Err(StorageError::InvalidBackupPath(_))
+        ));
+        assert!(matches!(
+            storage.backup_to(&source),
+            Err(StorageError::InvalidBackupPath(_))
+        ));
+        drop(storage);
+        let _ = std::fs::remove_file(source);
+    }
+
+    #[test]
+    fn journal_failure_stages_leave_no_partial_snapshot() {
+        for stage in [
+            JournalFailureStage::BeforeHistory,
+            JournalFailureStage::AfterHistory,
+            JournalFailureStage::AfterCurrent,
+            JournalFailureStage::AfterJournal,
+        ] {
+            let storage = Storage::open_memory().unwrap();
+            let original = session();
+            storage.save_session(&original).unwrap();
+            let mut changed = original.clone();
+            changed.revision = 4;
+            changed.name = "partial-must-not-survive".into();
+            assert!(storage
+                .save_session_with_journal(
+                    &changed,
+                    "crash-op",
+                    "graph.commit",
+                    "{\"revision\":4}",
+                    Some(stage),
+                )
+                .is_err());
+            assert_eq!(
+                storage.load_session(&original.id).unwrap(),
+                Some(original.clone())
+            );
+            assert_eq!(
+                storage.load_history(&original.id, 10).unwrap(),
+                vec![original]
+            );
+            assert_eq!(storage.journal_result("crash-op").unwrap(), None);
+        }
     }
 
     #[test]

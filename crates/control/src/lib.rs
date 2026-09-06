@@ -233,7 +233,17 @@ impl ControlPlane {
             let session = self.store.session(&result.session_id).ok_or_else(|| {
                 ControlError::InvalidRequest("committed session not found".into())
             })?;
-            storage.save_session(session).map_err(storage_error)?;
+            let result_document = serde_json::to_string(&result)
+                .map_err(|error| ControlError::Json(error.to_string()))?;
+            storage
+                .save_session_with_journal(
+                    session,
+                    idempotency_key,
+                    "graph.commit",
+                    &result_document,
+                    None,
+                )
+                .map_err(storage_error)?;
         }
         serde_json::to_value(result).map_err(|error| ControlError::Json(error.to_string()))
     }
@@ -684,8 +694,9 @@ mod tests {
         let mut candidate = original.clone();
         candidate.name = "persisted-change".into();
         let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
-        plane.commit_graph(&plan, 0, "persist-op").unwrap();
+        let result = plane.commit_graph(&plan, 0, "persist-op").unwrap();
         assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
+        assert!(result["revision"] == 1);
     }
 
     #[test]

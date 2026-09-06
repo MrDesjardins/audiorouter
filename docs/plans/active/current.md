@@ -132,6 +132,12 @@ This establishes that Codex can continue documentation and portable implementati
 - Bound native pipe authorization to the authenticated Windows user SID: `current_user_sid` resolves the durable enrollment grant, and an un-enrolled same-user client is rejected before dispatch. Fixed a real SID-buffer lifetime bug discovered by the native test.
 - Checks: `cargo test --workspace` — all 52 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No audio endpoint or persistent machine configuration was touched.
 
+### 2026-09-05 — Native capture cross-check and M01 durability
+
+- Added a native MSVC WASAPI capture diagnostic using the newly installed Visual Studio Community 18.9.2/MSVC 14.51.36231 and Windows SDK 10.0.26100. It independently reproduced `E_INVALIDARG` from `IAudioClient::Initialize` on all 13 capture endpoints after `Activate`, `GetMixFormat`, and `IsFormatSupported` all succeeded. The harness never started or read audio and was removed after execution.
+- Made normal storage-backed graph commits persist session history and the operation journal in one SQLite transaction. Added failure-stage rollback tests and backup destination policy tests for relative paths, missing parents, symlinks, and live-database targets.
+- Checks: `cargo test --workspace` — 3 CLI, 16 control, 12 domain, 5 protocol, 8 storage, and 10 transport tests passed, plus all doc tests; `cargo fmt --all` and `git diff --check` passed. No system audio configuration was changed.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.
