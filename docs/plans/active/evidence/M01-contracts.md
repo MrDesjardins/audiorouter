@@ -97,6 +97,8 @@ Authenticated control dispatch now enforces the API mutation budget with a per-c
 
 The session resource lifecycle now includes `sessions.create` and `sessions.delete`. Create accepts only a validated revision-0 stopped session; delete transactionally removes current and history rows, clears in-memory plans/runtime state, refuses active sessions until stopped, emits `session.deleted`, and is available through the CLI. Contract, domain, storage, control, and CLI coverage passes (29/20/23/4 tests) with strict Clippy and TypeScript typecheck green.
 
+`sessions.duplicate` now clones a source session through the backend into a new revision-0 stopped resource, permits an explicit replacement name, and rejects an existing destination ID. Control and CLI regressions cover cloning and collision handling; the affected suites pass (29 domain, 20 storage, 23 control, 4 CLI) with strict Clippy and contract typecheck green.
+
 `graph.commit` now hashes the planned session payload with SHA-256, checks the durable journal before domain mutation, and stores the hash in the same SQLite transaction as the session revision. Matching requests replay across a fresh control plane; mismatched reuse is rejected. The combined domain/control/storage verification passed 19, 22, and 16 tests respectively, with strict Clippy green. Expiry/retention policy for journal rows remains future work.
 
 Durable idempotency records now have a 24-hour retention bound. Journal reads and transactional writes prune older rows using an indexed `created_at`; a regression verifies an expired key can be reused while a current mismatched hash still conflicts. Storage coverage is 17 passing tests with strict Clippy.

@@ -179,12 +179,15 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: session <get|list|start|stop> [<session-id>] --database <path>".into(),
+            "usage: session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
         )
     })?;
-    if !matches!(action, "get" | "list" | "start" | "stop" | "delete") {
+    if !matches!(
+        action,
+        "get" | "list" | "start" | "stop" | "delete" | "duplicate"
+    ) {
         return Err(CliError::InvalidArguments(
-            "usage: session <get|list|start|stop|delete> [<session-id>] --database <path>".into(),
+            "usage: session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
         ));
     }
     let storage = database(args)?;
@@ -219,11 +222,27 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
             CliError::InvalidArguments(
-                "usage: session <get|list|start|stop|delete> [<session-id>] --database <path>"
+                "usage: session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>"
                     .into(),
             )
         })?;
     let id = EntityId::new(id);
+    if action == "duplicate" {
+        let duplicate_id = args
+            .get(3)
+            .copied()
+            .filter(|value| !value.starts_with('-'))
+            .ok_or_else(|| {
+                CliError::InvalidArguments(
+                    "usage: session duplicate <source-session-id> <new-session-id> --database <path>"
+                        .into(),
+                )
+            })?;
+        let mut plane = ControlPlane::with_storage("cli", storage);
+        return plane
+            .duplicate_session(&id, EntityId::new(duplicate_id), None)
+            .map_err(|error| CliError::Storage(format!("{error:?}")));
+    }
     if action == "get" {
         let session = storage
             .load_session(&id)
@@ -252,7 +271,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|start|stop|delete> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -504,6 +523,18 @@ mod tests {
         ])
         .unwrap();
         assert!(imported_bundle.contains("session-fixture"));
+        let duplicate_id = "session-fixture-copy";
+        let duplicated = run([
+            "session",
+            "duplicate",
+            "session-fixture",
+            duplicate_id,
+            "--database",
+            &database_arg,
+            "--json",
+        ])
+        .unwrap();
+        assert!(duplicated.contains(duplicate_id));
         let deleted = run([
             "session",
             "delete",
@@ -514,6 +545,15 @@ mod tests {
         ])
         .unwrap();
         assert!(deleted.contains("\"deleted\":true"));
+        run([
+            "session",
+            "delete",
+            duplicate_id,
+            "--database",
+            &database_arg,
+            "--json",
+        ])
+        .unwrap();
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(document);
         let _ = std::fs::remove_file(bundle);

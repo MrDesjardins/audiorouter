@@ -127,7 +127,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 18] = [
+pub const API_METHODS: [ApiMethodSpec; 19] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -190,6 +190,11 @@ pub const API_METHODS: [ApiMethodSpec; 18] = [
     },
     ApiMethodSpec {
         name: "sessions.create",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "sessions.duplicate",
         permission: PermissionScope::GraphWrite,
         side_effect: SideEffectClass::Mutating,
     },

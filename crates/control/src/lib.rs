@@ -261,6 +261,28 @@ impl ControlPlane {
         Ok(json!({ "session": session, "state": "stopped" }))
     }
 
+    pub fn duplicate_session(
+        &mut self,
+        source_id: &EntityId,
+        duplicate_id: EntityId,
+        name: Option<String>,
+    ) -> Result<Value, ControlError> {
+        self.ensure_session_loaded(source_id)?;
+        let source = self.get_session(source_id)?.clone();
+        if self.store.session(&duplicate_id).is_some() {
+            return Err(ControlError::InvalidRequest(
+                "duplicate session ID already exists".into(),
+            ));
+        }
+        let duplicate = Session {
+            id: duplicate_id,
+            name: name.unwrap_or_else(|| format!("{} (copy)", source.name)),
+            revision: 0,
+            ..source
+        };
+        self.create_session(duplicate)
+    }
+
     pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
         let session = self.get_session(id)?.clone();
@@ -603,6 +625,7 @@ impl ControlPlane {
             "sessions.get" => self.dispatch_session_get(request.params),
             "sessions.list" => self.dispatch_sessions_list(request.params),
             "sessions.create" => self.dispatch_session_create(request.params),
+            "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
             "sessions.delete" => self.dispatch_session_delete(request.params),
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "graph.history" => self.dispatch_graph_history(request.params),
@@ -910,6 +933,34 @@ impl ControlPlane {
         self.create_session(session)
     }
 
+    fn dispatch_session_duplicate(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("duplicate parameters are required".into())
+        })?;
+        let source_id: EntityId =
+            serde_json::from_value(params.get("sourceSessionId").cloned().ok_or_else(|| {
+                ControlError::InvalidRequest("sourceSessionId is required".into())
+            })?)
+            .map_err(|_| ControlError::InvalidRequest("invalid sourceSessionId".into()))?;
+        let duplicate_id: EntityId = serde_json::from_value(
+            params
+                .get("sessionId")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
+        )
+        .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let name = params
+            .get("name")
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| ControlError::InvalidRequest("name must be a string".into()))
+            })
+            .transpose()?;
+        self.duplicate_session(&source_id, duplicate_id, name)
+    }
+
     fn dispatch_session_delete(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let id = session_id_from_params(params)?;
         self.delete_session(&id)
@@ -1161,6 +1212,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "session.start"
             | "session.stop"
             | "sessions.create"
+            | "sessions.duplicate"
             | "sessions.delete"
     )
 }
@@ -1254,7 +1306,26 @@ mod tests {
         created.id = EntityId::new("created");
         let result = plane.create_session(created.clone()).unwrap();
         assert_eq!(result["state"], "stopped");
+        let duplicate = plane
+            .duplicate_session(
+                &created.id,
+                EntityId::new("copy"),
+                Some("Copied session".into()),
+            )
+            .unwrap();
+        assert_eq!(duplicate["session"]["id"], "copy");
+        assert_eq!(duplicate["session"]["name"], "Copied session");
+        assert_eq!(duplicate["session"]["revision"], 0);
+        assert!(matches!(
+            plane.duplicate_session(&created.id, EntityId::new("copy"), None),
+            Err(ControlError::InvalidRequest(message))
+                if message == "duplicate session ID already exists"
+        ));
         assert_eq!(plane.delete_session(&created.id).unwrap()["deleted"], true);
+        assert_eq!(
+            plane.delete_session(&EntityId::new("copy")).unwrap()["deleted"],
+            true
+        );
         assert!(matches!(
             plane.delete_session(&created.id),
             Err(ControlError::InvalidRequest(message)) if message == "session not found"
