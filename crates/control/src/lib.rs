@@ -385,6 +385,7 @@ impl ControlPlane {
             "apps.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
             "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
+            "sessions.get" => self.dispatch_session_get(request.params),
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "graph.history" => self.dispatch_graph_history(request.params),
             "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
@@ -587,6 +588,13 @@ impl ControlPlane {
     fn dispatch_session_start(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let id = session_id_from_params(params)?;
         self.session_start(&id)
+    }
+
+    fn dispatch_session_get(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let id = session_id_from_params(params)?;
+        self.ensure_session_loaded(&id)?;
+        serde_json::to_value(self.get_session(&id)?)
+            .map_err(|error| ControlError::Json(error.to_string()))
     }
 
     fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -836,6 +844,11 @@ mod tests {
             .unwrap()
             .iter()
             .any(|method| method["name"] == "nodes.describe"));
+        assert!(description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|method| method["name"] == "sessions.get"));
         assert!(description["nodeTypes"]
             .as_array()
             .unwrap()

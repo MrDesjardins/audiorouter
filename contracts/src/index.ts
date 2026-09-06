@@ -123,6 +123,7 @@ export type ImplementedMethod =
   | "graph.undoPlan"
   | "events.subscribe"
   | "nodes.describe"
+  | "sessions.get"
   | "graph.plan"
   | "graph.commit"
   | "session.start"

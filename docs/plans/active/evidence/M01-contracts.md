@@ -57,6 +57,8 @@ The in-memory graph store now drops the oldest snapshot once its 100-entry reten
 
 The CLI now supports `session start|stop <session-id> --database <absolute-path>`. The control plane lazily loads the persisted session and runs the deterministic fake lifecycle, returning `runtime: "fake"`; the acceptance script verifies running then stopped state and cleans up its temporary database. This is not evidence of live audio activation.
 
+Read parity now includes `sessions.get` and `session get <session-id> --database <absolute-path>`. The CLI acceptance round trip reads the imported fixture and verifies its ID/revision before starting the fake runtime, keeping persisted configuration inspection separate from external audio activation.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

@@ -174,12 +174,12 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: session <start|stop> <session-id> --database <path>".into(),
+            "usage: session <get|start|stop> <session-id> --database <path>".into(),
         )
     })?;
-    if !matches!(action, "start" | "stop") {
+    if !matches!(action, "get" | "start" | "stop") {
         return Err(CliError::InvalidArguments(
-            "usage: session <start|stop> <session-id> --database <path>".into(),
+            "usage: session <get|start|stop> <session-id> --database <path>".into(),
         ));
     }
     let id = args
@@ -188,11 +188,20 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
             CliError::InvalidArguments(
-                "usage: session <start|stop> <session-id> --database <path>".into(),
+                "usage: session <get|start|stop> <session-id> --database <path>".into(),
             )
         })?;
-    let mut plane = ControlPlane::with_storage("cli", database(args)?);
+    let storage = database(args)?;
     let id = EntityId::new(id);
+    if action == "get" {
+        let session = storage
+            .load_session(&id)
+            .map_err(|error| CliError::Storage(format!("{error:?}")))?
+            .ok_or_else(|| CliError::InvalidArguments("session not found".into()))?;
+        return serde_json::to_value(session)
+            .map_err(|error| CliError::InvalidArguments(error.to_string()));
+    }
+    let mut plane = ControlPlane::with_storage("cli", storage);
     match action {
         "start" => plane.session_start(&id),
         "stop" => plane.session_stop(&id),
@@ -211,7 +220,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <start|stop> <session-id> --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|start|stop> <session-id> --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
