@@ -179,3 +179,14 @@ The artifact verifier and runbook-command regression passed, and the
 temporary directory was removed. The manifest remains explicitly unsigned
 and not publication-ready; driver/signing, installer, and clean-machine gates
 remain open.
+
+## 2026-09-06 - Qualification after UI test configuration
+
+The complete unsigned preparation flow was rerun from revision
+`ff5d9e3c71d5f22c59a8b8d2af488b051f2c72dc`. The optimized CLI and plugin
+worker, locked Cargo SBOM, third-party notices, and provenance manifest were
+created in a disposable temporary directory. The artifact verifier accepted
+all four artifacts, and the manifest explicitly reported `signed: false` and
+`publicationReady: false`; the temporary directory was removed afterward.
+No signing, driver installation, installer action, or audio configuration was
+performed.
