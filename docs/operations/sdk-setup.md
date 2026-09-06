@@ -62,3 +62,14 @@ MSVC toolset and Windows SDK containing the required headers. See
 `tools/m00-native-wasapi-probe/build.ps1` for the native probe and
 `docs/plans/active/evidence/M06-vst3-sdk.md` for measured SDK validation
 evidence.
+
+For a repeatable local acceptance run, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst3-sdk.ps1
+```
+
+The script verifies the pinned revision, builds the local SDK sample when
+needed, runs the official validator and offline loader, and removes generated
+loader outputs. `-SkipBuild` is available when the existing Release build is
+already known to be current.
