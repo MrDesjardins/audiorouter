@@ -13,6 +13,7 @@ pub enum BlockError {
     InvalidChannels,
     InvalidFrameCount,
     ShapeMismatch,
+    InvalidSampleRate,
 }
 
 /// A preallocated planar float32 block. Samples are stored channel-major:
@@ -114,6 +115,37 @@ impl AudioBlock {
                         * matrix[destination_channel * source.channels + source_channel];
                 }
                 *sample = value;
+            }
+        }
+        Ok(())
+    }
+
+    /// Linearly resample a same-channel source into this preallocated block.
+    /// This is a bounded format-conversion primitive; clock-drift correction
+    /// and cross-block phase management belong to the later stream scheduler.
+    pub fn resample_linear_from(
+        &mut self,
+        source: &Self,
+        input_rate_hz: u32,
+        output_rate_hz: u32,
+    ) -> Result<(), BlockError> {
+        if self.channels != source.channels {
+            return Err(BlockError::ShapeMismatch);
+        }
+        if input_rate_hz == 0 || output_rate_hz == 0 {
+            return Err(BlockError::InvalidSampleRate);
+        }
+        let ratio = input_rate_hz as f64 / output_rate_hz as f64;
+        for destination_channel in 0..self.channels {
+            let destination = self.channel_mut(destination_channel).unwrap();
+            let input = source.channel(destination_channel).unwrap();
+            for (frame, sample) in destination.iter_mut().enumerate() {
+                let position = frame as f64 * ratio;
+                let lower = position.floor() as usize;
+                let lower = lower.min(source.frames - 1);
+                let upper = (lower + 1).min(source.frames - 1);
+                let fraction = (position - lower as f64) as f32;
+                *sample = input[lower] + (input[upper] - input[lower]) * fraction;
             }
         }
         Ok(())
@@ -266,6 +298,24 @@ mod tests {
             destination.map_from(&source, &[1.0]),
             Err(BlockError::ShapeMismatch)
         );
+    }
+
+    #[test]
+    fn linear_resampler_converts_rates_into_preallocated_output() {
+        let mut source = AudioBlock::new(1, 4).unwrap();
+        source
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.0, 1.0, 2.0, 3.0]);
+        let mut output = AudioBlock::new(1, 2).unwrap();
+        output
+            .resample_linear_from(&source, 48_000, 24_000)
+            .unwrap();
+        assert_eq!(output.channel(0).unwrap(), &[0.0, 2.0]);
+        assert!(matches!(
+            output.resample_linear_from(&source, 0, 48_000),
+            Err(BlockError::InvalidSampleRate)
+        ));
     }
 
     #[test]
