@@ -212,3 +212,7 @@ The `events.subscribe` resynchronization snapshot now matches the shared
 `SessionListPage` contract. Both backend-epoch mismatch and expired-cursor
 paths return `snapshot.sessions.items` plus `nextCursor`, preventing clients
 from receiving two incompatible snapshot shapes.
+
+The `routes.inspect` output schema now explicitly models destination identity,
+reachability, route paths, edge IDs, and channel maps. Discovery assertions
+cover the structured result without opening or changing any audio resource.

@@ -422,6 +422,28 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["backendEpoch", "events", "nextSequence"],
             "additionalProperties": false
         }),
+        "routes.inspect" => json!({
+            "type": "object",
+            "properties": {
+                "destinationNode": { "type": "string", "minLength": 1 },
+                "reachable": { "type": "boolean" },
+                "paths": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "nodes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                            "edges": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                            "channelMaps": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } }
+                        },
+                        "required": ["nodes", "edges", "channelMaps"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["destinationNode", "reachable", "paths"],
+            "additionalProperties": false
+        }),
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -3254,6 +3276,18 @@ mod tests {
         assert_eq!(
             history["outputSchema"]["properties"]["items"]["type"],
             "array"
+        );
+        let routes = methods
+            .iter()
+            .find(|method| method["name"] == "routes.inspect")
+            .unwrap();
+        assert_eq!(
+            routes["outputSchema"]["properties"]["reachable"]["type"],
+            "boolean"
+        );
+        assert_eq!(
+            routes["outputSchema"]["properties"]["paths"]["items"]["required"],
+            json!(["nodes", "edges", "channelMaps"])
         );
         let applications = methods
             .iter()
