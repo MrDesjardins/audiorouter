@@ -44,4 +44,4 @@ The original nine-test baseline is retained in the history above; the current en
 
 `RuntimePublication::clear` and `RuntimeProcessor::deactivate` now provide explicit stop behavior: future readers receive no active graph and are silenced, while existing retained snapshots remain safe until released. The lifecycle test passes without device access.
 
-`RuntimeProcessor::process_queued` connects the bounded block queue to processing: it consumes one block without waiting, clears output on empty queues or shape errors, and processes only caller-owned preallocated storage. The integration test passes; native capture/render scheduler wiring remains open.
+`RuntimeProcessor::process_queued` connects the bounded block queue to processing for control/worker use: it consumes one block without waiting and clears output on empty queues or shape errors. Because popping an owned block may reclaim its backing allocation on drop, it is explicitly not a realtime callback API; a reusable block pool/ring is still required for native scheduler wiring.

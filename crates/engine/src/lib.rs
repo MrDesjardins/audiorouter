@@ -867,9 +867,12 @@ impl RuntimeProcessor {
         Some(graph.generation())
     }
 
-    /// Consume one queued block into caller-owned output storage. An empty
-    /// queue produces safe silence and leaves the queue's underrun counter as
-    /// the authoritative indication of missing input.
+    /// Consume one queued block into caller-owned output storage. This helper
+    /// is for the control/worker path: dropping the popped block may reclaim
+    /// its backing allocation, so a realtime callback must use a reusable
+    /// block pool/ring instead. An empty queue produces safe silence and leaves
+    /// the queue's underrun counter as the authoritative indication of missing
+    /// input.
     pub fn process_queued(
         &self,
         queue: &AudioBlockQueue,
