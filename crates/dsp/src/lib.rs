@@ -111,6 +111,134 @@ pub struct Compressor {
     envelope_db: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GateParams {
+    pub threshold_db: f32,
+    pub hysteresis_db: f32,
+    pub ratio: f32,
+    pub range_db: f32,
+    pub attack_ms: f32,
+    pub hold_ms: f32,
+    pub release_ms: f32,
+    pub sample_rate: f32,
+}
+
+/// A stereo-linked downward gate/expander with explicit hold and hysteresis.
+#[derive(Clone, Debug)]
+pub struct Gate {
+    params: GateParams,
+    channels: usize,
+    gain_db: f32,
+    open: bool,
+    hold_frames: usize,
+}
+
+impl Gate {
+    pub fn new(params: GateParams, channels: usize) -> Result<Self, BiquadError> {
+        validate_gate(params, channels)?;
+        Ok(Self {
+            params,
+            channels,
+            gain_db: -params.range_db,
+            open: false,
+            hold_frames: 0,
+        })
+    }
+
+    pub fn params(&self) -> GateParams {
+        self.params
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+
+    pub fn reset(&mut self) {
+        self.gain_db = -self.params.range_db;
+        self.open = false;
+        self.hold_frames = 0;
+    }
+
+    pub fn process_interleaved(&mut self, samples: &mut [f32]) {
+        let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
+        let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
+        let hold = (self.params.hold_ms * 0.001 * self.params.sample_rate) as usize;
+        for frame in samples.chunks_exact_mut(self.channels) {
+            let peak = frame
+                .iter()
+                .map(|sample| sample.abs())
+                .fold(0.0_f32, f32::max);
+            let level_db = 20.0 * peak.max(1.0e-6).log10();
+            if self.open {
+                if level_db < self.params.threshold_db - self.params.hysteresis_db {
+                    if self.hold_frames == 0 {
+                        self.hold_frames = hold;
+                    }
+                    if self.hold_frames > 0 {
+                        self.hold_frames -= 1;
+                    } else {
+                        self.open = false;
+                    }
+                } else {
+                    self.hold_frames = 0;
+                }
+            } else if level_db >= self.params.threshold_db {
+                self.open = true;
+                self.hold_frames = 0;
+            }
+            let target_db = if self.open {
+                0.0
+            } else {
+                -((self.params.threshold_db - level_db) * (self.params.ratio - 1.0))
+                    .clamp(0.0, self.params.range_db)
+            };
+            let coefficient = if target_db > self.gain_db {
+                attack
+            } else {
+                release
+            };
+            self.gain_db = coefficient * self.gain_db + (1.0 - coefficient) * target_db;
+            let gain = 10.0_f32.powf(self.gain_db / 20.0);
+            for sample in frame {
+                let input = if sample.is_finite() { *sample } else { 0.0 };
+                let output = input * gain;
+                *sample = if output.is_finite() { output } else { 0.0 };
+            }
+        }
+    }
+}
+
+fn validate_gate(params: GateParams, channels: usize) -> Result<(), BiquadError> {
+    if channels == 0 || channels > 2 {
+        return Err(BiquadError::InvalidChannels);
+    }
+    if !params.threshold_db.is_finite()
+        || !params.hysteresis_db.is_finite()
+        || !params.ratio.is_finite()
+        || !params.range_db.is_finite()
+        || !params.attack_ms.is_finite()
+        || !params.hold_ms.is_finite()
+        || !params.release_ms.is_finite()
+        || !params.sample_rate.is_finite()
+    {
+        return Err(BiquadError::NonFiniteParameter);
+    }
+    if !(44_100.0..=192_000.0).contains(&params.sample_rate) {
+        return Err(BiquadError::InvalidSampleRate);
+    }
+    if !(-80.0..=0.0).contains(&params.threshold_db)
+        || !(0.0..=12.0).contains(&params.hysteresis_db)
+        || !(1.0..=20.0).contains(&params.ratio)
+        || !(0.0..=80.0).contains(&params.range_db)
+        || !(0.1..=100.0).contains(&params.attack_ms)
+        || !(0.0..=1_000.0).contains(&params.hold_ms)
+        || !(10.0..=2_000.0).contains(&params.release_ms)
+    {
+        return Err(BiquadError::InvalidQ);
+    }
+    Ok(())
+}
+
 impl Compressor {
     pub fn new(params: CompressorParams, channels: usize) -> Result<Self, BiquadError> {
         validate_compressor(params, channels)?;
@@ -438,5 +566,56 @@ mod tests {
         let mut samples = [f32::NAN, f32::INFINITY];
         compressor.process_interleaved(&mut samples);
         assert_eq!(samples, [0.0, 0.0]);
+    }
+
+    #[test]
+    fn gate_attenuates_quiet_signal_and_opens_for_linked_loud_signal() {
+        let params = GateParams {
+            threshold_db: -30.0,
+            hysteresis_db: 3.0,
+            ratio: 4.0,
+            range_db: 60.0,
+            attack_ms: 0.1,
+            hold_ms: 0.0,
+            release_ms: 10.0,
+            sample_rate: 48_000.0,
+        };
+        let mut gate = Gate::new(params, 2).unwrap();
+        let mut quiet = [0.01, 0.01];
+        gate.process_interleaved(&mut quiet);
+        assert!(quiet[0] < 0.01);
+        assert!(!gate.is_open());
+        let mut loud = [0.0; 128];
+        for frame in loud.chunks_exact_mut(2) {
+            frame[0] = 1.0;
+            frame[1] = 0.25;
+        }
+        gate.process_interleaved(&mut loud);
+        assert!(gate.is_open());
+        assert!((loud[126] / 1.0 - loud[127] / 0.25).abs() < 1e-5);
+    }
+
+    #[test]
+    fn gate_hysteresis_holds_open_below_threshold_until_release_condition() {
+        let params = GateParams {
+            threshold_db: -20.0,
+            hysteresis_db: 6.0,
+            ratio: 2.0,
+            range_db: 40.0,
+            attack_ms: 0.1,
+            hold_ms: 0.0,
+            release_ms: 10.0,
+            sample_rate: 48_000.0,
+        };
+        let mut gate = Gate::new(params, 1).unwrap();
+        let mut loud = [1.0];
+        gate.process_interleaved(&mut loud);
+        assert!(gate.is_open());
+        let mut just_below = [0.11];
+        gate.process_interleaved(&mut just_below);
+        assert!(gate.is_open());
+        let mut quiet = [0.01];
+        gate.process_interleaved(&mut quiet);
+        assert!(!gate.is_open());
     }
 }

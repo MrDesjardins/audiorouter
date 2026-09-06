@@ -89,3 +89,10 @@ processing is allocation-free and repairs non-finite values. Six DSP tests
 cover neutral below-threshold behavior, linked reduction, contract rejection,
 and finite repair. Gate, limiter, delay, graph/API integration, and reference
 transfer vectors remain open.
+
+The DSP crate now includes a stereo-linked gate/downward expander. It applies
+bounded threshold, hysteresis, ratio, range, attack, hold, and release
+parameters, exposes its open state, and performs finite-safe interleaved
+processing without allocation. Tests cover quiet-signal attenuation, linked
+loud-signal opening, and hysteresis behavior. Limiter, delay, graph/API
+integration, and measured transfer vectors remain open.
