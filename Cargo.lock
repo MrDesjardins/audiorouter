@@ -67,6 +67,7 @@ version = "0.1.0"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-protocol",
+ "audiorouter-recording",
  "audiorouter-storage",
  "audiorouter-windows-audio",
  "serde",
