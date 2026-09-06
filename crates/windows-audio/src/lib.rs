@@ -779,7 +779,10 @@ mod tests {
             id: "new".into(),
             ..before.clone()
         };
-        let changes = diff_endpoint_snapshots(&[before.clone()], &[after.clone(), added.clone()]);
+        let changes = diff_endpoint_snapshots(
+            std::slice::from_ref(&before),
+            &[after.clone(), added.clone()],
+        );
         assert_eq!(changes.len(), 2);
         assert!(changes.contains(&EndpointChange::Changed { before, after }));
         assert!(changes.contains(&EndpointChange::Added(added)));

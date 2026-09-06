@@ -432,8 +432,9 @@ fn has_cycle(adjacency: &HashMap<EntityId, Vec<EntityId>>) -> bool {
         .any(|node| visit(node, adjacency, &mut visiting, &mut visited))
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum RuntimeState {
+    #[default]
     Stopped,
     Preparing,
     Running,
@@ -594,12 +595,6 @@ impl GraphStore {
         self.committed_keys
             .insert(idempotency_key.into(), result.clone());
         Ok(result)
-    }
-}
-
-impl Default for RuntimeState {
-    fn default() -> Self {
-        Self::Stopped
     }
 }
 

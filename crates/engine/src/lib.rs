@@ -129,7 +129,7 @@ impl PrivacyMute {
 
 impl GainRamp {
     pub fn new(initial: f32) -> Self {
-        let initial = initial.is_finite().then_some(initial).unwrap_or(0.0);
+        let initial = if initial.is_finite() { initial } else { 0.0 };
         Self {
             current: initial,
             target: initial,
@@ -145,7 +145,7 @@ impl GainRamp {
     /// Set a finite target and transition over at most `ramp_frames` frames.
     /// A zero-length ramp changes the gain immediately.
     pub fn set_target(&mut self, target: f32, ramp_frames: usize) {
-        let target = target.is_finite().then_some(target).unwrap_or(0.0);
+        let target = if target.is_finite() { target } else { 0.0 };
         self.target = target;
         if ramp_frames == 0 {
             self.current = target;
@@ -230,7 +230,7 @@ impl AudioBlock {
     /// Apply a constant gain without allocating. Non-finite gain is treated as
     /// zero so invalid control input cannot inject NaN/Inf into the graph.
     pub fn apply_gain(&mut self, gain: f32) {
-        let gain = gain.is_finite().then_some(gain).unwrap_or(0.0);
+        let gain = if gain.is_finite() { gain } else { 0.0 };
         for sample in &mut self.samples {
             *sample *= gain;
         }
@@ -241,7 +241,7 @@ impl AudioBlock {
         if self.channels != source.channels || self.frames != source.frames {
             return Err(BlockError::ShapeMismatch);
         }
-        let gain = gain.is_finite().then_some(gain).unwrap_or(0.0);
+        let gain = if gain.is_finite() { gain } else { 0.0 };
         for (destination, source) in self.samples.iter_mut().zip(&source.samples) {
             *destination += *source * gain;
         }
@@ -287,10 +287,11 @@ impl AudioBlock {
                 for source_channel in 0..source.channels {
                     let coefficient =
                         matrix[destination_channel * source.channels + source_channel];
-                    let coefficient = coefficient
-                        .is_finite()
-                        .then_some(coefficient)
-                        .unwrap_or(0.0);
+                    let coefficient = if coefficient.is_finite() {
+                        coefficient
+                    } else {
+                        0.0
+                    };
                     value += source.channel(source_channel).unwrap()[frame] * coefficient;
                 }
                 *sample += value;
@@ -657,20 +658,11 @@ impl RuntimePublication {
 /// Integrated block-processing boundary used by a future Windows scheduler.
 /// It provides safe silence before activation, publishes only prepared graphs,
 /// applies the process-local privacy gate, and exposes callback counters.
+#[derive(Default)]
 pub struct RuntimeProcessor {
     publication: RuntimePublication,
     privacy_mute: PrivacyMute,
     metrics: CallbackMetrics,
-}
-
-impl Default for RuntimeProcessor {
-    fn default() -> Self {
-        Self {
-            publication: RuntimePublication::default(),
-            privacy_mute: PrivacyMute::default(),
-            metrics: CallbackMetrics::default(),
-        }
-    }
 }
 
 impl RuntimeProcessor {

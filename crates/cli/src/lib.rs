@@ -227,8 +227,7 @@ fn render_human(command: &str, value: &Value) -> String {
                 .as_array()
                 .unwrap()
                 .iter()
-                .map(Value::as_str)
-                .flatten()
+                .filter_map(Value::as_str)
                 .collect::<Vec<_>>()
                 .join("\n")
         );
