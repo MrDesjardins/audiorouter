@@ -13,6 +13,9 @@
 #include <atomic>
 #include <cstring>
 #include <cstdlib>
+#include <cmath>
+#include <cstdio>
+#include <ksmedia.h>
 #include <wrl.h>
 #include <wrl/implements.h>
 
@@ -280,7 +283,43 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
     return SUCCEEDED(hr) && packet_count > 0 ? 0 : 1;
 }
 
-static int render_data_probe(UINT target_index, DWORD duration_ms) {
+static bool render_tone(BYTE* data, UINT32 frames, const WAVEFORMATEX* format,
+                        double& phase, double frequency) {
+    if (!data || !format || format->nChannels == 0 || format->nSamplesPerSec == 0) return false;
+    const bool is_float = format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+        (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+         format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+         reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat ==
+             KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+    const double step = 2.0 * 3.14159265358979323846 * frequency /
+                        static_cast<double>(format->nSamplesPerSec);
+    if (is_float && format->wBitsPerSample == 32) {
+        auto* samples = reinterpret_cast<float*>(data);
+        for (UINT32 frame = 0; frame < frames; ++frame) {
+            const float sample = static_cast<float>(0.1 * std::sin(phase));
+            for (UINT channel = 0; channel < format->nChannels; ++channel) {
+                samples[static_cast<size_t>(frame) * format->nChannels + channel] = sample;
+            }
+            phase += step;
+        }
+        return true;
+    }
+    if (!is_float && format->wFormatTag == WAVE_FORMAT_PCM && format->wBitsPerSample == 16) {
+        auto* samples = reinterpret_cast<SHORT*>(data);
+        for (UINT32 frame = 0; frame < frames; ++frame) {
+            const SHORT sample = static_cast<SHORT>(0.1 * 32767.0 * std::sin(phase));
+            for (UINT channel = 0; channel < format->nChannels; ++channel) {
+                samples[static_cast<size_t>(frame) * format->nChannels + channel] = sample;
+            }
+            phase += step;
+        }
+        return true;
+    }
+    std::memset(data, 0, static_cast<size_t>(frames) * format->nBlockAlign);
+    return false;
+}
+
+static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -321,6 +360,8 @@ static int render_data_probe(UINT target_index, DWORD duration_ms) {
         print_hr("render_get_service", hr);
     }
     UINT32 submitted_frames = 0;
+    double phase = 0.0;
+    bool tone_written = !tone;
     if (SUCCEEDED(hr)) {
         hr = client->Start();
         print_hr("render_start", hr);
@@ -335,7 +376,8 @@ static int render_data_probe(UINT target_index, DWORD duration_ms) {
                     BYTE* data = nullptr;
                     hr = render->GetBuffer(available, &data);
                     if (FAILED(hr)) break;
-                    hr = render->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
+                    if (tone) tone_written = render_tone(data, available, format, phase, 997.0) || tone_written;
+                    hr = render->ReleaseBuffer(available, tone ? 0 : AUDCLNT_BUFFERFLAGS_SILENT);
                     if (FAILED(hr)) break;
                     submitted_frames += available;
                 }
@@ -343,7 +385,8 @@ static int render_data_probe(UINT target_index, DWORD duration_ms) {
             }
             print_hr("render_silent_submit", hr);
             std::cout << "render_buffer_size=" << buffer_size
-                      << " render_submitted_frames=" << submitted_frames << '\n';
+                      << " render_submitted_frames=" << submitted_frames
+                      << " render_tone_written=" << (tone_written ? 1 : 0) << '\n';
             print_hr("render_stop", client->Stop());
             print_hr("render_reset", client->Reset());
         }
@@ -352,7 +395,38 @@ static int render_data_probe(UINT target_index, DWORD duration_ms) {
     if (format) CoTaskMemFree(format);
     if (client) client->Release();
     device->Release(); devices->Release(); enumerator->Release();
-    return SUCCEEDED(hr) && submitted_frames > 0 ? 0 : 1;
+    return SUCCEEDED(hr) && submitted_frames > 0 && tone_written ? 0 : 1;
+}
+
+static int controlled_process_attribution(DWORD duration_ms) {
+    char executable[MAX_PATH]{};
+    if (GetModuleFileNameA(nullptr, executable, MAX_PATH) == 0) {
+        print_hr("attribution_get_executable", HRESULT_FROM_WIN32(GetLastError()));
+        return 1;
+    }
+    char command_line[2048]{};
+    sprintf_s(command_line, "\"%s\" tone %lu", executable,
+              static_cast<unsigned long>(duration_ms + 1000));
+    STARTUPINFOA startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessA(nullptr, command_line, nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process)) {
+        print_hr("attribution_create_process", HRESULT_FROM_WIN32(GetLastError()));
+        return 1;
+    }
+    CloseHandle(process.hThread);
+    const int result = process_loopback_probe(process.dwProcessId, true, true, duration_ms);
+    WaitForSingleObject(process.hProcess, duration_ms + 3000);
+    DWORD exit_code = STILL_ACTIVE;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    if (exit_code == STILL_ACTIVE) {
+        TerminateProcess(process.hProcess, 1);
+        WaitForSingleObject(process.hProcess, 1000);
+    }
+    CloseHandle(process.hProcess);
+    std::cout << "attribution_child_exit=" << exit_code << '\n';
+    return result == 0 && exit_code == 0 ? 0 : 1;
 }
 
 int main(int argc, char** argv) {
@@ -369,7 +443,19 @@ int main(int argc, char** argv) {
     if (argc > 1 && std::strcmp(argv[1], "render") == 0) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
-        int result = render_data_probe(target_index, duration_ms);
+        int result = render_data_probe(target_index, duration_ms, false);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "tone") == 0) {
+        DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1500;
+        int result = render_data_probe(0, duration_ms, true);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "process-attribution") == 0) {
+        DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
+        int result = controlled_process_attribution(duration_ms);
         CoUninitialize();
         return result;
     }
