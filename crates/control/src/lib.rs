@@ -2308,29 +2308,10 @@ fn role_from_name(name: &str) -> Option<ClientRole> {
 }
 
 fn is_mutating_method(method: &str) -> bool {
-    matches!(
-        method,
-        "graph.plan"
-            | "graph.undoPlan"
-            | "graph.commit"
-            | "operations.cancel"
-            | "session.start"
-            | "sessions.start"
-            | "session.stop"
-            | "sessions.stop"
-            | "sessions.create"
-            | "sessions.duplicate"
-            | "sessions.delete"
-            | "clients.authorize"
-            | "clients.revoke"
-            | "recordings.setMetadata"
-            | "recordings.rename"
-            | "recordings.reveal"
-            | "recordings.removeEntry"
-            | "recordings.recycle"
-            | "safety.setPrivacyMute"
-            | "recovery.clearSafeMode"
-    )
+    API_METHODS
+        .iter()
+        .find(|spec| spec.name == method)
+        .is_some_and(|spec| spec.side_effect != audiorouter_domain::SideEffectClass::ReadOnly)
 }
 
 fn storage_error(error: StorageError) -> ControlError {
@@ -3364,6 +3345,18 @@ mod tests {
             params: None,
         };
         assert_eq!(plane.dispatch(unknown).error.unwrap().code, -32601);
+    }
+
+    #[test]
+    fn mutation_classifier_matches_authoritative_method_metadata() {
+        for method in API_METHODS {
+            assert_eq!(
+                is_mutating_method(method.name),
+                method.side_effect != audiorouter_domain::SideEffectClass::ReadOnly,
+                "mutation classification drifted for {}",
+                method.name
+            );
+        }
     }
 
     #[test]
