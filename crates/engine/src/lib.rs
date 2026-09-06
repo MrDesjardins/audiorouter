@@ -1074,6 +1074,12 @@ pub struct CallbackMetrics {
     xruns: AtomicU64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BlockMeterSnapshot {
+    pub peak_abs: f32,
+    pub clipped_samples: u64,
+}
+
 /// Lock-free peak/clipping meter for a prepared node boundary. The maximum
 /// uses the monotonic positive-f32 bit representation, so observation never
 /// takes a mutex or allocates.
@@ -1114,6 +1120,13 @@ impl BlockMeter {
 
     pub fn clipped_samples(&self) -> u64 {
         self.clipped_samples.load(Ordering::Relaxed)
+    }
+
+    pub fn snapshot(&self) -> BlockMeterSnapshot {
+        BlockMeterSnapshot {
+            peak_abs: self.peak_abs(),
+            clipped_samples: self.clipped_samples(),
+        }
     }
 
     pub fn reset(&self) {
@@ -1715,6 +1728,10 @@ impl RuntimeGraph {
     /// snapshot is retained by its reader.
     pub fn meter(&self, index: usize) -> Option<&BlockMeter> {
         self.meters.get(index)
+    }
+
+    pub fn meter_snapshot(&self, index: usize) -> Option<BlockMeterSnapshot> {
+        self.meter(index).map(BlockMeter::snapshot)
     }
 
     pub fn process(&self, block: &mut AudioBlock) -> usize {
@@ -2618,6 +2635,13 @@ mod tests {
         assert_eq!(graph.meter(0).unwrap().clipped_samples(), 1);
         assert_eq!(graph.meter(1).unwrap().peak_abs(), 3.0);
         assert_eq!(graph.meter(1).unwrap().clipped_samples(), 1);
+        assert_eq!(
+            graph.meter_snapshot(1),
+            Some(BlockMeterSnapshot {
+                peak_abs: 3.0,
+                clipped_samples: 1,
+            })
+        );
         assert!(graph.meter(2).is_none());
     }
 

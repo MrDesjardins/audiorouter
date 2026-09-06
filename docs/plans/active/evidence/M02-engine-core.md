@@ -62,6 +62,11 @@ observe the block at their exact processing boundary without allocating or
 locking; a two-boundary regression verifies distinct pre- and post-gain peaks
 and clipping counts. Native scheduler/API transport publication remains open.
 
+The graph now also exposes a copyable `BlockMeterSnapshot`, so control-facing
+code need not depend on the atomic meter storage representation. Snapshot reads
+remain lock-free and bounded; transport publication and reset authorization
+remain outside this portable engine slice.
+
 ## 2026-09-06 — Graph processor parameter integration
 
 The domain `Node` contract now carries a backward-compatible parameter map.
