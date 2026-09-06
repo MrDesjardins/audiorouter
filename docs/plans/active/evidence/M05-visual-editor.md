@@ -146,3 +146,9 @@ node. It edits only the local candidate, remains disabled in disconnected
 preview mode, and emits a deterministic /nodes/<index>/parameters/gainDb
 change for the existing plan/commit flow. UI tests pass 8 cases with TypeScript
 typecheck and the production build.
+
+The selected Mute node now exposes its graph-level `muted` parameter as a
+connected-only draft checkbox. This is distinct from the process privacy-mute
+safety action, which remains unavailable in the editor; the parameter still
+flows through the existing plan/commit path. UI coverage is 9 tests with
+typecheck and production build passing.

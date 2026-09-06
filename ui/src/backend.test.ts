@@ -75,6 +75,15 @@ describe("plan-only drafts", () => {
     ]);
   });
 
+  it("edits a boolean Mute parameter without changing the revision", () => {
+    const candidate = setNodeDraftParameter(demoSession, "voice", "muted", true);
+    expect(candidate.revision).toBe(demoSession.revision);
+    expect(candidate.nodes[1].parameters.muted).toBe(true);
+    expect(describeDraftChanges(demoSession, candidate)).toEqual([
+      { path: "/nodes/1/parameters/muted", value: true },
+    ]);
+  });
+
   it("plans before committing and forwards the revision/key", async () => {
     const calls: string[] = [];
     const backend: Pick<UiBackend, "planGraph" | "commitGraph"> = {
