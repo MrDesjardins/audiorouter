@@ -767,6 +767,28 @@ impl Storage {
             .map_err(Into::into)
     }
 
+    pub fn operation_status(
+        &self,
+        operation_id: &str,
+    ) -> Result<Option<(String, String, u64, String)>, StorageError> {
+        self.connection
+            .query_row(
+                "SELECT operation, result, committed_revision, created_at
+                 FROM operation_journal WHERE idempotency_key = ?1",
+                params![operation_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get::<_, i64>(2)? as u64,
+                        row.get(3)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn save_client_enrollment(&self, client_id: &str, role: &str) -> Result<(), StorageError> {
         self.connection.execute(
             "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)

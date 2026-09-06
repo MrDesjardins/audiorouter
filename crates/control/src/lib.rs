@@ -93,6 +93,7 @@ fn method_description(name: &str) -> &'static str {
         "clients.list" => "List enrolled local client identities and roles.",
         "clients.authorize" => "Authorize a client with an explicit built-in role.",
         "clients.revoke" => "Revoke a client enrollment without deleting its audit record.",
+        "operations.get" => "Read the durable outcome of an idempotent operation.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -159,6 +160,10 @@ fn method_input_schema(name: &str) -> Value {
         "clients.revoke" => object_schema(
             json!({ "clientId": { "type": "string", "minLength": 1 } }),
             &["clientId"],
+        ),
+        "operations.get" => object_schema(
+            json!({ "operationId": { "type": "string", "minLength": 1 } }),
+            &["operationId"],
         ),
         "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
         | "session.stop" | "sessions.stop" => object_schema(
@@ -455,6 +460,40 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("clientId is required".into()))?;
         let changed = self.revoke_client(client_id)?;
         Ok(json!({ "clientId": client_id, "revoked": true, "changed": changed }))
+    }
+
+    fn dispatch_operation_get(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        let operation_id = params
+            .get("operationId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        let Some(storage) = &self.storage else {
+            return Ok(json!({
+                "operationId": operation_id,
+                "status": "unknown",
+                "durable": false
+            }));
+        };
+        let Some((operation, result, revision, created_at)) = storage
+            .operation_status(operation_id)
+            .map_err(storage_error)?
+        else {
+            return Err(ControlError::InvalidRequest("operation not found".into()));
+        };
+        let result: Value =
+            serde_json::from_str(&result).map_err(|error| ControlError::Json(error.to_string()))?;
+        Ok(json!({
+            "operationId": operation_id,
+            "operation": operation,
+            "status": "completed",
+            "durable": true,
+            "revision": revision,
+            "createdAt": created_at,
+            "result": result
+        }))
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
@@ -910,6 +949,7 @@ impl ControlPlane {
             "clients.list" => self.dispatch_clients_list(),
             "clients.authorize" => self.dispatch_client_authorize(request.params),
             "clients.revoke" => self.dispatch_client_revoke(request.params),
+            "operations.get" => self.dispatch_operation_get(request.params),
             "devices.list" => self.dispatch_devices_list(),
             "apps.list" | "applications.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1529,6 +1569,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "system.handshake" => &["protocolVersion"],
         "clients.authorize" => &["clientId", "role"],
         "clients.revoke" => &["clientId"],
+        "operations.get" => &["operationId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -2347,6 +2388,29 @@ mod tests {
         let result = plane.commit_graph(&plan, 0, "persist-op").unwrap();
         assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
         assert!(result["revision"] == 1);
+    }
+
+    #[test]
+    fn operations_get_returns_durable_commit_outcome() {
+        let storage = Storage::open_memory().unwrap();
+        let mut plane = ControlPlane::with_storage("operation-test", storage);
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "operation-change".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "operation-id").unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(13)),
+            method: "operations.get".into(),
+            params: Some(json!({ "operationId": "operation-id" })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["status"], "completed");
+        assert_eq!(result["durable"], true);
+        assert_eq!(result["revision"], 1);
+        assert_eq!(result["result"]["revision"], 1);
     }
 
     #[test]

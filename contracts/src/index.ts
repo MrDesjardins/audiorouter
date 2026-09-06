@@ -165,6 +165,7 @@ export type ImplementedMethod =
   | "clients.list"
   | "clients.authorize"
   | "clients.revoke"
+  | "operations.get"
   | "devices.list"
   | "apps.list"
   | "applications.list"
@@ -194,6 +195,7 @@ export type MethodParams = {
   "clients.list": undefined;
   "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator" };
   "clients.revoke": { clientId: string };
+  "operations.get": { operationId: string };
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "apps.list": undefined;
   "applications.list": undefined;
@@ -235,6 +237,7 @@ export type MethodResult = {
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
   "clients.authorize": Record<string, unknown>;
   "clients.revoke": Record<string, unknown>;
+  "operations.get": Record<string, unknown>;
   "devices.list": unknown[];
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];
