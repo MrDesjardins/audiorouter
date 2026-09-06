@@ -96,6 +96,56 @@ pub struct AudioBlockQueue {
     invalid_blocks: AtomicU64,
 }
 
+/// Reusable pool of fixed-shape blocks. All backing allocations happen during
+/// construction; a well-formed acquire/release cycle performs no allocation or
+/// deallocation and is suitable for a future callback-owned buffer ring.
+pub struct AudioBlockPool {
+    blocks: crossbeam_queue::ArrayQueue<AudioBlock>,
+    shape: (usize, usize),
+}
+
+impl AudioBlockPool {
+    pub fn new(capacity: usize, channels: usize, frames: usize) -> Result<Self, QueueError> {
+        if capacity == 0 {
+            return Err(QueueError::InvalidCapacity);
+        }
+        if !(1..=MAX_CHANNELS).contains(&channels)
+            || !(1..=PROCESSING_QUANTUM_FRAMES).contains(&frames)
+        {
+            return Err(QueueError::InvalidShape);
+        }
+        let blocks = crossbeam_queue::ArrayQueue::new(capacity);
+        for _ in 0..capacity {
+            blocks
+                .push(AudioBlock::new(channels, frames).unwrap())
+                .expect("new pool has capacity for every block");
+        }
+        Ok(Self {
+            blocks,
+            shape: (channels, frames),
+        })
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.blocks.capacity()
+    }
+
+    pub fn available(&self) -> usize {
+        self.blocks.len()
+    }
+
+    pub fn try_acquire(&self) -> Option<AudioBlock> {
+        self.blocks.pop()
+    }
+
+    pub fn try_release(&self, block: AudioBlock) -> Result<(), AudioBlock> {
+        if (block.channels(), block.frames()) != self.shape {
+            return Err(block);
+        }
+        self.blocks.push(block)
+    }
+}
+
 impl AudioBlockQueue {
     pub fn new(capacity: usize) -> Result<Self, QueueError> {
         if capacity == 0 {
@@ -995,6 +1045,21 @@ mod tests {
         let shaped = AudioBlockQueue::new_for_shape(1, 1, 2).unwrap();
         assert!(shaped.try_push(AudioBlock::new(2, 2).unwrap()).is_err());
         assert_eq!(shaped.invalid_blocks(), 1);
+    }
+
+    #[test]
+    fn block_pool_preallocates_and_recycles_only_its_shape() {
+        let pool = AudioBlockPool::new(2, 1, 2).unwrap();
+        assert_eq!(pool.capacity(), 2);
+        assert_eq!(pool.available(), 2);
+        let block = pool.try_acquire().unwrap();
+        assert_eq!(pool.available(), 1);
+        assert!(pool.try_release(AudioBlock::new(2, 2).unwrap()).is_err());
+        pool.try_release(block).unwrap();
+        assert_eq!(pool.available(), 2);
+        assert!(pool.try_acquire().is_some());
+        assert!(pool.try_acquire().is_some());
+        assert!(pool.try_acquire().is_none());
     }
 
     #[test]

@@ -45,3 +45,5 @@ The original nine-test baseline is retained in the history above; the current en
 `RuntimePublication::clear` and `RuntimeProcessor::deactivate` now provide explicit stop behavior: future readers receive no active graph and are silenced, while existing retained snapshots remain safe until released. The lifecycle test passes without device access.
 
 `RuntimeProcessor::process_queued` connects the bounded block queue to processing for control/worker use: it consumes one block without waiting and clears output on empty queues or shape errors. Because popping an owned block may reclaim its backing allocation on drop, it is explicitly not a realtime callback API; a reusable block pool/ring is still required for native scheduler wiring.
+
+`AudioBlockPool` now allocates all fixed-shape block storage during construction and exposes nonblocking acquire/release operations. The pool test verifies capacity, recycling, exhaustion, and rejection of a mismatched shape. This makes the ownership requirement concrete for a future callback ring, but no native scheduler uses the pool yet and callers must preserve the recycle path to avoid deallocation on the realtime thread.
