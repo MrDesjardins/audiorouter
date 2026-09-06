@@ -728,8 +728,8 @@ impl RuntimeProcessor {
             block.clear();
             return None;
         };
-        graph.process_instrumented(block, &self.metrics);
         self.privacy_mute.apply(block);
+        graph.process_instrumented(block, &self.metrics);
         Some(graph.generation())
     }
 }
