@@ -79,6 +79,8 @@ Durable idempotency records now have a 24-hour retention bound. Journal reads an
 
 The durable commit hash is derived from the operation, plan ID, and base revision rather than requiring the candidate to remain in memory. This permits replay from a fresh control process before plan lookup; a regression verifies the persisted result is returned without a second mutation. The affected suites pass 23 control, 19 domain, and 17 storage tests with strict Clippy.
 
+Status correction for the earlier coverage summary: subsequent native evidence now establishes process-loopback include/exclude activation and data reads. Controlled per-process tone attribution, physical latency, driver lifecycle/signing, and full M02 hardware acceptance remain open; the portable M01 tests do not claim those results.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.

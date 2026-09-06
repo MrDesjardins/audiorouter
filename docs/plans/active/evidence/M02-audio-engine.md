@@ -35,3 +35,5 @@ cargo test -p audiorouter-windows-audio
 Passed 5 tests, including live active-endpoint enumeration, endpoint snapshot diffing, and unknown capture/render endpoint rejection tests. The wrapper's real capture start/packet/stop path is covered by the separately run native diagnostic; the ordinary workspace suite does not open the user's microphone. The adapter does not change defaults, volume, mute, driver state, or other persistent configuration.
 
 This does not yet satisfy M02. Graph activation/routing, end-to-end realtime buffer transfer, latency measurement, dual-device drift validation, process-tree capture data, and failure recovery remain open. The native diagnostic separately provides the current capture and process-loopback activation/data evidence.
+
+The process-tree capture clause above is superseded by the later native probe evidence: include and exclude modes have successful data-path reads. Remaining M02 gaps are controlled attribution, graph-to-device activation, end-to-end scheduling, latency, dual-device drift validation, failure recovery, and driver lifecycle.
