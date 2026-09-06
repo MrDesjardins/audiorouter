@@ -1097,7 +1097,10 @@ pub fn compile_mixer_session(
         .iter()
         .filter(|edge| edge.enabled && edge.source_node == mixer.id)
         .collect::<Vec<_>>();
-    if incoming.len() < 2 || outgoing.len() != 1 {
+    if incoming.len() < 2
+        || outgoing.len() != 1
+        || session.edges.iter().filter(|edge| edge.enabled).count() != incoming.len() + 1
+    {
         return Err(GraphCompileError::UnsupportedTopology);
     }
     let mixer_input = mixer
@@ -1106,6 +1109,7 @@ pub fn compile_mixer_session(
         .find(|port| port.name == incoming[0].destination_port)
         .filter(|port| port.direction == audiorouter_domain::PortDirection::Input)
         .ok_or(GraphCompileError::UnsupportedTopology)?;
+    let mut source_ids = std::collections::HashSet::with_capacity(incoming.len());
     let mut matrices = Vec::with_capacity(incoming.len());
     for edge in incoming {
         let source = session
@@ -1113,7 +1117,11 @@ pub fn compile_mixer_session(
             .iter()
             .find(|node| node.id == edge.source_node)
             .ok_or(GraphCompileError::UnsupportedTopology)?;
-        if !source.enabled || source.bypass || edge.destination_port != mixer_input.name {
+        if !source.enabled
+            || source.bypass
+            || edge.destination_port != mixer_input.name
+            || !source_ids.insert(source.id.clone())
+        {
             return Err(GraphCompileError::UnsupportedTopology);
         }
         let source_port = source
@@ -1135,7 +1143,7 @@ pub fn compile_mixer_session(
         .iter()
         .find(|node| node.id == output_edge.destination_node)
         .ok_or(GraphCompileError::UnsupportedTopology)?;
-    if !destination.enabled || destination.bypass {
+    if destination.kind != NodeKind::PhysicalOutput || !destination.enabled || destination.bypass {
         return Err(GraphCompileError::UnsupportedTopology);
     }
     let mixer_output = mixer
@@ -1495,6 +1503,31 @@ mod tests {
             .process(&[left, right], &mut scratch, &mut output)
             .unwrap();
         assert_eq!(output.channel(0).unwrap(), &[0.75; 4]);
+
+        let mut unrelated = session.clone();
+        unrelated.nodes.push(node(
+            "unrelated-source",
+            NodeKind::Gain,
+            vec![port("out", PortDirection::Output)],
+        ));
+        unrelated.nodes.push(node(
+            "unrelated-output",
+            NodeKind::PhysicalOutput,
+            vec![port("in", PortDirection::Input)],
+        ));
+        unrelated.edges.push(Edge {
+            id: EntityId::new("unrelated-edge"),
+            source_node: EntityId::new("unrelated-source"),
+            source_port: "out".into(),
+            destination_node: EntityId::new("unrelated-output"),
+            destination_port: "in".into(),
+            matrix: vec![1.0],
+            enabled: true,
+        });
+        assert!(matches!(
+            compile_mixer_session(&unrelated, RuntimeGeneration::new(13)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
     }
 
     #[test]
