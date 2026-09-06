@@ -142,3 +142,15 @@ setup. One endpoint returned `AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`) while
 the remaining endpoints returned success; no endpoint was started or rendered
 to. This is a distinct, correctly classified busy-device result and does not
 reintroduce the earlier capture `E_INVALIDARG` finding.
+
+## 2026-09-06 — Rust adapter discrepancy isolation
+
+A Windows-gated Rust integration attempt against the same first capture
+endpoint (the endpoint ID and ordering matched the native probe) returned
+`E_INVALIDARG` from the Rust `IAudioClient::Initialize` call. Before that call,
+Rust `IAudioClient::IsFormatSupported` returned `S_OK` for the same
+`GetMixFormat()` pointer. This narrows the remaining issue to the Rust COM/ABI
+initialization boundary or its request marshalling, rather than endpoint
+enumeration, format support, or ordinary device contention. The temporary
+failing test and diagnostics were removed; the stable adapter suite remains
+portable/metadata-only until this live-open discrepancy is resolved.
