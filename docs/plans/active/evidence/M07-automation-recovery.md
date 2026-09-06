@@ -69,6 +69,11 @@ The focused MCP `list_recordings` tool now advertises the same optional cursor
 and 1–500 limit fields as the shared API. Its catalog regression verifies the
 schema, while CLI/MCP interoperability and strict Clippy remain green.
 
+Paged recording requests now use a bounded SQLite query (`limit + 1`) and a
+stable start-time/ID comparison, rather than loading the complete library into
+memory before slicing. Storage coverage verifies first/next/terminal pages and
+invalid cursors; control coverage and strict Clippy pass.
+
 ## 2026-09-06 — Session-list CLI cursor parity
 
 `session list` now accepts optional `--cursor ID` in addition to its bounded

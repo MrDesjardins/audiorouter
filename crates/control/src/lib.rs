@@ -1824,18 +1824,16 @@ impl ControlPlane {
                 json!([])
             });
         };
-        let mut records = storage.list_recordings(session_id).map_err(storage_error)?;
-        if let Some(cursor) = cursor {
-            let position = records
-                .iter()
-                .position(|record| record.id == cursor)
-                .ok_or_else(|| ControlError::InvalidRequest("invalid recording cursor".into()))?;
-            records.drain(..=position);
-        }
-        let has_more = paged && records.len() > limit as usize;
-        if paged {
-            records.truncate(limit as usize);
-        }
+        let (records, has_more) = if paged {
+            storage
+                .list_recordings_page(session_id, cursor, limit as usize)
+                .map_err(storage_error)?
+        } else {
+            (
+                storage.list_recordings(session_id).map_err(storage_error)?,
+                false,
+            )
+        };
         let values = records
             .into_iter()
             .map(|record| {

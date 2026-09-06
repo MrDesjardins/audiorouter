@@ -186,6 +186,26 @@ pub struct RecordingRecord {
     pub comment: Option<String>,
 }
 
+fn recording_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordingRecord> {
+    Ok(RecordingRecord {
+        id: row.get(0)?,
+        session_id: row.get(1)?,
+        recorder_id: row.get(2)?,
+        path: row.get(3)?,
+        format: row.get(4)?,
+        channels: row.get::<_, i64>(5)? as u16,
+        sample_rate: row.get::<_, i64>(6)? as u32,
+        frames: row.get::<_, i64>(7)? as u64,
+        file_bytes: row.get::<_, i64>(8)? as u64,
+        start_time: row.get(9)?,
+        state: row.get(10)?,
+        missing: row.get::<_, i64>(11)? != 0,
+        title: row.get(12)?,
+        artist: row.get(13)?,
+        comment: row.get(14)?,
+    })
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct GraphPlanRecord {
     pub id: String,
@@ -687,27 +707,75 @@ impl Storage {
              ORDER BY start_time ASC, id ASC",
         )?;
         let records = statement
-            .query_map(params![session_id], |row| {
-                Ok(RecordingRecord {
-                    id: row.get(0)?,
-                    session_id: row.get(1)?,
-                    recorder_id: row.get(2)?,
-                    path: row.get(3)?,
-                    format: row.get(4)?,
-                    channels: row.get::<_, i64>(5)? as u16,
-                    sample_rate: row.get::<_, i64>(6)? as u32,
-                    frames: row.get::<_, i64>(7)? as u64,
-                    file_bytes: row.get::<_, i64>(8)? as u64,
-                    start_time: row.get(9)?,
-                    state: row.get(10)?,
-                    missing: row.get::<_, i64>(11)? != 0,
-                    title: row.get(12)?,
-                    artist: row.get(13)?,
-                    comment: row.get(14)?,
-                })
-            })?
+            .query_map(params![session_id], recording_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(records)
+    }
+
+    /// Read one bounded recording page. The cursor is the last returned
+    /// recording ID in the stable (start_time, id) ordering.
+    pub fn list_recordings_page(
+        &self,
+        session_id: Option<&str>,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<(Vec<RecordingRecord>, bool), StorageError> {
+        if !(1..=500).contains(&limit) {
+            return Err(StorageError::InvalidRecording(
+                "recording page limit must be between 1 and 500".into(),
+            ));
+        }
+        if let Some(cursor) = cursor {
+            let exists = self
+                .connection
+                .query_row(
+                    "SELECT 1 FROM recordings WHERE id = ?1
+                     AND (?2 IS NULL OR session_id = ?2)",
+                    params![cursor, session_id],
+                    |_| Ok(()),
+                )
+                .optional()?;
+            if exists.is_none() {
+                return Err(StorageError::InvalidRecording(
+                    "invalid recording cursor".into(),
+                ));
+            }
+        }
+        let mut statement = if cursor.is_some() {
+            self.connection.prepare(
+                "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
+                        frames, file_bytes, start_time, state, missing, title, artist, comment
+                 FROM recordings
+                 WHERE (?1 IS NULL OR session_id = ?1)
+                   AND (start_time, id) > (
+                       SELECT start_time, id FROM recordings WHERE id = ?2
+                   )
+                 ORDER BY start_time ASC, id ASC
+                 LIMIT ?3",
+            )?
+        } else {
+            self.connection.prepare(
+                "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
+                        frames, file_bytes, start_time, state, missing, title, artist, comment
+                 FROM recordings
+                 WHERE (?1 IS NULL OR session_id = ?1)
+                 ORDER BY start_time ASC, id ASC
+                 LIMIT ?2",
+            )?
+        };
+        let fetch_limit = (limit + 1) as i64;
+        let mut records = if let Some(cursor) = cursor {
+            statement
+                .query_map(params![session_id, cursor, fetch_limit], recording_from_row)?
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            statement
+                .query_map(params![session_id, fetch_limit], recording_from_row)?
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        let has_more = records.len() > limit;
+        records.truncate(limit);
+        Ok((records, has_more))
     }
 
     pub fn get_recording(&self, id: &str) -> Result<Option<RecordingRecord>, StorageError> {
@@ -2680,6 +2748,23 @@ mod tests {
         second.missing = true;
         storage.save_recording(&second).unwrap();
         assert_eq!(storage.list_recordings(Some("session")).unwrap().len(), 2);
+        let (page, has_more) = storage
+            .list_recordings_page(Some("session"), None, 1)
+            .unwrap();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].id, "rec-1");
+        assert!(has_more);
+        let (page, has_more) = storage
+            .list_recordings_page(Some("session"), Some("rec-1"), 1)
+            .unwrap();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].id, "rec-2");
+        assert!(!has_more);
+        assert!(matches!(
+            storage.list_recordings_page(Some("session"), Some("missing"), 1),
+            Err(StorageError::InvalidRecording(message))
+                if message.contains("invalid recording cursor")
+        ));
         assert!(storage
             .update_recording_metadata("rec-1", Some("Take 1"), Some("User"), None)
             .unwrap());
