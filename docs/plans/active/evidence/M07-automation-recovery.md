@@ -57,6 +57,12 @@ conflicting with one another. Operation lookup/cancel resolves only the
 requesting client's scoped records. A regression proves two clients can each
 commit with the same key; control coverage is 68 tests with strict Clippy.
 
+The complete `tests/acceptance/m07-headless.ps1` wrapper was rerun from clean
+revision `76b4d2b`. M01 CLI acceptance, MCP stdio interoperability, 68 control
+tests, 31 plugin-host unit tests, 8 worker-process tests, and strict Clippy all
+passed. The run remained configuration-only and did not open audio devices,
+install drivers, or change machine audio settings.
+
 ## 2026-09-06 — Scan cancellation during bounded binary reads
 
 Plugin discovery now gives each candidate its own ten-second inspection window
