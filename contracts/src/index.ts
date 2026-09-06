@@ -67,6 +67,23 @@ export interface RouteInspection {
   paths: RoutePath[];
 }
 
+export interface GraphPlanResult {
+  planId: EntityId;
+  baseRevision: number;
+  expiresInMs: number;
+  diff: unknown[];
+  affectedDestinations: string[];
+  warnings: string[];
+  requiredScopes: string[];
+}
+
+export interface GraphCommitResult {
+  sessionId: EntityId;
+  revision: number;
+  idempotentReplay?: boolean;
+  activation?: Record<string, unknown>;
+}
+
 export type RecordingState = "armed" | "recording" | "paused" | "completed" | "failed";
 
 export interface RecordingMetadata {
@@ -316,8 +333,8 @@ export type MethodResult = {
   "sessions.create": Record<string, unknown>;
   "sessions.duplicate": Record<string, unknown>;
   "sessions.delete": Record<string, unknown>;
-  "graph.plan": Record<string, unknown>;
-  "graph.commit": Record<string, unknown>;
+  "graph.plan": GraphPlanResult;
+  "graph.commit": GraphCommitResult;
   "session.start": Record<string, unknown>;
   "sessions.start": Record<string, unknown>;
   "session.stop": Record<string, unknown>;

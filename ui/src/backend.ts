@@ -2,6 +2,8 @@ import type {
   AudioRouterClient,
   DiscoveryDocument,
   EventsSubscribeResult,
+  GraphCommitResult,
+  GraphPlanResult,
   RouteInspection,
   Session,
   StatusSnapshot,
@@ -20,6 +22,8 @@ export interface UiBackend {
   snapshot(): Promise<UiBackendSnapshot>;
   subscribe(afterSequence?: number, sessionId?: string): Promise<EventsSubscribeResult>;
   inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
+  planGraph(candidate: Session): Promise<GraphPlanResult>;
+  commitGraph(planId: string, baseRevision: number, idempotencyKey: string): Promise<GraphCommitResult>;
 }
 
 export type UiSnapshotState = {
@@ -76,6 +80,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async inspectRoute() {
       return null;
     },
+    async planGraph() {
+      throw new Error("The backend is disconnected; graph changes are unavailable.");
+    },
+    async commitGraph() {
+      throw new Error("The backend is disconnected; graph changes are unavailable.");
+    },
   };
 }
 
@@ -100,6 +110,16 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async inspectRoute(destinationNode) {
       return client.request("routes.inspect", { sessionId, destinationNode });
+    },
+    async planGraph(candidate) {
+      return client.request("graph.plan", {
+        sessionId,
+        baseRevision: candidate.revision,
+        candidate,
+      });
+    },
+    async commitGraph(planId, baseRevision, idempotencyKey) {
+      return client.request("graph.commit", { planId, baseRevision, idempotencyKey });
     },
   };
 }

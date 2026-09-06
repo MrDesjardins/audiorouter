@@ -102,3 +102,9 @@ verify disconnected read-only snapshots, empty event cursors, stale snapshot
 retention after a failed refresh, revision-preserving node drafts, and unknown
 node rejection. `npm run test`, typecheck, production build, and high-severity
 audit all pass.
+The UI backend now exposes typed `planGraph` and `commitGraph` operations over
+the shared client. Live adapters send the candidate's authoritative session
+revision to `graph.plan` and pass the returned plan data to `graph.commit`;
+the disconnected adapter rejects both operations with an actionable error.
+Vitest (4 tests), TypeScript typecheck, and the production build pass. This is
+an adapter seam; the rendered editor does not yet invoke graph mutations.

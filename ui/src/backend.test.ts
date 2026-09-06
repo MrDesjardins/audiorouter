@@ -10,6 +10,10 @@ describe("disconnected backend", () => {
     expect(backend.connected).toBe(false);
     expect(snapshot.session.id).toBe(demoSession.id);
     expect(await backend.subscribe()).toEqual({ backendEpoch: 0, events: [], nextSequence: 0 });
+    await expect(backend.planGraph(demoSession)).rejects.toThrow("backend is disconnected");
+    await expect(backend.commitGraph("plan-1", demoSession.revision, "ui-op")).rejects.toThrow(
+      "backend is disconnected",
+    );
   });
 });
 
@@ -22,6 +26,8 @@ describe("snapshot cache", () => {
       snapshot: async () => { throw new Error("pipe closed"); },
       subscribe: async () => ({ backendEpoch: 0, events: [], nextSequence: 0 }),
       inspectRoute: async () => null,
+      planGraph: async () => { throw new Error("not connected"); },
+      commitGraph: async () => { throw new Error("not connected"); },
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);
