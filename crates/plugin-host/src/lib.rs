@@ -10,6 +10,8 @@ use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
 #[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
+#[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
@@ -144,7 +146,7 @@ pub fn write_state_asset(
         .verify_for_restore(asset.version)
         .map_err(StateFileError::InvalidState)?;
     let root_metadata = fs::symlink_metadata(root).map_err(|_| StateFileError::InvalidRoot)?;
-    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+    if !root_metadata.is_dir() || is_reparse_point(&root_metadata) {
         return Err(StateFileError::InvalidRoot);
     }
     let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
@@ -179,13 +181,13 @@ pub fn read_state_asset(
     expected_sha256: &str,
 ) -> Result<PluginStateAsset, StateFileError> {
     let root_metadata = fs::symlink_metadata(root).map_err(|_| StateFileError::InvalidRoot)?;
-    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+    if !root_metadata.is_dir() || is_reparse_point(&root_metadata) {
         return Err(StateFileError::InvalidRoot);
     }
     let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
     let path_metadata =
         fs::symlink_metadata(path).map_err(|error| StateFileError::Io(error.to_string()))?;
-    if path_metadata.file_type().is_symlink() {
+    if is_reparse_point(&path_metadata) {
         return Err(StateFileError::OutsideRoot);
     }
     let canonical_path =
@@ -219,6 +221,17 @@ fn is_safe_asset_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
 }
 
 fn is_sha256(value: &str) -> bool {

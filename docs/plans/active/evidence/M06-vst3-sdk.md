@@ -390,3 +390,13 @@ be followed into an approved directory; the existing exclusive-write and hash
 validation rules remain intact. The Windows plugin-host suite passes 26 unit
 tests plus 4 worker-process tests with strict Clippy. Reparse-point coverage
 and full filesystem/network sandbox policy remain separate native work.
+
+## 2026-09-06 — Windows reparse-point state boundary
+
+Plugin state roots and assets now reject the Windows `FILE_ATTRIBUTE_REPARSE_POINT`
+attribute before canonicalization. This covers junctions and other Windows
+reparse objects in addition to ordinary symlinks; non-Windows builds retain
+symlink detection through the portable metadata API. The plugin-host unit and
+worker-process suites pass with strict Clippy, formatting, and diff checks.
+Nested reparse-point traversal and a full filesystem/network sandbox remain
+open native work.
