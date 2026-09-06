@@ -16,6 +16,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: Validate documentation
+        run: node tools/docs/validate.mjs
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Test workspace
