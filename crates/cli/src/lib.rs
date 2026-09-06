@@ -997,6 +997,12 @@ fn read_json_object(path: &std::path::Path) -> Result<Value, CliError> {
 
 fn write_new_file(path: &std::path::Path, contents: &[u8]) -> Result<(), CliError> {
     use std::fs::OpenOptions;
+    if !path.is_absolute() {
+        return Err(CliError::Io(format!(
+            "output path must be absolute: {}",
+            path.display()
+        )));
+    }
     let parent = path.parent().ok_or_else(|| {
         CliError::Io(format!(
             "cannot determine output parent for {}",
@@ -1020,7 +1026,18 @@ fn write_new_file(path: &std::path::Path, contents: &[u8]) -> Result<(), CliErro
         .create_new(true)
         .open(path)
         .map_err(|error| CliError::Io(format!("cannot create {}: {error}", path.display())))?;
-    std::io::Write::write_all(&mut file, contents).map_err(|error| CliError::Io(error.to_string()))
+    let result = std::io::Write::write_all(&mut file, contents)
+        .and_then(|()| std::io::Write::flush(&mut file))
+        .and_then(|()| file.sync_all());
+    if let Err(error) = result {
+        drop(file);
+        let _ = std::fs::remove_file(path);
+        return Err(CliError::Io(format!(
+            "cannot finish {}: {error}",
+            path.display()
+        )));
+    }
+    Ok(())
 }
 
 fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {

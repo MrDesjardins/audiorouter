@@ -613,3 +613,8 @@ revision `e7b5ccc`. M01 CLI (21 tests), MCP stdio, 68 control tests, 31
 plugin-host unit tests, 8 worker-process tests, and strict Clippy passed;
 temporary state was cleaned and no audio device, driver, or machine setting was
 accessed.
+
+The shared CLI output writer also now requires absolute destinations, flushes
+and synchronizes successful writes, and removes a destination if writing or
+syncing fails. This keeps diagnostics and graph-plan artifacts from being left
+as partial files; focused CLI tests and strict Clippy pass.
