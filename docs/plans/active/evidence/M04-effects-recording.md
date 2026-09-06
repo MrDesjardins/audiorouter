@@ -21,6 +21,10 @@ and applying a preset still requires an explicit graph plan/commit.
 `presets.list` and the CLI `presets list` command now provide the same catalog
 as a direct read-only API result for headless clients.
 
+The CLI regression now verifies both stable voice-chain IDs and the presence of
+user-facing names/descriptions, keeping the headless catalog aligned with the
+shared discovery contract.
+
 ## 2026-09-06 â€” Worker checkpoint boundary
 
 `WavRecorder` and `BufferedFlacRecorder` now expose validated controller

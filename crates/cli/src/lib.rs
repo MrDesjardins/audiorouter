@@ -1694,6 +1694,20 @@ mod tests {
     }
 
     #[test]
+    fn presets_list_exposes_the_read_only_voice_catalog() {
+        let presets: Value =
+            serde_json::from_str(&run(["presets", "list", "--json"]).unwrap()).unwrap();
+        let voice_chains = presets["voiceChains"].as_array().unwrap();
+        assert_eq!(voice_chains.len(), 2);
+        assert_eq!(voice_chains[0]["id"], "voiceNeutral");
+        assert_eq!(voice_chains[1]["id"], "voiceGateAndCompression");
+        assert!(voice_chains
+            .iter()
+            .all(|preset| preset["name"].as_str().is_some()
+                && preset["description"].as_str().is_some()));
+    }
+
+    #[test]
     fn recording_commands_use_control_dispatch_and_preserve_file_entries() {
         let database = std::env::temp_dir().join(format!(
             "audiorouter-cli-recordings-{}.sqlite",
