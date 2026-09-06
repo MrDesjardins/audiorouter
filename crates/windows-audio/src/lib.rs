@@ -87,6 +87,17 @@ pub struct SharedCapture {
     _com: ComApartment,
 }
 
+/// A shared-mode render client. `submit_silence` is the safe baseline API for
+/// exercising the render queue without requiring a caller to provide audio
+/// samples or accidentally emit uninitialized memory.
+pub struct SharedRender {
+    client: windows::Win32::Media::Audio::IAudioClient,
+    render: windows::Win32::Media::Audio::IAudioRenderClient,
+    buffer_size: u32,
+    started: bool,
+    _com: ComApartment,
+}
+
 impl SharedCapture {
     /// Open an exact active capture endpoint using its opaque endpoint ID.
     /// The stream is initialized but remains stopped until `start` is called.
@@ -196,6 +207,106 @@ impl Drop for SharedCapture {
     }
 }
 
+impl SharedRender {
+    /// Open an exact active render endpoint using its opaque endpoint ID.
+    /// The stream is initialized but remains stopped until `start` is called.
+    pub fn open(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+        use windows::Win32::Media::Audio::{
+            eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
+            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+        };
+        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+        let com = ComApartment::initialize()?;
+        let enumerator: IMMDeviceEnumerator =
+            unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
+        let devices = unsafe { enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)? };
+        let count = unsafe { devices.GetCount()? };
+        let mut selected = None;
+        for index in 0..count {
+            let device = unsafe { devices.Item(index)? };
+            let id = unsafe {
+                device
+                    .GetId()?
+                    .to_string()
+                    .map_err(|_| AudioError::InvalidUtf16)?
+            };
+            if id == endpoint_id {
+                selected = Some(device);
+                break;
+            }
+        }
+        let device = selected.ok_or_else(|| {
+            AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80070490u32 as i32),
+                "render endpoint not found",
+            ))
+        })?;
+        let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
+        let format = unsafe { client.GetMixFormat()? };
+        let initialized = unsafe {
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                buffer_duration_100ns,
+                0,
+                format,
+                None,
+            )
+        };
+        unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
+        initialized?;
+        let buffer_size = unsafe { client.GetBufferSize()? };
+        let render: IAudioRenderClient = unsafe { client.GetService()? };
+        Ok(Self {
+            client,
+            render,
+            buffer_size,
+            started: false,
+            _com: com,
+        })
+    }
+
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        unsafe { self.client.Start()? };
+        self.started = true;
+        Ok(())
+    }
+
+    /// Submit all currently available frames as silence and return that count.
+    pub fn submit_silence(&self) -> Result<u32, AudioError> {
+        let padding = unsafe { self.client.GetCurrentPadding()? };
+        let available = self.buffer_size.saturating_sub(padding);
+        if available == 0 {
+            return Ok(0);
+        }
+        unsafe {
+            let _data = self.render.GetBuffer(available)?;
+            self.render.ReleaseBuffer(
+                available,
+                windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_SILENT.0 as u32,
+            )?;
+        }
+        Ok(available)
+    }
+
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        if self.started {
+            unsafe { self.client.Stop()? };
+            self.started = false;
+        }
+        unsafe { self.client.Reset()? };
+        Ok(())
+    }
+}
+
+impl Drop for SharedRender {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
 /// Enumerate active capture and render endpoints without opening streams.
 pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
     unsafe {
@@ -278,6 +389,13 @@ mod tests {
     #[test]
     fn opening_an_unknown_capture_endpoint_fails_without_starting_audio() {
         let error = SharedCapture::open("audiorouter-missing-endpoint", 1_000_000);
+        assert!(matches!(error, Err(AudioError::Windows(_))));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn opening_an_unknown_render_endpoint_fails_without_starting_audio() {
+        let error = SharedRender::open("audiorouter-missing-endpoint", 1_000_000);
         assert!(matches!(error, Err(AudioError::Windows(_))));
     }
 

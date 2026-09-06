@@ -10,6 +10,6 @@ Verification on the Windows 11 host:
 cargo test -p audiorouter-windows-audio
 ```
 
-Passed 3 tests, including live active-endpoint enumeration and an unknown-endpoint rejection test. The wrapper's real capture start/packet/stop path is covered by the separately run native diagnostic; the ordinary workspace suite does not open the user's microphone. The adapter does not change defaults, volume, mute, driver state, or other persistent configuration.
+Passed 4 tests, including live active-endpoint enumeration and unknown capture/render endpoint rejection tests. The wrapper's real capture start/packet/stop path is covered by the separately run native diagnostic; the ordinary workspace suite does not open the user's microphone. The adapter does not change defaults, volume, mute, driver state, or other persistent configuration.
 
-This does not yet satisfy M02. Endpoint notifications, process-tree capture, event-driven stream ownership, preallocated realtime buffers, channel conversion/resampling, graph activation, routing, latency, drift, and failure recovery remain open. The native diagnostic separately provides the current capture and process-loopback activation/data evidence.
+This does not yet satisfy M02. Endpoint notifications, event-driven stream ownership, preallocated realtime buffers, channel conversion/resampling, graph activation, routing, latency, drift, process-tree capture data, and failure recovery remain open. The native diagnostic separately provides the current capture and process-loopback activation/data evidence.
