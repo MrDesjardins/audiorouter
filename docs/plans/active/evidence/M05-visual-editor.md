@@ -191,6 +191,12 @@ automatic layout; it does not alter graph topology, backend state, or audio
 configuration. A pure regression covers the clear operation; UI coverage is 42
 tests with typecheck and production build passing.
 
+The structured graph-list alternative now exposes the same draft connection
+enable/disable/remove operations as the canvas view. This keeps essential graph
+editing keyboard/select accessible while retaining the connected-backend gate
+and plan/commit boundary. UI coverage remains 46 tests with typecheck and
+production build passing.
+
 The node library now supports bounded local search across entry names,
 categories, and unavailable-capability explanations. Search never changes the
 draft; supported processors retain the connected-only add action and unavailable
