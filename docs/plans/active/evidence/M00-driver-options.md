@@ -17,7 +17,9 @@ This is a prototype-path decision, not a release approval. It keeps the driver b
 
 The prototype must first demonstrate separate render/capture buses, stable endpoint identities, a bounded user-mode bridge, restart/rebind behavior, and clean uninstall on an isolated target machine. It must not be installed on the current development machine without a separate explicit authorization. Production remains blocked until x64 package signing, Secure Boot/HVCI behavior, upgrade/uninstall, and Windows 11 compatibility are evidenced.
 
-No driver source was downloaded, built, installed, or changed during this investigation.
+No driver source was downloaded, built, installed, or changed during the initial
+investigation recorded above; the disposable build evaluation below is a later
+separate checkout and leaves no source or output in AudioRouter.
 
 ## Toolchain update (2026-09-05)
 
@@ -26,6 +28,30 @@ Windows SDK/WDK 28000 are now installed. Microsoft driver samples were used
 only from a temporary checkout for compile evaluation and then removed. A
 direct SysVAD kernel-source compile succeeded; the full reference solution
 still requires a clean MSBuild environment and WIL dependency resolution.
+
+## 2026-09-06 — SysVAD build evaluation
+
+The official Microsoft `Windows-driver-samples` repository was cloned into a
+disposable temporary checkout and its `audio/sysvad/sysvad.sln` was attempted
+with Visual Studio Community 2026/MSBuild and WDK 10.0.28000.0. The complete
+solution did not finish: APO projects require the repository's WIL dependency,
+and the installed WDK's x86 `InfVerif.dll`/API-validator path reported missing
+modules and exit-code failures.
+
+A narrower, explicitly non-installing evaluation then built
+`EndpointsCommon.vcxproj` followed by `TabletAudioSample.vcxproj` for x64
+Release. Both succeeded and produced `TabletAudioSample.sys` (243,928 bytes).
+The command used the sample/WDK properties `SkipPackageVerification=true` and
+`ApiValidator_Enable=false` only to isolate compilation; it is not package or
+API validation evidence. MSBuild also applied the sample's local automatic test
+signature, which is not a production signature. The checkout and all outputs
+were removed afterward. No driver was installed, no test-signing mode was
+enabled, and no machine audio configuration changed.
+
+Conclusion: the installed WDK is sufficient to compile the sample's core x64
+driver target, but the full sample dependency/validation path and any
+AudioRouter-owned SysVAD adaptation remain open. This does not satisfy the
+managed-driver or production-signing gates.
 No driver was copied into AudioRouter, installed, registered, loaded, or
 changed, and production signing remains unresolved.
 
