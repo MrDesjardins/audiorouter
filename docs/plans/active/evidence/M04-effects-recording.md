@@ -81,3 +81,11 @@ rejection, flat neutrality, finite output across all shapes, reset, and update
 behavior. This is portable DSP groundwork; graph compilation, typed node
 schemas/presets, dynamics, limiter, delay, and measured transfer-function
 vectors remain open.
+
+The DSP crate now also includes a stereo-linked feed-forward compressor with
+the M04 threshold, ratio, attack, release, knee, and makeup bounds. Detection
+uses one peak envelope for both channels so stereo balance is preserved; sample
+processing is allocation-free and repairs non-finite values. Six DSP tests
+cover neutral below-threshold behavior, linked reduction, contract rejection,
+and finite repair. Gate, limiter, delay, graph/API integration, and reference
+transfer vectors remain open.

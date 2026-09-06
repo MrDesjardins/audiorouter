@@ -91,6 +91,117 @@ impl Biquad {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CompressorParams {
+    pub threshold_db: f32,
+    pub ratio: f32,
+    pub attack_ms: f32,
+    pub release_ms: f32,
+    pub knee_db: f32,
+    pub makeup_db: f32,
+    pub sample_rate: f32,
+}
+
+/// A stereo-linked feed-forward compressor. Its state is scalar by design so
+/// a stereo image receives the same gain reduction on both channels.
+#[derive(Clone, Debug)]
+pub struct Compressor {
+    params: CompressorParams,
+    channels: usize,
+    envelope_db: f32,
+}
+
+impl Compressor {
+    pub fn new(params: CompressorParams, channels: usize) -> Result<Self, BiquadError> {
+        validate_compressor(params, channels)?;
+        Ok(Self {
+            params,
+            channels,
+            envelope_db: -120.0,
+        })
+    }
+
+    pub fn params(&self) -> CompressorParams {
+        self.params
+    }
+
+    pub fn reset(&mut self) {
+        self.envelope_db = -120.0;
+    }
+
+    /// Applies linked detection and compression in place without allocation.
+    pub fn process_interleaved(&mut self, samples: &mut [f32]) {
+        let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
+        let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
+        for frame in samples.chunks_exact_mut(self.channels) {
+            let peak = frame
+                .iter()
+                .map(|sample| sample.abs())
+                .fold(0.0_f32, f32::max);
+            let level_db = 20.0 * peak.max(1.0e-6).log10();
+            let coefficient = if level_db > self.envelope_db {
+                attack
+            } else {
+                release
+            };
+            self.envelope_db = coefficient * self.envelope_db + (1.0 - coefficient) * level_db;
+            let reduction_db = compression_reduction(
+                self.envelope_db,
+                self.params.threshold_db,
+                self.params.ratio,
+                self.params.knee_db,
+            );
+            let gain = 10.0_f32.powf((self.params.makeup_db - reduction_db) / 20.0);
+            for sample in frame {
+                let input = if sample.is_finite() { *sample } else { 0.0 };
+                let output = input * gain;
+                *sample = if output.is_finite() { output } else { 0.0 };
+            }
+        }
+    }
+}
+
+fn validate_compressor(params: CompressorParams, channels: usize) -> Result<(), BiquadError> {
+    if channels == 0 || channels > 2 {
+        return Err(BiquadError::InvalidChannels);
+    }
+    if !params.threshold_db.is_finite()
+        || !params.ratio.is_finite()
+        || !params.attack_ms.is_finite()
+        || !params.release_ms.is_finite()
+        || !params.knee_db.is_finite()
+        || !params.makeup_db.is_finite()
+        || !params.sample_rate.is_finite()
+    {
+        return Err(BiquadError::NonFiniteParameter);
+    }
+    if !(44_100.0..=192_000.0).contains(&params.sample_rate) {
+        return Err(BiquadError::InvalidSampleRate);
+    }
+    if !(-60.0..=0.0).contains(&params.threshold_db)
+        || !(1.0..=20.0).contains(&params.ratio)
+        || !(0.1..=200.0).contains(&params.attack_ms)
+        || !(10.0..=2_000.0).contains(&params.release_ms)
+        || !(0.0..=24.0).contains(&params.knee_db)
+        || !(0.0..=24.0).contains(&params.makeup_db)
+    {
+        return Err(BiquadError::InvalidQ);
+    }
+    Ok(())
+}
+
+fn compression_reduction(level_db: f32, threshold_db: f32, ratio: f32, knee_db: f32) -> f32 {
+    let over = level_db - threshold_db;
+    if knee_db > 0.0 && over > -knee_db * 0.5 && over < knee_db * 0.5 {
+        let distance = over + knee_db * 0.5;
+        distance * distance * (1.0 - 1.0 / ratio) / (2.0 * knee_db)
+    } else if over > 0.0 {
+        over * (1.0 - 1.0 / ratio)
+    } else {
+        0.0
+    }
+}
+
 fn validate(params: BiquadParams, channels: usize) -> Result<(), BiquadError> {
     if channels == 0 || channels > 2 {
         return Err(BiquadError::InvalidChannels);
@@ -270,5 +381,62 @@ mod tests {
         let mut cut = [1.0; 8];
         filter.process_interleaved(&mut cut);
         assert_ne!(boosted, cut);
+    }
+
+    #[test]
+    fn compressor_is_neutral_below_threshold_and_reduces_linked_peak() {
+        let base = CompressorParams {
+            threshold_db: -18.0,
+            ratio: 3.0,
+            attack_ms: 0.1,
+            release_ms: 10.0,
+            knee_db: 0.0,
+            makeup_db: 0.0,
+            sample_rate: 48_000.0,
+        };
+        let mut quiet = Compressor::new(base, 2).unwrap();
+        let mut quiet_samples = [0.1, 0.1, 0.1, 0.1];
+        quiet.process_interleaved(&mut quiet_samples);
+        assert!(quiet_samples
+            .iter()
+            .all(|sample| (*sample - 0.1).abs() < 1e-4));
+
+        let mut loud = Compressor::new(base, 2).unwrap();
+        let mut loud_samples = [0.0; 128];
+        for frame in loud_samples.chunks_exact_mut(2) {
+            frame[0] = 1.0;
+            frame[1] = 0.25;
+        }
+        loud.process_interleaved(&mut loud_samples);
+        assert!(loud_samples[126] < 1.0);
+        assert!((loud_samples[126] / 1.0 - loud_samples[127] / 0.25).abs() < 1e-5);
+    }
+
+    #[test]
+    fn compressor_rejects_out_of_contract_values_and_repairs_nonfinite() {
+        let params = CompressorParams {
+            threshold_db: -18.0,
+            ratio: 21.0,
+            attack_ms: 10.0,
+            release_ms: 150.0,
+            knee_db: 6.0,
+            makeup_db: 0.0,
+            sample_rate: 48_000.0,
+        };
+        assert!(matches!(
+            Compressor::new(params, 1),
+            Err(BiquadError::InvalidQ)
+        ));
+        let mut compressor = Compressor::new(
+            CompressorParams {
+                ratio: 1.0,
+                ..params
+            },
+            1,
+        )
+        .unwrap();
+        let mut samples = [f32::NAN, f32::INFINITY];
+        compressor.process_interleaved(&mut samples);
+        assert_eq!(samples, [0.0, 0.0]);
     }
 }
