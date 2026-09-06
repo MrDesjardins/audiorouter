@@ -1589,6 +1589,69 @@ mod tests {
     }
 
     #[test]
+    fn compiler_rejects_fan_out_until_branch_buffers_exist() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let output = |id: &str| Node {
+            id: EntityId::new(id),
+            kind: NodeKind::PhysicalOutput,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            ports: vec![Port {
+                name: "main".into(),
+                direction: PortDirection::Input,
+                channels: 1,
+            }],
+        };
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "fan-out".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                Node {
+                    id: EntityId::new("source"),
+                    kind: NodeKind::PhysicalInput,
+                    name: "Source".into(),
+                    enabled: true,
+                    bypass: false,
+                    ports: vec![Port {
+                        name: "main".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    }],
+                },
+                output("left"),
+                output("right"),
+            ],
+            edges: vec![
+                Edge {
+                    id: EntityId::new("source-left"),
+                    source_node: EntityId::new("source"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("left"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("source-right"),
+                    source_node: EntityId::new("source"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("right"),
+                    destination_port: "main".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+            ],
+        };
+        assert!(matches!(
+            compile_session(&session, RuntimeGeneration::new(5)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
+    }
+
+    #[test]
     fn publication_replaces_generation_without_invalidating_old_reader() {
         let first = RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]);
         let second = RuntimeGraph::prepare(RuntimeGeneration::new(2), vec![]);

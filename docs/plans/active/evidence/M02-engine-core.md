@@ -54,6 +54,8 @@ The original nine-test baseline is retained in the history above; the current en
 
 The compiler now accepts a narrow linear topology: every enabled node has at most one incoming and outgoing edge, all participating ports have the same mono/stereo channel count, and each edge matrix is applied in place before the destination node stage. A 0.5 mono route test passes. Branches, mixer fan-in, disabled-node semantics, endpoint resources, and native scheduling remain explicitly outside this subset.
 
+The negative topology coverage includes a valid source-to-two-sinks fan-out and verifies explicit `UnsupportedTopology` rejection. This prevents a branch from being incorrectly serialized through one block; branch buffers and fan-out scheduling remain required for full GRAPH-02 behavior.
+
 Pool release now clears the block before returning it to the free set. The test verifies that samples written before release are silent on the next acquire, closing a stale-audio ownership hazard without adding work to the allocation path.
 
 The ring-processing tests also cover output-pool starvation: the input block returns to its free pool, no output is published, and one xrun is recorded. No fallback allocation or silent ownership loss is used.
