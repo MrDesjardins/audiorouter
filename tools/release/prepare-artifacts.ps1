@@ -44,7 +44,20 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "cargo metadata failed with exit code $LASTEXITCODE"
     }
-    $metadata -join [Environment]::NewLine | Set-Content -LiteralPath (Join-Path $output "sbom.cargo.json") -Encoding utf8
+    $metadataJson = $metadata -join [Environment]::NewLine
+    $metadataJson | Set-Content -LiteralPath (Join-Path $output "sbom.cargo.json") -Encoding utf8
+    $metadataObject = $metadataJson | ConvertFrom-Json
+    $noticeLines = @(
+        "AudioRouter dependency notices"
+        "Generated from cargo metadata --locked at release preparation time."
+        ""
+    )
+    foreach ($package in @($metadataObject.packages | Sort-Object name, version)) {
+        $license = if ([string]::IsNullOrWhiteSpace($package.license)) { "license metadata unavailable" } else { $package.license }
+        $source = if ([string]::IsNullOrWhiteSpace($package.source)) { "workspace" } else { $package.source }
+        $noticeLines += "- $($package.name) $($package.version) - $license - $source"
+    }
+    $noticeLines | Set-Content -LiteralPath (Join-Path $output "THIRD-PARTY-NOTICES.txt") -Encoding utf8
 
     $files = Get-ChildItem -LiteralPath $output -File | Sort-Object Name
     $checksums = foreach ($file in $files) {

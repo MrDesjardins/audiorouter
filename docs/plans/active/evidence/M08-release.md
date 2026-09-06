@@ -114,6 +114,12 @@ removed afterward. The manifest continues to state `signed: false` and
 installer, and clean-machine acceptance remain open. No audio endpoint or
 machine configuration was changed.
 
+Release preparation now also emits `THIRD-PARTY-NOTICES.txt`, listing every
+locked Cargo package, version, declared license, and source/workspace origin.
+It is generated from the exact metadata used for `sbom.cargo.json`, included in
+the manifest's checksum/byte-count list, and therefore cannot be omitted from
+the prepared artifact set without verifier failure.
+
 The complete locked workspace was also rerun at the current revision after the
 storage hardening and release qualification. All unit, integration,
 worker-process, MCP, and doc tests passed, as did strict workspace Clippy,
