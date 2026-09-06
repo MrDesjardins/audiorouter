@@ -34,6 +34,8 @@ Privacy mute is applied before the published graph runs, preventing muted physic
 
 Queue full/empty events now increment atomic overrun/underrun counters while still returning immediately. The queue test verifies both counters; correlation with native device callbacks and external health publication remain open.
 
+`MixerStage` now prepares a bounded set of finite destination-major matrices off the realtime boundary and converges multiple caller-owned input blocks into a preallocated destination. It validates input count and shapes before clearing or mutating output. Two regressions cover successful two-input convergence and rejection without output mutation; the engine suite now contains 30 passing tests. Full domain graph compilation and native scheduling remain open.
+
 `AudioBlock` now exposes per-channel sample peak, per-channel RMS, and aggregate RMS without allocation. Non-finite samples are excluded from meter calculations and invalid channels return `None`; the engine suite contains 20 passing tests and strict engine Clippy passes.
 
 `RmsWindow` adds a preallocated rolling RMS window with explicit capacity and reset behavior. It treats non-finite input as silence and performs no allocation while pushing blocks; the engine suite contains 21 passing tests and strict engine Clippy passes.

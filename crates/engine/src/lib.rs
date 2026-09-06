@@ -735,6 +735,69 @@ pub enum ProcessingStage {
     ChannelMatrix { coefficients: Vec<f32> },
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum MixerError {
+    InvalidChannels,
+    InvalidMatrix,
+    InputCount,
+    Block(BlockError),
+}
+
+/// Prepared bounded mixer convergence. Matrices are owned and validated during
+/// construction; `process` only clears and accumulates caller-owned blocks.
+/// It performs no allocation, locking, I/O, or device access.
+pub struct MixerStage {
+    output_channels: usize,
+    matrices: Vec<Vec<f32>>,
+}
+
+impl MixerStage {
+    pub fn new(output_channels: usize, matrices: Vec<Vec<f32>>) -> Result<Self, MixerError> {
+        if !(1..=MAX_CHANNELS).contains(&output_channels) || matrices.is_empty() {
+            return Err(MixerError::InvalidChannels);
+        }
+        if matrices.iter().any(|matrix| {
+            matrix.is_empty()
+                || matrix.len() % output_channels != 0
+                || matrix.iter().any(|coefficient| !coefficient.is_finite())
+        }) {
+            return Err(MixerError::InvalidMatrix);
+        }
+        Ok(Self {
+            output_channels,
+            matrices,
+        })
+    }
+
+    pub fn input_count(&self) -> usize {
+        self.matrices.len()
+    }
+
+    pub fn process(
+        &self,
+        destination: &mut AudioBlock,
+        sources: &[AudioBlock],
+    ) -> Result<(), MixerError> {
+        if destination.channels() != self.output_channels || sources.len() != self.matrices.len() {
+            return Err(MixerError::InputCount);
+        }
+        if sources
+            .iter()
+            .zip(&self.matrices)
+            .any(|(source, matrix)| matrix.len() != destination.channels() * source.channels())
+        {
+            return Err(MixerError::Block(BlockError::ShapeMismatch));
+        }
+        destination.clear();
+        for (source, matrix) in sources.iter().zip(&self.matrices) {
+            destination
+                .mix_mapped_from(source, matrix)
+                .map_err(MixerError::Block)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct CallbackMetrics {
     processed_quanta: AtomicU64,
@@ -1186,6 +1249,34 @@ mod tests {
         destination.apply_gain(0.5);
         assert_eq!(destination.channel(0).unwrap(), &[1.0; 4]);
         assert_eq!(destination.channel(1).unwrap(), &[-0.5; 4]);
+    }
+
+    #[test]
+    fn prepared_mixer_converges_multiple_inputs_without_allocating_at_process_boundary() {
+        let mixer = MixerStage::new(2, vec![vec![1.0, 0.0, 0.0, 1.0]; 2]).unwrap();
+        let mut first = AudioBlock::new(2, 4).unwrap();
+        let mut second = AudioBlock::new(2, 4).unwrap();
+        first.channel_mut(0).unwrap().fill(0.25);
+        first.channel_mut(1).unwrap().fill(-0.5);
+        second.channel_mut(0).unwrap().fill(0.75);
+        second.channel_mut(1).unwrap().fill(0.5);
+        let mut destination = AudioBlock::new(2, 4).unwrap();
+        mixer.process(&mut destination, &[first, second]).unwrap();
+        assert_eq!(destination.channel(0).unwrap(), &[1.0; 4]);
+        assert_eq!(destination.channel(1).unwrap(), &[0.0; 4]);
+    }
+
+    #[test]
+    fn prepared_mixer_rejects_wrong_input_shapes_before_mutating_output() {
+        let mixer = MixerStage::new(1, vec![vec![1.0], vec![1.0]]).unwrap();
+        let mut destination = AudioBlock::new(1, 2).unwrap();
+        destination.channel_mut(0).unwrap().fill(7.0);
+        let source = AudioBlock::new(2, 2).unwrap();
+        assert_eq!(
+            mixer.process(&mut destination, &[source, AudioBlock::new(1, 2).unwrap()]),
+            Err(MixerError::Block(BlockError::ShapeMismatch))
+        );
+        assert_eq!(destination.channel(0).unwrap(), &[7.0; 2]);
     }
 
     #[test]
