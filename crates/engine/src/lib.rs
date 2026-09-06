@@ -322,6 +322,41 @@ pub struct RuntimeGraph {
     generation: RuntimeGeneration,
 }
 
+/// Publication point for prepared immutable graphs. Preparation and stores
+/// happen on the control thread; readers obtain an owned immutable snapshot,
+/// and the previous graph is reclaimed only after its last reader releases it.
+pub struct RuntimePublication {
+    current: arc_swap::ArcSwapOption<RuntimeGraph>,
+}
+
+impl Default for RuntimePublication {
+    fn default() -> Self {
+        Self {
+            current: arc_swap::ArcSwapOption::empty(),
+        }
+    }
+}
+
+impl RuntimePublication {
+    pub fn new(initial: Option<RuntimeGraph>) -> Self {
+        Self {
+            current: arc_swap::ArcSwapOption::from(initial.map(std::sync::Arc::new)),
+        }
+    }
+
+    /// Publish a fully prepared graph. Existing readers continue using their
+    /// old generation while new readers observe the replacement.
+    pub fn publish(&self, graph: RuntimeGraph) {
+        self.current.store(Some(std::sync::Arc::new(graph)));
+    }
+
+    /// Load the current graph without taking a mutex. `None` means the runtime
+    /// has not been activated yet.
+    pub fn load(&self) -> Option<std::sync::Arc<RuntimeGraph>> {
+        self.current.load_full()
+    }
+}
+
 impl RuntimeGraph {
     pub fn prepare(generation: RuntimeGeneration, stages: Vec<ProcessingStage>) -> Self {
         Self { stages, generation }
@@ -509,5 +544,16 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(graph.generation().value(), 3);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn publication_replaces_generation_without_invalidating_old_reader() {
+        let first = RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]);
+        let second = RuntimeGraph::prepare(RuntimeGeneration::new(2), vec![]);
+        let publication = RuntimePublication::new(Some(first));
+        let old_reader = publication.load().unwrap();
+        publication.publish(second);
+        assert_eq!(old_reader.generation().value(), 1);
+        assert_eq!(publication.load().unwrap().generation().value(), 2);
     }
 }

@@ -6,4 +6,6 @@ Added `crates/engine` with the M02 internal representation constants: 48 kHz pla
 
 The engine now exposes `compile_session`, which validates a domain session and prepares the supported processing-only subset in deterministic topological order. Enabled edge routing is rejected explicitly until the scheduler can transfer blocks between nodes; the compiler therefore cannot silently claim that physical or application audio is routed. The compiler test confirms generation propagation and mute execution without opening any device.
 
+`RuntimePublication` adds the immutable-generation handoff: a fully prepared graph is atomically published, new readers see the replacement, and existing readers may finish on the prior generation before deferred reclamation. The replacement test confirms both generations remain valid across publication.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.
