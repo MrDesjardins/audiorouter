@@ -1193,6 +1193,29 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    pub fn spawn_shared(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        transport: SharedAudioTransport,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        let mut supervisor = WorkerSupervisor::new();
+        supervisor.start(identity, now).map_err(|error| {
+            WorkerProcessError::Protocol(format!("worker start rejected: {error:?}"))
+        })?;
+        match WorkerProcess::spawn_shared(executable, &identity.sha256, channels, transport) {
+            Ok(process) => Ok(Self {
+                process,
+                supervisor,
+            }),
+            Err(error) => {
+                supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
     pub fn state(&self) -> WorkerState {
         self.supervisor.state()
     }

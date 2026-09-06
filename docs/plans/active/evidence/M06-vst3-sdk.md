@@ -471,3 +471,9 @@ worker failure: process, shared-process, and latency calls are rejected until
 an outer supervisor deliberately creates a replacement. A regression covers
 the timeout boundary; the plugin-host suite passes 29 unit tests and 6
 process/integration tests with strict Clippy.
+
+The same supervised boundary now covers the shared-memory transport path via
+`spawn_shared`; its integration regression exchanges a mapped stereo frame,
+refreshes the heartbeat, and shuts down cleanly. This remains process and
+transport evidence only: plugin loading, automatic restart, and full OS
+sandboxing are not claimed.

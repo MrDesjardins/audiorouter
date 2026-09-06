@@ -161,8 +161,18 @@ fn disposable_worker_process_round_trips_shared_audio_frames() {
         SharedAudioLayout::new(2).unwrap(),
     )
     .expect("create shared transport");
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+    };
+    let start = Instant::now();
     let mut worker =
-        WorkerProcess::spawn_shared(worker_path, &hash, 2, transport).expect("spawn worker");
+        SupervisedWorkerProcess::spawn_shared(worker_path, &identity, 2, transport, start)
+            .expect("spawn worker");
     let frame = WorkerFrame::new(
         1,
         worker_clock_tick().saturating_add(10_000),
@@ -171,7 +181,9 @@ fn disposable_worker_process_round_trips_shared_audio_frames() {
     )
     .unwrap();
     assert_eq!(
-        worker.process_shared(frame.clone(), Vec::new()).unwrap(),
+        worker
+            .process_shared(frame.clone(), Vec::new(), start)
+            .unwrap(),
         frame
     );
     assert!(worker.shutdown().unwrap().success());
