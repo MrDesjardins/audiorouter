@@ -93,6 +93,8 @@ Authenticated control dispatch now enforces the API mutation budget with a per-c
 
 `sessions.list` now accepts an opaque stable-ID cursor and returns bounded `{ items, nextCursor }` pages. The in-memory and SQLite paths share the same ascending-ID semantics, and the existing internal array helper remains available for resync snapshots and CLI compatibility. Cursor regressions pass in control and storage; contract typecheck remains green.
 
+`graph.history` now accepts a revision cursor and returns bounded `{ items, nextCursor }` pages in newest-first order. Both in-memory and SQLite history use one-record look-ahead to avoid advertising a cursor after the final page; control/storage/domain verification passes with strict Clippy.
+
 `graph.commit` now hashes the planned session payload with SHA-256, checks the durable journal before domain mutation, and stores the hash in the same SQLite transaction as the session revision. Matching requests replay across a fresh control plane; mismatched reuse is rejected. The combined domain/control/storage verification passed 19, 22, and 16 tests respectively, with strict Clippy green. Expiry/retention policy for journal rows remains future work.
 
 Durable idempotency records now have a 24-hour retention bound. Journal reads and transactional writes prune older rows using an indexed `created_at`; a regression verifies an expired key can be reused while a current mismatched hash still conflicts. Storage coverage is 17 passing tests with strict Clippy.

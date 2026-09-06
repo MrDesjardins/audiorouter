@@ -55,6 +55,11 @@ export interface SessionListPage {
   nextCursor: EntityId | null;
 }
 
+export interface GraphHistoryPage {
+  items: Session[];
+  nextCursor: string | null;
+}
+
 export type PermissionScope =
   | "read"
   | "graphWrite"

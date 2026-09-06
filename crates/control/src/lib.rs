@@ -288,17 +288,35 @@ impl ControlPlane {
         session_id: &EntityId,
         limit: usize,
     ) -> Result<Value, ControlError> {
-        let limit = limit.clamp(1, 500);
+        self.graph_history_page(session_id, None, limit)
+            .map(|page| page["items"].clone())
+    }
+
+    pub fn graph_history_page(
+        &self,
+        session_id: &EntityId,
+        before_revision: Option<u64>,
+        limit: usize,
+    ) -> Result<Value, ControlError> {
+        let limit = limit.clamp(1, 100);
         let history = if self.store.session(session_id).is_some() {
-            self.store.history(session_id, limit)
+            self.store
+                .history_before(session_id, before_revision, limit + 1)
         } else if let Some(storage) = &self.storage {
             storage
-                .load_history(session_id, limit)
+                .load_history_before(session_id, before_revision, limit + 1)
                 .map_err(storage_error)?
         } else {
             Vec::new()
         };
-        serde_json::to_value(history).map_err(|error| ControlError::Json(error.to_string()))
+        let has_more = history.len() > limit;
+        let mut history = history;
+        history.truncate(limit);
+        let next_cursor = has_more
+            .then(|| history.last().map(|session| session.revision))
+            .flatten()
+            .map(|revision| revision.to_string());
+        Ok(json!({ "items": history, "nextCursor": next_cursor }))
     }
 
     pub fn graph_undo_plan(
@@ -897,12 +915,22 @@ impl ControlPlane {
         )
         .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
         let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
-        if limit == 0 || limit > 500 {
+        if limit == 0 || limit > 100 {
             return Err(ControlError::InvalidRequest(
-                "limit must be between 1 and 500".into(),
+                "limit must be between 1 and 100".into(),
             ));
         }
-        self.graph_history(&session_id, limit as usize)
+        let before_revision = params
+            .get("cursor")
+            .map(|value| {
+                value
+                    .as_str()
+                    .ok_or_else(|| ControlError::InvalidRequest("cursor must be a string".into()))?
+                    .parse::<u64>()
+                    .map_err(|_| ControlError::InvalidRequest("invalid history cursor".into()))
+            })
+            .transpose()?;
+        self.graph_history_page(&session_id, before_revision, limit as usize)
     }
 
     fn dispatch_graph_undo_plan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -1273,9 +1301,19 @@ mod tests {
             params: Some(json!({ "sessionId": "session", "limit": 1 })),
         });
         let history = response.result.unwrap();
-        assert_eq!(history.as_array().unwrap().len(), 1);
-        assert_eq!(history[0]["revision"], 1);
-        assert_eq!(history[0]["name"], "revision-one");
+        assert_eq!(history["items"].as_array().unwrap().len(), 1);
+        assert_eq!(history["items"][0]["revision"], 1);
+        assert_eq!(history["items"][0]["name"], "revision-one");
+        assert_eq!(history["nextCursor"], "1");
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "graph.history".into(),
+            params: Some(json!({ "sessionId": "session", "cursor": "1", "limit": 1 })),
+        });
+        let history = response.result.unwrap();
+        assert_eq!(history["items"][0]["revision"], 0);
+        assert!(history["nextCursor"].is_null());
     }
 
     #[test]

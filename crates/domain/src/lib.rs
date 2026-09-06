@@ -824,11 +824,25 @@ impl GraphStore {
     }
 
     pub fn history(&self, id: &EntityId, limit: usize) -> Vec<Session> {
+        self.history_before(id, None, limit)
+    }
+
+    pub fn history_before(
+        &self,
+        id: &EntityId,
+        before_revision: Option<u64>,
+        limit: usize,
+    ) -> Vec<Session> {
         self.history
             .get(id)
             .into_iter()
             .flatten()
             .rev()
+            .filter(|session| {
+                before_revision
+                    .map(|revision| session.revision < revision)
+                    .unwrap_or(true)
+            })
             .take(limit.min(100))
             .cloned()
             .collect()

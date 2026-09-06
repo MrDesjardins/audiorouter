@@ -339,18 +339,44 @@ impl Storage {
     }
 
     pub fn load_history(&self, id: &EntityId, limit: usize) -> Result<Vec<Session>, StorageError> {
-        let mut statement = self.connection.prepare(
-            "SELECT document FROM session_history WHERE session_id = ?1
-             ORDER BY revision DESC LIMIT ?2",
-        )?;
-        let rows = statement.query_map(params![id.as_str(), limit as i64], |row| {
-            row.get::<_, String>(0)
-        })?;
-        rows.map(|row| {
-            let document = row?;
-            serde_json::from_str(&document).map_err(StorageError::Json)
-        })
-        .collect()
+        self.load_history_before(id, None, limit)
+    }
+
+    pub fn load_history_before(
+        &self,
+        id: &EntityId,
+        before_revision: Option<u64>,
+        limit: usize,
+    ) -> Result<Vec<Session>, StorageError> {
+        let mut statement = if before_revision.is_some() {
+            self.connection.prepare(
+                "SELECT document FROM session_history WHERE session_id = ?1 AND revision < ?2
+                 ORDER BY revision DESC LIMIT ?3",
+            )?
+        } else {
+            self.connection.prepare(
+                "SELECT document FROM session_history WHERE session_id = ?1
+                 ORDER BY revision DESC LIMIT ?2",
+            )?
+        };
+        let documents: Vec<String> = if let Some(before_revision) = before_revision {
+            statement
+                .query_map(
+                    params![id.as_str(), before_revision as i64, limit as i64],
+                    |row| row.get::<_, String>(0),
+                )?
+                .collect::<Result<_, _>>()?
+        } else {
+            statement
+                .query_map(params![id.as_str(), limit as i64], |row| {
+                    row.get::<_, String>(0)
+                })?
+                .collect::<Result<_, _>>()?
+        };
+        documents
+            .into_iter()
+            .map(|document| serde_json::from_str(&document).map_err(StorageError::Json))
+            .collect()
     }
 
     pub fn load_session(&self, id: &EntityId) -> Result<Option<Session>, StorageError> {
@@ -1087,6 +1113,12 @@ mod tests {
         assert_eq!(history[0], newer);
         assert_eq!(history[1], original);
         assert_eq!(storage.load_history(&original.id, 1).unwrap(), vec![newer]);
+        assert_eq!(
+            storage
+                .load_history_before(&original.id, Some(4), 2)
+                .unwrap(),
+            vec![original]
+        );
     }
 
     #[test]
