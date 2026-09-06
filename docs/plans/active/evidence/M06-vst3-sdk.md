@@ -163,3 +163,8 @@ channel/sample bounds, and parameter bounds before a future worker can accept
 audio. Round-trip, malformed, and oversized-frame regressions pass; the suite
 now has 18 passing tests and strict Clippy is clean. This is protocol evidence
 only; no worker process or plugin execution is claimed.
+
+Worker `Hello` negotiation now requires protocol version 1, a 64-character
+hexadecimal plugin fingerprint, and mono/stereo channel count; empty failure
+codes are rejected. Capability-negotiation regressions pass, bringing the
+plugin-host suite to 19 tests with strict Clippy clean.

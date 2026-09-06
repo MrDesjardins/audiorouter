@@ -25,6 +25,7 @@ pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 pub const MAX_PARAMETER_EVENTS: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
+pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -491,6 +492,9 @@ pub enum WorkerMessageError {
     Json(String),
     InvalidFrame(WorkerFrameError),
     InvalidParameter(ParameterEventError),
+    InvalidProtocolVersion,
+    InvalidPluginHash,
+    InvalidFailureCode,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -696,6 +700,23 @@ pub fn decode_worker_message(frame: &[u8]) -> Result<WorkerMessage, WorkerMessag
 
 fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageError> {
     match message {
+        WorkerMessage::Hello {
+            protocol_version,
+            plugin_sha256,
+            channels,
+        } => {
+            if *protocol_version != WORKER_PROTOCOL_VERSION {
+                return Err(WorkerMessageError::InvalidProtocolVersion);
+            }
+            if !is_sha256(plugin_sha256) {
+                return Err(WorkerMessageError::InvalidPluginHash);
+            }
+            if !matches!(channels, 1 | 2) {
+                return Err(WorkerMessageError::InvalidFrame(
+                    WorkerFrameError::InvalidChannels,
+                ));
+            }
+        }
         WorkerMessage::Process { frame, parameters } => {
             WorkerFrame::new(
                 frame.sequence,
@@ -726,6 +747,9 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                 frame.samples.clone(),
             )
             .map_err(WorkerMessageError::InvalidFrame)?;
+        }
+        WorkerMessage::Failure { code } if code.is_empty() => {
+            return Err(WorkerMessageError::InvalidFailureCode);
         }
         _ => {}
     }
@@ -1246,5 +1270,43 @@ mod tests {
             decode_worker_message(&oversized),
             Err(WorkerMessageError::TooLarge { .. })
         ));
+    }
+
+    #[test]
+    fn worker_hello_validates_negotiated_capabilities() {
+        let valid = WorkerMessage::Hello {
+            protocol_version: WORKER_PROTOCOL_VERSION,
+            plugin_sha256: "a".repeat(64),
+            channels: 2,
+        };
+        assert_eq!(
+            decode_worker_message(&encode_worker_message(&valid).unwrap()),
+            Ok(valid)
+        );
+
+        for message in [
+            WorkerMessage::Hello {
+                protocol_version: WORKER_PROTOCOL_VERSION + 1,
+                plugin_sha256: "a".repeat(64),
+                channels: 2,
+            },
+            WorkerMessage::Hello {
+                protocol_version: WORKER_PROTOCOL_VERSION,
+                plugin_sha256: "not-a-hash".into(),
+                channels: 2,
+            },
+            WorkerMessage::Hello {
+                protocol_version: WORKER_PROTOCOL_VERSION,
+                plugin_sha256: "a".repeat(64),
+                channels: 4,
+            },
+        ] {
+            let encoded = encode_worker_message(&message).unwrap();
+            assert!(decode_worker_message(&encoded).is_err());
+        }
+        let failure = WorkerMessage::Failure {
+            code: String::new(),
+        };
+        assert!(decode_worker_message(&encode_worker_message(&failure).unwrap()).is_err());
     }
 }
