@@ -1250,6 +1250,7 @@ impl ControlPlane {
                 .ok_or_else(|| ControlError::InvalidRequest("candidate is required".into()))?,
         )
         .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        self.ensure_session_loaded(&session_id)?;
         let existing = self.get_session(&session_id)?.clone();
         let diff = graph_diff(&existing, &candidate);
         let affected_destinations = candidate

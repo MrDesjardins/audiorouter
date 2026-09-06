@@ -50,6 +50,7 @@ where
         "nodes" => list_subcommand(&command_args, "nodes")?,
         "routes" => routes_subcommand(&command_args)?,
         "history" => history_command(&command_args)?,
+        "graph" => graph_command(&command_args)?,
         "session" => session_command(&command_args)?,
         "api" => api_subcommand(&command_args)?,
         "export" => export_session(&command_args)?,
@@ -238,6 +239,184 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
     serde_json::to_value(history).map_err(|error| CliError::InvalidArguments(error.to_string()))
 }
 
+fn graph_command(args: &[&str]) -> Result<Value, CliError> {
+    match args.get(1).copied() {
+        Some("plan") => graph_plan_command(args),
+        Some("inspect") => graph_inspect_command(args),
+        Some("apply") => graph_apply_command(args),
+        _ => Err(CliError::InvalidArguments(
+            "usage: graph <plan|inspect|apply> ...".into(),
+        )),
+    }
+}
+
+fn graph_plan_command(args: &[&str]) -> Result<Value, CliError> {
+    let session_id = positional(args, 2, "session id")?;
+    let candidate_path = absolute_option(args, "--file")?;
+    let output_path = absolute_option(args, "--output")?;
+    let base_revision = option_value(args, "--base-revision")?
+        .parse::<u64>()
+        .map_err(|_| CliError::InvalidArguments("--base-revision must be an integer".into()))?;
+    let candidate = read_session(&candidate_path)?;
+    if candidate.id != EntityId::new(session_id) {
+        return Err(CliError::InvalidArguments(
+            "candidate session id does not match the requested session".into(),
+        ));
+    }
+    let storage = database(args)?;
+    let mut plane = ControlPlane::with_storage("cli", storage);
+    let preview = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "graph.plan".into(),
+        params: Some(json!({
+            "sessionId": session_id,
+            "baseRevision": base_revision,
+            "candidate": candidate,
+        })),
+    });
+    if let Some(error) = preview.error {
+        return Err(CliError::InvalidArguments(error.message));
+    }
+    let preview = preview
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("graph.plan returned no result".into()))?;
+    let plan = json!({
+        "format": "audiorouter.graph-plan",
+        "schemaVersion": 1,
+        "sessionId": session_id,
+        "baseRevision": base_revision,
+        "candidate": candidate,
+        "preview": preview,
+    });
+    write_new_file(&output_path, &serde_json::to_vec_pretty(&plan).unwrap())?;
+    Ok(json!({
+        "planId": plan["preview"]["planId"],
+        "sessionId": session_id,
+        "baseRevision": base_revision,
+        "output": output_path,
+        "dryRun": true,
+        "preview": plan["preview"],
+    }))
+}
+
+fn graph_inspect_command(args: &[&str]) -> Result<Value, CliError> {
+    let path = positional_path(args, 2, "plan file")?;
+    let plan = read_json_object(&path)?;
+    if plan["format"] != "audiorouter.graph-plan" || plan["schemaVersion"] != 1 {
+        return Err(CliError::InvalidArguments(
+            "unsupported graph plan format".into(),
+        ));
+    }
+    Ok(plan)
+}
+
+fn graph_apply_command(args: &[&str]) -> Result<Value, CliError> {
+    let path = positional_path(args, 2, "plan file")?;
+    let key = option_value(args, "--idempotency-key")?;
+    if key.len() > 256 || key.is_empty() {
+        return Err(CliError::InvalidArguments(
+            "--idempotency-key must contain 1..256 characters".into(),
+        ));
+    }
+    let plan = read_json_object(&path)?;
+    if plan["format"] != "audiorouter.graph-plan" || plan["schemaVersion"] != 1 {
+        return Err(CliError::InvalidArguments(
+            "unsupported graph plan format".into(),
+        ));
+    }
+    let session_id = plan["sessionId"]
+        .as_str()
+        .ok_or_else(|| CliError::InvalidArguments("plan sessionId is required".into()))?;
+    let base_revision = plan["baseRevision"]
+        .as_u64()
+        .ok_or_else(|| CliError::InvalidArguments("plan baseRevision is required".into()))?;
+    let candidate: audiorouter_domain::Session = serde_json::from_value(plan["candidate"].clone())
+        .map_err(|error| CliError::InvalidArguments(format!("invalid plan candidate: {error}")))?;
+    if candidate.id != EntityId::new(session_id) {
+        return Err(CliError::InvalidArguments(
+            "plan candidate/session mismatch".into(),
+        ));
+    }
+    let storage = database(args)?;
+    let mut plane = ControlPlane::with_storage("cli", storage);
+    let current = plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.get".into(),
+            params: Some(json!({ "sessionId": session_id })),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("session not found".into()))?;
+    let current_revision = current["revision"]
+        .as_u64()
+        .ok_or_else(|| CliError::InvalidArguments("current session has no revision".into()))?;
+    if current_revision != base_revision {
+        return Err(CliError::InvalidArguments(format!(
+            "stale graph plan: expected revision {base_revision}, current revision {}",
+            current_revision
+        )));
+    }
+    let planned = plane
+        .plan_graph(&EntityId::new(session_id), base_revision, candidate)
+        .map_err(|error| CliError::InvalidArguments(format!("graph plan rejected: {error:?}")))?;
+    plane
+        .commit_graph(&planned, base_revision, key)
+        .map_err(|error| CliError::InvalidArguments(format!("graph commit rejected: {error:?}")))
+}
+
+fn positional<'a>(args: &'a [&str], index: usize, name: &str) -> Result<&'a str, CliError> {
+    args.get(index)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| CliError::InvalidArguments(format!("{name} is required")))
+}
+
+fn positional_path(
+    args: &[&str],
+    index: usize,
+    name: &str,
+) -> Result<std::path::PathBuf, CliError> {
+    let path = std::path::PathBuf::from(positional(args, index, name)?);
+    if !path.is_absolute() {
+        return Err(CliError::InvalidArguments(format!(
+            "{name} path must be absolute"
+        )));
+    }
+    Ok(path)
+}
+
+fn read_session(path: &std::path::Path) -> Result<audiorouter_domain::Session, CliError> {
+    let document =
+        std::fs::read_to_string(path).map_err(|error| CliError::Io(error.to_string()))?;
+    serde_json::from_str(&document)
+        .map_err(|error| CliError::InvalidArguments(format!("invalid session JSON: {error}")))
+}
+
+fn read_json_object(path: &std::path::Path) -> Result<Value, CliError> {
+    let document =
+        std::fs::read_to_string(path).map_err(|error| CliError::Io(error.to_string()))?;
+    let value: Value = serde_json::from_str(&document)
+        .map_err(|error| CliError::InvalidArguments(format!("invalid JSON: {error}")))?;
+    if !value.is_object() {
+        return Err(CliError::InvalidArguments(
+            "plan must be a JSON object".into(),
+        ));
+    }
+    Ok(value)
+}
+
+fn write_new_file(path: &std::path::Path, contents: &[u8]) -> Result<(), CliError> {
+    use std::fs::OpenOptions;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| CliError::Io(format!("cannot create {}: {error}", path.display())))?;
+    std::io::Write::write_all(&mut file, contents).map_err(|error| CliError::Io(error.to_string()))
+}
+
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
@@ -358,7 +537,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. Real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -685,5 +864,63 @@ mod tests {
         let _ = std::fs::remove_file(bundle);
         let _ = std::fs::remove_file(imported_database);
         let _ = std::fs::remove_dir_all(staging);
+    }
+
+    #[test]
+    fn graph_plan_file_is_inspectable_and_apply_rechecks_revision() {
+        let suffix = format!("audiorouter-cli-plan-{}", std::process::id());
+        let database = std::env::temp_dir().join(format!("{suffix}.sqlite"));
+        let candidate_path = std::env::temp_dir().join(format!("{suffix}-candidate.json"));
+        let plan_path = std::env::temp_dir().join(format!("{suffix}-plan.json"));
+        for path in [&database, &candidate_path, &plan_path] {
+            let _ = std::fs::remove_file(path);
+        }
+        let candidate_document = include_str!("../../../tests/fixtures/valid-session.json")
+            .replace("session-fixture", "session-plan");
+        std::fs::write(&candidate_path, candidate_document).unwrap();
+        let database_arg = database.to_string_lossy().into_owned();
+        let candidate_arg = candidate_path.to_string_lossy().into_owned();
+        let plan_arg = plan_path.to_string_lossy().into_owned();
+        run([
+            "session",
+            "create",
+            &candidate_arg,
+            "--database",
+            &database_arg,
+            "--json",
+        ])
+        .unwrap();
+        let first = run([
+            "graph",
+            "plan",
+            "session-plan",
+            "--base-revision",
+            "0",
+            "--file",
+            &candidate_arg,
+            "--output",
+            &plan_arg,
+            "--database",
+            &database_arg,
+            "--json",
+        ]);
+        assert!(first.is_ok(), "graph plan failed: {first:?}");
+        let inspected: Value =
+            serde_json::from_str(&run(["graph", "inspect", &plan_arg, "--json"]).unwrap()).unwrap();
+        assert_eq!(inspected["format"], "audiorouter.graph-plan");
+        assert!(run([
+            "graph",
+            "apply",
+            &plan_arg,
+            "--idempotency-key",
+            "cli-plan-apply",
+            "--database",
+            &database_arg,
+            "--json",
+        ])
+        .is_ok());
+        let _ = std::fs::remove_file(database);
+        let _ = std::fs::remove_file(candidate_path);
+        let _ = std::fs::remove_file(plan_path);
     }
 }
