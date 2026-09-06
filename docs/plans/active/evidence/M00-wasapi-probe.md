@@ -181,3 +181,9 @@ also returned `E_INVALIDARG`. The diagnostic code was removed after the run.
 This rules out a defect limited to the generated method wrapper; the remaining
 difference is the Rust process/runtime ABI context or its interaction with the
 Windows binding, and the native C++ shim remains the verified fallback boundary.
+
+The checked-in native probe was rebuilt again with Visual Studio Community 2026,
+MSVC, and Windows SDK/WDK 10.0.28000.0 after the decision-register update.
+Compilation succeeded; the generated executable and object were removed without
+running the probe or opening an audio endpoint. This is toolchain evidence only,
+and does not change the unresolved Rust live-open or physical-latency status.
