@@ -76,3 +76,14 @@ The temporary output directory was removed after verification. This validates
 the unsigned preparation workflow only; production signing, driver package
 and signing, installer, and clean-machine acceptance remain open. No audio
 endpoint or machine configuration was changed.
+
+## 2026-09-06 — Post-change workspace validation
+
+After the backup-retention, incremental-FLAC, bounded-worker-read, and
+Windows Job Object changes, the complete locked workspace validation passed:
+14 CLI unit tests plus the MCP process test, 52 control, 24 domain, 24 DSP,
+38 engine, 26 plugin-host plus 4 worker-process, 5 protocol, 26 recording,
+30 storage, 14 transport, and 8 Windows-audio tests. All doc tests, strict
+workspace Clippy, formatting, and diff checks also passed. Tests used
+temporary/local fixtures only; no audio endpoint or machine configuration was
+changed.
