@@ -318,7 +318,46 @@ impl ControlPlane {
                 Some(result.session_id.clone()),
             );
         }
-        serde_json::to_value(result).map_err(|error| ControlError::Json(error.to_string()))
+        let mut response =
+            serde_json::to_value(&result).map_err(|error| ControlError::Json(error.to_string()))?;
+        if !result.idempotent_replay
+            && self
+                .runtimes
+                .get(&result.session_id)
+                .map(|runtime| runtime.state() == RuntimeState::Running)
+                .unwrap_or(false)
+        {
+            let session = self
+                .store
+                .session(&result.session_id)
+                .cloned()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("committed session not found".into())
+                })?;
+            let runtime = self.runtimes.get_mut(&result.session_id).unwrap();
+            runtime.prepare(&session).map_err(|error| match error {
+                RuntimeError::InvalidGraph(errors) => {
+                    ControlError::InvalidRequest(format!("invalid graph: {errors:?}"))
+                }
+                RuntimeError::NotPrepared => {
+                    ControlError::InvalidRequest("session was not prepared".into())
+                }
+            })?;
+            let generation = runtime
+                .start()
+                .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
+            self.events.append(
+                result.revision,
+                Some(idempotency_key.into()),
+                "runtime.activated",
+                Some(result.session_id.clone()),
+            );
+            response["activation"] =
+                json!({ "state": "running", "generation": generation, "runtime": "fake" });
+        } else {
+            response["activation"] = json!({ "state": "pending", "runtime": "fake" });
+        }
+        Ok(response)
     }
 
     pub fn session_start(&mut self, id: &EntityId) -> Result<Value, ControlError> {
@@ -1084,6 +1123,21 @@ mod tests {
             plane.session_stop(&original.id).unwrap()["state"],
             "stopped"
         );
+        assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
+    }
+
+    #[test]
+    fn commit_reactivates_a_running_fake_session_as_one_generation() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 1);
+        let mut candidate = original.clone();
+        candidate.name = "live-edit".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        let result = plane.commit_graph(&plan, 0, "live-edit-op").unwrap();
+        assert_eq!(result["activation"]["state"], "running");
+        assert_eq!(result["activation"]["generation"], 2);
         assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
     }
 

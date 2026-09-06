@@ -63,6 +63,8 @@ Session resource listing now includes `sessions.list` and `session list --databa
 
 `graph.plan` now returns a deterministic preview containing changed `/name`, `/nodes`, or `/edges` entries, physical-output destinations, warnings, required scope, and expiry duration in addition to its plan ID. The control test verifies the diff and scope fields; capability resolution, external-resource activation, and full typed-operation semantics remain open.
 
+`graph.commit` now re-prepares and advances the fake runtime when its session is already running, returning an `activation` object with the new fake generation; commits for stopped sessions report pending fake activation. The control regression verifies generation 1→2 after an online edit. This proves only deterministic lifecycle wiring, not live endpoint resource activation or atomic native graph publication.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.
