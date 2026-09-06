@@ -68,6 +68,10 @@ The CLI also accepts the canonical `applications list` spelling in addition
 to the legacy `apps list` spelling. A regression confirms both commands
 produce identical JSON from the shared dispatcher.
 
+The CLI regression also requires the full observed audio-session field set on
+each returned application, keeping headless output aligned with the control
+schema and UI.
+
 ## 2026-09-06 — Typed CLI read parity
 
 Added `diagnostics [--database <path>]` and `operation get <operation-id> --database <path>` convenience commands. Both use the shared dispatcher and preserve read-only semantics; help now advertises their exact forms. CLI tests pass 8 cases with strict Clippy.

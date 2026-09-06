@@ -1389,6 +1389,14 @@ mod tests {
             .all(|device| { device["state"] == "active" && device["id"].as_str().is_some() }));
         let apps: Value = serde_json::from_str(&run(["apps", "list", "--json"]).unwrap()).unwrap();
         assert!(!apps.as_array().unwrap().is_empty());
+        assert!(apps.as_array().unwrap().iter().all(|application| {
+            application.get("audioActivity").is_some()
+                && application.get("captureCapability").is_some()
+                && application.get("audioSessionCount").is_some()
+                && application.get("activeAudioSessionCount").is_some()
+                && application.get("captureSessionCount").is_some()
+                && application.get("audioDisplayNames").is_some()
+        }));
         let applications: Value =
             serde_json::from_str(&run(["applications", "list", "--json"]).unwrap()).unwrap();
         assert_eq!(applications, apps);
