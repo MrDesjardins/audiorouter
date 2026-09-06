@@ -299,3 +299,11 @@ GetPluginFactory export, enumerated 68 factory classes, released the factory,
 and unloaded the module successfully. The generated executable and object file
 were removed afterward. This proves module/factory loading only; it does not
 claim processor activation, plugin DSP, editor behavior, or OS sandboxing.
+
+The loader probe was then extended to instantiate the first audio-effect class
+through IPluginFactory, initialize the component with the null host context,
+inspect one input and one output audio bus, terminate/release the component,
+and unload the module. This completed successfully against mda-vst3 without
+opening an audio device or processing live/user audio. It is component
+activation evidence only; audio-process callbacks, parameter/state behavior,
+worker integration, and sandbox enforcement remain open.

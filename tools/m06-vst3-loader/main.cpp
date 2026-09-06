@@ -3,10 +3,13 @@
 #include <windows.h>
 
 #include <filesystem>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 
 #include "pluginterfaces/base/ipluginbase.h"
+#include "pluginterfaces/vst/ivstcomponent.h"
+#include "pluginterfaces/vst/ivstaudioprocessor.h"
 
 namespace fs = std::filesystem;
 using namespace Steinberg;
@@ -40,6 +43,7 @@ int wmain(int argc, wchar_t** argv) {
 
     HMODULE module = nullptr;
     IPluginFactory* factory = nullptr;
+    Vst::IComponent* component = nullptr;
     try {
         const auto binary = fs::absolute(resolve_binary(argv[1]));
         module = LoadLibraryW(binary.c_str());
@@ -74,11 +78,39 @@ int wmain(int argc, wchar_t** argv) {
             std::cout << "class[" << index << "] category=" << info.category
                       << " name=" << info.name << "\n";
         }
+        for (int32 index = 0; index < classes; ++index) {
+            PClassInfo info{};
+            if (factory->getClassInfo(index, &info) != kResultOk) {
+                throw std::runtime_error("getClassInfo failed");
+            }
+            if (std::strcmp(info.category, kVstAudioEffectClass) == 0) {
+                if (factory->createInstance(
+                        info.cid, Vst::IComponent_iid, reinterpret_cast<void**>(&component)) !=
+                    kResultOk) {
+                    throw std::runtime_error("component createInstance failed");
+                }
+                if (component->initialize(nullptr) != kResultOk) {
+                    throw std::runtime_error("component initialize failed");
+                }
+                std::cout << "activated component: inputs="
+                          << component->getBusCount(Vst::kAudio, Vst::kInput)
+                          << " outputs="
+                          << component->getBusCount(Vst::kAudio, Vst::kOutput) << "\n";
+                component->terminate();
+                component->release();
+                component = nullptr;
+                break;
+            }
+        }
         factory->release();
         factory = nullptr;
         FreeLibrary(module);
         return 0;
     } catch (const std::exception& error) {
+        if (component) {
+            component->terminate();
+            component->release();
+        }
         if (factory) {
             factory->release();
         }
