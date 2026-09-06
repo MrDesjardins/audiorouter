@@ -1633,6 +1633,20 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
+        let startup = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 9,
+                "params": { "name": "get_startup", "arguments": {} }
+            }),
+        );
+        assert_eq!(startup["result"]["isError"], false);
+        let startup_content = startup["result"]["content"][0]["text"].as_str().unwrap();
+        let startup_payload: Value = serde_json::from_str(startup_content).unwrap();
+        assert_eq!(startup_payload["result"]["registration"], "unavailable");
         assert_eq!(mcp_tools().as_array().unwrap().len(), 21);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
