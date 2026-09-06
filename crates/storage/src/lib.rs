@@ -79,6 +79,13 @@ impl Storage {
                  committed_revision INTEGER NOT NULL,
                  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
              );
+             CREATE TABLE IF NOT EXISTS client_enrollments (
+                 client_id TEXT PRIMARY KEY,
+                 role TEXT NOT NULL CHECK(role IN ('observer', 'editor', 'operator')),
+                 revoked INTEGER NOT NULL DEFAULT 0 CHECK(revoked IN (0, 1)),
+                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                 revoked_at TEXT
+             );
              INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);",
         )?;
         Ok(())
@@ -165,6 +172,38 @@ impl Storage {
                 "SELECT result FROM operation_journal WHERE idempotency_key = ?1",
                 params![key],
                 |row| row.get(0),
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    pub fn save_client_enrollment(&self, client_id: &str, role: &str) -> Result<(), StorageError> {
+        self.connection.execute(
+            "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)
+             VALUES (?1, ?2, 0, NULL)
+             ON CONFLICT(client_id) DO UPDATE SET role=excluded.role, revoked=0, revoked_at=NULL",
+            params![client_id, role],
+        )?;
+        Ok(())
+    }
+
+    pub fn revoke_client_enrollment(&self, client_id: &str) -> Result<bool, StorageError> {
+        Ok(self.connection.execute(
+            "UPDATE client_enrollments SET revoked=1, revoked_at=CURRENT_TIMESTAMP
+             WHERE client_id = ?1 AND revoked = 0",
+            params![client_id],
+        )? == 1)
+    }
+
+    pub fn load_client_enrollment(
+        &self,
+        client_id: &str,
+    ) -> Result<Option<(String, bool)>, StorageError> {
+        self.connection
+            .query_row(
+                "SELECT role, revoked FROM client_enrollments WHERE client_id = ?1",
+                params![client_id],
+                |row| Ok((row.get(0)?, row.get::<_, i64>(1)? != 0)),
             )
             .optional()
             .map_err(Into::into)
@@ -316,5 +355,29 @@ mod tests {
         drop(storage);
         let _ = std::fs::remove_file(source);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn client_enrollment_is_explicit_and_revocation_is_auditable() {
+        let storage = Storage::open_memory().unwrap();
+        assert_eq!(storage.load_client_enrollment("client").unwrap(), None);
+        storage.save_client_enrollment("client", "editor").unwrap();
+        assert_eq!(
+            storage.load_client_enrollment("client").unwrap(),
+            Some(("editor".into(), false))
+        );
+        assert!(storage.revoke_client_enrollment("client").unwrap());
+        assert!(!storage.revoke_client_enrollment("client").unwrap());
+        assert_eq!(
+            storage.load_client_enrollment("client").unwrap(),
+            Some(("editor".into(), true))
+        );
+        storage
+            .save_client_enrollment("client", "observer")
+            .unwrap();
+        assert_eq!(
+            storage.load_client_enrollment("client").unwrap(),
+            Some(("observer".into(), false))
+        );
     }
 }

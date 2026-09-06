@@ -122,6 +122,8 @@ This establishes that Codex can continue documentation and portable implementati
 - Checks: `cargo test --workspace` — all 47 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory SQLite; no user database path was opened.
 - Added SQLite online backup support through rusqlite’s backup API, with a live-database round-trip test using temporary project files and cleanup.
 - Checks: `cargo test --workspace` — all 48 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No user database path was opened.
+- Added explicit SQLite client enrollment/revocation records with constrained roles, auditable revoked state, and re-enrollment reset semantics. Control-plane integration remains the next authorization slice.
+- Checks: `cargo test --workspace` — all 49 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory or uniquely named temporary project databases.
 
 ## Decisions and assumptions
 
