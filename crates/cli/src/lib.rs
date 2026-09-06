@@ -55,6 +55,7 @@ where
         "session" => session_command(&command_args)?,
         "api" => api_subcommand(&command_args)?,
         "operation" => operation_command(&command_args)?,
+        "recordings" => recordings_command(&command_args)?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
         "export-bundle" => export_bundle(&command_args)?,
@@ -107,6 +108,67 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
     response
         .result
         .ok_or_else(|| CliError::InvalidArguments("operation not found".into()))
+}
+
+fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
+    let action = args.get(1).copied().ok_or_else(|| {
+        CliError::InvalidArguments(
+            "usage: recordings <list|get|remove-entry> [<recording-id>] --database <path>".into(),
+        )
+    })?;
+    let (method, params) = match action {
+        "list" => {
+            let session_id = args
+                .iter()
+                .position(|argument| *argument == "--session")
+                .map(|index| {
+                    args.get(index + 1)
+                        .copied()
+                        .filter(|value| !value.starts_with('-'))
+                        .ok_or_else(|| {
+                            CliError::InvalidArguments("--session requires a value".into())
+                        })
+                })
+                .transpose()?;
+            (
+                "recordings.list",
+                session_id.map(|id| json!({ "sessionId": id })),
+            )
+        }
+        "get" => (
+            "recordings.get",
+            Some(json!({
+                "recordingId": positional(args, 2, "recording id")?
+            })),
+        ),
+        "remove-entry" => (
+            "recordings.removeEntry",
+            Some(json!({
+                "recordingId": positional(args, 2, "recording id")?
+            })),
+        ),
+        _ => {
+            return Err(CliError::InvalidArguments(
+                "usage: recordings <list|get|remove-entry> [<recording-id>] --database <path>"
+                    .into(),
+            ))
+        }
+    };
+    let mut plane = ControlPlane::with_storage("cli", database(args)?);
+    let response = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: method.into(),
+        params,
+    });
+    if let Some(result) = response.result {
+        Ok(result)
+    } else {
+        Err(CliError::InvalidArguments(response.error.map_or_else(
+            || format!("{method} failed"),
+            |error| error.message,
+        )))
+    }
 }
 
 fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
@@ -571,7 +633,12 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." })
+    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    value["commands"].as_array_mut().unwrap().insert(
+        14,
+        json!("recordings list|get|remove-entry [<recording-id>] --database <path>"),
+    );
+    value
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -1022,6 +1089,74 @@ mod tests {
             descriptions.as_array().unwrap().len(),
             nodes.as_array().unwrap().len()
         );
+    }
+
+    #[test]
+    fn recording_commands_use_control_dispatch_and_preserve_file_entries() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-recordings-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let storage = Storage::open(&database).unwrap();
+        storage
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "recording-cli".into(),
+                session_id: "session-cli".into(),
+                recorder_id: "recorder-1".into(),
+                path: "C:\\Audio\\recording.wav".into(),
+                format: "wav".into(),
+                channels: 2,
+                sample_rate: 48_000,
+                frames: 128,
+                file_bytes: 512,
+                start_time: "2026-09-06T00:00:00Z".into(),
+                state: "complete".into(),
+                missing: false,
+                title: Some("CLI test".into()),
+                artist: None,
+                comment: None,
+            })
+            .unwrap();
+        drop(storage);
+        let database = database.to_string_lossy().into_owned();
+        let listed: Value = serde_json::from_str(
+            &run(["recordings", "list", "--database", &database, "--json"]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(listed[0]["id"], "recording-cli");
+        let fetched: Value = serde_json::from_str(
+            &run([
+                "recordings",
+                "get",
+                "recording-cli",
+                "--database",
+                &database,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(fetched["path"], "C:\\Audio\\recording.wav");
+        let removed: Value = serde_json::from_str(
+            &run([
+                "recordings",
+                "remove-entry",
+                "recording-cli",
+                "--database",
+                &database,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(removed["fileAction"], "none");
+        assert!(Storage::open(&database)
+            .unwrap()
+            .get_recording("recording-cli")
+            .unwrap()
+            .is_none());
+        let _ = std::fs::remove_file(database);
     }
 
     #[test]
