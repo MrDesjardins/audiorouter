@@ -84,7 +84,7 @@ private:
 };
 
 static int process_loopback_probe(DWORD target_process_id, bool read_data, bool include_target_tree,
-                                  DWORD duration_ms) {
+                                  DWORD duration_ms, bool require_signal) {
     std::mutex mutex;
     std::condition_variable ready;
     HRESULT activation = E_FAIL;
@@ -206,7 +206,8 @@ static int process_loopback_probe(DWORD target_process_id, bool read_data, bool 
                                           << " process_capture_sample_energy=" << static_cast<double>(sample_energy) << '\n';
                                 print_hr("process_capture_stop", client->Stop());
                                 print_hr("process_capture_reset", client->Reset());
-                                data_ok = SUCCEEDED(read) && packet_count > 0 && nonzero_bytes > 0;
+                                data_ok = SUCCEEDED(read) && packet_count > 0 &&
+                                          (!require_signal || nonzero_bytes > 0);
                             }
                         } else {
                             print_hr("process_reset", client->Reset());
@@ -427,7 +428,7 @@ static int controlled_process_attribution(DWORD duration_ms) {
         return 1;
     }
     CloseHandle(process.hThread);
-    const int result = process_loopback_probe(process.dwProcessId, true, true, duration_ms);
+    const int result = process_loopback_probe(process.dwProcessId, true, true, duration_ms, true);
     WaitForSingleObject(process.hProcess, duration_ms + 3000);
     DWORD exit_code = STILL_ACTIVE;
     GetExitCodeProcess(process.hProcess, &exit_code);
@@ -479,7 +480,8 @@ int main(int argc, char** argv) {
                          std::strcmp(argv[1], "process-capture-exclude") == 0;
         bool include_target_tree = std::strcmp(argv[1], "process-capture-exclude") != 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 500;
-        int result = process_loopback_probe(target_process_id, read_data, include_target_tree, duration_ms);
+        int result = process_loopback_probe(target_process_id, read_data, include_target_tree,
+                                            duration_ms, false);
         CoUninitialize();
         return result;
     }
