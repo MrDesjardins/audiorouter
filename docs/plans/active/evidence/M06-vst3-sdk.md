@@ -44,6 +44,12 @@ candidates and returns invalid entries visibly alongside valid identities. It
 does not recurse or execute binaries and rejects more than 256 candidates.
 Five plugin-host tests and strict Clippy pass.
 
+The scanner now accepts a shared `ScanControl` with an explicit deadline and
+atomic cancellation flag. Both controls are checked at the root boundary,
+while enumerating candidates, and before inspection; an empty root therefore
+honors cancellation and expiry too. Six plugin-host tests and strict Clippy
+pass.
+
 The post-integration `cargo test --workspace` run passes across CLI (5),
 control (41), domain (23), DSP (17), engine (36), plugin-host (3), protocol
 (5), recording (14), storage (21), transport (14), and Windows-audio (8)

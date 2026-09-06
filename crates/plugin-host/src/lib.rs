@@ -6,11 +6,17 @@
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 
 pub const MAX_PLUGIN_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_FAILURES_BEFORE_QUARANTINE: u32 = 3;
 pub const MAX_WORKER_FRAMES: usize = 2048;
 pub const MAX_SCAN_CANDIDATES: usize = 256;
+pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -58,7 +64,42 @@ pub struct ScanEntry {
 pub enum ScanError {
     InvalidRoot,
     TooManyCandidates,
+    Cancelled,
+    DeadlineExceeded,
     Io(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct ScanControl {
+    deadline: Instant,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl ScanControl {
+    pub fn with_deadline(deadline: Instant) -> Self {
+        Self {
+            deadline,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn default_deadline() -> Self {
+        Self::with_deadline(Instant::now() + DEFAULT_SCAN_DEADLINE)
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
+
+    fn check(&self) -> Result<(), ScanError> {
+        if self.cancelled.load(Ordering::Acquire) {
+            return Err(ScanError::Cancelled);
+        }
+        if Instant::now() >= self.deadline {
+            return Err(ScanError::DeadlineExceeded);
+        }
+        Ok(())
+    }
 }
 
 pub fn inspect_binary(
@@ -111,11 +152,20 @@ pub fn inspect_binary(
 /// Enumerates one explicitly selected directory without executing its files.
 /// Every candidate is returned, including unsupported/error entries.
 pub fn scan_directory(root: &Path) -> Result<Vec<ScanEntry>, ScanError> {
+    scan_directory_with_control(root, &ScanControl::default_deadline())
+}
+
+pub fn scan_directory_with_control(
+    root: &Path,
+    control: &ScanControl,
+) -> Result<Vec<ScanEntry>, ScanError> {
     if !root.is_dir() {
         return Err(ScanError::InvalidRoot);
     }
+    control.check()?;
     let mut candidates = Vec::new();
     for entry in fs::read_dir(root).map_err(|error| ScanError::Io(error.to_string()))? {
+        control.check()?;
         let entry = entry.map_err(|error| ScanError::Io(error.to_string()))?;
         let path = entry.path();
         let extension = path
@@ -130,9 +180,10 @@ pub fn scan_directory(root: &Path) -> Result<Vec<ScanEntry>, ScanError> {
         }
     }
     candidates.sort();
-    Ok(candidates
-        .into_iter()
-        .map(|path| match inspect_binary(&path, &[root.to_path_buf()]) {
+    let mut entries = Vec::with_capacity(candidates.len());
+    for path in candidates {
+        control.check()?;
+        entries.push(match inspect_binary(&path, &[root.to_path_buf()]) {
             Ok(identity) => ScanEntry {
                 path,
                 identity: Some(identity),
@@ -143,8 +194,9 @@ pub fn scan_directory(root: &Path) -> Result<Vec<ScanEntry>, ScanError> {
                 identity: None,
                 error: Some(error),
             },
-        })
-        .collect())
+        });
+    }
+    Ok(entries)
 }
 
 fn root_contains(root: &Path, candidate: &Path) -> bool {
@@ -398,6 +450,23 @@ mod tests {
         assert!(entries
             .iter()
             .any(|entry| entry.error == Some(InspectionError::NotPe)));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn controlled_scan_honors_cancel_and_deadline() {
+        let root = temp_root();
+        let cancelled = ScanControl::default_deadline();
+        cancelled.cancel();
+        assert_eq!(
+            scan_directory_with_control(&root, &cancelled),
+            Err(ScanError::Cancelled)
+        );
+        let expired = ScanControl::with_deadline(Instant::now());
+        assert_eq!(
+            scan_directory_with_control(&root, &expired),
+            Err(ScanError::DeadlineExceeded)
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }
