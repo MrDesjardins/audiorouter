@@ -63,3 +63,8 @@ tests, plus all doc tests. Strict plugin-host Clippy remains green.
 failure selects silence for protected microphone paths, while dry fallback is
 available only when the path is explicitly unprotected. Eight plugin-host
 tests and strict Clippy pass.
+
+`PluginStateAsset` now bounds opaque state at 16 MiB, records a schema version
+and SHA-256, and verifies both before restore. Empty, oversized, mismatched,
+and tampered state are rejected. Nine plugin-host tests and strict Clippy pass;
+durable asset storage and plugin-specific state serialization remain open.

@@ -17,6 +17,7 @@ pub const MAX_FAILURES_BEFORE_QUARANTINE: u32 = 3;
 pub const MAX_WORKER_FRAMES: usize = 2048;
 pub const MAX_SCAN_CANDIDATES: usize = 256;
 pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
+pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -42,6 +43,55 @@ pub enum InspectionError {
     NotPe,
     UnsupportedArchitecture,
     Io(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StateError {
+    Empty,
+    TooLarge,
+    VersionMismatch,
+    IntegrityMismatch,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginStateAsset {
+    pub version: u32,
+    pub bytes: Vec<u8>,
+    pub sha256: String,
+}
+
+impl PluginStateAsset {
+    pub fn new(version: u32, bytes: Vec<u8>) -> Result<Self, StateError> {
+        if bytes.is_empty() {
+            return Err(StateError::Empty);
+        }
+        if bytes.len() > MAX_PLUGIN_STATE_BYTES {
+            return Err(StateError::TooLarge);
+        }
+        let sha256 = Sha256::digest(&bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        Ok(Self {
+            version,
+            bytes,
+            sha256,
+        })
+    }
+
+    pub fn verify_for_restore(&self, expected_version: u32) -> Result<&[u8], StateError> {
+        if self.version != expected_version {
+            return Err(StateError::VersionMismatch);
+        }
+        let digest: String = Sha256::digest(&self.bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        if digest != self.sha256 {
+            return Err(StateError::IntegrityMismatch);
+        }
+        Ok(&self.bytes)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -515,5 +565,22 @@ mod tests {
             WorkerFailurePolicy::new(false).on_failure(),
             WorkerFailureAction::DryFallback
         );
+    }
+
+    #[test]
+    fn plugin_state_is_versioned_and_integrity_checked() {
+        let asset = PluginStateAsset::new(2, vec![1, 2, 3]).unwrap();
+        assert_eq!(asset.verify_for_restore(2), Ok(&[1, 2, 3][..]));
+        assert_eq!(
+            asset.verify_for_restore(1),
+            Err(StateError::VersionMismatch)
+        );
+        let mut corrupt = asset.clone();
+        corrupt.bytes[0] = 9;
+        assert_eq!(
+            corrupt.verify_for_restore(2),
+            Err(StateError::IntegrityMismatch)
+        );
+        assert_eq!(PluginStateAsset::new(1, Vec::new()), Err(StateError::Empty));
     }
 }
