@@ -1,10 +1,75 @@
-import type { EntityId, Session } from "@audiorouter/contracts";
+import type { EntityId, NodeKind, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 
 export type DraftChange = {
   path: `/nodes/${number}/${"enabled" | "bypass"}` | `/nodes/${number}/parameters/${string}`;
   value: boolean | number | string;
 };
+
+const libraryNodeDefinitions: Record<Extract<NodeKind, "mixer" | "gain" | "mute" | "meter">, {
+  name: string;
+  parameters: Record<string, boolean | number | string>;
+  ports: Session["nodes"][number]["ports"];
+}> = {
+  mixer: {
+    name: "Mixer",
+    parameters: {},
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  gain: {
+    name: "Gain",
+    parameters: { gainDb: 0 },
+    ports: [
+      { name: "in", direction: "input", channels: 1 },
+      { name: "out", direction: "output", channels: 1 },
+    ],
+  },
+  mute: {
+    name: "Mute",
+    parameters: { muted: false },
+    ports: [
+      { name: "in", direction: "input", channels: 1 },
+      { name: "out", direction: "output", channels: 1 },
+    ],
+  },
+  meter: {
+    name: "Meter",
+    parameters: {},
+    ports: [{ name: "in", direction: "input", channels: 1 }],
+  },
+};
+
+/** Adds one supported built-in processor to a draft without mutating its revision or edges. */
+export function appendLibraryNode(
+  session: Session,
+  kind: keyof typeof libraryNodeDefinitions,
+): Session {
+  const definition = libraryNodeDefinitions[kind];
+  let suffix = 1;
+  let id = `${kind}-${suffix}`;
+  while (session.nodes.some((node) => node.id === id)) {
+    suffix += 1;
+    id = `${kind}-${suffix}`;
+  }
+  return {
+    ...session,
+    nodes: [
+      ...session.nodes,
+      {
+        id,
+        kind,
+        name: `${definition.name} ${suffix}`,
+        enabled: true,
+        bypass: false,
+        parameters: { ...definition.parameters },
+        ports: definition.ports.map((port) => ({ ...port })),
+      },
+    ],
+  };
+}
 
 /**
  * Creates a UI candidate without changing the authoritative session revision.

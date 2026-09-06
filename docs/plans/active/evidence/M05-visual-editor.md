@@ -344,3 +344,11 @@ existing list view remains available as a keyboard-friendly alternative. UI
 tests (26), TypeScript typecheck, production build, and diff checks pass; no
 graph commit, stream activation, or machine configuration change is performed
 by the canvas.
+
+The library now distinguishes available built-in processors from unavailable
+device/runtime capabilities. Gain, mixer, mute, and meter entries append valid
+nodes with deterministic IDs to the local draft; physical input and recorder
+entries are disabled with explanatory labels until their required native/runtime
+integration exists. The added node never changes the authoritative revision or
+edges and still requires the existing plan/commit flow. UI coverage is 28
+tests; typecheck, production build, and diff checks pass.
