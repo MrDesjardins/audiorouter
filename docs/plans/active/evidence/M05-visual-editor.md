@@ -66,3 +66,9 @@ preserves the authoritative revision, rejects unknown node IDs, and leaves
 validation/commit to the backend. This is UI preparation only and is not
 wired to disconnected controls. TypeScript checking and the production Vite
 build pass.
+
+The React shell now consumes `SnapshotCache` state and exposes an accessible
+status message when the retained backend snapshot is stale. The initial
+disconnected preview still renders safely, while a future failed live refresh
+will retain the last known session and explain the condition. UI typechecking
+and production build pass.

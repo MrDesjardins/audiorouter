@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
-import { createDisconnectedBackend } from "./backend";
+import { createDisconnectedBackend, SnapshotCache } from "./backend";
 import { demoSession, demoSessions } from "./fixtures";
 
 const backend = createDisconnectedBackend();
+const snapshotCache = new SnapshotCache();
 
 function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean; onSelect: () => void }) {
   return (
@@ -19,16 +20,17 @@ function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean;
 }
 
 export function App() {
-  const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof backend.snapshot>> | null>(null);
+  const [snapshotState, setSnapshotState] = useState(snapshotCache.current());
   const [selectedSessionId, setSelectedSessionId] = useState(demoSession.id);
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
   useEffect(() => {
     let mounted = true;
-    void backend.snapshot().then((nextSnapshot) => {
-      if (mounted) setSnapshot(nextSnapshot);
+    void snapshotCache.refresh(backend).then((nextState) => {
+      if (mounted) setSnapshotState(nextState);
     });
     return () => { mounted = false; };
   }, []);
+  const snapshot = snapshotState.snapshot;
   const availableSessions = snapshot ? [snapshot.session, ...demoSessions.filter((item) => item.id !== snapshot.session.id)] : demoSessions;
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
   const selectedNode = session.nodes.find((node) => node.id === selectedNodeId) ?? session.nodes[0];
@@ -56,6 +58,7 @@ export function App() {
 
         <main className="main-content">
           <section className="workspace-title"><div><p className="eyebrow">Stopped session</p><h2>{demoSession.name}</h2><p className="muted">Revision {demoSession.revision} · changes are presentation-only in this preview</p></div><div className="actions"><button type="button" className="secondary">Undo</button><button type="button" className="primary">Plan changes</button></div></section>
+          {snapshotState.stale && snapshotState.error && <p className="muted" role="status">Last known backend state is stale: {snapshotState.error}</p>}
           <section className="notice" role="status"><strong>Read-only preview</strong><span>The control backend is disconnected. No route, device, or recording action can be applied.</span></section>
           <section className="canvas-panel" aria-labelledby="canvas-heading"><div className="section-heading"><div><p className="eyebrow">Signal flow</p><h2 id="canvas-heading">Canvas</h2></div><button type="button" className="secondary">List view</button></div><div className="node-canvas">{demoSession.nodes.map((node) => <NodeCard key={node.id} node={node} selected={node.id === selectedNode.id} onSelect={() => setSelectedNodeId(node.id)} />)}</div></section>
           <section className="panel inspector" aria-labelledby="inspector-heading"><div className="section-heading"><div><p className="eyebrow">Selected node</p><h2 id="inspector-heading">{selectedNode.name}</h2></div><span className="badge">{selectedNode.kind}</span></div><div className="inspector-grid"><label>Enabled<input type="checkbox" checked={selectedNode.enabled} readOnly disabled /></label><label>Bypass<input type="checkbox" checked={selectedNode.bypass} readOnly disabled /></label><button type="button" disabled title="Connect the backend to apply node changes">Mute</button><p className="muted">Controls are disabled while disconnected. Selection is local presentation state only.</p></div></section>
