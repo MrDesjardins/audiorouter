@@ -27,3 +27,12 @@ owner. `force_release` clears ownership for crash/reconnect cleanup while the
 generation remains monotonic. Two domain regressions cover ownership and stale
 release behavior. This primitive carries no audio and is not a driver or
 endpoint implementation.
+
+`VirtualBusRegistry` now provides the portable desired-state inventory for up
+to eight stereo buses. It trims and bounds names, rejects duplicate IDs and
+case-insensitive names, sorts listing by stable ID, requires disablement before
+delete, and refuses deletion while a lease is held. Lease acquisition/release
+is routed through the same registry. Two additional regressions cover naming,
+capacity, disable/delete ordering, and lease cleanup. Native driver endpoint
+creation, persistence, bridge ownership, and external-client routing remain
+open.

@@ -14,6 +14,7 @@ pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
 pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
+pub const MAX_VIRTUAL_BUSES: usize = 8;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
@@ -173,6 +174,194 @@ impl VirtualBusLease {
     pub fn force_release(&mut self) {
         self.owner = None;
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VirtualBusError {
+    EmptyId,
+    EmptyName,
+    NameTooLong,
+    DuplicateId,
+    DuplicateName,
+    LimitReached,
+    NotFound,
+    MustBeDisabled,
+    Owned,
+    EmptyOwner,
+    AlreadyOwned,
+    NotOwner,
+    StaleLease,
+}
+
+/// Desired-state descriptor for one stereo virtual bus. Endpoint identities
+/// and driver handles are intentionally absent until M03 native integration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VirtualBus {
+    id: EntityId,
+    name: String,
+    enabled: bool,
+    lease: VirtualBusLease,
+}
+
+impl VirtualBus {
+    pub fn id(&self) -> &EntityId {
+        &self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn channels(&self) -> u16 {
+        2
+    }
+
+    pub fn enabled(&self) -> bool {
+        self.enabled
+    }
+
+    pub fn lease(&self) -> &VirtualBusLease {
+        &self.lease
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct VirtualBusRegistry {
+    buses: Vec<VirtualBus>,
+}
+
+impl VirtualBusRegistry {
+    pub fn list(&self) -> &[VirtualBus] {
+        &self.buses
+    }
+
+    pub fn create(&mut self, id: EntityId, name: impl Into<String>) -> Result<(), VirtualBusError> {
+        let name = validate_virtual_bus_name(name.into())?;
+        if id.as_str().is_empty() {
+            return Err(VirtualBusError::EmptyId);
+        }
+        if self.buses.iter().any(|bus| bus.id == id) {
+            return Err(VirtualBusError::DuplicateId);
+        }
+        if self
+            .buses
+            .iter()
+            .any(|bus| bus.name.eq_ignore_ascii_case(&name))
+        {
+            return Err(VirtualBusError::DuplicateName);
+        }
+        if self.buses.len() >= MAX_VIRTUAL_BUSES {
+            return Err(VirtualBusError::LimitReached);
+        }
+        self.buses.push(VirtualBus {
+            id,
+            name,
+            enabled: true,
+            lease: VirtualBusLease::default(),
+        });
+        self.buses
+            .sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
+        Ok(())
+    }
+
+    pub fn rename(
+        &mut self,
+        id: &EntityId,
+        name: impl Into<String>,
+    ) -> Result<(), VirtualBusError> {
+        let name = validate_virtual_bus_name(name.into())?;
+        if self
+            .buses
+            .iter()
+            .any(|bus| bus.id != *id && bus.name.eq_ignore_ascii_case(&name))
+        {
+            return Err(VirtualBusError::DuplicateName);
+        }
+        let bus = self
+            .buses
+            .iter_mut()
+            .find(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?;
+        bus.name = name;
+        Ok(())
+    }
+
+    pub fn set_enabled(&mut self, id: &EntityId, enabled: bool) -> Result<(), VirtualBusError> {
+        let bus = self
+            .buses
+            .iter_mut()
+            .find(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?;
+        bus.enabled = enabled;
+        Ok(())
+    }
+
+    pub fn delete(&mut self, id: &EntityId) -> Result<(), VirtualBusError> {
+        let index = self
+            .buses
+            .iter()
+            .position(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?;
+        let bus = &self.buses[index];
+        if bus.enabled {
+            return Err(VirtualBusError::MustBeDisabled);
+        }
+        if bus.lease.owner().is_some() {
+            return Err(VirtualBusError::Owned);
+        }
+        self.buses.remove(index);
+        Ok(())
+    }
+
+    pub fn acquire_lease(
+        &mut self,
+        id: &EntityId,
+        owner: EntityId,
+    ) -> Result<u64, VirtualBusError> {
+        self.buses
+            .iter_mut()
+            .find(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?
+            .lease
+            .acquire(owner)
+            .map_err(|error| match error {
+                VirtualBusLeaseError::EmptyOwner => VirtualBusError::EmptyOwner,
+                VirtualBusLeaseError::AlreadyOwned => VirtualBusError::AlreadyOwned,
+                VirtualBusLeaseError::NotOwner => VirtualBusError::NotOwner,
+                VirtualBusLeaseError::StaleLease => VirtualBusError::StaleLease,
+            })
+    }
+
+    pub fn release_lease(
+        &mut self,
+        id: &EntityId,
+        owner: &EntityId,
+        generation: u64,
+    ) -> Result<(), VirtualBusError> {
+        self.buses
+            .iter_mut()
+            .find(|bus| bus.id == *id)
+            .ok_or(VirtualBusError::NotFound)?
+            .lease
+            .release(owner, generation)
+            .map_err(|error| match error {
+                VirtualBusLeaseError::EmptyOwner => VirtualBusError::EmptyOwner,
+                VirtualBusLeaseError::AlreadyOwned => VirtualBusError::AlreadyOwned,
+                VirtualBusLeaseError::NotOwner => VirtualBusError::NotOwner,
+                VirtualBusLeaseError::StaleLease => VirtualBusError::StaleLease,
+            })
+    }
+}
+
+fn validate_virtual_bus_name(name: String) -> Result<String, VirtualBusError> {
+    let name = name.trim().to_owned();
+    if name.is_empty() {
+        return Err(VirtualBusError::EmptyName);
+    }
+    if name.chars().count() > 120 {
+        return Err(VirtualBusError::NameTooLong);
+    }
+    Ok(name)
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -1865,6 +2054,63 @@ mod tests {
         assert_eq!(
             lease.release(&owner, first_generation),
             Err(VirtualBusLeaseError::StaleLease)
+        );
+    }
+
+    #[test]
+    fn virtual_bus_registry_enforces_names_capacity_and_delete_safety() {
+        let mut registry = VirtualBusRegistry::default();
+        let first = EntityId::new("bus-1");
+        let second = EntityId::new("bus-2");
+        registry.create(first.clone(), "  Voice  ").unwrap();
+        assert_eq!(registry.list()[0].name(), "Voice");
+        assert_eq!(registry.list()[0].channels(), 2);
+        assert_eq!(
+            registry.create(second.clone(), "voice"),
+            Err(VirtualBusError::DuplicateName)
+        );
+        assert_eq!(
+            registry.delete(&first),
+            Err(VirtualBusError::MustBeDisabled)
+        );
+        let generation = registry
+            .acquire_lease(&first, EntityId::new("client"))
+            .unwrap();
+        registry.set_enabled(&first, false).unwrap();
+        assert_eq!(registry.delete(&first), Err(VirtualBusError::Owned));
+        registry
+            .release_lease(&first, &EntityId::new("client"), generation)
+            .unwrap();
+        registry.delete(&first).unwrap();
+        assert!(registry.list().is_empty());
+    }
+
+    #[test]
+    fn virtual_bus_registry_caps_at_eight_and_rejects_bad_names() {
+        let mut registry = VirtualBusRegistry::default();
+        assert_eq!(
+            registry.create(EntityId::new(""), "bus"),
+            Err(VirtualBusError::EmptyId)
+        );
+        assert_eq!(
+            registry.create(EntityId::new("bus"), "  "),
+            Err(VirtualBusError::EmptyName)
+        );
+        assert_eq!(
+            registry.create(EntityId::new("bus"), "x".repeat(121)),
+            Err(VirtualBusError::NameTooLong)
+        );
+        for index in 0..MAX_VIRTUAL_BUSES {
+            registry
+                .create(
+                    EntityId::new(format!("bus-{index}")),
+                    format!("Bus {index}"),
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            registry.create(EntityId::new("bus-overflow"), "Overflow"),
+            Err(VirtualBusError::LimitReached)
         );
     }
 
