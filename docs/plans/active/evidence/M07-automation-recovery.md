@@ -159,3 +159,9 @@ Added `backup --database <path> --output <new-path>` and
 absolute paths and new destinations; restore validates SQLite integrity before
 writing. The commands use the existing storage safeguards and do not open
 audio devices or change machine configuration.
+
+The validated checkpoint is now inspectable through the authorized
+`recordings.recovery` API, `recordings recovery` CLI command, and MCP
+`get_recording_recovery` tool. It returns lifecycle metadata only, reports
+missing checkpoints explicitly, and preserves the Record-scope boundary.
+Control coverage is 51 tests with strict Clippy.

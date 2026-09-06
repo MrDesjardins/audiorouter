@@ -108,6 +108,9 @@ fn method_description(name: &str) -> &'static str {
         "recordings.get" => {
             "Read one persisted recording metadata resource without touching its file."
         }
+        "recordings.recovery" => {
+            "Read a validated recorder recovery checkpoint without touching audio files."
+        }
         "recordings.reveal" => "Reveal a recorded file in the operating system file browser.",
         "recordings.preview" => "Inspect recording file format metadata without decoding audio.",
         "recordings.setMetadata" => {
@@ -200,6 +203,10 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "recordings.get" => object_schema(
+            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            &["recordingId"],
+        ),
+        "recordings.recovery" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
         ),
@@ -1190,6 +1197,7 @@ impl ControlPlane {
                     "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
+                    "recordings.recovery" => self.dispatch_recording_recovery(request.params),
                     "recordings.reveal" => self.dispatch_recording_reveal(request.params),
                     "recordings.preview" => self.dispatch_recordings_preview(request.params),
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
@@ -1758,6 +1766,35 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_recording_recovery(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let recording_id = params
+            .and_then(|params| {
+                params
+                    .get("recordingId")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let storage = self.storage.as_ref().ok_or_else(|| {
+            ControlError::InvalidRequest("recording recovery is unavailable".into())
+        })?;
+        let Some(checkpoint) = storage
+            .load_recording_checkpoint(&recording_id)
+            .map_err(storage_error)?
+        else {
+            return Ok(json!({
+                "recordingId": recording_id,
+                "status": "missing"
+            }));
+        };
+        Ok(json!({
+            "recordingId": recording_id,
+            "status": "available",
+            "checkpoint": checkpoint
+        }))
+    }
+
     fn dispatch_recording_reveal(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let recording_id = params
             .and_then(|params| {
@@ -2185,7 +2222,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "clients.revoke" => &["clientId"],
         "operations.get" | "operations.cancel" => &["operationId"],
         "recordings.list" => &["sessionId"],
-        "recordings.get" | "recordings.reveal" | "recordings.preview" => &["recordingId"],
+        "recordings.get" | "recordings.recovery" | "recordings.reveal" | "recordings.preview" => {
+            &["recordingId"]
+        }
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
         "recordings.rename" => &["recordingId", "newPath"],
         "safety.setPrivacyMute" => &["muted"],
@@ -3030,6 +3069,34 @@ mod tests {
             params: Some(json!({ "recordingId": "recording-1" })),
         });
         assert_eq!(response.result.unwrap()["title"], "Test");
+    }
+
+    #[test]
+    fn recording_recovery_dispatch_returns_validated_checkpoint_or_missing() {
+        let storage = Storage::open_memory().unwrap();
+        let mut recorder = audiorouter_recording::RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(100).unwrap();
+        storage
+            .save_recording_checkpoint("recovery-recording", &recorder.checkpoint())
+            .unwrap();
+        let mut plane = ControlPlane::with_storage("recovery", storage);
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "recordings.recovery".into(),
+            params: Some(json!({ "recordingId": "recovery-recording" })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["status"], "available");
+        assert_eq!(result["checkpoint"]["state"], "Recording");
+        let missing = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "recordings.recovery".into(),
+            params: Some(json!({ "recordingId": "missing" })),
+        });
+        assert_eq!(missing.result.unwrap()["status"], "missing");
     }
 
     #[test]
