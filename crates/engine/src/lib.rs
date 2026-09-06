@@ -991,6 +991,49 @@ impl RuntimeProcessor {
         }
         Ok(self.process(output))
     }
+
+    /// Process one block from an input ring into a destination-owned block and
+    /// submit it to an output ring. This is the reusable-buffer worker path:
+    /// the input is recycled and the output is acquired from its own pool, so
+    /// rings never transfer allocation ownership between one another. If the
+    /// output pool is empty, the input is recycled and an xrun is recorded.
+    pub fn process_ring_once(
+        &self,
+        input: &AudioBlockRing,
+        output: &AudioBlockRing,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        let Some(block) = input.try_receive() else {
+            return Ok(None);
+        };
+        let Some(mut destination) = output.try_acquire() else {
+            input
+                .try_recycle(block)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.metrics.record_xrun();
+            return Ok(None);
+        };
+        if destination.copy_from(&block).is_err() {
+            input
+                .try_recycle(block)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            output
+                .try_recycle(destination)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            return Err(BlockError::ShapeMismatch);
+        }
+        input
+            .try_recycle(block)
+            .map_err(|_| BlockError::ShapeMismatch)?;
+        let generation = self.process(&mut destination);
+        if let Err(destination) = output.try_submit(destination) {
+            output
+                .try_recycle(destination)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.metrics.record_xrun();
+            return Ok(None);
+        }
+        Ok(generation)
+    }
 }
 
 impl RuntimeGraph {
@@ -1142,6 +1185,29 @@ mod tests {
         let second = AudioBlock::new(1, 2).unwrap();
         assert!(ring.try_submit(second).is_err());
         assert_eq!(ring.overruns(), 1);
+    }
+
+    #[test]
+    fn processor_moves_recycled_block_between_rings() {
+        let input = AudioBlockRing::new(1, 1, 2).unwrap();
+        let output = AudioBlockRing::new(1, 1, 2).unwrap();
+        let mut block = input.try_acquire().unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        input.try_submit(block).unwrap();
+
+        let processor = RuntimeProcessor::default();
+        processor.publish(RuntimeGraph::prepare(
+            RuntimeGeneration::new(9),
+            vec![ProcessingStage::Gain { linear: 2.0 }],
+        ));
+        assert_eq!(
+            processor.process_ring_once(&input, &output).unwrap(),
+            Some(RuntimeGeneration::new(9))
+        );
+        let block = output.try_receive().unwrap();
+        assert_eq!(block.channel(0).unwrap(), &[0.5, 0.5]);
+        output.try_recycle(block).unwrap();
+        assert_eq!(processor.metrics().xruns(), 0);
     }
 
     #[test]
