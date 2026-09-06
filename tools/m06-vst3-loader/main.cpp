@@ -142,6 +142,7 @@ int wmain(int argc, wchar_t** argv) {
     bool component_initialized = false;
     bool component_active = false;
     bool processor_active = false;
+    bool processed_audio_effect = false;
     try {
         const auto binary = fs::absolute(resolve_binary(argv[1]));
         module = LoadLibraryW(binary.c_str());
@@ -317,8 +318,12 @@ int wmain(int argc, wchar_t** argv) {
                 std::cout << "processed offline block: channels=" << channels
                           << " frames=64 finite=true parameters=" << parameter_count
                           << " automation=verified state_bytes=" << state_bytes << "\n";
+                processed_audio_effect = true;
                 break;
             }
+        }
+        if (!processed_audio_effect) {
+            throw std::runtime_error("factory exposes no compatible audio effect");
         }
         factory->release();
         factory = nullptr;

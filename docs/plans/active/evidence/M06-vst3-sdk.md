@@ -530,3 +530,9 @@ three-available-effects/two-vendor gate, realtime worker integration, crash/
 hang/NaN/dynamic-latency fixtures, and editor lifecycle remain open. No audio
 device was opened and no machine configuration was changed. Generated loader
 outputs were removed after the run.
+
+The probe was hardened to require that at least one factory class actually
+passes the compatible audio-effect path. A bundle containing only non-audio
+classes can no longer produce a success-shaped result. The rebuilt probe was
+rerun against the same local fixture and passed; generated outputs were again
+removed.
