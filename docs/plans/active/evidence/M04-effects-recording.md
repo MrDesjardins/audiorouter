@@ -27,3 +27,10 @@ part, failures are explicit, and a completed recorder can be re-armed for a
 new part set. Two additional in-memory tests bring the crate to six tests.
 This remains control metadata only and does not claim file-worker, crash
 recovery, or recorder API integration.
+
+`WavRecorder` now joins the queue and state machine around the WAV writer. It
+drains a caller-selected maximum number of contiguous chunks per worker call,
+rejects non-recording drains and frame discontinuities, and finalizes the
+caller-owned WAV destination only after a completed stop. A seventh in-memory
+test verifies chunk draining and finalized data size. Filesystem policy,
+crash recovery, FLAC, and public recorder APIs remain open.

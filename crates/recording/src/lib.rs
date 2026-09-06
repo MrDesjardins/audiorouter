@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 const MAX_CHANNELS: u16 = 2;
 
 /// Caller-owned interleaved samples ready for an off-thread encoder.
+#[derive(Debug)]
 pub struct RecordingChunk {
     pub start_frame: u64,
     pub samples: Vec<f32>,
@@ -292,6 +293,8 @@ pub enum RecordingError {
     InvalidSampleCount,
     TooManyFrames,
     InvalidQueueCapacity,
+    NotRecording,
+    FrameDiscontinuity { expected: u64, actual: u64 },
     Io(std::io::Error),
 }
 
@@ -398,6 +401,95 @@ impl<W: Write + Seek> WavWriter<W> {
         )?;
         self.output.seek(SeekFrom::End(0))?;
         Ok(self.output)
+    }
+}
+
+/// A worker-side WAV recorder that joins queue draining with recorder state.
+/// The worker owns the encoder; callers retain ownership of the destination.
+pub struct WavRecorder<W> {
+    writer: WavWriter<W>,
+    controller: RecorderController,
+    next_frame: Option<u64>,
+}
+
+impl<W: Write + Seek> WavRecorder<W> {
+    pub fn new(writer: WavWriter<W>) -> Self {
+        Self {
+            writer,
+            controller: RecorderController::new(),
+            next_frame: None,
+        }
+    }
+
+    pub fn state(&self) -> RecorderState {
+        self.controller.state()
+    }
+
+    pub fn controller(&self) -> &RecorderController {
+        &self.controller
+    }
+
+    pub fn arm(&mut self) -> Result<(), RecorderError> {
+        self.controller.arm()
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.start(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    pub fn pause(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.pause(frame)
+    }
+
+    pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.resume(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    pub fn split(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.split(frame)
+    }
+
+    pub fn stop(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.stop(frame)
+    }
+
+    pub fn drain_queue(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        if self.controller.state() != RecorderState::Recording {
+            return Err(RecordingError::NotRecording);
+        }
+        let mut drained = 0;
+        while drained < maximum_chunks {
+            let Some(chunk) = queue.try_pop() else {
+                break;
+            };
+            let expected = self.next_frame.unwrap_or(chunk.start_frame);
+            if chunk.start_frame != expected {
+                return Err(RecordingError::FrameDiscontinuity {
+                    expected,
+                    actual: chunk.start_frame,
+                });
+            }
+            let frames = chunk.samples.len() / usize::from(self.writer.channels);
+            self.writer.write_interleaved(&chunk.samples)?;
+            self.next_frame = Some(expected + frames as u64);
+            drained += 1;
+        }
+        Ok(drained)
+    }
+
+    pub fn finish(self) -> Result<W, RecordingError> {
+        if self.controller.state() != RecorderState::Completed {
+            return Err(RecordingError::NotRecording);
+        }
+        self.writer.finish()
     }
 }
 
@@ -562,5 +654,32 @@ mod tests {
         recorder.start(5).unwrap();
         assert_eq!(recorder.parts().len(), 1);
         assert_eq!(recorder.parts()[0].start_frame, 5);
+    }
+
+    #[test]
+    fn wav_recorder_drains_contiguous_chunks_and_finalizes() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 10,
+                samples: vec![0.0, 0.5],
+            })
+            .unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 12,
+                samples: vec![-0.5],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        assert_eq!(recorder.drain_queue(&queue, 1).unwrap(), 1);
+        assert_eq!(recorder.drain_queue(&queue, 8).unwrap(), 1);
+        recorder.stop(13).unwrap();
+        let output = recorder.finish().unwrap().into_inner();
+        assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
     }
 }
