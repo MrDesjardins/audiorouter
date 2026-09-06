@@ -1,3 +1,5 @@
 /contracts/node_modules/
+/ui/node_modules/
+/ui/dist/
 /target/
 **/target/
