@@ -170,6 +170,12 @@ safety action, which remains unavailable in the editor; the parameter still
 flows through the existing plan/commit path. UI coverage is 9 tests with
 typecheck and production build passing.
 
+The inspector now supports explicit removal of the selected node from the
+draft after confirmation. Its incident edges are removed from the candidate,
+while the session revision and committed state remain unchanged until backend
+planning and commit; disconnected mode disables the action. UI coverage is 35
+tests with typecheck and production build passing.
+
 The recording library Search control is now functional as a bounded local
 filter over authorized metadata (identity, title, artist, comment, and path).
 It reports filtered counts and an explicit no-match state, while never opening

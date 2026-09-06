@@ -124,6 +124,16 @@ export function removeDraftConnection(session: Session, edgeId: EntityId): Sessi
   return { ...session, edges: session.edges.filter((edge) => edge.id !== edgeId) };
 }
 
+/** Removes a draft node and its incident edges without changing the session revision. */
+export function removeDraftNode(session: Session, nodeId: EntityId): Session {
+  if (!session.nodes.some((node) => node.id === nodeId)) throw new Error(`Unknown draft node: ${nodeId}`);
+  return {
+    ...session,
+    nodes: session.nodes.filter((node) => node.id !== nodeId),
+    edges: session.edges.filter((edge) => edge.sourceNode !== nodeId && edge.destinationNode !== nodeId),
+  };
+}
+
 /**
  * Creates a UI candidate without changing the authoritative session revision.
  * Validation and commit remain backend responsibilities.

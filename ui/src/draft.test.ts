@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendLibraryNode, setNodeDraftName } from "./draft";
+import { appendDraftConnection, appendLibraryNode, removeDraftNode, setNodeDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -36,5 +36,14 @@ describe("appendLibraryNode", () => {
     expect(renamed.edges).toEqual(demoSession.edges);
     expect(() => setNodeDraftName(demoSession, "voice", " ")).toThrow("cannot be empty");
     expect(() => setNodeDraftName(demoSession, "voice", "x".repeat(121))).toThrow("120");
+  });
+
+  it("removes a node and only its incident edges", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const reduced = removeDraftNode(connected, "voice");
+    expect(reduced.nodes.map((node) => node.id)).toEqual(["mic", "headphones"]);
+    expect(reduced.edges).toEqual([]);
+    expect(reduced.revision).toBe(demoSession.revision);
+    expect(() => removeDraftNode(reduced, "voice")).toThrow("Unknown draft node");
   });
 });
