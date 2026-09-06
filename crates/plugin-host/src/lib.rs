@@ -74,6 +74,8 @@ pub enum InspectionError {
     TooLarge,
     NotPe,
     UnsupportedArchitecture,
+    Cancelled,
+    DeadlineExceeded,
     Io(String),
 }
 
@@ -332,6 +334,14 @@ pub fn inspect_binary(
     path: &Path,
     configured_roots: &[PathBuf],
 ) -> Result<PluginIdentity, InspectionError> {
+    inspect_binary_with_control(path, configured_roots, None)
+}
+
+fn inspect_binary_with_control(
+    path: &Path,
+    configured_roots: &[PathBuf],
+    control: Option<&ScanControl>,
+) -> Result<PluginIdentity, InspectionError> {
     let canonical = fs::canonicalize(path).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             InspectionError::Missing
@@ -369,7 +379,34 @@ pub fn inspect_binary(
     if metadata.len() > MAX_PLUGIN_BYTES {
         return Err(InspectionError::TooLarge);
     }
-    let bytes = fs::read(&binary_path).map_err(|error| InspectionError::Io(error.to_string()))?;
+    let mut file =
+        fs::File::open(&binary_path).map_err(|error| InspectionError::Io(error.to_string()))?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    let mut chunk = [0_u8; 64 * 1024];
+    loop {
+        if let Some(control) = control {
+            match control.check() {
+                Ok(()) => {}
+                Err(ScanError::Cancelled) => return Err(InspectionError::Cancelled),
+                Err(ScanError::DeadlineExceeded) => return Err(InspectionError::DeadlineExceeded),
+                Err(error) => {
+                    return Err(InspectionError::Io(format!(
+                        "scan control failed: {error:?}"
+                    )))
+                }
+            }
+        }
+        let read = file
+            .read(&mut chunk)
+            .map_err(|error| InspectionError::Io(error.to_string()))?;
+        if read == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&chunk[..read]);
+        if bytes.len() as u64 > MAX_PLUGIN_BYTES {
+            return Err(InspectionError::TooLarge);
+        }
+    }
     let architecture = parse_pe_architecture(&bytes).ok_or(InspectionError::NotPe)?;
     if architecture != PeArchitecture::X64 {
         return Err(InspectionError::UnsupportedArchitecture);
@@ -443,18 +480,22 @@ pub fn scan_directory_with_control(
     let mut entries = Vec::with_capacity(candidates.len());
     for path in candidates {
         control.check()?;
-        entries.push(match inspect_binary(&path, &[root.to_path_buf()]) {
-            Ok(identity) => ScanEntry {
-                path,
-                identity: Some(identity),
-                error: None,
+        entries.push(
+            match inspect_binary_with_control(&path, &[root.to_path_buf()], Some(control)) {
+                Ok(identity) => ScanEntry {
+                    path,
+                    identity: Some(identity),
+                    error: None,
+                },
+                Err(InspectionError::Cancelled) => return Err(ScanError::Cancelled),
+                Err(InspectionError::DeadlineExceeded) => return Err(ScanError::DeadlineExceeded),
+                Err(error) => ScanEntry {
+                    path,
+                    identity: None,
+                    error: Some(error),
+                },
             },
-            Err(error) => ScanEntry {
-                path,
-                identity: None,
-                error: Some(error),
-            },
-        });
+        );
     }
     Ok(entries)
 }

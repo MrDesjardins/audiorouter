@@ -13,6 +13,16 @@ Regression coverage verifies an independent CLI-process-equivalent plan, inspect
 
 Remaining AUTO-04 work includes parity for the remaining convenience commands and full end-to-end warning-producing operations.
 
+## 2026-09-06 — Scan cancellation during bounded binary reads
+
+Plugin discovery now checks its shared `ScanControl` before each 64 KiB binary
+read, not only between directory entries. This ensures the ten-second scan
+deadline and explicit cancellation remain effective while inspecting a large
+candidate, while preserving the 256 MiB binary limit and returning invalid
+candidates as visible scan entries. The public single-file inspection API is
+unchanged. Plugin-host unit/integration tests and strict Clippy pass; files are
+read only and no plugin code is loaded or executed.
+
 ## 2026-09-06 — Node parameter convenience parity
 
 Added `node set <session-id> <node-id> <parameter> --value <json-scalar>
