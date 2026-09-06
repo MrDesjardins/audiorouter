@@ -153,6 +153,12 @@ When an event cursor falls outside retained history, `events.subscribe` now retu
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.
 
+On 2026-09-06, the checked-in `tests/acceptance/m01-cli.ps1` was rerun with
+the current branch and reported `M01 CLI acceptance passed`. It exercised the
+offline discovery, fixture import/export, persisted session inspection and
+fake lifecycle paths using temporary data; no audio endpoint or machine
+configuration was changed.
+
 ## Next action
 
 Implement application-loopback data-path validation and controlled process attribution in the native Windows probe. Preserve the existing no-default-change policy and keep driver installation/signing out of scope until isolated target and signing evidence exists.
