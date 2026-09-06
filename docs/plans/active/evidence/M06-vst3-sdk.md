@@ -531,6 +531,12 @@ hang/NaN/dynamic-latency fixtures, and editor lifecycle remain open. No audio
 device was opened and no machine configuration was changed. Generated loader
 outputs were removed after the run.
 
+The probe also now checks the return value from each audio-bus activation and
+from every normalized parameter write and restore. This makes plugin-side
+argument failures visible instead of silently accepting a partial probe. The
+fixture was rebuilt and rerun successfully after this change; no endpoint or
+machine configuration was touched.
+
 The probe was hardened to require that at least one factory class actually
 passes the compatible audio-effect path. A bundle containing only non-audio
 classes can no longer produce a success-shaped result. The rebuilt probe was

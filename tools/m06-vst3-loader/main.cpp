@@ -212,8 +212,10 @@ int wmain(int argc, wchar_t** argv) {
                     throw std::runtime_error("unsupported audio bus layout");
                 }
                 const auto channels = input_info.channelCount;
-                component->activateBus(Vst::kAudio, Vst::kInput, 0, true);
-                component->activateBus(Vst::kAudio, Vst::kOutput, 0, true);
+                if (component->activateBus(Vst::kAudio, Vst::kInput, 0, true) != kResultOk ||
+                    component->activateBus(Vst::kAudio, Vst::kOutput, 0, true) != kResultOk) {
+                    throw std::runtime_error("audio bus activation failed");
+                }
                 Vst::ProcessSetup setup{};
                 setup.processMode = Vst::kOffline;
                 setup.symbolicSampleSize = Vst::kSample32;
@@ -301,12 +303,16 @@ int wmain(int argc, wchar_t** argv) {
                     if (!std::isfinite(original) || original < 0.0 || original > 1.0) {
                         throw std::runtime_error("parameter returned invalid normalized value");
                     }
-                    controller->setParamNormalized(parameter.id, 0.5);
+                    if (controller->setParamNormalized(parameter.id, 0.5) != kResultOk) {
+                        throw std::runtime_error("parameter write rejected");
+                    }
                     const auto updated = controller->getParamNormalized(parameter.id);
                     if (!std::isfinite(updated) || updated < 0.0 || updated > 1.0) {
                         throw std::runtime_error("parameter automation returned invalid value");
                     }
-                    controller->setParamNormalized(parameter.id, original);
+                    if (controller->setParamNormalized(parameter.id, original) != kResultOk) {
+                        throw std::runtime_error("parameter restore rejected");
+                    }
                 }
                 controller->terminate();
                 controller->release();
