@@ -345,6 +345,33 @@ fn method_input_schema(name: &str) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "system.handshake" => json!({
+            "type": "object",
+            "properties": {
+                "compatible": { "const": true },
+                "requested": {
+                    "type": "object",
+                    "properties": {
+                        "major": { "type": "integer", "minimum": 0 },
+                        "minor": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["major", "minor"],
+                    "additionalProperties": false
+                },
+                "negotiated": {
+                    "type": "object",
+                    "properties": {
+                        "major": { "const": 1 },
+                        "minor": { "const": 0 }
+                    },
+                    "required": ["major", "minor"],
+                    "additionalProperties": false
+                },
+                "schemaVersion": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["compatible", "requested", "negotiated", "schemaVersion"],
+            "additionalProperties": false
+        }),
         "status.get" => status_output_schema(),
         "system.diagnostics" => diagnostics_output_schema(),
         "recovery.clearSafeMode" => json!({
@@ -380,6 +407,65 @@ fn method_output_schema(name: &str) -> Value {
             })
         }
         "sessions.get" => session_item_schema(),
+        "sessions.create" | "sessions.duplicate" => json!({
+            "type": "object",
+            "properties": {
+                "session": session_item_schema(),
+                "state": { "const": "stopped" }
+            },
+            "required": ["session", "state"],
+            "additionalProperties": false
+        }),
+        "sessions.delete" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1 },
+                "deleted": { "const": true }
+            },
+            "required": ["sessionId", "deleted"],
+            "additionalProperties": false
+        }),
+        "session.start" | "sessions.start" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1 },
+                "state": { "const": "running" },
+                "generation": { "type": "integer", "minimum": 1 },
+                "runtime": { "const": "fake" }
+            },
+            "required": ["sessionId", "state", "generation", "runtime"],
+            "additionalProperties": false
+        }),
+        "session.stop" | "sessions.stop" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1 },
+                "state": { "const": "stopped" },
+                "runtime": { "const": "fake" }
+            },
+            "required": ["sessionId", "state", "runtime"],
+            "additionalProperties": false
+        }),
+        "graph.undoPlan" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string", "minLength": 1 },
+                "baseRevision": { "type": "integer", "minimum": 0 },
+                "expiresInMs": { "type": "integer", "minimum": 1 }
+            },
+            "required": ["planId", "baseRevision", "expiresInMs"],
+            "additionalProperties": false
+        }),
+        "safety.setPrivacyMute" => json!({
+            "type": "object",
+            "properties": {
+                "muted": { "type": "boolean" },
+                "persistence": { "enum": ["durable", "memory"] },
+                "audioEffect": { "type": "string", "minLength": 1 }
+            },
+            "required": ["muted", "persistence", "audioEffect"],
+            "additionalProperties": false
+        }),
         "events.subscribe" => json!({
             "type": "object",
             "properties": {
@@ -3347,6 +3433,46 @@ mod tests {
             session_get["outputSchema"]["properties"]["edges"]["items"]["properties"]["sourceNode"]
                 ["type"],
             "string"
+        );
+        let handshake = methods
+            .iter()
+            .find(|method| method["name"] == "system.handshake")
+            .unwrap();
+        assert_eq!(
+            handshake["outputSchema"]["properties"]["negotiated"]["properties"]["major"]["const"],
+            1
+        );
+        let session_create = methods
+            .iter()
+            .find(|method| method["name"] == "sessions.create")
+            .unwrap();
+        assert_eq!(
+            session_create["outputSchema"]["properties"]["session"]["properties"]["nodes"]["type"],
+            "array"
+        );
+        let session_start = methods
+            .iter()
+            .find(|method| method["name"] == "session.start")
+            .unwrap();
+        assert_eq!(
+            session_start["outputSchema"]["properties"]["generation"]["minimum"],
+            1
+        );
+        let undo = methods
+            .iter()
+            .find(|method| method["name"] == "graph.undoPlan")
+            .unwrap();
+        assert_eq!(
+            undo["outputSchema"]["required"],
+            json!(["planId", "baseRevision", "expiresInMs"])
+        );
+        let privacy = methods
+            .iter()
+            .find(|method| method["name"] == "safety.setPrivacyMute")
+            .unwrap();
+        assert_eq!(
+            privacy["outputSchema"]["properties"]["muted"]["type"],
+            "boolean"
         );
         let history = methods
             .iter()

@@ -234,3 +234,10 @@ as the paginated session/history responses. Its schema covers session identity
 and revision, node and port descriptors, edge endpoints, and channel matrices;
 the discovery regression verifies the graph fields rather than accepting a
 generic object. The lookup remains read-only.
+
+Protocol handshake, session lifecycle mutations, `graph.undoPlan`, and
+`safety.setPrivacyMute` now also advertise explicit result schemas and shared
+TypeScript types. The schemas capture negotiated version fields, stopped or
+running fake-runtime invariants, plan expiry, and privacy persistence metadata;
+discovery tests verify representative fields without starting audio or changing
+machine privacy configuration.

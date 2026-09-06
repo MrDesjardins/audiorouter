@@ -257,6 +257,48 @@ export interface StartupStatus {
   reason: string;
 }
 
+export interface HandshakeResult {
+  compatible: true;
+  requested: { major: number; minor: number };
+  negotiated: { major: 1; minor: 0 };
+  schemaVersion: number;
+}
+
+export interface SessionCreateResult {
+  session: Session;
+  state: "stopped";
+}
+
+export interface SessionDeleteResult {
+  sessionId: EntityId;
+  deleted: true;
+}
+
+export interface SessionStartResult {
+  sessionId: EntityId;
+  state: "running";
+  generation: number;
+  runtime: "fake";
+}
+
+export interface SessionStopResult {
+  sessionId: EntityId;
+  state: "stopped";
+  runtime: "fake";
+}
+
+export interface GraphUndoPlanResult {
+  planId: EntityId;
+  baseRevision: number;
+  expiresInMs: number;
+}
+
+export interface PrivacyMuteResult {
+  muted: boolean;
+  persistence: "durable" | "memory";
+  audioEffect: string;
+}
+
 export interface StateEvent {
   sequence: number;
   backendEpoch: number;
@@ -453,7 +495,7 @@ export type MethodResult = {
   "recordings.removeEntry": Record<string, unknown>;
   "recordings.recycle": Record<string, unknown>;
   "recovery.clearSafeMode": { safeMode: false; recentCrashes: number; persistence: "durable" | "memory" };
-  "safety.setPrivacyMute": Record<string, unknown>;
+  "safety.setPrivacyMute": PrivacyMuteResult;
   "startup.get": StartupStatus;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "apps.list": ApplicationInfo[];
@@ -461,20 +503,20 @@ export type MethodResult = {
   "nodes.types": DiscoveryDocument["nodeTypes"];
   "routes.inspect": RouteInspection;
   "graph.history": GraphHistoryPage;
-  "graph.undoPlan": Record<string, unknown>;
+  "graph.undoPlan": GraphUndoPlanResult;
   "events.subscribe": EventsSubscribeResult;
   "nodes.describe": DiscoveryDocument["nodeTypes"];
   "sessions.get": Session;
   "sessions.list": SessionListPage;
-  "sessions.create": { session: Session; state: "stopped" };
-  "sessions.duplicate": { session: Session; state: "stopped" };
-  "sessions.delete": Record<string, unknown>;
+  "sessions.create": SessionCreateResult;
+  "sessions.duplicate": SessionCreateResult;
+  "sessions.delete": SessionDeleteResult;
   "graph.plan": GraphPlanResult;
   "graph.commit": GraphCommitResult;
-  "session.start": Record<string, unknown>;
-  "sessions.start": Record<string, unknown>;
-  "session.stop": Record<string, unknown>;
-  "sessions.stop": Record<string, unknown>;
+  "session.start": SessionStartResult;
+  "sessions.start": SessionStartResult;
+  "session.stop": SessionStopResult;
+  "sessions.stop": SessionStopResult;
 };
 
 export interface RpcTransport {
