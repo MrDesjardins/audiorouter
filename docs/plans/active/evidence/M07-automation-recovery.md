@@ -643,3 +643,10 @@ M08 release qualification. M01 CLI (22 tests), MCP stdio, 68 control tests,
 31 plugin-host tests, 8 worker-process tests, and strict Clippy passed. The
 wrapper used temporary state only and did not access audio devices, drivers,
 or machine configuration.
+
+The locked workspace all-target regression was then run at clean revision
+`c689e9a`. All crate tests passed: 22 CLI, 68 control, 35 domain, 25 DSP, 40
+engine, 31 plugin-host, 8 worker-process, 5 protocol, 30 recording, 36
+storage, 14 transport, and 12 Windows-audio tests. Strict workspace Clippy
+with `-D warnings` passed as well. This was validation only; no audio stream
+was started and no machine configuration changed.
