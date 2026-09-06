@@ -240,6 +240,52 @@ mod windows_pipe {
         Ok(frame)
     }
 
+    fn accept_client(name: &str) -> Result<(Handle, u32), TransportError> {
+        check_name(name)?;
+        let name = wide(name);
+        let security = owner_only_security()?;
+        let attributes = windows::Win32::Security::SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<windows::Win32::Security::SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: security.0 .0,
+            bInheritHandle: false.into(),
+        };
+        let handle = unsafe {
+            CreateNamedPipeW(
+                PCWSTR(name.as_ptr()),
+                PIPE_ACCESS_DUPLEX,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                1,
+                (MAX_FRAME_BYTES + 4) as u32,
+                (MAX_FRAME_BYTES + 4) as u32,
+                0,
+                Some(&attributes),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE || handle.is_invalid() {
+            return Err(win_error(windows::core::Error::from_thread()));
+        }
+        let handle = Handle(handle);
+        if let Err(error) = unsafe { ConnectNamedPipe(handle.0, None) } {
+            if error.code().0 != 0x8007_0217u32 as i32 {
+                return Err(win_error(error));
+            }
+        }
+        let mut client_process_id = 0;
+        unsafe { GetNamedPipeClientProcessId(handle.0, &mut client_process_id) }
+            .map_err(win_error)?;
+        if client_process_id == 0 {
+            return Err(TransportError::Windows(
+                "named pipe returned no client process ID".into(),
+            ));
+        }
+        if !client_is_same_user(client_process_id)? {
+            return Err(TransportError::Windows(
+                "named pipe client is not the server user".into(),
+            ));
+        }
+        Ok((handle, client_process_id))
+    }
+
     /// Serve exactly one framed request, then disconnect and close the pipe.
     /// The pipe is created with an owner-only ACL and the client SID is checked
     /// before its request is read. Production callers should still review the
@@ -268,54 +314,35 @@ mod windows_pipe {
     where
         F: FnOnce(u32, &[u8]) -> Result<Option<Vec<u8>>, TransportError>,
     {
-        check_name(name)?;
-        let name = wide(name);
-        let security = owner_only_security()?;
-        let attributes = windows::Win32::Security::SECURITY_ATTRIBUTES {
-            nLength: std::mem::size_of::<windows::Win32::Security::SECURITY_ATTRIBUTES>() as u32,
-            lpSecurityDescriptor: security.0 .0,
-            bInheritHandle: false.into(),
-        };
-        let handle = unsafe {
-            CreateNamedPipeW(
-                PCWSTR(name.as_ptr()),
-                PIPE_ACCESS_DUPLEX,
-                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                1,
-                (MAX_FRAME_BYTES + 4) as u32,
-                (MAX_FRAME_BYTES + 4) as u32,
-                0,
-                Some(&attributes),
-            )
-        };
-        if handle == INVALID_HANDLE_VALUE || handle.is_invalid() {
-            return Err(win_error(windows::core::Error::from_thread()));
-        }
-        let handle = Handle(handle);
-        if let Err(error) = unsafe { ConnectNamedPipe(handle.0, None) } {
-            // A client may connect between CreateNamedPipeW and ConnectNamedPipe.
-            // Win32 reports that successful race as ERROR_PIPE_CONNECTED.
-            if error.code().0 != 0x8007_0217u32 as i32 {
-                return Err(win_error(error));
-            }
-        }
-        let mut client_process_id = 0;
-        unsafe { GetNamedPipeClientProcessId(handle.0, &mut client_process_id) }
-            .map_err(win_error)?;
-        if client_process_id == 0 {
-            return Err(TransportError::Windows(
-                "named pipe returned no client process ID".into(),
-            ));
-        }
-        if !client_is_same_user(client_process_id)? {
-            return Err(TransportError::Windows(
-                "named pipe client is not the server user".into(),
-            ));
-        }
+        let (handle, client_process_id) = accept_client(name)?;
         let request = read_frame(handle.0)?;
         if let Some(response) = handler(client_process_id, &request)? {
             write_all(handle.0, &response)?;
             unsafe { FlushFileBuffers(handle.0) }.map_err(win_error)?;
+        }
+        let _ = unsafe { DisconnectNamedPipe(handle.0) };
+        Ok(())
+    }
+
+    /// Serve a bounded persistent client session. The same authenticated pipe
+    /// connection may carry `frames` requests; it is disconnected afterward so
+    /// ownership and shutdown remain deterministic for callers and tests.
+    pub fn serve_session<F>(name: &str, frames: usize, mut handler: F) -> Result<(), TransportError>
+    where
+        F: FnMut(u32, &[u8]) -> Result<Option<Vec<u8>>, TransportError>,
+    {
+        if frames == 0 {
+            return Err(TransportError::Protocol(
+                "session must serve at least one frame".into(),
+            ));
+        }
+        let (handle, client_process_id) = accept_client(name)?;
+        for _ in 0..frames {
+            let request = read_frame(handle.0)?;
+            if let Some(response) = handler(client_process_id, &request)? {
+                write_all(handle.0, &response)?;
+                unsafe { FlushFileBuffers(handle.0) }.map_err(win_error)?;
+            }
         }
         let _ = unsafe { DisconnectNamedPipe(handle.0) };
         Ok(())
@@ -431,6 +458,66 @@ mod windows_pipe {
         (0..responses).map(|_| read_frame(handle.0)).collect()
     }
 
+    /// Exchange the same framed request repeatedly over one authenticated
+    /// connection. This is a deterministic transport primitive for exercising
+    /// subscription/reconnect lifetimes; callers can encode distinct frames
+    /// with `round_trip_many` or a higher-level client protocol.
+    pub fn round_trip_session(
+        name: &str,
+        request: &[u8],
+        frames: usize,
+    ) -> Result<Vec<Vec<u8>>, TransportError> {
+        if frames == 0 {
+            return Err(TransportError::Protocol(
+                "session must exchange at least one frame".into(),
+            ));
+        }
+        check_name(name)?;
+        if request.len() < 4 || request.len() > MAX_FRAME_BYTES + 4 {
+            return Err(TransportError::Protocol("invalid request frame".into()));
+        }
+        let name = wide(name);
+        let handle = (0..20)
+            .find_map(|_| {
+                let result = unsafe {
+                    CreateFileW(
+                        PCWSTR(name.as_ptr()),
+                        (GENERIC_READ | GENERIC_WRITE).0,
+                        FILE_SHARE_NONE,
+                        None,
+                        OPEN_EXISTING,
+                        Default::default(),
+                        None,
+                    )
+                };
+                match result {
+                    Ok(handle) => Some(Ok(handle)),
+                    Err(error)
+                        if matches!(
+                            error.code().0,
+                            x if x == 0x8007_00E7u32 as i32 || x == 0x8007_0002u32 as i32
+                        ) =>
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(5));
+                        None
+                    }
+                    Err(error) => Some(Err(win_error(error))),
+                }
+            })
+            .unwrap_or_else(|| {
+                Err(TransportError::Windows(
+                    "timed out waiting for a free named-pipe instance".into(),
+                ))
+            })?;
+        let handle = Handle(handle);
+        let mut responses = Vec::with_capacity(frames);
+        for _ in 0..frames {
+            write_all(handle.0, request)?;
+            responses.push(read_frame(handle.0)?);
+        }
+        Ok(responses)
+    }
+
     /// Send a notification frame and close after the server has received it.
     pub fn send_oneway(name: &str, request: &[u8]) -> Result<(), TransportError> {
         check_name(name)?;
@@ -485,8 +572,8 @@ mod windows_pipe {
 #[cfg(windows)]
 pub use windows_pipe::{
     client_is_same_user, client_user_sid, current_user_sid, echo_handler, round_trip,
-    round_trip_many, send_oneway, serve_connections, serve_once, serve_once_with_client,
-    serve_once_with_client_optional,
+    round_trip_many, round_trip_session, send_oneway, serve_connections, serve_once,
+    serve_once_with_client, serve_once_with_client_optional, serve_session,
 };
 
 #[cfg(windows)]
@@ -498,6 +585,38 @@ pub fn serve_control_connections(
 ) -> Result<(), TransportError> {
     for _ in 0..connections {
         serve_once_with_client_optional(name, |_, frame| {
+            let responses = plane
+                .dispatch_frame_authorized(frame, &grant)
+                .map_err(|error| TransportError::Protocol(error.to_string()))?;
+            if responses.is_empty() {
+                Ok(None)
+            } else {
+                let total = responses.iter().map(Vec::len).sum();
+                let mut combined = Vec::with_capacity(total);
+                for response in responses {
+                    combined.extend_from_slice(&response);
+                }
+                Ok(Some(combined))
+            }
+        })?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+/// Serve a bounded number of authenticated persistent sessions. Each session
+/// accepts a fixed number of framed requests before disconnecting, preserving
+/// control-plane state across reconnects without introducing an unbounded
+/// daemon loop.
+pub fn serve_control_sessions(
+    name: &str,
+    sessions: usize,
+    frames_per_session: usize,
+    mut plane: audiorouter_control::ControlPlane,
+    grant: audiorouter_control::ClientGrant,
+) -> Result<(), TransportError> {
+    for _ in 0..sessions {
+        serve_session(name, frames_per_session, |_, frame| {
             let responses = plane
                 .dispatch_frame_authorized(frame, &grant)
                 .map_err(|error| TransportError::Protocol(error.to_string()))?;
@@ -546,6 +665,17 @@ pub fn serve_control_connections_for_current_user(
 }
 
 #[cfg(not(windows))]
+pub fn serve_control_sessions(
+    _: &str,
+    _: usize,
+    _: usize,
+    _: audiorouter_control::ControlPlane,
+    _: audiorouter_control::ClientGrant,
+) -> Result<(), TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
 pub fn round_trip(_: &str, _: &[u8]) -> Result<Vec<u8>, TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
@@ -573,6 +703,19 @@ pub fn send_oneway(_: &str, _: &[u8]) -> Result<(), TransportError> {
 
 #[cfg(not(windows))]
 pub fn round_trip_many(_: &str, _: &[u8], _: usize) -> Result<Vec<Vec<u8>>, TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn round_trip_session(_: &str, _: &[u8], _: usize) -> Result<Vec<Vec<u8>>, TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn serve_session<F>(_: &str, _: usize, _: F) -> Result<(), TransportError>
+where
+    F: FnMut(u32, &[u8]) -> Result<Option<Vec<u8>>, TransportError>,
+{
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -876,6 +1019,33 @@ mod tests {
             .unwrap();
             round_trip(&name, &request).unwrap();
         }
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_keeps_one_authenticated_session_for_bounded_frames() {
+        let name = format!(r"\\.\pipe\audiorouter-session-test-{}", std::process::id());
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_session(&server_name, 2, |client_pid, frame| {
+                assert!(client_is_same_user(client_pid).unwrap());
+                echo_handler(frame).map(Some)
+            })
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let request = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 77,
+            "method": "status.get"
+        }))
+        .unwrap();
+        let responses = round_trip_session(&name, &request, 2).unwrap();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&responses[1][4..]).unwrap()["ok"],
+            true
+        );
         server.join().unwrap().unwrap();
     }
 

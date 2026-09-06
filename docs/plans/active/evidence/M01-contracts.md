@@ -81,6 +81,8 @@ The durable commit hash is derived from the operation, plan ID, and base revisio
 
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
+The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.
+
 ## Next action
 
-Implement transport-level event subscriber lifetime and reconnect ownership over the tested local framing boundary. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.
+Implement application-loopback data-path validation and controlled process attribution in the native Windows probe. Preserve the existing no-default-change policy and keep driver installation/signing out of scope until isolated target and signing evidence exists.
