@@ -76,10 +76,16 @@ describe("plan-only drafts", () => {
   });
 
   it("edits a boolean Mute parameter without changing the revision", () => {
-    const candidate = setNodeDraftParameter(demoSession, "voice", "muted", true);
-    expect(candidate.revision).toBe(demoSession.revision);
+    const muteSession = {
+      ...demoSession,
+      nodes: demoSession.nodes.map((node) => node.id === "voice"
+        ? { ...node, kind: "mute" as const, parameters: {} }
+        : node),
+    };
+    const candidate = setNodeDraftParameter(muteSession, "voice", "muted", true);
+    expect(candidate.revision).toBe(muteSession.revision);
     expect(candidate.nodes[1].parameters.muted).toBe(true);
-    expect(describeDraftChanges(demoSession, candidate)).toEqual([
+    expect(describeDraftChanges(muteSession, candidate)).toEqual([
       { path: "/nodes/1/parameters/muted", value: true },
     ]);
   });
