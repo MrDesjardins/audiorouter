@@ -72,3 +72,9 @@ status message when the retained backend snapshot is stale. The initial
 disconnected preview still renders safely, while a future failed live refresh
 will retain the last known session and explain the condition. UI typechecking
 and production build pass.
+
+Added Vitest fake-backend coverage in `ui/src/backend.test.ts`: four tests
+verify disconnected read-only snapshots, empty event cursors, stale snapshot
+retention after a failed refresh, revision-preserving node drafts, and unknown
+node rejection. `npm run test`, typecheck, production build, and high-severity
+audit all pass.

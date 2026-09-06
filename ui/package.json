@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@audiorouter/contracts": "file:../contracts",
@@ -18,6 +19,7 @@
     "@types/react-dom": "19.1.7",
     "@vitejs/plugin-react": "5.0.4",
     "typescript": "5.9.2",
-    "vite": "7.3.6"
+    "vite": "7.3.6",
+    "vitest": "^5.0.0"
   }
 }
