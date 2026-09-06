@@ -25,6 +25,11 @@ Gain parameter update increments the session revision and persists the value.
 `cargo test -p audiorouter-cli --locked` passes 16 unit tests plus MCP
 interoperability; no audio endpoint or machine configuration is touched.
 
+`node set --dry-run` now validates and returns the candidate without requiring
+an idempotency key or creating a durable plan. The regression confirms the
+candidate contains the requested value while the persisted session revision
+and parameter remain unchanged.
+
 ## 2026-09-06 — Session-list CLI cursor parity
 
 `session list` now accepts optional `--cursor ID` in addition to its bounded
