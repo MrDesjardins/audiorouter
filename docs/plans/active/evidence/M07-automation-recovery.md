@@ -632,3 +632,8 @@ passed; graph-plan and diagnostics outputs remained disposable and protected.
 Direct CLI writer coverage also verifies that relative output paths and missing
 parents are rejected before any destination file or directory is created.
 Focused CLI tests and strict Clippy pass.
+
+The complete headless wrapper was rerun at clean revision `e377adc`. M01 CLI
+(22 tests), MCP stdio, 68 control tests, 31 plugin-host tests, 8 worker-process
+tests, and strict Clippy passed; graph-plan and diagnostics output paths remain
+disposable and no audio or machine configuration was accessed.
