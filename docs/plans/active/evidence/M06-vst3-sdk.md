@@ -569,3 +569,8 @@ converted into a success result.
 The selector also makes the class list and compatibility result reproducible
 for future plugin fixtures. All runs were offline, used the local SDK fixture,
 and removed generated probe outputs afterward.
+
+Selector rejection paths were also verified. Selecting the controller at index
+1 and a nonexistent index 999 both returned exit code 1 with
+`factory exposes no compatible audio effect`; neither path loaded a component
+or produced a success-shaped result.
