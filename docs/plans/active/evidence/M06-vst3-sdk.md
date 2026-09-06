@@ -206,3 +206,11 @@ control stream. A one-byte chunked-reader regression passes, bringing the
 plugin-host suite to 22 tests with strict Clippy clean. This is transport
 evidence only; native process creation and shared-memory audio transport remain
 open.
+
+Added `audiorouter-plugin-worker`, a disposable process protocol fixture. It
+negotiates the plugin fingerprint and channel count, accepts `Ready`, validates
+and echoes framed process buffers, echoes latency reports, and exits on
+`Shutdown`; it does not load plugin code or open audio devices. A process-level
+integration test passes alongside the 22 library tests and strict Clippy.
+This establishes stdio process IPC only; native plugin loading, sandbox policy,
+and shared-memory audio transport remain open.
