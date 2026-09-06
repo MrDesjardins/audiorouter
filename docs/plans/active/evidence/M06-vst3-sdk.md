@@ -554,3 +554,18 @@ passes the compatible audio-effect path. A bundle containing only non-audio
 classes can no longer produce a success-shaped result. The rebuilt probe was
 rerun against the same local fixture and passed; generated outputs were again
 removed.
+
+## Class selection and native result diagnostics (2026-09-06)
+
+The loader accepts an optional `--class-index` selector and reports the exact
+VST3 result code and operation when a selected effect rejects a step. Against
+the local mda bundle, class indices 0 (Ambience), 4 (BeatBox), 6 (Combo), and
+12 (Delay) passed offline processing, automation, and state round-trip. Class
+2 (Bandisto) and class 32 (Limiter) rejected processor activation with
+`0x80004001` (`E_NOTIMPL`), demonstrating a fixture-specific unsupported
+activation path rather than an `E_INVALIDARG` from the loader. No failure was
+converted into a success result.
+
+The selector also makes the class list and compatibility result reproducible
+for future plugin fixtures. All runs were offline, used the local SDK fixture,
+and removed generated probe outputs afterward.

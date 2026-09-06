@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <stdexcept>
 #include <vector>
 
@@ -128,10 +130,38 @@ static fs::path resolve_binary(const fs::path& supplied) {
     return result;
 }
 
+static void require_result(const char* operation, tresult result) {
+    if (result == kResultOk) {
+        return;
+    }
+    std::ostringstream message;
+    message << operation << " failed with VST3 result 0x" << std::hex
+            << static_cast<uint32>(result);
+    throw std::runtime_error(message.str());
+}
+
 int wmain(int argc, wchar_t** argv) {
-    if (argc != 2) {
-        std::wcerr << L"usage: m06-vst3-loader <plugin.vst3|binary>\n";
+    if (argc != 2 && argc != 4) {
+        std::wcerr << L"usage: m06-vst3-loader <plugin.vst3|binary> [--class-index <n>]\n";
         return 2;
+    }
+
+    int32 selected_class_index = -1;
+    if (argc == 4) {
+        if (std::wstring(argv[2]) != L"--class-index") {
+            std::wcerr << L"unknown option\n";
+            return 2;
+        }
+        try {
+            const auto parsed = std::stol(argv[3]);
+            if (parsed < 0 || parsed > INT32_MAX) {
+                throw std::out_of_range("class index");
+            }
+            selected_class_index = static_cast<int32>(parsed);
+        } catch (const std::exception&) {
+            std::wcerr << L"class index must be a non-negative integer\n";
+            return 2;
+        }
     }
 
     HMODULE module = nullptr;
@@ -189,6 +219,9 @@ int wmain(int argc, wchar_t** argv) {
             if (factory->getClassInfo(index, &info) != kResultOk) {
                 throw std::runtime_error("getClassInfo failed");
             }
+            if (selected_class_index >= 0 && index != selected_class_index) {
+                continue;
+            }
             if (std::strcmp(info.category, kVstAudioEffectClass) == 0) {
                 if (factory->createInstance(
                         info.cid, Vst::IComponent_iid, reinterpret_cast<void**>(&component)) !=
@@ -219,25 +252,19 @@ int wmain(int argc, wchar_t** argv) {
                     throw std::runtime_error("unsupported audio bus layout");
                 }
                 const auto channels = input_info.channelCount;
-                if (component->activateBus(Vst::kAudio, Vst::kInput, 0, true) != kResultOk ||
-                    component->activateBus(Vst::kAudio, Vst::kOutput, 0, true) != kResultOk) {
-                    throw std::runtime_error("audio bus activation failed");
-                }
+                require_result("input audio bus activation",
+                               component->activateBus(Vst::kAudio, Vst::kInput, 0, true));
+                require_result("output audio bus activation",
+                               component->activateBus(Vst::kAudio, Vst::kOutput, 0, true));
                 Vst::ProcessSetup setup{};
                 setup.processMode = Vst::kOffline;
                 setup.symbolicSampleSize = Vst::kSample32;
                 setup.maxSamplesPerBlock = 64;
                 setup.sampleRate = 48000.0;
-                if (processor->setupProcessing(setup) != kResultOk) {
-                    throw std::runtime_error("setupProcessing failed");
-                }
-                if (component->setActive(true) != kResultOk) {
-                    throw std::runtime_error("component activation failed");
-                }
+                require_result("setupProcessing", processor->setupProcessing(setup));
+                require_result("component activation", component->setActive(true));
                 component_active = true;
-                if (processor->setProcessing(true) != kResultOk) {
-                    throw std::runtime_error("processor activation failed");
-                }
+                require_result("processor activation", processor->setProcessing(true));
                 processor_active = true;
                 float input[2][64]{};
                 float output[2][64]{};
@@ -262,9 +289,7 @@ int wmain(int argc, wchar_t** argv) {
                 data.numOutputs = 1;
                 data.inputs = &input_bus;
                 data.outputs = &output_bus;
-                if (processor->process(data) != kResultOk) {
-                    throw std::runtime_error("processor process failed");
-                }
+                require_result("processor process", processor->process(data));
                 for (int channel = 0; channel < channels; ++channel) {
                     for (float sample : output[channel]) {
                         if (!std::isfinite(sample)) {
@@ -310,16 +335,13 @@ int wmain(int argc, wchar_t** argv) {
                     if (!std::isfinite(original) || original < 0.0 || original > 1.0) {
                         throw std::runtime_error("parameter returned invalid normalized value");
                     }
-                    if (controller->setParamNormalized(parameter.id, 0.5) != kResultOk) {
-                        throw std::runtime_error("parameter write rejected");
-                    }
+                    require_result("parameter write", controller->setParamNormalized(parameter.id, 0.5));
                     const auto updated = controller->getParamNormalized(parameter.id);
                     if (!std::isfinite(updated) || updated < 0.0 || updated > 1.0) {
                         throw std::runtime_error("parameter automation returned invalid value");
                     }
-                    if (controller->setParamNormalized(parameter.id, original) != kResultOk) {
-                        throw std::runtime_error("parameter restore rejected");
-                    }
+                    require_result("parameter restore",
+                                   controller->setParamNormalized(parameter.id, original));
                 }
                 controller->terminate();
                 controller->release();
@@ -330,7 +352,8 @@ int wmain(int argc, wchar_t** argv) {
                 component = nullptr;
                 std::cout << "processed offline block: channels=" << channels
                           << " frames=64 finite=true parameters=" << parameter_count
-                          << " automation=verified state_bytes=" << state_bytes << "\n";
+                          << " automation=verified state_bytes=" << state_bytes
+                          << " class_index=" << index << " class_name=" << info.name << "\n";
                 processed_audio_effect = true;
                 break;
             }
