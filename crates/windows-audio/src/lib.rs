@@ -102,15 +102,34 @@ fn sort_application_inventory(applications: &mut [ApplicationInfo]) {
 #[derive(Debug)]
 pub enum AudioError {
     Windows(windows::core::Error),
+    WindowsOperation {
+        operation: &'static str,
+        error: windows::core::Error,
+    },
     InvalidUtf16,
-    BufferTooSmall { required: usize, available: usize },
+    BufferTooSmall {
+        required: usize,
+        available: usize,
+    },
     InvalidFrameSize,
-    ApplicationNotFound { process_id: u32 },
-    ApplicationIdentityChanged { process_id: u32 },
-    ApplicationIdentityUnavailable { process_id: u32 },
-    ApplicationRestartNotFound { executable: String },
-    ApplicationRestartAmbiguous { executable: String },
-    ApplicationRestartIdentityUnavailable { executable: String },
+    ApplicationNotFound {
+        process_id: u32,
+    },
+    ApplicationIdentityChanged {
+        process_id: u32,
+    },
+    ApplicationIdentityUnavailable {
+        process_id: u32,
+    },
+    ApplicationRestartNotFound {
+        executable: String,
+    },
+    ApplicationRestartAmbiguous {
+        executable: String,
+    },
+    ApplicationRestartIdentityUnavailable {
+        executable: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -135,6 +154,7 @@ impl AudioError {
         }
         let code = match self {
             Self::Windows(error) => error.code().0 as u32,
+            Self::WindowsOperation { error, .. } => error.code().0 as u32,
             Self::InvalidUtf16
             | Self::InvalidFrameSize
             | Self::ApplicationNotFound { .. }
@@ -164,6 +184,11 @@ impl fmt::Display for AudioError {
             Self::Windows(error) => write!(
                 formatter,
                 "Windows audio error 0x{:08X}: {error}",
+                error.code().0 as u32
+            ),
+            Self::WindowsOperation { operation, error } => write!(
+                formatter,
+                "{operation} failed with Windows audio HRESULT 0x{:08X}: {error}",
                 error.code().0 as u32
             ),
             Self::InvalidUtf16 => formatter.write_str("endpoint ID was not valid UTF-16"),
@@ -333,7 +358,10 @@ impl SharedCapture {
             )
         };
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
-        initialized?;
+        initialized.map_err(|error| AudioError::WindowsOperation {
+            operation: "IAudioClient::Initialize(capture)",
+            error,
+        })?;
         unsafe { client.SetEventHandle(event.0)? };
         let capture: IAudioCaptureClient = unsafe { client.GetService()? };
         Ok(Self {
@@ -529,7 +557,10 @@ impl SharedRender {
             )
         };
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
-        initialized?;
+        initialized.map_err(|error| AudioError::WindowsOperation {
+            operation: "IAudioClient::Initialize(render)",
+            error,
+        })?;
         unsafe { client.SetEventHandle(event.0)? };
         let buffer_size = unsafe { client.GetBufferSize()? };
         let render: IAudioRenderClient = unsafe { client.GetService()? };
@@ -1113,6 +1144,17 @@ mod tests {
         ));
         assert_eq!(invalid_argument.kind(), AudioFailureKind::InvalidArgument);
         assert!(invalid_argument.to_string().contains("0x80070057"));
+        let initialize_failure = AudioError::WindowsOperation {
+            operation: "IAudioClient::Initialize(capture)",
+            error: windows::core::Error::new(
+                windows::core::HRESULT(0x80070057_u32 as i32),
+                "invalid argument",
+            ),
+        };
+        assert_eq!(initialize_failure.kind(), AudioFailureKind::InvalidArgument);
+        assert!(initialize_failure
+            .to_string()
+            .contains("IAudioClient::Initialize(capture)"));
     }
 
     #[test]

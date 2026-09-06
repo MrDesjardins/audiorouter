@@ -95,3 +95,9 @@ while retaining stable failure classification. A regression confirms
 diagnostic text. This improves investigation of the unresolved Rust
 `IAudioClient::Initialize` discrepancy; it does not claim that discrepancy is
 fixed and does not open or start an audio stream.
+
+Shared capture and render initialization now wrap failures with the operation
+name (`IAudioClient::Initialize(capture)` or `(render)`) while preserving the
+underlying HRESULT and `AudioFailureKind`. The Windows-audio regression covers
+the formatted invalid-argument path; this remains diagnostic hardening only,
+not a fix or evidence of a started stream.
