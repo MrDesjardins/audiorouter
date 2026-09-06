@@ -305,3 +305,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Added `crates/engine` with the M02 48 kHz planar-float32/128-frame representation and preallocated `AudioBlock` operations for clear, copy, gain, mix, and non-finite sanitization. Runtime operations reuse existing storage and do not allocate, lock, log, or perform I/O.
 - Added deterministic tests for shape/quantum bounds, planar gain/mix behavior, NaN/Inf repair, and invalid-gain safety. This is portable engine groundwork; WASAPI callback scheduling, graph compilation, resampling, drift, and live routing remain open.
+- Added explicit destination-major channel-matrix conversion for mono/stereo paths with no allocation, plus mono-to-stereo, stereo-to-mono, and invalid-matrix tests. Resampling, clock drift, and live graph scheduling remain open.

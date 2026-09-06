@@ -96,6 +96,29 @@ impl AudioBlock {
         Ok(())
     }
 
+    /// Apply an explicit source-channel-to-destination-channel matrix without
+    /// allocating. Matrix order is destination-major: `dst * source_channels
+    /// + src`. This keeps mono/stereo conversion visible in the compiled graph.
+    pub fn map_from(&mut self, source: &Self, matrix: &[f32]) -> Result<(), BlockError> {
+        if self.frames != source.frames
+            || matrix.len() != self.channels.saturating_mul(source.channels)
+        {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for destination_channel in 0..self.channels {
+            let destination = self.channel_mut(destination_channel).unwrap();
+            for (frame, sample) in destination.iter_mut().enumerate() {
+                let mut value = 0.0;
+                for source_channel in 0..source.channels {
+                    value += source.channel(source_channel).unwrap()[frame]
+                        * matrix[destination_channel * source.channels + source_channel];
+                }
+                *sample = value;
+            }
+        }
+        Ok(())
+    }
+
     /// Replace non-finite samples with silence and return the number repaired.
     pub fn sanitize_non_finite(&mut self) -> usize {
         let mut repaired = 0;
@@ -185,5 +208,29 @@ mod tests {
         block.channel_mut(0).unwrap().fill(1.0);
         block.apply_gain(f32::NAN);
         assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
+    }
+
+    #[test]
+    fn explicit_channel_maps_cover_mono_stereo_conversion() {
+        let mut mono = AudioBlock::new(1, 2).unwrap();
+        mono.channel_mut(0).unwrap().copy_from_slice(&[0.25, -0.5]);
+        let mut stereo = AudioBlock::new(2, 2).unwrap();
+        stereo.map_from(&mono, &[1.0, 1.0]).unwrap();
+        assert_eq!(stereo.channel(0).unwrap(), &[0.25, -0.5]);
+        assert_eq!(stereo.channel(1).unwrap(), &[0.25, -0.5]);
+
+        let mut downmix = AudioBlock::new(1, 2).unwrap();
+        downmix.map_from(&stereo, &[0.5, 0.5]).unwrap();
+        assert_eq!(downmix.channel(0).unwrap(), &[0.25, -0.5]);
+    }
+
+    #[test]
+    fn channel_map_rejects_wrong_matrix_shape() {
+        let source = AudioBlock::new(2, 4).unwrap();
+        let mut destination = AudioBlock::new(1, 4).unwrap();
+        assert_eq!(
+            destination.map_from(&source, &[1.0]),
+            Err(BlockError::ShapeMismatch)
+        );
     }
 }
