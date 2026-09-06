@@ -119,3 +119,11 @@ The React shell now accepts an injected `UiBackend` and owns its
 without changing the presentation components. The Reconnect action performs a
 bounded snapshot refresh and preserves stale-state behavior on failure. UI
 tests (6) and the production build pass.
+
+The rendered editor now wires the existing draft helpers into the connected
+backend: enabled and bypass flags are editable as local drafts, Undo restores
+the authoritative session snapshot, and Plan changes performs the two-phase
+plan/commit workflow with visible success or error status. The disconnected
+adapter keeps the controls and commit actions disabled, preserving the safe
+read-only preview. Vitest (6 tests), TypeScript typecheck, production build,
+and diff checks pass.
