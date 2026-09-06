@@ -124,3 +124,9 @@ not fail the build. The SDK examples and validator binaries are local build
 artifacts only and were not installed as system plugins. No audio endpoint,
 driver, default, volume, mute, or persistent machine audio setting was
 changed.
+
+The inspector now resolves VST3 bundle directories to their single
+`Contents/x86_64-win` binary, while preserving both bundle and binary paths in
+identity. The bundle-layout regression compiles and strict Clippy passes; the
+plugin-host test executable remains blocked by Windows Application Control OS
+error 4551.

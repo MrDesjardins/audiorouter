@@ -184,6 +184,7 @@ fn is_safe_asset_id(value: &str) -> bool {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PluginIdentity {
     pub path: PathBuf,
+    pub binary_path: PathBuf,
     pub format: PluginFormat,
     pub architecture: PeArchitecture,
     pub file_bytes: u64,
@@ -278,12 +279,19 @@ pub fn inspect_binary(
         Some("dll") => PluginFormat::Unknown,
         _ => return Err(InspectionError::UnsupportedExtension),
     };
+    let binary_path = resolve_binary_path(&canonical)?;
+    if !configured_roots
+        .iter()
+        .any(|root| root_contains(root, &binary_path))
+    {
+        return Err(InspectionError::OutsideConfiguredRoot);
+    }
     let metadata =
-        fs::metadata(&canonical).map_err(|error| InspectionError::Io(error.to_string()))?;
+        fs::metadata(&binary_path).map_err(|error| InspectionError::Io(error.to_string()))?;
     if metadata.len() > MAX_PLUGIN_BYTES {
         return Err(InspectionError::TooLarge);
     }
-    let bytes = fs::read(&canonical).map_err(|error| InspectionError::Io(error.to_string()))?;
+    let bytes = fs::read(&binary_path).map_err(|error| InspectionError::Io(error.to_string()))?;
     let architecture = parse_pe_architecture(&bytes).ok_or(InspectionError::NotPe)?;
     if architecture != PeArchitecture::X64 {
         return Err(InspectionError::UnsupportedArchitecture);
@@ -291,11 +299,36 @@ pub fn inspect_binary(
     let digest = Sha256::digest(&bytes);
     Ok(PluginIdentity {
         path: canonical,
+        binary_path,
         format,
         architecture,
         file_bytes: metadata.len(),
         sha256: digest.iter().map(|byte| format!("{byte:02x}")).collect(),
     })
+}
+
+fn resolve_binary_path(path: &Path) -> Result<PathBuf, InspectionError> {
+    if !path.is_dir() {
+        return Ok(path.to_path_buf());
+    }
+    let contents = path.join("Contents").join("x86_64-win");
+    let mut binaries = fs::read_dir(&contents)
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::NotFound {
+                InspectionError::Missing
+            } else {
+                InspectionError::Io(error.to_string())
+            }
+        })?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|candidate| candidate.is_file())
+        .collect::<Vec<_>>();
+    binaries.sort();
+    if binaries.len() != 1 {
+        return Err(InspectionError::NotPe);
+    }
+    fs::canonicalize(&binaries[0]).map_err(|error| InspectionError::Io(error.to_string()))
 }
 
 /// Enumerates one explicitly selected directory without executing its files.
@@ -775,6 +808,24 @@ mod tests {
     }
 
     #[test]
+    fn inspects_a_vst3_bundle_binary_under_x64_contents() {
+        let root = temp_root();
+        let bundle = root.join("effect.vst3");
+        let binary_dir = bundle.join("Contents").join("x86_64-win");
+        fs::create_dir_all(&binary_dir).unwrap();
+        let binary = binary_dir.join("effect.vst3");
+        fs::write(&binary, pe_x64()).unwrap();
+        let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.path, fs::canonicalize(bundle).unwrap());
+        assert_eq!(identity.binary_path, fs::canonicalize(binary).unwrap());
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst3X64
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn controlled_scan_honors_cancel_and_deadline() {
         let root = temp_root();
         let cancelled = ScanControl::default_deadline();
@@ -845,6 +896,7 @@ mod tests {
     fn worker_supervisor_requires_vst3_x64_and_expires_heartbeats() {
         let identity = PluginIdentity {
             path: PathBuf::from("effect.vst3"),
+            binary_path: PathBuf::from("effect.vst3"),
             format: PluginFormat::Vst3,
             architecture: PeArchitecture::X64,
             file_bytes: 1,
@@ -895,6 +947,7 @@ mod tests {
     fn compatibility_requires_vst3_x64_identity() {
         let mut identity = PluginIdentity {
             path: PathBuf::from("effect.vst3"),
+            binary_path: PathBuf::from("effect.vst3"),
             format: PluginFormat::Vst3,
             architecture: PeArchitecture::X64,
             file_bytes: 1,
