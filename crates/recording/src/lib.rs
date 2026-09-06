@@ -424,6 +424,7 @@ pub enum RecordingError {
     NotRecording,
     FrameDiscontinuity { expected: u64, actual: u64 },
     InvalidWav,
+    FlacEncode(String),
     Io(std::io::Error),
 }
 
@@ -453,6 +454,79 @@ pub struct WavFileInfo {
     pub frames: u64,
     pub data_bytes: u64,
     pub file_bytes: u64,
+}
+
+/// Batch FLAC encoder for completed in-memory segments. It is intentionally
+/// separate from `WavRecorder`: the current dependency API returns one encoded
+/// buffer, so it must not be used for unbounded live recording yet.
+pub struct FlacBufferEncoder {
+    channels: usize,
+    sample_rate: u32,
+    bits_per_sample: u8,
+    samples: Vec<i32>,
+}
+
+impl FlacBufferEncoder {
+    pub fn new(
+        channels: usize,
+        sample_rate: u32,
+        bits_per_sample: u8,
+    ) -> Result<Self, RecordingError> {
+        if !(1..=2).contains(&channels) {
+            return Err(RecordingError::InvalidChannels);
+        }
+        if !matches!(sample_rate, 44_100 | 48_000) {
+            return Err(RecordingError::InvalidSampleRate);
+        }
+        if !matches!(bits_per_sample, 16 | 24) {
+            return Err(RecordingError::InvalidSampleCount);
+        }
+        Ok(Self {
+            channels,
+            sample_rate,
+            bits_per_sample,
+            samples: Vec::new(),
+        })
+    }
+
+    pub fn frames(&self) -> u64 {
+        (self.samples.len() / self.channels) as u64
+    }
+
+    pub fn write_interleaved(&mut self, samples: &[f32]) -> Result<u64, RecordingError> {
+        if samples.len() % self.channels != 0 {
+            return Err(RecordingError::InvalidSampleCount);
+        }
+        let scale = if self.bits_per_sample == 16 {
+            32_767.0
+        } else {
+            8_388_607.0
+        };
+        self.samples.extend(samples.iter().map(|sample| {
+            let value = if sample.is_finite() { *sample } else { 0.0 };
+            (value.clamp(-1.0, 1.0) * scale).round() as i32
+        }));
+        Ok((samples.len() / self.channels) as u64)
+    }
+
+    pub fn finish(self) -> Result<Vec<u8>, RecordingError> {
+        if self.samples.is_empty() {
+            return Err(RecordingError::InvalidSampleCount);
+        }
+        let mut planar = vec![Vec::with_capacity(self.frames() as usize); self.channels];
+        for frame in self.samples.chunks_exact(self.channels) {
+            for (channel, sample) in frame.iter().enumerate() {
+                planar[channel].push(*sample);
+            }
+        }
+        flac_io::encode(&flac_io::FlacAudio {
+            sample_rate: self.sample_rate,
+            channels: self.channels as u8,
+            bits_per_sample: self.bits_per_sample,
+            samples: planar,
+        })
+        .map_err(|error| RecordingError::FlacEncode(error.to_string()))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1082,6 +1156,30 @@ mod tests {
             RecordingFileStatus::Invalid
         );
         let _ = std::fs::remove_file(invalid);
+    }
+
+    #[test]
+    fn flac_buffer_round_trips_pcm16_and_rejects_unshaped_input() {
+        let mut encoder = FlacBufferEncoder::new(2, 48_000, 16).unwrap();
+        assert_eq!(
+            encoder.write_interleaved(&[0.0, 0.5, -0.25, 1.0]).unwrap(),
+            2
+        );
+        let bytes = encoder.finish().unwrap();
+        assert_eq!(&bytes[0..4], b"fLaC");
+        let decoded = flac_io::decode(&bytes).unwrap();
+        assert_eq!(decoded.sample_rate, 48_000);
+        assert_eq!(decoded.channels, 2);
+        assert_eq!(decoded.bits_per_sample, 16);
+        assert_eq!(decoded.samples, vec![vec![0, -8_192], vec![16_384, 32_767]]);
+
+        let mut invalid = FlacBufferEncoder::new(1, 48_000, 16).unwrap();
+        assert!(matches!(invalid.write_interleaved(&[0.0, 1.0]), Ok(2)));
+        let empty = FlacBufferEncoder::new(1, 48_000, 24).unwrap();
+        assert!(matches!(
+            empty.finish(),
+            Err(RecordingError::InvalidSampleCount)
+        ));
     }
 
     #[cfg(unix)]

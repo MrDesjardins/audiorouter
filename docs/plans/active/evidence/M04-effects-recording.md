@@ -83,6 +83,17 @@ returns `Present`, `Missing`, or `Invalid` for the expected file conditions,
 while propagating unrelated I/O failures. A regression confirms deleted and
 malformed paths remain representable without terminating enumeration.
 
+## FLAC batch encoding boundary
+
+The recording crate now depends on pure-Rust `flac-io` 0.1.1 (Rust 1.74+
+metadata, MIT/Apache-2.0) and exposes `FlacBufferEncoder` for completed
+in-memory segments. It validates mono/stereo 44.1/48 kHz and FLAC 16/24-bit
+contracts, converts finite interleaved `f32` samples to exact integer planes,
+and returns a native FLAC stream. A round-trip test decodes PCM16 output and
+checks sample identity. This dependency API is batch-oriented, so bounded
+streaming FLAC worker integration, partial-file recovery, and metadata blocks
+remain open.
+
 ## Initial built-in DSP slice
 
 The new `audiorouter-dsp` crate provides an allocation-free, caller-owned
