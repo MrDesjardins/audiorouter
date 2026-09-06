@@ -2713,6 +2713,17 @@ mod tests {
             params: None,
         });
         assert_eq!(legacy.result, canonical.result);
+        let applications = legacy.result.unwrap();
+        assert!(applications.as_array().unwrap().iter().all(|application| {
+            application.get("processId").is_some()
+                && application.get("executable").is_some()
+                && application.get("audioActivity").is_some()
+                && application.get("captureCapability").is_some()
+                && application.get("audioSessionCount").is_some()
+                && application.get("activeAudioSessionCount").is_some()
+                && application.get("captureSessionCount").is_some()
+                && application.get("audioDisplayNames").is_some()
+        }));
     }
 
     #[test]
