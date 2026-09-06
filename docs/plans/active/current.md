@@ -361,3 +361,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Wired `events.subscribe` into control dispatch. Session creation and graph commit now emit filtered state events; clients can replay by sequence and session, while invalid limits and lost cursors are explicit errors. Meter events remain excluded.
 - Added explicit `nodes.describe` API/CLI parity over the authoritative node registry, preserving availability and realtime-cost metadata; the M01 acceptance script now checks description parity with `nodes.types`.
 - Added persisted CLI `history <session-id> --database <path> [--limit N]`, enforcing the 1–500 bound and returning newest SQLite snapshots; the M01 acceptance script now verifies the imported fixture history.
+- Enforced the promised 100-snapshot bound in the in-memory graph history store and added overflow coverage; durable SQLite retention remains governed by its existing bounded-history tests.

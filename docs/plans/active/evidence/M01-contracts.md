@@ -53,6 +53,8 @@ Control now owns an event log and exposes `events.subscribe` with optional `afte
 
 The CLI now exposes persisted revision history through `history <session-id> --database <absolute-path> [--limit N]`. It reads the bounded SQLite history newest-first, rejects limits outside 1–500, and is covered by the M01 acceptance round trip using temporary files.
 
+The in-memory graph store now drops the oldest snapshot once its 100-entry retention bound is exceeded. A regression test inserts 101 snapshots and verifies that revisions 1–100 are retained newest-first (revision 0 is discarded), matching the documented undo/history budget.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

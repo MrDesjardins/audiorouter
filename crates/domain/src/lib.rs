@@ -716,6 +716,11 @@ impl GraphStore {
             .entry(session.id.clone())
             .or_default()
             .push(session.clone());
+        if let Some(entries) = self.history.get_mut(&session.id) {
+            if entries.len() > 100 {
+                entries.remove(0);
+            }
+        }
         self.sessions.insert(session.id.clone(), session);
         Ok(())
     }
@@ -842,6 +847,11 @@ impl GraphStore {
             .entry(committed.id.clone())
             .or_default()
             .push(committed.clone());
+        if let Some(entries) = self.history.get_mut(&committed.id) {
+            if entries.len() > 100 {
+                entries.remove(0);
+            }
+        }
         self.sessions.insert(committed.id.clone(), committed);
         self.committed_keys
             .insert(idempotency_key.into(), result.clone());
@@ -1172,6 +1182,27 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].revision, 1);
         assert_eq!(history[0].name, "updated");
+    }
+
+    #[test]
+    fn graph_store_drops_oldest_snapshots_past_retention_bound() {
+        let mut store = GraphStore::default();
+        for revision in 0..=100 {
+            let mut snapshot = session(
+                vec![
+                    node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                    node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+                ],
+                vec![edge("e", "in", "out")],
+            );
+            snapshot.revision = revision;
+            snapshot.name = format!("revision-{revision}");
+            store.insert_session(snapshot).unwrap();
+        }
+        let history = store.history(&EntityId::new("session"), 500);
+        assert_eq!(history.len(), 100);
+        assert_eq!(history.first().unwrap().revision, 100);
+        assert_eq!(history.last().unwrap().revision, 1);
     }
 
     #[test]
