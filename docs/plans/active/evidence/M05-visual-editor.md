@@ -181,6 +181,10 @@ Each connected recording row now offers a read-only Preview action backed by
 opens, or modifies recording bytes; disconnected mode rejects the operation.
 UI typecheck, 11 tests, and production build pass.
 
+The UI backend regression also verifies that a live transport forwards the
+recording ID to `recordings.preview` and preserves the read-only response. UI
+coverage is now 12 tests.
+
 The shared TypeScript `graph.commit` parameters now include the nullable
 optional `acknowledgments` array, matching the Rust schema's bounded warning
 ID validation. Contracts typecheck and the dependent UI test/typecheck/build

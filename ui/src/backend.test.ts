@@ -82,6 +82,19 @@ describe("live event cursor", () => {
     await backend.listRecordings();
     expect(received).toEqual({ method: "recordings.list", params: { sessionId: demoSession.id } });
   });
+
+  it("forwards recording preview through the read-only API", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { recordingId: "take-1", status: "present" };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.previewRecording("take-1")).resolves.toEqual({ recordingId: "take-1", status: "present" });
+    expect(received).toEqual({ method: "recordings.preview", params: { recordingId: "take-1" } });
+  });
 });
 
 describe("plan-only drafts", () => {
