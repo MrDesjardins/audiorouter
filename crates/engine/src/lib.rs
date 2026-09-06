@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
+pub const MAX_MIXER_INPUTS: usize = 8;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum MeterError {
@@ -739,6 +740,7 @@ pub enum ProcessingStage {
 pub enum MixerError {
     InvalidChannels,
     InvalidMatrix,
+    InputLimit,
     InputCount,
     Block(BlockError),
 }
@@ -755,6 +757,9 @@ impl MixerStage {
     pub fn new(output_channels: usize, matrices: Vec<Vec<f32>>) -> Result<Self, MixerError> {
         if !(1..=MAX_CHANNELS).contains(&output_channels) || matrices.is_empty() {
             return Err(MixerError::InvalidChannels);
+        }
+        if matrices.len() > MAX_MIXER_INPUTS {
+            return Err(MixerError::InputLimit);
         }
         if matrices.iter().any(|matrix| {
             matrix.is_empty()
@@ -1413,6 +1418,17 @@ mod tests {
             Err(MixerError::Block(BlockError::ShapeMismatch))
         );
         assert_eq!(destination.channel(0).unwrap(), &[7.0; 2]);
+    }
+
+    #[test]
+    fn prepared_mixer_enforces_the_eight_input_bound() {
+        let matrices = (0..=MAX_MIXER_INPUTS)
+            .map(|_| vec![1.0])
+            .collect::<Vec<_>>();
+        assert!(matches!(
+            MixerStage::new(1, matrices),
+            Err(MixerError::InputLimit)
+        ));
     }
 
     #[test]

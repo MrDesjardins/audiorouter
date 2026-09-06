@@ -40,6 +40,8 @@ Queue full/empty events now increment atomic overrun/underrun counters while sti
 
 The mixer compiler now rejects enabled edges outside that exact topology, duplicate source participation, and destinations that are not physical outputs. These checks prevent silently ignoring graph branches during preparation; the 31-test engine suite and strict Clippy remain green.
 
+`MixerStage` now enforces the specification's maximum of eight converging inputs during preparation and returns an explicit `InputLimit` error above that bound. The regression suite now contains 32 passing engine tests with strict Clippy.
+
 `AudioBlock` now exposes per-channel sample peak, per-channel RMS, and aggregate RMS without allocation. Non-finite samples are excluded from meter calculations and invalid channels return `None`; the engine suite contains 20 passing tests and strict engine Clippy passes.
 
 `RmsWindow` adds a preallocated rolling RMS window with explicit capacity and reset behavior. It treats non-finite input as silence and performs no allocation while pushing blocks; the engine suite contains 21 passing tests and strict engine Clippy passes.
