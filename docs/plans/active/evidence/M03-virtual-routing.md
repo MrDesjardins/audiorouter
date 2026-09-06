@@ -49,3 +49,9 @@ CLI and MCP adapter parity now expose the same read-only query as
 regression confirms an empty initial managed inventory rather than inventing
 third-party cable endpoints. Lifecycle mutation, persistence, and native driver
 integration remain open.
+
+The UI backend now exposes the same inventory through `listVirtualDevices`,
+normalizing the bounded page shape for React consumers. Its regression confirms
+the client requests `virtualDevices.list` and preserves the unavailable/empty
+state; the UI does not offer a provisioning side effect. UI tests pass 57 tests
+and typecheck passes.

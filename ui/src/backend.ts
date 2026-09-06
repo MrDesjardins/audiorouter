@@ -3,6 +3,7 @@ import type {
   AudioRouterClient,
   ApplicationInfo,
   DeviceInfo,
+  VirtualDeviceInfo,
   DiscoveryDocument,
   EventsSubscribeResult,
   GraphCommitResult,
@@ -45,6 +46,7 @@ export interface UiBackend {
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
+  listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
   getRecordingRecovery(recordingId: string): Promise<RecordingRecoveryResult>;
   setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<RecordingMetadataResult>;
@@ -134,6 +136,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async listDevices() {
       return [];
     },
+    async listVirtualDevices() {
+      return [];
+    },
     async previewRecording() {
       throw new Error("The backend is disconnected; recording preview is unavailable.");
     },
@@ -220,6 +225,10 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async listDevices() {
       const result = await client.request("devices.list", { limit: 500 });
+      return Array.isArray(result) ? result : result.items;
+    },
+    async listVirtualDevices() {
+      const result = await client.request("virtualDevices.list", { limit: 500 });
       return Array.isArray(result) ? result : result.items;
     },
     async previewRecording(recordingId) {

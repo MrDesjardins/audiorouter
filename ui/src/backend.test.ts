@@ -36,6 +36,7 @@ describe("snapshot cache", () => {
       listRecordings: async () => [],
       listApplications: async () => [],
       listDevices: async () => [],
+      listVirtualDevices: async () => [],
       previewRecording: async () => { throw new Error("not connected"); },
       setPrivacyMute: async () => { throw new Error("not connected"); },
       clearRecoverySafeMode: async () => { throw new Error("not connected"); },
@@ -128,6 +129,19 @@ describe("live event cursor", () => {
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listDevices()).resolves.toEqual([device]);
     expect(received).toEqual({ method: "devices.list", params: { limit: 500 } });
+  });
+
+  it("normalizes the managed virtual-device inventory through the shared API", async () => {
+    const bus = { id: "bus-1", name: "Desktop", direction: "bidirectional", channels: 2, enabled: true };
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { items: [bus], nextCursor: null };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listVirtualDevices()).resolves.toEqual([bus]);
+    expect(received).toEqual({ method: "virtualDevices.list", params: { limit: 500 } });
   });
 
   it("forwards recording preview through the read-only API", async () => {
