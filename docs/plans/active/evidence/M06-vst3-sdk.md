@@ -537,6 +537,11 @@ argument failures visible instead of silently accepting a partial probe. The
 fixture was rebuilt and rerun successfully after this change; no endpoint or
 machine configuration was touched.
 
+The negative path was also exercised with a nonexistent bundle target. The
+probe returned exit code 1 with `resolved plugin binary is not a regular file`
+before calling the loader, confirming fail-closed target validation. Generated
+outputs were removed after the check.
+
 The loader now validates that the resolved target is a regular file and uses
 `LoadLibraryExW` with `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` and
 `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`, avoiding the broader legacy DLL search
