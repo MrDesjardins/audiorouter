@@ -317,3 +317,9 @@ render direction, sample rate, channel count, and default period; disconnected
 startup remains empty and safe. The adapter does not start streams or change
 endpoint configuration. UI coverage remains green at 24 tests with typecheck
 and production build validation.
+
+Typed recording, privacy, and session result contracts exposed stale UI adapter
+signatures and obsolete preview/recovery field access. The adapter now consumes
+the shared result variants directly; UI typecheck, all 24 Vitest tests, and the
+production build pass. No audio stream or file action is invoked by this
+adapter correction.
