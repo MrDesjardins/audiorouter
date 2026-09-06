@@ -45,6 +45,8 @@ The CLI exposes the same read-only inspection through `routes inspect <session-i
 
 `graph.undoPlan` now creates a normal expiring graph plan from the immediately prior retained snapshot, requiring the caller's current base revision and GraphWrite permission. It never commits automatically; a caller must review/acknowledge and invoke `graph.commit`. No prior snapshot returns `NoUndoAvailable`, while intervening revision conflicts are checked by the same plan/commit authority.
 
+The portable `EventLog` now establishes bounded state-event replay semantics: every event carries backend epoch, sequence, resource revision, optional operation ID, category, and optional session ID. Replay is limited to 500 records and returns `ResyncRequired` when retention has passed the requested cursor. It excludes meter data and is not yet connected to transport subscriptions.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

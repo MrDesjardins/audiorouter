@@ -5,10 +5,11 @@
 //! later control-plane adapters.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub const MAX_NODES_PER_SESSION: usize = 64;
 pub const MAX_EDGES_PER_SESSION: usize = 128;
+pub const MAX_RETAINED_EVENTS: usize = 10_000;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -432,6 +433,103 @@ pub struct RouteInspection {
     pub destination_node: EntityId,
     pub reachable: bool,
     pub paths: Vec<RoutePath>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StateEvent {
+    pub sequence: u64,
+    pub backend_epoch: u64,
+    pub resource_revision: u64,
+    pub operation_id: Option<String>,
+    pub category: String,
+    pub session_id: Option<EntityId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EventReplayError {
+    InvalidLimit,
+    ResyncRequired,
+}
+
+/// Bounded state-event history for reconnecting clients. Meter data is not
+/// stored here; callers append only durable/control state transitions.
+#[derive(Clone, Debug)]
+pub struct EventLog {
+    backend_epoch: u64,
+    next_sequence: u64,
+    events: VecDeque<StateEvent>,
+}
+
+impl EventLog {
+    pub fn new(backend_epoch: u64) -> Self {
+        Self {
+            backend_epoch,
+            next_sequence: 1,
+            events: VecDeque::new(),
+        }
+    }
+
+    pub fn backend_epoch(&self) -> u64 {
+        self.backend_epoch
+    }
+
+    pub fn latest_sequence(&self) -> u64 {
+        self.next_sequence.saturating_sub(1)
+    }
+
+    pub fn len(&self) -> usize {
+        self.events.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.events.is_empty()
+    }
+
+    pub fn append(
+        &mut self,
+        resource_revision: u64,
+        operation_id: Option<String>,
+        category: impl Into<String>,
+        session_id: Option<EntityId>,
+    ) -> u64 {
+        let sequence = self.next_sequence;
+        self.next_sequence = self.next_sequence.saturating_add(1);
+        self.events.push_back(StateEvent {
+            sequence,
+            backend_epoch: self.backend_epoch,
+            resource_revision,
+            operation_id,
+            category: category.into(),
+            session_id,
+        });
+        while self.events.len() > MAX_RETAINED_EVENTS {
+            self.events.pop_front();
+        }
+        sequence
+    }
+
+    pub fn since(
+        &self,
+        after_sequence: u64,
+        limit: usize,
+    ) -> Result<Vec<StateEvent>, EventReplayError> {
+        if !(1..=500).contains(&limit) {
+            return Err(EventReplayError::InvalidLimit);
+        }
+        if let Some(first) = self.events.front() {
+            if after_sequence.saturating_add(1) < first.sequence {
+                return Err(EventReplayError::ResyncRequired);
+            }
+        }
+        Ok(self
+            .events
+            .iter()
+            .filter(|event| event.sequence > after_sequence)
+            .take(limit)
+            .cloned()
+            .collect())
+    }
 }
 
 /// Inspect desired upstream provenance for one destination without opening or
@@ -868,6 +966,38 @@ mod tests {
             inspect_routes(&graph, &EntityId::new("missing")),
             Err(errors) if matches!(errors.as_slice(), [ValidationError::MissingNode { .. }])
         ));
+    }
+
+    #[test]
+    fn event_log_replays_ordered_state_and_reports_retention_loss() {
+        let mut log = EventLog::new(42);
+        assert_eq!(
+            log.append(3, Some("op-1".into()), "graph.committed", None),
+            1
+        );
+        assert_eq!(log.append(3, None, "runtime.activated", None), 2);
+        let events = log.since(0, 10).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].backend_epoch, 42);
+        assert_eq!(events[0].operation_id.as_deref(), Some("op-1"));
+        assert_eq!(events[1].sequence, 2);
+
+        for _ in 0..MAX_RETAINED_EVENTS {
+            log.append(4, None, "state.changed", None);
+        }
+        assert_eq!(log.len(), MAX_RETAINED_EVENTS);
+        assert!(matches!(
+            log.since(1, 10),
+            Err(EventReplayError::ResyncRequired)
+        ));
+        assert_eq!(log.since(log.latest_sequence(), 10).unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn event_log_rejects_unbounded_replay_requests() {
+        let log = EventLog::new(1);
+        assert_eq!(log.since(0, 0), Err(EventReplayError::InvalidLimit));
+        assert_eq!(log.since(0, 501), Err(EventReplayError::InvalidLimit));
     }
 
     #[test]
