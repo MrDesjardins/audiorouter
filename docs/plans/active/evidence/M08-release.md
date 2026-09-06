@@ -87,3 +87,12 @@ Windows Job Object changes, the complete locked workspace validation passed:
 workspace Clippy, formatting, and diff checks also passed. Tests used
 temporary/local fixtures only; no audio endpoint or machine configuration was
 changed.
+## 2026-09-06 — Workspace validation after hardening
+
+The complete `cargo test --workspace --locked` suite passed after the
+incremental-FLAC recovery and plugin state reparse-point changes. This includes
+all unit, integration, worker-process, MCP, and doc tests. Workspace
+`cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`,
+format checking, and `git diff --check` also passed. No audio endpoint,
+default device, volume, mute, privacy, driver, or other machine configuration
+was changed by this validation.
