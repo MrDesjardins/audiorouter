@@ -8,14 +8,20 @@ try {
     New-Item -ItemType Directory -Path $root | Out-Null
     $artifactPath = Join-Path $root "sample.bin"
     [IO.File]::WriteAllBytes($artifactPath, [byte[]](1, 2, 3, 5, 8))
+    $noticePath = Join-Path $root "THIRD-PARTY-NOTICES.txt"
+    Set-Content -LiteralPath $noticePath -Value "- sample 1.0 - MIT - workspace" -Encoding utf8
     @{ packages = @() } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root "sbom.cargo.json") -Encoding utf8
     $hash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $noticeHash = (Get-FileHash -LiteralPath $noticePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
         architecture = "x64"
         sourceRevision = ("a" * 40)
-        artifacts = @([ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 })
+        artifacts = @(
+            [ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 }
+            [ordered]@{ file = "THIRD-PARTY-NOTICES.txt"; sha256 = $noticeHash; bytes = (Get-Item -LiteralPath $noticePath).Length }
+        )
         signed = $false
         publicationReady = $false
         blockers = @("test blocker")
