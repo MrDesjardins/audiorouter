@@ -16,7 +16,7 @@ use audiorouter_storage::{GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RET
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, Instant};
 
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
@@ -1540,6 +1540,7 @@ pub struct ControlPlane {
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
     operation_names: HashMap<String, String>,
+    operation_order: VecDeque<String>,
     virtual_bus_idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
     privacy_muted: bool,
@@ -1567,6 +1568,7 @@ impl ControlPlane {
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
             operation_names: HashMap::new(),
+            operation_order: VecDeque::new(),
             virtual_bus_idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted: false,
@@ -1611,6 +1613,7 @@ impl ControlPlane {
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
             operation_names: HashMap::new(),
+            operation_order: VecDeque::new(),
             virtual_bus_idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted,
@@ -1628,14 +1631,18 @@ impl ControlPlane {
         operation: &str,
         virtual_request_hash: Option<&str>,
     ) {
-        if self.operation_outcomes.len() >= MAX_MEMORY_OPERATION_OUTCOMES
-            && !self.operation_outcomes.contains_key(idempotency_key)
-        {
-            if let Some(oldest) = self.operation_outcomes.keys().next().cloned() {
-                self.operation_outcomes.remove(&oldest);
-                self.operation_names.remove(&oldest);
-                self.virtual_bus_idempotency_hashes.remove(&oldest);
+        if !self.operation_outcomes.contains_key(idempotency_key) {
+            while self.operation_outcomes.len() >= MAX_MEMORY_OPERATION_OUTCOMES {
+                let Some(oldest) = self.operation_order.pop_front() else {
+                    break;
+                };
+                if self.operation_outcomes.remove(&oldest).is_some() {
+                    self.operation_names.remove(&oldest);
+                    self.virtual_bus_idempotency_hashes.remove(&oldest);
+                    break;
+                }
             }
+            self.operation_order.push_back(idempotency_key.to_owned());
         }
         self.operation_outcomes
             .insert(idempotency_key.to_owned(), result);
@@ -6061,6 +6068,25 @@ mod tests {
         assert_eq!(result["status"], "completed");
         assert_eq!(result["durable"], false);
         assert_eq!(result["result"]["revision"], 1);
+    }
+
+    #[test]
+    fn memory_operation_retention_evicts_in_insertion_order() {
+        let mut plane = ControlPlane::default();
+        for index in 0..=MAX_MEMORY_OPERATION_OUTCOMES {
+            plane.remember_operation_outcome(
+                &format!("operation-{index}"),
+                json!({ "index": index }),
+                "test.operation",
+                None,
+            );
+        }
+        assert!(!plane.operation_outcomes.contains_key("operation-0"));
+        assert!(plane.operation_outcomes.contains_key("operation-1"));
+        assert!(plane
+            .operation_outcomes
+            .contains_key(&format!("operation-{MAX_MEMORY_OPERATION_OUTCOMES}")));
+        assert_eq!(plane.operation_order.len(), MAX_MEMORY_OPERATION_OUTCOMES);
     }
 
     #[test]

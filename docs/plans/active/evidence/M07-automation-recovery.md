@@ -31,6 +31,16 @@ tests, 31 plugin-host unit tests, 8 worker-process tests, and strict Clippy.
 The acceptance scope remained configuration-only: no audio device, driver, or
 machine setting was opened or changed.
 
+## 2026-09-06 — Deterministic memory-operation retention
+
+The bounded in-memory operation outcome cache now keeps an explicit FIFO order
+and evicts the oldest inserted outcome at the 100-entry cap. This removes
+`HashMap` iteration order from operation availability while retaining the
+durable SQLite journal for persistent outcomes. A regression fills the cache,
+verifies the first entry is evicted and the next entry remains, and confirms
+the order ledger stays bounded. Control coverage is 67 tests with strict
+Clippy; no audio or machine state is involved.
+
 ## 2026-09-06 — Scan cancellation during bounded binary reads
 
 Plugin discovery now gives each candidate its own ten-second inspection window
