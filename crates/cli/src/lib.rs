@@ -1504,6 +1504,38 @@ mod tests {
     }
 
     #[test]
+    fn recording_recovery_command_reads_checkpoint_without_audio_access() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-recording-recovery-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let storage = Storage::open(&database).unwrap();
+        let mut recorder = audiorouter_recording::RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        storage
+            .save_recording_checkpoint("recovery-cli", &recorder.checkpoint())
+            .unwrap();
+        let database_arg = database.to_string_lossy().into_owned();
+        let result: Value = serde_json::from_str(
+            &run([
+                "recordings",
+                "recovery",
+                "recovery-cli",
+                "--database",
+                &database_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(result["status"], "available");
+        assert_eq!(result["checkpoint"]["state"], "Recording");
+        let _ = std::fs::remove_file(database);
+    }
+
+    #[test]
     fn generic_api_call_uses_the_shared_dispatcher() {
         let response: Value =
             serde_json::from_str(&run(["api", "call", "status.get", "--json"]).unwrap()).unwrap();
@@ -1752,6 +1784,23 @@ mod tests {
         let startup_content = startup["result"]["content"][0]["text"].as_str().unwrap();
         let startup_payload: Value = serde_json::from_str(startup_content).unwrap();
         assert_eq!(startup_payload["result"]["registration"], "unavailable");
+        let recovery = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 10,
+                "params": {
+                    "name": "get_recording_recovery",
+                    "arguments": { "recordingId": "missing" }
+                }
+            }),
+        );
+        assert_eq!(recovery["result"]["isError"], true);
+        let recovery_content = recovery["result"]["content"][0]["text"].as_str().unwrap();
+        let recovery_payload: Value = serde_json::from_str(recovery_content).unwrap();
+        assert!(recovery_payload["error"].is_object());
         assert_eq!(mcp_tools().as_array().unwrap().len(), 22);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(

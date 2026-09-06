@@ -165,3 +165,5 @@ The validated checkpoint is now inspectable through the authorized
 `get_recording_recovery` tool. It returns lifecycle metadata only, reports
 missing checkpoints explicitly, and preserves the Record-scope boundary.
 Control coverage is 51 tests with strict Clippy.
+CLI coverage is 12 tests with strict Clippy, including the recovery command
+and MCP authorization path.
