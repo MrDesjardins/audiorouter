@@ -119,7 +119,7 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
 fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: recordings <list|get|preview|reveal|set-metadata|rename|remove-entry> [<recording-id>] --database <path>"
+            "usage: recordings <list|get|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path>"
                 .into(),
         )
     })?;
@@ -193,8 +193,15 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
                 "recordingId": positional(args, 2, "recording id")?
             })),
         ),
+        "recycle" => (
+            "recordings.recycle",
+            Some(json!({
+                "recordingId": positional(args, 2, "recording id")?,
+                "confirm": args.contains(&"--confirm")
+            })),
+        ),
         _ => return Err(CliError::InvalidArguments(
-            "usage: recordings <list|get|preview|reveal|set-metadata|rename|remove-entry> [<recording-id>] --database <path>"
+            "usage: recordings <list|get|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path>"
                 .into(),
         )),
     };
@@ -1016,6 +1023,7 @@ fn mcp_tools() -> Value {
         { "name": "rename_recording", "description": "Rename a recording within its approved directory; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "newPath": { "type": "string", "minLength": 1 } }, "required": ["recordingId", "newPath"], "additionalProperties": false } },
         { "name": "set_privacy_mute", "description": "Latch or clear process-local privacy mute; requires capture scope.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" } }, "required": ["muted"], "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
+        { "name": "recycle_recording", "description": "Preview or explicitly recycle a recording through the OS Recycle Bin; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "confirm": { "type": "boolean" } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
         { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
         { "name": "control_session", "description": "Start or stop one session through the authorized lifecycle API.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "action": { "enum": ["start", "stop"] } }, "required": ["sessionId", "action"], "additionalProperties": false } },
@@ -1057,6 +1065,7 @@ fn mcp_tool_call(
         "rename_recording" => ("recordings.rename", Some(arguments)),
         "set_privacy_mute" => ("safety.setPrivacyMute", Some(arguments)),
         "remove_recording_entry" => ("recordings.removeEntry", Some(arguments)),
+        "recycle_recording" => ("recordings.recycle", Some(arguments)),
         "plan_graph_change" => ("graph.plan", Some(arguments)),
         "apply_graph_change" => ("graph.commit", Some(arguments)),
         "control_session" => {
@@ -1592,7 +1601,7 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 19);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 20);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
             &mut plane,

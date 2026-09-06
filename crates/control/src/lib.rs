@@ -116,6 +116,9 @@ fn method_description(name: &str) -> &'static str {
         "recordings.rename" => "Rename a recording within its approved directory.",
         "safety.setPrivacyMute" => "Latch or clear process-local privacy mute for capture paths.",
         "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
+        "recordings.recycle" => {
+            "Move a recording to the operating system Recycle Bin after explicit confirmation."
+        }
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -228,6 +231,13 @@ fn method_input_schema(name: &str) -> Value {
         }
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            &["recordingId"],
+        ),
+        "recordings.recycle" => object_schema(
+            json!({
+                "recordingId": { "type": "string", "minLength": 1 },
+                "confirm": { "type": "boolean" }
+            }),
             &["recordingId"],
         ),
         "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
@@ -1183,6 +1193,7 @@ impl ControlPlane {
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
                     "recordings.rename" => self.dispatch_recording_rename(request.params),
                     "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
+                    "recordings.recycle" => self.dispatch_recording_recycle(request.params),
                     "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
@@ -1905,6 +1916,64 @@ impl ControlPlane {
         Ok(json!({ "recordingId": recording_id, "removed": true, "fileAction": "none" }))
     }
 
+    fn dispatch_recording_recycle(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("recordingId and confirm are required".into())
+        })?;
+        let recording_id = params
+            .get("recordingId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let confirm = params
+            .get("confirm")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let record = storage
+            .get_recording(recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let path = std::path::Path::new(&record.path);
+        if !path.is_absolute() {
+            return Err(ControlError::InvalidRequest(
+                "recording path must be absolute".into(),
+            ));
+        }
+        if !path.is_file() {
+            return Ok(
+                json!({ "recordingId": recording_id, "path": record.path, "fileAction": "none", "reason": "missing" }),
+            );
+        }
+        if !confirm {
+            return Ok(
+                json!({ "recordingId": recording_id, "path": record.path, "fileAction": "recycle", "preview": true }),
+            );
+        }
+        #[cfg(windows)]
+        {
+            trash::delete(path).map_err(|error| {
+                ControlError::InvalidRequest(format!("recycleUnavailable: {error}"))
+            })?;
+            storage
+                .set_recording_missing(recording_id, true)
+                .map_err(storage_error)?;
+            Ok(
+                json!({ "recordingId": recording_id, "path": record.path, "fileAction": "recycled", "missing": true }),
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = path;
+            Ok(
+                json!({ "recordingId": recording_id, "path": record.path, "fileAction": "none", "reason": "recycleUnavailable" }),
+            )
+        }
+    }
+
     fn dispatch_privacy_mute(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let muted = params
             .and_then(|params| params.get("muted").and_then(Value::as_bool))
@@ -2114,6 +2183,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.rename" => &["recordingId", "newPath"],
         "safety.setPrivacyMute" => &["muted"],
         "recordings.removeEntry" => &["recordingId"],
+        "recordings.recycle" => &["recordingId", "confirm"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -2164,6 +2234,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "recordings.setMetadata"
             | "recordings.reveal"
             | "recordings.removeEntry"
+            | "recordings.recycle"
     )
 }
 

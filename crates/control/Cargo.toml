@@ -11,6 +11,7 @@ audiorouter-protocol = { path = "../protocol" }
 audiorouter-storage = { path = "../storage" }
 audiorouter-recording = { path = "../recording" }
 audiorouter-windows-audio = { path = "../windows-audio" }
+trash.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

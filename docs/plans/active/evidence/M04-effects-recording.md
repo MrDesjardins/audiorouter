@@ -270,3 +270,11 @@ recording identity, returns an explicit missing result without spawning a
 process, and on Windows launches `explorer.exe` with a separate `/select,`
 argument for an existing regular file. It does not modify the file or library
 row. Domain/control/CLI tests and strict Clippy pass.
+
+Added separately authorized `recordings.recycle`, `recordings recycle`, and
+MCP `recycle_recording`. Requests without `confirm: true` return a preview and
+never touch the file. On Windows, confirmed requests use the OS Recycle Bin
+through the `trash` library, then mark the persisted row missing; missing
+files and unsupported platforms return explicit non-destructive results. No
+permanent-delete fallback exists. Storage/domain/control/CLI tests and strict
+Clippy pass.

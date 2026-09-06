@@ -543,6 +543,14 @@ impl Storage {
             == 1)
     }
 
+    pub fn set_recording_missing(&self, id: &str, missing: bool) -> Result<bool, StorageError> {
+        let changed = self.connection.execute(
+            "UPDATE recordings SET missing = ?2 WHERE id = ?1",
+            params![id, missing as i64],
+        )?;
+        Ok(changed == 1)
+    }
+
     /// Rename a recording within its existing canonical directory and update
     /// only the durable library path. The destination must not already exist.
     pub fn rename_recording(&self, id: &str, new_path: &str) -> Result<bool, StorageError> {
