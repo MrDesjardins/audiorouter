@@ -506,6 +506,11 @@ that scope implicitly; an explicit grant is required and covered by the
 control authorization regression. This preserves the security contract while
 keeping scan results read-only.
 
+The authorization regression now exercises the full path: a generic read-only
+grant is rejected before the scan, while an explicit `pluginScan` grant can
+inspect the same bounded invalid-candidate fixture. No filesystem inspection
+occurs on the denied path.
+
 The complementary `plugins.inspect` API now accepts one explicit absolute
 binary path and returns the same identity/error shape without loading the
 module. The control regression covers an invalid binary, and the shared

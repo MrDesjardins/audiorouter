@@ -4636,24 +4636,37 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir(&root).unwrap();
         std::fs::write(root.join("candidate.dll"), b"not a PE binary").unwrap();
-        let response = ControlPlane::default().dispatch(JsonRpcRequest {
+        let mut plane = ControlPlane::default();
+        let request = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
             method: "plugins.scan".into(),
             params: Some(json!({ "directory": root.to_string_lossy() })),
-        });
+        };
+        let denied = plane.dispatch_authorized(request.clone(), &ClientGrant::read_only());
+        assert_eq!(
+            denied.error.unwrap().data.unwrap()["code"],
+            "permissionDenied"
+        );
+        let response = plane.dispatch_authorized(
+            request,
+            &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+        );
         assert!(response.error.is_none());
         let result = response.result.unwrap();
         assert_eq!(result["directory"], root.to_string_lossy().to_string());
         assert_eq!(result["entries"].as_array().unwrap().len(), 1);
         assert!(result["entries"][0]["identity"].is_null());
         assert!(result["entries"][0]["error"].is_string());
-        let inspected = ControlPlane::default().dispatch(JsonRpcRequest {
-            jsonrpc: "2.0".into(),
-            id: Some(json!(2)),
-            method: "plugins.inspect".into(),
-            params: Some(json!({ "path": root.join("candidate.dll").to_string_lossy() })),
-        });
+        let inspected = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "plugins.inspect".into(),
+                params: Some(json!({ "path": root.join("candidate.dll").to_string_lossy() })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+        );
         assert!(inspected.error.is_none());
         assert!(inspected.result.unwrap()["identity"].is_null());
         let _ = std::fs::remove_dir_all(root);
