@@ -101,6 +101,9 @@ dependencies = [
 [[package]]
 name = "audiorouter-recording"
 version = "0.1.0"
+dependencies = [
+ "crossbeam-queue",
+]
 
 [[package]]
 name = "audiorouter-storage"

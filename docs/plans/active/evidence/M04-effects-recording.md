@@ -13,3 +13,9 @@ Three in-memory tests cover header finalization, 24-bit byte packing and
 non-finite sanitization, and invalid rate/channel/sample shapes. Strict Clippy
 passes. This does not yet claim REC-01 independent sinks, bounded recorder
 workers, pause/split state, filesystem safety, crash recovery, or FLAC.
+
+`RecordingQueue` adds a fixed-capacity nonblocking handoff for caller-owned
+interleaved chunks. A full queue returns the chunk to its producer and
+increments an overrun counter; queue operations perform no encoding or file
+I/O. A fourth in-memory test covers capacity, ownership return, and counters.
+The queue is not yet connected to a recorder worker.

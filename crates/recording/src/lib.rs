@@ -4,8 +4,65 @@
 //! It does not open paths, create files, or perform realtime scheduling.
 
 use std::io::{Seek, SeekFrom, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const MAX_CHANNELS: u16 = 2;
+
+/// Caller-owned interleaved samples ready for an off-thread encoder.
+pub struct RecordingChunk {
+    pub start_frame: u64,
+    pub samples: Vec<f32>,
+}
+
+/// Fixed-capacity, nonblocking handoff from audio processing to recording.
+/// Chunks must be prepared by the caller; queue operations do not allocate,
+/// encode, touch files, or wait for a consumer.
+pub struct RecordingQueue {
+    chunks: crossbeam_queue::ArrayQueue<RecordingChunk>,
+    overruns: AtomicU64,
+}
+
+impl RecordingQueue {
+    pub fn new(capacity: usize) -> Result<Self, RecordingError> {
+        if capacity == 0 {
+            return Err(RecordingError::InvalidQueueCapacity);
+        }
+        Ok(Self {
+            chunks: crossbeam_queue::ArrayQueue::new(capacity),
+            overruns: AtomicU64::new(0),
+        })
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.chunks.capacity()
+    }
+
+    pub fn len(&self) -> usize {
+        self.chunks.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.chunks.is_empty()
+    }
+
+    pub fn overruns(&self) -> u64 {
+        self.overruns.load(Ordering::Relaxed)
+    }
+
+    pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        match self.chunks.push(chunk) {
+            Ok(()) => Ok(()),
+            Err(chunk) => {
+                self.overruns.fetch_add(1, Ordering::Relaxed);
+                Err(chunk)
+            }
+        }
+    }
+
+    pub fn try_pop(&self) -> Option<RecordingChunk> {
+        self.chunks.pop()
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WavFormat {
@@ -37,6 +94,7 @@ pub enum RecordingError {
     InvalidChannels,
     InvalidSampleCount,
     TooManyFrames,
+    InvalidQueueCapacity,
     Io(std::io::Error),
 }
 
@@ -241,6 +299,29 @@ mod tests {
         assert!(matches!(
             writer.write_interleaved(&[0.0]),
             Err(RecordingError::InvalidSampleCount)
+        ));
+    }
+
+    #[test]
+    fn recording_queue_is_bounded_and_reports_overruns() {
+        let queue = RecordingQueue::new(1).unwrap();
+        let first = RecordingChunk {
+            start_frame: 4,
+            samples: vec![0.0, 0.5],
+        };
+        let second = RecordingChunk {
+            start_frame: 5,
+            samples: vec![0.25, 0.75],
+        };
+        assert!(queue.try_push(first).is_ok());
+        let returned = queue.try_push(second).unwrap_err();
+        assert_eq!(returned.start_frame, 5);
+        assert_eq!(queue.overruns(), 1);
+        assert_eq!(queue.try_pop().unwrap().start_frame, 4);
+        assert!(queue.try_pop().is_none());
+        assert!(matches!(
+            RecordingQueue::new(0),
+            Err(RecordingError::InvalidQueueCapacity)
         ));
     }
 }
