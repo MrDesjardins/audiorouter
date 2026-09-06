@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
+#include <string>
 #include <ksmedia.h>
 #include <wrl.h>
 #include <wrl/implements.h>
@@ -441,17 +442,21 @@ static int controlled_process_attribution(DWORD duration_ms) {
     return result == 0 && exit_code == 0 ? 0 : 1;
 }
 
-static int event_capture_initialize_probe(UINT target_index) {
+static int event_endpoint_initialize_probe(EDataFlow flow, UINT target_index,
+                                           const char* prefix) {
+    auto label = [prefix](const char* suffix) {
+        return std::string(prefix) + suffix;
+    };
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator),
                                   reinterpret_cast<void**>(&enumerator));
-    print_hr("event_co_create_enumerator", hr);
+    print_hr(label("_co_create_enumerator").c_str(), hr);
     if (FAILED(hr)) return 1;
 
     IMMDeviceCollection* devices = nullptr;
-    hr = enumerator->EnumAudioEndpoints(eCapture, DEVICE_STATE_ACTIVE, &devices);
-    print_hr("event_enum_capture", hr);
+    hr = enumerator->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, &devices);
+    print_hr(label("_enum").c_str(), hr);
     if (FAILED(hr)) {
         enumerator->Release();
         return 1;
@@ -459,7 +464,7 @@ static int event_capture_initialize_probe(UINT target_index) {
     UINT count = 0;
     devices->GetCount(&count);
     if (target_index >= count) {
-        std::cout << "event_capture_index_out_of_range=" << target_index
+        std::cout << prefix << "_index_out_of_range=" << target_index
                   << " count=" << count << '\n';
         devices->Release();
         enumerator->Release();
@@ -468,7 +473,7 @@ static int event_capture_initialize_probe(UINT target_index) {
 
     IMMDevice* device = nullptr;
     hr = devices->Item(target_index, &device);
-    print_hr("event_capture_item", hr);
+    print_hr(label("_item").c_str(), hr);
     if (FAILED(hr)) {
         devices->Release();
         enumerator->Release();
@@ -477,16 +482,16 @@ static int event_capture_initialize_probe(UINT target_index) {
     IAudioClient* client = nullptr;
     hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
                           reinterpret_cast<void**>(&client));
-    print_hr("event_capture_activate", hr);
+    print_hr(label("_activate").c_str(), hr);
     WAVEFORMATEX* format = nullptr;
     if (SUCCEEDED(hr)) hr = client->GetMixFormat(&format);
-    print_hr("event_capture_get_mix_format", hr);
+    print_hr(label("_get_mix_format").c_str(), hr);
     HANDLE ready_event = nullptr;
     if (SUCCEEDED(hr)) {
         ready_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         if (!ready_event) {
             hr = HRESULT_FROM_WIN32(GetLastError());
-            print_hr("event_capture_create_event", hr);
+            print_hr(label("_create_event").c_str(), hr);
         }
     }
     if (SUCCEEDED(hr)) {
@@ -497,9 +502,9 @@ static int event_capture_initialize_probe(UINT target_index) {
                                 AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
                                     AUDCLNT_STREAMFLAGS_NOPERSIST,
                                 0, 0, format, nullptr);
-        print_hr("event_capture_initialize_exact_zero", hr);
+        print_hr(label("_initialize_exact_zero").c_str(), hr);
     }
-    if (SUCCEEDED(hr)) print_hr("event_capture_set_event", client->SetEventHandle(ready_event));
+    if (SUCCEEDED(hr)) print_hr(label("_set_event").c_str(), client->SetEventHandle(ready_event));
     if (format) CoTaskMemFree(format);
     if (ready_event) CloseHandle(ready_event);
     if (client) client->Release();
@@ -529,7 +534,13 @@ int main(int argc, char** argv) {
     }
     if (argc > 1 && std::strcmp(argv[1], "event-capture-init") == 0) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
-        int result = event_capture_initialize_probe(target_index);
+        int result = event_endpoint_initialize_probe(eCapture, target_index, "event_capture");
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "event-render-init") == 0) {
+        UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        int result = event_endpoint_initialize_probe(eRender, target_index, "event_render");
         CoUninitialize();
         return result;
     }

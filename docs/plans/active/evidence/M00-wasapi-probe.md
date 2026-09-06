@@ -135,3 +135,10 @@ capture endpoints. Every endpoint returned success for exact-format shared
 ordinary endpoint contention as an explanation for the earlier `E_INVALIDARG`
 result for this adapter request shape; data attribution and latency remain
 open.
+
+The generalized probe was also run across all 18 active render endpoints. 17
+accepted the same exact-format event-driven initialization and event-handle
+setup. One endpoint returned `AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`) while
+the remaining endpoints returned success; no endpoint was started or rendered
+to. This is a distinct, correctly classified busy-device result and does not
+reintroduce the earlier capture `E_INVALIDARG` finding.
