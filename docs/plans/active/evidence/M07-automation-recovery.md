@@ -517,3 +517,10 @@ module. The control regression covers an invalid binary, and the shared
 discovery schema plus TypeScript method contracts are updated. This remains
 inspection evidence only; runtime plugin execution and OS sandbox enforcement
 are still separate M06 gates.
+
+The CLI `plugins scan` command now routes through the shared authorized control
+dispatcher, and `plugins inspect --path <absolute-path>` provides matching
+convenience coverage. Relative paths fail as CLI argument errors before
+dispatch; invalid absolute candidates remain visible as inspection errors.
+CLI/control tests and strict Clippy pass, preserving adapter parity and the
+explicit `pluginScan` boundary.

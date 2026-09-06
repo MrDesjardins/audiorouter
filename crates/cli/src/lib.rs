@@ -1,7 +1,7 @@
 //! Offline M01 CLI command surface.
 
-use audiorouter_control::ControlPlane;
-use audiorouter_domain::{inspect_routes, validate_session, EntityId};
+use audiorouter_control::{ClientGrant, ControlPlane};
+use audiorouter_domain::{inspect_routes, validate_session, EntityId, PermissionScope};
 use audiorouter_storage::Storage;
 use serde_json::{json, Value};
 use std::io::{BufRead, Read, Write};
@@ -119,51 +119,43 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
 }
 
 fn plugins_command(args: &[&str]) -> Result<Value, CliError> {
-    if args.get(1).copied() != Some("scan") {
+    let action = args.get(1).copied().unwrap_or_default();
+    if !matches!(action, "scan" | "inspect") {
         return Err(CliError::InvalidArguments(
-            "usage: plugins scan --directory <absolute-path>".into(),
+            "usage: plugins scan --directory <absolute-path> | plugins inspect --path <absolute-path>".into(),
         ));
     }
-    let directory = option_value(args, "--directory")?;
-    let root = std::path::Path::new(directory);
-    if !root.is_absolute() {
-        return Err(CliError::InvalidArguments(
-            "--directory path must be absolute".into(),
-        ));
-    }
-    let entries = audiorouter_plugin_host::scan_directory(root)
-        .map_err(|error| CliError::Io(format!("plugin scan failed: {error:?}")))?;
-    Ok(json!({
-        "directory": directory,
-        "entries": entries.into_iter().map(|entry| {
-            let identity = entry.identity.map(|identity| json!({
-                "path": identity.path,
-                "binaryPath": identity.binary_path,
-                "format": match identity.format {
-                    audiorouter_plugin_host::PluginFormat::Vst3 => "vst3",
-                    audiorouter_plugin_host::PluginFormat::Vst2 => "vst2",
-                    audiorouter_plugin_host::PluginFormat::Unknown => "unknown",
-                },
-                "architecture": match identity.architecture {
-                    audiorouter_plugin_host::PeArchitecture::X64 => "x64",
-                    audiorouter_plugin_host::PeArchitecture::X86 => "x86",
-                    audiorouter_plugin_host::PeArchitecture::Arm64 => "arm64",
-                    audiorouter_plugin_host::PeArchitecture::Unknown => "unknown",
-                },
-                "fileBytes": identity.file_bytes,
-                "sha256": identity.sha256,
-                "compatibility": match identity.compatibility() {
-                    audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
-                    audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
-                }
-            }));
-            json!({
-                "path": entry.path,
-                "identity": identity,
-                "error": entry.error.map(|error| format!("{error:?}"))
-            })
-        }).collect::<Vec<_>>()
-    }))
+    let (method, params) = if action == "scan" {
+        let directory = option_value(args, "--directory")?;
+        if !std::path::Path::new(directory).is_absolute() {
+            return Err(CliError::InvalidArguments(
+                "--directory path must be absolute".into(),
+            ));
+        }
+        ("plugins.scan", json!({ "directory": directory }))
+    } else {
+        let path = option_value(args, "--path")?;
+        if !std::path::Path::new(path).is_absolute() {
+            return Err(CliError::InvalidArguments("--path must be absolute".into()));
+        }
+        ("plugins.inspect", json!({ "path": path }))
+    };
+    let response = ControlPlane::default().dispatch_authorized(
+        audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        },
+        &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+    );
+    response.result.ok_or_else(|| {
+        CliError::Io(
+            response
+                .error
+                .map_or_else(|| "plugin inspection failed".into(), |error| error.message),
+        )
+    })
 }
 
 fn presets_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1148,6 +1140,10 @@ fn help_value() -> Value {
     value["commands"]
         .as_array_mut()
         .unwrap()
+        .insert(7, json!("plugins inspect --path <absolute-path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
         .insert(7, json!("presets list"));
     value["commands"]
         .as_array_mut()
@@ -1892,6 +1888,13 @@ mod tests {
         assert_eq!(scanned["entries"].as_array().unwrap().len(), 1);
         assert!(scanned["entries"][0]["identity"].is_null());
         assert!(scanned["entries"][0]["error"].is_string());
+        let path = root.join("candidate.vst3").to_string_lossy().into_owned();
+        let inspected: Value =
+            serde_json::from_str(&run(["plugins", "inspect", "--path", &path, "--json"]).unwrap())
+                .unwrap();
+        assert_eq!(inspected["path"], path);
+        assert!(inspected["identity"].is_null());
+        assert!(inspected["error"].is_string());
         std::fs::remove_dir_all(root).unwrap();
     }
 
