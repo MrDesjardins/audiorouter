@@ -87,6 +87,9 @@ pub enum AudioError {
     ApplicationNotFound { process_id: u32 },
     ApplicationIdentityChanged { process_id: u32 },
     ApplicationIdentityUnavailable { process_id: u32 },
+    ApplicationRestartNotFound { executable: String },
+    ApplicationRestartAmbiguous { executable: String },
+    ApplicationRestartIdentityUnavailable { executable: String },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -114,8 +117,11 @@ impl AudioError {
             Self::InvalidUtf16
             | Self::InvalidFrameSize
             | Self::ApplicationNotFound { .. }
-            | Self::ApplicationIdentityChanged { .. } => 0x80070057,
-            Self::ApplicationIdentityUnavailable { .. } => 0x80070005,
+            | Self::ApplicationIdentityChanged { .. }
+            | Self::ApplicationRestartNotFound { .. }
+            | Self::ApplicationRestartAmbiguous { .. } => 0x80070057,
+            Self::ApplicationIdentityUnavailable { .. }
+            | Self::ApplicationRestartIdentityUnavailable { .. } => 0x80070005,
             Self::BufferTooSmall { .. } => unreachable!(),
         };
         match code {
@@ -161,6 +167,22 @@ impl fmt::Display for AudioError {
                     "application process {process_id} identity unavailable"
                 )
             }
+            Self::ApplicationRestartNotFound { executable } => {
+                write!(
+                    formatter,
+                    "no restart candidate matched executable {executable}"
+                )
+            }
+            Self::ApplicationRestartAmbiguous { executable } => {
+                write!(
+                    formatter,
+                    "multiple restart candidates matched executable {executable}"
+                )
+            }
+            Self::ApplicationRestartIdentityUnavailable { executable } => write!(
+                formatter,
+                "restart candidate for executable {executable} has no creation identity"
+            ),
         }
     }
 }
@@ -811,6 +833,39 @@ pub fn bind_application(
     Ok(application)
 }
 
+/// Resolve a persisted executable selector after a backend restart. A PID is
+/// deliberately not used here: exactly one case-insensitive executable match
+/// with a creation timestamp is required, otherwise rebinding remains silent.
+pub fn resolve_application_restart(
+    applications: &[ApplicationInfo],
+    expected_executable: &str,
+) -> Result<ApplicationInfo, AudioError> {
+    let matches = applications
+        .iter()
+        .filter(|application| {
+            application
+                .executable
+                .eq_ignore_ascii_case(expected_executable)
+        })
+        .collect::<Vec<_>>();
+    let Some(application) = matches.first() else {
+        return Err(AudioError::ApplicationRestartNotFound {
+            executable: expected_executable.to_owned(),
+        });
+    };
+    if matches.len() != 1 {
+        return Err(AudioError::ApplicationRestartAmbiguous {
+            executable: expected_executable.to_owned(),
+        });
+    }
+    if application.creation_time_100ns.is_none() {
+        return Err(AudioError::ApplicationRestartIdentityUnavailable {
+            executable: expected_executable.to_owned(),
+        });
+    }
+    Ok((*application).clone())
+}
+
 unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
     use windows::Win32::Media::Audio::{
         eCapture, eRender, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -926,6 +981,46 @@ mod tests {
             .kind(),
             AudioFailureKind::BufferConstraint
         );
+    }
+
+    #[test]
+    fn restart_binding_requires_one_verified_executable_identity() {
+        let candidate = ApplicationInfo {
+            process_id: 7,
+            executable: "Game.EXE".into(),
+            creation_time_100ns: Some(42),
+        };
+        assert_eq!(
+            resolve_application_restart(std::slice::from_ref(&candidate), "game.exe").unwrap(),
+            candidate
+        );
+        assert!(matches!(
+            resolve_application_restart(&[], "game.exe"),
+            Err(AudioError::ApplicationRestartNotFound { .. })
+        ));
+        assert!(matches!(
+            resolve_application_restart(
+                &[
+                    candidate.clone(),
+                    ApplicationInfo {
+                        process_id: 8,
+                        ..candidate.clone()
+                    }
+                ],
+                "game.exe"
+            ),
+            Err(AudioError::ApplicationRestartAmbiguous { .. })
+        ));
+        assert!(matches!(
+            resolve_application_restart(
+                &[ApplicationInfo {
+                    creation_time_100ns: None,
+                    ..candidate
+                }],
+                "game.exe"
+            ),
+            Err(AudioError::ApplicationRestartIdentityUnavailable { .. })
+        ));
     }
 
     #[cfg(windows)]

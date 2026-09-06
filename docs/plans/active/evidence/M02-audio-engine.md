@@ -20,6 +20,14 @@ Application discovery now attempts `PROCESS_QUERY_LIMITED_INFORMATION` and recor
 
 The validator rejects missing creation-time metadata explicitly, preventing PID/name-only matches from being accepted. Seven adapter tests and strict adapter Clippy pass.
 
+The adapter now also exposes a restart resolver for persisted executable
+selectors. It refuses to rebind when no executable matches, when multiple
+case-insensitive matches exist, or when the sole match lacks a creation
+timestamp; only one verified candidate is returned. Portable regression
+coverage exercises all four outcomes. This is identity-only evidence: no
+audio stream is opened, and controlled process-tree attribution and native
+restart/PID-reuse runtime evidence remain open.
+
 Control serialization now exposes creation timestamps as decimal strings rather than JSON numbers, preserving the full `u64` identity across TypeScript clients. Control tests and contract typechecking pass; no audio operation is involved.
 
 Buffer-capacity failures are now classified separately as `BufferConstraint`, while invalid frame sizes remain `InvalidArgument`. Seven adapter tests and strict adapter Clippy pass.
