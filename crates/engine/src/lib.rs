@@ -37,6 +37,29 @@ pub struct GainRamp {
     remaining_frames: usize,
 }
 
+/// Process-local privacy gate. It silences blocks at a boundary and does not
+/// alter Windows privacy permissions or other applications' microphone use.
+#[derive(Debug, Default)]
+pub struct PrivacyMute {
+    muted: std::sync::atomic::AtomicBool,
+}
+
+impl PrivacyMute {
+    pub fn set_muted(&self, muted: bool) {
+        self.muted.store(muted, Ordering::Release);
+    }
+
+    pub fn is_muted(&self) -> bool {
+        self.muted.load(Ordering::Acquire)
+    }
+
+    pub fn apply(&self, block: &mut AudioBlock) {
+        if self.is_muted() {
+            block.clear();
+        }
+    }
+}
+
 impl GainRamp {
     pub fn new(initial: f32) -> Self {
         let initial = initial.is_finite().then_some(initial).unwrap_or(0.0);
@@ -680,5 +703,20 @@ mod tests {
 
         ramp.set_target(0.0, 0);
         assert_eq!(ramp.current(), 0.0);
+    }
+
+    #[test]
+    fn privacy_mute_silences_only_the_process_local_block() {
+        let mute = PrivacyMute::default();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        mute.set_muted(true);
+        mute.apply(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+        assert!(mute.is_muted());
+        mute.set_muted(false);
+        block.channel_mut(0).unwrap().fill(1.0);
+        mute.apply(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[1.0; 2]);
     }
 }

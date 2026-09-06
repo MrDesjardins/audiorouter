@@ -12,4 +12,6 @@ Optional `CallbackMetrics` records processed quanta and repaired sample counts u
 
 `GainRamp` provides a preallocated per-frame transition for de-clicked gain and privacy-mute changes. It clamps invalid targets to silence, supports immediate changes, and reaches its target exactly at the configured boundary. The engine suite now contains 13 passing tests.
 
+`PrivacyMute` adds an atomic process-local silence gate checked at block boundaries. The test verifies mute and unmute behavior; persistent latching, restart recovery, and actual Windows microphone privacy behavior remain outside this portable engine slice. The engine suite now contains 14 passing tests.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.
