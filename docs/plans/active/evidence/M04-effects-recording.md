@@ -357,6 +357,16 @@ ordinary draining remains unchanged. The recording suite passes 23 tests with
 strict Clippy and formatting checks. This is the durable scheduling seam; true
 incremental FLAC encoding and native realtime integration remain open.
 
+Implemented StreamingFlacWriter and StreamingFlacRecorder. The writer emits
+bounded verbatim FLAC frames on each off-thread chunk, keeps only one bounded
+frame in memory, and patches STREAMINFO frame-size and total-sample fields on
+finish. The queue worker preserves contiguous-frame validation, lifecycle
+states, and per-chunk checkpoint hooks. Interoperability tests decode the
+resulting stereo stream and verify a three-frame worker output; recording
+coverage is now 25 tests with strict Clippy. Compression tuning, metadata
+insertion for this streaming path, and native realtime integration remain
+open.
+
 Added deterministic compressor transfer-curve reference vectors covering below
 threshold, the soft-knee center and boundary, and the hard-knee ceiling. The
 vectors exercise the same `compression_reduction` function used by processing;

@@ -577,6 +577,264 @@ pub struct FlacFileInfo {
     pub file_bytes: u64,
 }
 
+const STREAMING_FLAC_BLOCK_FRAMES: usize = 4096;
+
+/// Incremental seekable FLAC writer.
+///
+/// Audio is emitted as bounded verbatim FLAC frames while writes arrive.
+/// STREAMINFO is patched on finish with the final frame count and frame-size
+/// bounds. Verbatim subframes intentionally trade compression ratio for a
+/// small, deterministic writer that is safe for an off-thread recorder.
+pub struct StreamingFlacWriter<W> {
+    output: W,
+    streaminfo_start: u64,
+    channels: u16,
+    bits_per_sample: u8,
+    streaminfo: [u8; 34],
+    frames: u64,
+    minimum_frame_size: u32,
+    maximum_frame_size: u32,
+    dither: bool,
+    rng: u64,
+}
+
+impl<W: Write + Seek> StreamingFlacWriter<W> {
+    pub fn new(
+        mut output: W,
+        channels: u16,
+        sample_rate: u32,
+        bits_per_sample: u8,
+        dither: bool,
+    ) -> Result<Self, RecordingError> {
+        validate_format(WavFormat::Pcm16, channels, sample_rate)?;
+        if !matches!(bits_per_sample, 16 | 24) {
+            return Err(RecordingError::InvalidSampleCount);
+        }
+        output.write_all(b"fLaC")?;
+        output.write_all(&[0x80, 0, 0, 0x22])?;
+        let streaminfo_start = 8;
+        let mut streaminfo = [0u8; 34];
+        streaminfo[0..2].copy_from_slice(&(STREAMING_FLAC_BLOCK_FRAMES as u16).to_be_bytes());
+        streaminfo[2..4].copy_from_slice(&(STREAMING_FLAC_BLOCK_FRAMES as u16).to_be_bytes());
+        let packed = (u64::from(sample_rate) << 44)
+            | (u64::from(channels - 1) << 41)
+            | (u64::from(bits_per_sample - 1) << 36);
+        streaminfo[10..18].copy_from_slice(&packed.to_be_bytes());
+        output.write_all(&streaminfo)?;
+        Ok(Self {
+            output,
+            streaminfo_start,
+            channels,
+            bits_per_sample,
+            streaminfo,
+            frames: 0,
+            minimum_frame_size: u32::MAX,
+            maximum_frame_size: 0,
+            dither,
+            rng: 0x9e37_79b9_7f4a_7c15,
+        })
+    }
+
+    pub fn frames(&self) -> u64 {
+        self.frames
+    }
+
+    pub fn write_interleaved(&mut self, samples: &[f32]) -> Result<u64, RecordingError> {
+        let channels = usize::from(self.channels);
+        if samples.len() % channels != 0 {
+            return Err(RecordingError::InvalidSampleCount);
+        }
+        let mut offset = 0;
+        while offset < samples.len() {
+            let remaining_frames = (samples.len() - offset) / channels;
+            let frame_count = remaining_frames.min(STREAMING_FLAC_BLOCK_FRAMES);
+            let frame = self.encode_frame(&samples[offset..offset + frame_count * channels])?;
+            let frame_size =
+                u32::try_from(frame.len()).map_err(|_| RecordingError::TooManyFrames)?;
+            self.minimum_frame_size = self.minimum_frame_size.min(frame_size);
+            self.maximum_frame_size = self.maximum_frame_size.max(frame_size);
+            self.output.write_all(&frame)?;
+            self.frames = self
+                .frames
+                .checked_add(frame_count as u64)
+                .ok_or(RecordingError::TooManyFrames)?;
+            offset += frame_count * channels;
+        }
+        Ok((samples.len() / channels) as u64)
+    }
+
+    pub fn finish(mut self) -> Result<W, RecordingError> {
+        let end = self.output.stream_position()?;
+        let minimum = if self.minimum_frame_size == u32::MAX {
+            0
+        } else {
+            self.minimum_frame_size
+        };
+        self.streaminfo[4..7].copy_from_slice(&minimum.to_be_bytes()[1..]);
+        self.streaminfo[7..10].copy_from_slice(&self.maximum_frame_size.to_be_bytes()[1..]);
+        let mut packed = u64::from_be_bytes(self.streaminfo[10..18].try_into().unwrap());
+        packed = (packed & !((1u64 << 36) - 1)) | self.frames.min((1u64 << 36) - 1);
+        self.streaminfo[10..18].copy_from_slice(&packed.to_be_bytes());
+        self.output.seek(SeekFrom::Start(self.streaminfo_start))?;
+        self.output.write_all(&self.streaminfo)?;
+        self.output.seek(SeekFrom::Start(end))?;
+        Ok(self.output)
+    }
+
+    fn encode_frame(&mut self, samples: &[f32]) -> Result<Vec<u8>, RecordingError> {
+        let channels = usize::from(self.channels);
+        let frame_count = samples.len() / channels;
+        let mut header = BitWriter::new();
+        header.write_bits(0x3ffe, 14);
+        header.write_bits(0, 1);
+        header.write_bits(0, 1);
+        header.write_bits(7, 4);
+        header.write_bits(0, 4);
+        header.write_bits((channels - 1) as u64, 4);
+        header.write_bits(0, 3);
+        header.write_bits(0, 1);
+        write_utf8_number(&mut header, self.frames);
+        header.write_bits((frame_count - 1) as u64, 16);
+        header.align();
+        let mut frame = header.into_bytes();
+        frame.push(crc8(&frame));
+        let scale = if self.bits_per_sample == 16 {
+            32_767.0
+        } else {
+            8_388_607.0
+        };
+        for channel in 0..channels {
+            let mut subframe = BitWriter::new();
+            subframe.write_bits(0, 1);
+            subframe.write_bits(1, 6);
+            subframe.write_bits(0, 1);
+            for frame_index in 0..frame_count {
+                let sample = samples[frame_index * channels + channel];
+                let value = if sample.is_finite() {
+                    quantize(sample, self.dither, &mut self.rng, scale) as i32
+                } else {
+                    0
+                };
+                subframe.write_signed(value as i64, u32::from(self.bits_per_sample));
+            }
+            subframe.align();
+            frame.extend_from_slice(&subframe.into_bytes());
+        }
+        let checksum = crc16(&frame);
+        frame.extend_from_slice(&checksum.to_be_bytes());
+        Ok(frame)
+    }
+}
+
+struct BitWriter {
+    bytes: Vec<u8>,
+    current: u8,
+    used: u8,
+}
+
+impl BitWriter {
+    fn new() -> Self {
+        Self {
+            bytes: Vec::new(),
+            current: 0,
+            used: 0,
+        }
+    }
+
+    fn write_bits(&mut self, value: u64, count: u32) {
+        for bit in (0..count).rev() {
+            self.current = (self.current << 1) | (((value >> bit) & 1) as u8);
+            self.used += 1;
+            if self.used == 8 {
+                self.bytes.push(self.current);
+                self.current = 0;
+                self.used = 0;
+            }
+        }
+    }
+
+    fn write_signed(&mut self, value: i64, count: u32) {
+        self.write_bits(value as u64, count);
+    }
+
+    fn align(&mut self) {
+        if self.used != 0 {
+            self.current <<= 8 - self.used;
+            self.bytes.push(self.current);
+            self.current = 0;
+            self.used = 0;
+        }
+    }
+
+    fn into_bytes(mut self) -> Vec<u8> {
+        self.align();
+        self.bytes
+    }
+}
+
+fn write_utf8_number(writer: &mut BitWriter, value: u64) {
+    let mut bytes = [0u8; 7];
+    let count = if value < 0x80 {
+        1
+    } else if value < 0x800 {
+        2
+    } else if value < 0x10000 {
+        3
+    } else if value < 0x200000 {
+        4
+    } else if value < 0x4000000 {
+        5
+    } else {
+        6
+    };
+    let mut remaining = value;
+    for index in (1..count).rev() {
+        bytes[index] = 0x80 | (remaining as u8 & 0x3f);
+        remaining >>= 6;
+    }
+    bytes[0] = match count {
+        1 => remaining as u8,
+        2 => 0xc0 | remaining as u8 & 0x1f,
+        3 => 0xe0 | remaining as u8 & 0x0f,
+        4 => 0xf0 | remaining as u8 & 0x07,
+        5 => 0xf8 | remaining as u8 & 0x03,
+        _ => 0xfc | remaining as u8 & 0x01,
+    };
+    for byte in bytes.into_iter().take(count) {
+        writer.write_bits(u64::from(byte), 8);
+    }
+}
+
+fn crc8(bytes: &[u8]) -> u8 {
+    let mut crc = 0;
+    for byte in bytes {
+        crc ^= *byte;
+        for _ in 0..8 {
+            crc = if crc & 0x80 != 0 {
+                (crc << 1) ^ 0x07
+            } else {
+                crc << 1
+            };
+        }
+    }
+    crc
+}
+
+fn crc16(bytes: &[u8]) -> u16 {
+    let mut crc = 0;
+    for byte in bytes {
+        crc ^= u16::from(*byte) << 8;
+        for _ in 0..8 {
+            crc = if crc & 0x8000 != 0 {
+                (crc << 1) ^ 0x8005
+            } else {
+                crc << 1
+            };
+        }
+    }
+    crc
+}
+
 /// Batch FLAC encoder for completed in-memory segments. It is intentionally
 /// separate from `WavRecorder`: the current dependency API returns one encoded
 /// buffer, so it must not be used for unbounded live recording yet.
@@ -1359,6 +1617,123 @@ pub struct BufferedFlacRecorder {
     encoder: FlacBufferEncoder,
     controller: RecorderController,
     next_frame: Option<u64>,
+}
+
+/// Queue-backed recorder that writes FLAC frames as chunks are drained.
+/// Unlike BufferedFlacRecorder, this worker does not retain the complete
+/// recording in an in-memory sample buffer.
+pub struct StreamingFlacRecorder<W> {
+    writer: StreamingFlacWriter<W>,
+    controller: RecorderController,
+    next_frame: Option<u64>,
+}
+
+impl<W: Write + Seek> StreamingFlacRecorder<W> {
+    pub fn new(writer: StreamingFlacWriter<W>) -> Self {
+        Self {
+            writer,
+            controller: RecorderController::new(),
+            next_frame: None,
+        }
+    }
+
+    pub fn state(&self) -> RecorderState {
+        self.controller.state()
+    }
+
+    pub fn checkpoint(&self) -> RecorderCheckpoint {
+        self.controller.checkpoint()
+    }
+
+    pub fn arm(&mut self) -> Result<(), RecorderError> {
+        self.controller.arm()
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.start(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    pub fn pause(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.pause(frame)
+    }
+
+    pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.resume(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    pub fn stop(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.stop(frame)
+    }
+
+    pub fn fail(&mut self) {
+        self.controller.fail();
+    }
+
+    pub fn drain_queue(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        self.drain_queue_with_checkpoint(queue, maximum_chunks, |_| Ok(()))
+    }
+
+    pub fn drain_queue_with_checkpoint<F>(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+        mut persist: F,
+    ) -> Result<usize, RecordingError>
+    where
+        F: FnMut(&RecorderCheckpoint) -> Result<(), RecordingError>,
+    {
+        if self.controller.state() != RecorderState::Recording {
+            return Err(RecordingError::NotRecording);
+        }
+        let mut drained = 0;
+        while drained < maximum_chunks {
+            let Some(chunk) = queue.try_pop() else {
+                break;
+            };
+            let expected = self.next_frame.unwrap_or(chunk.start_frame);
+            if chunk.start_frame != expected {
+                self.controller.fail();
+                return Err(RecordingError::FrameDiscontinuity {
+                    expected,
+                    actual: chunk.start_frame,
+                });
+            }
+            let frames = chunk.samples.len() / usize::from(self.writer.channels);
+            if let Err(error) = self.writer.write_interleaved(&chunk.samples) {
+                self.controller.fail();
+                return Err(error);
+            }
+            let end = expected
+                .checked_add(frames as u64)
+                .ok_or(RecordingError::TooManyFrames)?;
+            self.controller
+                .advance(end)
+                .map_err(RecordingError::Controller)?;
+            self.next_frame = Some(end);
+            let checkpoint = self.controller.checkpoint();
+            if let Err(error) = persist(&checkpoint) {
+                self.controller.fail();
+                return Err(error);
+            }
+            drained += 1;
+        }
+        Ok(drained)
+    }
+
+    pub fn finish(self) -> Result<W, RecordingError> {
+        if self.controller.state() != RecorderState::Completed {
+            return Err(RecordingError::NotRecording);
+        }
+        self.writer.finish()
+    }
 }
 
 impl BufferedFlacRecorder {
@@ -2203,6 +2578,67 @@ mod tests {
             empty.finish(),
             Err(RecordingError::InvalidSampleCount)
         ));
+    }
+
+    #[test]
+    fn streaming_flac_writer_emits_incremental_frames_and_patches_streaminfo() {
+        let mut writer =
+            StreamingFlacWriter::new(Cursor::new(Vec::new()), 2, 48_000, 16, false).unwrap();
+        assert_eq!(
+            writer.write_interleaved(&[0.0, 0.25, -0.5, 0.75]).unwrap(),
+            2
+        );
+        assert_eq!(writer.frames(), 2);
+        assert_eq!(
+            writer
+                .write_interleaved(&[0.125, -0.125, 0.5, -0.5, 0.0, 0.0])
+                .unwrap(),
+            3
+        );
+        let bytes = writer.finish().unwrap().into_inner();
+        assert_eq!(&bytes[..4], b"fLaC");
+        let info = flac_io::info(&bytes).unwrap();
+        assert_eq!(info.total_samples, 5);
+        let decoded = flac_io::decode(&bytes).unwrap();
+        assert_eq!(decoded.samples.len(), 2);
+        assert_eq!(decoded.samples[0].len(), 5);
+        assert_eq!(decoded.samples[1].len(), 5);
+    }
+
+    #[test]
+    fn streaming_flac_recorder_drains_queue_and_persists_boundaries() {
+        let writer =
+            StreamingFlacWriter::new(Cursor::new(Vec::new()), 1, 48_000, 16, false).unwrap();
+        let mut recorder = StreamingFlacRecorder::new(writer);
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 10,
+                samples: vec![0.1, 0.2],
+            })
+            .unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 12,
+                samples: vec![0.3],
+            })
+            .unwrap();
+        let mut persisted = Vec::new();
+        assert_eq!(
+            recorder
+                .drain_queue_with_checkpoint(&queue, 2, |checkpoint| {
+                    persisted.push(checkpoint.last_frame);
+                    Ok(())
+                })
+                .unwrap(),
+            2
+        );
+        assert_eq!(persisted, [Some(12), Some(13)]);
+        recorder.stop(13).unwrap();
+        let bytes = recorder.finish().unwrap().into_inner();
+        assert_eq!(flac_io::info(&bytes).unwrap().total_samples, 3);
     }
 
     #[test]
