@@ -105,13 +105,16 @@ impl AudioError {
     /// Classify errors for stable control-plane behavior while retaining the
     /// original HRESULT for diagnostics.
     pub fn kind(&self) -> AudioFailureKind {
+        if matches!(self, Self::BufferTooSmall { .. }) {
+            return AudioFailureKind::BufferConstraint;
+        }
         let code = match self {
             Self::Windows(error) => error.code().0 as u32,
             Self::InvalidUtf16
             | Self::InvalidFrameSize
             | Self::ApplicationNotFound { .. }
             | Self::ApplicationIdentityChanged { .. } => 0x80070057,
-            Self::BufferTooSmall { .. } => 0x80070057,
+            Self::BufferTooSmall { .. } => unreachable!(),
         };
         match code {
             0x80070057 => AudioFailureKind::InvalidArgument,
@@ -863,6 +866,14 @@ mod tests {
         assert_eq!(
             AudioError::InvalidFrameSize.kind(),
             AudioFailureKind::InvalidArgument
+        );
+        assert_eq!(
+            AudioError::BufferTooSmall {
+                required: 8,
+                available: 4
+            }
+            .kind(),
+            AudioFailureKind::BufferConstraint
         );
     }
 
