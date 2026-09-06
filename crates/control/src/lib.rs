@@ -214,6 +214,7 @@ fn method_input_schema(name: &str) -> Value {
         "events.subscribe" => object_schema(
             json!({
                 "afterSequence": { "type": "integer", "minimum": 0 },
+                "backendEpoch": { "type": "integer", "minimum": 0 },
                 "limit": { "type": "integer", "minimum": 1, "maximum": 500 },
                 "sessionId": { "type": ["string", "null"] }
             }),
@@ -1475,6 +1476,18 @@ impl ControlPlane {
 
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
+        if let Some(requested_epoch) = params.get("backendEpoch").and_then(Value::as_u64) {
+            if requested_epoch != self.events.backend_epoch() {
+                return Ok(json!({
+                    "backendEpoch": self.events.backend_epoch(),
+                    "resyncRequired": true,
+                    "reason": "backendEpochChanged",
+                    "snapshot": { "sessions": self.sessions_list(500)? },
+                    "events": [],
+                    "nextSequence": self.events.latest_sequence()
+                }));
+            }
+        }
         let after_sequence = params
             .get("afterSequence")
             .and_then(Value::as_u64)
@@ -1620,7 +1633,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "routes.inspect" => &["sessionId", "destinationNode"],
         "graph.history" => &["sessionId", "cursor", "limit"],
         "graph.undoPlan" => &["sessionId", "baseRevision"],
-        "events.subscribe" => &["afterSequence", "limit", "sessionId"],
+        "events.subscribe" => &["afterSequence", "backendEpoch", "limit", "sessionId"],
         "graph.plan" => &["sessionId", "baseRevision", "candidate"],
         "graph.commit" => &["planId", "baseRevision", "idempotencyKey"],
         "system.handshake" => &["protocolVersion"],
@@ -2329,6 +2342,23 @@ mod tests {
         assert_eq!(result["resyncRequired"], true);
         assert_eq!(result["snapshot"]["sessions"].as_array().unwrap().len(), 1);
         assert!(result["events"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn events_subscribe_requires_resync_when_backend_epoch_changes() {
+        let mut plane = ControlPlane::default();
+        plane.insert_session(session()).unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(6)),
+            method: "events.subscribe".into(),
+            params: Some(json!({ "backendEpoch": 999, "afterSequence": 0 })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["resyncRequired"], true);
+        assert_eq!(result["reason"], "backendEpochChanged");
+        assert_eq!(result["backendEpoch"], 1);
+        assert_eq!(result["snapshot"]["sessions"].as_array().unwrap().len(), 1);
     }
 
     #[test]
