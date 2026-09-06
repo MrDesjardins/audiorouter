@@ -1196,7 +1196,8 @@ impl WorkerFrame {
     }
 }
 
-pub const SHARED_AUDIO_HEADER_BYTES: usize = 32;
+pub const SHARED_AUDIO_HEADER_BYTES: usize = 40;
+const SHARED_AUDIO_STATE_OFFSET: usize = 32;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SharedAudioError {
@@ -1208,6 +1209,9 @@ pub enum SharedAudioError {
     InvalidFrame(WorkerFrameError),
     InvalidPath,
     Exists,
+    Empty,
+    Busy,
+    TornRead,
     Io(String),
 }
 
@@ -1275,11 +1279,47 @@ impl SharedAudioRegion {
     }
 
     pub fn write(&mut self, frame: &WorkerFrame) -> Result<(), SharedAudioError> {
-        self.layout.write(&mut self.map, frame)
+        let state = self.state() as *const std::sync::atomic::AtomicU64;
+        let current = unsafe { (*state).load(std::sync::atomic::Ordering::Acquire) };
+        if current & 1 != 0 {
+            return Err(SharedAudioError::Busy);
+        }
+        unsafe {
+            (*state).compare_exchange(
+                current,
+                current.saturating_add(1),
+                std::sync::atomic::Ordering::Acquire,
+                std::sync::atomic::Ordering::Relaxed,
+            )
+        }
+        .map_err(|_| SharedAudioError::Busy)?;
+        if let Err(error) = self.layout.write(&mut self.map, frame) {
+            unsafe { (*state).store(current, std::sync::atomic::Ordering::Release) };
+            return Err(error);
+        }
+        unsafe {
+            (*state).store(
+                current.saturating_add(2),
+                std::sync::atomic::Ordering::Release,
+            )
+        };
+        Ok(())
     }
 
     pub fn read(&self) -> Result<WorkerFrame, SharedAudioError> {
-        self.layout.read(&self.map)
+        let state = self.state();
+        let before = state.load(std::sync::atomic::Ordering::Acquire);
+        if before == 0 {
+            return Err(SharedAudioError::Empty);
+        }
+        if before & 1 != 0 {
+            return Err(SharedAudioError::Busy);
+        }
+        let frame = self.layout.read(&self.map)?;
+        if state.load(std::sync::atomic::Ordering::Acquire) != before {
+            return Err(SharedAudioError::TornRead);
+        }
+        Ok(frame)
     }
 
     pub fn flush(&mut self) -> Result<(), SharedAudioError> {
@@ -1294,6 +1334,15 @@ impl SharedAudioRegion {
 
     pub fn file(&self) -> &fs::File {
         &self.file
+    }
+
+    fn state(&self) -> &std::sync::atomic::AtomicU64 {
+        // The mapping starts page-aligned and the state offset is 8-byte
+        // aligned. The region is created/opened at the exact layout length.
+        unsafe {
+            &*(self.map.as_ptr().add(SHARED_AUDIO_STATE_OFFSET)
+                as *const std::sync::atomic::AtomicU64)
+        }
     }
 }
 
@@ -1340,7 +1389,8 @@ impl SharedAudioLayout {
             return Err(SharedAudioError::InvalidChannels);
         }
         let frame_count = frame.frame_count();
-        destination[..self.buffer_len()].fill(0);
+        destination[..SHARED_AUDIO_STATE_OFFSET].fill(0);
+        destination[SHARED_AUDIO_HEADER_BYTES..self.buffer_len()].fill(0);
         destination[..4].copy_from_slice(b"ARSH");
         destination[4..6].copy_from_slice(&1u16.to_le_bytes());
         destination[6..8].copy_from_slice(&self.channels.to_le_bytes());
@@ -1944,6 +1994,7 @@ mod tests {
         let _ = fs::remove_file(&path);
         let frame = WorkerFrame::new(4, 90, 1, vec![0.125, -0.25]).unwrap();
         let mut writer = SharedAudioRegion::create(&path, layout).unwrap();
+        assert!(matches!(writer.read(), Err(SharedAudioError::Empty)));
         writer.write(&frame).unwrap();
         writer.flush().unwrap();
         drop(writer);

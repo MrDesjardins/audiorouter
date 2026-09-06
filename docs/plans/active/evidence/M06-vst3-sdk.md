@@ -240,3 +240,11 @@ or audio access. The reopen/round-trip and relative-path regression passes;
 the plugin-host suite now has 24 tests with strict Clippy clean. A complete
 cross-process ownership/synchronization protocol and plugin execution remain
 open.
+
+The mapped region now carries an acquire/release epoch state word. Writers
+reserve an even slot as odd while copying, publish the next even epoch only
+after the frame is complete, and restore the prior state on validation error.
+Readers reject empty or busy slots and compare the epoch after decoding to
+detect a concurrent overwrite. This establishes single-writer/torn-read
+semantics for the mapping; bounded worker queue integration, OS security
+policy, and plugin execution remain open.
