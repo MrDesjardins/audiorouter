@@ -113,3 +113,9 @@ removed afterward. The manifest continues to state `signed: false` and
 `publicationReady: false`; production signing, driver packaging/install,
 installer, and clean-machine acceptance remain open. No audio endpoint or
 machine configuration was changed.
+
+The complete locked workspace was also rerun at the current revision after the
+storage hardening and release qualification. All unit, integration,
+worker-process, MCP, and doc tests passed, as did strict workspace Clippy,
+formatting, and diff checks. The validation used temporary/local fixtures only;
+it did not open a live audio stream or change machine audio configuration.
