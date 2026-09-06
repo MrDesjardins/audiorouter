@@ -149,6 +149,7 @@ This establishes that Codex can continue documentation and portable implementati
 
 - Added a runtime-scoped `Local\AudioRouter-*` named mutex around the multi-connection backend server. A competing backend using the same pipe name now fails before creating pipe instances, while distinct pipe names remain independent.
 - The Windows transport suite passed all 11 tests, including a same-user collision test and two sequential authenticated connections. The mutex is released on server shutdown and no audio or persistent machine configuration is touched.
+- Added bounded eight-client concurrent named-pipe coverage; all clients received intact responses while the singleton server serialized authenticated connections. The transport suite now passes 12 tests.
 
 ## Decisions and assumptions
 

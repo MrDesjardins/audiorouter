@@ -906,4 +906,40 @@ mod tests {
         round_trip(&name, &request).unwrap();
         server.join().unwrap().unwrap();
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_handles_bounded_concurrent_clients() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-concurrent-test-{}",
+            std::process::id()
+        );
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_connections(&server_name, 8, |_, frame| echo_handler(frame))
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let clients = (0..8)
+            .map(|index| {
+                let name = name.clone();
+                std::thread::spawn(move || {
+                    let request = encode_frame(&serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": index,
+                        "method": "status.get"
+                    }))
+                    .unwrap();
+                    let response = round_trip(&name, &request).unwrap();
+                    serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap()
+                })
+            })
+            .collect::<Vec<_>>();
+        let responses = clients
+            .into_iter()
+            .map(|client| client.join().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), 8);
+        assert!(responses.iter().all(|response| response["ok"] == true));
+        server.join().unwrap().unwrap();
+    }
 }
