@@ -102,11 +102,13 @@ CLI path is useful when no typed convenience command exists:
 audiorouter api call status.get --json
 audiorouter api call sessions.list --database C:\path\state.sqlite --json
 audiorouter diagnostics --output C:\path\diagnostics.json --json
+audiorouter diagnostics export --output C:\path\diagnostics.json --json
 ```
 
 The diagnostics export is a redacted, read-only JSON snapshot. Its destination
 must be absolute and must not already exist; this prevents accidental overwrite
-of an earlier support bundle.
+of an earlier support bundle. The explicit `diagnostics export` form and the
+option form are equivalent.
 
 The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
 the enrolled client identity and cannot bypass the backend permission checks.

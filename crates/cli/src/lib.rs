@@ -107,6 +107,17 @@ fn startup_command(args: &[&str]) -> Result<Value, CliError> {
 }
 
 fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
+    let action = args.get(1).copied();
+    if action.is_some_and(|value| value != "export" && !value.starts_with('-')) {
+        return Err(CliError::InvalidArguments(
+            "usage: diagnostics [export] [--database <path>] [--output <absolute-path>]".into(),
+        ));
+    }
+    if action == Some("export") && !args.contains(&"--output") {
+        return Err(CliError::InvalidArguments(
+            "diagnostics export requires --output <absolute-path>".into(),
+        ));
+    }
     let request = request("system.diagnostics");
     let response = if args.contains(&"--database") {
         ControlPlane::with_storage("cli", database(args)?).dispatch(request)
@@ -1192,7 +1203,8 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 
 fn help_value() -> Value {
     let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list [--limit N] [--cursor ID]", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N] [--cursor REVISION]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> [--idempotency-key <key>] [--dry-run] --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
-    value["commands"][2] = json!("diagnostics [--database <path>] [--output <absolute-path>]");
+    value["commands"][2] =
+        json!("diagnostics [export] [--database <path>] [--output <absolute-path>]");
     value["commands"]
         .as_array_mut()
         .unwrap()
@@ -2126,15 +2138,16 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&output);
         let output_arg = output.to_string_lossy().into_owned();
-        let response: Value =
-            serde_json::from_str(&run(["diagnostics", "--output", &output_arg, "--json"]).unwrap())
-                .unwrap();
+        let response: Value = serde_json::from_str(
+            &run(["diagnostics", "export", "--output", &output_arg, "--json"]).unwrap(),
+        )
+        .unwrap();
         assert_eq!(response["written"], true);
         assert_eq!(response["redacted"], true);
         let saved: Value =
             serde_json::from_str(&std::fs::read_to_string(&output).unwrap()).unwrap();
         assert_eq!(saved["redacted"], true);
-        assert!(run(["diagnostics", "--output", &output_arg]).is_err());
+        assert!(run(["diagnostics", "export", "--output", &output_arg]).is_err());
         let _ = std::fs::remove_file(output);
     }
 
