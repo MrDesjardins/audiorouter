@@ -400,3 +400,12 @@ symlink detection through the portable metadata API. The plugin-host unit and
 worker-process suites pass with strict Clippy, formatting, and diff checks.
 Nested reparse-point traversal and a full filesystem/network sandbox remain
 open native work.
+
+## 2026-09-06 — Nested state path traversal hardening
+
+State reads now inspect the requested asset and every existing ancestor on the
+path back toward the approved canonical root. Any symlink or Windows reparse
+component is rejected before canonicalization and file opening, closing the
+nested junction/symlink traversal case. Plugin-host unit and worker-process
+tests pass with strict Clippy. This remains path hardening, not a complete OS
+filesystem/network sandbox for plugin execution.

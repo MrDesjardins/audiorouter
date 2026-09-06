@@ -187,7 +187,10 @@ pub fn read_state_asset(
     let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
     let path_metadata =
         fs::symlink_metadata(path).map_err(|error| StateFileError::Io(error.to_string()))?;
-    if is_reparse_point(&path_metadata) {
+    if path_has_reparse_component(path, &canonical_root)
+        .map_err(|error| StateFileError::Io(error.to_string()))?
+        || is_reparse_point(&path_metadata)
+    {
         return Err(StateFileError::OutsideRoot);
     }
     let canonical_path =
@@ -221,6 +224,21 @@ fn is_safe_asset_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn path_has_reparse_component(path: &Path, root: &Path) -> std::io::Result<bool> {
+    let mut current = path.to_path_buf();
+    loop {
+        if current == root {
+            return Ok(false);
+        }
+        if current.exists() && is_reparse_point(&fs::symlink_metadata(&current)?) {
+            return Ok(true);
+        }
+        if !current.pop() {
+            return Ok(false);
+        }
+    }
 }
 
 #[cfg(windows)]
