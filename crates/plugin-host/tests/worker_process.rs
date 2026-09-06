@@ -175,6 +175,74 @@ fn supervised_worker_accepts_outer_process_failure_reports() {
 }
 
 #[test]
+fn supervised_worker_replacement_preserves_quarantine_history() {
+    let hash = "c".repeat(64);
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+    };
+    let start = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn(worker_path.clone(), &identity, 1, start)
+        .expect("spawn supervised worker");
+    assert_eq!(
+        worker.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let supervisor = worker.into_supervisor();
+    assert_eq!(supervisor.failure_count(), 1);
+    let mut replacement = SupervisedWorkerProcess::spawn_with_supervisor(
+        &worker_path,
+        &identity,
+        1,
+        supervisor,
+        start,
+    )
+    .expect("spawn replacement");
+    assert_eq!(
+        replacement.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let supervisor = replacement.into_supervisor();
+    assert_eq!(supervisor.failure_count(), 2);
+    let mut final_worker = SupervisedWorkerProcess::spawn_with_supervisor(
+        &worker_path,
+        &identity,
+        1,
+        supervisor,
+        start,
+    )
+    .expect("spawn final replacement");
+    assert_eq!(
+        final_worker.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Quarantined
+    );
+    assert_eq!(
+        final_worker.state(),
+        audiorouter_plugin_host::WorkerState::Quarantined
+    );
+    assert!(final_worker.shutdown().unwrap().success());
+}
+
+#[test]
 fn disposable_worker_process_round_trips_shared_audio_frames() {
     let hash = "e".repeat(64);
     let worker_path =

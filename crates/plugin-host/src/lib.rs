@@ -626,6 +626,10 @@ impl WorkerSupervisor {
         self.state
     }
 
+    pub fn failure_count(&self) -> u32 {
+        self.failures.failures()
+    }
+
     /// Records lifecycle policy only; process creation belongs to the native worker adapter.
     pub fn start(
         &mut self,
@@ -1178,10 +1182,27 @@ impl SupervisedWorkerProcess {
         channels: u16,
         now: Instant,
     ) -> Result<Self, WorkerProcessError> {
-        let mut supervisor = WorkerSupervisor::new();
-        supervisor.start(identity, now).map_err(|error| {
-            WorkerProcessError::Protocol(format!("worker start rejected: {error:?}"))
-        })?;
+        let supervisor = WorkerSupervisor::new();
+        Self::spawn_with_supervisor(executable, identity, channels, supervisor, now)
+            .map_err(|(error, _)| error)
+    }
+
+    /// Spawn a replacement while preserving the caller-owned failure ledger.
+    /// The ledger is returned with an error so an outer supervisor cannot lose
+    /// quarantine history when a replacement fails to launch.
+    pub fn spawn_with_supervisor(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        mut supervisor: WorkerSupervisor,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        if let Err(error) = supervisor.start(identity, now) {
+            return Err((
+                WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
+                supervisor,
+            ));
+        }
         match WorkerProcess::spawn(executable, &identity.sha256, channels) {
             Ok(process) => Ok(Self {
                 process,
@@ -1189,7 +1210,7 @@ impl SupervisedWorkerProcess {
             }),
             Err(error) => {
                 supervisor.record_failure(now);
-                Err(error)
+                Err((error, supervisor))
             }
         }
     }
@@ -1305,6 +1326,17 @@ impl SupervisedWorkerProcess {
         timeout: Duration,
     ) -> Result<ExitStatus, WorkerProcessError> {
         self.process.shutdown_with_timeout(timeout)
+    }
+
+    /// Consume the wrapper and return its policy state for a deliberate
+    /// replacement. Dropping the process closes the current worker; the
+    /// returned ledger remains available for the next spawn attempt.
+    pub fn into_supervisor(self) -> WorkerSupervisor {
+        let Self {
+            process: _process,
+            supervisor,
+        } = self;
+        supervisor
     }
 
     fn ensure_running(&self) -> Result<(), WorkerProcessError> {

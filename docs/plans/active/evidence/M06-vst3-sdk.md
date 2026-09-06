@@ -487,3 +487,9 @@ unit tests and 7 process/integration tests with strict Clippy.
 The lifecycle documentation was corrected to distinguish the portable
 `WorkerSession` handshake state machine from the native `WorkerProcess` and
 its Job Object containment; neither layer claims actual plugin execution.
+
+Replacement spawning now accepts and returns an explicit `WorkerSupervisor`
+ledger, preserving failure history across worker generations. A regression
+exercises three deliberate generations and confirms the third failure enters
+quarantine rather than resetting the count. The suite passes 29 unit tests and
+8 process/integration tests with strict Clippy.
