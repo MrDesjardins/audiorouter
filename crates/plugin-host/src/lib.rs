@@ -497,6 +497,7 @@ pub enum WorkerMessageError {
     InvalidPluginHash,
     InvalidFailureCode,
     InvalidLatency,
+    Io(String),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -829,6 +830,42 @@ pub fn decode_worker_message(frame: &[u8]) -> Result<WorkerMessage, WorkerMessag
     Ok(message)
 }
 
+/// Reads one worker frame from a stream, handling partial pipe reads and
+/// rejecting its declared size before allocating the payload buffer.
+pub fn read_worker_message<R: Read>(reader: &mut R) -> Result<WorkerMessage, WorkerMessageError> {
+    let mut header = [0u8; 4];
+    reader
+        .read_exact(&mut header)
+        .map_err(|error| WorkerMessageError::Io(error.to_string()))?;
+    let declared = u32::from_le_bytes(header) as usize;
+    if declared > MAX_WORKER_MESSAGE_BYTES {
+        return Err(WorkerMessageError::TooLarge {
+            length: declared,
+            maximum: MAX_WORKER_MESSAGE_BYTES,
+        });
+    }
+    let mut frame = Vec::with_capacity(4 + declared);
+    frame.extend_from_slice(&header);
+    frame.resize(4 + declared, 0);
+    reader
+        .read_exact(&mut frame[4..])
+        .map_err(|error| WorkerMessageError::Io(error.to_string()))?;
+    decode_worker_message(&frame)
+}
+
+/// Writes one complete worker frame to a stream. This is a control-plane
+/// operation; realtime audio never waits on this helper.
+pub fn write_worker_message<W: Write>(
+    writer: &mut W,
+    message: &WorkerMessage,
+) -> Result<(), WorkerMessageError> {
+    let frame = encode_worker_message(message)?;
+    writer
+        .write_all(&frame)
+        .and_then(|_| writer.flush())
+        .map_err(|error| WorkerMessageError::Io(error.to_string()))
+}
+
 fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageError> {
     match message {
         WorkerMessage::Hello {
@@ -1055,7 +1092,29 @@ impl Default for WorkerFrameGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Cursor, Read};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct ChunkedReader {
+        bytes: Vec<u8>,
+        offset: usize,
+        chunk_size: usize,
+    }
+
+    impl Read for ChunkedReader {
+        fn read(&mut self, destination: &mut [u8]) -> std::io::Result<usize> {
+            if self.offset == self.bytes.len() {
+                return Ok(0);
+            }
+            let count = self
+                .chunk_size
+                .min(destination.len())
+                .min(self.bytes.len() - self.offset);
+            destination[..count].copy_from_slice(&self.bytes[self.offset..self.offset + count]);
+            self.offset += count;
+            Ok(count)
+        }
+    }
 
     fn temp_root() -> PathBuf {
         let id = SystemTime::now()
@@ -1404,6 +1463,19 @@ mod tests {
             decode_worker_message(&oversized),
             Err(WorkerMessageError::TooLarge { .. })
         ));
+    }
+
+    #[test]
+    fn worker_stream_helpers_handle_fragmented_reads_and_flush_writes() {
+        let message = WorkerMessage::Ready;
+        let mut encoded = Cursor::new(Vec::new());
+        write_worker_message(&mut encoded, &message).unwrap();
+        let mut reader = ChunkedReader {
+            bytes: encoded.into_inner(),
+            offset: 0,
+            chunk_size: 1,
+        };
+        assert_eq!(read_worker_message(&mut reader).unwrap(), message);
     }
 
     #[test]

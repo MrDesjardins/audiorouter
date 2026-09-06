@@ -198,3 +198,11 @@ semitones: the combined test completed in 34.6 seconds, and each run preserved
 the exact 2,880,000-frame length with finite output. This proves the offline
 duration invariant but does not replace realtime streaming, speech listening,
 or native W2 latency measurements.
+
+Added exact-stream worker I/O helpers. `read_worker_message` validates the
+declared payload size before allocation and uses `read_exact` for fragmented
+pipe reads; `write_worker_message` writes one encoded frame and flushes the
+control stream. A one-byte chunked-reader regression passes, bringing the
+plugin-host suite to 22 tests with strict Clippy clean. This is transport
+evidence only; native process creation and shared-memory audio transport remain
+open.
