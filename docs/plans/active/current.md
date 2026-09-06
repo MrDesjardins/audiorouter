@@ -138,6 +138,12 @@ This establishes that Codex can continue documentation and portable implementati
 - Made normal storage-backed graph commits persist session history and the operation journal in one SQLite transaction. Added failure-stage rollback tests and backup destination policy tests for relative paths, missing parents, symlinks, and live-database targets.
 - Checks: `cargo test --workspace` — 3 CLI, 16 control, 12 domain, 5 protocol, 8 storage, and 10 transport tests passed, plus all doc tests; `cargo fmt --all` and `git diff --check` passed. No system audio configuration was changed.
 
+### 2026-09-05 — Native process-loopback activation
+
+- Corrected the native harness to use an agile WRL `FtmBase` completion handler and to distinguish `GetActivateResult` from the callback method’s HRESULT. `ActivateAudioInterfaceAsync` for Explorer, `IAudioClient` query, shared-mode 44.1 kHz PCM initialization, and event-handle setup all returned `S_OK`.
+- This is a real native activation/initialization pass but not an audio-data or latency pass: the harness did not call `Start`, `GetBuffer`, or read samples. The official sample solution was inspected and its build is blocked by its WIL NuGet dependency; the local dependency-free harness compiles with the installed MSVC/SDK.
+- No default endpoint, volume, mute, privacy, or persistent audio configuration was changed. Generated executable/object files were removed after testing.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.

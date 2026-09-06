@@ -1,10 +1,18 @@
 #define NOMINMAX
 #include <windows.h>
 #include <audioclient.h>
+#include <audioclientactivationparams.h>
 #include <mmdeviceapi.h>
 #include <functiondiscoverykeys_devpkey.h>
 #include <iostream>
 #include <iomanip>
+#include <condition_variable>
+#include <mutex>
+#include <atomic>
+#include <cstring>
+#include <cstdlib>
+#include <wrl.h>
+#include <wrl/implements.h>
 
 static void print_format(const WAVEFORMATEX* format) {
     if (!format) return;
@@ -30,9 +38,127 @@ static void print_hr(const char* label, HRESULT hr) {
               << std::dec << '\n';
 }
 
-int main() {
+class ProcessLoopbackHandler final
+    : public Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
+                                          Microsoft::WRL::FtmBase,
+                                          IActivateAudioInterfaceCompletionHandler> {
+public:
+    explicit ProcessLoopbackHandler(std::mutex& mutex, std::condition_variable& ready,
+                                    HRESULT& activation, bool& completed,
+                                    Microsoft::WRL::ComPtr<IUnknown>& activated)
+        : mutex_(mutex), ready_(ready), activation_(activation), completed_(completed),
+          activated_(activated) {}
+
+    HRESULT STDMETHODCALLTYPE ActivateCompleted(
+        IActivateAudioInterfaceAsyncOperation* operation) override {
+        HRESULT activation = E_FAIL;
+        IUnknown* activated = nullptr;
+        if (operation) {
+            HRESULT activate_result = E_FAIL;
+            HRESULT get_result = operation->GetActivateResult(&activate_result, &activated);
+            activation = FAILED(get_result) ? get_result : activate_result;
+            if (SUCCEEDED(activation) && activated) activated_.Attach(activated);
+            else if (activated) activated->Release();
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            activation_ = activation;
+            completed_ = true;
+        }
+        ready_.notify_one();
+        return S_OK;
+    }
+
+private:
+    std::mutex& mutex_;
+    std::condition_variable& ready_;
+    HRESULT& activation_;
+    bool& completed_;
+    Microsoft::WRL::ComPtr<IUnknown>& activated_;
+};
+
+static int process_loopback_probe(DWORD target_process_id) {
+    std::mutex mutex;
+    std::condition_variable ready;
+    HRESULT activation = E_FAIL;
+    bool completed = false;
+    Microsoft::WRL::ComPtr<IUnknown> activated;
+    auto handler = Microsoft::WRL::Make<ProcessLoopbackHandler>(
+        mutex, ready, activation, completed, activated);
+    if (!handler) return 1;
+
+    AUDIOCLIENT_ACTIVATION_PARAMS parameters{};
+    parameters.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
+    parameters.ProcessLoopbackParams.TargetProcessId = target_process_id;
+    parameters.ProcessLoopbackParams.ProcessLoopbackMode =
+        PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
+
+    PROPVARIANT property{};
+    PropVariantInit(&property);
+    property.vt = VT_BLOB;
+    property.blob.cbSize = sizeof(parameters);
+    property.blob.pBlobData = static_cast<BYTE*>(CoTaskMemAlloc(sizeof(parameters)));
+    if (!property.blob.pBlobData) {
+        return 1;
+    }
+    std::memcpy(property.blob.pBlobData, &parameters, sizeof(parameters));
+
+    IActivateAudioInterfaceAsyncOperation* operation = nullptr;
+    HRESULT hr = ActivateAudioInterfaceAsync(
+        VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient), &property,
+        handler.Get(), &operation);
+    print_hr("process_activate_async", hr);
+    if (SUCCEEDED(hr)) {
+        std::unique_lock<std::mutex> lock(mutex);
+        if (!ready.wait_for(lock, std::chrono::seconds(5), [&] { return completed; })) {
+            std::cout << "process_callback=timeout\n";
+        } else {
+            print_hr("process_activate_result", activation);
+            if (SUCCEEDED(activation)) {
+                Microsoft::WRL::ComPtr<IAudioClient> client;
+                HRESULT query = activated.As(&client);
+                print_hr("process_query_audio_client", query);
+                if (SUCCEEDED(query)) {
+                    WAVEFORMATEX format{};
+                    format.wFormatTag = WAVE_FORMAT_PCM;
+                    format.nChannels = 2;
+                    format.nSamplesPerSec = 44100;
+                    format.wBitsPerSample = 16;
+                    format.nBlockAlign = format.nChannels * format.wBitsPerSample / 8;
+                    format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
+                    HANDLE ready_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+                    HRESULT initialize = client->Initialize(
+                        AUDCLNT_SHAREMODE_SHARED,
+                        AUDCLNT_STREAMFLAGS_LOOPBACK |
+                            AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
+                            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+                        0, 0, &format, nullptr);
+                    print_hr("process_initialize_44100_pcm", initialize);
+                    if (SUCCEEDED(initialize) && ready_event) {
+                        print_hr("process_set_event_handle", client->SetEventHandle(ready_event));
+                        client->Reset();
+                    }
+                    if (ready_event) CloseHandle(ready_event);
+                }
+            }
+        }
+        if (operation) operation->Release();
+    }
+    PropVariantClear(&property);
+    return SUCCEEDED(hr) && completed && SUCCEEDED(activation) ? 0 : 1;
+}
+
+int main(int argc, char** argv) {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr)) { print_hr("CoInitializeEx", hr); return 1; }
+
+    if (argc > 1) {
+        DWORD target_process_id = GetCurrentProcessId();
+        if (argc > 2) target_process_id = static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10));
+        int result = process_loopback_probe(target_process_id);
+        CoUninitialize();
+        return result;
+    }
 
     IMMDeviceEnumerator* enumerator = nullptr;
     hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
