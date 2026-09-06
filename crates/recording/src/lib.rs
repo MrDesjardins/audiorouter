@@ -1414,6 +1414,165 @@ pub fn inspect_flac_file(
     stream_info.ok_or(RecordingError::InvalidWav)
 }
 
+/// Repairs a file emitted by StreamingFlacWriter after an interrupted write.
+///
+/// Recovery is deliberately limited to AudioRouter's bounded verbatim-frame
+/// layout. It scans complete frame headers and CRCs without loading the audio
+/// stream, truncates an incomplete tail, and patches STREAMINFO with the
+/// number of complete samples. Unsupported FLAC subframes are rejected.
+pub fn recover_streaming_flac_file(
+    file: &mut std::fs::File,
+    channels: u16,
+    sample_rate: u32,
+    bits_per_sample: u8,
+) -> Result<u64, RecordingError> {
+    validate_format(WavFormat::Pcm16, channels, sample_rate)?;
+    if !matches!(bits_per_sample, 16 | 24) {
+        return Err(RecordingError::InvalidSampleCount);
+    }
+    let length = file.metadata()?.len();
+    if length < 42 {
+        return Err(RecordingError::InvalidWav);
+    }
+    file.seek(SeekFrom::Start(0))?;
+    let mut marker = [0u8; 4];
+    file.read_exact(&mut marker)?;
+    if &marker != b"fLaC" {
+        return Err(RecordingError::InvalidWav);
+    }
+    let mut metadata_position = 4u64;
+    let mut streaminfo_start = None;
+    let audio_start;
+    loop {
+        file.seek(SeekFrom::Start(metadata_position))?;
+        let mut header = [0u8; 4];
+        file.read_exact(&mut header)?;
+        let is_last = header[0] & 0x80 != 0;
+        let block_type = header[0] & 0x7f;
+        let block_length = u32::from_be_bytes([0, header[1], header[2], header[3]]) as u64;
+        let data_start = metadata_position + 4;
+        if block_type == 0 && block_length == 34 && streaminfo_start.is_none() {
+            streaminfo_start = Some(data_start);
+        }
+        let next = data_start
+            .checked_add(block_length)
+            .ok_or(RecordingError::TooManyFrames)?;
+        if next > length {
+            return Err(RecordingError::InvalidWav);
+        }
+        if is_last {
+            audio_start = next;
+            break;
+        }
+        metadata_position = next;
+    }
+    let streaminfo_start = streaminfo_start.ok_or(RecordingError::InvalidWav)?;
+    let mut position = audio_start;
+    let mut total_frames = 0u64;
+    let mut minimum_frame_size = u32::MAX;
+    let mut maximum_frame_size = 0u32;
+    while position < length {
+        let remaining = length - position;
+        if remaining < 7 {
+            break;
+        }
+        file.seek(SeekFrom::Start(position))?;
+        let mut prefix = [0u8; 16];
+        let prefix_length = file.read(&mut prefix)?;
+        if prefix_length < 7 {
+            break;
+        }
+        let first = u32::from_be_bytes(prefix[..4].try_into().unwrap());
+        if ((first >> 18) & 0x3fff) != 0x3ffe
+            || ((first >> 16) & 1) != 0
+            || ((first >> 12) & 0x0f) != 7
+            || ((first >> 8) & 0x0f) != 0
+            || ((first >> 4) & 0x0f) != u32::from(channels - 1)
+            || ((first >> 1) & 0x07) != 0
+            || (first & 1) != 0
+        {
+            break;
+        }
+        let utf8_length = utf8_number_length(prefix[4]).ok_or(RecordingError::InvalidWav)?;
+        let header_length = 4 + utf8_length + 2 + 1;
+        if prefix_length < header_length {
+            break;
+        }
+        let frame_count =
+            u16::from_be_bytes(prefix[4 + utf8_length..6 + utf8_length].try_into().unwrap())
+                as usize
+                + 1;
+        if frame_count > STREAMING_FLAC_BLOCK_FRAMES {
+            break;
+        }
+        if crc8(&prefix[..header_length - 1]) != prefix[header_length - 1] {
+            break;
+        }
+        let subframe_bytes = 1 + (frame_count * usize::from(bits_per_sample)).div_ceil(8);
+        let frame_length = header_length
+            .checked_add(usize::from(channels) * subframe_bytes)
+            .and_then(|value| value.checked_add(2))
+            .ok_or(RecordingError::TooManyFrames)?;
+        if u64::try_from(frame_length).unwrap() > remaining {
+            break;
+        }
+        let mut frame = vec![0u8; frame_length];
+        file.seek(SeekFrom::Start(position))?;
+        file.read_exact(&mut frame)?;
+        let mut body_position = header_length;
+        for _ in 0..channels {
+            if frame[body_position] != 0x02 {
+                return Err(RecordingError::InvalidWav);
+            }
+            body_position += subframe_bytes;
+        }
+        let expected_crc = u16::from_be_bytes(frame[frame_length - 2..].try_into().unwrap());
+        if crc16(&frame[..frame_length - 2]) != expected_crc {
+            break;
+        }
+        minimum_frame_size = minimum_frame_size.min(frame_length as u32);
+        maximum_frame_size = maximum_frame_size.max(frame_length as u32);
+        total_frames = total_frames
+            .checked_add(frame_count as u64)
+            .ok_or(RecordingError::TooManyFrames)?;
+        position += frame_length as u64;
+    }
+    if total_frames == 0 {
+        return Err(RecordingError::InvalidWav);
+    }
+    file.set_len(position)?;
+    file.seek(SeekFrom::Start(streaminfo_start))?;
+    let mut streaminfo = [0u8; 34];
+    file.read_exact(&mut streaminfo)?;
+    streaminfo[4..7].copy_from_slice(&minimum_frame_size.to_be_bytes()[1..]);
+    streaminfo[7..10].copy_from_slice(&maximum_frame_size.to_be_bytes()[1..]);
+    let mut packed = u64::from_be_bytes(streaminfo[10..18].try_into().unwrap());
+    packed = (packed & !((1u64 << 36) - 1)) | total_frames.min((1u64 << 36) - 1);
+    streaminfo[10..18].copy_from_slice(&packed.to_be_bytes());
+    file.seek(SeekFrom::Start(streaminfo_start))?;
+    file.write_all(&streaminfo)?;
+    file.seek(SeekFrom::End(0))?;
+    Ok(total_frames)
+}
+
+fn utf8_number_length(first: u8) -> Option<usize> {
+    if first < 0x80 {
+        Some(1)
+    } else if first & 0xe0 == 0xc0 {
+        Some(2)
+    } else if first & 0xf0 == 0xe0 {
+        Some(3)
+    } else if first & 0xf8 == 0xf0 {
+        Some(4)
+    } else if first & 0xfc == 0xf8 {
+        Some(5)
+    } else if first & 0xfe == 0xfc {
+        Some(6)
+    } else {
+        None
+    }
+}
+
 impl<W: Write + Seek> WavWriter<W> {
     pub fn new(
         mut output: W,
@@ -2728,6 +2887,37 @@ mod tests {
             }
         );
         assert_eq!(inspect_flac_file(&path).unwrap().frames, 2);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn streaming_flac_recovery_truncates_an_incomplete_tail() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-streaming-flac-recovery-{}.flac",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut writer =
+            StreamingFlacWriter::new(Cursor::new(Vec::new()), 2, 48_000, 16, false).unwrap();
+        writer
+            .write_interleaved(&[0.0, 0.25, -0.5, 0.75, 0.1, -0.1])
+            .unwrap();
+        let mut bytes = writer.finish().unwrap().into_inner();
+        bytes.extend_from_slice(&[0xaa, 0xbb, 0xcc]);
+        std::fs::write(&path, bytes).unwrap();
+        let before = std::fs::metadata(&path).unwrap().len();
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        assert_eq!(
+            recover_streaming_flac_file(&mut file, 2, 48_000, 16).unwrap(),
+            3
+        );
+        let after = file.metadata().unwrap().len();
+        assert!(after < before);
+        assert_eq!(inspect_flac_file(&path).unwrap().frames, 3);
         let _ = std::fs::remove_file(path);
     }
 

@@ -407,3 +407,14 @@ open-state pass-through. The named `gate_target_gain_db` helper is the same
 equation used by processing; the DSP suite now has 22 tests with strict
 Clippy/formatting green. Hysteresis timing and native scheduling remain
 separate acceptance work.
+
+## 2026-09-06 — Incremental FLAC recovery
+
+Added recover_streaming_flac_file for conservative crash recovery of the
+incremental writer's verbatim layout. It validates the FLAC metadata chain,
+scans complete bounded frames and CRCs without decoding the audio payload,
+truncates an incomplete tail, and patches STREAMINFO with complete-frame
+counts and size bounds. A temporary-file regression recovers three frames
+after appended partial bytes; recording coverage is now 27 tests with strict
+Clippy. Recovery of arbitrary third-party FLAC subframes remains outside this
+specialized path.
