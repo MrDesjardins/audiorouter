@@ -825,7 +825,9 @@ pub fn bind_application(
         .into_iter()
         .find(|application| application.process_id == process_id)
         .ok_or(AudioError::ApplicationNotFound { process_id })?;
-    if application.executable != expected_executable
+    if !application
+        .executable
+        .eq_ignore_ascii_case(expected_executable)
         || application.creation_time_100ns != expected_creation_time_100ns
     {
         return Err(AudioError::ApplicationIdentityChanged { process_id });
@@ -1034,7 +1036,7 @@ mod tests {
             .unwrap();
         let bound = bind_application(
             process_id,
-            &application.executable,
+            &application.executable.to_ascii_lowercase(),
             application.creation_time_100ns,
         )
         .unwrap();

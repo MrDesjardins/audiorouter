@@ -28,6 +28,11 @@ coverage exercises all four outcomes. This is identity-only evidence: no
 audio stream is opened, and controlled process-tree attribution and native
 restart/PID-reuse runtime evidence remain open.
 
+PID-bound verification now compares executable names case-insensitively, while
+still requiring the observed creation timestamp and PID. This keeps live
+rebinding consistent with the restart resolver and avoids false identity
+changes caused only by Windows name casing; no audio stream is opened.
+
 Control serialization now exposes creation timestamps as decimal strings rather than JSON numbers, preserving the full `u64` identity across TypeScript clients. Control tests and contract typechecking pass; no audio operation is involved.
 
 Buffer-capacity failures are now classified separately as `BufferConstraint`, while invalid frame sizes remain `InvalidArgument`. Seven adapter tests and strict adapter Clippy pass.
