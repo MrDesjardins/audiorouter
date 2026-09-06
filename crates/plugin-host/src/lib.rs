@@ -10,9 +10,10 @@ use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
+use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
+    mpsc::{self, Receiver},
     Arc,
 };
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -29,6 +30,7 @@ pub const MAX_PARAMETER_EVENTS: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
+pub const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Milliseconds since the Unix epoch used for cross-process frame deadlines.
 pub fn worker_clock_tick() -> u64 {
@@ -934,7 +936,7 @@ pub enum WorkerProcessError {
 pub struct WorkerProcess {
     child: Child,
     writer: BufWriter<ChildStdin>,
-    reader: BufReader<ChildStdout>,
+    reader: Receiver<Result<WorkerMessage, WorkerMessageError>>,
     channels: u16,
     shared: Option<SharedAudioTransport>,
 }
@@ -992,10 +994,21 @@ impl WorkerProcess {
             .map_err(|error| WorkerProcessError::Spawn(error.to_string()))?;
         let stdin = child.stdin.take().ok_or(WorkerProcessError::Exited)?;
         let stdout = child.stdout.take().ok_or(WorkerProcessError::Exited)?;
+        let (reader_sender, reader) = mpsc::sync_channel(4);
+        std::thread::spawn(move || {
+            let mut reader = BufReader::new(stdout);
+            loop {
+                let result = read_worker_message(&mut reader);
+                let finished = result.is_err();
+                if reader_sender.send(result).is_err() || finished {
+                    break;
+                }
+            }
+        });
         let mut process = Self {
             child,
             writer: BufWriter::new(stdin),
-            reader: BufReader::new(stdout),
+            reader,
             channels,
             shared: shared.take(),
         };
@@ -1145,11 +1158,20 @@ impl WorkerProcess {
     }
 
     fn read(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
-        read_worker_message(&mut self.reader)
+        receive_worker_message(&self.reader, WORKER_RESPONSE_TIMEOUT)
     }
     fn write(&mut self, message: &WorkerMessage) -> Result<(), WorkerMessageError> {
         write_worker_message(&mut self.writer, message)
     }
+}
+
+fn receive_worker_message(
+    reader: &Receiver<Result<WorkerMessage, WorkerMessageError>>,
+    timeout: Duration,
+) -> Result<WorkerMessage, WorkerMessageError> {
+    reader
+        .recv_timeout(timeout)
+        .map_err(|error| WorkerMessageError::Io(error.to_string()))?
 }
 
 impl Drop for WorkerProcess {
@@ -2242,6 +2264,17 @@ mod tests {
             chunk_size: 1,
         };
         assert_eq!(read_worker_message(&mut reader).unwrap(), message);
+    }
+
+    #[test]
+    fn worker_response_reader_has_a_bounded_wait() {
+        let (_sender, receiver) = mpsc::sync_channel(1);
+        let started = Instant::now();
+        let result = receive_worker_message(&receiver, Duration::from_millis(5));
+        assert!(
+            matches!(result, Err(WorkerMessageError::Io(message)) if message.contains("timed out"))
+        );
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 
     #[test]

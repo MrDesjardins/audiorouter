@@ -366,3 +366,10 @@ instead of a constant zero. Future-dated frames continue to round-trip, while
 the process regression confirms an expired frame returns DeadlineExpired and
 is not processed. The worker suite passes 25 unit tests plus 4 process tests
 with strict Clippy; OS sandboxing and nonblocking frame reads remain open.
+
+WorkerProcess now reads child stdout on a dedicated bounded-channel reader
+thread. Control calls receive responses with a five-second timeout, converting
+EOF, disconnect, and timeout into stable worker-message errors instead of
+blocking indefinitely. A timeout regression and the complete 26-test
+plugin-host suite pass with strict Clippy; OS sandbox policy and production
+plugin execution remain open.
