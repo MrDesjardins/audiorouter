@@ -330,3 +330,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Cleared strict workspace Clippy findings in the domain, engine, Windows adapter tests, and CLI iterator code; `cargo clippy --workspace --all-targets -- -D warnings` now passes.
 - Added explicit `process-capture-exclude` support and verified the exclude-tree mode for 500 ms with the same successful 50-packet/22,050-frame read and cleanup. Controlled per-process tone attribution remains open.
 - Added stable `AudioFailureKind` classification for invalid arguments, access denial, device-in-use, exclusive-only, invalidated-device, unsupported-format, service-unavailable, and buffer-constraint cases while retaining original HRESULTs.
+- Extended read-only application discovery with optional Windows process creation timestamps, allowing future process-loopback bindings to verify PID plus creation time and reject PID reuse; command lines and full paths remain excluded.

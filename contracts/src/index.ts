@@ -83,6 +83,12 @@ export interface DiscoveryDocument {
   limits: { maxNodesPerSession: number; maxEdgesPerSession: number };
 }
 
+export interface ApplicationInfo {
+  processId: number;
+  executable: string;
+  creationTime100ns: number | null;
+}
+
 export interface JsonRpcRequest<Params = unknown> {
   jsonrpc: "2.0";
   id?: string | number | null;

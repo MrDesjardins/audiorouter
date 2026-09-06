@@ -14,6 +14,8 @@ Endpoint topology notifications are now registered through an RAII `IMMNotificat
 
 The adapter now classifies retained Windows HRESULTs into stable `AudioFailureKind` values, including device contention versus invalid argument and exclusive-only behavior. Six adapter tests pass. This allows control diagnostics to distinguish the earlier `E_INVALIDARG` condition from `AUDCLNT_E_DEVICE_IN_USE` without changing the underlying error.
 
+Application discovery now attempts `PROCESS_QUERY_LIMITED_INFORMATION` and records an optional process creation timestamp alongside PID and executable name. This is sufficient identity material for a future PID-reuse check without exposing command lines or paths. The adapter and contracts checks pass; process-loopback binding has not yet been wired to enforce this identity.
+
 Verification on the Windows 11 host:
 
 ```powershell

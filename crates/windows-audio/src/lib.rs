@@ -73,6 +73,9 @@ pub struct CapturePacket {
 pub struct ApplicationInfo {
     pub process_id: u32,
     pub executable: String,
+    /// Windows process creation time in 100-ns intervals since 1601 UTC.
+    /// Combined with PID, this prevents rebinding a reused process ID.
+    pub creation_time_100ns: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -657,13 +660,16 @@ pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
 }
 
 /// Enumerate process identities suitable for a later process-loopback binding.
-/// Only PID and executable name are returned; command lines and full paths are
-/// intentionally excluded from this discovery surface.
+/// PID, executable name, and an optional creation timestamp are returned;
+/// command lines and full paths are intentionally excluded from this surface.
 pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
-    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Foundation::{CloseHandle, FILETIME};
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
+    };
+    use windows::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     unsafe {
@@ -683,9 +689,29 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                     .unwrap_or(entry.szExeFile.len());
                 let executable = String::from_utf16(&entry.szExeFile[..length])
                     .map_err(|_| AudioError::InvalidUtf16)?;
+                let creation_time_100ns = OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION,
+                    false,
+                    entry.th32ProcessID,
+                )
+                .ok()
+                .and_then(|handle| {
+                    let mut creation = FILETIME::default();
+                    let mut exit = FILETIME::default();
+                    let mut kernel = FILETIME::default();
+                    let mut user = FILETIME::default();
+                    let result =
+                        GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user);
+                    let _ = CloseHandle(handle);
+                    result.ok().map(|_| {
+                        (u64::from(creation.dwHighDateTime) << 32)
+                            | u64::from(creation.dwLowDateTime)
+                    })
+                });
                 applications.push(ApplicationInfo {
                     process_id: entry.th32ProcessID,
                     executable,
+                    creation_time_100ns,
                 });
                 if applications.len() >= 4096 || Process32NextW(snapshot, &mut entry).is_err() {
                     break;
