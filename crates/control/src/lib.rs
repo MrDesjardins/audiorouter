@@ -779,6 +779,12 @@ impl ControlPlane {
         }
     }
 
+    fn recovery_safe_mode(&self) -> Result<bool, ControlError> {
+        self.storage.as_ref().map_or(Ok(false), |storage| {
+            storage.recovery_safe_mode().map_err(storage_error)
+        })
+    }
+
     fn status_snapshot(&self) -> Result<Value, ControlError> {
         let mut active_session_ids = self
             .runtimes
@@ -792,6 +798,7 @@ impl ControlPlane {
         } else {
             self.store.sessions(500).len()
         };
+        let recovery_safe_mode = self.recovery_safe_mode()?;
         Ok(json!({
             "build": self.build,
             "audio": "unavailable",
@@ -805,6 +812,10 @@ impl ControlPlane {
                 "muted": self.privacy_muted,
                 "persistence": if self.storage.is_some() { "durable" } else { "memory" },
                 "audioEffect": "process-local-when-realtime-backend-is-available"
+            },
+            "recovery": {
+                "safeMode": recovery_safe_mode,
+                "persistence": if self.storage.is_some() { "durable" } else { "memory" }
             },
             "eventCursor": {
                 "backendEpoch": self.events.backend_epoch(),
@@ -1183,6 +1194,10 @@ impl ControlPlane {
                         "nativeAdapter": "not activated",
                         "privacyMute": {
                             "muted": self.privacy_muted,
+                            "persistence": if self.storage.is_some() { "durable" } else { "memory" }
+                        },
+                        "recovery": {
+                            "safeMode": self.recovery_safe_mode()?,
                             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
                         },
                         "eventLog": {
@@ -2740,6 +2755,36 @@ mod tests {
         assert_eq!(result["sessionCount"], 1);
         assert_eq!(result["activeSessionCount"], 0);
         assert_eq!(result["eventCursor"]["latestSequence"], 1);
+    }
+
+    #[test]
+    fn status_and_diagnostics_expose_persisted_recovery_safe_mode() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recovery-status-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let storage = Storage::open(&path).unwrap();
+        for timestamp in 100..103 {
+            storage.record_recovery_crash(timestamp).unwrap();
+        }
+        let mut plane = ControlPlane::with_storage("recovery", storage);
+        let status = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(17)),
+            method: "status.get".into(),
+            params: None,
+        });
+        assert_eq!(status.result.unwrap()["recovery"]["safeMode"], true);
+        let diagnostics = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(18)),
+            method: "system.diagnostics".into(),
+            params: None,
+        });
+        assert_eq!(diagnostics.result.unwrap()["recovery"]["safeMode"], true);
+        drop(plane);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

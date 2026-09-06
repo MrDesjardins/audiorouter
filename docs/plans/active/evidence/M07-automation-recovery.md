@@ -245,6 +245,11 @@ reset and expiry are covered by domain tests; this is policy evidence only and
 does not claim persisted crash markers, process restart orchestration, Windows
 startup integration, or automatic audio restart.
 
+Read-only control status and diagnostics now expose the persisted recovery
+`safeMode` state and its durable/memory provenance. A storage-backed control
+regression verifies the latch is visible after three recorded crashes; these
+surfaces do not start sessions or resume audio.
+
 Storage now persists the bounded crash markers in a dedicated SQLite table with
 expiry, a three-marker cap, count, and explicit clear operations. Storage tests
 cover expiry and invalid timestamp rejection. The control/supervisor integration
