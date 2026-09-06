@@ -1551,7 +1551,10 @@ impl Storage {
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
-    use std::io::Write;
+    use audiorouter_recording::{
+        RecordingChunk, RecordingError, RecordingQueue, WavFormat, WavRecorder, WavWriter,
+    };
+    use std::io::{Cursor, Write};
 
     fn session() -> Session {
         Session {
@@ -2174,6 +2177,46 @@ mod tests {
         ));
 
         let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn live_wav_worker_persists_each_committed_boundary_to_storage() {
+        let storage = Storage::open_memory().unwrap();
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        recorder.arm().unwrap();
+        recorder.start(100).unwrap();
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 100,
+                samples: vec![0.25, -0.25],
+            })
+            .unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 102,
+                samples: vec![0.5],
+            })
+            .unwrap();
+
+        let drained = recorder
+            .drain_queue_with_checkpoint(&queue, 2, |checkpoint| {
+                storage
+                    .save_recording_checkpoint("live-worker", checkpoint)
+                    .map_err(|_| RecordingError::InvalidWav)
+            })
+            .unwrap();
+        assert_eq!(drained, 2);
+        assert_eq!(
+            storage
+                .load_recording_checkpoint("live-worker")
+                .unwrap()
+                .unwrap()
+                .last_frame,
+            Some(103)
+        );
     }
 
     #[test]

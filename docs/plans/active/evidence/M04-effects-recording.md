@@ -187,6 +187,13 @@ The checkpoint excludes queued samples and file handles, so it is safe as a
 control-plane crash-journal payload. Recording coverage is 18 tests with
 strict Clippy; durable worker journal persistence remains open.
 
+Added a cross-crate recovery regression that drives the live WAV worker's
+per-committed-chunk checkpoint hook into SQLite storage. Two contiguous queued
+chunks are drained, the latest durable boundary is reloaded, and frame 103 is
+recovered without persisting samples or file handles. Storage coverage is now
+30 tests with strict Clippy; true incremental FLAC encoding and native
+realtime integration remain open.
+
 ## Initial built-in DSP slice
 
 The new `audiorouter-dsp` crate provides an allocation-free, caller-owned
