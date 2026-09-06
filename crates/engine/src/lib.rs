@@ -809,6 +809,12 @@ impl RuntimePublication {
         self.current.store(Some(std::sync::Arc::new(graph)));
     }
 
+    /// Remove the active graph. Existing snapshots remain valid until their
+    /// last reader releases them; future readers observe no active runtime.
+    pub fn clear(&self) {
+        self.current.store(None);
+    }
+
     /// Load the current graph without taking a mutex. `None` means the runtime
     /// has not been activated yet.
     pub fn load(&self) -> Option<std::sync::Arc<RuntimeGraph>> {
@@ -830,6 +836,10 @@ pub struct RuntimeProcessor {
 impl RuntimeProcessor {
     pub fn publish(&self, graph: RuntimeGraph) {
         self.publication.publish(graph);
+    }
+
+    pub fn deactivate(&self) {
+        self.publication.clear();
     }
 
     pub fn set_privacy_muted(&self, muted: bool) {
@@ -1252,5 +1262,9 @@ mod tests {
         processor.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
         assert_eq!(processor.metrics().processed_quanta(), 2);
+        processor.deactivate();
+        block.channel_mut(0).unwrap().fill(1.0);
+        assert_eq!(processor.process(&mut block), None);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
     }
 }

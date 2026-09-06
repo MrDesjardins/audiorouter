@@ -41,3 +41,5 @@ Queue full/empty events now increment atomic overrun/underrun counters while sti
 `RuntimeProcessor` now observes active processed blocks through `BlockMeter`, exposing peak and clipping health without changing the no-graph silence behavior. The integration test verifies the meter sees processed output; per-node API publication remains open.
 
 The original nine-test baseline is retained in the history above; the current engine suite contains 21 deterministic tests. The portable crate now covers preallocated blocks, explicit mapping/accumulation, bounded queues, rolling and instantaneous metering, resampling/drift primitives, de-click ramps, privacy gating, domain preparation, immutable publication, and callback instrumentation. It still does not claim end-to-end node buffer scheduling, physical endpoint routing, latency evidence, or driver behavior.
+
+`RuntimePublication::clear` and `RuntimeProcessor::deactivate` now provide explicit stop behavior: future readers receive no active graph and are silenced, while existing retained snapshots remain safe until released. The lifecycle test passes without device access.

@@ -343,3 +343,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Corrected the failure taxonomy so undersized caller buffers report `BufferConstraint` rather than being conflated with malformed arguments; seven adapter tests and strict adapter Clippy pass.
 - Added `EndpointMonitor` to combine the coalesced notification dirty flag with a control-thread endpoint resnapshot and explicit `EndpointChange` diff; no automatic rebinding is performed.
 - Corrected the M02 engine evidence report's stale nine-test conclusion; it now distinguishes historical baseline coverage from the current 21-test engine state and remaining end-to-end routing gaps.
+- Added explicit `RuntimePublication::clear`/`RuntimeProcessor::deactivate` lifecycle operations; new readers receive safe silence after stop while retained old generations remain valid for existing readers.
