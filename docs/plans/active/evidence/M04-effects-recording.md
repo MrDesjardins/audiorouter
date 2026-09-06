@@ -57,3 +57,10 @@ FLAC recovery remain open.
 discontinuity or encoder/I/O error. Failed recorders cannot be finalized, while
 their caller-owned destination remains available for the recovery or quarantine
 policy. A regression verifies the terminal state and finalization refusal.
+
+`inspect_wav_file` supplies the first recording-library metadata boundary. It
+validates the canonical RIFF/WAVE header, supported format/rate/channel shape,
+block alignment, and data bounds, returning exact frame, data-byte, and file-byte
+counts. A temporary-file regression verifies PCM24 metadata and rejects a
+truncated payload; missing-file, rename, user metadata, and recycle operations
+remain open.

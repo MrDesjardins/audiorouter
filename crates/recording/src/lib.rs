@@ -3,7 +3,7 @@
 //! The writer only operates on a caller-provided `Write + Seek` destination.
 //! It does not open paths, create files, or perform realtime scheduling.
 
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -423,6 +423,7 @@ pub enum RecordingError {
     InvalidQueueCapacity,
     NotRecording,
     FrameDiscontinuity { expected: u64, actual: u64 },
+    InvalidWav,
     Io(std::io::Error),
 }
 
@@ -442,6 +443,66 @@ pub struct WavWriter<W> {
     data_bytes: u64,
     dither: bool,
     rng: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WavFileInfo {
+    pub format: WavFormat,
+    pub channels: u16,
+    pub sample_rate: u32,
+    pub frames: u64,
+    pub data_bytes: u64,
+    pub file_bytes: u64,
+}
+
+/// Reads the canonical WAV files produced by this crate for library indexing.
+/// It validates the fixed PCM/IEEE-float header and exact data bounds but does
+/// not decode samples or touch any audio device.
+pub fn inspect_wav_file(path: impl AsRef<std::path::Path>) -> Result<WavFileInfo, RecordingError> {
+    let mut file = std::fs::File::open(path)?;
+    let file_bytes = file.metadata()?.len();
+    if file_bytes < 44 {
+        return Err(RecordingError::InvalidWav);
+    }
+    let mut header = [0u8; 44];
+    file.read_exact(&mut header)?;
+    if &header[0..4] != b"RIFF"
+        || &header[8..12] != b"WAVE"
+        || &header[12..16] != b"fmt "
+        || &header[36..40] != b"data"
+        || u32::from_le_bytes(header[16..20].try_into().unwrap()) != 16
+    {
+        return Err(RecordingError::InvalidWav);
+    }
+    let format = match (
+        u16::from_le_bytes(header[20..22].try_into().unwrap()),
+        u16::from_le_bytes(header[34..36].try_into().unwrap()),
+    ) {
+        (1, 16) => WavFormat::Pcm16,
+        (1, 24) => WavFormat::Pcm24,
+        (3, 32) => WavFormat::Float32,
+        _ => return Err(RecordingError::InvalidWav),
+    };
+    let channels = u16::from_le_bytes(header[22..24].try_into().unwrap());
+    let sample_rate = u32::from_le_bytes(header[24..28].try_into().unwrap());
+    validate_format(format, channels, sample_rate)?;
+    let block_align = u64::from(u16::from_le_bytes(header[32..34].try_into().unwrap()));
+    let expected_align = u64::from(channels) * u64::from(format.bits() / 8);
+    if block_align != expected_align {
+        return Err(RecordingError::InvalidWav);
+    }
+    let data_bytes = u64::from(u32::from_le_bytes(header[40..44].try_into().unwrap()));
+    if data_bytes % block_align != 0 || data_bytes > file_bytes - 44 {
+        return Err(RecordingError::InvalidWav);
+    }
+    Ok(WavFileInfo {
+        format,
+        channels,
+        sample_rate,
+        frames: data_bytes / block_align,
+        data_bytes,
+        file_bytes,
+    })
 }
 
 impl<W: Write + Seek> WavWriter<W> {
@@ -943,6 +1004,38 @@ mod tests {
             recorder.finish(),
             Err(RecordingError::NotRecording)
         ));
+    }
+
+    #[test]
+    fn wav_inspector_reports_file_shape_and_rejects_truncation() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recording-inspect-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::File::create(&path).unwrap();
+        let mut writer = WavWriter::new(file, WavFormat::Pcm24, 2, 44_100, false).unwrap();
+        writer.write_interleaved(&[0.0, 0.25, -0.25, 0.5]).unwrap();
+        writer.finish().unwrap();
+        let info = inspect_wav_file(&path).unwrap();
+        assert_eq!(
+            info,
+            WavFileInfo {
+                format: WavFormat::Pcm24,
+                channels: 2,
+                sample_rate: 44_100,
+                frames: 2,
+                data_bytes: 12,
+                file_bytes: 56,
+            }
+        );
+        let truncated = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+        truncated.set_len(50).unwrap();
+        assert!(matches!(
+            inspect_wav_file(&path),
+            Err(RecordingError::InvalidWav)
+        ));
+        let _ = std::fs::remove_file(path);
     }
 
     #[cfg(unix)]
