@@ -19,7 +19,9 @@ name = "audiorouter-cli"
 version = "0.1.0"
 dependencies = [
  "audiorouter-control",
+ "audiorouter-domain",
  "audiorouter-protocol",
+ "audiorouter-storage",
  "serde_json",
 ]
 
