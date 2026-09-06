@@ -79,7 +79,7 @@ private:
     Microsoft::WRL::ComPtr<IUnknown>& activated_;
 };
 
-static int process_loopback_probe(DWORD target_process_id) {
+static int process_loopback_probe(DWORD target_process_id, bool read_data, DWORD duration_ms) {
     std::mutex mutex;
     std::condition_variable ready;
     HRESULT activation = E_FAIL;
@@ -110,6 +110,7 @@ static int process_loopback_probe(DWORD target_process_id) {
         VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient), &property,
         handler.Get(), &operation);
     print_hr("process_activate_async", hr);
+    bool data_ok = !read_data;
     if (SUCCEEDED(hr)) {
         std::unique_lock<std::mutex> lock(mutex);
         if (!ready.wait_for(lock, std::chrono::seconds(5), [&] { return completed; })) {
@@ -138,7 +139,62 @@ static int process_loopback_probe(DWORD target_process_id) {
                     print_hr("process_initialize_44100_pcm", initialize);
                     if (SUCCEEDED(initialize) && ready_event) {
                         print_hr("process_set_event_handle", client->SetEventHandle(ready_event));
-                        client->Reset();
+                        if (read_data) {
+                            Microsoft::WRL::ComPtr<IAudioCaptureClient> capture;
+                            HRESULT service = client.As(&capture);
+                            print_hr("process_get_capture_service", service);
+                            if (SUCCEEDED(service)) {
+                                HRESULT start = client->Start();
+                                print_hr("process_capture_start", start);
+                                UINT32 packet_count = 0;
+                                UINT32 frame_count = 0;
+                                UINT32 silent_packet_count = 0;
+                                UINT64 nonzero_bytes = 0;
+                                HRESULT read = start;
+                                if (SUCCEEDED(start)) {
+                                    const auto deadline = std::chrono::steady_clock::now() +
+                                        std::chrono::milliseconds(duration_ms);
+                                    while (std::chrono::steady_clock::now() < deadline) {
+                                        WaitForSingleObject(ready_event, 50);
+                                        while (true) {
+                                            UINT32 frames = 0;
+                                            read = capture->GetNextPacketSize(&frames);
+                                            if (FAILED(read) || frames == 0) break;
+                                            BYTE* data = nullptr;
+                                            DWORD flags = 0;
+                                            UINT64 position = 0;
+                                            UINT64 timestamp = 0;
+                                            read = capture->GetBuffer(&data, &frames, &flags,
+                                                                      &position, &timestamp);
+                                            if (FAILED(read)) break;
+                                            ++packet_count;
+                                            frame_count += frames;
+                                            const UINT64 packet_bytes = static_cast<UINT64>(frames) * format.nBlockAlign;
+                                            if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0) {
+                                                ++silent_packet_count;
+                                            } else if (data) {
+                                                for (UINT64 index = 0; index < packet_bytes; ++index) {
+                                                    if (data[index] != 0) ++nonzero_bytes;
+                                                }
+                                            }
+                                            read = capture->ReleaseBuffer(frames);
+                                            if (FAILED(read)) break;
+                                        }
+                                        if (FAILED(read)) break;
+                                    }
+                                }
+                                print_hr("process_capture_packet_read", read);
+                                std::cout << "process_capture_packets=" << packet_count
+                                          << " process_capture_frames=" << frame_count
+                                          << " process_capture_silent_packets=" << silent_packet_count
+                                          << " process_capture_nonzero_bytes=" << nonzero_bytes << '\n';
+                                print_hr("process_capture_stop", client->Stop());
+                                print_hr("process_capture_reset", client->Reset());
+                                data_ok = SUCCEEDED(read) && packet_count > 0;
+                            }
+                        } else {
+                            print_hr("process_reset", client->Reset());
+                        }
                     }
                     if (ready_event) CloseHandle(ready_event);
                 }
@@ -147,7 +203,7 @@ static int process_loopback_probe(DWORD target_process_id) {
         if (operation) operation->Release();
     }
     PropVariantClear(&property);
-    return SUCCEEDED(hr) && completed && SUCCEEDED(activation) ? 0 : 1;
+    return SUCCEEDED(hr) && completed && SUCCEEDED(activation) && data_ok ? 0 : 1;
 }
 
 static int capture_data_probe(UINT target_index, DWORD duration_ms) {
@@ -315,10 +371,13 @@ int main(int argc, char** argv) {
         CoUninitialize();
         return result;
     }
-    if (argc > 1) {
+    if (argc > 1 && (std::strcmp(argv[1], "process") == 0 ||
+                     std::strcmp(argv[1], "process-capture") == 0)) {
         DWORD target_process_id = GetCurrentProcessId();
         if (argc > 2) target_process_id = static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10));
-        int result = process_loopback_probe(target_process_id);
+        bool read_data = std::strcmp(argv[1], "process-capture") == 0;
+        DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 500;
+        int result = process_loopback_probe(target_process_id, read_data, duration_ms);
         CoUninitialize();
         return result;
     }

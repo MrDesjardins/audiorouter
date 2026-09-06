@@ -55,6 +55,10 @@ A Rust scaffold for the documented asynchronous process-loopback activation ABI 
 ### Native process-loopback result (2026-09-05)
 
 The native harness now uses an agile WRL `FtmBase` completion handler and correctly distinguishes `GetActivateResult` from the callback method HRESULT. `ActivateAudioInterfaceAsync` for the current Explorer process returned `S_OK`; the callback retrieved the activation result and queried `IAudioClient` successfully. Shared-mode initialization with 44.1 kHz stereo PCM plus `LOOPBACK|EVENTCALLBACK|AUTOCONVERTPCM` returned `S_OK`, and `SetEventHandle` returned `S_OK`. The harness did not start or read the stream, so this is activation/initialization evidence rather than captured-audio or latency evidence. This supersedes the earlier minimal-harness runtime result; the Rust path remains disabled pending an equivalent COM interop fix.
+
+### Native process-loopback data result (2026-09-05)
+
+The probe now has an opt-in `process-capture [pid] [milliseconds]` mode. Against the current PowerShell process for 500 ms, asynchronous activation, 44.1 kHz shared loopback initialization, capture service lookup, `Start`, event-driven reads, `Stop`, and `Reset` all returned success. It read 50 packets totaling 22,050 frames; no packets were marked silent and 15,217 nonzero payload bytes were observed. Samples were not retained. This is process-tree loopback data-flow evidence, not a latency or end-to-end routed-output claim. The temporary executable/object were removed after the run, and no defaults, volume, mute, privacy policy, or driver state changed.
 ## 2026-09-05 native toolchain correction
 
 The host now has Visual Studio Community 2026 `18.9.2`, MSVC `14.51.36231`, Windows SDK `10.0.28000.2526` (headers/libs under `10.0.28000.0`), and WDK `10.1.28000.2526`. The reproducible build entry point is [`tools/m00-native-wasapi-probe/build.ps1`](../../../tools/m00-native-wasapi-probe/build.ps1). It uses explicit toolchain paths and does not modify environment or audio settings.
