@@ -650,3 +650,11 @@ engine, 31 plugin-host, 8 worker-process, 5 protocol, 30 recording, 36
 storage, 14 transport, and 12 Windows-audio tests. Strict workspace Clippy
 with `-D warnings` passed as well. This was validation only; no audio stream
 was started and no machine configuration changed.
+
+Added and passed the Windows-gated MCP named-pipe interoperability regression.
+The test starts an authenticated local control backend, launches the CLI MCP
+stdio proxy with `--pipe`, and verifies that a real `get_startup` tool call is
+forwarded through the named pipe and returns the backend JSON-RPC result. The
+focused MCP test, CLI strict Clippy, formatting, and full M07 headless wrapper
+passed. Only temporary SQLite and named-pipe state was used; no audio device,
+driver, or machine configuration was accessed.

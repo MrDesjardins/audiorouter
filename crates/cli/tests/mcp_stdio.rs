@@ -158,3 +158,90 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     assert!(child.wait().unwrap().success());
     std::fs::remove_file(database).unwrap();
 }
+
+#[cfg(windows)]
+#[test]
+fn mcp_pipe_proxy_interoperates_with_authenticated_backend() {
+    let database = std::env::temp_dir().join(format!(
+        "audiorouter-mcp-pipe-{}.sqlite",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&database);
+    let storage = Storage::open(&database).unwrap();
+    let mut plane = ControlPlane::with_storage("mcp-pipe-test", storage);
+    plane
+        .enroll_client("mcp-pipe-client", ClientRole::Observer)
+        .unwrap();
+    drop(plane);
+
+    let pipe_name = format!(r"\\.\pipe\audiorouter-mcp-pipe-{}", std::process::id());
+    let backend = std::thread::spawn({
+        let pipe_name = pipe_name.clone();
+        move || {
+            audiorouter_transport::serve_control_connections_as_role(
+                &pipe_name,
+                1,
+                ControlPlane::new("mcp-pipe-backend"),
+                ClientRole::Observer,
+            )
+            .unwrap();
+        }
+    });
+
+    let mut child = Command::new(cli_path())
+        .args([
+            "mcp",
+            "serve",
+            "--client-id",
+            "mcp-pipe-client",
+            "--database",
+            database.to_str().unwrap(),
+            "--pipe",
+            &pipe_name,
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn CLI MCP pipe proxy");
+    let mut input = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let mut output = BufReader::new(stdout);
+
+    let initialized = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "pipe-interop-test", "version": "1" }
+            }
+        }),
+    );
+    assert_eq!(initialized["result"]["protocolVersion"], "2025-06-18");
+
+    let startup = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": { "name": "get_startup", "arguments": {} }
+        }),
+    );
+    assert_eq!(startup["result"]["isError"], false);
+    assert_eq!(
+        startup["result"]["structuredContent"]["result"]["enabled"],
+        false
+    );
+
+    drop(input);
+    assert!(child.wait().unwrap().success());
+    backend.join().unwrap();
+    std::fs::remove_file(database).unwrap();
+}
