@@ -510,6 +510,7 @@ pub enum RecordingError {
     NotRecording,
     FrameDiscontinuity { expected: u64, actual: u64 },
     Controller(RecorderError),
+    InvalidMetadata,
     InvalidWav,
     FlacEncode(String),
     Io(std::io::Error),
@@ -541,6 +542,30 @@ pub struct WavFileInfo {
     pub frames: u64,
     pub data_bytes: u64,
     pub file_bytes: u64,
+}
+
+/// Optional RIFF INFO tags written during WAV finalization. Values are kept
+/// bounded and UTF-8; the writer never accepts control characters.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct WavMetadata {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub comment: Option<String>,
+}
+
+impl WavMetadata {
+    fn validate(&self) -> Result<(), RecordingError> {
+        for value in [&self.title, &self.artist, &self.comment]
+            .into_iter()
+            .flatten()
+        {
+            if value.chars().count() > 256 || value.chars().any(|character| character.is_control())
+            {
+                return Err(RecordingError::InvalidMetadata);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -987,12 +1012,22 @@ impl<W: Write + Seek> WavWriter<W> {
         Ok(added)
     }
 
-    pub fn finish(mut self) -> Result<W, RecordingError> {
+    pub fn finish(self) -> Result<W, RecordingError> {
+        self.finish_with_metadata(&WavMetadata::default())
+    }
+
+    pub fn finish_with_metadata(mut self, metadata: &WavMetadata) -> Result<W, RecordingError> {
+        metadata.validate()?;
+        let info_chunk = encode_info_chunk(metadata)?;
         let data_size =
             u32::try_from(self.data_bytes).map_err(|_| RecordingError::TooManyFrames)?;
-        let riff_size = 36u32
-            .checked_add(data_size)
+        let riff_size = 36u64
+            .checked_add(u64::from(data_size))
+            .and_then(|size| size.checked_add(info_chunk.len() as u64))
+            .and_then(|size| u32::try_from(size).ok())
             .ok_or(RecordingError::TooManyFrames)?;
+        self.output.seek(SeekFrom::End(0))?;
+        self.output.write_all(&info_chunk)?;
         self.output.seek(SeekFrom::Start(0))?;
         write_header(
             &mut self.output,
@@ -1005,6 +1040,39 @@ impl<W: Write + Seek> WavWriter<W> {
         self.output.seek(SeekFrom::End(0))?;
         Ok(self.output)
     }
+}
+
+fn encode_info_chunk(metadata: &WavMetadata) -> Result<Vec<u8>, RecordingError> {
+    let fields = [
+        (*b"INAM", metadata.title.as_deref()),
+        (*b"IART", metadata.artist.as_deref()),
+        (*b"ICMT", metadata.comment.as_deref()),
+    ];
+    let mut payload = Vec::new();
+    payload.extend_from_slice(b"INFO");
+    for (id, value) in fields
+        .into_iter()
+        .filter_map(|(id, value)| value.map(|v| (id, v)))
+    {
+        let mut bytes = value.as_bytes().to_vec();
+        bytes.push(0);
+        let length = u32::try_from(bytes.len()).map_err(|_| RecordingError::TooManyFrames)?;
+        payload.extend_from_slice(&id);
+        payload.extend_from_slice(&length.to_le_bytes());
+        payload.extend_from_slice(&bytes);
+        if bytes.len() % 2 != 0 {
+            payload.push(0);
+        }
+    }
+    if payload.len() == 4 {
+        return Ok(Vec::new());
+    }
+    let size = u32::try_from(payload.len()).map_err(|_| RecordingError::TooManyFrames)?;
+    let mut chunk = Vec::with_capacity(8 + payload.len());
+    chunk.extend_from_slice(b"LIST");
+    chunk.extend_from_slice(&size.to_le_bytes());
+    chunk.extend_from_slice(&payload);
+    Ok(chunk)
 }
 
 fn validate_format(
@@ -1272,10 +1340,14 @@ impl<W: Write + Seek> WavRecorder<W> {
     }
 
     pub fn finish(self) -> Result<W, RecordingError> {
+        self.finish_with_metadata(&WavMetadata::default())
+    }
+
+    pub fn finish_with_metadata(self, metadata: &WavMetadata) -> Result<W, RecordingError> {
         if self.controller.state() != RecorderState::Completed {
             return Err(RecordingError::NotRecording);
         }
-        self.writer.finish()
+        self.writer.finish_with_metadata(metadata)
     }
 }
 
@@ -1357,6 +1429,37 @@ mod tests {
         let output = writer.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 9);
         assert_eq!(output.len(), 53);
+    }
+
+    #[test]
+    fn wav_metadata_is_written_as_bounded_info_chunks() {
+        let mut writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        writer.write_interleaved(&[0.25]).unwrap();
+        let metadata = WavMetadata {
+            title: Some("Take 1".into()),
+            artist: Some("AudioRouter".into()),
+            comment: Some("voice".into()),
+        };
+        let output = writer.finish_with_metadata(&metadata).unwrap().into_inner();
+        assert!(output.windows(4).any(|window| window == b"LIST"));
+        assert!(output.windows(6).any(|window| window == b"Take 1"));
+        assert!(output.windows(11).any(|window| window == b"AudioRouter"));
+        assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 2);
+    }
+
+    #[test]
+    fn wav_metadata_rejects_control_and_oversized_values() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let metadata = WavMetadata {
+            title: Some("bad\nvalue".into()),
+            ..WavMetadata::default()
+        };
+        assert!(matches!(
+            writer.finish_with_metadata(&metadata),
+            Err(RecordingError::InvalidMetadata)
+        ));
     }
 
     #[test]

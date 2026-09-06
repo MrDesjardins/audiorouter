@@ -10,6 +10,16 @@ encoder buffer, or file handle. Recording tests (18) and strict Clippy pass.
 Durable scheduling of these snapshots and true incremental FLAC output remain
 open.
 
+## 2026-09-06 â€” WAV metadata tags
+
+WAV finalization now optionally writes bounded UTF-8 title, artist, and
+comment values as RIFF `LIST/INFO` chunks. Invalid control characters and
+values over 256 characters are rejected before finalization. The worker-facing
+`finish_with_metadata` method keeps metadata writing off the realtime path;
+the default no-metadata output remains byte-compatible. Recording coverage is
+20 tests with strict Clippy. FLAC tags and durable metadata scheduling remain
+open.
+
 ## Initial recorder slice
 
 The new `crates/recording` crate provides a seekable WAV writer for PCM16,
