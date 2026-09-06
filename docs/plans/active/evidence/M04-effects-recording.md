@@ -118,6 +118,13 @@ valid and missing entries, traversal rejection, and that removing an entry
 leaves the recording bytes present. Durable persistence, rename/title/artist/
 comment metadata, preview, and separately authorized recycle remain open.
 
+`RecordingMetadata` now provides title, artist, and comment fields for library
+entries. Updates reject control characters and values over 256 Unicode
+characters before mutating the entry, and the metadata remains independent of
+the underlying file and remove-entry operation. The library regression covers
+valid metadata and rejection of invalid text; fourteen recording tests and
+strict Clippy pass. Durable metadata/file tags and API wiring remain open.
+
 ## Initial built-in DSP slice
 
 The new `audiorouter-dsp` crate provides an allocation-free, caller-owned

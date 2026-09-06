@@ -542,6 +542,29 @@ pub enum RecordingLibraryError {
     InvalidPath,
     NotFound,
     Io(std::io::ErrorKind),
+    InvalidMetadata,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct RecordingMetadata {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub comment: Option<String>,
+}
+
+impl RecordingMetadata {
+    pub fn validate(&self) -> Result<(), RecordingLibraryError> {
+        for value in [&self.title, &self.artist, &self.comment]
+            .into_iter()
+            .flatten()
+        {
+            if value.chars().count() > 256 || value.chars().any(|character| character.is_control())
+            {
+                return Err(RecordingLibraryError::InvalidMetadata);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -551,6 +574,7 @@ pub struct RecordingEntry {
     pub recorder: String,
     pub path: std::path::PathBuf,
     pub status: RecordingFileStatus,
+    pub metadata: RecordingMetadata,
 }
 
 /// Root-scoped recording index. It owns metadata entries only; removing an
@@ -584,6 +608,7 @@ impl RecordingLibrary {
             RecordingError::Io(error) => RecordingLibraryError::Io(error.kind()),
             _ => RecordingLibraryError::InvalidPath,
         })?;
+        let metadata = RecordingMetadata::default();
         let id = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
         self.entries.push(RecordingEntry {
@@ -592,6 +617,7 @@ impl RecordingLibrary {
             recorder: recorder.into(),
             path,
             status,
+            metadata,
         });
         Ok(id)
     }
@@ -623,6 +649,21 @@ impl RecordingLibrary {
             .position(|entry| entry.id == id)
             .ok_or(RecordingLibraryError::NotFound)?;
         Ok(self.entries.remove(index))
+    }
+
+    pub fn set_metadata(
+        &mut self,
+        id: u64,
+        metadata: RecordingMetadata,
+    ) -> Result<(), RecordingLibraryError> {
+        metadata.validate()?;
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(RecordingLibraryError::NotFound)?;
+        entry.metadata = metadata;
+        Ok(())
     }
 
     fn validate_path(&self, path: &Path) -> Result<PathBuf, RecordingLibraryError> {
@@ -1288,6 +1329,30 @@ mod tests {
             library.list(Some("session"))[1].status,
             RecordingFileStatus::Missing
         );
+        library
+            .set_metadata(
+                id,
+                RecordingMetadata {
+                    title: Some("Morning voice".into()),
+                    artist: Some("AudioRouter".into()),
+                    comment: Some("kept locally".into()),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            library.list(Some("session"))[0].metadata.title.as_deref(),
+            Some("Morning voice")
+        );
+        assert!(matches!(
+            library.set_metadata(
+                id,
+                RecordingMetadata {
+                    title: Some("bad\nvalue".into()),
+                    ..RecordingMetadata::default()
+                }
+            ),
+            Err(RecordingLibraryError::InvalidMetadata)
+        ));
         library.refresh(missing).unwrap();
         let removed = library.remove_entry(id).unwrap();
         assert_eq!(removed.path, path);
