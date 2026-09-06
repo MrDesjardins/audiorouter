@@ -234,3 +234,8 @@ portable symlinks. Backup destinations, restore sources, bundle files and
 staging roots, and retention directories are checked before their respective
 operations. The storage suite passes 30 tests with strict Clippy; deployment
 filesystem policy beyond these selected roots remains open.
+Backup and restore destinations now use `symlink_metadata` presence checks
+instead of relying on `Path::exists()`. This rejects dangling symlinks before
+SQLite creates or restores a file, closing a path-safety bypass; the regression
+suite verifies a broken backup destination is preserved/rejected when link
+creation is available. Storage coverage is 30 tests with strict Clippy.

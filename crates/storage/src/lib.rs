@@ -258,15 +258,19 @@ impl Storage {
                 "backup destination parent must already exist".into(),
             ));
         }
-        if destination.exists() && is_reparse_point(&std::fs::symlink_metadata(destination)?) {
-            return Err(StorageError::InvalidBackupPath(
-                "backup destination cannot be a symbolic link".into(),
-            ));
-        }
-        if destination.exists() {
-            return Err(StorageError::InvalidBackupPath(
-                "backup destination must not already exist".into(),
-            ));
+        match std::fs::symlink_metadata(destination) {
+            Ok(metadata) => {
+                if is_reparse_point(&metadata) {
+                    return Err(StorageError::InvalidBackupPath(
+                        "backup destination cannot be a symbolic link or reparse point".into(),
+                    ));
+                }
+                return Err(StorageError::InvalidBackupPath(
+                    "backup destination must not already exist".into(),
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(StorageError::Io(error)),
         }
         if let Some(source) = &self.database_path {
             let source = std::fs::canonicalize(source)?;
@@ -369,10 +373,14 @@ impl Storage {
                 "restore destination parent must already exist".into(),
             ));
         }
-        if destination.exists() {
-            return Err(StorageError::InvalidBackupPath(
-                "restore destination must not already exist".into(),
-            ));
+        match std::fs::symlink_metadata(destination) {
+            Ok(_) => {
+                return Err(StorageError::InvalidBackupPath(
+                    "restore destination must not already exist".into(),
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(StorageError::Io(error)),
         }
         if std::fs::canonicalize(source).ok()
             == std::fs::canonicalize(parent.join(destination.file_name().unwrap_or_default())).ok()
@@ -2134,8 +2142,24 @@ mod tests {
             std::fs::read(&destination).unwrap(),
             b"preserve this recovery copy"
         );
+        std::fs::remove_file(&destination).unwrap();
+        let dangling_target = std::env::temp_dir().join(format!("{suffix}-missing.sqlite"));
+        let _ = std::fs::remove_file(&dangling_target);
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_file(&dangling_target, &destination);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&dangling_target, &destination);
+        if link_result.is_ok() {
+            assert!(matches!(
+                storage.backup_to(&destination),
+                Err(StorageError::InvalidBackupPath(message))
+                    if message.contains("symbolic link")
+            ));
+            std::fs::remove_file(&destination).unwrap();
+        }
         drop(storage);
         let _ = std::fs::remove_file(source);
+        let _ = std::fs::remove_file(dangling_target);
         let _ = std::fs::remove_file(destination);
     }
 
