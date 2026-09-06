@@ -433,3 +433,9 @@ counts and size bounds. A temporary-file regression recovers three frames
 after appended partial bytes; recording coverage is now 27 tests with strict
 Clippy. Recovery of arbitrary third-party FLAC subframes remains outside this
 specialized path.
+
+Added a recording-library refresh regression for incremental FLAC files. When
+an indexed FLAC is externally replaced, refresh now reloads its bounded Vorbis
+title metadata rather than retaining stale values; the file path and safety
+policy remain unchanged. Recording coverage is now 30 tests with strict
+Clippy; native realtime integration remains separate work.

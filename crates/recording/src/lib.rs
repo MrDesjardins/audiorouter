@@ -2883,6 +2883,63 @@ mod tests {
     }
 
     #[test]
+    fn library_refresh_reloads_flac_metadata() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-recording-library-flac-refresh-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let (path, file) = policy.create_file("session", "voice", 0, "flac").unwrap();
+        let mut writer = StreamingFlacWriter::new_with_metadata(
+            file,
+            1,
+            48_000,
+            16,
+            false,
+            &WavMetadata {
+                title: Some("First FLAC title".into()),
+                ..WavMetadata::default()
+            },
+        )
+        .unwrap();
+        writer.write_interleaved(&[0.25]).unwrap();
+        writer.finish().unwrap();
+
+        let mut library = RecordingLibrary::new(&policy);
+        let id = library.register("session", "voice", &path).unwrap();
+        assert_eq!(
+            library.list(None)[0].metadata.title.as_deref(),
+            Some("First FLAC title")
+        );
+
+        let replacement = root.join("replacement.flac");
+        let mut replacement_writer = StreamingFlacWriter::new_with_metadata(
+            std::fs::File::create(&replacement).unwrap(),
+            1,
+            48_000,
+            16,
+            false,
+            &WavMetadata {
+                title: Some("Second FLAC title".into()),
+                ..WavMetadata::default()
+            },
+        )
+        .unwrap();
+        replacement_writer.write_interleaved(&[0.5]).unwrap();
+        replacement_writer.finish().unwrap();
+        std::fs::rename(replacement, &path).unwrap();
+
+        library.refresh(id).unwrap();
+        assert_eq!(
+            library.list(None)[0].metadata.title.as_deref(),
+            Some("Second FLAC title")
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn flac_buffer_round_trips_pcm16_and_rejects_unshaped_input() {
         let mut encoder = FlacBufferEncoder::new(2, 48_000, 16).unwrap();
         assert_eq!(
