@@ -165,3 +165,102 @@ export type ImplementedMethod =
   | "graph.commit"
   | "session.start"
   | "session.stop";
+
+export type MethodParams = {
+  "system.describe": undefined;
+  "system.handshake": { protocolVersion: { major: number; minor: number } };
+  "status.get": undefined;
+  "devices.list": { cursor?: string; limit?: number } | undefined;
+  "apps.list": undefined;
+  "nodes.types": undefined;
+  "routes.inspect": { sessionId: EntityId; destinationNode: EntityId };
+  "graph.history": { sessionId: EntityId; cursor?: string; limit?: number };
+  "graph.undoPlan": { sessionId: EntityId; baseRevision: number };
+  "events.subscribe":
+    | { afterSequence?: number; limit?: number; sessionId?: EntityId }
+    | undefined;
+  "nodes.describe": undefined;
+  "sessions.get": { sessionId: EntityId };
+  "sessions.list": { cursor?: string; limit?: number } | undefined;
+  "sessions.create": { session: Session };
+  "sessions.duplicate": {
+    sourceSessionId: EntityId;
+    sessionId: EntityId;
+    name?: string;
+  };
+  "sessions.delete": { sessionId: EntityId };
+  "graph.plan": { sessionId: EntityId; baseRevision: number; candidate: Session };
+  "graph.commit": { planId: EntityId; baseRevision: number; idempotencyKey: string };
+  "session.start": { sessionId: EntityId };
+  "session.stop": { sessionId: EntityId };
+};
+
+export type MethodResult = {
+  "system.describe": DiscoveryDocument;
+  "system.handshake": {
+    compatible: true;
+    requested: { major: number; minor: number };
+    negotiated: { major: 1; minor: 0 };
+    schemaVersion: number;
+  };
+  "status.get": Record<string, unknown>;
+  "devices.list": unknown[];
+  "apps.list": ApplicationInfo[];
+  "nodes.types": DiscoveryDocument["nodeTypes"];
+  "routes.inspect": Record<string, unknown>;
+  "graph.history": GraphHistoryPage;
+  "graph.undoPlan": Record<string, unknown>;
+  "events.subscribe": Record<string, unknown>;
+  "nodes.describe": DiscoveryDocument["nodeTypes"];
+  "sessions.get": Session;
+  "sessions.list": SessionListPage;
+  "sessions.create": Record<string, unknown>;
+  "sessions.duplicate": Record<string, unknown>;
+  "sessions.delete": Record<string, unknown>;
+  "graph.plan": Record<string, unknown>;
+  "graph.commit": Record<string, unknown>;
+  "session.start": Record<string, unknown>;
+  "session.stop": Record<string, unknown>;
+};
+
+export interface RpcTransport {
+  send(request: JsonRpcRequest): Promise<JsonRpcResponse>;
+}
+
+export class AudioRouterRpcError extends Error {
+  readonly code: number;
+  readonly data?: ApplicationErrorData;
+
+  constructor(error: JsonRpcError["error"]) {
+    super(error.message);
+    this.name = "AudioRouterRpcError";
+    this.code = error.code;
+    this.data = error.data;
+  }
+}
+
+export interface AudioRouterClient {
+  request<M extends ImplementedMethod>(
+    method: M,
+    params: MethodParams[M],
+  ): Promise<MethodResult[M]>;
+}
+
+/** Create the shared typed client over any framed/local transport adapter. */
+export function createAudioRouterClient(transport: RpcTransport): AudioRouterClient {
+  let nextId = 1;
+  return {
+    async request(method, params) {
+      const response = await transport.send({
+        jsonrpc: "2.0",
+        id: nextId++,
+        method,
+        ...(params === undefined ? {} : { params }),
+      });
+      if ("error" in response) {
+        throw new AudioRouterRpcError(response.error);
+      }
+      return response.result as MethodResult[typeof method];
+    },
+  };
+}
