@@ -71,6 +71,8 @@ In-memory graph idempotency now binds each committed key to its original plan ID
 
 Bundle manifests now optionally carry `requiredNodeTypes` entries with a type name and version. Export derives the list from the session, and import rejects unknown or mismatched versions before writing the session; the existing v1 fixture remains compatible. The storage suite passed 15 tests with strict Clippy. The rebuilt CLI test executable was blocked from launch by the host Application Control policy (OS error 4551), so no CLI result is claimed for this slice.
 
+The SQLite operation journal now persists a request hash and exposes checked replay lookup. Matching hashes replay the stored result; a reused key with a different hash returns `IdempotencyConflict`. The migration preserves existing databases with an empty legacy hash, so control integration must treat legacy rows conservatively. Storage tests passed 16 cases with strict Clippy.
+
 ## Next action
 
 Implement durable idempotency request hashing and bounded expiry across control-process restarts using the existing SQLite journal transaction. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.

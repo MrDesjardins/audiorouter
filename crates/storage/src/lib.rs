@@ -17,6 +17,7 @@ pub enum StorageError {
     Io(std::io::Error),
     InvalidSession(String),
     InvalidBundle(String),
+    IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
 }
@@ -289,6 +290,7 @@ impl Storage {
                  operation TEXT NOT NULL,
                  result TEXT NOT NULL,
                  committed_revision INTEGER NOT NULL,
+                 request_hash TEXT NOT NULL DEFAULT '',
                  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
              );
              CREATE TABLE IF NOT EXISTS client_enrollments (
@@ -300,6 +302,17 @@ impl Storage {
              );
              INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);",
         )?;
+        let has_request_hash = self
+            .connection
+            .prepare("PRAGMA table_info(operation_journal)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .any(|column| column.as_deref().ok() == Some("request_hash"));
+        if !has_request_hash {
+            self.connection.execute(
+                "ALTER TABLE operation_journal ADD COLUMN request_hash TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
         Ok(())
     }
 
@@ -730,11 +743,42 @@ impl Storage {
         result: &str,
         revision: u64,
     ) -> Result<bool, StorageError> {
+        self.journal_commit_with_hash(key, operation, result, revision, "")
+    }
+
+    pub fn journal_commit_with_hash(
+        &self,
+        key: &str,
+        operation: &str,
+        result: &str,
+        revision: u64,
+        request_hash: &str,
+    ) -> Result<bool, StorageError> {
         let inserted = self.connection.execute(
-            "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision) VALUES (?1, ?2, ?3, ?4)",
-            params![key, operation, result, revision as i64],
+            "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![key, operation, result, revision as i64, request_hash],
         )?;
         Ok(inserted == 1)
+    }
+
+    pub fn journal_result_checked(
+        &self,
+        key: &str,
+        request_hash: &str,
+    ) -> Result<Option<String>, StorageError> {
+        let row: Option<(String, String)> = self
+            .connection
+            .query_row(
+                "SELECT result, request_hash FROM operation_journal WHERE idempotency_key = ?1",
+                params![key],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        match row {
+            Some((result, stored_hash)) if stored_hash == request_hash => Ok(Some(result)),
+            Some(_) => Err(StorageError::IdempotencyConflict),
+            None => Ok(None),
+        }
     }
 
     /// Persist the current session and its idempotency record as one SQLite
@@ -746,6 +790,18 @@ impl Storage {
         key: &str,
         operation: &str,
         result: &str,
+        failure: Option<JournalFailureStage>,
+    ) -> Result<(), StorageError> {
+        self.save_session_with_journal_with_hash(session, key, operation, result, "", failure)
+    }
+
+    pub fn save_session_with_journal_with_hash(
+        &self,
+        session: &Session,
+        key: &str,
+        operation: &str,
+        result: &str,
+        request_hash: &str,
         failure: Option<JournalFailureStage>,
     ) -> Result<(), StorageError> {
         let document = serde_json::to_string(session)?;
@@ -775,8 +831,8 @@ impl Storage {
             ));
         }
         transaction.execute(
-            "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision) VALUES (?1, ?2, ?3, ?4)",
-            params![key, operation, result, session.revision as i64],
+            "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![key, operation, result, session.revision as i64, request_hash],
         )?;
         if failure == Some(JournalFailureStage::AfterJournal) {
             return Err(StorageError::InvalidSession(
@@ -879,6 +935,25 @@ mod tests {
             storage.journal_result("op").unwrap().as_deref(),
             Some("{\"revision\":1}")
         );
+    }
+
+    #[test]
+    fn journal_request_hash_replays_only_matching_requests() {
+        let storage = Storage::open_memory().unwrap();
+        assert!(storage
+            .journal_commit_with_hash("hashed", "graph.commit", "result", 1, "hash-a")
+            .unwrap());
+        assert_eq!(
+            storage
+                .journal_result_checked("hashed", "hash-a")
+                .unwrap()
+                .as_deref(),
+            Some("result")
+        );
+        assert!(matches!(
+            storage.journal_result_checked("hashed", "hash-b"),
+            Err(StorageError::IdempotencyConflict)
+        ));
     }
 
     #[test]
