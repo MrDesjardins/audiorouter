@@ -15,6 +15,7 @@ pub enum PathPolicyError {
     NetworkRoot,
     RootUnavailable(std::io::Error),
     RootNotDirectory,
+    RootReparsePoint,
     UnsupportedExtension,
     PathEscapesRoot,
     FileExists,
@@ -36,6 +37,11 @@ impl RecordingPathPolicy {
         let text = root.as_os_str().to_string_lossy();
         if text.starts_with("\\\\") || text.starts_with("//") {
             return Err(PathPolicyError::NetworkRoot);
+        }
+        let root_metadata =
+            std::fs::symlink_metadata(root).map_err(PathPolicyError::RootUnavailable)?;
+        if is_reparse_point(&root_metadata) {
+            return Err(PathPolicyError::RootReparsePoint);
         }
         let root = root
             .canonicalize()
@@ -89,6 +95,19 @@ impl RecordingPathPolicy {
             })?;
         Ok((path, file))
     }
+}
+
+#[cfg(windows)]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
 }
 
 pub fn sanitize_component(value: &str) -> String {
@@ -812,5 +831,25 @@ mod tests {
         ));
         drop(_file);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn path_policy_rejects_symlink_roots() {
+        let base = std::env::temp_dir().join(format!(
+            "audiorouter-recording-reparse-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir(&base).unwrap();
+        let target = base.join("target");
+        let link = base.join("link");
+        std::fs::create_dir(&target).unwrap();
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(matches!(
+            RecordingPathPolicy::new(&link),
+            Err(PathPolicyError::RootReparsePoint)
+        ));
+        let _ = std::fs::remove_dir_all(base);
     }
 }

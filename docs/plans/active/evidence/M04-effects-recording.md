@@ -41,5 +41,7 @@ canonical parent remains under the approved root, and creates files with
 exclusive `create_new` semantics. A temp-directory test verifies sanitization
 and collision rejection. File creation now also accepts only the supported
 `wav` and `flac` extensions, rejecting unsupported formats before opening a
-file. Reparse-point-specific Windows checks, allowlisted token templates,
-library metadata, and recycle operations remain open.
+file. Root symlinks/reparse points are rejected before canonicalization; the
+Windows suite covers the reparse attribute path and the portable suite covers
+a Unix symlink root. Nested reparse-point-specific checks, allowlisted token
+templates, library metadata, and recycle operations remain open.
