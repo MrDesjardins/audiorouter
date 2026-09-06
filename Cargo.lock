@@ -65,6 +65,7 @@ dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
  "audiorouter-protocol",
+ "audiorouter-recording",
  "audiorouter-storage",
  "audiorouter-transport",
  "serde_json",
