@@ -177,6 +177,14 @@ cover round trips, redo invalidation, and bounds; UI coverage is 39 tests with
 typecheck and production build passing. These actions never call the backend or
 alter live audio.
 
+The library now includes guided templates for Gaming + Discord, Processed
+Microphone, and Mix-minus conversation. Loading one replaces only the local
+candidate with an independent, stopped, inspectable graph; explicit edges and
+channel maps are shown for review, while device bindings still require review
+and backend plan/commit. Template regressions cover matrix shape, independent
+snapshots, and distinct names; UI coverage is 41 tests with typecheck and
+production build passing.
+
 The inspector now supports explicit removal of the selected node from the
 draft after confirmation. Its incident edges are removed from the candidate,
 while the session revision and committed state remain unchanged until backend

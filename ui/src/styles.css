@@ -41,3 +41,5 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .connection-editor select { min-height: 2.25rem; }
 .draft-connections { margin-top: 1rem; }
 .draft-connections li { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.template-picker { display: grid; gap: .5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #293344; }
+.template-picker label { display: grid; gap: .25rem; }
