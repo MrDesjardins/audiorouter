@@ -195,6 +195,8 @@ impl AudioBlockPool {
         if (block.channels(), block.frames()) != self.shape {
             return Err(block);
         }
+        let mut block = block;
+        block.clear();
         self.blocks.push(block)
     }
 }
@@ -1149,10 +1151,14 @@ mod tests {
         assert_eq!(pool.capacity(), 2);
         assert_eq!(pool.available(), 2);
         let block = pool.try_acquire().unwrap();
-        assert_eq!(pool.available(), 1);
-        assert!(pool.try_release(AudioBlock::new(2, 2).unwrap()).is_err());
+        let mut block = block;
+        block.channel_mut(0).unwrap().fill(1.0);
+        pool.try_release(block).unwrap();
+        let block = pool.try_acquire().unwrap();
+        assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
         pool.try_release(block).unwrap();
         assert_eq!(pool.available(), 2);
+        assert!(pool.try_release(AudioBlock::new(2, 2).unwrap()).is_err());
         assert!(pool.try_acquire().is_some());
         assert!(pool.try_acquire().is_some());
         assert!(pool.try_acquire().is_none());

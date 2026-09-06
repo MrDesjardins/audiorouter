@@ -51,3 +51,5 @@ The original nine-test baseline is retained in the history above; the current en
 `AudioBlockRing` pairs that pool with a fixed-shape ready queue. A producer acquires and submits a block, a consumer receives it, and the consumer explicitly recycles it; full submission returns the block and increments an overrun counter, while empty receive increments an underrun counter. This is a portable ownership primitive, not evidence of native callback timing, endpoint routing, or physical latency.
 
 `RuntimeProcessor::process_ring_once` now demonstrates pooled transfer from an input ring through the prepared graph into destination-owned output storage. Input and output blocks are recycled independently; output-pool starvation is recorded as an xrun. The API intentionally documents pool membership as a caller invariant: fixed shape alone cannot prove that an externally supplied block came from the preallocated pool.
+
+Pool release now clears the block before returning it to the free set. The test verifies that samples written before release are silent on the next acquire, closing a stale-audio ownership hazard without adding work to the allocation path.
