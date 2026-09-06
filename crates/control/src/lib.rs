@@ -435,12 +435,12 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        self.get_session(id)?;
+        let revision = self.get_session(id)?.revision;
         if let Some(runtime) = self.runtimes.get_mut(id) {
             runtime.stop();
         }
         self.events
-            .append(0, None, "runtime.stopped", Some(id.clone()));
+            .append(revision, None, "runtime.stopped", Some(id.clone()));
         Ok(json!({ "sessionId": id, "state": "stopped", "runtime": "fake" }))
     }
 
@@ -1225,6 +1225,8 @@ mod tests {
             plane.session_stop(&original.id).unwrap()["state"],
             "stopped"
         );
+        let events = plane.events.since(0, 10).unwrap();
+        assert_eq!(events.last().unwrap().resource_revision, original.revision);
         assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
     }
 
