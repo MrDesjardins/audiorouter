@@ -618,3 +618,8 @@ The shared CLI output writer also now requires absolute destinations, flushes
 and synchronizes successful writes, and removes a destination if writing or
 syncing fails. This keeps diagnostics and graph-plan artifacts from being left
 as partial files; focused CLI tests and strict Clippy pass.
+
+The complete headless wrapper was rerun at clean revision `fc05361`: M01 CLI
+(21 tests), MCP stdio, 68 control tests, 31 plugin-host tests, 8 worker-process
+tests, and strict Clippy passed. Temporary state was cleaned; no audio device,
+driver, or machine setting was accessed.
