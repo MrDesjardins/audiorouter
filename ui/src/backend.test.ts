@@ -95,6 +95,14 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "recordings.list", params: { sessionId: demoSession.id } });
   });
 
+  it("normalizes a paged recording response for the existing UI row contract", async () => {
+    const row = { id: "take-1" };
+    const client = {
+      request: async () => ({ items: [row], nextCursor: null }),
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listRecordings()).resolves.toEqual([row]);
+  });
+
   it("maps application inventory to the canonical read method", async () => {
     let received: unknown;
     const client = {

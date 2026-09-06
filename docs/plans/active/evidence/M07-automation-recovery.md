@@ -49,6 +49,10 @@ regression verifies `recordings list --limit 1` returns the page envelope while
 the existing unpaged command continues to return its legacy array. CLI and
 control suites, contracts/UI typechecks, and UI tests pass.
 
+The UI backend now has a direct regression for a paged recording response and
+normalizes its items into the established row-list contract. UI coverage is 23
+tests with typecheck passing.
+
 ## 2026-09-06 — Session-list CLI cursor parity
 
 `session list` now accepts optional `--cursor ID` in addition to its bounded
