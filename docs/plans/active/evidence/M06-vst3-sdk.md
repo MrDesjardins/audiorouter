@@ -341,3 +341,10 @@ reaps it, and returns a stable Timeout error. The existing default uses five
 seconds. The complete plugin-host suite (25 unit tests plus 2 process tests)
 passes with strict Clippy and formatting. This does not yet make frame reads
 nonblocking or establish OS sandbox restrictions.
+
+The disposable worker now drives WorkerSession at runtime, including an
+explicit worker-side Hello-sent transition before accepting Ready and process
+messages. A process regression confirms that a duplicate sequence is rejected
+with a session failure rather than echoed. The full plugin-host runtime suite
+passes 25 unit tests plus 3 process tests with strict Clippy. The worker still
+uses a placeholder zero-based clock and does not yet enforce OS sandbox policy.

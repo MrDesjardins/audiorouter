@@ -76,3 +76,32 @@ fn disposable_worker_process_round_trips_shared_audio_frames() {
     std::fs::remove_file(input_path).unwrap();
     std::fs::remove_file(output_path).unwrap();
 }
+
+#[test]
+fn disposable_worker_rejects_duplicate_sequence_frames() {
+    let hash = "f".repeat(64);
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let mut worker = WorkerProcess::spawn(worker_path, &hash, 1).expect("spawn worker");
+    let frame = WorkerFrame::new(1, 1, 1, vec![0.25]).unwrap();
+    assert_eq!(worker.process(frame.clone(), Vec::new()).unwrap(), frame);
+    let error = worker.process(frame, Vec::new()).unwrap_err();
+    assert!(matches!(
+        error,
+        audiorouter_plugin_host::WorkerProcessError::Protocol(code)
+            if code.contains("SequenceRegression")
+    ));
+}

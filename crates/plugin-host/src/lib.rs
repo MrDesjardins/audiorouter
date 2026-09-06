@@ -753,6 +753,14 @@ impl WorkerSession {
         self.state
     }
 
+    pub fn hello_sent(&mut self) -> Result<(), WorkerSessionError> {
+        if self.state != WorkerSessionState::AwaitingHello {
+            return Err(WorkerSessionError::UnexpectedMessage);
+        }
+        self.state = WorkerSessionState::AwaitingReady;
+        Ok(())
+    }
+
     pub fn accept(
         &mut self,
         message: &WorkerMessage,

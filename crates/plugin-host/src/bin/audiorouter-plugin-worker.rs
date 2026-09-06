@@ -20,7 +20,7 @@ fn main() -> ExitCode {
 
 fn run() -> Result<(), String> {
     let (plugin_sha256, channels, shared_paths) = parse_arguments()?;
-    let _session = WorkerSession::new(&plugin_sha256, channels)
+    let mut session = WorkerSession::new(&plugin_sha256, channels)
         .map_err(|error| format!("invalid worker configuration: {error:?}"))?;
     let mut shared = shared_paths
         .map(|(input_path, output_path)| {
@@ -46,16 +46,32 @@ fn run() -> Result<(), String> {
         },
     )
     .map_err(|error| format!("hello write failed: {error:?}"))?;
-    if read_worker_message(&mut reader).map_err(|error| format!("ready read failed: {error:?}"))?
-        != WorkerMessage::Ready
-    {
+    session
+        .hello_sent()
+        .map_err(|error| format!("hello state transition failed: {error:?}"))?;
+    let ready = read_worker_message(&mut reader)
+        .map_err(|error| format!("ready read failed: {error:?}"))?;
+    if ready != WorkerMessage::Ready {
         return Err("worker requires Ready after Hello".into());
     }
+    session
+        .accept(&ready, 0)
+        .map_err(|error| format!("ready rejected: {error:?}"))?;
 
     loop {
-        match read_worker_message(&mut reader)
-            .map_err(|error| format!("message read failed: {error:?}"))?
-        {
+        let message = read_worker_message(&mut reader)
+            .map_err(|error| format!("message read failed: {error:?}"))?;
+        if let Err(error) = session.accept(&message, 0) {
+            write_worker_message(
+                &mut writer,
+                &WorkerMessage::Failure {
+                    code: format!("session:{error:?}"),
+                },
+            )
+            .map_err(|write_error| format!("failure write failed: {write_error:?}"))?;
+            return Err(format!("worker session rejected message: {error:?}"));
+        }
+        match message {
             WorkerMessage::ProcessShared {
                 sequence,
                 deadline_tick,
