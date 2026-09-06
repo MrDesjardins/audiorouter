@@ -74,18 +74,23 @@ fn status_request() -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
-    let expected = if parent == "api" {
-        "methods"
-    } else if parent == "nodes" {
-        args.get(1).copied().unwrap_or("types")
-    } else {
-        "list"
+    let subcommand = args.get(1).copied();
+    let valid = match parent {
+        "api" => subcommand == Some("methods"),
+        "nodes" => matches!(subcommand, Some("types" | "describe")),
+        _ => subcommand == Some("list"),
     };
-    if args.get(1).copied() != Some(expected) {
+    if !valid {
+        let expected = match parent {
+            "api" => "methods",
+            "nodes" => "types|describe",
+            _ => "list",
+        };
         return Err(CliError::InvalidArguments(format!(
             "usage: {parent} {expected}"
         )));
     }
+    let expected = subcommand.unwrap();
     let mut plane = ControlPlane::default();
     Ok(match parent {
         "devices" => plane
@@ -413,6 +418,10 @@ mod tests {
     fn invalid_and_unknown_commands_are_actionable() {
         assert!(matches!(
             run(["devices", "oops"]),
+            Err(CliError::InvalidArguments(_))
+        ));
+        assert!(matches!(
+            run(["nodes", "oops"]),
             Err(CliError::InvalidArguments(_))
         ));
         assert_eq!(run(["nope"]), Err(CliError::UnknownCommand("nope".into())));
