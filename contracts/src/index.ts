@@ -228,6 +228,12 @@ export interface DiagnosticsSnapshot {
   redacted: true;
 }
 
+export interface StartupStatus {
+  enabled: false;
+  registration: "unavailable";
+  reason: string;
+}
+
 export interface StateEvent {
   sequence: number;
   backendEpoch: number;
@@ -424,7 +430,7 @@ export type MethodResult = {
   "recordings.recycle": Record<string, unknown>;
   "recovery.clearSafeMode": { safeMode: false; recentCrashes: number; persistence: "durable" | "memory" };
   "safety.setPrivacyMute": Record<string, unknown>;
-  "startup.get": Record<string, unknown>;
+  "startup.get": StartupStatus;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];

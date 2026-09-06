@@ -197,3 +197,8 @@ The `system.diagnostics` output schema now explicitly models its redacted
 backend, unavailable-audio, privacy/recovery, and event-log fields. Discovery
 tests verify the redaction marker and bounded counters; the operation remains
 read-only.
+
+The fixed `startup.get` capability response and `recovery.clearSafeMode` result
+now have explicit output schemas and shared TypeScript types. Their
+unavailable/cleared-state invariants are discovery-tested without registering
+startup or mutating recovery state.

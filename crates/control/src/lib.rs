@@ -347,6 +347,26 @@ fn method_output_schema(name: &str) -> Value {
     match name {
         "status.get" => status_output_schema(),
         "system.diagnostics" => diagnostics_output_schema(),
+        "recovery.clearSafeMode" => json!({
+            "type": "object",
+            "properties": {
+                "safeMode": { "const": false },
+                "recentCrashes": { "type": "integer", "minimum": 0 },
+                "persistence": { "enum": ["durable", "memory"] }
+            },
+            "required": ["safeMode", "recentCrashes", "persistence"],
+            "additionalProperties": false
+        }),
+        "startup.get" => json!({
+            "type": "object",
+            "properties": {
+                "enabled": { "const": false },
+                "registration": { "const": "unavailable" },
+                "reason": { "type": "string", "minLength": 1 }
+            },
+            "required": ["enabled", "registration", "reason"],
+            "additionalProperties": false
+        }),
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -3082,6 +3102,22 @@ mod tests {
         assert_eq!(
             diagnostics["outputSchema"]["properties"]["eventLog"]["required"],
             json!(["latestSequence", "retained"])
+        );
+        let startup = methods
+            .iter()
+            .find(|method| method["name"] == "startup.get")
+            .unwrap();
+        assert_eq!(
+            startup["outputSchema"]["properties"]["registration"]["const"],
+            "unavailable"
+        );
+        let recovery_clear = methods
+            .iter()
+            .find(|method| method["name"] == "recovery.clearSafeMode")
+            .unwrap();
+        assert_eq!(
+            recovery_clear["outputSchema"]["properties"]["safeMode"]["const"],
+            false
         );
         let applications = methods
             .iter()
