@@ -110,6 +110,16 @@ explicitly rather than treated as authorization; malformed IDs are rejected
 before plan lookup. Control coverage is 47 tests, domain coverage 23, and CLI
 coverage 9, with strict Clippy passing.
 
+## 2026-09-06 — Durable privacy mute latch
+
+Added `safety.setPrivacyMute`, `privacy mute <on|off>`, and MCP
+`set_privacy_mute` with explicit Capture-scope authorization. SQLite-backed
+control planes restore the latch on restart; `status.get` reports whether the
+latch is durable and explicitly limits its audio effect to the process-local
+realtime backend when available. Enable/disable events are discoverable and
+read-only clients cannot mutate the latch. Control/storage/CLI coverage passes
+at 48/25/9 with strict Clippy.
+
 ## 2026-09-06 — Recording CLI parity
 
 Added `recordings list`, `recordings get`, and `recordings remove-entry` to the

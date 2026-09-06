@@ -113,6 +113,7 @@ fn method_description(name: &str) -> &'static str {
             "Update recording metadata without changing audio content or path."
         }
         "recordings.rename" => "Rename a recording within its approved directory.",
+        "safety.setPrivacyMute" => "Latch or clear process-local privacy mute for capture paths.",
         "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
@@ -217,6 +218,9 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["recordingId", "newPath"],
         ),
+        "safety.setPrivacyMute" => {
+            object_schema(json!({ "muted": { "type": "boolean" } }), &["muted"])
+        }
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
@@ -379,6 +383,7 @@ pub struct ControlPlane {
     mutation_limiter: MutationRateLimiter,
     operation_outcomes: HashMap<String, Value>,
     application_snapshot: Option<(Instant, Value)>,
+    privacy_muted: bool,
 }
 
 impl Default for ControlPlane {
@@ -399,10 +404,12 @@ impl ControlPlane {
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
             application_snapshot: None,
+            privacy_muted: false,
         }
     }
 
     pub fn with_storage(build: impl Into<String>, storage: Storage) -> Self {
+        let privacy_muted = storage.load_privacy_mute().unwrap_or(false);
         Self {
             store: GraphStore::default(),
             build: build.into(),
@@ -413,6 +420,7 @@ impl ControlPlane {
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
             application_snapshot: None,
+            privacy_muted,
         }
     }
 
@@ -712,7 +720,9 @@ impl ControlPlane {
                     "graph.committed",
                     "runtime.started",
                     "runtime.activated",
-                    "runtime.stopped"
+                    "runtime.stopped",
+                    "privacy.muteEnabled",
+                    "privacy.muteDisabled"
                 ],
                 "meterReplay": false,
                 "retention": {
@@ -764,6 +774,11 @@ impl ControlPlane {
             "sessionCount": session_count,
             "activeSessionCount": active_session_ids.len(),
             "activeSessionIds": active_session_ids,
+            "privacyMute": {
+                "muted": self.privacy_muted,
+                "persistence": if self.storage.is_some() { "durable" } else { "memory" },
+                "audioEffect": "process-local-when-realtime-backend-is-available"
+            },
             "eventCursor": {
                 "backendEpoch": self.events.backend_epoch(),
                 "latestSequence": self.events.latest_sequence()
@@ -1156,6 +1171,7 @@ impl ControlPlane {
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
                     "recordings.rename" => self.dispatch_recording_rename(request.params),
                     "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
+                    "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1836,6 +1852,31 @@ impl ControlPlane {
         Ok(json!({ "recordingId": recording_id, "removed": true, "fileAction": "none" }))
     }
 
+    fn dispatch_privacy_mute(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let muted = params
+            .and_then(|params| params.get("muted").and_then(Value::as_bool))
+            .ok_or_else(|| ControlError::InvalidRequest("muted is required".into()))?;
+        if let Some(storage) = &self.storage {
+            storage.save_privacy_mute(muted).map_err(storage_error)?;
+        }
+        self.privacy_muted = muted;
+        self.events.append(
+            0,
+            None,
+            if muted {
+                "privacy.muteEnabled"
+            } else {
+                "privacy.muteDisabled"
+            },
+            None,
+        );
+        Ok(json!({
+            "muted": muted,
+            "persistence": if self.storage.is_some() { "durable" } else { "memory" },
+            "audioEffect": "process-local-when-realtime-backend-is-available"
+        }))
+    }
+
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         if let Some(requested_epoch) = params.get("backendEpoch").and_then(Value::as_u64) {
@@ -2018,6 +2059,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.get" | "recordings.preview" => &["recordingId"],
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
         "recordings.rename" => &["recordingId", "newPath"],
+        "safety.setPrivacyMute" => &["muted"],
         "recordings.removeEntry" => &["recordingId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
@@ -2515,6 +2557,46 @@ mod tests {
         assert_eq!(result["sessionCount"], 1);
         assert_eq!(result["activeSessionCount"], 0);
         assert_eq!(result["eventCursor"]["latestSequence"], 1);
+    }
+
+    #[test]
+    fn privacy_mute_is_authorized_and_durable_across_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-privacy-mute-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let mut first = ControlPlane::with_storage("first", Storage::open(&path).unwrap());
+        let enabled = first.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(19)),
+            method: "safety.setPrivacyMute".into(),
+            params: Some(json!({ "muted": true })),
+        });
+        assert_eq!(enabled.result.unwrap()["muted"], true);
+        let denied = first.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(20)),
+                method: "safety.setPrivacyMute".into(),
+                params: Some(json!({ "muted": false })),
+            },
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(denied.error.unwrap().code, -32001);
+        drop(first);
+        let mut second = ControlPlane::with_storage("second", Storage::open(&path).unwrap());
+        let status = second
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(21)),
+                method: "status.get".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert_eq!(status["privacyMute"]["muted"], true);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

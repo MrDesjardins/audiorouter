@@ -56,6 +56,7 @@ where
         "api" => api_subcommand(&command_args)?,
         "operation" => operation_command(&command_args)?,
         "recordings" => recordings_command(&command_args)?,
+        "privacy" => privacy_command(&command_args)?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
         "export-bundle" => export_bundle(&command_args)?,
@@ -230,6 +231,33 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
             |error| error.message,
         )))
     }
+}
+
+fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("mute") {
+        return Err(CliError::InvalidArguments(
+            "usage: privacy mute <on|off> --database <path>".into(),
+        ));
+    }
+    let muted = match args.get(2).copied() {
+        Some("on") => true,
+        Some("off") => false,
+        _ => {
+            return Err(CliError::InvalidArguments(
+                "usage: privacy mute <on|off> --database <path>".into(),
+            ))
+        }
+    };
+    let mut plane = ControlPlane::with_storage("cli", database(args)?);
+    plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "safety.setPrivacyMute".into(),
+            params: Some(json!({ "muted": muted })),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("privacy mute update failed".into()))
 }
 
 fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
@@ -714,6 +742,10 @@ fn help_value() -> Value {
         14,
         json!("operation <get|cancel> <operation-id> --database <path>"),
     );
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
+        .insert(14, json!("privacy mute <on|off> --database <path>"));
     value
 }
 
@@ -975,6 +1007,7 @@ fn mcp_tools() -> Value {
         { "name": "preview_recording", "description": "Inspect recording file metadata without decoding audio; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "set_recording_metadata", "description": "Update recording metadata without changing its audio or path; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "title": { "type": ["string", "null"], "maxLength": 256 }, "artist": { "type": ["string", "null"], "maxLength": 256 }, "comment": { "type": ["string", "null"], "maxLength": 256 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "rename_recording", "description": "Rename a recording within its approved directory; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "newPath": { "type": "string", "minLength": 1 } }, "required": ["recordingId", "newPath"], "additionalProperties": false } },
+        { "name": "set_privacy_mute", "description": "Latch or clear process-local privacy mute; requires capture scope.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" } }, "required": ["muted"], "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
         { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
@@ -1014,6 +1047,7 @@ fn mcp_tool_call(
         "preview_recording" => ("recordings.preview", Some(arguments)),
         "set_recording_metadata" => ("recordings.setMetadata", Some(arguments)),
         "rename_recording" => ("recordings.rename", Some(arguments)),
+        "set_privacy_mute" => ("safety.setPrivacyMute", Some(arguments)),
         "remove_recording_entry" => ("recordings.removeEntry", Some(arguments)),
         "plan_graph_change" => ("graph.plan", Some(arguments)),
         "apply_graph_change" => ("graph.commit", Some(arguments)),
@@ -1264,6 +1298,11 @@ mod tests {
         .unwrap();
         assert_eq!(fetched["title"], "Updated title");
         assert_eq!(fetched["path"], "C:\\Audio\\recording.wav");
+        let muted: Value = serde_json::from_str(
+            &run(["privacy", "mute", "on", "--database", &database, "--json"]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(muted["muted"], true);
         let removed: Value = serde_json::from_str(
             &run([
                 "recordings",
@@ -1545,7 +1584,7 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 17);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 18);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
             &mut plane,

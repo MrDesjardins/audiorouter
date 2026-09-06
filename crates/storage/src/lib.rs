@@ -353,6 +353,10 @@ impl Storage {
                  expires_at INTEGER NOT NULL
              );
              CREATE INDEX IF NOT EXISTS graph_plans_expires_at ON graph_plans(expires_at);
+             CREATE TABLE IF NOT EXISTS control_settings (
+                 key TEXT PRIMARY KEY,
+                 value TEXT NOT NULL
+             );
              CREATE TABLE IF NOT EXISTS client_enrollments (
                  client_id TEXT PRIMARY KEY,
                  role TEXT NOT NULL CHECK(role IN ('observer', 'editor', 'operator')),
@@ -1287,6 +1291,28 @@ impl Storage {
         self.connection
             .execute("DELETE FROM graph_plans WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    pub fn save_privacy_mute(&self, muted: bool) -> Result<(), StorageError> {
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('privacyMute', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![if muted { "true" } else { "false" }],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_privacy_mute(&self) -> Result<bool, StorageError> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'privacyMute'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .as_deref()
+            == Some("true"))
     }
 
     fn prune_expired_graph_plans(&self) -> Result<(), StorageError> {
