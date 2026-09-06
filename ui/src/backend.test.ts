@@ -132,18 +132,18 @@ describe("live event cursor", () => {
     const client = {
       request: async (method: string, params: unknown) => {
         received = { method, params };
-        return { recordingId: "take-1", status: "present" };
+        return { recordingId: "take-1", preview: { status: "missing" } };
       },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
-    await expect(backend.previewRecording("take-1")).resolves.toEqual({ recordingId: "take-1", status: "present" });
+    await expect(backend.previewRecording("take-1")).resolves.toEqual({ recordingId: "take-1", preview: { status: "missing" } });
     expect(received).toEqual({ method: "recordings.preview", params: { recordingId: "take-1" } });
   });
 
   it("forwards the privacy safety latch through the live API", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { muted: true }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).setPrivacyMute(true)).resolves.toEqual({ muted: true });
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { muted: true, persistence: "memory", audioEffect: "process-local" }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).setPrivacyMute(true)).resolves.toEqual({ muted: true, persistence: "memory", audioEffect: "process-local" });
     expect(received).toEqual({ method: "safety.setPrivacyMute", params: { muted: true } });
   });
 
@@ -156,15 +156,15 @@ describe("live event cursor", () => {
 
   it("forwards metadata-only recording entry removal", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { fileAction: "none" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).removeRecordingEntry("take-1")).resolves.toEqual({ fileAction: "none" });
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", removed: true, fileAction: "none" }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).removeRecordingEntry("take-1")).resolves.toEqual({ recordingId: "take-1", removed: true, fileAction: "none" });
     expect(received).toEqual({ method: "recordings.removeEntry", params: { recordingId: "take-1" } });
   });
 
   it("forwards recording recovery inspection without file actions", async () => {
     let received: unknown;
-    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { present: false }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).getRecordingRecovery("take-1")).resolves.toEqual({ present: false });
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", status: "missing" }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).getRecordingRecovery("take-1")).resolves.toEqual({ recordingId: "take-1", status: "missing" });
     expect(received).toEqual({ method: "recordings.recovery", params: { recordingId: "take-1" } });
   });
 

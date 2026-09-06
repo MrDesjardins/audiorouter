@@ -7,9 +7,16 @@ import type {
   EventsSubscribeResult,
   GraphCommitResult,
   GraphPlanResult,
+  PrivacyMuteResult,
+  RecordingMetadataResult,
+  RecordingPreviewResult,
+  RecordingRecoveryResult,
+  RecordingRemoveResult,
   RecordingRow,
   RouteInspection,
   Session,
+  SessionCreateResult,
+  SessionDeleteResult,
   StatusSnapshot,
   RpcTransport,
 } from "@audiorouter/contracts";
@@ -34,15 +41,15 @@ export interface UiBackend {
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
-  previewRecording(recordingId: string): Promise<Record<string, unknown>>;
-  getRecordingRecovery(recordingId: string): Promise<Record<string, unknown>>;
-  setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<Record<string, unknown>>;
-  setPrivacyMute(muted: boolean): Promise<Record<string, unknown>>;
+  previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
+  getRecordingRecovery(recordingId: string): Promise<RecordingRecoveryResult>;
+  setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<RecordingMetadataResult>;
+  setPrivacyMute(muted: boolean): Promise<PrivacyMuteResult>;
   clearRecoverySafeMode(): Promise<Record<string, unknown>>;
-  removeRecordingEntry(recordingId: string): Promise<Record<string, unknown>>;
-  createSession(session: Session): Promise<{ session: Session; state: string }>;
-  duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<{ session: Session; state: string }>;
-  deleteSession(sessionId: string): Promise<Record<string, unknown>>;
+  removeRecordingEntry(recordingId: string): Promise<RecordingRemoveResult>;
+  createSession(session: Session): Promise<SessionCreateResult>;
+  duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<SessionCreateResult>;
+  deleteSession(sessionId: string): Promise<SessionDeleteResult>;
 }
 
 export type UiSnapshotState = {
