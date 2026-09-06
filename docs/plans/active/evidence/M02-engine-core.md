@@ -38,4 +38,6 @@ Queue full/empty events now increment atomic overrun/underrun counters while sti
 
 `RmsWindow` adds a preallocated rolling RMS window with explicit capacity and reset behavior. It treats non-finite input as silence and performs no allocation while pushing blocks; the engine suite contains 21 passing tests and strict engine Clippy passes.
 
+`RuntimeProcessor` now observes active processed blocks through `BlockMeter`, exposing peak and clipping health without changing the no-graph silence behavior. The integration test verifies the meter sees processed output; per-node API publication remains open.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.

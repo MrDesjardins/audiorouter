@@ -824,6 +824,7 @@ pub struct RuntimeProcessor {
     publication: RuntimePublication,
     privacy_mute: PrivacyMute,
     metrics: CallbackMetrics,
+    meter: BlockMeter,
 }
 
 impl RuntimeProcessor {
@@ -839,6 +840,10 @@ impl RuntimeProcessor {
         &self.metrics
     }
 
+    pub fn meter(&self) -> &BlockMeter {
+        &self.meter
+    }
+
     /// Process one block and return the active generation. Before a graph is
     /// published, the block is cleared and `None` is returned.
     pub fn process(&self, block: &mut AudioBlock) -> Option<RuntimeGeneration> {
@@ -848,6 +853,7 @@ impl RuntimeProcessor {
         };
         self.privacy_mute.apply(block);
         graph.process_instrumented(block, &self.metrics);
+        self.meter.observe(block);
         Some(graph.generation())
     }
 }
@@ -1240,6 +1246,8 @@ mod tests {
             Some(9)
         );
         assert_eq!(block.channel(0).unwrap(), &[2.0; 2]);
+        assert_eq!(processor.meter().peak_abs(), 2.0);
+        assert_eq!(processor.meter().clipped_samples(), 2);
         processor.set_privacy_muted(true);
         processor.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
