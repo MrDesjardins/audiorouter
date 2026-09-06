@@ -101,6 +101,15 @@ within the same transaction as the session and history deletion. A storage
 regression verifies that a retained plan is absent after deletion; control
 coverage remains green at 46 tests, with strict Clippy and formatting passing.
 
+## 2026-09-06 — Graph warning acknowledgment validation
+
+Aligned `graph.commit` discovery and validation with API-05 by accepting an
+optional nullable `acknowledgments` array of bounded warning IDs. The current
+plan generator exposes no warnings, so non-empty acknowledgments are rejected
+explicitly rather than treated as authorization; malformed IDs are rejected
+before plan lookup. Control coverage is 47 tests, domain coverage 23, and CLI
+coverage 9, with strict Clippy passing.
+
 ## 2026-09-06 — Recording CLI parity
 
 Added `recordings list`, `recordings get`, and `recordings remove-entry` to the

@@ -287,7 +287,12 @@ fn method_input_schema(name: &str) -> Value {
             json!({
                 "planId": { "type": "string", "minLength": 1 },
                 "baseRevision": { "type": "integer", "minimum": 0 },
-                "idempotencyKey": { "type": "string", "minLength": 1 }
+                "idempotencyKey": { "type": "string", "minLength": 1 },
+                "acknowledgments": {
+                    "type": ["array", "null"],
+                    "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "maxItems": 100
+                }
             }),
             &["planId", "baseRevision", "idempotencyKey"],
         ),
@@ -1451,6 +1456,24 @@ impl ControlPlane {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("graph.commit params are required".into())
         })?;
+        if let Some(acknowledgments) = params.get("acknowledgments") {
+            let acknowledgments = acknowledgments.as_array().ok_or_else(|| {
+                ControlError::InvalidRequest("acknowledgments must be an array or null".into())
+            })?;
+            if acknowledgments.iter().any(|value| match value.as_str() {
+                Some(value) => value.is_empty() || value.len() > 128,
+                None => true,
+            }) {
+                return Err(ControlError::InvalidRequest(
+                    "acknowledgments must contain non-empty warning IDs".into(),
+                ));
+            }
+            if !acknowledgments.is_empty() {
+                return Err(ControlError::InvalidRequest(
+                    "no warnings on this plan require acknowledgment".into(),
+                ));
+            }
+        }
         let plan_id: EntityId = serde_json::from_value(
             params
                 .get("planId")
@@ -1981,7 +2004,12 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "graph.undoPlan" => &["sessionId", "baseRevision"],
         "events.subscribe" => &["afterSequence", "backendEpoch", "limit", "sessionId"],
         "graph.plan" => &["sessionId", "baseRevision", "candidate"],
-        "graph.commit" => &["planId", "baseRevision", "idempotencyKey"],
+        "graph.commit" => &[
+            "planId",
+            "baseRevision",
+            "idempotencyKey",
+            "acknowledgments",
+        ],
         "system.handshake" => &["protocolVersion"],
         "clients.authorize" => &["clientId", "role"],
         "clients.revoke" => &["clientId"],
@@ -3039,6 +3067,36 @@ mod tests {
         assert_eq!(result["cancelled"], false);
         assert_eq!(result["reason"], "alreadyCompleted");
         assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
+    }
+
+    #[test]
+    fn graph_commit_acknowledgments_are_validated_and_cannot_grant_scope() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(17)),
+            method: "graph.commit".into(),
+            params: Some(json!({
+                "planId": "plan-1",
+                "baseRevision": 0,
+                "idempotencyKey": "ack-test",
+                "acknowledgments": ["unverified-feedback"]
+            })),
+        });
+        assert!(response.error.unwrap().message.contains("no warnings"));
+
+        let invalid = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(18)),
+            method: "graph.commit".into(),
+            params: Some(json!({
+                "planId": "plan-1",
+                "baseRevision": 0,
+                "idempotencyKey": "ack-test",
+                "acknowledgments": [12]
+            })),
+        });
+        assert!(invalid.error.unwrap().message.contains("warning IDs"));
     }
 
     #[test]
