@@ -170,6 +170,13 @@ safety action, which remains unavailable in the editor; the parameter still
 flows through the existing plan/commit path. UI coverage is 9 tests with
 typecheck and production build passing.
 
+Draft graph edits now use a bounded 20-entry undo/redo history. Undo and redo
+restore complete candidate snapshots, a new edit clears the redo branch, and
+switching sessions/discarding a draft resets history. Pure history regressions
+cover round trips, redo invalidation, and bounds; UI coverage is 39 tests with
+typecheck and production build passing. These actions never call the backend or
+alter live audio.
+
 The inspector now supports explicit removal of the selected node from the
 draft after confirmation. Its incident edges are removed from the candidate,
 while the session revision and committed state remain unchanged until backend
