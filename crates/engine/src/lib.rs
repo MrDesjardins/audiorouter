@@ -10,6 +10,48 @@ pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum QueueError {
+    InvalidCapacity,
+}
+
+/// Fixed-capacity nonblocking queue for preallocated audio blocks. The queue
+/// allocates its slots during construction; push/pop never wait or allocate.
+pub struct AudioBlockQueue {
+    blocks: crossbeam_queue::ArrayQueue<AudioBlock>,
+}
+
+impl AudioBlockQueue {
+    pub fn new(capacity: usize) -> Result<Self, QueueError> {
+        if capacity == 0 {
+            return Err(QueueError::InvalidCapacity);
+        }
+        Ok(Self {
+            blocks: crossbeam_queue::ArrayQueue::new(capacity),
+        })
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.blocks.capacity()
+    }
+
+    pub fn len(&self) -> usize {
+        self.blocks.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.blocks.is_empty()
+    }
+
+    pub fn try_push(&self, block: AudioBlock) -> Result<(), AudioBlock> {
+        self.blocks.push(block)
+    }
+
+    pub fn try_pop(&self) -> Option<AudioBlock> {
+        self.blocks.pop()
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BlockError {
     InvalidChannels,
@@ -20,6 +62,7 @@ pub enum BlockError {
 
 /// A preallocated planar float32 block. Samples are stored channel-major:
 /// `channel * frames + frame`.
+#[derive(Debug)]
 pub struct AudioBlock {
     channels: usize,
     frames: usize,
@@ -705,6 +748,24 @@ mod tests {
         let other = AudioBlock::new(2, 4).unwrap();
         assert_eq!(block.copy_from(&other), Err(BlockError::ShapeMismatch));
         assert_eq!(block.mix_from(&other, 1.0), Err(BlockError::ShapeMismatch));
+    }
+
+    #[test]
+    fn bounded_audio_queue_is_nonblocking_and_explicit_when_full() {
+        assert!(matches!(
+            AudioBlockQueue::new(0),
+            Err(QueueError::InvalidCapacity)
+        ));
+        let queue = AudioBlockQueue::new(1).unwrap();
+        let first = AudioBlock::new(1, 2).unwrap();
+        let second = AudioBlock::new(1, 2).unwrap();
+        assert!(queue.is_empty());
+        queue.try_push(first).unwrap();
+        assert_eq!(queue.len(), 1);
+        let returned = queue.try_push(second).unwrap_err();
+        assert_eq!(returned.frames(), 2);
+        assert!(queue.try_pop().is_some());
+        assert!(queue.try_pop().is_none());
     }
 
     #[test]

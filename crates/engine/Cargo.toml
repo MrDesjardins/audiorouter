@@ -8,3 +8,4 @@ rust-version.workspace = true
 [dependencies]
 arc-swap = "1.7.1"
 audiorouter-domain = { path = "../domain" }
+crossbeam-queue = "0.3.12"
