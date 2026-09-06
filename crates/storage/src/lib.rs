@@ -18,6 +18,7 @@ pub enum StorageError {
     InvalidSession(String),
     InvalidBundle(String),
     InvalidRecording(String),
+    InvalidPluginState(String),
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
@@ -46,6 +47,10 @@ fn is_executable_name(name: &str) -> bool {
             | Some("cmd")
             | Some("ps1")
     )
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +156,17 @@ pub struct RecordingRecord {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub comment: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PluginStateRecord {
+    pub id: String,
+    pub plugin_id: String,
+    pub plugin_sha256: String,
+    pub version: u32,
+    pub path: String,
+    pub state_sha256: String,
+    pub size_bytes: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -339,6 +355,16 @@ impl Storage {
                  comment TEXT
              );
              CREATE INDEX IF NOT EXISTS recordings_session_id ON recordings(session_id);
+             CREATE TABLE IF NOT EXISTS plugin_states (
+                 id TEXT PRIMARY KEY,
+                 plugin_id TEXT NOT NULL,
+                 plugin_sha256 TEXT NOT NULL,
+                 version INTEGER NOT NULL,
+                 path TEXT NOT NULL,
+                 state_sha256 TEXT NOT NULL,
+                 size_bytes INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS plugin_states_plugin_id ON plugin_states(plugin_id);
              INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);",
         )?;
         let has_request_hash = self
@@ -496,6 +522,75 @@ impl Storage {
             "UPDATE recordings SET title = ?2, artist = ?3, comment = ?4 WHERE id = ?1",
             params![id, title, artist, comment],
         )? == 1)
+    }
+
+    pub fn save_plugin_state(&self, state: &PluginStateRecord) -> Result<(), StorageError> {
+        if state.id.is_empty()
+            || state.plugin_id.is_empty()
+            || !is_sha256(&state.plugin_sha256)
+            || state.version == 0
+            || state.path.is_empty()
+            || !is_sha256(&state.state_sha256)
+            || state.size_bytes == 0
+            || state.size_bytes > MAX_BUNDLE_ASSET_BYTES
+        {
+            return Err(StorageError::InvalidPluginState(
+                "invalid plugin state fields".into(),
+            ));
+        }
+        self.connection.execute(
+            "INSERT INTO plugin_states
+             (id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(id) DO UPDATE SET plugin_id=excluded.plugin_id,
+               plugin_sha256=excluded.plugin_sha256, version=excluded.version,
+               path=excluded.path, state_sha256=excluded.state_sha256,
+               size_bytes=excluded.size_bytes",
+            params![
+                state.id,
+                state.plugin_id,
+                state.plugin_sha256,
+                i64::from(state.version),
+                state.path,
+                state.state_sha256,
+                state.size_bytes as i64,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_plugin_states(
+        &self,
+        plugin_id: Option<&str>,
+    ) -> Result<Vec<PluginStateRecord>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes
+             FROM plugin_states
+             WHERE (?1 IS NULL OR plugin_id = ?1)
+             ORDER BY id ASC",
+        )?;
+        let records = statement
+            .query_map(params![plugin_id], |row| {
+                Ok(PluginStateRecord {
+                    id: row.get(0)?,
+                    plugin_id: row.get(1)?,
+                    plugin_sha256: row.get(2)?,
+                    version: row.get::<_, i64>(3)? as u32,
+                    path: row.get(4)?,
+                    state_sha256: row.get(5)?,
+                    size_bytes: row.get::<_, i64>(6)? as u64,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(records)
+    }
+
+    /// Removes only state metadata; the asset file remains untouched.
+    pub fn remove_plugin_state(&self, id: &str) -> Result<bool, StorageError> {
+        Ok(self
+            .connection
+            .execute("DELETE FROM plugin_states WHERE id = ?1", params![id])?
+            == 1)
     }
 
     pub fn load_history(&self, id: &EntityId, limit: usize) -> Result<Vec<Session>, StorageError> {
@@ -1706,5 +1801,26 @@ mod tests {
         assert!(!reopened.remove_recording_entry("rec-1").unwrap());
         assert_eq!(reopened.list_recordings(None).unwrap().len(), 1);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn plugin_state_metadata_persists_and_removal_keeps_asset_path_untouched() {
+        let storage = Storage::open_memory().unwrap();
+        let state = PluginStateRecord {
+            id: "state-1".into(),
+            plugin_id: "plugin-1".into(),
+            plugin_sha256: "a".repeat(64),
+            version: 1,
+            path: "C:\\AudioRouter\\state\\state-1.bin".into(),
+            state_sha256: "b".repeat(64),
+            size_bytes: 128,
+        };
+        storage.save_plugin_state(&state).unwrap();
+        assert_eq!(
+            storage.list_plugin_states(Some("plugin-1")).unwrap(),
+            vec![state]
+        );
+        assert!(storage.remove_plugin_state("state-1").unwrap());
+        assert!(storage.list_plugin_states(None).unwrap().is_empty());
     }
 }

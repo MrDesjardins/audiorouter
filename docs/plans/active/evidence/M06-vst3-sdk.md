@@ -69,6 +69,12 @@ and SHA-256, and verifies both before restore. Empty, oversized, mismatched,
 and tampered state are rejected. Nine plugin-host tests and strict Clippy pass;
 durable asset storage and plugin-specific state serialization remain open.
 
+The SQLite storage boundary now persists validated `PluginStateRecord` metadata
+(plugin identity/hash, state version/path/hash, and size), filters by plugin,
+and removes only the metadata row without touching the asset path. Twenty-two
+storage tests pass, including reopen/persistence coverage, and strict Clippy is
+green.
+
 `FailureLedger` now expires its rolling failure count after ten minutes, with
 an injectable clock for deterministic tests. The new test compiles and strict
 Clippy passes, but Windows Application Control blocked launching the generated
