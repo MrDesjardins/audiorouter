@@ -34,6 +34,7 @@ pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 pub const GRAPH_PLAN_RETENTION_SECONDS: i64 = 5 * 60;
+pub const DAILY_RECOVERY_BACKUP_LIMIT: usize = 10;
 
 fn is_executable_name(name: &str) -> bool {
     matches!(
@@ -273,6 +274,56 @@ impl Storage {
         self.connection
             .backup(rusqlite::DatabaseName::Main, destination, None)
             .map_err(StorageError::Sql)
+    }
+
+    /// Retain the newest ten explicitly named daily recovery backups.
+    ///
+    /// Only direct regular files named audiorouter-backup-*.sqlite are
+    /// eligible. Files named audiorouter-pre-migration-*.sqlite are always
+    /// preserved, as are all unrelated files. The caller owns the selected
+    /// directory and invokes this operation as an explicit maintenance action.
+    pub fn prune_recovery_backups(
+        directory: impl AsRef<std::path::Path>,
+    ) -> Result<Vec<std::path::PathBuf>, StorageError> {
+        let directory = directory.as_ref();
+        if !directory.is_absolute() {
+            return Err(StorageError::InvalidBackupPath(
+                "backup retention directory must be absolute".into(),
+            ));
+        }
+        let metadata = std::fs::symlink_metadata(directory)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(StorageError::InvalidBackupPath(
+                "backup retention directory must be a regular non-symlink directory".into(),
+            ));
+        }
+
+        let mut daily = Vec::new();
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path)?;
+            if !metadata.is_file() || metadata.file_type().is_symlink() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if name.starts_with("audiorouter-backup-")
+                && name.ends_with(".sqlite")
+                && !name.starts_with("audiorouter-backup-pre-migration-")
+            {
+                daily.push((name.to_owned(), path));
+            }
+        }
+        daily.sort_by(|left, right| right.0.cmp(&left.0));
+
+        let mut removed = Vec::new();
+        for (_, path) in daily.into_iter().skip(DAILY_RECOVERY_BACKUP_LIMIT) {
+            std::fs::remove_file(&path)?;
+            removed.push(path);
+        }
+        Ok(removed)
     }
 
     /// Restore a validated SQLite backup into a new file. Existing files and
@@ -2078,6 +2129,51 @@ mod tests {
         drop(storage);
         let _ = std::fs::remove_file(source);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn recovery_retention_keeps_newest_daily_and_all_pre_migration_backups() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-storage-retention-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir(&directory).unwrap();
+        for index in 1..=12 {
+            std::fs::write(
+                directory.join(format!("audiorouter-backup-202609{:02}.sqlite", index)),
+                [index as u8],
+            )
+            .unwrap();
+        }
+        let pre_migration = directory.join("audiorouter-pre-migration-20260901.sqlite");
+        let unrelated = directory.join("notes.txt");
+        std::fs::write(&pre_migration, b"keep").unwrap();
+        std::fs::write(&unrelated, b"keep").unwrap();
+
+        let removed = Storage::prune_recovery_backups(&directory).unwrap();
+        assert_eq!(removed.len(), 2);
+        assert!(!directory
+            .join("audiorouter-backup-20260901.sqlite")
+            .exists());
+        assert!(!directory
+            .join("audiorouter-backup-20260902.sqlite")
+            .exists());
+        assert!(directory
+            .join("audiorouter-backup-20260903.sqlite")
+            .exists());
+        assert!(directory
+            .join("audiorouter-backup-20260912.sqlite")
+            .exists());
+        assert!(pre_migration.exists());
+        assert!(unrelated.exists());
+        assert!(matches!(
+            Storage::prune_recovery_backups("relative"),
+            Err(StorageError::InvalidBackupPath(message))
+                if message.contains("must be absolute")
+        ));
+
+        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[test]

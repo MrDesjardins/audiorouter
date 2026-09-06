@@ -113,6 +113,22 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
 }
 
 fn backup_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() == Some("prune") {
+        let directory = option_value(args, "--directory")?;
+        let directory_path = std::path::Path::new(directory);
+        if !directory_path.is_absolute() {
+            return Err(CliError::InvalidArguments(
+                "--directory path must be absolute".into(),
+            ));
+        }
+        let removed = Storage::prune_recovery_backups(directory_path)
+            .map_err(|error| CliError::Storage(format!("{error:?}")))?;
+        return Ok(json!({
+            "directory": directory,
+            "retainedDaily": audiorouter_storage::DAILY_RECOVERY_BACKUP_LIMIT,
+            "removed": removed.iter().map(|path| path.to_string_lossy()).collect::<Vec<_>>()
+        }));
+    }
     let source = option_value(args, "--database")?;
     let destination = option_value(args, "--output")?;
     let source_path = std::path::Path::new(source);
@@ -865,17 +881,21 @@ fn help_value() -> Value {
     value["commands"]
         .as_array_mut()
         .unwrap()
-        .insert(5, json!("restore --backup <path> --database <new-path>"));
+        .insert(5, json!("backup prune --directory <path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
+        .insert(6, json!("restore --backup <path> --database <new-path>"));
     value["commands"]
         .as_array_mut()
         .unwrap()
         .insert(3, json!("startup get [--database <path>]"));
     value["commands"].as_array_mut().unwrap().insert(
-        6,
+        7,
         json!("watch <session-id> --database <path> [--after N] [--limit N]"),
     );
     value["commands"].as_array_mut().unwrap().insert(
-        14,
+        15,
         json!("recordings list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle [<recording-id>] --database <path>"),
     );
     value["commands"].as_array_mut().unwrap().insert(
@@ -1558,6 +1578,41 @@ mod tests {
         for path in [&source, &backup, &restored] {
             let _ = std::fs::remove_file(path);
         }
+    }
+
+    #[test]
+    fn backup_prune_command_retains_daily_limit_and_pre_migration_files() {
+        let directory =
+            std::env::temp_dir().join(format!("audiorouter-cli-retention-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir(&directory).unwrap();
+        for index in 1..=11 {
+            std::fs::write(
+                directory.join(format!("audiorouter-backup-202609{:02}.sqlite", index)),
+                [index as u8],
+            )
+            .unwrap();
+        }
+        let pre_migration = directory.join("audiorouter-pre-migration-20260901.sqlite");
+        std::fs::write(&pre_migration, b"preserve").unwrap();
+        let directory_arg = directory.to_string_lossy().into_owned();
+        let result: Value = serde_json::from_str(
+            &run(["backup", "prune", "--directory", &directory_arg, "--json"]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            result["retainedDaily"],
+            audiorouter_storage::DAILY_RECOVERY_BACKUP_LIMIT
+        );
+        assert_eq!(result["removed"].as_array().unwrap().len(), 1);
+        assert!(!directory
+            .join("audiorouter-backup-20260901.sqlite")
+            .exists());
+        assert!(directory
+            .join("audiorouter-backup-20260911.sqlite")
+            .exists());
+        assert!(pre_migration.exists());
+        let _ = std::fs::remove_dir_all(directory);
     }
 
     #[test]

@@ -41,10 +41,15 @@ Backups require a new destination; the storage layer refuses to overwrite an exi
 ```powershell
 audiorouter backup --database C:\path\audiorouter.sqlite --output C:\path\recovery.sqlite --json
 audiorouter restore --backup C:\path\recovery.sqlite --database C:\path\restored.sqlite --json
+audiorouter backup prune --directory C:\path\recovery --json
 ```
 
 The backup and restore commands require absolute paths and refuse existing
 destinations. Restore validates SQLite integrity before writing the new file.
+The explicit retention command removes only direct files named
+audiorouter-backup-*.sqlite beyond the newest ten lexically timestamped
+names; pre-migration backups and unrelated files are preserved. It never
+prunes recordings.
 
 ```powershell
 audiorouter export-bundle session-id --database C:\path\audiorouter.sqlite --output C:\path\session.audiorouter --json

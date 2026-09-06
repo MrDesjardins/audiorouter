@@ -217,3 +217,13 @@ MCP and worker changes, including the CLI process-level MCP test, all control
 and storage recovery coverage, and the plugin-host worker tests. Strict
 formatting/Clippy checks remain green. This checkpoint does not claim native
 pipe interoperability, live audio routing, driver lifecycle, or signing.
+
+## 2026-09-06 — Explicit filesystem backup retention
+
+Added Storage::prune_recovery_backups and the headless
+backup prune --directory command. The operation requires an absolute,
+non-symlink directory, considers only direct audiorouter-backup-*.sqlite
+files, retains the newest ten timestamped names, preserves pre-migration and
+unrelated files, and reports removed paths. Temporary-directory storage and
+CLI regressions pass with strict Clippy. Recordings and the SQLite database
+are never pruned by this operation.
