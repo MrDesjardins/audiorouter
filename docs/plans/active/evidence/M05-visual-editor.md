@@ -46,6 +46,12 @@ updates local presentation state only; it does not call a control method or
 alter audio configuration. TypeScript checking and the production Vite build
 pass.
 
+Added presentation support for Windows accessibility preferences: reduced
+motion disables transitions/animations, and forced-colors mode uses system
+button colors plus non-color focus/selection outlines. The session picker is
+also styled as a full-width labeled control. This remains renderer-only;
+TypeScript checking, UI tests, production build, and high-severity audit pass.
+
 `SnapshotCache` now retains the last successful `UiBackendSnapshot` and marks
 it stale with an actionable error when refresh fails. A failed reconnect cannot
 erase the last known session or create an unbounded edit queue; a later
