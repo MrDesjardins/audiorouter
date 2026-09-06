@@ -42,6 +42,10 @@ try {
         if ($routes.paths.Count -eq 0 -or $routes.paths[0].channelMaps.Count -eq 0) { throw "Route channel map missing" }
         $history = cargo run --quiet -p audiorouter-cli -- --json history session-fixture --database $database --limit 1 | ConvertFrom-Json
         if ($history.Count -ne 1 -or $history[0].revision -ne 0) { throw "Revision history command returned the wrong snapshot" }
+        $started = cargo run --quiet -p audiorouter-cli -- --json session start session-fixture --database $database | ConvertFrom-Json
+        if ($started.state -ne "running" -or $started.runtime -ne "fake") { throw "Fake session start lifecycle failed" }
+        $stopped = cargo run --quiet -p audiorouter-cli -- --json session stop session-fixture --database $database | ConvertFrom-Json
+        if ($stopped.state -ne "stopped" -or $stopped.runtime -ne "fake") { throw "Fake session stop lifecycle failed" }
         cargo run --quiet -p audiorouter-cli -- export-bundle session-fixture --database $database --output $bundle | Out-Null
         New-Item -ItemType Directory -Path $staging | Out-Null
         $imported = cargo run --quiet -p audiorouter-cli -- --json import-bundle $bundle --database $importedDatabase --staging $staging | ConvertFrom-Json

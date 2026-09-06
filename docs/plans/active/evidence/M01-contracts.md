@@ -55,6 +55,8 @@ The CLI now exposes persisted revision history through `history <session-id> --d
 
 The in-memory graph store now drops the oldest snapshot once its 100-entry retention bound is exceeded. A regression test inserts 101 snapshots and verifies that revisions 1–100 are retained newest-first (revision 0 is discarded), matching the documented undo/history budget.
 
+The CLI now supports `session start|stop <session-id> --database <absolute-path>`. The control plane lazily loads the persisted session and runs the deterministic fake lifecycle, returning `runtime: "fake"`; the acceptance script verifies running then stopped state and cleans up its temporary database. This is not evidence of live audio activation.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

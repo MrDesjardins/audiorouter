@@ -362,3 +362,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Added explicit `nodes.describe` API/CLI parity over the authoritative node registry, preserving availability and realtime-cost metadata; the M01 acceptance script now checks description parity with `nodes.types`.
 - Added persisted CLI `history <session-id> --database <path> [--limit N]`, enforcing the 1–500 bound and returning newest SQLite snapshots; the M01 acceptance script now verifies the imported fixture history.
 - Enforced the promised 100-snapshot bound in the in-memory graph history store and added overflow coverage; durable SQLite retention remains governed by its existing bounded-history tests.
+- Added persisted `session start`/`session stop` CLI commands with lazy database session loading. They exercise the deterministic fake runtime only; M02 real graph activation remains unavailable, and M01 acceptance now verifies both lifecycle transitions.

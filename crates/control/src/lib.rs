@@ -308,6 +308,7 @@ impl ControlPlane {
     }
 
     pub fn session_start(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        self.ensure_session_loaded(id)?;
         let session = self.get_session(id)?.clone();
         let runtime = self.runtimes.entry(id.clone()).or_default();
         if runtime.state() == RuntimeState::Running {
@@ -334,6 +335,7 @@ impl ControlPlane {
     }
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        self.ensure_session_loaded(id)?;
         self.get_session(id)?;
         if let Some(runtime) = self.runtimes.get_mut(id) {
             runtime.stop();
@@ -341,6 +343,21 @@ impl ControlPlane {
         self.events
             .append(0, None, "runtime.stopped", Some(id.clone()));
         Ok(json!({ "sessionId": id, "state": "stopped", "runtime": "fake" }))
+    }
+
+    fn ensure_session_loaded(&mut self, id: &EntityId) -> Result<(), ControlError> {
+        if self.store.session(id).is_some() {
+            return Ok(());
+        }
+        let Some(storage) = &self.storage else {
+            return Ok(());
+        };
+        if let Some(session) = storage.load_session(id).map_err(storage_error)? {
+            self.store
+                .insert_session(session)
+                .map_err(ControlError::from)?;
+        }
+        Ok(())
     }
 
     pub fn dispatch(&mut self, request: JsonRpcRequest) -> JsonRpcResponse {
