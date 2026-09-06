@@ -58,3 +58,8 @@ The post-integration `cargo test --workspace` run passes across CLI (5),
 control (41), domain (23), DSP (17), engine (36), plugin-host (3), protocol
 (5), recording (14), storage (21), transport (14), and Windows-audio (8)
 tests, plus all doc tests. Strict plugin-host Clippy remains green.
+
+`WorkerFailurePolicy` now makes the protected-path rule executable: worker
+failure selects silence for protected microphone paths, while dry fallback is
+available only when the path is explicitly unprotected. Eight plugin-host
+tests and strict Clippy pass.

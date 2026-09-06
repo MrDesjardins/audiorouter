@@ -269,6 +269,31 @@ pub enum WorkerFrameError {
     DeadlineExpired,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerFailureAction {
+    Silence,
+    DryFallback,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WorkerFailurePolicy {
+    protected_path: bool,
+}
+
+impl WorkerFailurePolicy {
+    pub fn new(protected_path: bool) -> Self {
+        Self { protected_path }
+    }
+
+    pub fn on_failure(self) -> WorkerFailureAction {
+        if self.protected_path {
+            WorkerFailureAction::Silence
+        } else {
+            WorkerFailureAction::DryFallback
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkerFrame {
     pub sequence: u64,
@@ -478,5 +503,17 @@ mod tests {
         }
         assert_eq!(scan_directory(&root), Err(ScanError::TooManyCandidates));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn protected_worker_failures_never_choose_dry_fallback() {
+        assert_eq!(
+            WorkerFailurePolicy::new(true).on_failure(),
+            WorkerFailureAction::Silence
+        );
+        assert_eq!(
+            WorkerFailurePolicy::new(false).on_failure(),
+            WorkerFailureAction::DryFallback
+        );
     }
 }
