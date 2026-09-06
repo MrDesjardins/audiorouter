@@ -111,6 +111,8 @@ The durable commit hash is derived from the operation, plan ID, and base revisio
 
 Status correction for the earlier coverage summary: subsequent native evidence now establishes process-loopback include/exclude activation and data reads. Controlled per-process tone attribution, physical latency, driver lifecycle/signing, and full M02 hardware acceptance remain open; the portable M01 tests do not claim those results.
 
+Discovery method descriptions now include JSON-Schema-style `inputSchema` and `outputSchema` fields. Required identifiers, graph commit/plan fields, and pagination bounds are described for clients, while read-only array results are distinguished from object results. Rust discovery regression and TypeScript contract typecheck pass; runtime schema enforcement and generated client validation remain future work.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.

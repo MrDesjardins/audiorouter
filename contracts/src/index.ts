@@ -78,6 +78,8 @@ export interface MethodDescription {
   name: string;
   permission: PermissionScope;
   sideEffect: SideEffectClass;
+  inputSchema: unknown;
+  outputSchema: unknown;
 }
 
 export interface DiscoveryDocument {

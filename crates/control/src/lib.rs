@@ -61,10 +61,13 @@ impl MutationRateLimiter {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MethodDescription {
     pub name: &'static str,
     pub permission: audiorouter_domain::PermissionScope,
     pub side_effect: audiorouter_domain::SideEffectClass,
+    pub input_schema: Value,
+    pub output_schema: Value,
 }
 
 impl From<ApiMethodSpec> for MethodDescription {
@@ -73,7 +76,105 @@ impl From<ApiMethodSpec> for MethodDescription {
             name: spec.name,
             permission: spec.permission,
             side_effect: spec.side_effect,
+            input_schema: method_input_schema(spec.name),
+            output_schema: method_output_schema(spec.name),
         }
+    }
+}
+
+fn object_schema(properties: Value, required: &[&str]) -> Value {
+    let required = required
+        .iter()
+        .map(|value| Value::String((*value).into()))
+        .collect::<Vec<_>>();
+    json!({
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": false
+    })
+}
+
+fn method_input_schema(name: &str) -> Value {
+    match name {
+        "sessions.get" | "sessions.delete" | "session.start" | "session.stop" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1 } }),
+            &["sessionId"],
+        ),
+        "sessions.list" => object_schema(
+            json!({
+                "cursor": { "type": ["string", "null"] },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+            }),
+            &[],
+        ),
+        "sessions.create" => {
+            object_schema(json!({ "session": { "type": "object" } }), &["session"])
+        }
+        "sessions.duplicate" => object_schema(
+            json!({
+                "sourceSessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1 },
+                "name": { "type": ["string", "null"] }
+            }),
+            &["sourceSessionId", "sessionId"],
+        ),
+        "routes.inspect" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1 },
+                "destinationNode": { "type": "string", "minLength": 1 }
+            }),
+            &["sessionId", "destinationNode"],
+        ),
+        "graph.history" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1 },
+                "cursor": { "type": ["string", "null"] },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+            }),
+            &["sessionId"],
+        ),
+        "graph.undoPlan" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1 },
+                "baseRevision": { "type": "integer", "minimum": 0 }
+            }),
+            &["sessionId", "baseRevision"],
+        ),
+        "events.subscribe" => object_schema(
+            json!({
+                "afterSequence": { "type": "integer", "minimum": 0 },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500 },
+                "sessionId": { "type": ["string", "null"] }
+            }),
+            &[],
+        ),
+        "graph.plan" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1 },
+                "baseRevision": { "type": "integer", "minimum": 0 },
+                "candidate": { "type": "object" }
+            }),
+            &["sessionId", "baseRevision", "candidate"],
+        ),
+        "graph.commit" => object_schema(
+            json!({
+                "planId": { "type": "string", "minLength": 1 },
+                "baseRevision": { "type": "integer", "minimum": 0 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
+            &["planId", "baseRevision", "idempotencyKey"],
+        ),
+        _ => object_schema(json!({}), &[]),
+    }
+}
+
+fn method_output_schema(name: &str) -> Value {
+    match name {
+        "devices.list" | "apps.list" | "nodes.types" | "nodes.describe" => {
+            json!({ "type": "array" })
+        }
+        _ => json!({ "type": "object" }),
     }
 }
 
@@ -1455,6 +1556,29 @@ mod tests {
             .iter()
             .any(|node| node["type"] == "physical-input@1"
                 && node["availability"]["status"] == "unavailable"));
+    }
+
+    #[test]
+    fn describe_exposes_input_and_output_schemas_for_methods() {
+        let methods = ControlPlane::default().describe()["methods"]
+            .as_array()
+            .unwrap()
+            .clone();
+        let commit = methods
+            .iter()
+            .find(|method| method["name"] == "graph.commit")
+            .unwrap();
+        assert_eq!(
+            commit["inputSchema"]["required"],
+            json!(["planId", "baseRevision", "idempotencyKey"])
+        );
+        assert_eq!(commit["outputSchema"]["type"], "object");
+        let devices = methods
+            .iter()
+            .find(|method| method["name"] == "devices.list")
+            .unwrap();
+        assert_eq!(devices["inputSchema"]["additionalProperties"], false);
+        assert_eq!(devices["outputSchema"]["type"], "array");
     }
 
     #[test]
