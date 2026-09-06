@@ -201,3 +201,9 @@ using the installed Visual Studio Community 2026/MSVC and Windows SDK/WDK
 toolchain. `main.exe` and `main.obj` were removed after verification. The
 executable was not run, no stream was started or read, and no driver or audio
 configuration was changed.
+
+The checked-in `tests/acceptance/m00-native-build.ps1` now reproduces this
+compile-only check with a unique temporary executable and `finally` cleanup. It
+refuses to overwrite a pre-existing generated object and reports the scope as
+compile-only; no audio stream, driver, signing mode, or machine configuration
+action is performed.
