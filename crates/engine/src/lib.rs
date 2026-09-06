@@ -4,6 +4,8 @@
 //! `AudioBlock` exists, the operations below reuse its storage and perform no
 //! heap allocation, locking, I/O, or logging.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
@@ -236,6 +238,28 @@ pub enum ProcessingStage {
     Mute { muted: bool },
 }
 
+#[derive(Debug, Default)]
+pub struct CallbackMetrics {
+    processed_quanta: AtomicU64,
+    repaired_samples: AtomicU64,
+}
+
+impl CallbackMetrics {
+    pub fn processed_quanta(&self) -> u64 {
+        self.processed_quanta.load(Ordering::Relaxed)
+    }
+
+    pub fn repaired_samples(&self) -> u64 {
+        self.repaired_samples.load(Ordering::Relaxed)
+    }
+
+    fn record(&self, repaired: usize) {
+        self.processed_quanta.fetch_add(1, Ordering::Relaxed);
+        self.repaired_samples
+            .fetch_add(repaired as u64, Ordering::Relaxed);
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum GraphCompileError {
     InvalidGraph(Vec<audiorouter_domain::ValidationError>),
@@ -367,6 +391,16 @@ impl RuntimeGraph {
     }
 
     pub fn process(&self, block: &mut AudioBlock) -> usize {
+        self.process_inner(block, None)
+    }
+
+    /// Process one quantum and update optional atomic callback counters. The
+    /// counters never allocate, lock, log, or perform I/O.
+    pub fn process_instrumented(&self, block: &mut AudioBlock, metrics: &CallbackMetrics) -> usize {
+        self.process_inner(block, Some(metrics))
+    }
+
+    fn process_inner(&self, block: &mut AudioBlock, metrics: Option<&CallbackMetrics>) -> usize {
         for stage in &self.stages {
             match *stage {
                 ProcessingStage::Gain { linear } => block.apply_gain(linear),
@@ -374,7 +408,11 @@ impl RuntimeGraph {
                 ProcessingStage::Mute { muted: false } => {}
             }
         }
-        block.sanitize_non_finite()
+        let repaired = block.sanitize_non_finite();
+        if let Some(metrics) = metrics {
+            metrics.record(repaired);
+        }
+        repaired
     }
 }
 
@@ -555,5 +593,19 @@ mod tests {
         publication.publish(second);
         assert_eq!(old_reader.generation().value(), 1);
         assert_eq!(publication.load().unwrap().generation().value(), 2);
+    }
+
+    #[test]
+    fn instrumented_processing_records_only_atomic_counters() {
+        let graph = RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]);
+        let metrics = CallbackMetrics::default();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[f32::NAN, 1.0]);
+        assert_eq!(graph.process_instrumented(&mut block, &metrics), 1);
+        assert_eq!(metrics.processed_quanta(), 1);
+        assert_eq!(metrics.repaired_samples(), 1);
     }
 }

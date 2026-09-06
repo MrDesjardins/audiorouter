@@ -8,4 +8,6 @@ The engine now exposes `compile_session`, which validates a domain session and p
 
 `RuntimePublication` adds the immutable-generation handoff: a fully prepared graph is atomically published, new readers see the replacement, and existing readers may finish on the prior generation before deferred reclamation. The replacement test confirms both generations remain valid across publication.
 
+Optional `CallbackMetrics` records processed quanta and repaired sample counts using relaxed atomics. Instrumented processing remains bounded and free of locks, logging, I/O, and allocation; twelve engine tests pass.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.
