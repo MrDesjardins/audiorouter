@@ -3,7 +3,7 @@ import type { Node, RouteInspection } from "@audiorouter/contracts";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceInfo } from "@audiorouter/contracts";
-import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, removeDraftConnection, removeDraftNode, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter } from "./draft";
+import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, removeDraftConnection, removeDraftNode, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
 import { recordDraft, redoDraft as redoDraftHistory, undoDraft as undoDraftHistory, type DraftHistory } from "./history";
 import { templateSession, type TemplateId } from "./templates";
@@ -148,7 +148,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const changeNodeName = (name: string) => { try { recordDraftChange(setNodeDraftName(draft, selectedNode.id, name)); setActionMessage("Node name draft updated. Review and plan the changes before committing."); } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to rename node."); } };
   const changeNodeParameter = (name: string, value: boolean | number) => { if (typeof value === "number" && !Number.isFinite(value)) return; recordDraftChange(setNodeDraftParameter(draft, selectedNode.id, name, value)); setActionMessage("Draft updated. Review and plan the changes before committing."); };
   const resetNodeParameters = () => { recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id)); setActionMessage("Processor parameters reset in the draft. Review and plan the changes before committing."); };
-  const changeSessionName = (name: string) => { recordDraftChange({ ...draft, name }); setActionMessage("Session name draft updated. Review and plan the change before committing."); };
+  const changeSessionName = (name: string) => { try { recordDraftChange(setSessionDraftName(draft, name)); setActionMessage("Session name draft updated. Review and plan the change before committing."); } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to rename session."); } };
   const planChanges = async () => {
     setActionMessage("Planning changes...");
     try {

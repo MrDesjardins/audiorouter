@@ -466,3 +466,9 @@ parameters: gain returns to 0 dB and mute returns to off. The reset updates
 only the local candidate and enters the bounded draft history; node identity,
 topology, revision, and live audio remain unchanged until backend plan/commit.
 UI coverage is 51 tests with typecheck and production build passing.
+
+Session-name editing now trims valid values and rejects empty or overlong names
+before they enter the local candidate. The session ID and revision remain
+unchanged until the backend plan/commit flow; a pure regression covers the
+normalization and 120-character bound. UI coverage is 52 tests with typecheck
+and production build passing.

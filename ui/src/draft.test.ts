@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, removeDraftNode, resetNodeDraftParameters, setNodeDraftName } from "./draft";
+import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -64,5 +64,11 @@ describe("appendLibraryNode", () => {
     expect(reset.nodes.find((node) => node.id === "voice")?.parameters).toEqual({ gainDb: 0 });
     expect(reset.revision).toBe(demoSession.revision);
     expect(() => resetNodeDraftParameters(demoSession, "mic")).not.toThrow();
+  });
+
+  it("normalizes and bounds session names", () => {
+    expect(setSessionDraftName(demoSession, "  Streaming setup  ").name).toBe("Streaming setup");
+    expect(() => setSessionDraftName(demoSession, " ")).toThrow("cannot be empty");
+    expect(() => setSessionDraftName(demoSession, "x".repeat(121))).toThrow("120");
   });
 });

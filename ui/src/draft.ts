@@ -189,6 +189,14 @@ export function setNodeDraftName(session: Session, nodeId: EntityId, name: strin
   return { ...session, nodes: session.nodes.map((node) => node.id === nodeId ? { ...node, name: trimmed } : node) };
 }
 
+/** Normalizes and validates a session name in the local candidate. */
+export function setSessionDraftName(session: Session, name: string): Session {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) throw new Error("Session name cannot be empty");
+  if (trimmed.length > 120) throw new Error("Session name cannot exceed 120 characters");
+  return { ...session, name: trimmed };
+}
+
 export function setNodeDraftParameter(
   session: Session,
   nodeId: EntityId,
