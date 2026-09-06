@@ -239,6 +239,136 @@ fn validate_gate(params: GateParams, channels: usize) -> Result<(), BiquadError>
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LimiterParams {
+    pub ceiling_db: f32,
+}
+
+/// A sample-peak safety limiter. It deliberately makes no true-peak or
+/// lookahead claim; the ceiling is enforced on every emitted sample.
+#[derive(Clone, Copy, Debug)]
+pub struct PeakLimiter {
+    ceiling_linear: f32,
+}
+
+impl PeakLimiter {
+    pub fn new(params: LimiterParams) -> Result<Self, BiquadError> {
+        if !params.ceiling_db.is_finite() {
+            return Err(BiquadError::NonFiniteParameter);
+        }
+        if !(-12.0..=0.0).contains(&params.ceiling_db) {
+            return Err(BiquadError::InvalidQ);
+        }
+        Ok(Self {
+            ceiling_linear: 10.0_f32.powf(params.ceiling_db / 20.0),
+        })
+    }
+
+    pub fn ceiling_db(&self) -> f32 {
+        20.0 * self.ceiling_linear.log10()
+    }
+
+    pub fn process_interleaved(&self, samples: &mut [f32]) {
+        for sample in samples {
+            let input = if sample.is_finite() { *sample } else { 0.0 };
+            *sample = input.clamp(-self.ceiling_linear, self.ceiling_linear);
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DelayError {
+    InvalidSampleRate,
+    InvalidChannels,
+    InvalidMaximum,
+    InvalidDelay,
+    NonFiniteParameter,
+}
+
+/// A bounded interleaved delay line. The ring is allocated once at
+/// construction and parameter changes only alter read positions.
+#[derive(Clone, Debug)]
+pub struct DelayLine {
+    sample_rate: f32,
+    channels: usize,
+    capacity_frames: usize,
+    delay_frames: usize,
+    buffer: Vec<f32>,
+    write_frame: usize,
+}
+
+impl DelayLine {
+    pub fn new(max_delay_ms: f32, sample_rate: f32, channels: usize) -> Result<Self, DelayError> {
+        if !max_delay_ms.is_finite() || max_delay_ms < 0.0 {
+            return Err(DelayError::NonFiniteParameter);
+        }
+        if !sample_rate.is_finite() || sample_rate <= 0.0 {
+            return Err(DelayError::InvalidSampleRate);
+        }
+        if channels == 0 || channels > 2 {
+            return Err(DelayError::InvalidChannels);
+        }
+        if max_delay_ms > 1_000.0 {
+            return Err(DelayError::InvalidMaximum);
+        }
+        let max_frames = (max_delay_ms * 0.001 * sample_rate).ceil() as usize;
+        let capacity_frames = max_frames.saturating_add(1);
+        Ok(Self {
+            sample_rate,
+            channels,
+            capacity_frames,
+            delay_frames: 0,
+            buffer: vec![0.0; capacity_frames * channels],
+            write_frame: 0,
+        })
+    }
+
+    pub fn delay_ms(&self) -> f32 {
+        self.delay_frames as f32 * 1_000.0 / self.sample_rate
+    }
+
+    pub fn set_delay_ms(&mut self, delay_ms: f32) -> Result<(), DelayError> {
+        if !delay_ms.is_finite() {
+            return Err(DelayError::NonFiniteParameter);
+        }
+        if delay_ms < 0.0 {
+            return Err(DelayError::InvalidDelay);
+        }
+        let frames = (delay_ms * 0.001 * self.sample_rate).round() as usize;
+        if frames >= self.capacity_frames {
+            return Err(DelayError::InvalidDelay);
+        }
+        self.delay_frames = frames;
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        self.buffer.fill(0.0);
+        self.write_frame = 0;
+    }
+
+    pub fn process_interleaved(&mut self, samples: &mut [f32]) {
+        for frame in samples.chunks_exact_mut(self.channels) {
+            let read_frame = (self.write_frame + self.capacity_frames - self.delay_frames)
+                % self.capacity_frames;
+            for (channel, sample) in frame.iter_mut().enumerate() {
+                let input = if sample.is_finite() { *sample } else { 0.0 };
+                let index = self.write_frame * self.channels + channel;
+                let delayed = self.buffer[read_frame * self.channels + channel];
+                self.buffer[index] = input;
+                *sample = if self.delay_frames == 0 {
+                    input
+                } else if delayed.is_finite() {
+                    delayed
+                } else {
+                    0.0
+                };
+            }
+            self.write_frame = (self.write_frame + 1) % self.capacity_frames;
+        }
+    }
+}
+
 impl Compressor {
     pub fn new(params: CompressorParams, channels: usize) -> Result<Self, BiquadError> {
         validate_compressor(params, channels)?;
@@ -617,5 +747,33 @@ mod tests {
         let mut quiet = [0.01];
         gate.process_interleaved(&mut quiet);
         assert!(!gate.is_open());
+    }
+
+    #[test]
+    fn peak_limiter_enforces_declared_sample_ceiling_and_repairs_nonfinite() {
+        let limiter = PeakLimiter::new(LimiterParams { ceiling_db: -1.0 }).unwrap();
+        let mut samples = [2.0, -2.0, f32::NAN, f32::INFINITY];
+        limiter.process_interleaved(&mut samples);
+        let ceiling = 10.0_f32.powf(-1.0 / 20.0);
+        assert_eq!(samples, [ceiling, -ceiling, 0.0, 0.0]);
+        assert!((limiter.ceiling_db() + 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn delay_line_is_bounded_and_preserves_channel_order() {
+        let mut delay = DelayLine::new(10.0, 1_000.0, 2).unwrap();
+        delay.set_delay_ms(2.0).unwrap();
+        let mut samples = [1.0, 10.0, 2.0, 20.0, 3.0, 30.0];
+        delay.process_interleaved(&mut samples);
+        assert_eq!(samples, [0.0, 0.0, 0.0, 0.0, 1.0, 10.0]);
+        assert!(matches!(
+            delay.set_delay_ms(12.0),
+            Err(DelayError::InvalidDelay)
+        ));
+        delay.reset();
+        let mut zero_delay = [4.0, 5.0];
+        delay.set_delay_ms(0.0).unwrap();
+        delay.process_interleaved(&mut zero_delay);
+        assert_eq!(zero_delay, [4.0, 5.0]);
     }
 }

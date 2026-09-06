@@ -90,6 +90,15 @@ cover neutral below-threshold behavior, linked reduction, contract rejection,
 and finite repair. Gate, limiter, delay, graph/API integration, and reference
 transfer vectors remain open.
 
+The DSP crate now provides a conservative sample-peak `PeakLimiter` and a
+bounded interleaved `DelayLine`. The limiter clamps every emitted finite sample
+to its declared ceiling and explicitly makes no true-peak or lookahead claim.
+The delay allocates its fixed ring at construction, bounds changes to the
+declared maximum, preserves channel order, and supports reset. Ten DSP tests
+cover ceiling enforcement, finite repair, delay timing, bounds, and reset.
+Graph/API integration, de-clicked automation, and measured transfer vectors
+remain open.
+
 The DSP crate now includes a stereo-linked gate/downward expander. It applies
 bounded threshold, hysteresis, ratio, range, attack, hold, and release
 parameters, exposes its open state, and performs finite-safe interleaved
