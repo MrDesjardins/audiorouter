@@ -214,3 +214,12 @@ and echoes framed process buffers, echoes latency reports, and exits on
 integration test passes alongside the 22 library tests and strict Clippy.
 This establishes stdio process IPC only; native plugin loading, sandbox policy,
 and shared-memory audio transport remain open.
+
+Added the reusable `WorkerProcess` control-plane client. It validates the
+configured hash/channel identity during Hello/Ready negotiation, rejects frame
+channel or sequence mismatches, forwards bounded latency reports, supports
+graceful shutdown, and kills an unfinished child on drop. The process
+integration test now exercises this client against the disposable fixture;
+the 22 library tests, process test, and strict Clippy pass. This is still
+stdio IPC with an echo fixture: plugin loading, OS sandbox policy, and actual
+shared-memory audio transport are not claimed.

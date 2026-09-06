@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
+use std::process::{Child, ChildStdin, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -864,6 +865,144 @@ pub fn write_worker_message<W: Write>(
         .write_all(&frame)
         .and_then(|_| writer.flush())
         .map_err(|error| WorkerMessageError::Io(error.to_string()))
+}
+
+#[derive(Debug)]
+pub enum WorkerProcessError {
+    Spawn(String),
+    Message(WorkerMessageError),
+    Protocol(String),
+    Exited,
+}
+
+/// Control-plane client for one disposable worker process. This owns the
+/// process and pipes; realtime callers must exchange frames through a
+/// preallocated transport rather than calling these blocking methods.
+pub struct WorkerProcess {
+    child: Child,
+    writer: BufWriter<ChildStdin>,
+    reader: BufReader<ChildStdout>,
+    channels: u16,
+}
+
+impl WorkerProcess {
+    pub fn spawn(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+    ) -> Result<Self, WorkerProcessError> {
+        if !is_sha256(plugin_sha256) {
+            return Err(WorkerProcessError::Protocol("invalid plugin hash".into()));
+        }
+        if !matches!(channels, 1 | 2) {
+            return Err(WorkerProcessError::Protocol("invalid channel count".into()));
+        }
+        let mut child = Command::new(executable.as_ref())
+            .args([
+                "--plugin-sha256",
+                plugin_sha256,
+                "--channels",
+                &channels.to_string(),
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|error| WorkerProcessError::Spawn(error.to_string()))?;
+        let stdin = child.stdin.take().ok_or(WorkerProcessError::Exited)?;
+        let stdout = child.stdout.take().ok_or(WorkerProcessError::Exited)?;
+        let mut process = Self {
+            child,
+            writer: BufWriter::new(stdin),
+            reader: BufReader::new(stdout),
+            channels,
+        };
+        let hello = process.read().map_err(WorkerProcessError::Message)?;
+        match hello {
+            WorkerMessage::Hello {
+                protocol_version,
+                plugin_sha256: actual,
+                channels: actual_channels,
+            } if protocol_version == WORKER_PROTOCOL_VERSION
+                && actual == plugin_sha256
+                && actual_channels == channels => {}
+            _ => {
+                return Err(WorkerProcessError::Protocol(
+                    "worker identity negotiation failed".into(),
+                ))
+            }
+        }
+        process
+            .write(&WorkerMessage::Ready)
+            .map_err(WorkerProcessError::Message)?;
+        Ok(process)
+    }
+
+    pub fn process(
+        &mut self,
+        frame: WorkerFrame,
+        parameters: Vec<ParameterEvent>,
+    ) -> Result<WorkerFrame, WorkerProcessError> {
+        if frame.channels != self.channels {
+            return Err(WorkerProcessError::Protocol(
+                "frame channel count mismatch".into(),
+            ));
+        }
+        self.write(&WorkerMessage::Process {
+            frame: frame.clone(),
+            parameters,
+        })
+        .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::Processed { frame: processed }
+                if processed.sequence == frame.sequence =>
+            {
+                Ok(processed)
+            }
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected process response".into(),
+            )),
+        }
+    }
+
+    pub fn report_latency(
+        &mut self,
+        latency: WorkerLatency,
+    ) -> Result<WorkerLatency, WorkerProcessError> {
+        self.write(&WorkerMessage::Latency(latency))
+            .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::Latency(actual) => Ok(actual),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected latency response".into(),
+            )),
+        }
+    }
+
+    pub fn shutdown(mut self) -> Result<ExitStatus, WorkerProcessError> {
+        self.write(&WorkerMessage::Shutdown)
+            .map_err(WorkerProcessError::Message)?;
+        self.child
+            .wait()
+            .map_err(|error| WorkerProcessError::Spawn(error.to_string()))
+    }
+
+    fn read(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
+        read_worker_message(&mut self.reader)
+    }
+    fn write(&mut self, message: &WorkerMessage) -> Result<(), WorkerMessageError> {
+        write_worker_message(&mut self.writer, message)
+    }
+}
+
+impl Drop for WorkerProcess {
+    fn drop(&mut self) {
+        if self.child.try_wait().ok().flatten().is_none() {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
 }
 
 fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageError> {
