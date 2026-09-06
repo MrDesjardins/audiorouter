@@ -505,3 +505,10 @@ generic read access. Built-in observer/editor/operator roles do not receive
 that scope implicitly; an explicit grant is required and covered by the
 control authorization regression. This preserves the security contract while
 keeping scan results read-only.
+
+The complementary `plugins.inspect` API now accepts one explicit absolute
+binary path and returns the same identity/error shape without loading the
+module. The control regression covers an invalid binary, and the shared
+discovery schema plus TypeScript method contracts are updated. This remains
+inspection evidence only; runtime plugin execution and OS sandbox enforcement
+are still separate M06 gates.

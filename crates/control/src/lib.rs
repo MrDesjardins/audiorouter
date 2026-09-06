@@ -151,6 +151,7 @@ fn method_description(name: &str) -> &'static str {
         }
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
+        "plugins.inspect" => "Inspect one explicitly selected plugin binary without loading plugin code.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
@@ -249,6 +250,12 @@ fn method_input_schema(name: &str) -> Value {
                 "directory": { "type": "string", "minLength": 1 }
             }),
             &["directory"],
+        ),
+        "plugins.inspect" => object_schema(
+            json!({
+                "path": { "type": "string", "minLength": 1 }
+            }),
+            &["path"],
         ),
         "virtualDevices.list" => object_schema(
             json!({
@@ -825,6 +832,16 @@ fn method_output_schema(name: &str) -> Value {
                 }
             },
             "required": ["directory", "entries"],
+            "additionalProperties": false
+        }),
+        "plugins.inspect" => json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "identity": { "type": ["object", "null"] },
+                "error": { "type": ["string", "null"] }
+            },
+            "required": ["path", "identity", "error"],
             "additionalProperties": false
         }),
         "virtualDevices.list" => json!({
@@ -2535,6 +2552,7 @@ impl ControlPlane {
                     })),
                     "devices.list" => self.dispatch_devices_list(request.params),
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
+                    "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
                     "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
@@ -3595,6 +3613,56 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_plugins_inspect(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let path = params
+            .as_ref()
+            .and_then(|value| value.get("path"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
+        let candidate = std::path::Path::new(path);
+        if !candidate.is_absolute() {
+            return Err(ControlError::InvalidRequest("path must be absolute".into()));
+        }
+        let root = candidate.parent().ok_or_else(|| {
+            ControlError::InvalidRequest("path must have a parent directory".into())
+        })?;
+        let result = match audiorouter_plugin_host::inspect_binary(candidate, &[root.to_path_buf()])
+        {
+            Ok(identity) => json!({
+                "path": path,
+                "identity": {
+                    "path": identity.path,
+                    "binaryPath": identity.binary_path,
+                    "format": match identity.format {
+                        audiorouter_plugin_host::PluginFormat::Vst3 => "vst3",
+                        audiorouter_plugin_host::PluginFormat::Vst2 => "vst2",
+                        audiorouter_plugin_host::PluginFormat::Unknown => "unknown",
+                    },
+                    "architecture": match identity.architecture {
+                        audiorouter_plugin_host::PeArchitecture::X64 => "x64",
+                        audiorouter_plugin_host::PeArchitecture::X86 => "x86",
+                        audiorouter_plugin_host::PeArchitecture::Arm64 => "arm64",
+                        audiorouter_plugin_host::PeArchitecture::Unknown => "unknown",
+                    },
+                    "fileBytes": identity.file_bytes,
+                    "sha256": identity.sha256,
+                    "compatibility": match identity.compatibility() {
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
+                        audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
+                    }
+                },
+                "error": null
+            }),
+            Err(error) => json!({
+                "path": path,
+                "identity": null,
+                "error": format!("{error:?}")
+            }),
+        };
+        Ok(result)
+    }
+
     fn dispatch_virtual_devices_plan(
         &mut self,
         params: Option<Value>,
@@ -3978,6 +4046,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.recycle" => &["recordingId", "confirm"],
         "devices.list" => &["cursor", "limit"],
         "plugins.scan" => &["directory"],
+        "plugins.inspect" => &["path"],
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
@@ -4579,6 +4648,14 @@ mod tests {
         assert_eq!(result["entries"].as_array().unwrap().len(), 1);
         assert!(result["entries"][0]["identity"].is_null());
         assert!(result["entries"][0]["error"].is_string());
+        let inspected = ControlPlane::default().dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "plugins.inspect".into(),
+            params: Some(json!({ "path": root.join("candidate.dll").to_string_lossy() })),
+        });
+        assert!(inspected.error.is_none());
+        assert!(inspected.result.unwrap()["identity"].is_null());
         let _ = std::fs::remove_dir_all(root);
     }
 
