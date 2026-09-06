@@ -183,6 +183,28 @@ export interface VirtualDeviceListPage {
   nextCursor: string | null;
 }
 
+export type VirtualDeviceOperation =
+  | { action: "create"; id: EntityId; name: string }
+  | { action: "rename"; id: EntityId; name: string }
+  | { action: "setEnabled"; id: EntityId; enabled: boolean }
+  | { action: "delete"; id: EntityId };
+
+export interface VirtualDevicePlanResult {
+  planId: EntityId;
+  expiresInMs: number;
+  operation: VirtualDeviceOperation;
+  availability: { status: "unavailable"; reason: string };
+  requiredScopes: string[];
+  warnings: string[];
+}
+
+export interface VirtualDeviceApplyResult {
+  planId: EntityId;
+  state: "applied";
+  availability: { status: "unavailable"; reason: string };
+  operation: VirtualDeviceOperation;
+}
+
 export interface GraphHistoryPage {
   items: Session[];
   nextCursor: string | null;
@@ -499,6 +521,8 @@ export type ImplementedMethod =
   | "startup.get"
   | "devices.list"
   | "virtualDevices.list"
+  | "virtualDevices.plan"
+  | "virtualDevices.apply"
   | "apps.list"
   | "applications.list"
   | "nodes.types"
@@ -550,6 +574,8 @@ export type MethodParams = {
   "startup.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
+  "virtualDevices.plan": { operation: VirtualDeviceOperation };
+  "virtualDevices.apply": { planId: EntityId; idempotencyKey: string };
   "apps.list": undefined;
   "applications.list": undefined;
   "nodes.types": undefined;
@@ -611,6 +637,8 @@ export type MethodResult = {
   "startup.get": StartupStatus;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
+  "virtualDevices.plan": VirtualDevicePlanResult;
+  "virtualDevices.apply": VirtualDeviceApplyResult;
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];
   "nodes.types": DiscoveryDocument["nodeTypes"];

@@ -17,12 +17,27 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
+const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum VirtualBusOperation {
+    Create { id: EntityId, name: String },
+    Rename { id: EntityId, name: String },
+    SetEnabled { id: EntityId, enabled: bool },
+    Delete { id: EntityId },
+}
+
+#[derive(Clone, Debug)]
+struct VirtualBusPlan {
+    operation: VirtualBusOperation,
+    expires_at: Instant,
+}
 
 fn unix_epoch_seconds() -> i64 {
     std::time::SystemTime::now()
@@ -129,6 +144,8 @@ fn method_description(name: &str) -> &'static str {
         }
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
+        "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
+        "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities and observed Windows audio-session activity for binding."
         }
@@ -224,6 +241,29 @@ fn method_input_schema(name: &str) -> Value {
                 "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
             }),
             &[],
+        ),
+        "virtualDevices.plan" => object_schema(
+            json!({
+                "operation": {
+                    "type": "object",
+                    "properties": {
+                        "action": { "enum": ["create", "rename", "setEnabled", "delete"] },
+                        "id": { "type": "string", "minLength": 1 },
+                        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+                        "enabled": { "type": "boolean" }
+                    },
+                    "required": ["action", "id"],
+                    "additionalProperties": false
+                }
+            }),
+            &["operation"],
+        ),
+        "virtualDevices.apply" => object_schema(
+            json!({
+                "planId": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
+            &["planId", "idempotencyKey"],
         ),
         "recordings.get" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
@@ -721,6 +761,38 @@ fn method_output_schema(name: &str) -> Value {
                     "additionalProperties": false
                 }
             ]
+        }),
+        "virtualDevices.plan" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string", "minLength": 1 },
+                "expiresInMs": { "type": "integer", "minimum": 1 },
+                "operation": { "type": "object" },
+                "availability": {
+                    "type": "object",
+                    "properties": {
+                        "status": { "const": "unavailable" },
+                        "reason": { "type": "string", "minLength": 1 }
+                    },
+                    "required": ["status", "reason"],
+                    "additionalProperties": false
+                },
+                "requiredScopes": { "type": "array", "items": { "type": "string" } },
+                "warnings": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["planId", "expiresInMs", "operation", "availability", "requiredScopes", "warnings"],
+            "additionalProperties": false
+        }),
+        "virtualDevices.apply" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string", "minLength": 1 },
+                "state": { "const": "applied" },
+                "availability": { "type": "object" },
+                "operation": { "type": "object" }
+            },
+            "required": ["planId", "state", "availability", "operation"],
+            "additionalProperties": false
         }),
         "nodes.types" | "nodes.describe" => json!({
             "type": "array",
@@ -1312,6 +1384,8 @@ pub struct ControlPlane {
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
     virtual_buses: VirtualBusRegistry,
+    virtual_bus_plans: HashMap<EntityId, VirtualBusPlan>,
+    next_virtual_bus_plan: u64,
 }
 
 impl Default for ControlPlane {
@@ -1335,6 +1409,8 @@ impl ControlPlane {
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses: VirtualBusRegistry::default(),
+            virtual_bus_plans: HashMap::new(),
+            next_virtual_bus_plan: 1,
         }
     }
 
@@ -1356,6 +1432,8 @@ impl ControlPlane {
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
+            virtual_bus_plans: HashMap::new(),
+            next_virtual_bus_plan: 1,
         }
     }
 
@@ -2255,6 +2333,8 @@ impl ControlPlane {
                     })),
                     "devices.list" => self.dispatch_devices_list(request.params),
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
+                    "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
+                    "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
@@ -3262,6 +3342,94 @@ impl ControlPlane {
         Ok(json!({ "items": devices, "nextCursor": next_cursor }))
     }
 
+    fn dispatch_virtual_devices_plan(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("operation is required".into()))?;
+        let operation = virtual_bus_operation_from_value(
+            params
+                .get("operation")
+                .ok_or_else(|| ControlError::InvalidRequest("operation is required".into()))?,
+        )?;
+        let mut candidate = self.virtual_buses.clone();
+        apply_virtual_bus_operation(&mut candidate, &operation)?;
+        let plan_id = EntityId::new(format!("virtual-plan-{}", self.next_virtual_bus_plan));
+        self.next_virtual_bus_plan = self.next_virtual_bus_plan.saturating_add(1);
+        self.virtual_bus_plans.insert(
+            plan_id.clone(),
+            VirtualBusPlan {
+                operation: operation.clone(),
+                expires_at: Instant::now() + VIRTUAL_DEVICE_PLAN_TTL,
+            },
+        );
+        Ok(json!({
+            "planId": plan_id,
+            "expiresInMs": VIRTUAL_DEVICE_PLAN_TTL.as_millis(),
+            "operation": virtual_bus_operation_value(&operation),
+            "availability": {
+                "status": "unavailable",
+                "reason": "requires M03 managed virtual driver"
+            },
+            "requiredScopes": ["deviceAdministration"],
+            "warnings": ["desired state can be stored, but Windows endpoints remain unavailable until the managed driver is installed"]
+        }))
+    }
+
+    fn dispatch_virtual_devices_apply(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("planId is required".into()))?;
+        let plan_id = params
+            .get("planId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("planId is required".into()))?;
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        if let Some(previous) = self.operation_outcomes.get(idempotency_key) {
+            return Ok(previous.clone());
+        }
+        let plan = self
+            .virtual_bus_plans
+            .get(&EntityId::new(plan_id))
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("virtual device plan not found".into()))?;
+        if plan.expires_at <= Instant::now() {
+            self.virtual_bus_plans.remove(&EntityId::new(plan_id));
+            return Err(ControlError::InvalidRequest(
+                "virtual device plan expired".into(),
+            ));
+        }
+        let checkpoint = self.virtual_buses.clone();
+        apply_virtual_bus_operation(&mut self.virtual_buses, &plan.operation)?;
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+                self.virtual_buses = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        self.virtual_bus_plans.remove(&EntityId::new(plan_id));
+        let result = json!({
+            "planId": plan_id,
+            "state": "applied",
+            "availability": {
+                "status": "unavailable",
+                "reason": "requires M03 managed virtual driver"
+            },
+            "operation": virtual_bus_operation_value(&plan.operation)
+        });
+        self.operation_outcomes
+            .insert(idempotency_key.to_owned(), result.clone());
+        Ok(result)
+    }
+
     fn dispatch_virtual_devices_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         let paged = params.get("cursor").is_some() || params.get("limit").is_some();
@@ -3364,6 +3532,78 @@ fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlErro
     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
 }
 
+fn virtual_bus_operation_from_value(value: &Value) -> Result<VirtualBusOperation, ControlError> {
+    let action = value
+        .get("action")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ControlError::InvalidRequest("operation.action is required".into()))?;
+    let id = value
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(EntityId::new)
+        .ok_or_else(|| ControlError::InvalidRequest("operation.id is required".into()))?;
+    match action {
+        "create" => Ok(VirtualBusOperation::Create {
+            id,
+            name: value
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ControlError::InvalidRequest("operation.name is required".into()))?
+                .to_owned(),
+        }),
+        "rename" => Ok(VirtualBusOperation::Rename {
+            id,
+            name: value
+                .get("name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ControlError::InvalidRequest("operation.name is required".into()))?
+                .to_owned(),
+        }),
+        "setEnabled" => Ok(VirtualBusOperation::SetEnabled {
+            id,
+            enabled: value
+                .get("enabled")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("operation.enabled is required".into())
+                })?,
+        }),
+        "delete" => Ok(VirtualBusOperation::Delete { id }),
+        _ => Err(ControlError::InvalidRequest(
+            "operation.action must be create, rename, setEnabled, or delete".into(),
+        )),
+    }
+}
+
+fn apply_virtual_bus_operation(
+    registry: &mut VirtualBusRegistry,
+    operation: &VirtualBusOperation,
+) -> Result<(), ControlError> {
+    let result = match operation {
+        VirtualBusOperation::Create { id, name } => registry.create(id.clone(), name),
+        VirtualBusOperation::Rename { id, name } => registry.rename(id, name),
+        VirtualBusOperation::SetEnabled { id, enabled } => registry.set_enabled(id, *enabled),
+        VirtualBusOperation::Delete { id } => registry.delete(id),
+    };
+    result.map_err(virtual_bus_control_error)
+}
+
+fn virtual_bus_operation_value(operation: &VirtualBusOperation) -> Value {
+    match operation {
+        VirtualBusOperation::Create { id, name } => {
+            json!({ "action": "create", "id": id, "name": name })
+        }
+        VirtualBusOperation::Rename { id, name } => {
+            json!({ "action": "rename", "id": id, "name": name })
+        }
+        VirtualBusOperation::SetEnabled { id, enabled } => {
+            json!({ "action": "setEnabled", "id": id, "enabled": enabled })
+        }
+        VirtualBusOperation::Delete { id } => json!({ "action": "delete", "id": id }),
+    }
+}
+
 fn graph_diff(before: &Session, after: &Session) -> Vec<Value> {
     let mut diff = Vec::new();
     if before.name != after.name {
@@ -3432,6 +3672,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.recycle" => &["recordingId", "confirm"],
         "devices.list" => &["cursor", "limit"],
         "virtualDevices.list" => &["cursor", "limit"],
+        "virtualDevices.plan" => &["operation"],
+        "virtualDevices.apply" => &["planId", "idempotencyKey"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -3650,6 +3892,49 @@ mod tests {
             .result
             .unwrap_or_else(|| panic!("unexpected paged response error: {:?}", paged.error));
         assert_eq!(paged_result, json!({ "items": [], "nextCursor": null }));
+    }
+
+    #[test]
+    fn virtual_devices_plan_apply_is_revisionless_and_idempotent() {
+        let mut plane = ControlPlane::default();
+        let planned = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(3)),
+                method: "virtualDevices.plan".into(),
+                params: Some(json!({
+                    "operation": {
+                        "action": "create",
+                        "id": "bus-1",
+                        "name": "Desktop In"
+                    }
+                })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(planned["availability"]["status"], "unavailable");
+        let plan_id = planned["planId"].as_str().unwrap().to_owned();
+        let request = |id, plan_id: &str| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(id)),
+            method: "virtualDevices.apply".into(),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "create-bus-1" })),
+        };
+        let applied = plane.dispatch(request(4, &plan_id)).result.unwrap();
+        assert_eq!(applied["state"], "applied");
+        let replay = plane.dispatch(request(5, &plan_id)).result.unwrap();
+        assert_eq!(replay, applied);
+        let inventory = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(6)),
+                method: "virtualDevices.list".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert_eq!(inventory[0]["name"], "Desktop In");
+        assert_eq!(inventory[0]["endpointIds"]["render"], Value::Null);
     }
 
     #[test]

@@ -63,6 +63,15 @@ the client requests `virtualDevices.list` and preserves the unavailable/empty
 state; the UI does not offer a provisioning side effect. UI tests pass 57 tests
 and typecheck passes.
 
+The lifecycle API now provides `virtualDevices.plan` and
+`virtualDevices.apply`. Plans validate the candidate registry before issuing a
+five-minute plan ID; apply rechecks expiry, commits only the desired registry
+state, persists it transactionally, and replays a completed result for the same
+idempotency key. Create/rename/enable-disable/delete are represented explicitly,
+while the result continues to report `requires M03 managed virtual driver`, so
+no API call claims that a Windows endpoint was provisioned. Control tests verify
+the create/apply/list flow and idempotent replay.
+
 The registry now exposes force-release cleanup for a crashed or disconnected
 owner. Cleanup clears the active owner but preserves the monotonic generation;
 a delayed release from the old owner cannot release a replacement lease. This
