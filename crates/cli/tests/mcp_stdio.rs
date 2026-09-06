@@ -108,6 +108,33 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
         3
     );
 
+    let diagnostics = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "resources/read",
+            "params": { "uri": "audiorouter://diagnostics" }
+        }),
+    );
+    assert_eq!(
+        diagnostics["result"]["contents"][0]["mimeType"],
+        "application/json"
+    );
+
+    let startup = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": { "name": "get_startup", "arguments": {} }
+        }),
+    );
+    assert_eq!(startup["result"]["isError"], false);
+
     drop(input);
     assert!(child.wait().unwrap().success());
     std::fs::remove_file(database).unwrap();

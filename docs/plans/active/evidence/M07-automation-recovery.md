@@ -201,3 +201,8 @@ tools/list, and resources/list over newline-delimited JSON-RPC, verifies the
 pinned protocol and 22 tools/3 resources, then closes stdin and confirms clean
 server exit. The test passes with strict CLI Clippy; no audio device or machine
 configuration is accessed.
+
+The same process client now reads audiorouter://diagnostics and invokes the
+read-only get_startup tool after initialization and discovery. Both responses
+are validated over the real stdio stream, extending interoperability coverage
+beyond listing. The test remains non-audio and temporary-state-only.
