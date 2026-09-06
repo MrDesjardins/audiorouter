@@ -14,7 +14,7 @@ Endpoint topology notifications are now registered through an RAII `IMMNotificat
 
 The adapter now classifies retained Windows HRESULTs into stable `AudioFailureKind` values, including device contention versus invalid argument and exclusive-only behavior. Six adapter tests pass. This allows control diagnostics to distinguish the earlier `E_INVALIDARG` condition from `AUDCLNT_E_DEVICE_IN_USE` without changing the underlying error.
 
-Application discovery now attempts `PROCESS_QUERY_LIMITED_INFORMATION` and records an optional process creation timestamp alongside PID and executable name. This is sufficient identity material for a future PID-reuse check without exposing command lines or paths. The adapter and contracts checks pass; process-loopback binding has not yet been wired to enforce this identity.
+Application discovery now attempts `PROCESS_QUERY_LIMITED_INFORMATION` and records an optional process creation timestamp alongside PID and executable name. This is sufficient identity material for a PID-reuse check without exposing command lines or paths. The adapter's `bind_application` path enforces the identity tuple; controlled process-loopback tone attribution remains open.
 
 `bind_application` now enforces that identity material before a future process-loopback activation: PID, executable name, and creation timestamp must all match, otherwise binding is rejected. The Windows identity test passes without opening an audio stream; the native loopback harness remains a separate data-path implementation.
 
