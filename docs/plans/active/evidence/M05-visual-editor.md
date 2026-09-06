@@ -508,3 +508,12 @@ The checked-in `tests/acceptance/m05-ui.ps1` now automates this host-safe
 verification. It passed UI typecheck, all 58 Vitest tests, and a disposable
 three-file production build, then removed the temporary output. The script
 does not touch audio, driver, or machine configuration.
+
+## Gain range guard (2026-09-06)
+
+The local draft editor now mirrors the authoritative -60 to +24 dB gain range
+and rejects non-finite or out-of-range gain values before they enter a draft.
+Boundary and rejection regressions pass; UI typecheck and all 59 Vitest tests
+pass. The existing single-line inspector markup still has a stale HTML `max`
+attribute and should be refreshed during the next UI formatting pass; backend
+and draft validation remain authoritative.

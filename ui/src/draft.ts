@@ -6,6 +6,10 @@ export type DraftChange = {
   value: boolean | number | string;
 };
 
+/** Gain bounds mirrored from the authoritative DSP/domain contract. */
+export const GAIN_MIN_DB = -60;
+export const GAIN_MAX_DB = 24;
+
 const libraryNodeDefinitions: Record<Extract<NodeKind, "mixer" | "gain" | "mute" | "meter">, {
   name: string;
   parameters: Record<string, boolean | number | string>;
@@ -205,6 +209,10 @@ export function setNodeDraftParameter(
 ): Session {
   const nodeIndex = session.nodes.findIndex((node) => node.id === nodeId);
   if (nodeIndex < 0) throw new Error(`Unknown node: ${nodeId}`);
+  const node = session.nodes[nodeIndex];
+  if (node.kind === "gain" && parameter === "gainDb" && (typeof value !== "number" || !Number.isFinite(value) || value < GAIN_MIN_DB || value > GAIN_MAX_DB)) {
+    throw new Error(`Gain must be between ${GAIN_MIN_DB} and ${GAIN_MAX_DB} dB`);
+  }
   return {
     ...session,
     nodes: session.nodes.map((node, index) => index === nodeIndex

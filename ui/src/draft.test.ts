@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setSessionDraftName } from "./draft";
+import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -64,6 +64,12 @@ describe("appendLibraryNode", () => {
     expect(reset.nodes.find((node) => node.id === "voice")?.parameters).toEqual({ gainDb: 0 });
     expect(reset.revision).toBe(demoSession.revision);
     expect(() => resetNodeDraftParameters(demoSession, "mic")).not.toThrow();
+  });
+
+  it("keeps gain drafts inside the documented range", () => {
+    expect(setNodeDraftParameter(demoSession, "voice", "gainDb", GAIN_MAX_DB).nodes[1].parameters.gainDb).toBe(24);
+    expect(setNodeDraftParameter(demoSession, "voice", "gainDb", GAIN_MIN_DB).nodes[1].parameters.gainDb).toBe(-60);
+    expect(() => setNodeDraftParameter(demoSession, "voice", "gainDb", 24.1)).toThrow("between -60 and 24");
   });
 
   it("normalizes and bounds session names", () => {
