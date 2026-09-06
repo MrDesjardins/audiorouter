@@ -5,8 +5,8 @@
 //! authority and that unsupported audio capabilities are discoverable.
 
 use audiorouter_domain::{
-    node_registry, ApiMethodSpec, EntityId, FakeRuntime, GraphStore, PermissionScope, RuntimeError,
-    RuntimeState, Session, API_METHODS,
+    inspect_routes, node_registry, ApiMethodSpec, EntityId, FakeRuntime, GraphStore,
+    PermissionScope, RuntimeError, RuntimeState, Session, API_METHODS,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -209,6 +209,20 @@ impl ControlPlane {
             .ok_or(ControlError::InvalidRequest("session not found".into()))
     }
 
+    pub fn inspect_routes(
+        &self,
+        session_id: &EntityId,
+        destination_node: &EntityId,
+    ) -> Result<Value, ControlError> {
+        let session = self.get_session(session_id)?;
+        serde_json::to_value(
+            inspect_routes(session, destination_node).map_err(|errors| {
+                ControlError::InvalidRequest(format!("invalid graph: {errors:?}"))
+            })?,
+        )
+        .map_err(|error| ControlError::Json(error.to_string()))
+    }
+
     pub fn plan_graph(
         &mut self,
         session_id: &EntityId,
@@ -304,6 +318,7 @@ impl ControlPlane {
             "devices.list" => self.dispatch_devices_list(),
             "apps.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
+            "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "session.start" => self.dispatch_session_start(request.params),
             "session.stop" => self.dispatch_session_stop(request.params),
             "graph.plan" => self.dispatch_plan(request.params),
@@ -493,6 +508,25 @@ impl ControlPlane {
         self.session_stop(&id)
     }
 
+    fn dispatch_routes_inspect(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("routes.inspect params are required".into())
+        })?;
+        let session_id: EntityId = serde_json::from_value(
+            params
+                .get("sessionId")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
+        )
+        .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let destination_node: EntityId =
+            serde_json::from_value(params.get("destinationNode").cloned().ok_or_else(|| {
+                ControlError::InvalidRequest("destinationNode is required".into())
+            })?)
+            .map_err(|_| ControlError::InvalidRequest("invalid destinationNode".into()))?;
+        self.inspect_routes(&session_id, &destination_node)
+    }
+
     fn dispatch_devices_list(&self) -> Result<Value, ControlError> {
         let endpoints = audiorouter_windows_audio::enumerate_active_endpoints()
             .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
@@ -633,6 +667,26 @@ mod tests {
             .iter()
             .any(|node| node["type"] == "physical-input@1"
                 && node["availability"]["status"] == "unavailable"));
+    }
+
+    #[test]
+    fn routes_inspect_dispatch_returns_desired_provenance() {
+        let mut plane = ControlPlane::default();
+        let graph = session();
+        plane.insert_session(graph).unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "routes.inspect".into(),
+            params: Some(json!({
+                "sessionId": "session",
+                "destinationNode": "out"
+            })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["reachable"], true);
+        assert_eq!(result["paths"][0]["nodes"], json!(["in", "out"]));
+        assert_eq!(result["paths"][0]["edges"], json!(["edge"]));
     }
 
     #[test]

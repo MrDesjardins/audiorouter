@@ -35,6 +35,8 @@ Portable evidence supports the domain/control portions of ARCH-01/03/06/10/12, G
 
 Still not evidenced: required-node-type/type-version compatibility beyond the frozen v1 manifest boundary; real endpoint discovery/activation in the control plane; process-tree audio data capture; driver lifecycle; realtime callback safety; physical latency; and M02 hardware acceptance. M00 remains open and M01 is not a releasable product gate.
 
+The read-only `routes.inspect` method now validates a session and returns all enabled desired upstream paths to a requested destination as ordered node and edge IDs. Disabled edges produce an unreachable destination path, and unknown destinations return a path-specific validation error. This is desired-topology provenance only; it does not claim a running graph or physical audio reachability.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

@@ -121,7 +121,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 9] = [
+pub const API_METHODS: [ApiMethodSpec; 10] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -144,6 +144,11 @@ pub const API_METHODS: [ApiMethodSpec; 9] = [
     },
     ApiMethodSpec {
         name: "nodes.types",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "routes.inspect",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
@@ -401,6 +406,83 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     } else {
         Err(errors)
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct RoutePath {
+    pub nodes: Vec<EntityId>,
+    pub edges: Vec<EntityId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct RouteInspection {
+    pub destination_node: EntityId,
+    pub reachable: bool,
+    pub paths: Vec<RoutePath>,
+}
+
+/// Inspect desired upstream provenance for one destination without opening or
+/// activating any runtime resource. Disabled edges are excluded, while
+/// disabled nodes remain visible in the returned desired path.
+pub fn inspect_routes(
+    session: &Session,
+    destination_node: &EntityId,
+) -> Result<RouteInspection, Vec<ValidationError>> {
+    validate_session(session)?;
+    if !session
+        .nodes
+        .iter()
+        .any(|node| node.id == *destination_node)
+    {
+        return Err(vec![ValidationError::MissingNode {
+            path: "destinationNode".into(),
+            id: destination_node.as_str().into(),
+        }]);
+    }
+    let mut incoming = HashMap::<EntityId, Vec<&Edge>>::new();
+    for edge in session.edges.iter().filter(|edge| edge.enabled) {
+        incoming
+            .entry(edge.destination_node.clone())
+            .or_default()
+            .push(edge);
+    }
+    fn walk(
+        node: &EntityId,
+        incoming: &HashMap<EntityId, Vec<&Edge>>,
+        nodes: &mut Vec<EntityId>,
+        edges: &mut Vec<EntityId>,
+        paths: &mut Vec<RoutePath>,
+    ) {
+        let Some(parents) = incoming.get(node) else {
+            paths.push(RoutePath {
+                nodes: nodes.iter().rev().cloned().collect(),
+                edges: edges.iter().rev().cloned().collect(),
+            });
+            return;
+        };
+        for edge in parents {
+            nodes.push(edge.source_node.clone());
+            edges.push(edge.id.clone());
+            walk(&edge.source_node, incoming, nodes, edges, paths);
+            nodes.pop();
+            edges.pop();
+        }
+    }
+    let mut nodes = vec![destination_node.clone()];
+    let mut edges = Vec::new();
+    let mut paths = Vec::new();
+    walk(
+        destination_node,
+        &incoming,
+        &mut nodes,
+        &mut edges,
+        &mut paths,
+    );
+    Ok(RouteInspection {
+        destination_node: destination_node.clone(),
+        reachable: paths.iter().any(|path| path.nodes.len() > 1),
+        paths,
+    })
 }
 
 fn has_cycle(adjacency: &HashMap<EntityId, Vec<EntityId>>) -> bool {
@@ -686,6 +768,46 @@ mod tests {
         ))
         .is_ok());
     }
+
+    #[test]
+    fn route_inspection_reports_enabled_upstream_provenance() {
+        let graph = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("in-out", "in", "out")],
+        );
+        let inspection = inspect_routes(&graph, &EntityId::new("out")).unwrap();
+        assert!(inspection.reachable);
+        assert_eq!(inspection.paths.len(), 1);
+        assert_eq!(
+            inspection.paths[0].nodes,
+            vec![EntityId::new("in"), EntityId::new("out")]
+        );
+        assert_eq!(inspection.paths[0].edges, vec![EntityId::new("in-out")]);
+    }
+
+    #[test]
+    fn route_inspection_excludes_disabled_edges_and_rejects_unknown_destinations() {
+        let mut disabled = edge("e", "in", "out");
+        disabled.enabled = false;
+        let graph = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![disabled],
+        );
+        let inspection = inspect_routes(&graph, &EntityId::new("out")).unwrap();
+        assert!(!inspection.reachable);
+        assert_eq!(inspection.paths[0].nodes, vec![EntityId::new("out")]);
+        assert!(matches!(
+            inspect_routes(&graph, &EntityId::new("missing")),
+            Err(errors) if matches!(errors.as_slice(), [ValidationError::MissingNode { .. }])
+        ));
+    }
+
     #[test]
     fn rejects_dangling_edge_and_cycle() {
         let result = validate_session(&session(
