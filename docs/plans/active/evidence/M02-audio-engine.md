@@ -54,3 +54,9 @@ The process-tree capture clause above is superseded by the later native probe ev
 The native probe now provides an opt-in controlled-attribution harness: a bounded child process renders a deterministic tone while the parent captures only that process tree and verifies child cleanup. The implementation builds with the installed Windows toolchain, but runtime execution is intentionally pending because it emits an audible test tone; this does not yet constitute attribution evidence.
 
 The Windows application inventory now supplements process identities with a read-only `IAudioSessionManager2` snapshot across active render and capture endpoints. `applications.list` reports active/inactive session counts, display names, and capture sessions observed for each PID. It does not open or start an audio stream, alter endpoint state, or claim that an unobserved protected/background capture is impossible. Process-loopback attribution and capture capability beyond the observed snapshot remain open.
+
+Session enumeration is fail-soft at the individual session and endpoint
+manager boundaries: an aggregate session, inaccessible endpoint, or transient
+session disappearance is skipped while the rest of the process inventory is
+retained. The adapter regression still verifies nonzero process identities and
+consistent session-count bounds.

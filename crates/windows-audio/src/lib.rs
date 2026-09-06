@@ -849,17 +849,33 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                 let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
                 for index in 0..devices.GetCount()? {
                     let device = devices.Item(index)?;
-                    let manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
-                    let sessions = manager.GetSessionEnumerator()?;
-                    let count = sessions.GetCount()?.max(0);
+                    let Ok(manager) = device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)
+                    else {
+                        continue;
+                    };
+                    let Ok(sessions) = manager.GetSessionEnumerator() else {
+                        continue;
+                    };
+                    let Ok(count) = sessions.GetCount() else {
+                        continue;
+                    };
+                    let count = count.max(0);
                     for session_index in 0..count {
-                        let session = sessions.GetSession(session_index)?;
-                        let control: IAudioSessionControl2 = session.cast()?;
-                        let process_id = control.GetProcessId()?;
+                        let Ok(session) = sessions.GetSession(session_index) else {
+                            continue;
+                        };
+                        let Ok(control) = session.cast::<IAudioSessionControl2>() else {
+                            continue;
+                        };
+                        let Ok(process_id) = control.GetProcessId() else {
+                            continue;
+                        };
                         if process_id == 0 {
                             continue;
                         }
-                        let state = session.GetState()?;
+                        let state = session
+                            .GetState()
+                            .unwrap_or(windows::Win32::Media::Audio::AudioSessionStateInactive);
                         let entry =
                             by_process
                                 .entry(process_id)
@@ -877,7 +893,9 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                         if is_capture {
                             entry.capture_session_count += 1;
                         }
-                        let display_name = session.GetDisplayName()?;
+                        let Ok(display_name) = session.GetDisplayName() else {
+                            continue;
+                        };
                         if !display_name.is_null() {
                             if let Ok(name) = display_name.to_string() {
                                 if !name.is_empty() && !entry.display_names.contains(&name) {
