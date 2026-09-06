@@ -74,6 +74,9 @@ dependencies = [
 [[package]]
 name = "audiorouter-engine"
 version = "0.1.0"
+dependencies = [
+ "audiorouter-domain",
+]
 
 [[package]]
 name = "audiorouter-protocol"

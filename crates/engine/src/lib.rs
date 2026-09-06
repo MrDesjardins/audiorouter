@@ -236,6 +236,85 @@ pub enum ProcessingStage {
     Mute { muted: bool },
 }
 
+#[derive(Debug, PartialEq)]
+pub enum GraphCompileError {
+    InvalidGraph(Vec<audiorouter_domain::ValidationError>),
+    UnsupportedTopology,
+}
+
+/// Prepare the currently supported processing subset of a validated domain
+/// graph. Device nodes and edge mixing are intentionally not activated here;
+/// they remain owned by the Windows scheduler milestone. A graph containing
+/// enabled edges is rejected until buffer routing is implemented. Gain has no
+/// scalar field in the v1 domain contract yet, so a non-bypassed gain is unity.
+pub fn compile_session(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+) -> Result<RuntimeGraph, GraphCompileError> {
+    use audiorouter_domain::{validate_session, NodeKind};
+    use std::collections::{HashMap, VecDeque};
+
+    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    if session.edges.iter().any(|edge| edge.enabled) {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mut indegree = session
+        .nodes
+        .iter()
+        .map(|node| (node.id.clone(), 0usize))
+        .collect::<HashMap<_, _>>();
+    let mut outgoing = HashMap::<audiorouter_domain::EntityId, Vec<_>>::new();
+    for edge in session.edges.iter().filter(|edge| edge.enabled) {
+        *indegree.get_mut(&edge.destination_node).unwrap() += 1;
+        outgoing
+            .entry(edge.source_node.clone())
+            .or_default()
+            .push(edge.destination_node.clone());
+    }
+    let mut ready = session
+        .nodes
+        .iter()
+        .filter(|node| indegree[&node.id] == 0)
+        .map(|node| node.id.clone())
+        .collect::<VecDeque<_>>();
+    let mut order = Vec::with_capacity(session.nodes.len());
+    while let Some(node_id) = ready.pop_front() {
+        order.push(node_id.clone());
+        if let Some(children) = outgoing.get(&node_id) {
+            for child in children {
+                let count = indegree.get_mut(child).unwrap();
+                *count -= 1;
+                if *count == 0 {
+                    ready.push_back(child.clone());
+                }
+            }
+        }
+    }
+
+    let mut stages = Vec::new();
+    for node_id in order {
+        let node = session
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id)
+            .unwrap();
+        if !node.enabled || node.bypass {
+            continue;
+        }
+        match node.kind {
+            NodeKind::Gain => stages.push(ProcessingStage::Gain { linear: 1.0 }),
+            NodeKind::Mute => stages.push(ProcessingStage::Mute { muted: true }),
+            NodeKind::PhysicalInput
+            | NodeKind::ApplicationCapture
+            | NodeKind::EndpointLoopback
+            | NodeKind::PhysicalOutput
+            | NodeKind::Mixer
+            | NodeKind::Meter => {}
+        }
+    }
+    Ok(RuntimeGraph::prepare(generation, stages))
+}
+
 /// An immutable, prepared processing schedule. The stage vector is created
 /// before realtime execution; `process` only mutates the caller's block.
 pub struct RuntimeGraph {
@@ -403,5 +482,32 @@ mod tests {
         );
         assert_eq!(mute.process(&mut block), 0);
         assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
+    }
+
+    #[test]
+    fn compiler_prepares_supported_processing_nodes() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "processing-only".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: EntityId::new("mute"),
+                kind: NodeKind::Mute,
+                name: "Mute".into(),
+                enabled: true,
+                bypass: false,
+                ports: vec![],
+            }],
+            edges: vec![],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(3)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        graph.process(&mut block);
+        assert_eq!(graph.generation().value(), 3);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
     }
 }
