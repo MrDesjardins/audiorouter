@@ -41,6 +41,10 @@ The [SDK and native toolchain setup](operations/sdk-setup.md) explains the
 source-distributed VST3 SDK checkout and the installed Windows SDK/WDK build
 dependencies.
 
+The [API reference](operations/api-reference.md) lists every discovered public
+method, permission, side-effect class, node type, and preset; use `schema
+--json` for the exact machine-readable contracts.
+
 The [release qualification checklist](operations/release-qualification.md)
 records the reproducible unsigned artifact flow, recovery expectations, and
 the native/signing/installer gates that remain open.
