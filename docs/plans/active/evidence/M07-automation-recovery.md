@@ -320,3 +320,8 @@ The Windows plugin worker now applies Job Object limits for one active process
 and 512 MiB of process memory in addition to kill-on-close containment. This
 is resource-containment evidence only; it does not establish filesystem or
 network isolation for arbitrary plugins.
+
+`WorkerSupervisor::record_failure` now lets a native adapter report immediate
+worker faults through the same bounded failure/quarantine policy used for
+heartbeat timeouts. The transition does not restart processes or claim plugin
+execution; those native integration gates remain open.

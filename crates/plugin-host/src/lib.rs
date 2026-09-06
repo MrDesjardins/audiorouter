@@ -651,6 +651,22 @@ impl WorkerSupervisor {
         true
     }
 
+    /// Record an immediate worker failure reported by the process adapter.
+    /// This shares the heartbeat timeout's bounded quarantine policy and
+    /// never starts or restarts a process by itself.
+    pub fn record_failure(&mut self, now: Instant) -> WorkerState {
+        if self.state == WorkerState::Running {
+            self.failures.record_failure_at(now);
+            self.state = if self.failures.quarantined() {
+                WorkerState::Quarantined
+            } else {
+                WorkerState::Failed
+            };
+            self.last_heartbeat = None;
+        }
+        self.state
+    }
+
     pub fn poll(&mut self, now: Instant) -> WorkerState {
         if self.state == WorkerState::Running
             && self
@@ -2351,6 +2367,29 @@ mod tests {
             WorkerState::Failed
         );
         assert!(!supervisor.heartbeat(now));
+        supervisor.deliberate_retry();
+        assert_eq!(supervisor.state(), WorkerState::Stopped);
+    }
+
+    #[test]
+    fn worker_supervisor_accepts_immediate_failures_and_quarantines_repeated_faults() {
+        let identity = PluginIdentity {
+            path: PathBuf::from("effect.vst3"),
+            binary_path: PathBuf::from("effect.vst3"),
+            format: PluginFormat::Vst3,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "0".repeat(64),
+        };
+        let start = Instant::now();
+        let mut supervisor = WorkerSupervisor::new();
+        for expected in [WorkerState::Failed, WorkerState::Failed] {
+            assert_eq!(supervisor.start(&identity, start), Ok(()));
+            assert_eq!(supervisor.record_failure(start), expected);
+        }
+        assert_eq!(supervisor.start(&identity, start), Ok(()));
+        assert_eq!(supervisor.record_failure(start), WorkerState::Quarantined);
+        assert_eq!(supervisor.record_failure(start), WorkerState::Quarantined);
         supervisor.deliberate_retry();
         assert_eq!(supervisor.state(), WorkerState::Stopped);
     }
