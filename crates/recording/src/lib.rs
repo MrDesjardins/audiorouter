@@ -981,6 +981,100 @@ pub struct WavRecorder<W> {
     next_frame: Option<u64>,
 }
 
+/// Queue-backed FLAC worker using the dependency's bounded batch encoder.
+/// This owns no path and emits bytes only at `finish`; a true incremental
+/// FLAC file worker remains a separate implementation requirement.
+pub struct BufferedFlacRecorder {
+    encoder: FlacBufferEncoder,
+    controller: RecorderController,
+    next_frame: Option<u64>,
+}
+
+impl BufferedFlacRecorder {
+    pub fn new(
+        channels: usize,
+        sample_rate: u32,
+        bits_per_sample: u8,
+    ) -> Result<Self, RecordingError> {
+        Ok(Self {
+            encoder: FlacBufferEncoder::new(channels, sample_rate, bits_per_sample)?,
+            controller: RecorderController::new(),
+            next_frame: None,
+        })
+    }
+
+    pub fn state(&self) -> RecorderState {
+        self.controller.state()
+    }
+
+    pub fn arm(&mut self) -> Result<(), RecorderError> {
+        self.controller.arm()
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.start(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    pub fn pause(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.pause(frame)
+    }
+
+    pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.resume(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    pub fn stop(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.stop(frame)
+    }
+
+    pub fn fail(&mut self) {
+        self.controller.fail();
+    }
+
+    pub fn drain_queue(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        if self.controller.state() != RecorderState::Recording {
+            return Err(RecordingError::NotRecording);
+        }
+        let mut drained = 0;
+        while drained < maximum_chunks {
+            let Some(chunk) = queue.try_pop() else {
+                break;
+            };
+            let expected = self.next_frame.unwrap_or(chunk.start_frame);
+            if chunk.start_frame != expected {
+                self.controller.fail();
+                return Err(RecordingError::FrameDiscontinuity {
+                    expected,
+                    actual: chunk.start_frame,
+                });
+            }
+            let frames = chunk.samples.len() / self.encoder.channels;
+            if let Err(error) = self.encoder.write_interleaved(&chunk.samples) {
+                self.controller.fail();
+                return Err(error);
+            }
+            self.next_frame = Some(expected + frames as u64);
+            drained += 1;
+        }
+        Ok(drained)
+    }
+
+    pub fn finish(self) -> Result<Vec<u8>, RecordingError> {
+        if self.controller.state() != RecorderState::Completed {
+            return Err(RecordingError::NotRecording);
+        }
+        self.encoder.finish()
+    }
+}
+
 impl<W: Write + Seek> WavRecorder<W> {
     pub fn new(writer: WavWriter<W>) -> Self {
         Self {
@@ -1261,6 +1355,34 @@ mod tests {
         recorder.stop(13).unwrap();
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn buffered_flac_recorder_drains_contiguous_chunks_and_finalizes() {
+        let mut recorder = BufferedFlacRecorder::new(1, 48_000, 16).unwrap();
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 10,
+                samples: vec![0.0, 0.5],
+            })
+            .unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 12,
+                samples: vec![-0.5],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        assert_eq!(recorder.drain_queue(&queue, 8).unwrap(), 2);
+        recorder.stop(13).unwrap();
+        let bytes = recorder.finish().unwrap();
+        let info = flac_io::info(&bytes).unwrap();
+        assert_eq!(info.sample_rate, 48_000);
+        assert_eq!(info.channels, 1);
+        assert_eq!(info.bits_per_sample, 16);
+        assert_eq!(info.total_samples, 3);
     }
 
     #[test]

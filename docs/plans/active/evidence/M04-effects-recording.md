@@ -229,3 +229,10 @@ The temporary sample buffer in `FlacBufferEncoder` now has a ten-minute frame
 limit and returns `TooManyFrames` before extending, keeping the explicitly
 batch-only path bounded. The 15-test recording suite and strict Clippy remain
 green; this does not claim incremental FLAC output.
+
+Added `BufferedFlacRecorder`, which joins the bounded recording queue and
+recorder lifecycle to the batch encoder. It handles arm/start/stop, contiguous
+frame validation, terminal errors, bounded accumulation, and emits a valid
+FLAC stream on finish. The recording suite now has 16 passing tests with
+strict Clippy clean. This is deliberately not claimed as incremental FLAC file
+output; a true streaming encoder remains open.
