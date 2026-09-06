@@ -303,7 +303,7 @@ impl ControlPlane {
         base_revision: u64,
         idempotency_key: &str,
     ) -> Result<Value, ControlError> {
-        let fingerprint = self.store.plan_fingerprint(plan_id)?;
+        let fingerprint = format!("graph.commit:{}:{}", plan_id.as_str(), base_revision);
         let request_hash = format!("{:x}", Sha256::digest(fingerprint.as_bytes()));
         if let Some(storage) = &self.storage {
             if let Some(result) = storage
@@ -1219,6 +1219,29 @@ mod tests {
         let result = plane.commit_graph(&plan, 0, "persist-op").unwrap();
         assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
         assert!(result["revision"] == 1);
+    }
+
+    #[test]
+    fn durable_commit_replays_before_plan_lookup_after_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-idempotency-restart-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let original = session();
+        let mut first = ControlPlane::with_storage("first", Storage::open(&path).unwrap());
+        first.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "durable-change".into();
+        let plan = first.plan_graph(&original.id, 0, candidate).unwrap();
+        first.commit_graph(&plan, 0, "restart-key").unwrap();
+        drop(first);
+
+        let mut second = ControlPlane::with_storage("second", Storage::open(&path).unwrap());
+        let replay = second.commit_graph(&plan, 0, "restart-key").unwrap();
+        assert_eq!(replay["idempotentReplay"], true);
+        assert_eq!(replay["revision"], 1);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

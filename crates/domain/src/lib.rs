@@ -811,17 +811,6 @@ impl GraphStore {
         )
     }
 
-    pub fn plan_fingerprint(&self, plan_id: &EntityId) -> Result<String, StoreError> {
-        let plan = self.plans.get(plan_id).ok_or(StoreError::PlanNotFound)?;
-        serde_json::to_string(&(&plan.session_id, plan.base_revision, &plan.candidate)).map_err(
-            |error| {
-                StoreError::InvalidGraph(vec![ValidationError::InvalidMatrix {
-                    path: format!("plan fingerprint: {error}"),
-                }])
-            },
-        )
-    }
-
     pub fn plan_graph_with_ttl(
         &mut self,
         session_id: &EntityId,

@@ -77,6 +77,8 @@ The SQLite operation journal now persists a request hash and exposes checked rep
 
 Durable idempotency records now have a 24-hour retention bound. Journal reads and transactional writes prune older rows using an indexed `created_at`; a regression verifies an expired key can be reused while a current mismatched hash still conflicts. Storage coverage is 17 passing tests with strict Clippy.
 
+The durable commit hash is derived from the operation, plan ID, and base revision rather than requiring the candidate to remain in memory. This permits replay from a fresh control process before plan lookup; a regression verifies the persisted result is returned without a second mutation. The affected suites pass 23 control, 19 domain, and 17 storage tests with strict Clippy.
+
 ## Next action
 
-Implement durable idempotency request hashing and bounded expiry across control-process restarts using the existing SQLite journal transaction. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.
+Implement transport-level event subscriber lifetime and snapshot-resync behavior over the tested local framing boundary. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.
