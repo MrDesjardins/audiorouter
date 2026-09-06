@@ -127,3 +127,11 @@ zero buffer duration, and `SetEventHandle` all returned success. The client was
 never started and no packet was read. This directly validates the request shape
 that previously produced `E_INVALIDARG`; data-path, process attribution, and
 latency evidence remain separate gates.
+
+The same read-only event-initialization mode was then run for all 13 active
+capture endpoints. Every endpoint returned success for exact-format shared
+`Initialize` with `EVENTCALLBACK | NOPERSIST`, zero duration, and
+`SetEventHandle`. No endpoint was started and no packet was read. This removes
+ordinary endpoint contention as an explanation for the earlier `E_INVALIDARG`
+result for this adapter request shape; data attribution and latency remain
+open.
