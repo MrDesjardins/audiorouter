@@ -141,4 +141,5 @@ Added read-only `startup.get` API, CLI (`startup get`), and MCP
 (`get_startup`) reporting. The response explicitly reports sign-in startup
 registration as unavailable in this build; it performs no registration and
 does not change machine configuration. Domain, control, and CLI validation is
-covered by the workspace test suite.
+covered by the workspace test suite (50 control tests, 23 domain tests, and
+10 CLI tests).

@@ -765,6 +765,10 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 
 fn help_value() -> Value {
     let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
+        .insert(3, json!("startup get [--database <path>]"));
     value["commands"].as_array_mut().unwrap().insert(
         14,
         json!("recordings list|get|preview|set-metadata|rename|remove-entry [<recording-id>] --database <path>"),
@@ -1384,6 +1388,14 @@ mod tests {
             serde_json::from_str(&run(["diagnostics", "--json"]).unwrap()).unwrap();
         assert_eq!(diagnostics["redacted"], true);
         assert_eq!(diagnostics["audio"]["state"], "unavailable");
+    }
+
+    #[test]
+    fn startup_convenience_command_reports_capability_without_registration() {
+        let startup: Value =
+            serde_json::from_str(&run(["startup", "get", "--json"]).unwrap()).unwrap();
+        assert_eq!(startup["enabled"], false);
+        assert_eq!(startup["registration"], "unavailable");
     }
 
     #[test]
