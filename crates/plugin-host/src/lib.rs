@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 pub const MAX_PLUGIN_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_FAILURES_BEFORE_QUARANTINE: u32 = 3;
+pub const MAX_WORKER_FRAMES: usize = 2048;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -152,6 +153,89 @@ impl Default for FailureLedger {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WorkerFrameError {
+    InvalidChannels,
+    InvalidFrameCount,
+    WrongSampleCount,
+    NonFiniteSample,
+    SequenceRegression,
+    DeadlineExpired,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WorkerFrame {
+    pub sequence: u64,
+    pub deadline_tick: u64,
+    pub channels: u16,
+    pub samples: Vec<f32>,
+}
+
+impl WorkerFrame {
+    pub fn new(
+        sequence: u64,
+        deadline_tick: u64,
+        channels: u16,
+        samples: Vec<f32>,
+    ) -> Result<Self, WorkerFrameError> {
+        if !matches!(channels, 1 | 2) {
+            return Err(WorkerFrameError::InvalidChannels);
+        }
+        if samples.is_empty() || samples.len() > MAX_WORKER_FRAMES * channels as usize {
+            return Err(WorkerFrameError::InvalidFrameCount);
+        }
+        if samples.len() % channels as usize != 0 {
+            return Err(WorkerFrameError::WrongSampleCount);
+        }
+        if samples.iter().any(|sample| !sample.is_finite()) {
+            return Err(WorkerFrameError::NonFiniteSample);
+        }
+        Ok(Self {
+            sequence,
+            deadline_tick,
+            channels,
+            samples,
+        })
+    }
+
+    pub fn frame_count(&self) -> usize {
+        self.samples.len() / self.channels as usize
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerFrameGuard {
+    last_sequence: Option<u64>,
+}
+
+impl WorkerFrameGuard {
+    pub fn new() -> Self {
+        Self {
+            last_sequence: None,
+        }
+    }
+
+    pub fn accept(&mut self, frame: &WorkerFrame, now_tick: u64) -> Result<(), WorkerFrameError> {
+        if self
+            .last_sequence
+            .is_some_and(|last| frame.sequence <= last)
+        {
+            return Err(WorkerFrameError::SequenceRegression);
+        }
+        if frame.deadline_tick < now_tick {
+            return Err(WorkerFrameError::DeadlineExpired);
+        }
+        self.last_sequence = Some(frame.sequence);
+        Ok(())
+    }
+}
+
+impl Default for WorkerFrameGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -225,5 +309,26 @@ mod tests {
         assert!(ledger.quarantined());
         ledger.deliberate_retry();
         assert_eq!(ledger, FailureLedger::new());
+    }
+
+    #[test]
+    fn validates_bounded_worker_frames_and_deadlines() {
+        let mut guard = WorkerFrameGuard::new();
+        let frame = WorkerFrame::new(1, 10, 2, vec![0.25, -0.25, 0.0, 0.1]).unwrap();
+        assert_eq!(frame.frame_count(), 2);
+        assert!(guard.accept(&frame, 9).is_ok());
+        assert_eq!(
+            guard.accept(&frame, 9),
+            Err(WorkerFrameError::SequenceRegression)
+        );
+        let late = WorkerFrame::new(2, 10, 1, vec![0.0]).unwrap();
+        assert_eq!(
+            guard.accept(&late, 11),
+            Err(WorkerFrameError::DeadlineExpired)
+        );
+        assert_eq!(
+            WorkerFrame::new(3, 20, 2, vec![f32::NAN, 0.0]),
+            Err(WorkerFrameError::NonFiniteSample)
+        );
     }
 }

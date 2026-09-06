@@ -33,6 +33,12 @@ quarantine ledger requiring deliberate retry. Three crate tests and strict
 Clippy pass. Loading, scanning code execution, worker IPC, and plugin state
 remain intentionally separate follow-up work.
 
+The same crate now defines a bounded `WorkerFrame` and `WorkerFrameGuard`:
+only mono/stereo finite frames up to 2048 frames are accepted, sample shape is
+checked, sequence regressions are rejected, and expired deadlines are
+reported. Four plugin-host tests and strict Clippy pass. This validates the
+message boundary without claiming shared-memory transport or plugin execution.
+
 The post-integration `cargo test --workspace` run passes across CLI (5),
 control (41), domain (23), DSP (17), engine (36), plugin-host (3), protocol
 (5), recording (14), storage (21), transport (14), and Windows-audio (8)
