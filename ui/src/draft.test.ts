@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, removeDraftNode, setNodeDraftName } from "./draft";
+import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, removeDraftNode, resetNodeDraftParameters, setNodeDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -56,5 +56,13 @@ describe("appendLibraryNode", () => {
     expect(duplicated.revision).toBe(demoSession.revision);
     const twice = duplicateDraftNode(duplicated, "voice");
     expect(twice.nodes.at(-1)?.id).toBe("voice-copy-2");
+  });
+
+  it("resets supported parameters without changing topology", () => {
+    const changed = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "voice" ? { ...node, parameters: { gainDb: 8 } } : node) };
+    const reset = resetNodeDraftParameters(changed, "voice");
+    expect(reset.nodes.find((node) => node.id === "voice")?.parameters).toEqual({ gainDb: 0 });
+    expect(reset.revision).toBe(demoSession.revision);
+    expect(() => resetNodeDraftParameters(demoSession, "mic")).not.toThrow();
   });
 });

@@ -460,3 +460,9 @@ coordinates are discarded, persistence failures are non-fatal, and positions
 are never sent to the backend graph planner. Layout persistence has two pure
 regressions; UI coverage is 33 tests with typecheck and production build
 passing.
+
+The selected-node inspector now offers a reset for supported processor
+parameters: gain returns to 0 dB and mute returns to off. The reset updates
+only the local candidate and enters the bounded draft history; node identity,
+topology, revision, and live audio remain unchanged until backend plan/commit.
+UI coverage is 51 tests with typecheck and production build passing.

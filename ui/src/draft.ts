@@ -205,6 +205,14 @@ export function setNodeDraftParameter(
   };
 }
 
+/** Restores supported built-in processor parameters to their documented defaults. */
+export function resetNodeDraftParameters(session: Session, nodeId: EntityId): Session {
+  const node = session.nodes.find((item) => item.id === nodeId);
+  if (!node) throw new Error(`Unknown node: ${nodeId}`);
+  const parameters: Record<string, boolean | number | string> = node.kind === "gain" ? { gainDb: 0 } : node.kind === "mute" ? { muted: false } : { ...node.parameters };
+  return { ...session, nodes: session.nodes.map((item) => item.id === nodeId ? { ...item, parameters } : item) };
+}
+
 /** Produces deterministic plan inputs for changed node boolean flags. */
 export function describeDraftChanges(base: Session, candidate: Session): DraftChange[] {
   return candidate.nodes.flatMap((node, index) => {
