@@ -46,6 +46,13 @@ updates local presentation state only; it does not call a control method or
 alter audio configuration. TypeScript checking and the production Vite build
 pass.
 
+`SnapshotCache` now retains the last successful `UiBackendSnapshot` and marks
+it stale with an actionable error when refresh fails. A failed reconnect cannot
+erase the last known session or create an unbounded edit queue; a later
+successful refresh clears the stale state. This is transport/UI state only and
+does not touch audio configuration. Contracts/UI typechecks, production build,
+and high-severity audit pass.
+
 The shared TypeScript contract now models `StateEvent` and the complete
 `events.subscribe` result, including backend epoch, sequence, filtered events,
 and explicit resync snapshots. `UiBackend.subscribe` exposes this read-only

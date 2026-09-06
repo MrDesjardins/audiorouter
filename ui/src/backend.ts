@@ -20,6 +20,35 @@ export interface UiBackend {
   subscribe(afterSequence?: number, sessionId?: string): Promise<EventsSubscribeResult>;
 }
 
+export type UiSnapshotState = {
+  snapshot: UiBackendSnapshot | null;
+  stale: boolean;
+  error: string | null;
+};
+
+/** Keeps the last known state visible across a failed refresh or reconnect. */
+export class SnapshotCache {
+  private state: UiSnapshotState = { snapshot: null, stale: true, error: null };
+
+  current(): UiSnapshotState {
+    return this.state;
+  }
+
+  async refresh(backend: UiBackend): Promise<UiSnapshotState> {
+    try {
+      const snapshot = await backend.snapshot();
+      this.state = { snapshot, stale: false, error: null };
+    } catch (error) {
+      this.state = {
+        ...this.state,
+        stale: true,
+        error: error instanceof Error ? error.message : "Backend refresh failed",
+      };
+    }
+    return this.state;
+  }
+}
+
 const disconnectedStatus: StatusSnapshot = {
   build: "preview",
   audio: "unavailable",
