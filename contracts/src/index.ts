@@ -155,6 +155,7 @@ export type ImplementedMethod =
   | "status.get"
   | "devices.list"
   | "apps.list"
+  | "applications.list"
   | "nodes.types"
   | "routes.inspect"
   | "graph.history"
@@ -177,6 +178,7 @@ export type MethodParams = {
   "status.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "apps.list": undefined;
+  "applications.list": undefined;
   "nodes.types": undefined;
   "routes.inspect": { sessionId: EntityId; destinationNode: EntityId };
   "graph.history": { sessionId: EntityId; cursor?: string; limit?: number };
@@ -211,6 +213,7 @@ export type MethodResult = {
   "status.get": Record<string, unknown>;
   "devices.list": unknown[];
   "apps.list": ApplicationInfo[];
+  "applications.list": ApplicationInfo[];
   "nodes.types": DiscoveryDocument["nodeTypes"];
   "routes.inspect": Record<string, unknown>;
   "graph.history": GraphHistoryPage;

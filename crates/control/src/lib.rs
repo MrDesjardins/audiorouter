@@ -90,7 +90,9 @@ fn method_description(name: &str) -> &'static str {
         "system.handshake" => "Negotiate a compatible protocol version before requests.",
         "status.get" => "Return backend, runtime, and audio availability status.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
-        "apps.list" => "List discoverable application identities for binding.",
+        "apps.list" | "applications.list" => {
+            "List discoverable application identities for binding."
+        }
         "nodes.types" => "List supported node types and their availability.",
         "routes.inspect" => "Inspect upstream route provenance for a destination node.",
         "graph.history" => "List bounded committed graph revisions for a session.",
@@ -213,7 +215,7 @@ fn method_input_schema(name: &str) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
-        "devices.list" | "apps.list" | "nodes.types" | "nodes.describe" => {
+        "devices.list" | "apps.list" | "applications.list" | "nodes.types" | "nodes.describe" => {
             json!({ "type": "array" })
         }
         _ => json!({ "type": "object" }),
@@ -791,7 +793,7 @@ impl ControlPlane {
                 json!({ "build": self.build, "audio": "unavailable", "deviceDiscovery": "available", "reason": "M02 realtime graph engine and routing are not implemented" }),
             ),
             "devices.list" => self.dispatch_devices_list(),
-            "apps.list" => self.dispatch_apps_list(),
+            "apps.list" | "applications.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
             "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
             "sessions.get" => self.dispatch_session_get(request.params),
@@ -1399,8 +1401,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "graph.plan" => &["sessionId", "baseRevision", "candidate"],
         "graph.commit" => &["planId", "baseRevision", "idempotencyKey"],
         "system.handshake" => &["protocolVersion"],
-        "system.describe" | "status.get" | "devices.list" | "apps.list" | "nodes.types"
-        | "nodes.describe" => &[],
+        "system.describe" | "status.get" | "devices.list" | "apps.list" | "applications.list"
+        | "nodes.types" | "nodes.describe" => &[],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -1733,6 +1735,11 @@ mod tests {
             .unwrap()
             .iter()
             .any(|method| method["name"] == "sessions.get"));
+        assert!(description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|method| method["name"] == "applications.list"));
         assert!(description["nodeTypes"]
             .as_array()
             .unwrap()
@@ -1786,6 +1793,24 @@ mod tests {
             params: Some(json!([])),
         });
         assert_eq!(response.error.unwrap().code, -32602);
+    }
+
+    #[test]
+    fn canonical_application_list_alias_uses_the_same_discovery_result() {
+        let mut plane = ControlPlane::default();
+        let legacy = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(5)),
+            method: "apps.list".into(),
+            params: None,
+        });
+        let canonical = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(6)),
+            method: "applications.list".into(),
+            params: None,
+        });
+        assert_eq!(legacy.result, canonical.result);
     }
 
     #[test]
