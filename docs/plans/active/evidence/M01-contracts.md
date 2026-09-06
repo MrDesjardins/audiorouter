@@ -49,6 +49,8 @@ The portable `EventLog` now establishes bounded state-event replay semantics: ev
 
 Control now owns an event log and exposes `events.subscribe` with optional `afterSequence`, `limit`, and `sessionId` filters. Session creation and graph commits append state events; the control test verifies epoch, ordering, operation ID, and filtering. Transport-level subscriber lifetime and snapshot resync responses remain open.
 
+`nodes.describe` is now a documented read-only method and `nodes describe` is available in the CLI. Both expose the same registry entries as `nodes.types`, including availability and realtime cost class; the M01 acceptance script verifies equal entry counts while real device/plugin schemas remain future milestone work.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

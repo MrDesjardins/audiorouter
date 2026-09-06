@@ -75,7 +75,7 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
     let expected = if parent == "api" {
         "methods"
     } else if parent == "nodes" {
-        "types"
+        args.get(1).copied().unwrap_or("types")
     } else {
         "list"
     };
@@ -94,7 +94,9 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
             .dispatch(request("apps.list"))
             .result
             .unwrap_or_else(|| json!([])),
-        "nodes" => plane.describe()["nodeTypes"].clone(),
+        "nodes" if matches!(expected, "types" | "describe") => {
+            plane.describe()["nodeTypes"].clone()
+        }
         "api" => plane.describe()["methods"].clone(),
         _ => unreachable!(),
     })
@@ -145,7 +147,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "routes inspect <session-id> <destination-node> --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -301,6 +303,12 @@ mod tests {
             .unwrap()
             .iter()
             .any(|node| node["availability"]["status"] == "unavailable"));
+        let descriptions: Value =
+            serde_json::from_str(&run(["nodes", "describe", "--json"]).unwrap()).unwrap();
+        assert_eq!(
+            descriptions.as_array().unwrap().len(),
+            nodes.as_array().unwrap().len()
+        );
     }
 
     #[test]

@@ -367,6 +367,7 @@ impl ControlPlane {
             "devices.list" => self.dispatch_devices_list(),
             "apps.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
+            "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "graph.history" => self.dispatch_graph_history(request.params),
             "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
@@ -813,6 +814,11 @@ mod tests {
             .unwrap()
             .iter()
             .any(|method| method["name"] == "graph.plan"));
+        assert!(description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|method| method["name"] == "nodes.describe"));
         assert!(description["nodeTypes"]
             .as_array()
             .unwrap()
