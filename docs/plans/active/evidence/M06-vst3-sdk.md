@@ -75,6 +75,10 @@ and removes only the metadata row without touching the asset path. Twenty-two
 storage tests pass, including reopen/persistence coverage, and strict Clippy is
 green.
 
+The durable plugin-state API now rejects relative asset paths and requires an
+absolute path before persistence. The storage regression verifies the rejection
+without creating files; storage tests (23) and strict Clippy pass.
+
 `FailureLedger` now expires its rolling failure count after ten minutes, with
 an injectable clock for deterministic tests. The new test compiles and strict
 Clippy passes, but Windows Application Control blocked launching the generated

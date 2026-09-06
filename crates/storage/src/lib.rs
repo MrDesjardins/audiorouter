@@ -530,6 +530,7 @@ impl Storage {
             || !is_sha256(&state.plugin_sha256)
             || state.version == 0
             || state.path.is_empty()
+            || !std::path::Path::new(&state.path).is_absolute()
             || !is_sha256(&state.state_sha256)
             || state.size_bytes == 0
             || state.size_bytes > MAX_BUNDLE_ASSET_BYTES
@@ -1822,5 +1823,23 @@ mod tests {
         );
         assert!(storage.remove_plugin_state("state-1").unwrap());
         assert!(storage.list_plugin_states(None).unwrap().is_empty());
+    }
+
+    #[test]
+    fn plugin_state_rejects_relative_asset_paths() {
+        let storage = Storage::open_memory().unwrap();
+        let state = PluginStateRecord {
+            id: "state-relative".into(),
+            plugin_id: "plugin-1".into(),
+            plugin_sha256: "a".repeat(64),
+            version: 1,
+            path: "relative/state.bin".into(),
+            state_sha256: "b".repeat(64),
+            size_bytes: 1,
+        };
+        assert!(matches!(
+            storage.save_plugin_state(&state),
+            Err(StorageError::InvalidPluginState(_))
+        ));
     }
 }
