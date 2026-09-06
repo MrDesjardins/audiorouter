@@ -193,3 +193,11 @@ Storage open now performs a bounded retention sweep for expired idempotency
 journal and graph-plan rows after migrations. A reopen regression verifies both
 classes are removed while session and file state remain untouched. Storage
 coverage is 28 tests with strict Clippy.
+
+Added a process-level MCP stdio interoperability regression. It creates a
+temporary SQLite enrollment for an observer client, launches the built
+audiorouter-cli binary, exchanges initialize, notifications/initialized,
+tools/list, and resources/list over newline-delimited JSON-RPC, verifies the
+pinned protocol and 22 tools/3 resources, then closes stdin and confirms clean
+server exit. The test passes with strict CLI Clippy; no audio device or machine
+configuration is accessed.
