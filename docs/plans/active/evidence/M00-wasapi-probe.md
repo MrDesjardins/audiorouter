@@ -195,3 +195,9 @@ MSVC, and Windows SDK/WDK 10.0.28000.0 after the decision-register update.
 Compilation succeeded; the generated executable and object were removed without
 running the probe or opening an audio endpoint. This is toolchain evidence only,
 and does not change the unresolved Rust live-open or physical-latency status.
+
+At clean revision `d495b9e`, the same compile-only build completed successfully
+using the installed Visual Studio Community 2026/MSVC and Windows SDK/WDK
+toolchain. `main.exe` and `main.obj` were removed after verification. The
+executable was not run, no stream was started or read, and no driver or audio
+configuration was changed.
