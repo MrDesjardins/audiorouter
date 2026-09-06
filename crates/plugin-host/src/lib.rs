@@ -150,6 +150,7 @@ pub fn read_state_asset(
     root: &Path,
     path: &Path,
     version: u32,
+    expected_sha256: &str,
 ) -> Result<PluginStateAsset, StateFileError> {
     let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
     let canonical_path =
@@ -168,6 +169,9 @@ pub fn read_state_asset(
         .read_to_end(&mut bytes)
         .map_err(|error| StateFileError::Io(error.to_string()))?;
     let asset = PluginStateAsset::new(version, bytes).map_err(StateFileError::InvalidState)?;
+    if !is_sha256(expected_sha256) || asset.sha256 != expected_sha256 {
+        return Err(StateFileError::InvalidState(StateError::IntegrityMismatch));
+    }
     asset
         .verify_for_restore(version)
         .map_err(StateFileError::InvalidState)?;
@@ -180,6 +184,10 @@ fn is_safe_asset_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1003,7 +1011,14 @@ mod tests {
         let root = temp_root();
         let asset = PluginStateAsset::new(4, vec![7, 8, 9]).unwrap();
         let path = write_state_asset(&root, "plugin_state-1", &asset).unwrap();
-        assert_eq!(read_state_asset(&root, &path, 4).unwrap(), asset);
+        assert_eq!(
+            read_state_asset(&root, &path, 4, &asset.sha256).unwrap(),
+            asset
+        );
+        assert_eq!(
+            read_state_asset(&root, &path, 4, &"00".repeat(32)),
+            Err(StateFileError::InvalidState(StateError::IntegrityMismatch))
+        );
         assert_eq!(
             write_state_asset(&root, "plugin_state-1", &asset),
             Err(StateFileError::Exists)
@@ -1011,6 +1026,12 @@ mod tests {
         assert_eq!(
             write_state_asset(&root, "..\\escape", &asset),
             Err(StateFileError::InvalidAssetId)
+        );
+
+        fs::write(&path, [9_u8, 8, 7]).unwrap();
+        assert_eq!(
+            read_state_asset(&root, &path, 4, &asset.sha256),
+            Err(StateFileError::InvalidState(StateError::IntegrityMismatch))
         );
         fs::remove_dir_all(root).unwrap();
     }

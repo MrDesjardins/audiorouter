@@ -146,3 +146,8 @@ official SDK validator. It completed with exit code 0 and reported 1,598 tests
 passed and 0 tests failed. The sample was validated in its build directory
 only; it was not installed as a system plugin and no audio endpoint or machine
 audio configuration was touched.
+
+The state-file restore API now requires the durable expected SHA-256 from the
+metadata record instead of comparing a freshly computed digest with itself.
+Wrong-hash and post-write tamper regressions pass. The plugin-host suite has
+16 passing tests, and strict Clippy passes.
