@@ -50,6 +50,11 @@ export interface Session {
   edges: Edge[];
 }
 
+export interface SessionListPage {
+  items: Session[];
+  nextCursor: EntityId | null;
+}
+
 export type PermissionScope =
   | "read"
   | "graphWrite"

@@ -810,8 +810,15 @@ impl GraphStore {
     }
 
     pub fn sessions(&self, limit: usize) -> Vec<Session> {
+        self.sessions_after(None, limit)
+    }
+
+    pub fn sessions_after(&self, cursor: Option<&str>, limit: usize) -> Vec<Session> {
         let mut sessions = self.sessions.values().cloned().collect::<Vec<_>>();
         sessions.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
+        if let Some(cursor) = cursor {
+            sessions.retain(|session| session.id.as_str() > cursor);
+        }
         sessions.truncate(limit.min(500));
         sessions
     }

@@ -323,17 +323,35 @@ impl ControlPlane {
     }
 
     pub fn sessions_list(&self, limit: usize) -> Result<Value, ControlError> {
+        self.sessions_list_page(None, limit)
+            .map(|page| page["items"].clone())
+    }
+
+    pub fn sessions_list_page(
+        &self,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<Value, ControlError> {
         if !(1..=500).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
             ));
         }
         let sessions = if let Some(storage) = &self.storage {
-            storage.list_sessions(limit).map_err(storage_error)?
+            storage
+                .list_sessions_after(cursor, limit)
+                .map_err(storage_error)?
         } else {
-            self.store.sessions(limit)
+            self.store.sessions_after(cursor, limit)
         };
-        serde_json::to_value(sessions).map_err(|error| ControlError::Json(error.to_string()))
+        let next_cursor = (sessions.len() == limit)
+            .then(|| {
+                sessions
+                    .last()
+                    .map(|session| session.id.as_str().to_owned())
+            })
+            .flatten();
+        Ok(json!({ "items": sessions, "nextCursor": next_cursor }))
     }
 
     pub fn plan_graph(
@@ -826,12 +844,21 @@ impl ControlPlane {
     }
 
     fn dispatch_sessions_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let cursor = params
+            .as_ref()
+            .and_then(|value| value.get("cursor"))
+            .map(|value| {
+                value
+                    .as_str()
+                    .ok_or_else(|| ControlError::InvalidRequest("cursor must be a string".into()))
+            })
+            .transpose()?;
         let limit = params
             .as_ref()
             .and_then(|value| value.get("limit"))
             .and_then(Value::as_u64)
             .unwrap_or(100);
-        self.sessions_list(limit as usize)
+        self.sessions_list_page(cursor, limit as usize)
     }
 
     fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -1096,6 +1123,40 @@ mod tests {
             response.error.as_ref().unwrap().data,
             Some(json!({ "code": "rateLimited", "retryAfterMs": 50 }))
         );
+    }
+
+    #[test]
+    fn sessions_list_supports_stable_cursor_pages() {
+        let mut plane = ControlPlane::default();
+        for id in ["a", "b", "c"] {
+            let mut value = session();
+            value.id = EntityId::new(id);
+            plane.insert_session(value).unwrap();
+        }
+        let first = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "sessions.list".into(),
+                params: Some(json!({ "limit": 2 })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(first["items"].as_array().unwrap().len(), 2);
+        assert_eq!(first["items"][0]["id"], "a");
+        assert_eq!(first["nextCursor"], "b");
+        let second = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "sessions.list".into(),
+                params: Some(json!({ "cursor": "b", "limit": 2 })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(second["items"].as_array().unwrap().len(), 1);
+        assert_eq!(second["items"][0]["id"], "c");
+        assert!(second["nextCursor"].is_null());
     }
 
     fn session() -> Session {

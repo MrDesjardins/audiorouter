@@ -369,15 +369,34 @@ impl Storage {
     }
 
     pub fn list_sessions(&self, limit: usize) -> Result<Vec<Session>, StorageError> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT document FROM sessions ORDER BY id ASC LIMIT ?1")?;
-        let rows = statement.query_map(params![limit as i64], |row| row.get::<_, String>(0))?;
-        rows.map(|row| {
-            let document = row?;
-            serde_json::from_str(&document).map_err(StorageError::Json)
-        })
-        .collect()
+        self.list_sessions_after(None, limit)
+    }
+
+    pub fn list_sessions_after(
+        &self,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<Session>, StorageError> {
+        let mut statement = if cursor.is_some() {
+            self.connection
+                .prepare("SELECT document FROM sessions WHERE id > ?1 ORDER BY id ASC LIMIT ?2")?
+        } else {
+            self.connection
+                .prepare("SELECT document FROM sessions ORDER BY id ASC LIMIT ?1")?
+        };
+        let documents: Vec<String> = if let Some(cursor) = cursor {
+            statement
+                .query_map(params![cursor, limit as i64], |row| row.get::<_, String>(0))?
+                .collect::<Result<_, _>>()?
+        } else {
+            statement
+                .query_map(params![limit as i64], |row| row.get::<_, String>(0))?
+                .collect::<Result<_, _>>()?
+        };
+        documents
+            .into_iter()
+            .map(|document| serde_json::from_str(&document).map_err(StorageError::Json))
+            .collect()
     }
 
     pub fn export_session(&self, id: &EntityId) -> Result<Option<String>, StorageError> {
@@ -938,6 +957,27 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn session_listing_uses_stable_id_cursors() {
+        let storage = Storage::open_memory().unwrap();
+        for id in ["a", "b", "c"] {
+            let mut value = session();
+            value.id = EntityId::new(id);
+            storage.save_session(&value).unwrap();
+        }
+        let first = storage.list_sessions_after(None, 2).unwrap();
+        assert_eq!(
+            first
+                .iter()
+                .map(|value| value.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+        let second = storage.list_sessions_after(Some("b"), 2).unwrap();
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].id.as_str(), "c");
     }
 
     #[test]
