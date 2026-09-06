@@ -13,6 +13,18 @@ Regression coverage verifies an independent CLI-process-equivalent plan, inspect
 
 Remaining AUTO-04 work includes parity for the remaining convenience commands and full end-to-end warning-producing operations.
 
+## 2026-09-06 — Node parameter convenience parity
+
+Added `node set <session-id> <node-id> <parameter> --value <json-scalar>
+--idempotency-key <key> --database <path>`. The command loads the current
+session, validates a scalar parameter value, hydrates the control plane's
+authoritative session copy, and commits through the same graph plan/commit
+boundary as generic graph edits. Missing sessions/nodes, malformed values, and
+invalid processor parameters fail before a commit. The regression verifies a
+Gain parameter update increments the session revision and persists the value.
+`cargo test -p audiorouter-cli --locked` passes 16 unit tests plus MCP
+interoperability; no audio endpoint or machine configuration is touched.
+
 ## 2026-09-06 — Event epoch reconnect guard
 
 `events.subscribe` now accepts an optional `backendEpoch`. A mismatched epoch immediately returns `resyncRequired: true`, the current epoch, a bounded session snapshot, and the next event sequence. This prevents a restarted backend from replaying a cursor from a previous process epoch. The request schema and strict unknown-parameter validation include the new field. `cargo test -p audiorouter-control` passes 42 tests and strict Clippy passes.

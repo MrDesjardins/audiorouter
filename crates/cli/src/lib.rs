@@ -54,6 +54,7 @@ where
         "history" => history_command(&command_args)?,
         "watch" => watch_command(&command_args)?,
         "graph" => graph_command(&command_args)?,
+        "node" => node_command(&command_args)?,
         "session" => session_command(&command_args)?,
         "api" => api_subcommand(&command_args)?,
         "operation" => operation_command(&command_args)?,
@@ -596,6 +597,63 @@ fn graph_command(args: &[&str]) -> Result<Value, CliError> {
     }
 }
 
+fn node_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("set") {
+        return Err(CliError::InvalidArguments(
+            "usage: node set <session-id> <node-id> <parameter> --value <json-scalar> --idempotency-key <key> --database <path>".into(),
+        ));
+    }
+    let session_id = positional(args, 2, "session id")?;
+    let node_id = positional(args, 3, "node id")?;
+    let parameter = positional(args, 4, "parameter")?;
+    let raw_value = option_value_allow_negative(args, "--value")?;
+    let value: Value = serde_json::from_str(raw_value).map_err(|error| {
+        CliError::InvalidArguments(format!("--value must be valid JSON: {error}"))
+    })?;
+    if !value.is_boolean() && !value.is_number() && !value.is_string() {
+        return Err(CliError::InvalidArguments(
+            "--value must be a JSON boolean, number, or string".into(),
+        ));
+    }
+    let key = option_value(args, "--idempotency-key")?;
+    if key.is_empty() || key.len() > 256 {
+        return Err(CliError::InvalidArguments(
+            "--idempotency-key must contain 1..256 characters".into(),
+        ));
+    }
+    let storage = database(args)?;
+    let mut candidate = storage
+        .load_session(&EntityId::new(session_id))
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?
+        .ok_or_else(|| CliError::InvalidArguments("session not found".into()))?;
+    let node = candidate
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == EntityId::new(node_id))
+        .ok_or_else(|| CliError::InvalidArguments("node not found".into()))?;
+    node.parameters.insert(parameter.into(), value);
+    let base_revision = candidate.revision;
+    let candidate_id = candidate.id.clone();
+    let mut plane = ControlPlane::with_storage("cli", storage);
+    plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.get".into(),
+            params: Some(json!({ "sessionId": candidate_id })),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("session not found".into()))?;
+    let plan = plane
+        .plan_graph(&candidate_id, base_revision, candidate)
+        .map_err(|error| CliError::InvalidArguments(format!("node update rejected: {error:?}")))?;
+    plane
+        .commit_graph(&plan, base_revision, key)
+        .map_err(|error| {
+            CliError::InvalidArguments(format!("node update commit rejected: {error:?}"))
+        })
+}
+
 fn graph_plan_command(args: &[&str]) -> Result<Value, CliError> {
     let session_id = positional(args, 2, "session id")?;
     let candidate_path = absolute_option(args, "--file")?;
@@ -894,7 +952,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
     value["commands"]
         .as_array_mut()
         .unwrap()
@@ -942,6 +1000,17 @@ fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError>
     args.get(index + 1)
         .copied()
         .filter(|value| !value.is_empty() && !value.starts_with('-'))
+        .ok_or_else(|| CliError::InvalidArguments(format!("{option} requires a value")))
+}
+
+fn option_value_allow_negative<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
+    let index = args
+        .iter()
+        .position(|argument| *argument == option)
+        .ok_or_else(|| CliError::InvalidArguments(format!("{option} is required")))?;
+    args.get(index + 1)
+        .copied()
+        .filter(|value| !value.is_empty())
         .ok_or_else(|| CliError::InvalidArguments(format!("{option} requires a value")))
 }
 
@@ -1551,6 +1620,52 @@ mod tests {
             run(["operation", "oops"]),
             Err(CliError::InvalidArguments(_))
         ));
+        assert!(matches!(
+            run(["node", "oops"]),
+            Err(CliError::InvalidArguments(_))
+        ));
+    }
+
+    #[test]
+    fn node_set_uses_plan_commit_and_preserves_revision_safety() {
+        let suffix = format!("audiorouter-cli-node-set-{}", std::process::id());
+        let database = std::env::temp_dir().join(format!("{suffix}.sqlite"));
+        let _ = std::fs::remove_file(&database);
+        let fixture = include_str!("../../../tests/fixtures/valid-session.json")
+            .replace("session-fixture", "node-set-session")
+            .replace("\"kind\": \"physicalInput\"", "\"kind\": \"gain\"");
+        let database_arg = database.to_string_lossy().into_owned();
+        let storage = Storage::open(&database).unwrap();
+        let session: audiorouter_domain::Session = serde_json::from_str(&fixture).unwrap();
+        storage.save_session(&session).unwrap();
+        drop(storage);
+        let committed: Value = serde_json::from_str(
+            &run([
+                "node",
+                "set",
+                "node-set-session",
+                "input",
+                "gainDb",
+                "--value",
+                "-6",
+                "--idempotency-key",
+                "node-set-1",
+                "--database",
+                &database_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(committed["revision"], 1);
+        let session = Storage::open(&database)
+            .unwrap()
+            .load_session(&EntityId::new("node-set-session"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(session.nodes[0].parameters["gainDb"], -6);
+        assert_eq!(session.revision, 1);
+        let _ = std::fs::remove_file(database);
     }
 
     #[test]
