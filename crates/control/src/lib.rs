@@ -7,7 +7,7 @@
 use audiorouter_domain::{
     inspect_routes, node_registry, ApiMethodSpec, CrashRecoveryTracker, EntityId, EventLog,
     EventReplayError, FakeRuntime, GraphStore, PermissionScope, RecoveryDecision, RecoveryMode,
-    RuntimeError, RuntimeState, Session, API_METHODS,
+    RuntimeError, RuntimeState, Session, VirtualBusRegistry, API_METHODS,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -128,6 +128,7 @@ fn method_description(name: &str) -> &'static str {
             "Move a recording to the operating system Recycle Bin after explicit confirmation."
         }
         "devices.list" => "List authoritative audio endpoint descriptors.",
+        "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities and observed Windows audio-session activity for binding."
         }
@@ -211,6 +212,13 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "devices.list" => object_schema(
+            json!({
+                "cursor": { "type": ["string", "null"], "minLength": 1 },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+            }),
+            &[],
+        ),
+        "virtualDevices.list" => object_schema(
             json!({
                 "cursor": { "type": ["string", "null"], "minLength": 1 },
                 "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
@@ -697,6 +705,23 @@ fn method_output_schema(name: &str) -> Value {
                 ]
             })
         }
+        "virtualDevices.list" => json!({
+            "oneOf": [
+                {
+                    "type": "array",
+                    "items": virtual_device_item_schema()
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "items": { "type": "array", "items": virtual_device_item_schema() },
+                        "nextCursor": { "type": ["string", "null"] }
+                    },
+                    "required": ["items", "nextCursor"],
+                    "additionalProperties": false
+                }
+            ]
+        }),
         "nodes.types" | "nodes.describe" => json!({
             "type": "array",
             "items": node_type_item_schema()
@@ -1083,6 +1108,40 @@ fn device_item_schema() -> Value {
     })
 }
 
+fn virtual_device_item_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "direction": { "const": "bidirectional" },
+            "channels": { "const": 2 },
+            "enabled": { "type": "boolean" },
+            "availability": {
+                "type": "object",
+                "properties": {
+                    "status": { "const": "unavailable" },
+                    "reason": { "type": "string", "minLength": 1 }
+                },
+                "required": ["status", "reason"],
+                "additionalProperties": false
+            },
+            "endpointIds": {
+                "type": "object",
+                "properties": {
+                    "render": { "type": ["string", "null"] },
+                    "capture": { "type": ["string", "null"] }
+                },
+                "required": ["render", "capture"],
+                "additionalProperties": false
+            },
+            "leaseOwner": { "type": ["string", "null"] }
+        },
+        "required": ["id", "name", "direction", "channels", "enabled", "availability", "endpointIds", "leaseOwner"],
+        "additionalProperties": false
+    })
+}
+
 fn node_type_item_schema() -> Value {
     json!({
         "type": "object",
@@ -1252,6 +1311,7 @@ pub struct ControlPlane {
     application_snapshot: Option<(Instant, Value)>,
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
+    virtual_buses: VirtualBusRegistry,
 }
 
 impl Default for ControlPlane {
@@ -1274,6 +1334,7 @@ impl ControlPlane {
             application_snapshot: None,
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
+            virtual_buses: VirtualBusRegistry::default(),
         }
     }
 
@@ -1293,6 +1354,7 @@ impl ControlPlane {
             application_snapshot: None,
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
+            virtual_buses: VirtualBusRegistry::default(),
         }
     }
 
@@ -2123,6 +2185,7 @@ impl ControlPlane {
                         "reason": "sign-in startup registration is not implemented in this build"
                     })),
                     "devices.list" => self.dispatch_devices_list(request.params),
+                    "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
@@ -3130,6 +3193,64 @@ impl ControlPlane {
         Ok(json!({ "items": devices, "nextCursor": next_cursor }))
     }
 
+    fn dispatch_virtual_devices_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
+        let paged = params.get("cursor").is_some() || params.get("limit").is_some();
+        let cursor = params
+            .get("cursor")
+            .filter(|value| !value.is_null())
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| ControlError::InvalidRequest("cursor must be a string".into()))
+            })
+            .transpose()?;
+        let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
+        if !(1..=500).contains(&limit) {
+            return Err(ControlError::InvalidRequest(
+                "limit must be between 1 and 500".into(),
+            ));
+        }
+        let mut buses = self
+            .virtual_buses
+            .list()
+            .iter()
+            .map(|bus| {
+                json!({
+                    "id": bus.id(),
+                    "name": bus.name(),
+                    "direction": "bidirectional",
+                    "channels": bus.channels(),
+                    "enabled": bus.enabled(),
+                    "availability": {
+                        "status": "unavailable",
+                        "reason": "requires M03 managed virtual driver"
+                    },
+                    "endpointIds": { "render": null, "capture": null },
+                    "leaseOwner": bus.lease().owner()
+                })
+            })
+            .collect::<Vec<_>>();
+        if let Some(cursor) = cursor {
+            let Some(index) = buses.iter().position(|bus| bus["id"] == cursor) else {
+                return Err(ControlError::InvalidRequest(
+                    "invalid virtual device cursor".into(),
+                ));
+            };
+            buses.drain(..=index);
+        }
+        if !paged {
+            return Ok(json!(buses));
+        }
+        let has_more = buses.len() > limit as usize;
+        buses.truncate(limit as usize);
+        let next_cursor = has_more
+            .then(|| buses.last().and_then(|bus| bus["id"].as_str()))
+            .flatten();
+        Ok(json!({ "items": buses, "nextCursor": next_cursor }))
+    }
+
     fn dispatch_apps_list(&mut self) -> Result<Value, ControlError> {
         if let Some((captured_at, snapshot)) = &self.application_snapshot {
             if captured_at.elapsed() < APPLICATION_SNAPSHOT_TTL {
@@ -3241,6 +3362,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.removeEntry" => &["recordingId"],
         "recordings.recycle" => &["recordingId", "confirm"],
         "devices.list" => &["cursor", "limit"],
+        "virtualDevices.list" => &["cursor", "limit"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -3429,6 +3551,32 @@ mod tests {
         assert_eq!(second["items"].as_array().unwrap().len(), 1);
         assert_eq!(second["items"][0]["id"], "c");
         assert!(second["nextCursor"].is_null());
+    }
+
+    #[test]
+    fn virtual_devices_list_exposes_empty_managed_inventory_without_activation() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "virtualDevices.list".into(),
+            params: None,
+        });
+        let result = response
+            .result
+            .unwrap_or_else(|| panic!("unexpected response error: {:?}", response.error));
+        assert_eq!(result, json!([]));
+
+        let paged = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "virtualDevices.list".into(),
+            params: Some(json!({ "limit": 1 })),
+        });
+        let paged_result = paged
+            .result
+            .unwrap_or_else(|| panic!("unexpected paged response error: {:?}", paged.error));
+        assert_eq!(paged_result, json!({ "items": [], "nextCursor": null }));
     }
 
     #[test]

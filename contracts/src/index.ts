@@ -161,6 +161,28 @@ export interface DeviceListPage {
   nextCursor: string | null;
 }
 
+export interface VirtualDeviceInfo {
+  id: string;
+  name: string;
+  direction: "bidirectional";
+  channels: 2;
+  enabled: boolean;
+  availability: {
+    status: "unavailable";
+    reason: string;
+  };
+  endpointIds: {
+    render: string | null;
+    capture: string | null;
+  };
+  leaseOwner: string | null;
+}
+
+export interface VirtualDeviceListPage {
+  items: VirtualDeviceInfo[];
+  nextCursor: string | null;
+}
+
 export interface GraphHistoryPage {
   items: Session[];
   nextCursor: string | null;
@@ -476,6 +498,7 @@ export type ImplementedMethod =
   | "safety.setPrivacyMute"
   | "startup.get"
   | "devices.list"
+  | "virtualDevices.list"
   | "apps.list"
   | "applications.list"
   | "nodes.types"
@@ -526,6 +549,7 @@ export type MethodParams = {
   "safety.setPrivacyMute": { muted: boolean };
   "startup.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
+  "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "apps.list": undefined;
   "applications.list": undefined;
   "nodes.types": undefined;
@@ -586,6 +610,7 @@ export type MethodResult = {
   "safety.setPrivacyMute": PrivacyMuteResult;
   "startup.get": StartupStatus;
   "devices.list": DeviceInfo[] | DeviceListPage;
+  "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];
   "nodes.types": DiscoveryDocument["nodeTypes"];

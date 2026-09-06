@@ -36,3 +36,10 @@ is routed through the same registry. Two additional regressions cover naming,
 capacity, disable/delete ordering, and lease cleanup. Native driver endpoint
 creation, persistence, bridge ownership, and external-client routing remain
 open.
+
+The shared control API now exposes `virtualDevices.list` as a read-only,
+cursor-compatible inventory query. It reports each managed bus's desired state,
+availability reason, endpoint identity placeholders, and current lease owner;
+the empty initial registry is returned without activating a stream or creating
+an endpoint. The method is included in domain discovery and the generated
+TypeScript client contract.
