@@ -79,3 +79,12 @@ matrix and verifies that generation and output remain on the original graph.
 The engine suite passes 40 tests with strict Clippy. This is a portable
 publication/rollback boundary; WASAPI scheduling, device-resource activation,
 and live routing remain open.
+
+## 2026-09-06 — Cross-milestone regression
+
+The full locked Rust workspace passed, including the 40-test engine suite and
+all adapter, control, storage, recording, plugin-worker, transport, CLI/MCP,
+and doc-test targets. Contracts/UI typechecks, 23 UI tests, and the production
+Vite build also passed. This confirms regression health for the portable
+boundaries; live graph-to-device scheduling, physical latency, and driver
+lifecycle remain open.
