@@ -83,6 +83,41 @@ pub enum AudioError {
     InvalidFrameSize,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioFailureKind {
+    InvalidArgument,
+    AccessDenied,
+    DeviceInUse,
+    ExclusiveModeOnly,
+    DeviceInvalidated,
+    UnsupportedFormat,
+    ServiceUnavailable,
+    BufferConstraint,
+    Other,
+}
+
+impl AudioError {
+    /// Classify errors for stable control-plane behavior while retaining the
+    /// original HRESULT for diagnostics.
+    pub fn kind(&self) -> AudioFailureKind {
+        let code = match self {
+            Self::Windows(error) => error.code().0 as u32,
+            Self::InvalidUtf16 | Self::InvalidFrameSize => 0x80070057,
+            Self::BufferTooSmall { .. } => 0x80070057,
+        };
+        match code {
+            0x80070057 => AudioFailureKind::InvalidArgument,
+            0x80070005 => AudioFailureKind::AccessDenied,
+            0x8889000A => AudioFailureKind::DeviceInUse,
+            0x88890012 => AudioFailureKind::ExclusiveModeOnly,
+            0x88890004 => AudioFailureKind::DeviceInvalidated,
+            0x88890008 => AudioFailureKind::UnsupportedFormat,
+            0x88890010 => AudioFailureKind::ServiceUnavailable,
+            _ => AudioFailureKind::Other,
+        }
+    }
+}
+
 impl fmt::Display for AudioError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -748,6 +783,24 @@ mod tests {
         assert_eq!(changes.len(), 2);
         assert!(changes.contains(&EndpointChange::Changed { before, after }));
         assert!(changes.contains(&EndpointChange::Added(added)));
+    }
+
+    #[test]
+    fn audio_failures_have_stable_categories() {
+        let error = AudioError::Windows(windows::core::Error::new(
+            windows::core::HRESULT(0x8889000A_u32 as i32),
+            "busy",
+        ));
+        assert_eq!(error.kind(), AudioFailureKind::DeviceInUse);
+        let error = AudioError::Windows(windows::core::Error::new(
+            windows::core::HRESULT(0x88890012_u32 as i32),
+            "exclusive",
+        ));
+        assert_eq!(error.kind(), AudioFailureKind::ExclusiveModeOnly);
+        assert_eq!(
+            AudioError::InvalidFrameSize.kind(),
+            AudioFailureKind::InvalidArgument
+        );
     }
 
     #[cfg(windows)]
