@@ -260,3 +260,9 @@ schema, including protocol/schema versions, build identity, method descriptors,
 node-type metadata, resource limits, and event-retention policy. Discovery tests
 verify the method-array and non-replayed-meter invariants without changing
 backend, session, audio, or machine state.
+
+The remaining UI/shared result seams were tightened as well. Recovery clearing
+uses a dedicated result type with the cleared-latch invariant, while graph
+commit activation is represented as either pending or running fake-runtime
+state. Contracts and UI typechecks, UI tests, and the workspace compile check
+pass without starting audio or changing machine configuration.

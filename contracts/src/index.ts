@@ -82,7 +82,9 @@ export interface GraphCommitResult {
   sessionId: EntityId;
   revision: number;
   idempotentReplay?: boolean;
-  activation?: Record<string, unknown>;
+  activation?:
+    | { state: "pending"; runtime: "fake" }
+    | { state: "running"; generation: number; runtime: "fake" };
 }
 
 export interface OperationCompleted {
@@ -255,6 +257,12 @@ export interface StartupStatus {
   enabled: false;
   registration: "unavailable";
   reason: string;
+}
+
+export interface RecoveryClearResult {
+  safeMode: false;
+  recentCrashes: 0;
+  persistence: "durable" | "memory";
 }
 
 export interface HandshakeResult {
@@ -572,7 +580,7 @@ export type MethodResult = {
   "recordings.rename": RecordingRenameResult;
   "recordings.removeEntry": RecordingRemoveResult;
   "recordings.recycle": RecordingRecycleResult;
-  "recovery.clearSafeMode": { safeMode: false; recentCrashes: number; persistence: "durable" | "memory" };
+  "recovery.clearSafeMode": RecoveryClearResult;
   "safety.setPrivacyMute": PrivacyMuteResult;
   "startup.get": StartupStatus;
   "devices.list": DeviceInfo[] | DeviceListPage;

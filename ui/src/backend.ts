@@ -8,6 +8,7 @@ import type {
   GraphCommitResult,
   GraphPlanResult,
   PrivacyMuteResult,
+  RecoveryClearResult,
   RecordingMetadataResult,
   RecordingPreviewResult,
   RecordingRecoveryResult,
@@ -45,7 +46,7 @@ export interface UiBackend {
   getRecordingRecovery(recordingId: string): Promise<RecordingRecoveryResult>;
   setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<RecordingMetadataResult>;
   setPrivacyMute(muted: boolean): Promise<PrivacyMuteResult>;
-  clearRecoverySafeMode(): Promise<Record<string, unknown>>;
+  clearRecoverySafeMode(): Promise<RecoveryClearResult>;
   removeRecordingEntry(recordingId: string): Promise<RecordingRemoveResult>;
   createSession(session: Session): Promise<SessionCreateResult>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<SessionCreateResult>;
