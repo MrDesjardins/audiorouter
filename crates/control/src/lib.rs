@@ -90,6 +90,9 @@ fn method_description(name: &str) -> &'static str {
         "system.handshake" => "Negotiate a compatible protocol version before requests.",
         "status.get" => "Return backend, runtime, and audio availability status.",
         "system.diagnostics" => "Return a redacted backend diagnostic snapshot.",
+        "clients.list" => "List enrolled local client identities and roles.",
+        "clients.authorize" => "Authorize a client with an explicit built-in role.",
+        "clients.revoke" => "Revoke a client enrollment without deleting its audit record.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -141,6 +144,17 @@ fn method_input_schema(name: &str) -> Value {
                 }
             }),
             &["protocolVersion"],
+        ),
+        "clients.authorize" => object_schema(
+            json!({
+                "clientId": { "type": "string", "minLength": 1 },
+                "role": { "enum": ["observer", "editor", "operator"] }
+            }),
+            &["clientId", "role"],
+        ),
+        "clients.revoke" => object_schema(
+            json!({ "clientId": { "type": "string", "minLength": 1 } }),
+            &["clientId"],
         ),
         "sessions.get" | "sessions.delete" | "session.start" | "session.stop" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1 } }),
@@ -216,7 +230,8 @@ fn method_input_schema(name: &str) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
-        "devices.list" | "apps.list" | "applications.list" | "nodes.types" | "nodes.describe" => {
+        "devices.list" | "apps.list" | "applications.list" | "nodes.types" | "nodes.describe"
+        | "clients.list" => {
             json!({ "type": "array" })
         }
         _ => json!({ "type": "object" }),
@@ -375,6 +390,66 @@ impl ControlPlane {
         Ok(enrollment
             .filter(|(_, revoked)| !revoked)
             .map(|(role, _)| ClientGrant::for_role(role)))
+    }
+
+    fn client_records(&self) -> Result<Vec<Value>, ControlError> {
+        let records = if let Some(storage) = &self.storage {
+            storage.list_client_enrollments().map_err(storage_error)?
+        } else {
+            let mut records = self
+                .enrollments
+                .iter()
+                .map(|(client_id, (role, revoked))| {
+                    (client_id.clone(), role_name(*role).to_owned(), *revoked)
+                })
+                .collect::<Vec<_>>();
+            records.sort_by(|left, right| left.0.cmp(&right.0));
+            records
+        };
+        Ok(records
+            .into_iter()
+            .map(|(client_id, role, revoked)| {
+                json!({
+                    "clientId": client_id,
+                    "role": role,
+                    "revoked": revoked
+                })
+            })
+            .collect())
+    }
+
+    fn dispatch_clients_list(&self) -> Result<Value, ControlError> {
+        Ok(Value::Array(self.client_records()?))
+    }
+
+    fn dispatch_client_authorize(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params
+            .ok_or_else(|| ControlError::InvalidRequest("clientId and role are required".into()))?;
+        let client_id = params
+            .get("clientId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("clientId is required".into()))?;
+        let role_name_value = params
+            .get("role")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("role is required".into()))?;
+        let role = role_from_name(role_name_value)
+            .ok_or_else(|| ControlError::InvalidRequest("unknown client role".into()))?;
+        self.enroll_client(client_id, role)?;
+        Ok(json!({ "clientId": client_id, "role": role_name_value, "revoked": false }))
+    }
+
+    fn dispatch_client_revoke(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("clientId is required".into()))?;
+        let client_id = params
+            .get("clientId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("clientId is required".into()))?;
+        let changed = self.revoke_client(client_id)?;
+        Ok(json!({ "clientId": client_id, "revoked": true, "changed": changed }))
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
@@ -827,6 +902,9 @@ impl ControlPlane {
                 },
                 "redacted": true
             })),
+            "clients.list" => self.dispatch_clients_list(),
+            "clients.authorize" => self.dispatch_client_authorize(request.params),
+            "clients.revoke" => self.dispatch_client_revoke(request.params),
             "devices.list" => self.dispatch_devices_list(),
             "apps.list" | "applications.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1439,8 +1517,10 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "graph.plan" => &["sessionId", "baseRevision", "candidate"],
         "graph.commit" => &["planId", "baseRevision", "idempotencyKey"],
         "system.handshake" => &["protocolVersion"],
+        "clients.authorize" => &["clientId", "role"],
+        "clients.revoke" => &["clientId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
-        | "applications.list" | "nodes.types" | "nodes.describe" => &[],
+        | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -1482,6 +1562,8 @@ fn is_mutating_method(method: &str) -> bool {
             | "sessions.create"
             | "sessions.duplicate"
             | "sessions.delete"
+            | "clients.authorize"
+            | "clients.revoke"
     )
 }
 
@@ -1905,6 +1987,39 @@ mod tests {
         assert_eq!(result["storage"], "memory");
         assert_eq!(result["redacted"], true);
         assert!(result.get("path").is_none());
+    }
+
+    #[test]
+    fn client_enrollment_api_lists_authorizes_and_revokes() {
+        let mut plane = ControlPlane::default();
+        let grant = ClientGrant::with_scopes([PermissionScope::DeviceAdministration]);
+        let authorize = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(10)),
+                method: "clients.authorize".into(),
+                params: Some(json!({ "clientId": "desktop", "role": "editor" })),
+            },
+            &grant,
+        );
+        assert_eq!(authorize.result.unwrap()["revoked"], false);
+        let listed = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(11)),
+            method: "clients.list".into(),
+            params: None,
+        });
+        assert_eq!(listed.result.unwrap()[0]["clientId"], "desktop");
+        let revoked = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(12)),
+                method: "clients.revoke".into(),
+                params: Some(json!({ "clientId": "desktop" })),
+            },
+            &grant,
+        );
+        assert_eq!(revoked.result.unwrap()["changed"], true);
     }
 
     #[test]

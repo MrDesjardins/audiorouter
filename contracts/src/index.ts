@@ -162,6 +162,9 @@ export type ImplementedMethod =
   | "system.handshake"
   | "status.get"
   | "system.diagnostics"
+  | "clients.list"
+  | "clients.authorize"
+  | "clients.revoke"
   | "devices.list"
   | "apps.list"
   | "applications.list"
@@ -186,6 +189,9 @@ export type MethodParams = {
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
   "system.diagnostics": undefined;
+  "clients.list": undefined;
+  "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator" };
+  "clients.revoke": { clientId: string };
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "apps.list": undefined;
   "applications.list": undefined;
@@ -222,6 +228,9 @@ export type MethodResult = {
   };
   "status.get": Record<string, unknown>;
   "system.diagnostics": Record<string, unknown>;
+  "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
+  "clients.authorize": Record<string, unknown>;
+  "clients.revoke": Record<string, unknown>;
   "devices.list": unknown[];
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];

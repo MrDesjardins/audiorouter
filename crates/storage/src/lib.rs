@@ -799,6 +799,19 @@ impl Storage {
             .map_err(Into::into)
     }
 
+    pub fn list_client_enrollments(&self) -> Result<Vec<(String, String, bool)>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT client_id, role, revoked FROM client_enrollments ORDER BY client_id ASC",
+        )?;
+        let records = statement
+            .query_map([], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get::<_, i64>(2)? != 0))
+            })?
+            .collect::<Result<_, _>>()
+            .map_err(Into::into);
+        records
+    }
+
     pub fn journal_commit(
         &self,
         key: &str,
