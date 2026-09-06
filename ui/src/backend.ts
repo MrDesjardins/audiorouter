@@ -28,6 +28,7 @@ export interface UiBackend {
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string): Promise<GraphCommitResult>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
+  previewRecording(recordingId: string): Promise<Record<string, unknown>>;
 }
 
 export type UiSnapshotState = {
@@ -93,6 +94,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async listRecordings() {
       return [];
     },
+    async previewRecording() {
+      throw new Error("The backend is disconnected; recording preview is unavailable.");
+    },
   };
 }
 
@@ -131,6 +135,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async listRecordings(recordingSessionId = sessionId) {
       return client.request("recordings.list", { sessionId: recordingSessionId });
+    },
+    async previewRecording(recordingId) {
+      return client.request("recordings.preview", { recordingId });
     },
   };
 }

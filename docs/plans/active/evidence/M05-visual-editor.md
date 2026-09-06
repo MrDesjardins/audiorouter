@@ -176,6 +176,11 @@ Recording query failures are now rendered as an explicit unavailable state,
 rather than being confused with an empty library. This preserves actionable
 permission/backend feedback while retaining the safe disconnected empty state.
 
+Each connected recording row now offers a read-only Preview action backed by
+`recordings.preview`. The UI reports the returned status and never decodes,
+opens, or modifies recording bytes; disconnected mode rejects the operation.
+UI typecheck, 11 tests, and production build pass.
+
 The shared TypeScript `graph.commit` parameters now include the nullable
 optional `acknowledgments` array, matching the Rust schema's bounded warning
 ID validation. Contracts typecheck and the dependent UI test/typecheck/build
