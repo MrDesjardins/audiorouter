@@ -743,7 +743,7 @@ pub struct MeterSnapshot {
 /// A bounded rolling telemetry meter. Audio processing only overwrites
 /// preallocated ring slots; RMS is computed over the configured recent window
 /// and peak is held over its own recent window.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct WindowedSignalMeter {
     channels: usize,
     rms_window_frames: usize,
@@ -1046,7 +1046,7 @@ pub struct VoiceChain {
     compressor: Option<Compressor>,
     delay: Option<DelayLine>,
     limiter: PeakLimiter,
-    meter: SignalMeter,
+    meter: WindowedSignalMeter,
 }
 
 impl VoiceChain {
@@ -1079,7 +1079,7 @@ impl VoiceChain {
             compressor,
             delay,
             limiter: PeakLimiter::new(config.limiter)?,
-            meter: SignalMeter::new(channels)?,
+            meter: WindowedSignalMeter::new_default(channels, config.sample_rate)?,
         })
     }
 

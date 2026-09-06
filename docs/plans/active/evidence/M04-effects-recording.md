@@ -364,6 +364,11 @@ construction. Regression tests verify rolling expiry, reset, and bounds; the
 DSP suite passes 24 tests with strict Clippy and formatting. Existing
 allocation-free block-meter compatibility is preserved.
 
+Integrated `WindowedSignalMeter` into `VoiceChain`; callers retain the existing
+`MeterSnapshot` interface while receiving rolling RMS and peak-hold behavior
+with the documented defaults. DSP library tests and strict Clippy pass. Graph
+publication and native realtime scheduling remain separate acceptance work.
+
 Added deterministic gate/expander transfer vectors for below-threshold
 attenuation, threshold crossover, ratio response, range clamping, and the
 open-state pass-through. The named `gate_target_gain_db` helper is the same
