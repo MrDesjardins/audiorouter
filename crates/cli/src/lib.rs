@@ -179,15 +179,15 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
+            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
         )
     })?;
     if !matches!(
         action,
-        "get" | "list" | "start" | "stop" | "delete" | "duplicate"
+        "get" | "list" | "create" | "start" | "stop" | "delete" | "duplicate"
     ) {
         return Err(CliError::InvalidArguments(
-            "usage: session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
+            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>".into(),
         ));
     }
     let storage = database(args)?;
@@ -216,13 +216,38 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         )
         .map_err(|error| CliError::InvalidArguments(error.to_string()));
     }
+    if action == "create" {
+        let document_path = args
+            .get(2)
+            .copied()
+            .filter(|value| !value.starts_with('-'))
+            .ok_or_else(|| {
+                CliError::InvalidArguments(
+                    "usage: session create <document-path> --database <path>".into(),
+                )
+            })?;
+        let document_path = std::path::Path::new(document_path);
+        if !document_path.is_absolute() {
+            return Err(CliError::InvalidArguments(
+                "document path must be absolute".into(),
+            ));
+        }
+        let document = std::fs::read_to_string(document_path)
+            .map_err(|error| CliError::Io(error.to_string()))?;
+        let session: audiorouter_domain::Session = serde_json::from_str(&document)
+            .map_err(|error| CliError::InvalidArguments(error.to_string()))?;
+        let mut plane = ControlPlane::with_storage("cli", storage);
+        return plane
+            .create_session(session)
+            .map_err(|error| CliError::Storage(format!("{error:?}")));
+    }
     let id = args
         .get(2)
         .copied()
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
             CliError::InvalidArguments(
-                "usage: session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>"
+                "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>"
                     .into(),
             )
         })?;
@@ -271,7 +296,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -453,14 +478,32 @@ mod tests {
         let suffix = format!("audiorouter-cli-{}", std::process::id());
         let database = std::env::temp_dir().join(format!("{suffix}.sqlite"));
         let document = std::env::temp_dir().join(format!("{suffix}.json"));
+        let created_database = std::env::temp_dir().join(format!("{suffix}-created.sqlite"));
+        let created_document = std::env::temp_dir().join(format!("{suffix}-created.json"));
         let _ = std::fs::remove_file(&database);
+        let _ = std::fs::remove_file(&created_database);
         std::fs::write(
             &document,
             include_str!("../../../tests/fixtures/valid-session.json"),
         )
         .unwrap();
+        let create_document = include_str!("../../../tests/fixtures/valid-session.json")
+            .replace("session-fixture", "session-created");
+        std::fs::write(&created_document, create_document).unwrap();
         let database_arg = database.to_string_lossy().into_owned();
         let document_arg = document.to_string_lossy().into_owned();
+        let created_database_arg = created_database.to_string_lossy().into_owned();
+        let created_document_arg = created_document.to_string_lossy().into_owned();
+        let created = run([
+            "session",
+            "create",
+            &created_document_arg,
+            "--database",
+            &created_database_arg,
+            "--json",
+        ])
+        .unwrap();
+        assert!(created.contains("session-created"));
         let imported = run([
             "import",
             &document_arg,
@@ -556,6 +599,8 @@ mod tests {
         .unwrap();
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(document);
+        let _ = std::fs::remove_file(created_database);
+        let _ = std::fs::remove_file(created_document);
         let _ = std::fs::remove_file(bundle);
         let _ = std::fs::remove_file(imported_database);
         let _ = std::fs::remove_dir_all(staging);
