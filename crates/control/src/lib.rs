@@ -299,7 +299,7 @@ impl ControlPlane {
         let result = match request.method.as_str() {
             "system.describe" => Ok(self.describe()),
             "status.get" => Ok(
-                json!({ "build": self.build, "audio": "unavailable", "reason": "M02 Windows audio adapters not implemented" }),
+                json!({ "build": self.build, "audio": "unavailable", "deviceDiscovery": "available", "reason": "M02 realtime graph engine and routing are not implemented" }),
             ),
             "devices.list" => self.dispatch_devices_list(),
             "apps.list" => Ok(json!([])),
