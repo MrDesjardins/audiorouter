@@ -234,8 +234,8 @@ impl SharedCapture {
     pub fn open(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eCapture, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
-            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -272,9 +272,11 @@ impl SharedCapture {
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
-                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
-                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                    | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                // GetMixFormat is the endpoint's exact shared-mode format;
+                // conversion is neither needed nor desirable here. Keeping
+                // the request exact avoids format/flag combinations that
+                // some drivers reject with E_INVALIDARG.
+                AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
                 buffer_duration_100ns,
                 0,
                 format,
@@ -430,8 +432,8 @@ impl SharedRender {
     pub fn open(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
-            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -468,9 +470,7 @@ impl SharedRender {
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
-                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
-                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
-                    | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
                 buffer_duration_100ns,
                 0,
                 format,
