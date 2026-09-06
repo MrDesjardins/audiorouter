@@ -1348,7 +1348,7 @@ impl WorkerProcess {
         .map_err(WorkerProcessError::Message)?;
         match self.read().map_err(WorkerProcessError::Message)? {
             WorkerMessage::Processed { frame: processed }
-                if processed.sequence == frame.sequence =>
+                if processed_frame_matches(&frame, &processed) =>
             {
                 Ok(processed)
             }
@@ -1417,6 +1417,13 @@ fn receive_worker_message(
     reader
         .recv_timeout(timeout)
         .map_err(|error| WorkerMessageError::Io(error.to_string()))?
+}
+
+fn processed_frame_matches(expected: &WorkerFrame, actual: &WorkerFrame) -> bool {
+    actual.sequence == expected.sequence
+        && actual.deadline_tick == expected.deadline_tick
+        && actual.channels == expected.channels
+        && actual.samples.len() == expected.samples.len()
 }
 
 fn validate_worker_executable(path: &Path) -> Result<PathBuf, String> {
@@ -2255,6 +2262,20 @@ mod tests {
             WorkerFrame::new(3, 20, 2, vec![f32::NAN, 0.0]),
             Err(WorkerFrameError::NonFiniteSample)
         );
+    }
+
+    #[test]
+    fn processed_frames_must_preserve_transport_identity_and_shape() {
+        let expected = WorkerFrame::new(7, 20, 2, vec![0.0; 4]).unwrap();
+        assert!(processed_frame_matches(&expected, &expected));
+        for actual in [
+            WorkerFrame::new(8, 20, 2, vec![0.0; 4]).unwrap(),
+            WorkerFrame::new(7, 21, 2, vec![0.0; 4]).unwrap(),
+            WorkerFrame::new(7, 20, 1, vec![0.0; 4]).unwrap(),
+            WorkerFrame::new(7, 20, 2, vec![0.0; 2]).unwrap(),
+        ] {
+            assert!(!processed_frame_matches(&expected, &actual));
+        }
     }
 
     #[test]
