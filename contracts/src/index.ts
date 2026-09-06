@@ -248,6 +248,18 @@ export type ImplementedMethod =
   | "clients.authorize"
   | "clients.revoke"
   | "operations.get"
+  | "operations.cancel"
+  | "recordings.list"
+  | "recordings.get"
+  | "recordings.recovery"
+  | "recordings.reveal"
+  | "recordings.preview"
+  | "recordings.setMetadata"
+  | "recordings.rename"
+  | "recordings.removeEntry"
+  | "recordings.recycle"
+  | "safety.setPrivacyMute"
+  | "startup.get"
   | "devices.list"
   | "apps.list"
   | "applications.list"
@@ -278,6 +290,23 @@ export type MethodParams = {
   "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator" };
   "clients.revoke": { clientId: string };
   "operations.get": { operationId: string };
+  "operations.cancel": { operationId: string };
+  "recordings.list": { sessionId?: EntityId | null } | undefined;
+  "recordings.get": { recordingId: EntityId };
+  "recordings.recovery": { recordingId: EntityId };
+  "recordings.reveal": { recordingId: EntityId };
+  "recordings.preview": { recordingId: EntityId };
+  "recordings.setMetadata": {
+    recordingId: EntityId;
+    title?: string | null;
+    artist?: string | null;
+    comment?: string | null;
+  };
+  "recordings.rename": { recordingId: EntityId; newPath: string };
+  "recordings.removeEntry": { recordingId: EntityId };
+  "recordings.recycle": { recordingId: EntityId; confirm?: boolean };
+  "safety.setPrivacyMute": { muted: boolean };
+  "startup.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "apps.list": undefined;
   "applications.list": undefined;
@@ -286,7 +315,7 @@ export type MethodParams = {
   "graph.history": { sessionId: EntityId; cursor?: string; limit?: number };
   "graph.undoPlan": { sessionId: EntityId; baseRevision: number };
   "events.subscribe":
-    | { afterSequence?: number; limit?: number; sessionId?: EntityId }
+    | { afterSequence?: number; backendEpoch?: number; limit?: number; sessionId?: EntityId }
     | undefined;
   "nodes.describe": undefined;
   "sessions.get": { sessionId: EntityId };
@@ -320,6 +349,18 @@ export type MethodResult = {
   "clients.authorize": Record<string, unknown>;
   "clients.revoke": Record<string, unknown>;
   "operations.get": Record<string, unknown>;
+  "operations.cancel": Record<string, unknown>;
+  "recordings.list": RecordingRow[];
+  "recordings.get": RecordingRow;
+  "recordings.recovery": Record<string, unknown>;
+  "recordings.reveal": Record<string, unknown>;
+  "recordings.preview": Record<string, unknown>;
+  "recordings.setMetadata": Record<string, unknown>;
+  "recordings.rename": Record<string, unknown>;
+  "recordings.removeEntry": Record<string, unknown>;
+  "recordings.recycle": Record<string, unknown>;
+  "safety.setPrivacyMute": Record<string, unknown>;
+  "startup.get": Record<string, unknown>;
   "devices.list": unknown[];
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];

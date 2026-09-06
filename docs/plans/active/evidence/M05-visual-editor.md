@@ -159,3 +159,10 @@ typed `AudioRouterClient` from a host-provided framed `RpcTransport` before
 creating the live backend. React remains independent of named-pipe and native
 WebView details, while the disconnected backend remains the safe default. Ten
 Vitest tests, TypeScript typecheck, and the production Vite build pass.
+## 2026-09-06 â€” Shared API contract parity
+
+The TypeScript contract map now includes the implemented operations-cancel,
+recording library/recovery/file-action, privacy-mute, startup, and event-epoch
+parameter/result surfaces. This prevents UI host adapters from falling behind
+Rust discovery. The contracts package typechecks; the dependent UI passes 10
+tests, typecheck, and production build.
