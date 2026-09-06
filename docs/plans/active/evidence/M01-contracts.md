@@ -254,3 +254,9 @@ boundary snapshot; preview distinguishes WAV, FLAC, missing, and invalid file
 metadata; recycle distinguishes preview, completed, missing, and unavailable
 outcomes. Discovery coverage checks the variant counts without performing file
 actions or decoding audio.
+
+The `system.describe` result now advertises an explicit discovery-document
+schema, including protocol/schema versions, build identity, method descriptors,
+node-type metadata, resource limits, and event-retention policy. Discovery tests
+verify the method-array and non-replayed-meter invariants without changing
+backend, session, audio, or machine state.

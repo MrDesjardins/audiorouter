@@ -345,6 +345,71 @@ fn method_input_schema(name: &str) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "system.describe" => json!({
+            "type": "object",
+            "properties": {
+                "protocolVersion": {
+                    "type": "object",
+                    "properties": {
+                        "major": { "type": "integer", "minimum": 0 },
+                        "minor": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["major", "minor"],
+                    "additionalProperties": false
+                },
+                "schemaVersion": { "type": "integer", "minimum": 0 },
+                "build": { "type": "string", "minLength": 1 },
+                "methods": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": { "type": "string", "minLength": 1 },
+                            "description": { "type": "string", "minLength": 1 },
+                            "permission": { "type": "string", "minLength": 1 },
+                            "sideEffect": { "type": "string", "minLength": 1 },
+                            "inputSchema": { "type": "object" },
+                            "outputSchema": { "type": "object" }
+                        },
+                        "required": ["name", "description", "permission", "sideEffect", "inputSchema", "outputSchema"],
+                        "additionalProperties": false
+                    }
+                },
+                "nodeTypes": { "type": "array", "items": { "type": "object" } },
+                "limits": {
+                    "type": "object",
+                    "properties": {
+                        "maxNodesPerSession": { "type": "integer", "minimum": 1 },
+                        "maxEdgesPerSession": { "type": "integer", "minimum": 1 },
+                        "maxNodesGlobal": { "type": "integer", "minimum": 1 },
+                        "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
+                        "maxActiveSessions": { "type": "integer", "minimum": 1 }
+                    },
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions"],
+                    "additionalProperties": false
+                },
+                "events": {
+                    "type": "object",
+                    "properties": {
+                        "stateCategories": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "meterReplay": { "const": false },
+                        "retention": {
+                            "type": "object",
+                            "properties": {
+                                "maxEvents": { "type": "integer", "minimum": 1 },
+                                "maxAgeSeconds": { "type": "integer", "minimum": 1 }
+                            },
+                            "required": ["maxEvents", "maxAgeSeconds"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "required": ["stateCategories", "meterReplay", "retention"],
+                    "additionalProperties": false
+                }
+            },
+            "required": ["protocolVersion", "schemaVersion", "build", "methods", "nodeTypes", "limits", "events"],
+            "additionalProperties": false
+        }),
         "system.handshake" => json!({
             "type": "object",
             "properties": {
@@ -3627,6 +3692,18 @@ mod tests {
         assert_eq!(
             handshake["outputSchema"]["properties"]["negotiated"]["properties"]["major"]["const"],
             1
+        );
+        let describe = methods
+            .iter()
+            .find(|method| method["name"] == "system.describe")
+            .unwrap();
+        assert_eq!(
+            describe["outputSchema"]["properties"]["methods"]["type"],
+            "array"
+        );
+        assert_eq!(
+            describe["outputSchema"]["properties"]["events"]["properties"]["meterReplay"]["const"],
+            false
         );
         let session_create = methods
             .iter()
