@@ -280,6 +280,11 @@ doc tests passed, including 28 domain and 32 storage tests; strict workspace
 Clippy, formatting, and diff checks also passed. No audio endpoint or machine
 configuration was changed.
 
+SQLite now persists the safe-mode latch alongside bounded crash markers. A
+file-backed regression verifies that three crashes retain safe mode across a
+storage reopen and that the explicit clear operation removes both markers and
+the latch. Process supervision and automatic route restart remain unimplemented.
+
 The in-memory recovery policy now caps its retained crash timestamps at three,
 matching the SQLite persistence bound. A crash-storm regression verifies that
 the tracker remains bounded while still entering latched safe mode.

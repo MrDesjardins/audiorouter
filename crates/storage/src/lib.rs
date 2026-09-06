@@ -1553,6 +1553,13 @@ impl Storage {
             params![cutoff],
             |row| row.get::<_, i64>(0),
         )?;
+        if count as usize >= RECOVERY_SAFE_MODE_CRASHES {
+            transaction.execute(
+                "INSERT INTO control_settings(key, value) VALUES ('recoverySafeMode', 'true')
+                 ON CONFLICT(key) DO UPDATE SET value='true'",
+                [],
+            )?;
+        }
         transaction.commit()?;
         Ok(count as usize)
     }
@@ -1572,9 +1579,28 @@ impl Storage {
     }
 
     pub fn clear_recovery_crashes(&self) -> Result<(), StorageError> {
-        self.connection
-            .execute("DELETE FROM recovery_crashes", [])?;
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute("DELETE FROM recovery_crashes", [])?;
+        transaction.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('recoverySafeMode', 'false')
+             ON CONFLICT(key) DO UPDATE SET value='false'",
+            [],
+        )?;
+        transaction.commit()?;
         Ok(())
+    }
+
+    pub fn recovery_safe_mode(&self) -> Result<bool, StorageError> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'recoverySafeMode'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .as_deref()
+            == Some("true"))
     }
 
     fn prune_expired_graph_plans(&self) -> Result<(), StorageError> {
@@ -1747,6 +1773,7 @@ mod tests {
         assert_eq!(storage.record_recovery_crash(100).unwrap(), 1);
         assert_eq!(storage.record_recovery_crash(101).unwrap(), 2);
         assert_eq!(storage.record_recovery_crash(102).unwrap(), 3);
+        assert!(storage.recovery_safe_mode().unwrap());
         assert_eq!(storage.recovery_crash_count(102).unwrap(), 3);
         assert_eq!(storage.record_recovery_crash(103).unwrap(), 3);
         assert_eq!(
@@ -1757,6 +1784,7 @@ mod tests {
         );
         storage.clear_recovery_crashes().unwrap();
         assert_eq!(storage.recovery_crash_count(103).unwrap(), 0);
+        assert!(!storage.recovery_safe_mode().unwrap());
     }
 
     #[test]
@@ -1783,12 +1811,15 @@ mod tests {
             let storage = Storage::open(&path).unwrap();
             assert_eq!(storage.record_recovery_crash(500).unwrap(), 1);
             assert_eq!(storage.record_recovery_crash(501).unwrap(), 2);
+            assert_eq!(storage.record_recovery_crash(502).unwrap(), 3);
         }
         {
             let storage = Storage::open(&path).unwrap();
-            assert_eq!(storage.recovery_crash_count(501).unwrap(), 2);
+            assert_eq!(storage.recovery_crash_count(502).unwrap(), 3);
+            assert!(storage.recovery_safe_mode().unwrap());
             storage.clear_recovery_crashes().unwrap();
-            assert_eq!(storage.recovery_crash_count(501).unwrap(), 0);
+            assert_eq!(storage.recovery_crash_count(502).unwrap(), 0);
+            assert!(!storage.recovery_safe_mode().unwrap());
         }
         let _ = std::fs::remove_file(path);
     }
