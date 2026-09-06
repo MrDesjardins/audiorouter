@@ -69,3 +69,15 @@ remain open.
 returns `Present`, `Missing`, or `Invalid` for the expected file conditions,
 while propagating unrelated I/O failures. A regression confirms deleted and
 malformed paths remain representable without terminating enumeration.
+
+## Initial built-in DSP slice
+
+The new `audiorouter-dsp` crate provides an allocation-free, caller-owned
+interleaved biquad processor for mono and stereo. It implements peaking,
+low/high shelf, low/high pass, and notch coefficient forms, validates the M04
+frequency/Q/sample-rate/channel bounds, repairs non-finite samples, and
+supports state reset and coefficient updates. Four tests cover unsafe parameter
+rejection, flat neutrality, finite output across all shapes, reset, and update
+behavior. This is portable DSP groundwork; graph compilation, typed node
+schemas/presets, dynamics, limiter, delay, and measured transfer-function
+vectors remain open.
