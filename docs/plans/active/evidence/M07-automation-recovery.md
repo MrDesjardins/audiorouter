@@ -46,3 +46,7 @@ Added `recordings.get` with validated `recordingId` input and storage lookup, pl
 ## 2026-09-06 — Authorized recording metadata mutation
 
 Added `recordings.setMetadata` with explicit `Record` permission scope and bounded title/artist/comment fields. The control method delegates to the existing transactional storage update, reports not-found cleanly, and never changes recording path or audio content. A read-only grant is denied while an explicit record-scope grant succeeds. Targeted storage/control/CLI tests pass (24/44/7) with strict Clippy.
+
+## 2026-09-06 — Non-destructive recording entry removal
+
+Added `recordings.removeEntry` with explicit `Record` permission scope and MCP `remove_recording_entry`. It deletes only the library metadata row, reports `fileAction: none`, and leaves the recorded file path outside the operation. Targeted storage/control/CLI tests pass (24/44/7) with strict Clippy.

@@ -102,6 +102,7 @@ fn method_description(name: &str) -> &'static str {
         "recordings.setMetadata" => {
             "Update recording metadata without changing audio content or path."
         }
+        "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -188,6 +189,10 @@ fn method_input_schema(name: &str) -> Value {
                 "artist": { "type": ["string", "null"], "maxLength": 256 },
                 "comment": { "type": ["string", "null"], "maxLength": 256 }
             }),
+            &["recordingId"],
+        ),
+        "recordings.removeEntry" => object_schema(
+            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
         ),
         "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
@@ -1031,6 +1036,7 @@ impl ControlPlane {
                     "recordings.list" => self.dispatch_recordings_list(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
+                    "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1594,6 +1600,28 @@ impl ControlPlane {
         Ok(json!({ "recordingId": recording_id, "updated": true }))
     }
 
+    fn dispatch_recording_remove(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let recording_id = params
+            .and_then(|params| {
+                params
+                    .get("recordingId")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        if !storage
+            .remove_recording_entry(&recording_id)
+            .map_err(storage_error)?
+        {
+            return Err(ControlError::InvalidRequest("recording not found".into()));
+        }
+        Ok(json!({ "recordingId": recording_id, "removed": true, "fileAction": "none" }))
+    }
+
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         if let Some(requested_epoch) = params.get("backendEpoch").and_then(Value::as_u64) {
@@ -1763,6 +1791,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.list" => &["sessionId"],
         "recordings.get" => &["recordingId"],
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
+        "recordings.removeEntry" => &["recordingId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -1811,6 +1840,7 @@ fn is_mutating_method(method: &str) -> bool {
             | "clients.authorize"
             | "clients.revoke"
             | "recordings.setMetadata"
+            | "recordings.removeEntry"
     )
 }
 
@@ -2574,6 +2604,23 @@ mod tests {
             .unwrap();
         assert_eq!(record.path, "C:\\recordings\\keep.wav");
         assert_eq!(record.title.as_deref(), Some("Edited"));
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(11)),
+                method: "recordings.removeEntry".into(),
+                params: Some(json!({ "recordingId": "recording-edit" })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::Record]),
+        );
+        assert_eq!(response.result.unwrap()["fileAction"], "none");
+        assert!(plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .get_recording("recording-edit")
+            .unwrap()
+            .is_none());
     }
 
     #[test]

@@ -127,7 +127,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 31] = [
+pub const API_METHODS: [ApiMethodSpec; 32] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -180,6 +180,11 @@ pub const API_METHODS: [ApiMethodSpec; 31] = [
     },
     ApiMethodSpec {
         name: "recordings.setMetadata",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recordings.removeEntry",
         permission: PermissionScope::Record,
         side_effect: SideEffectClass::Mutating,
     },
