@@ -99,6 +99,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiorouter-recording"
+version = "0.1.0"
+
+[[package]]
 name = "audiorouter-storage"
 version = "0.1.0"
 dependencies = [
