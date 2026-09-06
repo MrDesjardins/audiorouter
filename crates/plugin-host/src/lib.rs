@@ -1181,9 +1181,27 @@ impl WorkerProcess {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|error| WorkerProcessError::Spawn(error.to_string()))?;
-        let sandbox = WorkerSandbox::attach(&child).map_err(WorkerProcessError::Spawn)?;
-        let stdin = child.stdin.take().ok_or(WorkerProcessError::Exited)?;
-        let stdout = child.stdout.take().ok_or(WorkerProcessError::Exited)?;
+        let sandbox = match WorkerSandbox::attach(&child) {
+            Ok(sandbox) => sandbox,
+            Err(error) => {
+                terminate_child(&mut child);
+                return Err(WorkerProcessError::Spawn(error));
+            }
+        };
+        let stdin = match child.stdin.take() {
+            Some(stdin) => stdin,
+            None => {
+                terminate_child(&mut child);
+                return Err(WorkerProcessError::Exited);
+            }
+        };
+        let stdout = match child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                terminate_child(&mut child);
+                return Err(WorkerProcessError::Exited);
+            }
+        };
         let (reader_sender, reader) = mpsc::sync_channel(4);
         std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
@@ -1378,12 +1396,16 @@ fn validate_worker_executable(path: &Path) -> Result<PathBuf, String> {
         .map_err(|error| format!("worker executable canonicalization failed: {error}"))
 }
 
+fn terminate_child(child: &mut Child) {
+    if child.try_wait().ok().flatten().is_none() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
 impl Drop for WorkerProcess {
     fn drop(&mut self) {
-        if self.child.try_wait().ok().flatten().is_none() {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
-        }
+        terminate_child(&mut self.child);
     }
 }
 

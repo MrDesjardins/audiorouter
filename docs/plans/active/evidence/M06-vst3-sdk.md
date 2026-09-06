@@ -429,3 +429,10 @@ Windows reparse metadata. This prevents an accidental relative/PATH resolution
 from selecting an unintended worker binary. The plugin-host suite passes 27 unit
 tests plus 4 worker-process tests with strict Clippy; this is launch provenance,
 not full OS sandbox enforcement or actual plugin execution.
+
+Worker setup failures are now fail-closed as well: if Job Object attachment or
+either piped handle cannot be obtained after spawn, the child is explicitly
+killed and reaped before the error returns. `WorkerProcess::Drop` uses the same
+cleanup helper. The plugin-host suite passes 27 unit tests plus 4
+worker-process tests with strict Clippy; this does not establish full OS
+filesystem/network sandboxing or plugin execution.
