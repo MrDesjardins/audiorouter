@@ -1417,6 +1417,21 @@ impl BufferedFlacRecorder {
         queue: &RecordingQueue,
         maximum_chunks: usize,
     ) -> Result<usize, RecordingError> {
+        self.drain_queue_with_checkpoint(queue, maximum_chunks, |_| Ok(()))
+    }
+
+    /// Drains audio and invokes the persistence hook after every committed
+    /// contiguous chunk. A hook failure fails the recorder so a caller cannot
+    /// report durable progress that was not actually persisted.
+    pub fn drain_queue_with_checkpoint<F>(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+        mut persist: F,
+    ) -> Result<usize, RecordingError>
+    where
+        F: FnMut(&RecorderCheckpoint) -> Result<(), RecordingError>,
+    {
         if self.controller.state() != RecorderState::Recording {
             return Err(RecordingError::NotRecording);
         }
@@ -1445,6 +1460,11 @@ impl BufferedFlacRecorder {
                 .advance(end)
                 .map_err(RecordingError::Controller)?;
             self.next_frame = Some(end);
+            let checkpoint = self.controller.checkpoint();
+            if let Err(error) = persist(&checkpoint) {
+                self.controller.fail();
+                return Err(error);
+            }
             drained += 1;
         }
         Ok(drained)
@@ -1526,6 +1546,21 @@ impl<W: Write + Seek> WavRecorder<W> {
         queue: &RecordingQueue,
         maximum_chunks: usize,
     ) -> Result<usize, RecordingError> {
+        self.drain_queue_with_checkpoint(queue, maximum_chunks, |_| Ok(()))
+    }
+
+    /// Drains audio and invokes the persistence hook after every committed
+    /// contiguous chunk. A hook failure fails the recorder before more audio
+    /// can be accepted.
+    pub fn drain_queue_with_checkpoint<F>(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+        mut persist: F,
+    ) -> Result<usize, RecordingError>
+    where
+        F: FnMut(&RecorderCheckpoint) -> Result<(), RecordingError>,
+    {
         if self.controller.state() != RecorderState::Recording {
             return Err(RecordingError::NotRecording);
         }
@@ -1554,6 +1589,11 @@ impl<W: Write + Seek> WavRecorder<W> {
                 .advance(end)
                 .map_err(RecordingError::Controller)?;
             self.next_frame = Some(end);
+            let checkpoint = self.controller.checkpoint();
+            if let Err(error) = persist(&checkpoint) {
+                self.controller.fail();
+                return Err(error);
+            }
             drained += 1;
         }
         Ok(drained)
@@ -1821,6 +1861,59 @@ mod tests {
         assert_eq!(recorder.checkpoint().state, RecorderState::Completed);
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn wav_worker_persists_checkpoint_after_each_committed_chunk() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 4,
+                samples: vec![0.0, 0.1],
+            })
+            .unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 6,
+                samples: vec![0.2],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(4).unwrap();
+        let mut frames = Vec::new();
+        assert_eq!(
+            recorder
+                .drain_queue_with_checkpoint(&queue, 8, |checkpoint| {
+                    frames.push(checkpoint.last_frame);
+                    Ok(())
+                })
+                .unwrap(),
+            2
+        );
+        assert_eq!(frames, vec![Some(6), Some(7)]);
+    }
+
+    #[test]
+    fn checkpoint_persistence_failure_fails_wav_worker() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(1).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.0],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        let result =
+            recorder.drain_queue_with_checkpoint(&queue, 1, |_| Err(RecordingError::InvalidWav));
+        assert!(matches!(result, Err(RecordingError::InvalidWav)));
+        assert_eq!(recorder.state(), RecorderState::Failed);
     }
 
     #[test]

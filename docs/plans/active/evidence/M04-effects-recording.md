@@ -341,3 +341,11 @@ FLAC registration now follows the same boundary: it reads only bounded Vorbis
 comment blocks before the audio frames, maps title/artist/comment values, and
 ignores malformed comments without rejecting the recording. Encode, parse, and
 registration regression coverage passes in the 21-test recording suite.
+
+The WAV and bounded FLAC recorder workers now expose
+`drain_queue_with_checkpoint`, invoking a caller-owned persistence hook after
+each contiguous chunk has advanced the validated lifecycle boundary. A hook
+failure transitions the worker to `Failed` before more audio is accepted;
+ordinary draining remains unchanged. The recording suite passes 23 tests with
+strict Clippy and formatting checks. This is the durable scheduling seam; true
+incremental FLAC encoding and native realtime integration remain open.
