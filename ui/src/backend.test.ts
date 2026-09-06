@@ -8,6 +8,7 @@ describe("disconnected backend", () => {
     const backend = createDisconnectedBackend();
     const snapshot = await backend.snapshot();
     expect(backend.connected).toBe(false);
+    expect(snapshot.status.privacyMute.muted).toBe(true);
     expect(snapshot.session.id).toBe(demoSession.id);
     expect(await backend.listRecordings()).toEqual([]);
     await expect(backend.previewRecording("recording")).rejects.toThrow("recording preview is unavailable");

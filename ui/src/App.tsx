@@ -42,6 +42,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(error instanceof Error ? error.message : "Recording library unavailable"); });
   };
   const snapshot = snapshotState.snapshot;
+  useEffect(() => { if (snapshot) setPrivacyMuted(snapshot.status.privacyMute.muted); }, [snapshot]);
   const availableSessions = [...(snapshot ? [snapshot.session, ...demoSessions.filter((item) => item.id !== snapshot.session.id)] : demoSessions), ...createdSessions.filter((item) => !snapshot || item.id !== snapshot.session.id)];
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
   useEffect(() => { setDraft(session); setSelectedNodeId(session.nodes[0]?.id ?? ""); setActionMessage(null); setRouteInspection(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); }, [session]);

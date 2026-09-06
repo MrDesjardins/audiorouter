@@ -295,3 +295,9 @@ clear calls. The live adapter forwards the exact no-parameter RPC request.
 UI coverage is 21 tests; typecheck and production build pass. This operation
 clears recovery markers/latch state only and does not start audio or alter
 machine configuration.
+
+The UI status contract now includes the backend's privacy-mute persistence and
+effect metadata. Connected snapshot refreshes synchronize the visible safety
+latch from that authoritative value instead of relying on stale renderer
+state; disconnected preview remains fail-closed and in-memory. UI coverage is
+21 tests with typecheck and production build passing.

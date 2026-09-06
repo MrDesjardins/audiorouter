@@ -177,6 +177,11 @@ export interface StatusSnapshot {
   sessionCount: number;
   activeSessionCount: number;
   activeSessionIds: EntityId[];
+  privacyMute: {
+    muted: boolean;
+    persistence: "durable" | "memory";
+    audioEffect: string;
+  };
   recovery: {
     safeMode: boolean;
     recentCrashes: number;

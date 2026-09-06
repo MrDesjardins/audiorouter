@@ -77,6 +77,11 @@ const disconnectedStatus: StatusSnapshot = {
   sessionCount: 1,
   activeSessionCount: 0,
   activeSessionIds: [],
+  privacyMute: {
+    muted: true,
+    persistence: "memory",
+    audioEffect: "process-local-when-realtime-backend-is-available",
+  },
   recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
   eventCursor: { backendEpoch: 0, latestSequence: 0 },
 };
