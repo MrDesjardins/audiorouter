@@ -65,6 +65,12 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+The DSP crate now exposes fixed, explainable EQ starting points: an all-disabled
+`VoiceNeutral` preset and Q8 notch presets at 50 Hz and 60 Hz. Presets return
+the same bounded `BiquadParams` values used by processing and response-curve
+calculation; reference tests verify target frequencies and more than 40 dB
+rejection at each hum frequency. Twelve DSP tests and strict Clippy pass.
+
 `Biquad::magnitude_db_at` now computes a control-plane magnitude response from
 the exact normalized coefficients used by the audio path, avoiding a separate
 UI curve model. Reference tests verify flat response, the configured peaking

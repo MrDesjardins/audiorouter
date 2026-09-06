@@ -12,6 +12,59 @@ pub enum FilterKind {
     Notch,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EqPresetId {
+    VoiceNeutral,
+    Hum50Hz,
+    Hum60Hz,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EqPreset {
+    pub id: EqPresetId,
+    pub bands: [Option<BiquadParams>; 8],
+}
+
+/// Returns the versioned, explainable starting points used by the built-in EQ.
+/// Disabled bands are `None`; callers still validate and instantiate each band
+/// through `Biquad::new` before adding it to a prepared graph.
+pub fn eq_preset(id: EqPresetId, sample_rate: f32) -> Result<EqPreset, BiquadError> {
+    if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        return Err(BiquadError::InvalidSampleRate);
+    }
+    let empty = [None; 8];
+    let band = |frequency_hz, q| {
+        Some(BiquadParams {
+            kind: FilterKind::Notch,
+            frequency_hz,
+            q,
+            gain_db: 0.0,
+            sample_rate,
+        })
+    };
+    let bands = match id {
+        EqPresetId::VoiceNeutral => empty,
+        EqPresetId::Hum50Hz => {
+            let mut bands = empty;
+            bands[0] = band(50.0, 8.0);
+            bands
+        }
+        EqPresetId::Hum60Hz => {
+            let mut bands = empty;
+            bands[0] = band(60.0, 8.0);
+            bands
+        }
+    };
+    if bands
+        .iter()
+        .flatten()
+        .any(|params| params.frequency_hz >= sample_rate * 0.5)
+    {
+        return Err(BiquadError::InvalidFrequency);
+    }
+    Ok(EqPreset { id, bands })
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BiquadParams {
     pub kind: FilterKind,
@@ -697,6 +750,26 @@ mod tests {
         assert!(matches!(
             notch.magnitude_db_at(30_000.0),
             Err(BiquadError::InvalidFrequency)
+        ));
+    }
+
+    #[test]
+    fn eq_presets_are_bounded_and_explainable() {
+        let neutral = eq_preset(EqPresetId::VoiceNeutral, 48_000.0).unwrap();
+        assert_eq!(neutral.id, EqPresetId::VoiceNeutral);
+        assert!(neutral.bands.iter().all(Option::is_none));
+
+        for (id, frequency) in [(EqPresetId::Hum50Hz, 50.0), (EqPresetId::Hum60Hz, 60.0)] {
+            let preset = eq_preset(id, 48_000.0).unwrap();
+            let band = preset.bands[0].unwrap();
+            assert_eq!(band.kind, FilterKind::Notch);
+            assert_eq!(band.frequency_hz, frequency);
+            let filter = Biquad::new(band, 1).unwrap();
+            assert!(filter.magnitude_db_at(frequency).unwrap() < -40.0);
+        }
+        assert!(matches!(
+            eq_preset(EqPresetId::Hum50Hz, f32::NAN),
+            Err(BiquadError::InvalidSampleRate)
         ));
     }
 
