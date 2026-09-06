@@ -26,6 +26,13 @@ The preparation script also refuses any tracked or untracked working-tree
 changes before invoking Cargo, so the manifest and SBOM cannot describe an
 uncommitted source state. PowerShell parsing and diff validation pass.
 
+Added `tools/release/verify-artifacts.ps1`, a read-only verifier for prepared
+directories. It validates the pinned manifest schema/x64 source revision,
+requires explicit unsigned/publication blockers, parses the Cargo SBOM, and
+checks every artifact's safe filename, existence, SHA-256, and byte count.
+PowerShell parser validation and the missing-input failure path pass; signing,
+installer, driver, and clean-machine qualification remain release blockers.
+
 ## 2026-09-06 — Headless operations runbook
 
 Added `docs/operations/headless-runbook.md` and linked it from the documentation index. It documents commands that exist in the current CLI, the versioned plan-file workflow, non-overwriting recovery backups, staged bundle import, MCP stdio/pipe launch, stale-plan recovery, and explicit limits around native routing, drivers, signing, and installation. The runbook does not present portable tests or an MCP response as evidence of a configured audio system.
