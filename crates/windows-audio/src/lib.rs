@@ -90,6 +90,15 @@ pub struct ApplicationAudioInfo {
     pub display_names: Vec<String>,
 }
 
+fn sort_application_inventory(applications: &mut [ApplicationInfo]) {
+    applications.sort_by(|left, right| {
+        left.executable
+            .to_ascii_lowercase()
+            .cmp(&right.executable.to_ascii_lowercase())
+            .then_with(|| left.process_id.cmp(&right.process_id))
+    });
+}
+
 #[derive(Debug)]
 pub enum AudioError {
     Windows(windows::core::Error),
@@ -824,12 +833,7 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
             }
         }
         let _ = CloseHandle(snapshot);
-        applications.sort_by(|left, right| {
-            left.executable
-                .to_ascii_lowercase()
-                .cmp(&right.executable.to_ascii_lowercase())
-                .then_with(|| left.process_id.cmp(&right.process_id))
-        });
+        sort_application_inventory(&mut applications);
         first.map(|_| applications).map_err(AudioError::Windows)
     }
 }
@@ -1190,6 +1194,35 @@ mod tests {
                 .then_with(|| pair[0].process_id.cmp(&pair[1].process_id))
                 .is_le()
         }));
+    }
+
+    #[test]
+    fn application_inventory_sort_is_case_insensitive_then_pid() {
+        let mut applications = vec![
+            ApplicationInfo {
+                process_id: 20,
+                executable: "zeta.exe".into(),
+                creation_time_100ns: Some(2),
+            },
+            ApplicationInfo {
+                process_id: 4,
+                executable: "Audio.exe".into(),
+                creation_time_100ns: Some(1),
+            },
+            ApplicationInfo {
+                process_id: 3,
+                executable: "audio.exe".into(),
+                creation_time_100ns: Some(0),
+            },
+        ];
+        sort_application_inventory(&mut applications);
+        assert_eq!(
+            applications
+                .iter()
+                .map(|application| (application.executable.as_str(), application.process_id))
+                .collect::<Vec<_>>(),
+            [("audio.exe", 3), ("Audio.exe", 4), ("zeta.exe", 20)]
+        );
     }
 
     #[cfg(windows)]

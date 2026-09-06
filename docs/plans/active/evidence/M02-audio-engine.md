@@ -67,3 +67,4 @@ every returned application satisfies the API's positive-PID schema constraint.
 Results are sorted case-insensitively by executable and then PID, making
 read-only UI/CLI refreshes deterministic even though Toolhelp enumeration
 order is not guaranteed.
+The policy has both a synthetic regression and a live Windows snapshot check.
