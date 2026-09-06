@@ -63,10 +63,14 @@ export async function applyGraphDraft(
   backend: Pick<UiBackend, "planGraph" | "commitGraph">,
   candidate: Session,
   idempotencyKey: string,
+  acknowledgments?: string[],
 ) {
   const plan = await backend.planGraph(candidate);
   if (plan.baseRevision !== candidate.revision) {
     throw new Error("Backend returned a plan for a different session revision");
   }
-  return backend.commitGraph(plan.planId, plan.baseRevision, idempotencyKey);
+  if (plan.warnings.length > 0 && acknowledgments === undefined) {
+    throw new Error(`Plan requires acknowledgment: ${plan.warnings.join(", ")}`);
+  }
+  return backend.commitGraph(plan.planId, plan.baseRevision, idempotencyKey, acknowledgments);
 }

@@ -21,6 +21,9 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [recordings, setRecordings] = useState<import("@audiorouter/contracts").RecordingRow[]>([]);
   const [recordingsError, setRecordingsError] = useState<string | null>(null);
   const [previewMessage, setPreviewMessage] = useState<string | null>(null);
+  const [pendingWarnings, setPendingWarnings] = useState<string[]>([]);
+  const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<Set<string>>(() => new Set());
+  const [pendingOperation, setPendingOperation] = useState<string | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) setSnapshotState(nextState); }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refresh = () => {
@@ -30,7 +33,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const snapshot = snapshotState.snapshot;
   const availableSessions = snapshot ? [snapshot.session, ...demoSessions.filter((item) => item.id !== snapshot.session.id)] : demoSessions;
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
-  useEffect(() => { setDraft(session); setSelectedNodeId(session.nodes[0]?.id ?? ""); setActionMessage(null); setRouteInspection(null); }, [session]);
+  useEffect(() => { setDraft(session); setSelectedNodeId(session.nodes[0]?.id ?? ""); setActionMessage(null); setRouteInspection(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); }, [session]);
   useEffect(() => {
     let active = true;
     void backend.listRecordings(session.id).then((items) => { if (active) { setRecordings(items); setRecordingsError(null); } }).catch((error) => { if (active) { setRecordings([]); setRecordingsError(error instanceof Error ? error.message : "Recording library unavailable"); } });
@@ -66,14 +69,39 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const statusSummary = snapshot ? `${snapshot.status.audio} audio - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot";
   const changeNodeFlag = (flag: "enabled" | "bypass", value: boolean) => { setDraft((current) => setNodeDraftFlag(current, selectedNode.id, flag, value)); setActionMessage("Draft updated. Review and plan the changes before committing."); };
   const changeNodeParameter = (name: string, value: boolean | number) => { if (typeof value === "number" && !Number.isFinite(value)) return; setDraft((current) => setNodeDraftParameter(current, selectedNode.id, name, value)); setActionMessage("Draft updated. Review and plan the changes before committing."); };
-  const planChanges = async () => { setActionMessage("Planning changes..."); try { const result = await applyGraphDraft(backend, draft, `ui-${Date.now()}`); setActionMessage(`Committed revision ${result.revision}. Reconnect to refresh the authoritative view.`); } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to apply graph changes."); } };
+  const planChanges = async () => {
+    setActionMessage("Planning changes...");
+    try {
+      const operation = `ui-${Date.now()}`;
+      const plan = await backend.planGraph(draft);
+      if (plan.baseRevision !== draft.revision) throw new Error("Backend returned a plan for a different session revision");
+      if (plan.warnings.length > 0) {
+        setPendingOperation(operation);
+        setPendingWarnings(plan.warnings);
+        setAcknowledgedWarnings(new Set());
+        setActionMessage("Review and acknowledge every plan warning before committing.");
+        return;
+      }
+      const result = await backend.commitGraph(plan.planId, plan.baseRevision, operation);
+      setActionMessage(`Committed revision ${result.revision}. Reconnect to refresh the authoritative view.`);
+    } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to apply graph changes."); }
+  };
+  const commitAcknowledgedPlan = async () => {
+    if (!pendingOperation || acknowledgedWarnings.size !== pendingWarnings.length) return;
+    setActionMessage("Replanning acknowledged changes...");
+    try {
+      const result = await applyGraphDraft(backend, draft, pendingOperation, [...acknowledgedWarnings]);
+      setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null);
+      setActionMessage(`Committed revision ${result.revision}. Reconnect to refresh the authoritative view.`);
+    } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to commit acknowledged changes."); }
+  };
   const inspectRoute = async () => { setActionMessage("Inspecting route..."); try { setRouteInspection(await backend.inspectRoute(selectedNode.id)); setActionMessage("Route inspection refreshed from the backend."); } catch (error) { setRouteInspection(null); setActionMessage(error instanceof Error ? error.message : "Unable to inspect route."); } };
   const previewRecording = async (recordingId: string) => { setPreviewMessage("Inspecting recording..."); try { const result = await backend.previewRecording(recordingId); setPreviewMessage(`${String(result.status ?? "available")} recording preview loaded.`); } catch (error) { setPreviewMessage(error instanceof Error ? error.message : "Recording preview unavailable."); } };
   return <div className="app-shell">
     <header className="topbar"><div><p className="eyebrow">AudioRouter</p><h1>Routing workspace</h1></div><div className="status-cluster" aria-live="polite"><span className={`status-dot${backend.connected ? "" : " disconnected"}`} aria-hidden="true" /><span>{connectionLabel}</span><span className="status-detail">{statusSummary}</span><button type="button" onClick={refresh}>Reconnect</button></div></header>
     <div className="workspace-grid"><aside className="sidebar" aria-label="Sessions"><div className="section-heading"><h2>Sessions</h2><button type="button" aria-label="Create session">+</button></div><label className="session-picker">Preview session<select value={session.id} onChange={(event) => setSelectedSessionId(event.target.value)}>{availableSessions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button type="button" className="session-item selected"><span>{session.name}</span><small>Stopped - rev {session.revision}</small></button><button type="button" className="session-item" onClick={() => setSelectedSessionId("processed-microphone")}><span>Processed microphone</span><small>Stopped - rev 2</small></button><button type="button" className="session-item" onClick={() => setSelectedSessionId("desktop-recording")}><span>Desktop recording</span><small>Missing device</small></button><div className="sidebar-note"><strong>Safe startup</strong><p>Monitoring is muted and recording is unarmed until you explicitly start them.</p></div></aside>
       <main className="main-content"><section className="workspace-title"><div><p className="eyebrow">Stopped session</p><h2>{session.name}</h2><p className="muted">Revision {session.revision} - {backend.connected ? "draft changes require plan and commit" : "changes are presentation-only in this preview"}</p></div><div className="actions"><button type="button" className="secondary" onClick={() => { setDraft(session); setActionMessage("Draft discarded."); }} disabled={!backend.connected}>Undo</button><button type="button" className="primary" onClick={() => void planChanges()} disabled={!backend.connected}>Plan changes</button></div></section>
-        {actionMessage && <p className="muted" role="status" aria-live="polite">{actionMessage}</p>}{snapshotState.stale && snapshotState.error && <p className="muted" role="status">Last known backend state is stale: {snapshotState.error}</p>}
+        {actionMessage && <p className="muted" role="status" aria-live="polite">{actionMessage}</p>}{pendingWarnings.length > 0 && <section className="warning-panel" aria-labelledby="warning-heading"><h2 id="warning-heading">Plan warnings</h2>{pendingWarnings.map((warning) => <label key={warning}><input type="checkbox" checked={acknowledgedWarnings.has(warning)} onChange={(event) => setAcknowledgedWarnings((current) => { const next = new Set(current); if (event.target.checked) next.add(warning); else next.delete(warning); return next; })} /> I acknowledge: {warning}</label>)}<button type="button" className="primary" disabled={acknowledgedWarnings.size !== pendingWarnings.length} onClick={() => void commitAcknowledgedPlan()}>Commit acknowledged plan</button></section>}{snapshotState.stale && snapshotState.error && <p className="muted" role="status">Last known backend state is stale: {snapshotState.error}</p>}
         <section className="notice" role="status"><strong>{backend.connected ? "Connected editor" : "Read-only preview"}</strong><span>{backend.connected ? "Drafts are validated and committed through the authoritative backend." : "The control backend is disconnected. No route, device, or recording action can be applied."}</span></section>
         <section className="canvas-panel" aria-labelledby="canvas-heading"><div className="section-heading"><div><p className="eyebrow">Signal flow</p><h2 id="canvas-heading">Canvas</h2></div><button type="button" className="secondary">List view</button></div><div className="node-canvas">{draft.nodes.map((node) => <NodeCard key={node.id} node={node} selected={node.id === selectedNode.id} onSelect={() => setSelectedNodeId(node.id)} />)}</div></section>
         <section className="panel inspector" aria-labelledby="inspector-heading"><div className="section-heading"><div><p className="eyebrow">Selected node</p><h2 id="inspector-heading">{selectedNode.name}</h2></div><span className="badge">{selectedNode.kind}</span></div><div className="inspector-grid"><label>Enabled<input type="checkbox" checked={selectedNode.enabled} disabled={!backend.connected} onChange={(event) => changeNodeFlag("enabled", event.target.checked)} /></label><label>Bypass<input type="checkbox" checked={selectedNode.bypass} disabled={!backend.connected} onChange={(event) => changeNodeFlag("bypass", event.target.checked)} /></label>{selectedNode.kind === "gain" && <label>Gain (dB)<input type="number" min="-60" max="12" step="0.1" value={typeof selectedNode.parameters.gainDb === "number" ? selectedNode.parameters.gainDb : 0} disabled={!backend.connected} onChange={(event) => changeNodeParameter("gainDb", Number(event.target.value))} /></label>}{selectedNode.kind === "mute" && <label>Muted<input type="checkbox" checked={selectedNode.parameters.muted === true} disabled={!backend.connected} onChange={(event) => changeNodeParameter("muted", event.target.checked)} /></label>}<button type="button" disabled title="Privacy mute control will be enabled with the live safety API">Privacy mute</button><p className="muted">{backend.connected ? "Changes are local drafts until Plan changes is committed." : "Controls are disabled while disconnected. Selection is local presentation state only."}</p></div></section>

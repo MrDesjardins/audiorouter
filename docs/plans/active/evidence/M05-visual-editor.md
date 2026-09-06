@@ -189,3 +189,10 @@ The shared TypeScript `graph.commit` parameters now include the nullable
 optional `acknowledgments` array, matching the Rust schema's bounded warning
 ID validation. Contracts typecheck and the dependent UI test/typecheck/build
 checks remain green.
+
+The graph editor now preserves that safety boundary in its interaction flow:
+it plans before committing, renders each returned warning as a required
+acknowledgment, and sends the acknowledged warning IDs only after the user
+explicitly checks every item. A warning plan cannot be committed by the normal
+single-click path. UI coverage is 13 tests; typecheck and the production build
+pass. No audio endpoint or machine configuration is touched.

@@ -179,4 +179,15 @@ describe("plan-only drafts", () => {
       "different session revision",
     );
   });
+
+  it("requires and forwards explicit acknowledgments for warning plans", async () => {
+    const calls: unknown[][] = [];
+    const backend: Pick<UiBackend, "planGraph" | "commitGraph"> = {
+      planGraph: async () => ({ planId: "warn-plan", baseRevision: demoSession.revision, expiresInMs: 30_000, diff: [], affectedDestinations: [], warnings: ["audible change"], requiredScopes: ["graph.write"] }),
+      commitGraph: async (...args) => { calls.push(args); return { sessionId: demoSession.id, revision: 2 }; },
+    };
+    await expect(applyGraphDraft(backend, demoSession, "warning-operation")).rejects.toThrow("requires acknowledgment");
+    await expect(applyGraphDraft(backend, demoSession, "warning-operation", ["audible change"])).resolves.toMatchObject({ revision: 2 });
+    expect(calls).toEqual([["warn-plan", demoSession.revision, "warning-operation", ["audible change"]]]);
+  });
 });

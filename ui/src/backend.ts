@@ -26,7 +26,7 @@ export interface UiBackend {
   subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number): Promise<EventsSubscribeResult>;
   inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
-  commitGraph(planId: string, baseRevision: number, idempotencyKey: string): Promise<GraphCommitResult>;
+  commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   previewRecording(recordingId: string): Promise<Record<string, unknown>>;
 }
@@ -130,8 +130,13 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
         candidate,
       });
     },
-    async commitGraph(planId, baseRevision, idempotencyKey) {
-      return client.request("graph.commit", { planId, baseRevision, idempotencyKey });
+    async commitGraph(planId, baseRevision, idempotencyKey, acknowledgments) {
+      return client.request("graph.commit", {
+        planId,
+        baseRevision,
+        idempotencyKey,
+        ...(acknowledgments === undefined ? {} : { acknowledgments }),
+      });
     },
     async listRecordings(recordingSessionId = sessionId) {
       return client.request("recordings.list", { sessionId: recordingSessionId });
