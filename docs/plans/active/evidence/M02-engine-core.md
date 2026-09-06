@@ -36,6 +36,8 @@ Queue full/empty events now increment atomic overrun/underrun counters while sti
 
 `MixerStage` now prepares a bounded set of finite destination-major matrices off the realtime boundary and converges multiple caller-owned input blocks into a preallocated destination. It validates input count and shapes before clearing or mutating output. Two regressions cover successful two-input convergence and rejection without output mutation; the engine suite now contains 30 passing tests. Full domain graph compilation and native scheduling remain open.
 
+`compile_mixer_session` now prepares a narrow domain-to-engine topology with two or more enabled sources, one mixer, and one output edge. `CompiledMixerGraph::process` routes source blocks through preallocated mixer scratch and output blocks without allocation at the processing boundary. A compiler/runtime regression proves two-source convergence and generation propagation; the engine suite contains 31 passing tests with strict Clippy. Fan-out, arbitrary multi-stage scheduling, endpoint resources, and native timing remain open.
+
 `AudioBlock` now exposes per-channel sample peak, per-channel RMS, and aggregate RMS without allocation. Non-finite samples are excluded from meter calculations and invalid channels return `None`; the engine suite contains 20 passing tests and strict engine Clippy passes.
 
 `RmsWindow` adds a preallocated rolling RMS window with explicit capacity and reset behavior. It treats non-finite input as silence and performs no allocation while pushing blocks; the engine suite contains 21 passing tests and strict engine Clippy passes.

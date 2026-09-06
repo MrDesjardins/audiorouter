@@ -798,6 +798,37 @@ impl MixerStage {
     }
 }
 
+/// A prepared narrow mixer graph: two or more enabled source nodes converge
+/// into one mixer node and then feed one destination. The caller supplies the
+/// source blocks, mixer scratch block, and destination block at execution time.
+pub struct CompiledMixerGraph {
+    generation: RuntimeGeneration,
+    mixer: MixerStage,
+    output_matrix: Vec<f32>,
+}
+
+impl CompiledMixerGraph {
+    pub fn generation(&self) -> RuntimeGeneration {
+        self.generation
+    }
+
+    pub fn input_count(&self) -> usize {
+        self.mixer.input_count()
+    }
+
+    pub fn process(
+        &self,
+        sources: &[AudioBlock],
+        mixer_scratch: &mut AudioBlock,
+        destination: &mut AudioBlock,
+    ) -> Result<(), MixerError> {
+        self.mixer.process(mixer_scratch, sources)?;
+        destination
+            .map_from(mixer_scratch, &self.output_matrix)
+            .map_err(MixerError::Block)
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct CallbackMetrics {
     processed_quanta: AtomicU64,
@@ -1034,6 +1065,103 @@ pub fn compile_session(
         previous_node = Some(node_id);
     }
     Ok(RuntimeGraph::prepare(generation, stages))
+}
+
+/// Compile the supported mixer-convergence topology. This intentionally has a
+/// separate return type because the ordinary single-block `RuntimeGraph`
+/// cannot represent multiple live upstream buffers without silently dropping
+/// a branch.
+pub fn compile_mixer_session(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+) -> Result<CompiledMixerGraph, GraphCompileError> {
+    use audiorouter_domain::{validate_session, NodeKind};
+
+    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    let mixers = session
+        .nodes
+        .iter()
+        .filter(|node| node.kind == NodeKind::Mixer && node.enabled && !node.bypass)
+        .collect::<Vec<_>>();
+    if mixers.len() != 1 {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mixer = mixers[0];
+    let incoming = session
+        .edges
+        .iter()
+        .filter(|edge| edge.enabled && edge.destination_node == mixer.id)
+        .collect::<Vec<_>>();
+    let outgoing = session
+        .edges
+        .iter()
+        .filter(|edge| edge.enabled && edge.source_node == mixer.id)
+        .collect::<Vec<_>>();
+    if incoming.len() < 2 || outgoing.len() != 1 {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mixer_input = mixer
+        .ports
+        .iter()
+        .find(|port| port.name == incoming[0].destination_port)
+        .filter(|port| port.direction == audiorouter_domain::PortDirection::Input)
+        .ok_or(GraphCompileError::UnsupportedTopology)?;
+    let mut matrices = Vec::with_capacity(incoming.len());
+    for edge in incoming {
+        let source = session
+            .nodes
+            .iter()
+            .find(|node| node.id == edge.source_node)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if !source.enabled || source.bypass || edge.destination_port != mixer_input.name {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        let source_port = source
+            .ports
+            .iter()
+            .find(|port| port.name == edge.source_port)
+            .filter(|port| port.direction == audiorouter_domain::PortDirection::Output)
+            .ok_or(GraphCompileError::UnsupportedTopology)?;
+        if edge.matrix.len()
+            != usize::from(mixer_input.channels) * usize::from(source_port.channels)
+        {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
+        matrices.push(edge.matrix.clone());
+    }
+    let output_edge = outgoing[0];
+    let destination = session
+        .nodes
+        .iter()
+        .find(|node| node.id == output_edge.destination_node)
+        .ok_or(GraphCompileError::UnsupportedTopology)?;
+    if !destination.enabled || destination.bypass {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mixer_output = mixer
+        .ports
+        .iter()
+        .find(|port| port.name == output_edge.source_port)
+        .filter(|port| port.direction == audiorouter_domain::PortDirection::Output)
+        .ok_or(GraphCompileError::UnsupportedTopology)?;
+    let destination_port = destination
+        .ports
+        .iter()
+        .find(|port| port.name == output_edge.destination_port)
+        .filter(|port| port.direction == audiorouter_domain::PortDirection::Input)
+        .ok_or(GraphCompileError::UnsupportedTopology)?;
+    if output_edge.matrix.len()
+        != usize::from(destination_port.channels) * usize::from(mixer_output.channels)
+    {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let mixer = MixerStage::new(usize::from(mixer_input.channels), matrices)
+        .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+    Ok(CompiledMixerGraph {
+        generation,
+        mixer,
+        output_matrix: output_edge.matrix.clone(),
+    })
 }
 
 /// An immutable, prepared processing schedule. The stage vector is created
@@ -1277,6 +1405,96 @@ mod tests {
             Err(MixerError::Block(BlockError::ShapeMismatch))
         );
         assert_eq!(destination.channel(0).unwrap(), &[7.0; 2]);
+    }
+
+    #[test]
+    fn compiler_and_runtime_execute_a_two_source_mixer_graph() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 1,
+        };
+        let node = |id: &str, kind, ports| Node {
+            id: EntityId::new(id),
+            kind,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            ports,
+        };
+        let session = Session {
+            id: EntityId::new("mixer-session"),
+            name: "mixer".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![
+                node(
+                    "left",
+                    NodeKind::Gain,
+                    vec![port("out", PortDirection::Output)],
+                ),
+                node(
+                    "right",
+                    NodeKind::Gain,
+                    vec![port("out", PortDirection::Output)],
+                ),
+                node(
+                    "mixer",
+                    NodeKind::Mixer,
+                    vec![
+                        port("in", PortDirection::Input),
+                        port("out", PortDirection::Output),
+                    ],
+                ),
+                node(
+                    "output",
+                    NodeKind::PhysicalOutput,
+                    vec![port("in", PortDirection::Input)],
+                ),
+            ],
+            edges: vec![
+                Edge {
+                    id: EntityId::new("left-edge"),
+                    source_node: EntityId::new("left"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("right-edge"),
+                    source_node: EntityId::new("right"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("mixer"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+                Edge {
+                    id: EntityId::new("output-edge"),
+                    source_node: EntityId::new("mixer"),
+                    source_port: "out".into(),
+                    destination_node: EntityId::new("output"),
+                    destination_port: "in".into(),
+                    matrix: vec![1.0],
+                    enabled: true,
+                },
+            ],
+        };
+        let graph = compile_mixer_session(&session, RuntimeGeneration::new(12)).unwrap();
+        assert_eq!(graph.generation(), RuntimeGeneration::new(12));
+        let mut left = AudioBlock::new(1, 4).unwrap();
+        let mut right = AudioBlock::new(1, 4).unwrap();
+        left.channel_mut(0).unwrap().fill(0.25);
+        right.channel_mut(0).unwrap().fill(0.5);
+        let mut scratch = AudioBlock::new(1, 4).unwrap();
+        let mut output = AudioBlock::new(1, 4).unwrap();
+        graph
+            .process(&[left, right], &mut scratch, &mut output)
+            .unwrap();
+        assert_eq!(output.channel(0).unwrap(), &[0.75; 4]);
     }
 
     #[test]
