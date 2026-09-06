@@ -1006,9 +1006,20 @@ impl Storage {
         let parent = destination.parent().ok_or_else(|| {
             StorageError::InvalidBackupPath("bundle destination must have a parent".into())
         })?;
-        if !parent.is_dir() || destination.exists() {
+        if !parent.is_dir() {
             return Err(StorageError::InvalidBackupPath(
                 "bundle destination parent must exist and destination must be new".into(),
+            ));
+        }
+        let parent_metadata = std::fs::symlink_metadata(parent)?;
+        if !parent_metadata.is_dir() || is_reparse_point(&parent_metadata) {
+            return Err(StorageError::InvalidBackupPath(
+                "bundle destination parent must be a regular non-reparse directory".into(),
+            ));
+        }
+        if std::fs::symlink_metadata(destination).is_ok() {
+            return Err(StorageError::InvalidBackupPath(
+                "bundle destination must be new".into(),
             ));
         }
         let document = self

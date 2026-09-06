@@ -246,3 +246,7 @@ reparse metadata before invoking SQLite. Recording rename similarly validates
 the source file and both parent directories before moving a path. Existing
 relative/missing/existing-destination and non-destructive recovery tests remain
 green: storage coverage is 30 tests with strict Clippy.
+Bundle export now validates its parent with reparse metadata and checks
+destination presence through `symlink_metadata`, preventing a dangling link or
+redirected parent from bypassing the new-file policy. The complete storage suite
+passes 30 tests with strict Clippy.
