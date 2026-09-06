@@ -151,3 +151,8 @@ The state-file restore API now requires the durable expected SHA-256 from the
 metadata record instead of comparing a freshly computed digest with itself.
 Wrong-hash and post-write tamper regressions pass. The plugin-host suite has
 16 passing tests, and strict Clippy passes.
+
+State-file writes now validate the asset's own versioned digest before creating
+the file, rejecting caller-side mutation of the public asset fields. The
+corruption-on-write regression passes; the plugin-host suite remains at 16
+passing tests with strict Clippy clean.

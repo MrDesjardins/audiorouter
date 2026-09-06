@@ -121,6 +121,9 @@ pub fn write_state_asset(
     asset_id: &str,
     asset: &PluginStateAsset,
 ) -> Result<PathBuf, StateFileError> {
+    asset
+        .verify_for_restore(asset.version)
+        .map_err(StateFileError::InvalidState)?;
     let canonical_root = fs::canonicalize(root).map_err(|_| StateFileError::InvalidRoot)?;
     if !canonical_root.is_dir() {
         return Err(StateFileError::InvalidRoot);
@@ -1026,6 +1029,13 @@ mod tests {
         assert_eq!(
             write_state_asset(&root, "..\\escape", &asset),
             Err(StateFileError::InvalidAssetId)
+        );
+
+        let mut corrupted = asset.clone();
+        corrupted.bytes[0] = 0;
+        assert_eq!(
+            write_state_asset(&root, "corrupted", &corrupted),
+            Err(StateFileError::InvalidState(StateError::IntegrityMismatch))
         );
 
         fs::write(&path, [9_u8, 8, 7]).unwrap();
