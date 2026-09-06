@@ -15,6 +15,7 @@ pub enum PathPolicyError {
     NetworkRoot,
     RootUnavailable(std::io::Error),
     RootNotDirectory,
+    UnsupportedExtension,
     PathEscapesRoot,
     FileExists,
     Io(std::io::Error),
@@ -57,8 +58,8 @@ impl RecordingPathPolicy {
         extension: &str,
     ) -> Result<(PathBuf, std::fs::File), PathPolicyError> {
         let extension = sanitize_component(extension);
-        if extension.is_empty() {
-            return Err(PathPolicyError::PathEscapesRoot);
+        if !matches!(extension.to_ascii_lowercase().as_str(), "wav" | "flac") {
+            return Err(PathPolicyError::UnsupportedExtension);
         }
         let filename = format!(
             "{}-{}-{}.{}",
@@ -799,6 +800,10 @@ mod tests {
         std::fs::create_dir(&root).unwrap();
         assert_eq!(sanitize_component("CON:take?.wav"), "CON_take_.wav");
         let policy = RecordingPathPolicy::new(&root).unwrap();
+        assert!(matches!(
+            policy.create_file("voice", "main", 0, "mp3"),
+            Err(PathPolicyError::UnsupportedExtension)
+        ));
         let (path, _file) = policy.create_file("voice/main", "CON", 1, "wav").unwrap();
         assert!(path.starts_with(policy.root()));
         assert!(matches!(

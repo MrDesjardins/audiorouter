@@ -39,5 +39,7 @@ crash recovery, FLAC, and public recorder APIs remain open.
 roots, sanitizes reserved/invalid Windows filename components, confirms the
 canonical parent remains under the approved root, and creates files with
 exclusive `create_new` semantics. A temp-directory test verifies sanitization
-and collision rejection. Reparse-point-specific Windows checks, allowlisted
-token templates, library metadata, and recycle operations remain open.
+and collision rejection. File creation now also accepts only the supported
+`wav` and `flac` extensions, rejecting unsupported formats before opening a
+file. Reparse-point-specific Windows checks, allowlisted token templates,
+library metadata, and recycle operations remain open.
