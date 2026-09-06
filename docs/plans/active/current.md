@@ -300,3 +300,8 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Wired `devices.list` through the read-only Windows adapter so control/CLI discovery now reports authoritative active endpoint IDs, direction, format, and periods instead of an invented empty list. Full audio status, app discovery, and graph routing remain unavailable until later M02 slices.
 - Corrected `status.get` capability reporting to distinguish available device metadata discovery from unavailable realtime graph/routing; this avoids claiming the entire Windows adapter is missing.
 - Added bounded read-only process discovery (`apps.list`) with PID and executable name only, excluding command lines and full paths. This supplies identities for future process-loopback binding but does not claim process-tree audio capture.
+
+### 2026-09-05 — Preallocated realtime block core
+
+- Added `crates/engine` with the M02 48 kHz planar-float32/128-frame representation and preallocated `AudioBlock` operations for clear, copy, gain, mix, and non-finite sanitization. Runtime operations reuse existing storage and do not allocate, lock, log, or perform I/O.
+- Added deterministic tests for shape/quantum bounds, planar gain/mix behavior, NaN/Inf repair, and invalid-gain safety. This is portable engine groundwork; WASAPI callback scheduling, graph compilation, resampling, drift, and live routing remain open.
