@@ -39,6 +39,36 @@ try {
             throw
         }
     }
+
+    $linkPath = Join-Path $root "linked.bin"
+    try {
+        New-Item -ItemType SymbolicLink -Path $linkPath -Target $noticePath -ErrorAction Stop | Out-Null
+        $linkHash = (Get-FileHash -LiteralPath $linkPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $linkManifest = [ordered]@{
+            format = "audiorouter.release-preparation"
+            schemaVersion = 1
+            architecture = "x64"
+            sourceRevision = ("b" * 40)
+            artifacts = @([ordered]@{ file = "linked.bin"; sha256 = $linkHash; bytes = (Get-Item -LiteralPath $linkPath).Length })
+            signed = $false
+            publicationReady = $false
+            blockers = @("test blocker")
+        }
+        $linkManifestPath = Join-Path $root "linked-release-manifest.json"
+        $linkManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $linkManifestPath -Encoding utf8
+        try {
+            & $verifier $linkManifestPath | Out-Null
+            throw "verifier accepted a reparse-point artifact"
+        } catch {
+            if ($_.Exception.Message -eq "verifier accepted a reparse-point artifact") {
+                throw
+            }
+        }
+    } catch {
+        if ($_.Exception.Message -notmatch "privilege|symbolic|not permitted|cannot create") {
+            throw
+        }
+    }
     Write-Output "Release artifact verifier tests passed"
 }
 finally {

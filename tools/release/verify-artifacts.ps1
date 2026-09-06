@@ -7,6 +7,16 @@ param(
 $ErrorActionPreference = "Stop"
 $manifestFile = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction Stop).Path
 $root = Split-Path -Parent $manifestFile
+
+function Assert-RegularFileNoReparse {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw "release path must be a regular non-reparse file: $Path"
+    }
+}
+
+Assert-RegularFileNoReparse $manifestFile
 $manifest = Get-Content -LiteralPath $manifestFile -Raw | ConvertFrom-Json
 
 if ($manifest.format -ne "audiorouter.release-preparation" -or $manifest.schemaVersion -ne 1) {
@@ -26,7 +36,13 @@ $sbom = Join-Path $root "sbom.cargo.json"
 if (-not (Test-Path -LiteralPath $sbom -PathType Leaf)) {
     throw "release SBOM is missing: $sbom"
 }
+Assert-RegularFileNoReparse $sbom
 $null = Get-Content -LiteralPath $sbom -Raw | ConvertFrom-Json
+$notices = Join-Path $root "THIRD-PARTY-NOTICES.txt"
+if (-not (Test-Path -LiteralPath $notices -PathType Leaf)) {
+    throw "third-party notices are missing: $notices"
+}
+Assert-RegularFileNoReparse $notices
 
 $names = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($entry in @($manifest.artifacts)) {
@@ -43,6 +59,7 @@ foreach ($entry in @($manifest.artifacts)) {
     if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
         throw "release artifact is missing: $artifact"
     }
+    Assert-RegularFileNoReparse $artifact
     $actual = Get-FileHash -LiteralPath $artifact -Algorithm SHA256
     if ($actual.Hash -ne $entry.sha256.ToUpperInvariant()) {
         throw "checksum mismatch for release artifact: $($entry.file)"

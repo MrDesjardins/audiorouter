@@ -144,3 +144,8 @@ accepts `-ManifestPath`, not the previously documented `-ReleaseDirectory`.
 The new `tools/release/test-runbook-command.ps1` regression checks the exact
 invocation and rejects the obsolete parameter, keeping the unsigned artifact
 workflow executable as documented.
+
+The artifact verifier now rejects reparse-point paths before hashing and
+requires `THIRD-PARTY-NOTICES.txt` alongside the SBOM. Its temporary regression
+fixture covers the existing tamper check and conditionally exercises a symbolic
+link artifact when the host permits link creation; no release output is kept.
