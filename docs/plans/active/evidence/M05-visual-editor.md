@@ -185,6 +185,13 @@ and backend plan/commit. Template regressions cover matrix shape, independent
 snapshots, and distinct names; UI coverage is 41 tests with typecheck and
 production build passing.
 
+The editor now exposes dark, light, and high-contrast themes through an
+accessible select control. The preference is browser-local, invalid stored
+values fall back to dark, and storage failures are non-fatal. Existing forced
+colors and reduced-motion media behavior remains supported; two pure preference
+regressions were added and UI coverage is 48 tests with typecheck and
+production build passing.
+
 The canvas toolbar now provides a Reset layout action. It removes only the
 selected session's browser-local presentation coordinates and restores the
 automatic layout; it does not alter graph topology, backend state, or audio
