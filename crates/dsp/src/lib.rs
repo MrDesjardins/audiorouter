@@ -111,6 +111,95 @@ pub struct ParametricEq {
     channels: usize,
 }
 
+pub const GRAPHIC_EQ_FREQUENCIES_HZ: [f32; 10] = [
+    31.5, 63.0, 125.0, 250.0, 500.0, 1_000.0, 2_000.0, 4_000.0, 8_000.0, 16_000.0,
+];
+
+/// Fixed ten-band graphic EQ using the same biquad coefficient path as the
+/// parametric EQ. Gains are constrained to the M04 +/-18 dB contract.
+#[derive(Clone, Debug)]
+pub struct GraphicEq {
+    bands: [Option<Biquad>; 10],
+    gains_db: [f32; 10],
+    sample_rate: f32,
+    channels: usize,
+}
+
+impl GraphicEq {
+    pub fn new(
+        gains_db: [f32; 10],
+        sample_rate: f32,
+        channels: usize,
+    ) -> Result<Self, BiquadError> {
+        if !sample_rate.is_finite() || sample_rate <= 0.0 {
+            return Err(BiquadError::InvalidSampleRate);
+        }
+        if channels == 0 || channels > 2 {
+            return Err(BiquadError::InvalidChannels);
+        }
+        let mut bands = [None, None, None, None, None, None, None, None, None, None];
+        for (index, gain_db) in gains_db.into_iter().enumerate() {
+            if !gain_db.is_finite() || !(-18.0..=18.0).contains(&gain_db) {
+                return Err(BiquadError::InvalidQ);
+            }
+            if GRAPHIC_EQ_FREQUENCIES_HZ[index] >= sample_rate * 0.5 {
+                return Err(BiquadError::InvalidFrequency);
+            }
+            bands[index] = Some(Biquad::new(
+                BiquadParams {
+                    kind: FilterKind::Peaking,
+                    frequency_hz: GRAPHIC_EQ_FREQUENCIES_HZ[index],
+                    q: 1.4,
+                    gain_db,
+                    sample_rate,
+                },
+                channels,
+            )?);
+        }
+        Ok(Self {
+            bands,
+            gains_db,
+            sample_rate,
+            channels,
+        })
+    }
+
+    pub fn gains_db(&self) -> &[f32; 10] {
+        &self.gains_db
+    }
+
+    pub fn set_gain_db(&mut self, index: usize, gain_db: f32) -> Result<(), BiquadError> {
+        if !gain_db.is_finite() || !(-18.0..=18.0).contains(&gain_db) {
+            return Err(BiquadError::InvalidQ);
+        }
+        let band = self.bands.get_mut(index).ok_or(BiquadError::InvalidBand)?;
+        *band = Some(Biquad::new(
+            BiquadParams {
+                kind: FilterKind::Peaking,
+                frequency_hz: GRAPHIC_EQ_FREQUENCIES_HZ[index],
+                q: 1.4,
+                gain_db,
+                sample_rate: self.sample_rate,
+            },
+            self.channels,
+        )?);
+        self.gains_db[index] = gain_db;
+        Ok(())
+    }
+
+    pub fn reset(&mut self) {
+        for band in self.bands.iter_mut().flatten() {
+            band.reset();
+        }
+    }
+
+    pub fn process_interleaved(&mut self, samples: &mut [f32]) {
+        for band in self.bands.iter_mut().flatten() {
+            band.process_interleaved(samples);
+        }
+    }
+}
+
 impl ParametricEq {
     pub fn new(
         band_params: [Option<BiquadParams>; 8],
@@ -851,6 +940,28 @@ mod tests {
             Err(BiquadError::InvalidBand)
         ));
         eq.reset();
+    }
+
+    #[test]
+    fn graphic_eq_has_ten_bounded_bands_and_flat_default() {
+        let mut gains = [0.0; 10];
+        let mut eq = GraphicEq::new(gains, 48_000.0, 1).unwrap();
+        assert_eq!(eq.gains_db(), &gains);
+        let mut flat = [0.25, -0.25];
+        eq.process_interleaved(&mut flat);
+        assert!((flat[0] - 0.25).abs() < 1e-4);
+        assert!((flat[1] + 0.25).abs() < 1e-4);
+        eq.set_gain_db(9, 18.0).unwrap();
+        gains[9] = 18.0;
+        assert_eq!(eq.gains_db(), &gains);
+        assert!(matches!(
+            eq.set_gain_db(10, 0.0),
+            Err(BiquadError::InvalidBand)
+        ));
+        assert!(matches!(
+            GraphicEq::new([19.0; 10], 48_000.0, 1),
+            Err(BiquadError::InvalidQ)
+        ));
     }
 
     #[test]

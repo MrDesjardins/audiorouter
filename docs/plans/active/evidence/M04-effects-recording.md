@@ -136,3 +136,10 @@ supports per-band replacement and reset, and processes interleaved audio with
 no allocation. Tests cover preset construction, active-band accounting, finite
 processing, replacement, reset, and invalid band indices. Graph/API wiring and
 the separate ten-band graphic EQ remain open.
+
+`GraphicEq` now provides the required ten fixed bands at 31.5, 63, 125, 250,
+500, 1k, 2k, 4k, 8k, and 16k Hz. It validates +/-18 dB gains and sample-rate
+eligibility, uses the shared peaking biquad path, prebuilds all state, and
+processes without allocation. Tests cover flat response, gain updates, band
+bounds, and invalid gain rejection. Fourteen DSP tests and strict Clippy pass;
+graph/API wiring and parameter smoothing remain open.
