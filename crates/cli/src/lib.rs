@@ -91,9 +91,10 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
 }
 
 fn operation_command(args: &[&str]) -> Result<Value, CliError> {
-    if args.get(1).copied() != Some("get") {
+    let action = args.get(1).copied();
+    if !matches!(action, Some("get" | "cancel")) {
         return Err(CliError::InvalidArguments(
-            "usage: operation get <operation-id> --database <path>".into(),
+            "usage: operation <get|cancel> <operation-id> --database <path>".into(),
         ));
     }
     let operation_id = positional(args, 2, "operation id")?;
@@ -101,7 +102,11 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
         audiorouter_protocol::JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
-            method: "operations.get".into(),
+            method: if action == Some("cancel") {
+                "operations.cancel".into()
+            } else {
+                "operations.get".into()
+            },
             params: Some(json!({ "operationId": operation_id })),
         },
     );
@@ -637,6 +642,10 @@ fn help_value() -> Value {
     value["commands"].as_array_mut().unwrap().insert(
         14,
         json!("recordings list|get|remove-entry [<recording-id>] --database <path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        14,
+        json!("operation <get|cancel> <operation-id> --database <path>"),
     );
     value
 }

@@ -84,6 +84,15 @@ commits remove the retained plan. The restart regression passes, including the
 fresh-commit response shape (`idempotentReplay: false`); 45 control tests, 24
 storage tests, and strict Clippy pass.
 
+## 2026-09-06 — Operation cancellation contract
+
+Added `operations.cancel` to discovery, authorization, strict parameter
+validation, and the CLI's `operation cancel` command. The backend currently
+retains only completed graph-commit outcomes; cancellation therefore reports
+`status: completed`, `cancelled: false`, and `reason: alreadyCompleted` rather
+than claiming to undo a committed side effect. Unknown IDs return an explicit
+not-found error. Domain/control/CLI tests pass (23/46/9) with strict Clippy.
+
 ## 2026-09-06 — Recording CLI parity
 
 Added `recordings list`, `recordings get`, and `recordings remove-entry` to the

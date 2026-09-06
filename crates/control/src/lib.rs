@@ -103,6 +103,7 @@ fn method_description(name: &str) -> &'static str {
         "clients.authorize" => "Authorize a client with an explicit built-in role.",
         "clients.revoke" => "Revoke a client enrollment without deleting its audit record.",
         "operations.get" => "Read the durable outcome of an idempotent operation.",
+        "operations.cancel" => "Cancel a pending operation when it has not completed.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
         "recordings.get" => {
             "Read one persisted recording metadata resource without touching its file."
@@ -179,6 +180,10 @@ fn method_input_schema(name: &str) -> Value {
             &["clientId"],
         ),
         "operations.get" => object_schema(
+            json!({ "operationId": { "type": "string", "minLength": 1 } }),
+            &["operationId"],
+        ),
+        "operations.cancel" => object_schema(
             json!({ "operationId": { "type": "string", "minLength": 1 } }),
             &["operationId"],
         ),
@@ -551,6 +556,33 @@ impl ControlPlane {
             "operationId": operation_id,
             "status": "unknown",
             "durable": false
+        }))
+    }
+
+    fn dispatch_operation_cancel(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        let operation_id = params
+            .get("operationId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        let exists = if let Some(storage) = &self.storage {
+            storage
+                .operation_status(operation_id)
+                .map_err(storage_error)?
+                .is_some()
+        } else {
+            self.operation_outcomes.contains_key(operation_id)
+        };
+        if !exists {
+            return Err(ControlError::InvalidRequest("operation not found".into()));
+        }
+        Ok(json!({
+            "operationId": operation_id,
+            "status": "completed",
+            "cancelled": false,
+            "reason": "alreadyCompleted"
         }))
     }
 
@@ -1099,6 +1131,7 @@ impl ControlPlane {
                     "clients.authorize" => self.dispatch_client_authorize(request.params),
                     "clients.revoke" => self.dispatch_client_revoke(request.params),
                     "operations.get" => self.dispatch_operation_get(request.params),
+                    "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
@@ -1860,7 +1893,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "system.handshake" => &["protocolVersion"],
         "clients.authorize" => &["clientId", "role"],
         "clients.revoke" => &["clientId"],
-        "operations.get" => &["operationId"],
+        "operations.get" | "operations.cancel" => &["operationId"],
         "recordings.list" => &["sessionId"],
         "recordings.get" => &["recordingId"],
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
@@ -2891,6 +2924,28 @@ mod tests {
         assert_eq!(result["status"], "completed");
         assert_eq!(result["durable"], false);
         assert_eq!(result["result"]["revision"], 1);
+    }
+
+    #[test]
+    fn operations_cancel_reports_completed_operations_without_undoing_them() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "cancel-check".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "cancel-check-key").unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(16)),
+            method: "operations.cancel".into(),
+            params: Some(json!({ "operationId": "cancel-check-key" })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["status"], "completed");
+        assert_eq!(result["cancelled"], false);
+        assert_eq!(result["reason"], "alreadyCompleted");
+        assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
     }
 
     #[test]
