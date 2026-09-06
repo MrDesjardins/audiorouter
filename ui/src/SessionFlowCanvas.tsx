@@ -10,6 +10,7 @@ import "@xyflow/react/dist/style.css";
 import { useEffect, useState } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
+import { relatedNodeIds } from "./graphView";
 
 type SessionFlowCanvasProps = {
   session: Session;
@@ -29,6 +30,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
+  const highlightedNodeIds = relatedNodeIds(session, selectedNodeId);
   const nodes: FlowNode[] = session.nodes.map((node, index) => ({
     id: node.id,
     position: positions[node.id] ?? positionFor(index),
@@ -49,6 +51,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
       background: "var(--panel, #162132)",
       color: "var(--text, #edf4ff)",
       minWidth: 190,
+      opacity: highlightedNodeIds.has(node.id) ? 1 : 0.55,
     },
   }));
 
@@ -58,7 +61,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
     target: edge.destinationNode,
     label: `${edge.sourcePort} → ${edge.destinationPort}`,
     animated: false,
-    style: { stroke: edge.enabled ? "#65d1b5" : "#667085", strokeWidth: edge.enabled ? 2 : 1 },
+    style: { stroke: edge.enabled && highlightedNodeIds.has(edge.sourceNode) && highlightedNodeIds.has(edge.destinationNode) ? "#65d1b5" : "#667085", strokeWidth: edge.enabled && highlightedNodeIds.has(edge.sourceNode) && highlightedNodeIds.has(edge.destinationNode) ? 3 : 1, opacity: !highlightedNodeIds.has(edge.sourceNode) || !highlightedNodeIds.has(edge.destinationNode) ? 0.45 : 1 },
   }));
 
   return (
