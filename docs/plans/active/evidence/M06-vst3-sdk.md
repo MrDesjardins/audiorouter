@@ -168,3 +168,10 @@ Worker `Hello` negotiation now requires protocol version 1, a 64-character
 hexadecimal plugin fingerprint, and mono/stereo channel count; empty failure
 codes are rejected. Capability-negotiation regressions pass, bringing the
 plugin-host suite to 19 tests with strict Clippy clean.
+
+Added a stateful `WorkerSession` gate requiring the expected plugin identity
+and channel negotiation before `Ready`, then enforcing monotonic, non-expired
+process frames until orderly shutdown or failure. The handshake, identity,
+and sequence regression passes; the plugin-host suite now has 20 passing tests
+with strict Clippy clean. This remains a portable protocol/lifecycle proof;
+native process creation and OS isolation are still open.

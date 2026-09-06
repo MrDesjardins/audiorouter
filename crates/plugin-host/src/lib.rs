@@ -474,7 +474,7 @@ impl Default for FailureLedger {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerFrameError {
     InvalidChannels,
     InvalidFrameCount,
@@ -495,6 +495,23 @@ pub enum WorkerMessageError {
     InvalidProtocolVersion,
     InvalidPluginHash,
     InvalidFailureCode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerSessionState {
+    AwaitingHello,
+    AwaitingReady,
+    Active,
+    Closed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerSessionError {
+    InvalidExpectedHash,
+    InvalidChannels,
+    UnexpectedMessage,
+    IdentityMismatch,
+    Frame(WorkerFrameError),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -656,6 +673,90 @@ pub enum WorkerMessage {
     Failure {
         code: String,
     },
+}
+
+/// Stateful handshake and frame gate for one disposable worker instance.
+/// Process creation and OS-level isolation remain outside this portable type.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerSession {
+    expected_plugin_sha256: String,
+    channels: u16,
+    state: WorkerSessionState,
+    frame_guard: WorkerFrameGuard,
+}
+
+impl WorkerSession {
+    pub fn new(
+        expected_plugin_sha256: impl Into<String>,
+        channels: u16,
+    ) -> Result<Self, WorkerSessionError> {
+        let expected_plugin_sha256 = expected_plugin_sha256.into();
+        if !is_sha256(&expected_plugin_sha256) {
+            return Err(WorkerSessionError::InvalidExpectedHash);
+        }
+        if !matches!(channels, 1 | 2) {
+            return Err(WorkerSessionError::InvalidChannels);
+        }
+        Ok(Self {
+            expected_plugin_sha256,
+            channels,
+            state: WorkerSessionState::AwaitingHello,
+            frame_guard: WorkerFrameGuard::new(),
+        })
+    }
+
+    pub fn state(&self) -> WorkerSessionState {
+        self.state
+    }
+
+    pub fn accept(
+        &mut self,
+        message: &WorkerMessage,
+        now_tick: u64,
+    ) -> Result<Option<WorkerFrame>, WorkerSessionError> {
+        validate_worker_message(message).map_err(|error| match error {
+            WorkerMessageError::InvalidFrame(error) => WorkerSessionError::Frame(error),
+            _ => WorkerSessionError::UnexpectedMessage,
+        })?;
+        match (&self.state, message) {
+            (
+                WorkerSessionState::AwaitingHello,
+                WorkerMessage::Hello {
+                    protocol_version: _,
+                    plugin_sha256,
+                    channels,
+                },
+            ) if plugin_sha256 == &self.expected_plugin_sha256 && *channels == self.channels => {
+                self.state = WorkerSessionState::AwaitingReady;
+                Ok(None)
+            }
+            (WorkerSessionState::AwaitingHello, WorkerMessage::Hello { .. }) => {
+                Err(WorkerSessionError::IdentityMismatch)
+            }
+            (WorkerSessionState::AwaitingReady, WorkerMessage::Ready) => {
+                self.state = WorkerSessionState::Active;
+                Ok(None)
+            }
+            (WorkerSessionState::Active, WorkerMessage::Process { frame, .. }) => {
+                if frame.channels != self.channels {
+                    return Err(WorkerSessionError::Frame(WorkerFrameError::InvalidChannels));
+                }
+                self.frame_guard
+                    .accept(frame, now_tick)
+                    .map_err(WorkerSessionError::Frame)?;
+                Ok(Some(frame.clone()))
+            }
+            (
+                WorkerSessionState::Active,
+                WorkerMessage::Shutdown | WorkerMessage::Failure { .. },
+            ) => {
+                self.state = WorkerSessionState::Closed;
+                Ok(None)
+            }
+            (WorkerSessionState::Closed, _) => Err(WorkerSessionError::UnexpectedMessage),
+            _ => Err(WorkerSessionError::UnexpectedMessage),
+        }
+    }
 }
 
 pub fn encode_worker_message(message: &WorkerMessage) -> Result<Vec<u8>, WorkerMessageError> {
@@ -1308,5 +1409,61 @@ mod tests {
             code: String::new(),
         };
         assert!(decode_worker_message(&encode_worker_message(&failure).unwrap()).is_err());
+    }
+
+    #[test]
+    fn worker_session_requires_handshake_identity_and_monotonic_frames() {
+        let hash = "b".repeat(64);
+        let frame = WorkerFrame::new(1, 20, 2, vec![0.0, 0.1]).unwrap();
+        let mut session = WorkerSession::new(&hash, 2).unwrap();
+        assert_eq!(session.state(), WorkerSessionState::AwaitingHello);
+        assert_eq!(
+            session.accept(
+                &WorkerMessage::Hello {
+                    protocol_version: WORKER_PROTOCOL_VERSION,
+                    plugin_sha256: "c".repeat(64),
+                    channels: 2,
+                },
+                0,
+            ),
+            Err(WorkerSessionError::IdentityMismatch)
+        );
+        assert_eq!(
+            session.accept(
+                &WorkerMessage::Hello {
+                    protocol_version: WORKER_PROTOCOL_VERSION,
+                    plugin_sha256: hash,
+                    channels: 2,
+                },
+                0,
+            ),
+            Ok(None)
+        );
+        assert_eq!(session.accept(&WorkerMessage::Ready, 0), Ok(None));
+        assert_eq!(session.state(), WorkerSessionState::Active);
+        assert_eq!(
+            session.accept(
+                &WorkerMessage::Process {
+                    frame: frame.clone(),
+                    parameters: Vec::new(),
+                },
+                10,
+            ),
+            Ok(Some(frame.clone()))
+        );
+        assert_eq!(
+            session.accept(
+                &WorkerMessage::Process {
+                    frame,
+                    parameters: Vec::new(),
+                },
+                10,
+            ),
+            Err(WorkerSessionError::Frame(
+                WorkerFrameError::SequenceRegression
+            ))
+        );
+        assert_eq!(session.accept(&WorkerMessage::Shutdown, 10), Ok(None));
+        assert_eq!(session.state(), WorkerSessionState::Closed);
     }
 }
