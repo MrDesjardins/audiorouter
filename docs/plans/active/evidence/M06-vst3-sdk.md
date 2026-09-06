@@ -590,3 +590,11 @@ The same acceptance was rerun from the current post-hardening tip on
 2026-09-06. The repository-local checkout remained at revision
 `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`; the Release build, 51 SDK tests,
 1,598/0 official validator result, and offline loader all passed again.
+
+The acceptance was revalidated at repository revision `22da8a2` after the
+native compile acceptance was added. The repository-local SDK build and
+offline fixture run passed again with the same VS2026/MSVC/Windows SDK
+toolchain. The loader executable and object were removed in the acceptance
+cleanup; the ignored SDK build directory is retained for repeatable local
+builds. No system plugin registration, driver installation, endpoint change,
+or other audio configuration was performed.
