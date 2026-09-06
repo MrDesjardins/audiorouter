@@ -79,7 +79,8 @@ private:
     Microsoft::WRL::ComPtr<IUnknown>& activated_;
 };
 
-static int process_loopback_probe(DWORD target_process_id, bool read_data, DWORD duration_ms) {
+static int process_loopback_probe(DWORD target_process_id, bool read_data, bool include_target_tree,
+                                  DWORD duration_ms) {
     std::mutex mutex;
     std::condition_variable ready;
     HRESULT activation = E_FAIL;
@@ -92,8 +93,9 @@ static int process_loopback_probe(DWORD target_process_id, bool read_data, DWORD
     AUDIOCLIENT_ACTIVATION_PARAMS parameters{};
     parameters.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
     parameters.ProcessLoopbackParams.TargetProcessId = target_process_id;
-    parameters.ProcessLoopbackParams.ProcessLoopbackMode =
-        PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
+    parameters.ProcessLoopbackParams.ProcessLoopbackMode = include_target_tree
+        ? PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
+        : PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE;
 
     PROPVARIANT property{};
     PropVariantInit(&property);
@@ -372,12 +374,15 @@ int main(int argc, char** argv) {
         return result;
     }
     if (argc > 1 && (std::strcmp(argv[1], "process") == 0 ||
-                     std::strcmp(argv[1], "process-capture") == 0)) {
+                     std::strcmp(argv[1], "process-capture") == 0 ||
+                     std::strcmp(argv[1], "process-capture-exclude") == 0)) {
         DWORD target_process_id = GetCurrentProcessId();
         if (argc > 2) target_process_id = static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10));
-        bool read_data = std::strcmp(argv[1], "process-capture") == 0;
+        bool read_data = std::strcmp(argv[1], "process-capture") == 0 ||
+                         std::strcmp(argv[1], "process-capture-exclude") == 0;
+        bool include_target_tree = std::strcmp(argv[1], "process-capture-exclude") != 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 500;
-        int result = process_loopback_probe(target_process_id, read_data, duration_ms);
+        int result = process_loopback_probe(target_process_id, read_data, include_target_tree, duration_ms);
         CoUninitialize();
         return result;
     }

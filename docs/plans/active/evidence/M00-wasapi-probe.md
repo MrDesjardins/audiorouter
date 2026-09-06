@@ -59,6 +59,8 @@ The native harness now uses an agile WRL `FtmBase` completion handler and correc
 ### Native process-loopback data result (2026-09-05)
 
 The probe now has an opt-in `process-capture [pid] [milliseconds]` mode. Against the current PowerShell process for 500 ms, asynchronous activation, 44.1 kHz shared loopback initialization, capture service lookup, `Start`, event-driven reads, `Stop`, and `Reset` all returned success. It read 50 packets totaling 22,050 frames; no packets were marked silent and 15,217 nonzero payload bytes were observed. Samples were not retained. This is process-tree loopback data-flow evidence, not a latency or end-to-end routed-output claim. The temporary executable/object were removed after the run, and no defaults, volume, mute, privacy policy, or driver state changed.
+
+The same harness now accepts `process-capture-exclude [pid] [milliseconds]`, selecting `PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE` explicitly. Against the current PowerShell process for 500 ms it also completed activation, initialization, event-driven capture, and cleanup successfully, reading 50 packets/22,050 frames with 15,217 nonzero payload bytes. These runs establish both API mode paths, but do not yet prove process-tree attribution against a controlled per-process tone source.
 ## 2026-09-05 native toolchain correction
 
 The host now has Visual Studio Community 2026 `18.9.2`, MSVC `14.51.36231`, Windows SDK `10.0.28000.2526` (headers/libs under `10.0.28000.0`), and WDK `10.1.28000.2526`. The reproducible build entry point is [`tools/m00-native-wasapi-probe/build.ps1`](../../../tools/m00-native-wasapi-probe/build.ps1). It uses explicit toolchain paths and does not modify environment or audio settings.
