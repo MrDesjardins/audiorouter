@@ -188,3 +188,8 @@ strict Clippy.
 The control layer maps this condition to a stable, non-retryable
 `corruptDatabase` response with guidance to open a validated backup or restore
 into a new destination. Control coverage is 52 tests with strict Clippy.
+
+Storage open now performs a bounded retention sweep for expired idempotency
+journal and graph-plan rows after migrations. A reopen regression verifies both
+classes are removed while session and file state remain untouched. Storage
+coverage is 28 tests with strict Clippy.

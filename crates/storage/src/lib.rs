@@ -197,6 +197,7 @@ impl Storage {
         };
         storage.check_integrity()?;
         storage.migrate()?;
+        storage.prune_expired_recovery()?;
         Ok(storage)
     }
 
@@ -208,6 +209,7 @@ impl Storage {
         };
         storage.check_integrity()?;
         storage.migrate()?;
+        storage.prune_expired_recovery()?;
         Ok(storage)
     }
 
@@ -1421,6 +1423,15 @@ impl Storage {
         Ok(())
     }
 
+    /// Remove bounded recovery records that have passed their retention
+    /// windows. This is safe maintenance only; it never touches sessions,
+    /// recordings, plugin assets, or files on disk.
+    pub fn prune_expired_recovery(&self) -> Result<(), StorageError> {
+        self.prune_expired_journal()?;
+        self.prune_expired_graph_plans()?;
+        Ok(())
+    }
+
     /// Persist the current session and its idempotency record as one SQLite
     /// transaction. The failure stage is test-only infrastructure used to
     /// prove that partial journal writes cannot survive a restart.
@@ -1712,6 +1723,53 @@ mod tests {
         assert!(storage
             .journal_commit_with_hash("expired", "graph.commit", "new", 2, "new-hash")
             .unwrap());
+    }
+
+    #[test]
+    fn reopening_storage_prunes_idle_recovery_rows() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-retention-open-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let storage = Storage::open(&path).unwrap();
+            storage
+                .journal_commit("idle-journal", "graph.commit", "{}", 1)
+                .unwrap();
+            storage
+                .connection
+                .execute(
+                    "UPDATE operation_journal SET created_at = datetime('now', '-2 days')",
+                    [],
+                )
+                .unwrap();
+            let candidate = session();
+            storage
+                .save_graph_plan(&GraphPlanRecord {
+                    id: "idle-plan".into(),
+                    session_id: candidate.id.as_str().into(),
+                    base_revision: 0,
+                    candidate,
+                    expires_at: 0,
+                })
+                .unwrap();
+        }
+        let storage = Storage::open(&path).unwrap();
+        let journal_count: i64 = storage
+            .connection
+            .query_row("SELECT COUNT(*) FROM operation_journal", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let plan_count: i64 = storage
+            .connection
+            .query_row("SELECT COUNT(*) FROM graph_plans", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(journal_count, 0);
+        assert_eq!(plan_count, 0);
+        drop(storage);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
