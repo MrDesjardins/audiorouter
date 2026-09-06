@@ -4,6 +4,7 @@
 //! produces identity evidence for a later disposable worker boundary.
 
 use sha2::{Digest, Sha256};
+use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{
@@ -463,6 +464,46 @@ pub struct WorkerFrame {
     pub samples: Vec<f32>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct BoundedFrameQueue {
+    frames: VecDeque<WorkerFrame>,
+    capacity: usize,
+    overflow_count: u64,
+}
+
+impl BoundedFrameQueue {
+    pub fn new(capacity: usize) -> Self {
+        assert!(capacity > 0, "worker frame queue capacity must be positive");
+        Self {
+            frames: VecDeque::with_capacity(capacity),
+            capacity,
+            overflow_count: 0,
+        }
+    }
+
+    pub fn push(&mut self, frame: WorkerFrame) -> Result<(), WorkerFrame> {
+        if self.frames.len() >= self.capacity {
+            self.overflow_count = self.overflow_count.saturating_add(1);
+            return Err(frame);
+        }
+        self.frames.push_back(frame);
+        Ok(())
+    }
+
+    pub fn pop(&mut self) -> Option<WorkerFrame> {
+        self.frames.pop_front()
+    }
+    pub fn len(&self) -> usize {
+        self.frames.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.frames.is_empty()
+    }
+    pub fn overflow_count(&self) -> u64 {
+        self.overflow_count
+    }
+}
+
 impl WorkerFrame {
     pub fn new(
         sequence: u64,
@@ -725,5 +766,17 @@ mod tests {
         assert!(!supervisor.heartbeat(now));
         supervisor.deliberate_retry();
         assert_eq!(supervisor.state(), WorkerState::Stopped);
+    }
+
+    #[test]
+    fn bounded_frame_queue_returns_overflow_ownership_without_waiting() {
+        let first = WorkerFrame::new(1, 10, 1, vec![0.0]).unwrap();
+        let second = WorkerFrame::new(2, 10, 1, vec![0.1]).unwrap();
+        let mut queue = BoundedFrameQueue::new(1);
+        assert!(queue.push(first.clone()).is_ok());
+        assert_eq!(queue.push(second.clone()), Err(second));
+        assert_eq!(queue.overflow_count(), 1);
+        assert_eq!(queue.pop(), Some(first));
+        assert!(queue.is_empty());
     }
 }

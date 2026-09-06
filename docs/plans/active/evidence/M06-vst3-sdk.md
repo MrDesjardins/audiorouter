@@ -85,3 +85,8 @@ The scanner no longer labels arbitrary `.dll` files as VST2. DLL candidates
 are retained with `PluginFormat::Unknown`, while only the `.vst3` extension
 receives VST3 classification; this prevents false ReaPlugs/legacy support
 claims. Nine plugin-host tests and strict Clippy pass.
+
+`BoundedFrameQueue` now preallocates a fixed-capacity FIFO for worker frames,
+returns the rejected frame to its caller on overflow, and exposes an overflow
+counter without waiting. The queue test compiles and strict Clippy passes;
+runtime execution remains blocked by OS error 4551.
