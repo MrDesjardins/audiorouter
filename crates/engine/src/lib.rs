@@ -74,6 +74,17 @@ impl AudioBlockQueue {
             }
         }
     }
+
+    /// Discard all currently queued blocks, used during stop/reconnect so old
+    /// audio is never replayed into a new runtime generation. This operation
+    /// is nonblocking and does not count the intentional discard as an xrun.
+    pub fn drain(&self) -> usize {
+        let mut discarded = 0;
+        while self.blocks.pop().is_some() {
+            discarded += 1;
+        }
+        discarded
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -826,6 +837,10 @@ mod tests {
         assert_eq!(queue.overruns(), 1);
         assert!(queue.try_pop().is_some());
         assert!(queue.try_pop().is_none());
+        assert_eq!(queue.underruns(), 1);
+        queue.try_push(AudioBlock::new(1, 2).unwrap()).unwrap();
+        assert_eq!(queue.drain(), 1);
+        assert!(queue.is_empty());
         assert_eq!(queue.underruns(), 1);
     }
 
