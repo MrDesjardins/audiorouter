@@ -252,3 +252,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Extraction uses a unique child of the caller-owned staging directory and `create_new`, removes that child on rejection, and imports only after validation. No live database or path outside staging is written by the bundle boundary.
 - Added tests for valid staging/import, traversal rejection with outside-path protection, and oversized-asset rejection. Added the pinned `zip` dependency and lockfile entries.
 - Check: `cargo test -p audiorouter-storage` passed 12 tests plus doc tests. No Windows audio settings, defaults, streams, drivers, or SDK configuration were changed.
+
+### 2026-09-05 — Native pipe concurrency stress
+
+- Added a 32-client concurrent named-pipe stress test over the owner-only, same-user transport. Each client sends a framed JSON request concurrently; every response remains independently decodable and complete.
+- The test initially caught only an assertion mismatch with the echo handler’s documented `{ok:true}` response shape; the transport itself remained intact. After correcting the assertion, all 13 transport tests passed.
+- Check: `cargo test -p audiorouter-transport` passed 13 tests plus doc tests. No audio stream, default, driver, or machine configuration was touched.

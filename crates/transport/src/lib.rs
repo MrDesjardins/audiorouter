@@ -942,4 +942,43 @@ mod tests {
         assert!(responses.iter().all(|response| response["ok"] == true));
         server.join().unwrap().unwrap();
     }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_handles_high_volume_concurrent_clients_without_corrupting_frames() {
+        const CLIENTS: usize = 32;
+        let name = format!(
+            r"\\.\pipe\audiorouter-high-volume-test-{}",
+            std::process::id()
+        );
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_connections(&server_name, CLIENTS, |_, frame| echo_handler(frame))
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let clients = (0..CLIENTS)
+            .map(|index| {
+                let name = name.clone();
+                std::thread::spawn(move || {
+                    let request = encode_frame(&serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": index,
+                        "method": "system.describe"
+                    }))
+                    .unwrap();
+                    let response = round_trip(&name, &request).unwrap();
+                    serde_json::from_slice::<serde_json::Value>(&response[4..]).unwrap()
+                })
+            })
+            .collect::<Vec<_>>();
+        let responses = clients
+            .into_iter()
+            .map(|client| client.join().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(responses.len(), CLIENTS);
+        for response in &responses {
+            assert_eq!(response["ok"], true);
+        }
+        server.join().unwrap().unwrap();
+    }
 }
