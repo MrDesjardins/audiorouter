@@ -45,3 +45,10 @@ same session-shaped fixtures used by the snapshot seam. Switching sessions
 updates local presentation state only; it does not call a control method or
 alter audio configuration. TypeScript checking and the production Vite build
 pass.
+
+`ui/src/draft.ts` adds plan-only candidate editing for node enabled/bypass
+flags and deterministic draft-change descriptions. It clones session data,
+preserves the authoritative revision, rejects unknown node IDs, and leaves
+validation/commit to the backend. This is UI preparation only and is not
+wired to disconnected controls. TypeScript checking and the production Vite
+build pass.
