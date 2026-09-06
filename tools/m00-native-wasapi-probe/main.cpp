@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
+#include <cstdint>
 #include <ksmedia.h>
 #include <wrl.h>
 #include <wrl/implements.h>
@@ -155,6 +156,7 @@ static int process_loopback_probe(DWORD target_process_id, bool read_data, bool 
                                 UINT32 frame_count = 0;
                                 UINT32 silent_packet_count = 0;
                                 UINT64 nonzero_bytes = 0;
+                                long double sample_energy = 0.0;
                                 HRESULT read = start;
                                 if (SUCCEEDED(start)) {
                                     const auto deadline = std::chrono::steady_clock::now() +
@@ -181,6 +183,14 @@ static int process_loopback_probe(DWORD target_process_id, bool read_data, bool 
                                                 for (UINT64 index = 0; index < packet_bytes; ++index) {
                                                     if (data[index] != 0) ++nonzero_bytes;
                                                 }
+                                                if (format.wBitsPerSample == 16) {
+                                                    const auto* samples = reinterpret_cast<const int16_t*>(data);
+                                                    const UINT64 sample_count = static_cast<UINT64>(frames) * format.nChannels;
+                                                    for (UINT64 index = 0; index < sample_count; ++index) {
+                                                        const long double sample = samples[index];
+                                                        sample_energy += sample * sample;
+                                                    }
+                                                }
                                             }
                                             read = capture->ReleaseBuffer(frames);
                                             if (FAILED(read)) break;
@@ -192,10 +202,11 @@ static int process_loopback_probe(DWORD target_process_id, bool read_data, bool 
                                 std::cout << "process_capture_packets=" << packet_count
                                           << " process_capture_frames=" << frame_count
                                           << " process_capture_silent_packets=" << silent_packet_count
-                                          << " process_capture_nonzero_bytes=" << nonzero_bytes << '\n';
+                                          << " process_capture_nonzero_bytes=" << nonzero_bytes
+                                          << " process_capture_sample_energy=" << static_cast<double>(sample_energy) << '\n';
                                 print_hr("process_capture_stop", client->Stop());
                                 print_hr("process_capture_reset", client->Reset());
-                                data_ok = SUCCEEDED(read) && packet_count > 0;
+                                data_ok = SUCCEEDED(read) && packet_count > 0 && nonzero_bytes > 0;
                             }
                         } else {
                             print_hr("process_reset", client->Reset());
