@@ -115,6 +115,7 @@ fn method_description(name: &str) -> &'static str {
         }
         "recordings.rename" => "Rename a recording within its approved directory.",
         "safety.setPrivacyMute" => "Latch or clear process-local privacy mute for capture paths.",
+        "startup.get" => "Report the desired sign-in startup policy and registration capability.",
         "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
         "recordings.recycle" => {
             "Move a recording to the operating system Recycle Bin after explicit confirmation."
@@ -229,6 +230,7 @@ fn method_input_schema(name: &str) -> Value {
         "safety.setPrivacyMute" => {
             object_schema(json!({ "muted": { "type": "boolean" } }), &["muted"])
         }
+        "startup.get" => object_schema(json!({}), &[]),
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
@@ -1195,6 +1197,11 @@ impl ControlPlane {
                     "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
                     "recordings.recycle" => self.dispatch_recording_recycle(request.params),
                     "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
+                    "startup.get" => Ok(json!({
+                        "enabled": false,
+                        "registration": "unavailable",
+                        "reason": "sign-in startup registration is not implemented in this build"
+                    })),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -2184,8 +2191,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "safety.setPrivacyMute" => &["muted"],
         "recordings.removeEntry" => &["recordingId"],
         "recordings.recycle" => &["recordingId", "confirm"],
-        "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
-        | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
+        "system.describe" | "status.get" | "system.diagnostics" | "startup.get"
+        | "devices.list" | "apps.list" | "applications.list" | "nodes.types" | "nodes.describe"
+        | "clients.list" => &[],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -2910,6 +2918,24 @@ mod tests {
         assert_eq!(result["backendEpoch"], 1);
         assert_eq!(result["events"].as_array().unwrap().len(), 2);
         assert_eq!(result["events"][1]["operationId"], "event-commit");
+    }
+
+    #[test]
+    fn startup_get_reports_unavailable_without_side_effects() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "startup.get".into(),
+            params: None,
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["enabled"], false);
+        assert_eq!(result["registration"], "unavailable");
+        assert_eq!(
+            result["reason"],
+            "sign-in startup registration is not implemented in this build"
+        );
     }
 
     #[test]

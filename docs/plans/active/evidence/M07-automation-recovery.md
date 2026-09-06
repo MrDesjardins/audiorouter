@@ -134,3 +134,11 @@ database and dispatch through the same control-plane methods as MCP/API calls.
 The end-to-end CLI regression verifies metadata listing and retrieval, then
 removes only the library row and confirms `fileAction: none`; the underlying
 recording path is not touched. Nine CLI tests and strict Clippy pass.
+
+## 2026-09-06 — Startup capability reporting
+
+Added read-only `startup.get` API, CLI (`startup get`), and MCP
+(`get_startup`) reporting. The response explicitly reports sign-in startup
+registration as unavailable in this build; it performs no registration and
+does not change machine configuration. Domain, control, and CLI validation is
+covered by the workspace test suite.

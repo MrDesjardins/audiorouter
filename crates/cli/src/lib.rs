@@ -57,6 +57,7 @@ where
         "operation" => operation_command(&command_args)?,
         "recordings" => recordings_command(&command_args)?,
         "privacy" => privacy_command(&command_args)?,
+        "startup" => startup_command(&command_args)?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
         "export-bundle" => export_bundle(&command_args)?,
@@ -77,6 +78,23 @@ fn status_request() -> audiorouter_protocol::JsonRpcRequest {
         method: "status.get".into(),
         params: None,
     }
+}
+
+fn startup_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("get") {
+        return Err(CliError::InvalidArguments(
+            "usage: startup get [--database <path>]".into(),
+        ));
+    }
+    let request = request("startup.get");
+    let response = if args.contains(&"--database") {
+        ControlPlane::with_storage("cli", database(args)?).dispatch(request)
+    } else {
+        ControlPlane::default().dispatch(request)
+    };
+    response
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("startup status unavailable".into()))
 }
 
 fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1009,6 +1027,7 @@ fn mcp_error(id: Option<Value>, code: i64, message: &str) -> Value {
 fn mcp_tools() -> Value {
     json!([
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_devices", "description": "List authoritative audio endpoint descriptors.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_applications", "description": "List discoverable application identities.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
@@ -1051,6 +1070,7 @@ fn mcp_tool_call(
     let arguments = message["params"]["arguments"].clone();
     let (method, params) = match name {
         "describe_capabilities" => ("system.describe", None),
+        "get_startup" => ("startup.get", None),
         "list_devices" => ("devices.list", None),
         "list_applications" => ("apps.list", None),
         "get_session" => ("sessions.get", Some(arguments)),
@@ -1601,7 +1621,7 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 20);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 21);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
             &mut plane,
