@@ -120,6 +120,12 @@ realtime backend when available. Enable/disable events are discoverable and
 read-only clients cannot mutate the latch. Control/storage/CLI coverage passes
 at 48/25/9 with strict Clippy.
 
+Startup recovery now fails closed when the persisted latch cannot be read:
+the control plane starts muted rather than silently unmuting a capture path.
+The redacted diagnostics response exposes the same muted state and whether
+the latch is durable or process-local. Targeted control/CLI tests (48/9),
+strict Clippy, formatting, and diff checks pass.
+
 ## 2026-09-06 — Recording CLI parity
 
 Added `recordings list`, `recordings get`, and `recordings remove-entry` to the

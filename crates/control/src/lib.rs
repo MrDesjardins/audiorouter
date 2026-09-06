@@ -409,7 +409,9 @@ impl ControlPlane {
     }
 
     pub fn with_storage(build: impl Into<String>, storage: Storage) -> Self {
-        let privacy_muted = storage.load_privacy_mute().unwrap_or(false);
+        // Fail closed if the durable latch cannot be read: a persistence
+        // failure must never silently unmute a capture path.
+        let privacy_muted = storage.load_privacy_mute().unwrap_or(true);
         Self {
             store: GraphStore::default(),
             build: build.into(),
@@ -1154,6 +1156,10 @@ impl ControlPlane {
                             "reason": "M02 realtime graph engine and routing are not implemented"
                         },
                         "nativeAdapter": "not activated",
+                        "privacyMute": {
+                            "muted": self.privacy_muted,
+                            "persistence": if self.storage.is_some() { "durable" } else { "memory" }
+                        },
                         "eventLog": {
                             "latestSequence": self.events.latest_sequence(),
                             "retained": self.events.len()
