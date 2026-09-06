@@ -186,11 +186,15 @@ impl ControlPlane {
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
+        let checkpoint = self.store.clone();
         self.store
             .insert_session(session.clone())
             .map_err(ControlError::from)?;
         if let Some(storage) = &self.storage {
-            storage.save_session(&session).map_err(storage_error)?;
+            if let Err(error) = storage.save_session(&session) {
+                self.store = checkpoint;
+                return Err(storage_error(error));
+            }
         }
         self.events.append(
             session.revision,
@@ -303,6 +307,7 @@ impl ControlPlane {
         base_revision: u64,
         idempotency_key: &str,
     ) -> Result<Value, ControlError> {
+        let checkpoint = self.store.clone();
         let fingerprint = format!("graph.commit:{}:{}", plan_id.as_str(), base_revision);
         let request_hash = format!("{:x}", Sha256::digest(fingerprint.as_bytes()));
         if let Some(storage) = &self.storage {
@@ -326,16 +331,17 @@ impl ControlPlane {
             })?;
             let result_document = serde_json::to_string(&result)
                 .map_err(|error| ControlError::Json(error.to_string()))?;
-            storage
-                .save_session_with_journal_with_hash(
-                    session,
-                    idempotency_key,
-                    "graph.commit",
-                    &result_document,
-                    &request_hash,
-                    None,
-                )
-                .map_err(storage_error)?;
+            if let Err(error) = storage.save_session_with_journal_with_hash(
+                session,
+                idempotency_key,
+                "graph.commit",
+                &result_document,
+                &request_hash,
+                None,
+            ) {
+                self.store = checkpoint;
+                return Err(storage_error(error));
+            }
         }
         if !result.idempotent_replay {
             self.events.append(

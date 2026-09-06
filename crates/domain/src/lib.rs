@@ -713,7 +713,7 @@ struct GraphPlan {
 
 /// In-memory revision store used to prove M01 transaction semantics before
 /// SQLite and the named-pipe control process are introduced.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct GraphStore {
     sessions: HashMap<EntityId, Session>,
     history: HashMap<EntityId, Vec<Session>>,
