@@ -5,6 +5,8 @@
 //! It does not initialize, start, or read an audio stream.
 
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EndpointDirection {
@@ -399,6 +401,108 @@ impl SharedRender {
 impl Drop for SharedRender {
     fn drop(&mut self) {
         let _ = self.stop();
+    }
+}
+
+/// A control-plane subscription for endpoint topology changes.
+///
+/// The WASAPI callback only sets an atomic dirty bit. It does not allocate,
+/// enumerate devices, acquire locks, or touch an audio stream. The owner must
+/// call [`EndpointNotificationSubscription::take_dirty`] and then obtain a
+/// fresh read-only snapshot when convenient.
+pub struct EndpointNotificationSubscription {
+    enumerator: windows::Win32::Media::Audio::IMMDeviceEnumerator,
+    callback: windows::Win32::Media::Audio::IMMNotificationClient,
+    dirty: Arc<AtomicBool>,
+    _com: ComApartment,
+}
+
+#[windows_core::implement(windows::Win32::Media::Audio::IMMNotificationClient)]
+struct EndpointNotificationCallback {
+    dirty: Arc<AtomicBool>,
+}
+
+impl windows::Win32::Media::Audio::IMMNotificationClient_Impl
+    for EndpointNotificationCallback_Impl
+{
+    fn OnDeviceStateChanged(
+        &self,
+        _device_id: &windows::core::PCWSTR,
+        _state: windows::Win32::Media::Audio::DEVICE_STATE,
+    ) -> windows::core::Result<()> {
+        self.dirty.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    fn OnDeviceAdded(&self, _device_id: &windows::core::PCWSTR) -> windows::core::Result<()> {
+        self.dirty.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    fn OnDeviceRemoved(&self, _device_id: &windows::core::PCWSTR) -> windows::core::Result<()> {
+        self.dirty.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    fn OnDefaultDeviceChanged(
+        &self,
+        _flow: windows::Win32::Media::Audio::EDataFlow,
+        _role: windows::Win32::Media::Audio::ERole,
+        _device_id: &windows::core::PCWSTR,
+    ) -> windows::core::Result<()> {
+        self.dirty.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    fn OnPropertyValueChanged(
+        &self,
+        _device_id: &windows::core::PCWSTR,
+        _key: &windows::Win32::Foundation::PROPERTYKEY,
+    ) -> windows::core::Result<()> {
+        self.dirty.store(true, Ordering::Release);
+        Ok(())
+    }
+}
+
+impl EndpointNotificationSubscription {
+    /// Register a read-only endpoint notification callback on the current
+    /// thread's MTA. Registration does not change defaults or open streams.
+    pub fn start() -> Result<Self, AudioError> {
+        use windows::Win32::Media::Audio::{
+            IMMDeviceEnumerator, IMMNotificationClient, MMDeviceEnumerator,
+        };
+        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+        let com = ComApartment::initialize()?;
+        let enumerator: IMMDeviceEnumerator =
+            unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)? };
+        let dirty = Arc::new(AtomicBool::new(false));
+        let callback: IMMNotificationClient = (EndpointNotificationCallback {
+            dirty: Arc::clone(&dirty),
+        })
+        .into();
+        unsafe { enumerator.RegisterEndpointNotificationCallback(&callback)? };
+        Ok(Self {
+            enumerator,
+            callback,
+            dirty,
+            _com: com,
+        })
+    }
+
+    /// Return and clear whether a notification arrived since the last call.
+    pub fn take_dirty(&self) -> bool {
+        self.dirty.swap(false, Ordering::Acquire)
+    }
+}
+
+impl Drop for EndpointNotificationSubscription {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = self
+                .enumerator
+                .UnregisterEndpointNotificationCallback(&self.callback);
+        }
     }
 }
 

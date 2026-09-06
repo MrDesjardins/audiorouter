@@ -302,6 +302,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Added bounded read-only process discovery (`apps.list`) with PID and executable name only, excluding command lines and full paths. This supplies identities for future process-loopback binding but does not claim process-tree audio capture.
 - Added identity-preserving endpoint snapshot diffing for added, removed, and changed metadata. It is a control-plane polling helper and never silently rebinds a missing endpoint; native IMMNotificationClient callbacks remain open.
 - Upgraded `SharedCapture` and `SharedRender` to event-driven initialization with private RAII event handles, `SetEventHandle`, bounded waits, and `EVENTCALLBACK` flags. The normal tests remain non-invasive; actual stream lifecycle evidence stays in the opt-in native diagnostic.
+- Added `EndpointNotificationSubscription` using WASAPI's `IMMNotificationClient`. The callback is allocation-free and nonblocking: it only sets an atomic dirty flag, while the owner performs a later read-only endpoint resnapshot. Registration/unregistration is COM- and RAII-scoped; it does not change defaults or open streams.
 
 ### 2026-09-05 — Preallocated realtime block core
 
