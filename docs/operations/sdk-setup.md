@@ -1,0 +1,46 @@
+# SDK and native toolchain setup
+
+AudioRouter uses two different SDK categories:
+
+## Steinberg VST3 SDK
+
+The VST3 SDK is source-distributed; the GitHub repository is the SDK itself,
+not an installer. AudioRouter keeps the pinned checkout in the ignored local
+directory `third_party/vst3sdk` so it is not committed into this repository.
+
+The expected checkout is:
+
+```text
+third_party/vst3sdk
+revision: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+```
+
+It includes the SDK submodules and is built with the project-local portable
+CMake cache under `third_party/vst3sdk-build`. The official validator and the
+sample `mda-vst3` bundle have been run successfully. AudioRouter supports the
+VST3 x64 boundary; VST2 and x86 plugins are not part of this setup.
+
+## Windows SDK and WDK
+
+The native WASAPI and future driver work use the Windows SDK and WDK installed
+through Visual Studio/Build Tools. The verified host installation provides
+Windows SDK `10.0.28000.0` and WDK `10.1.28000.2526`, including MSVC, kernel
+headers/libraries, and `signtool.exe`.
+
+These tools are build dependencies only. Setup and validation do not install a
+driver, register a plugin, change default devices, or modify volume, mute,
+privacy, or other persistent audio settings.
+
+## Verification
+
+Read-only verification of the local VST3 checkout:
+
+```powershell
+Test-Path third_party\vst3sdk\CMakeLists.txt
+git -C third_party\vst3sdk rev-parse HEAD
+```
+
+Native build scripts locate Visual Studio and the Windows SDK without requiring
+global PATH changes. See `tools/m00-native-wasapi-probe/build.ps1` for the
+native probe and `docs/plans/active/evidence/M06-vst3-sdk.md` for measured SDK
+validation evidence.

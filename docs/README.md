@@ -28,6 +28,10 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 
 The [headless runbook](operations/headless-runbook.md) documents the implemented CLI/MCP plan, backup, restore, and recovery boundaries. It distinguishes portable control-plane evidence from native audio, driver, signing, and installer requirements.
 
+The [SDK and native toolchain setup](operations/sdk-setup.md) explains the
+source-distributed VST3 SDK checkout and the installed Windows SDK/WDK build
+dependencies.
+
 ## Plans versus specifications
 
 - [Active](plans/active/current.md): execution state, evidence, and next steps. Start here when resuming work.
