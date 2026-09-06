@@ -176,3 +176,11 @@ Added the bounded one-shot `watch` CLI command over `events.subscribe`. It
 forwards the selected session, replay cursor, and validated 1–500 event limit
 through the shared control dispatcher without opening audio or mutating
 configuration. CLI coverage is 13 tests with strict Clippy.
+
+## 2026-09-06 â€” Corrupted database handling
+
+`Storage::open` now performs a read-only SQLite integrity check before schema
+migration. Malformed or damaged files return the explicit `CorruptDatabase`
+error and remain byte-for-byte untouched, directing recovery through the
+existing validated backup/restore workflow. Storage coverage is 27 tests with
+strict Clippy.

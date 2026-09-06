@@ -20,6 +20,7 @@ pub enum StorageError {
     InvalidBundle(String),
     InvalidRecording(String),
     InvalidPluginState(String),
+    CorruptDatabase(String),
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
@@ -194,6 +195,7 @@ impl Storage {
             connection: Connection::open_in_memory()?,
             database_path: None,
         };
+        storage.check_integrity()?;
         storage.migrate()?;
         Ok(storage)
     }
@@ -204,8 +206,24 @@ impl Storage {
             connection: Connection::open(path)?,
             database_path: Some(path.to_path_buf()),
         };
+        storage.check_integrity()?;
         storage.migrate()?;
         Ok(storage)
+    }
+
+    /// Reject malformed SQLite before migrations can make any changes. This
+    /// is intentionally a read-only check; recovery uses an explicit backup
+    /// or restore destination instead of modifying the damaged source.
+    fn check_integrity(&self) -> Result<(), StorageError> {
+        let result: String = self
+            .connection
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .map_err(|error| StorageError::CorruptDatabase(error.to_string()))?;
+        if result == "ok" {
+            Ok(())
+        } else {
+            Err(StorageError::CorruptDatabase(result))
+        }
     }
 
     /// Create a consistent SQLite backup while the source connection remains open.
@@ -1545,6 +1563,20 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn opening_corrupt_database_returns_explicit_read_only_error() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-corrupt-storage-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, b"not a sqlite database").unwrap();
+        let result = Storage::open(&path);
+        assert!(matches!(result, Err(StorageError::CorruptDatabase(_))));
+        assert_eq!(std::fs::read(&path).unwrap(), b"not a sqlite database");
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
