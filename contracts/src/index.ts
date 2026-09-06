@@ -546,6 +546,7 @@ export type ImplementedMethod =
   | "graph.undoPlan"
   | "events.subscribe"
   | "nodes.describe"
+  | "presets.list"
   | "sessions.get"
   | "sessions.list"
   | "sessions.create"
@@ -601,6 +602,7 @@ export type MethodParams = {
     | { afterSequence?: number; backendEpoch?: number; limit?: number; sessionId?: EntityId }
     | undefined;
   "nodes.describe": undefined;
+  "presets.list": undefined;
   "sessions.get": { sessionId: EntityId };
   "sessions.list": { cursor?: string; limit?: number } | undefined;
   "sessions.create": { session: Session };
@@ -662,6 +664,7 @@ export type MethodResult = {
   "graph.undoPlan": GraphUndoPlanResult;
   "events.subscribe": EventsSubscribeResult;
   "nodes.describe": DiscoveryDocument["nodeTypes"];
+  "presets.list": DiscoveryDocument["presets"];
   "sessions.get": Session;
   "sessions.list": SessionListPage;
   "sessions.create": SessionCreateResult;

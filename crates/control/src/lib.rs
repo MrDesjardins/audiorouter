@@ -162,6 +162,7 @@ fn method_description(name: &str) -> &'static str {
         "graph.undoPlan" => "Prepare an inverse graph plan from retained history.",
         "events.subscribe" => "Replay retained state events from an optional cursor.",
         "nodes.describe" => "Describe node types, availability, and realtime cost.",
+        "presets.list" => "List explainable built-in processing presets.",
         "sessions.get" => "Return one session resource by opaque identifier.",
         "sessions.list" => "List session resources with stable cursor pagination.",
         "sessions.create" => "Create a validated stopped session resource.",
@@ -824,6 +825,26 @@ fn method_output_schema(name: &str) -> Value {
         "nodes.types" | "nodes.describe" => json!({
             "type": "array",
             "items": node_type_item_schema()
+        }),
+        "presets.list" => json!({
+            "type": "object",
+            "properties": {
+                "voiceChains": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "string", "minLength": 1 },
+                            "name": { "type": "string", "minLength": 1 },
+                            "description": { "type": "string", "minLength": 1 }
+                        },
+                        "required": ["id", "name", "description"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["voiceChains"],
+            "additionalProperties": false
         }),
         "clients.list" => json!({
             "type": "array",
@@ -2442,6 +2463,7 @@ impl ControlPlane {
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
+                    "presets.list" => Ok(self.describe()["presets"].clone()),
                     "sessions.get" => self.dispatch_session_get(request.params),
                     "sessions.list" => self.dispatch_sessions_list(request.params),
                     "sessions.create" => self.dispatch_session_create(request.params),
@@ -3832,7 +3854,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
-        | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
+        | "applications.list" | "nodes.types" | "nodes.describe" | "presets.list"
+        | "clients.list" => &[],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -4394,6 +4417,19 @@ mod tests {
         assert!(description["presets"]["voiceChains"][0]["description"]
             .as_str()
             .is_some_and(|value| !value.is_empty()));
+        let presets = ControlPlane::default().dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "presets.list".into(),
+            params: None,
+        });
+        assert_eq!(
+            presets.result.unwrap()["voiceChains"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[test]

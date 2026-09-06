@@ -18,6 +18,9 @@ The control discovery document now publishes the same voice-chain catalog
 The TypeScript discovery contract mirrors this shape; discovery is read-only
 and applying a preset still requires an explicit graph plan/commit.
 
+`presets.list` and the CLI `presets list` command now provide the same catalog
+as a direct read-only API result for headless clients.
+
 ## 2026-09-06 â€” Worker checkpoint boundary
 
 `WavRecorder` and `BufferedFlacRecorder` now expose validated controller

@@ -49,6 +49,7 @@ where
         "devices" => list_subcommand(&command_args, "devices")?,
         "virtual-devices" => list_subcommand(&command_args, "virtual-devices")?,
         "plugins" => plugins_command(&command_args)?,
+        "presets" => presets_command(&command_args)?,
         "apps" => list_subcommand(&command_args, "apps")?,
         "applications" => list_subcommand(&command_args, "applications")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
@@ -163,6 +164,16 @@ fn plugins_command(args: &[&str]) -> Result<Value, CliError> {
             })
         }).collect::<Vec<_>>()
     }))
+}
+
+fn presets_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("list") {
+        return Err(CliError::InvalidArguments("usage: presets list".into()));
+    }
+    ControlPlane::default()
+        .dispatch(request("presets.list"))
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("presets unavailable".into()))
 }
 
 fn backup_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1134,6 +1145,10 @@ fn help_value() -> Value {
         .as_array_mut()
         .unwrap()
         .insert(6, json!("plugins scan --directory <absolute-path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
+        .insert(7, json!("presets list"));
     value["commands"]
         .as_array_mut()
         .unwrap()
