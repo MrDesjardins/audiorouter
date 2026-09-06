@@ -12,7 +12,7 @@ pub enum EndpointDirection {
     Render,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EndpointInfo {
     pub id: String,
     pub direction: EndpointDirection,
@@ -22,6 +22,41 @@ pub struct EndpointInfo {
     pub channels: u16,
     pub bits_per_sample: u16,
     pub format_tag: u16,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EndpointChange {
+    Added(EndpointInfo),
+    Removed(EndpointInfo),
+    Changed {
+        before: EndpointInfo,
+        after: EndpointInfo,
+    },
+}
+
+/// Diff two metadata snapshots by opaque endpoint ID. This is a control-plane
+/// polling helper; it never rebinding a missing endpoint or opens a stream.
+pub fn diff_endpoint_snapshots(
+    previous: &[EndpointInfo],
+    current: &[EndpointInfo],
+) -> Vec<EndpointChange> {
+    let mut changes = Vec::new();
+    for before in previous {
+        match current.iter().find(|after| after.id == before.id) {
+            Some(after) if after != before => changes.push(EndpointChange::Changed {
+                before: before.clone(),
+                after: after.clone(),
+            }),
+            Some(_) => {}
+            None => changes.push(EndpointChange::Removed(before.clone())),
+        }
+    }
+    for after in current {
+        if !previous.iter().any(|before| before.id == after.id) {
+            changes.push(EndpointChange::Added(after.clone()));
+        }
+    }
+    changes
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -430,6 +465,30 @@ mod tests {
         };
         assert_eq!(info.direction, EndpointDirection::Capture);
         assert!(info.minimum_period_100ns <= info.default_period_100ns);
+    }
+
+    #[test]
+    fn endpoint_snapshot_diff_preserves_identity_and_detects_changes() {
+        let before = EndpointInfo {
+            id: "same".into(),
+            direction: EndpointDirection::Capture,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 1,
+            bits_per_sample: 32,
+            format_tag: 3,
+        };
+        let mut after = before.clone();
+        after.channels = 2;
+        let added = EndpointInfo {
+            id: "new".into(),
+            ..before.clone()
+        };
+        let changes = diff_endpoint_snapshots(&[before.clone()], &[after.clone(), added.clone()]);
+        assert_eq!(changes.len(), 2);
+        assert!(changes.contains(&EndpointChange::Changed { before, after }));
+        assert!(changes.contains(&EndpointChange::Added(added)));
     }
 
     #[cfg(windows)]

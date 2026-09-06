@@ -300,6 +300,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Wired `devices.list` through the read-only Windows adapter so control/CLI discovery now reports authoritative active endpoint IDs, direction, format, and periods instead of an invented empty list. Full audio status, app discovery, and graph routing remain unavailable until later M02 slices.
 - Corrected `status.get` capability reporting to distinguish available device metadata discovery from unavailable realtime graph/routing; this avoids claiming the entire Windows adapter is missing.
 - Added bounded read-only process discovery (`apps.list`) with PID and executable name only, excluding command lines and full paths. This supplies identities for future process-loopback binding but does not claim process-tree audio capture.
+- Added identity-preserving endpoint snapshot diffing for added, removed, and changed metadata. It is a control-plane polling helper and never silently rebinds a missing endpoint; native IMMNotificationClient callbacks remain open.
 
 ### 2026-09-05 — Preallocated realtime block core
 
