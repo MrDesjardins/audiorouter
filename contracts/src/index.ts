@@ -80,7 +80,12 @@ export interface DiscoveryDocument {
     availability: { status: "available" | "unavailable"; reason?: string };
     realtimeCostClass: string;
   }>;
-  limits: { maxNodesPerSession: number; maxEdgesPerSession: number };
+  limits: {
+    maxNodesPerSession: number;
+    maxEdgesPerSession: number;
+    maxNodesGlobal: number;
+    maxEdgesGlobal: number;
+  };
 }
 
 export interface ApplicationInfo {

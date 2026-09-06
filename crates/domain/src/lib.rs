@@ -9,6 +9,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 pub const MAX_NODES_PER_SESSION: usize = 64;
 pub const MAX_EDGES_PER_SESSION: usize = 128;
+pub const MAX_NODES_GLOBAL: usize = 128;
+pub const MAX_EDGES_GLOBAL: usize = 256;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -723,6 +725,31 @@ pub struct GraphStore {
 impl GraphStore {
     pub fn insert_session(&mut self, session: Session) -> Result<(), StoreError> {
         validate_session(&session).map_err(StoreError::InvalidGraph)?;
+        let (nodes, edges) = self
+            .sessions
+            .values()
+            .filter(|existing| existing.id != session.id)
+            .fold((0usize, 0usize), |(nodes, edges), existing| {
+                (nodes + existing.nodes.len(), edges + existing.edges.len())
+            });
+        if nodes + session.nodes.len() > MAX_NODES_GLOBAL {
+            return Err(StoreError::InvalidGraph(vec![
+                ValidationError::LimitExceeded {
+                    path: "global.nodes".into(),
+                    requested: nodes + session.nodes.len(),
+                    maximum: MAX_NODES_GLOBAL,
+                },
+            ]));
+        }
+        if edges + session.edges.len() > MAX_EDGES_GLOBAL {
+            return Err(StoreError::InvalidGraph(vec![
+                ValidationError::LimitExceeded {
+                    path: "global.edges".into(),
+                    requested: edges + session.edges.len(),
+                    maximum: MAX_EDGES_GLOBAL,
+                },
+            ]));
+        }
         self.history
             .entry(session.id.clone())
             .or_default()
@@ -1207,6 +1234,37 @@ mod tests {
                 actual: 1
             })
         );
+    }
+
+    #[test]
+    fn graph_store_enforces_global_node_budget_with_replacement_accounting() {
+        let make_session = |id: &str, count: usize| {
+            let mut value = session(
+                (0..count)
+                    .map(|index| {
+                        node(
+                            &format!("{id}-{index}"),
+                            NodeKind::Gain,
+                            PortDirection::Output,
+                        )
+                    })
+                    .collect(),
+                vec![],
+            );
+            value.id = EntityId::new(id);
+            value
+        };
+        let mut store = GraphStore::default();
+        store.insert_session(make_session("one", 64)).unwrap();
+        store.insert_session(make_session("two", 64)).unwrap();
+        let error = store.insert_session(make_session("three", 1)).unwrap_err();
+        assert!(matches!(
+            error,
+            StoreError::InvalidGraph(errors)
+                if matches!(errors.as_slice(), [ValidationError::LimitExceeded { path, maximum: MAX_NODES_GLOBAL, .. }] if path == "global.nodes")
+        ));
+        store.insert_session(make_session("one", 1)).unwrap();
+        assert_eq!(store.sessions(10).len(), 2);
     }
 
     #[test]

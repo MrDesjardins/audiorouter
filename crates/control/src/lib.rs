@@ -210,7 +210,7 @@ impl ControlPlane {
             };
             json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class })
         }).collect();
-        json!({ "protocolVersion": { "major": 1, "minor": 0 }, "schemaVersion": 1, "build": self.build, "methods": methods, "nodeTypes": nodes, "limits": { "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION, "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION } })
+        json!({ "protocolVersion": { "major": 1, "minor": 0 }, "schemaVersion": 1, "build": self.build, "methods": methods, "nodeTypes": nodes, "limits": { "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION, "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION, "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL, "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL } })
     }
 
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
@@ -972,6 +972,8 @@ mod tests {
         assert_eq!(description["build"], "test-build");
         assert_eq!(description["protocolVersion"]["major"], 1);
         assert_eq!(description["limits"]["maxNodesPerSession"], 64);
+        assert_eq!(description["limits"]["maxNodesGlobal"], 128);
+        assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
         assert!(description["methods"]
             .as_array()
             .unwrap()
