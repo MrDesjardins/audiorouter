@@ -67,6 +67,8 @@ Session resource listing now includes `sessions.list` and `session list --databa
 
 `graph.undoPlan` now hydrates the latest bounded SQLite history when a fresh control plane lacks prior in-memory snapshots. A restart regression creates and commits revision 1, opens a new control plane, and successfully creates the undo plan against base revision 1. Runtime state and external audio remain untouched.
 
+In-memory graph idempotency now binds each committed key to its original plan ID. A repeated commit of the same plan replays the original result, but reusing that key for another plan is rejected as an idempotency conflict. The durable journal still needs request-hash validation and bounded expiry across process restarts.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

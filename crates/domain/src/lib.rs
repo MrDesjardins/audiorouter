@@ -691,6 +691,7 @@ pub enum StoreError {
     RevisionConflict { expected: u64, actual: u64 },
     EmptyIdempotencyKey,
     NoUndoAvailable,
+    IdempotencyConflict,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -715,7 +716,7 @@ pub struct GraphStore {
     sessions: HashMap<EntityId, Session>,
     history: HashMap<EntityId, Vec<Session>>,
     plans: HashMap<EntityId, GraphPlan>,
-    committed_keys: HashMap<String, CommitResult>,
+    committed_keys: HashMap<String, (CommitResult, EntityId)>,
     next_plan: u64,
 }
 
@@ -854,7 +855,10 @@ impl GraphStore {
         if idempotency_key.is_empty() {
             return Err(StoreError::EmptyIdempotencyKey);
         }
-        if let Some(result) = self.committed_keys.get(idempotency_key) {
+        if let Some((result, committed_plan_id)) = self.committed_keys.get(idempotency_key) {
+            if committed_plan_id.as_str() != plan_id.as_str() {
+                return Err(StoreError::IdempotencyConflict);
+            }
             let mut replay = result.clone();
             replay.idempotent_replay = true;
             return Ok(replay);
@@ -896,7 +900,7 @@ impl GraphStore {
         }
         self.sessions.insert(committed.id.clone(), committed);
         self.committed_keys
-            .insert(idempotency_key.into(), result.clone());
+            .insert(idempotency_key.into(), (result.clone(), plan_id.clone()));
         Ok(result)
     }
 }
@@ -1202,6 +1206,30 @@ mod tests {
                 expected: 0,
                 actual: 1
             })
+        );
+    }
+
+    #[test]
+    fn graph_store_rejects_idempotency_key_reuse_for_another_plan() {
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        let mut store = GraphStore::default();
+        store.insert_session(original.clone()).unwrap();
+        let mut first_candidate = original.clone();
+        first_candidate.name = "first".into();
+        let first_plan = store.plan_graph(&original.id, 0, first_candidate).unwrap();
+        store.commit_graph(&first_plan, 0, "same-key").unwrap();
+        let mut second_candidate = store.session(&original.id).unwrap().clone();
+        second_candidate.name = "second".into();
+        let second_plan = store.plan_graph(&original.id, 1, second_candidate).unwrap();
+        assert_eq!(
+            store.commit_graph(&second_plan, 1, "same-key"),
+            Err(StoreError::IdempotencyConflict)
         );
     }
 
