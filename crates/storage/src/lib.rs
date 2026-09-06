@@ -14,6 +14,7 @@ pub enum StorageError {
 }
 
 pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
+pub const MAX_BACKUP_BYTES: u64 = 64 * 1024 * 1024;
 
 impl From<rusqlite::Error> for StorageError {
     fn from(error: rusqlite::Error) -> Self {
@@ -106,6 +107,70 @@ impl Storage {
         self.connection
             .backup(rusqlite::DatabaseName::Main, destination, None)
             .map_err(StorageError::Sql)
+    }
+
+    /// Restore a validated SQLite backup into a new file. Existing files and
+    /// symbolic links are never overwritten; callers must explicitly move a
+    /// validated result into place using their own deployment policy.
+    pub fn restore_backup(
+        source: impl AsRef<std::path::Path>,
+        destination: impl AsRef<std::path::Path>,
+    ) -> Result<(), StorageError> {
+        let source = source.as_ref();
+        let destination = destination.as_ref();
+        if !source.is_absolute() || !destination.is_absolute() {
+            return Err(StorageError::InvalidBackupPath(
+                "backup paths must be absolute".into(),
+            ));
+        }
+        if !source.is_file() || std::fs::symlink_metadata(source)?.file_type().is_symlink() {
+            return Err(StorageError::InvalidBackupPath(
+                "backup source must be a regular non-symlink file".into(),
+            ));
+        }
+        let size = std::fs::metadata(source)?.len();
+        if size > MAX_BACKUP_BYTES {
+            return Err(StorageError::DocumentTooLarge {
+                bytes: size as usize,
+                maximum: MAX_BACKUP_BYTES as usize,
+            });
+        }
+        let parent = destination.parent().ok_or_else(|| {
+            StorageError::InvalidBackupPath("restore destination must have a parent".into())
+        })?;
+        if !parent.is_dir() {
+            return Err(StorageError::InvalidBackupPath(
+                "restore destination parent must already exist".into(),
+            ));
+        }
+        if destination.exists() {
+            return Err(StorageError::InvalidBackupPath(
+                "restore destination must not already exist".into(),
+            ));
+        }
+        if std::fs::canonicalize(source).ok()
+            == std::fs::canonicalize(parent.join(destination.file_name().unwrap_or_default())).ok()
+        {
+            return Err(StorageError::InvalidBackupPath(
+                "restore destination cannot be the backup source".into(),
+            ));
+        }
+        let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY;
+        let source_connection = Connection::open_with_flags(source, flags)?;
+        let integrity: String =
+            source_connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+        if integrity != "ok" {
+            return Err(StorageError::InvalidBackupPath(format!(
+                "backup integrity check failed: {integrity}"
+            )));
+        }
+        match source_connection.backup(rusqlite::DatabaseName::Main, destination, None) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                let _ = std::fs::remove_file(destination);
+                Err(StorageError::Sql(error))
+            }
+        }
     }
 
     fn migrate(&self) -> Result<(), StorageError> {
@@ -460,6 +525,36 @@ mod tests {
         drop(storage);
         let _ = std::fs::remove_file(source);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn restore_backup_requires_new_destination_and_round_trips_data() {
+        let suffix = format!("audiorouter-storage-restore-{}", std::process::id());
+        let source = std::env::temp_dir().join(format!("{suffix}-source.sqlite"));
+        let backup = std::env::temp_dir().join(format!("{suffix}-backup.sqlite"));
+        let restored = std::env::temp_dir().join(format!("{suffix}-restored.sqlite"));
+        for path in [&source, &backup, &restored] {
+            let _ = std::fs::remove_file(path);
+        }
+        let storage = Storage::open(&source).unwrap();
+        let original = session();
+        storage.save_session(&original).unwrap();
+        storage.backup_to(&backup).unwrap();
+        Storage::restore_backup(&backup, &restored).unwrap();
+        let restored_storage = Storage::open(&restored).unwrap();
+        assert_eq!(
+            restored_storage.load_session(&original.id).unwrap(),
+            Some(original)
+        );
+        assert!(matches!(
+            Storage::restore_backup(&backup, &restored),
+            Err(StorageError::InvalidBackupPath(_))
+        ));
+        drop(restored_storage);
+        drop(storage);
+        for path in [&source, &backup, &restored] {
+            let _ = std::fs::remove_file(path);
+        }
     }
 
     #[test]

@@ -157,6 +157,11 @@ This establishes that Codex can continue documentation and portable implementati
 - Downloaded Microsoft’s driver samples temporarily. The full SysVAD solution reached MIDL/compiler tasks but MSBuild’s file-tracker subprocess failed because this host shell exposes duplicate case variants of `PATH`; a direct MSVC kernel-mode compile of `EndpointsCommon\NewDelete.cpp` succeeded against the new WDK.
 - No driver was installed, registered, loaded, signed, or used to alter audio configuration. Temporary sample sources and build outputs were removed.
 
+### 2026-09-05 — Safe SQLite backup restore
+
+- Added `Storage::restore_backup`, which requires absolute paths, a regular non-symlink source, a destination parent that already exists, a new destination file, a 64 MiB bound, and SQLite `integrity_check` success before restoring.
+- The restore test verifies data round-trip and rejects a second restore over an existing destination. Storage coverage is now 9 tests; no live database or machine configuration is overwritten.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.
