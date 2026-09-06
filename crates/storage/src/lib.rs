@@ -602,10 +602,17 @@ impl Storage {
 
     /// Removes only the durable library row; it never touches the recording path.
     pub fn remove_recording_entry(&self, id: &str) -> Result<bool, StorageError> {
-        Ok(self
-            .connection
-            .execute("DELETE FROM recordings WHERE id = ?1", params![id])?
-            == 1)
+        let transaction = self.connection.unchecked_transaction()?;
+        let removed =
+            transaction.execute("DELETE FROM recordings WHERE id = ?1", params![id])? == 1;
+        if removed {
+            transaction.execute(
+                "DELETE FROM recording_checkpoints WHERE recording_id = ?1",
+                params![id],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(removed)
     }
 
     pub fn set_recording_missing(&self, id: &str, missing: bool) -> Result<bool, StorageError> {
@@ -2027,6 +2034,25 @@ mod tests {
         recorder.pause(20).unwrap();
         let checkpoint = recorder.checkpoint();
         storage
+            .save_recording(&RecordingRecord {
+                id: "recording".into(),
+                session_id: "session".into(),
+                recorder_id: "recorder".into(),
+                path: "C:\\recordings\\recovery.wav".into(),
+                format: "wav".into(),
+                channels: 1,
+                sample_rate: 48_000,
+                frames: 0,
+                file_bytes: 0,
+                start_time: "2026-09-06T00:00:00Z".into(),
+                state: "recording".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+            })
+            .unwrap();
+        storage
             .save_recording_checkpoint("recording", &checkpoint)
             .unwrap();
         assert_eq!(
@@ -2044,8 +2070,12 @@ mod tests {
             storage.load_recording_checkpoint("recording"),
             Err(StorageError::InvalidRecording(_))
         ));
-        assert!(storage.clear_recording_checkpoint("recording").unwrap());
-        assert!(!storage.clear_recording_checkpoint("recording").unwrap());
+        assert!(storage.remove_recording_entry("recording").unwrap());
+        assert_eq!(
+            storage.load_recording_checkpoint("recording").unwrap(),
+            None
+        );
+        assert!(!storage.remove_recording_entry("recording").unwrap());
     }
 
     #[test]

@@ -167,3 +167,7 @@ missing checkpoints explicitly, and preserves the Record-scope boundary.
 Control coverage is 51 tests with strict Clippy.
 CLI coverage is 12 tests with strict Clippy, including the recovery command
 and MCP authorization path.
+
+Removing a recording library entry now removes its associated checkpoint in the
+same SQLite transaction, while leaving the recording path untouched. The
+storage regression verifies checkpoint cleanup and repeated removal behavior.
