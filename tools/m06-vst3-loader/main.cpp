@@ -2,12 +2,16 @@
 
 #include <windows.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <cmath>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
+#include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
@@ -16,6 +20,93 @@
 namespace fs = std::filesystem;
 using namespace Steinberg;
 using GetPluginFactoryProc = IPluginFactory* (PLUGIN_API*)();
+
+class MemoryStream final : public IBStream {
+public:
+    tresult PLUGIN_API queryInterface(const TUID, void** object) override {
+        if (object) {
+            *object = nullptr;
+        }
+        return kNoInterface;
+    }
+
+    uint32 PLUGIN_API addRef() override { return ++references; }
+
+    uint32 PLUGIN_API release() override {
+        const auto remaining = --references;
+        if (remaining == 0) {
+            delete this;
+        }
+        return remaining;
+    }
+
+    tresult PLUGIN_API read(void* buffer, int32 bytes, int32* bytes_read) override {
+        if (bytes < 0 || !buffer) {
+            return kInvalidArgument;
+        }
+        const auto available = data.size() - std::min(position, data.size());
+        const auto count = std::min<std::size_t>(available, static_cast<std::size_t>(bytes));
+        std::memcpy(buffer, data.data() + position, count);
+        position += count;
+        if (bytes_read) {
+            *bytes_read = static_cast<int32>(count);
+        }
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API write(void* buffer, int32 bytes, int32* bytes_written) override {
+        if (bytes < 0 || (bytes > 0 && !buffer)) {
+            return kInvalidArgument;
+        }
+        const auto count = static_cast<std::size_t>(bytes);
+        if (position > data.size() - std::min(position, data.size())) {
+            data.resize(position);
+        }
+        if (position + count > data.size()) {
+            data.resize(position + count);
+        }
+        std::memcpy(data.data() + position, buffer, count);
+        position += count;
+        if (bytes_written) {
+            *bytes_written = bytes;
+        }
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API seek(int64 offset, int32 mode, int64* result) override {
+        int64 base = 0;
+        if (mode == IBStream::kIBSeekCur) {
+            base = static_cast<int64>(position);
+        } else if (mode == IBStream::kIBSeekEnd) {
+            base = static_cast<int64>(data.size());
+        } else if (mode != IBStream::kIBSeekSet) {
+            return kInvalidArgument;
+        }
+        if (offset < -base || base + offset < 0) {
+            return kInvalidArgument;
+        }
+        position = static_cast<std::size_t>(base + offset);
+        if (result) {
+            *result = static_cast<int64>(position);
+        }
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API tell(int64* position_out) override {
+        if (!position_out) {
+            return kInvalidArgument;
+        }
+        *position_out = static_cast<int64>(position);
+        return kResultOk;
+    }
+
+    std::size_t size() const { return data.size(); }
+
+private:
+    uint32 references = 1;
+    std::vector<uint8_t> data;
+    std::size_t position = 0;
+};
 
 static fs::path resolve_binary(const fs::path& supplied) {
     if (!fs::is_directory(supplied)) {
@@ -177,6 +268,15 @@ int wmain(int argc, wchar_t** argv) {
                 component_active = false;
                 processor->release();
                 processor = nullptr;
+                MemoryStream state;
+                if (component->getState(&state) != kResultOk || state.size() == 0) {
+                    throw std::runtime_error("component getState returned no data");
+                }
+                const auto state_bytes = state.size();
+                if (state.seek(0, IBStream::kIBSeekSet, nullptr) != kResultOk ||
+                    component->setState(&state) != kResultOk) {
+                    throw std::runtime_error("component state round trip failed");
+                }
                 TUID controller_id{};
                 if (component->getControllerClassId(controller_id) != kResultOk ||
                     factory->createInstance(
@@ -216,7 +316,7 @@ int wmain(int argc, wchar_t** argv) {
                 component = nullptr;
                 std::cout << "processed offline block: channels=" << channels
                           << " frames=64 finite=true parameters=" << parameter_count
-                          << " automation=verified\n";
+                          << " automation=verified state_bytes=" << state_bytes << "\n";
                 break;
             }
         }

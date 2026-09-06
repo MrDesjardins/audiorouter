@@ -327,3 +327,10 @@ reading its normalized value, setting 0.5, validating a finite 0..1 response,
 and restoring the original value. The complete synthetic automation pass
 succeeded before controller shutdown. This does not yet prove AudioRouter
 parameter-event forwarding, state persistence, editor behavior, or sandboxing.
+
+The probe then supplied an in-memory IBStream to the real component. getState
+emitted a 180-byte opaque payload; seeking back to the beginning and calling
+setState succeeded before normal termination and unload. No state file or user
+data was written. This is native component state round-trip evidence, not yet
+durable AudioRouter state persistence, editor lifecycle, worker failure
+containment, or sandbox evidence.
