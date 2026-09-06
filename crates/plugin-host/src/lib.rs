@@ -31,6 +31,12 @@ pub enum PluginFormat {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginCompatibility {
+    SupportedVst3X64,
+    UnsupportedFormat,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PeArchitecture {
     X64,
     X86,
@@ -182,6 +188,16 @@ pub struct PluginIdentity {
     pub architecture: PeArchitecture,
     pub file_bytes: u64,
     pub sha256: String,
+}
+
+impl PluginIdentity {
+    pub fn compatibility(&self) -> PluginCompatibility {
+        if self.format == PluginFormat::Vst3 && self.architecture == PeArchitecture::X64 {
+            PluginCompatibility::SupportedVst3X64
+        } else {
+            PluginCompatibility::UnsupportedFormat
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -873,5 +889,25 @@ mod tests {
             Err(StateFileError::InvalidAssetId)
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn compatibility_requires_vst3_x64_identity() {
+        let mut identity = PluginIdentity {
+            path: PathBuf::from("effect.vst3"),
+            format: PluginFormat::Vst3,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "0".repeat(64),
+        };
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst3X64
+        );
+        identity.format = PluginFormat::Unknown;
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::UnsupportedFormat
+        );
     }
 }

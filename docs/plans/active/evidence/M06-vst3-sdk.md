@@ -102,3 +102,9 @@ boundary: safe IDs, approved-root canonical containment, exclusive creation,
 flush-to-disk, size limits, and version/hash verification on read. The new
 asset-file test compiles and strict Clippy passes; plugin-host runtime launch
 remains blocked by Windows Application Control OS error 4551.
+
+`PluginIdentity::compatibility` now returns an explicit capability result:
+only an inspected VST3/x64 identity is supported, while unknown/legacy
+formats remain unsupported even if their PE structure is valid. The new test
+compiles and strict Clippy passes; runtime launch remains blocked by OS error
+4551.
