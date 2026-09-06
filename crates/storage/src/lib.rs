@@ -31,6 +31,7 @@ pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
+pub const GRAPH_PLAN_RETENTION_SECONDS: i64 = 5 * 60;
 
 fn is_executable_name(name: &str) -> bool {
     matches!(
@@ -156,6 +157,15 @@ pub struct RecordingRecord {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub comment: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GraphPlanRecord {
+    pub id: String,
+    pub session_id: String,
+    pub base_revision: u64,
+    pub candidate: Session,
+    pub expires_at: i64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -335,6 +345,14 @@ impl Storage {
                  request_hash TEXT NOT NULL DEFAULT '',
                  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
              );
+             CREATE TABLE IF NOT EXISTS graph_plans (
+                 id TEXT PRIMARY KEY,
+                 session_id TEXT NOT NULL,
+                 base_revision INTEGER NOT NULL,
+                 candidate TEXT NOT NULL,
+                 expires_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS graph_plans_expires_at ON graph_plans(expires_at);
              CREATE TABLE IF NOT EXISTS client_enrollments (
                  client_id TEXT PRIMARY KEY,
                  role TEXT NOT NULL CHECK(role IN ('observer', 'editor', 'operator')),
@@ -1151,6 +1169,64 @@ impl Storage {
             "DELETE FROM operation_journal
              WHERE created_at < datetime('now', ?1)",
             params![format!("-{} seconds", IDEMPOTENCY_RETENTION_SECONDS)],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_graph_plan(&self, plan: &GraphPlanRecord) -> Result<(), StorageError> {
+        let candidate = serde_json::to_string(&plan.candidate)?;
+        self.connection.execute(
+            "INSERT OR REPLACE INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                plan.id,
+                plan.session_id,
+                plan.base_revision as i64,
+                candidate,
+                plan.expires_at
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_graph_plan(&self, id: &str) -> Result<Option<GraphPlanRecord>, StorageError> {
+        self.prune_expired_graph_plans()?;
+        self.connection
+            .query_row(
+                "SELECT id, session_id, base_revision, candidate, expires_at
+                 FROM graph_plans WHERE id = ?1",
+                params![id],
+                |row| {
+                    let candidate: String = row.get(3)?;
+                    Ok(GraphPlanRecord {
+                        id: row.get(0)?,
+                        session_id: row.get(1)?,
+                        base_revision: row.get::<_, i64>(2)? as u64,
+                        candidate: serde_json::from_str(&candidate).map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                3,
+                                rusqlite::types::Type::Text,
+                                Box::new(error),
+                            )
+                        })?,
+                        expires_at: row.get(4)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::Sql)
+    }
+
+    pub fn delete_graph_plan(&self, id: &str) -> Result<(), StorageError> {
+        self.connection
+            .execute("DELETE FROM graph_plans WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    fn prune_expired_graph_plans(&self) -> Result<(), StorageError> {
+        self.connection.execute(
+            "DELETE FROM graph_plans WHERE expires_at <= unixepoch('now')",
+            [],
         )?;
         Ok(())
     }

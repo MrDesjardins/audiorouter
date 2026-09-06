@@ -11,7 +11,7 @@ use audiorouter_domain::{
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
 };
-use audiorouter_storage::{Storage, StorageError};
+use audiorouter_storage::{GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -22,6 +22,13 @@ const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
+
+fn unix_epoch_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+}
 
 #[derive(Debug)]
 struct MutationBucket {
@@ -829,9 +836,23 @@ impl ControlPlane {
         base_revision: u64,
         candidate: Session,
     ) -> Result<EntityId, ControlError> {
-        self.store
-            .plan_graph(session_id, base_revision, candidate)
-            .map_err(Into::into)
+        let plan_id = self
+            .store
+            .plan_graph(session_id, base_revision, candidate.clone())
+            .map_err(ControlError::from)?;
+        if let Some(storage) = &self.storage {
+            let expires_at = unix_epoch_seconds() + GRAPH_PLAN_RETENTION_SECONDS;
+            storage
+                .save_graph_plan(&GraphPlanRecord {
+                    id: plan_id.as_str().to_owned(),
+                    session_id: session_id.as_str().to_owned(),
+                    base_revision,
+                    candidate,
+                    expires_at,
+                })
+                .map_err(storage_error)?;
+        }
+        Ok(plan_id)
     }
 
     pub fn commit_graph(
@@ -855,9 +876,47 @@ impl ControlPlane {
                 return Ok(response);
             }
         }
-        let result = self
+        let result = match self
             .store
-            .commit_graph(plan_id, base_revision, idempotency_key)?;
+            .commit_graph(plan_id, base_revision, idempotency_key)
+        {
+            Ok(result) => result,
+            Err(audiorouter_domain::StoreError::PlanNotFound) => {
+                let storage = self.storage.as_ref().ok_or(ControlError::from(
+                    audiorouter_domain::StoreError::PlanNotFound,
+                ))?;
+                let durable = storage
+                    .load_graph_plan(plan_id.as_str())
+                    .map_err(storage_error)?
+                    .ok_or(ControlError::from(
+                        audiorouter_domain::StoreError::PlanNotFound,
+                    ))?;
+                let remaining = durable.expires_at - unix_epoch_seconds();
+                if remaining <= 0 {
+                    storage
+                        .delete_graph_plan(plan_id.as_str())
+                        .map_err(storage_error)?;
+                    return Err(ControlError::from(
+                        audiorouter_domain::StoreError::PlanExpired,
+                    ));
+                }
+                let durable_session_id = EntityId::new(durable.session_id.clone());
+                self.ensure_session_loaded(&durable_session_id)?;
+                self.store
+                    .restore_plan_with_ttl(
+                        EntityId::new(durable.id),
+                        &durable_session_id,
+                        durable.base_revision,
+                        durable.candidate,
+                        std::time::Duration::from_secs(remaining as u64),
+                    )
+                    .map_err(ControlError::from)?;
+                self.store
+                    .commit_graph(plan_id, base_revision, idempotency_key)
+                    .map_err(ControlError::from)?
+            }
+            Err(error) => return Err(ControlError::from(error)),
+        };
         if let Some(storage) = &self.storage {
             let session = self.store.session(&result.session_id).ok_or_else(|| {
                 ControlError::InvalidRequest("committed session not found".into())
@@ -875,6 +934,9 @@ impl ControlPlane {
                 self.store = checkpoint;
                 return Err(storage_error(error));
             }
+            storage
+                .delete_graph_plan(plan_id.as_str())
+                .map_err(storage_error)?;
         }
         if !result.idempotent_replay {
             self.events.append(
@@ -2851,6 +2913,40 @@ mod tests {
         let replay = second.commit_graph(&plan, 0, "restart-key").unwrap();
         assert_eq!(replay["idempotentReplay"], true);
         assert_eq!(replay["revision"], 1);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn durable_uncommitted_plan_survives_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-plan-restart-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let original = session();
+        let mut first = ControlPlane::with_storage("first", Storage::open(&path).unwrap());
+        first.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "survives-restart".into();
+        let plan = first.plan_graph(&original.id, 0, candidate).unwrap();
+        drop(first);
+
+        let mut second = ControlPlane::with_storage("second", Storage::open(&path).unwrap());
+        let committed = second.commit_graph(&plan, 0, "restart-plan-key").unwrap();
+        assert_eq!(committed["revision"], 1);
+        assert_eq!(committed["idempotentReplay"], false);
+        assert_eq!(
+            second
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(15)),
+                    method: "sessions.get".into(),
+                    params: Some(json!({ "sessionId": "session" })),
+                })
+                .result
+                .unwrap()["name"],
+            "survives-restart"
+        );
         let _ = std::fs::remove_file(path);
     }
 

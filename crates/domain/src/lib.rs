@@ -820,6 +820,7 @@ pub enum StoreError {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CommitResult {
     pub session_id: EntityId,
     pub revision: u64,
@@ -1049,6 +1050,43 @@ impl GraphStore {
             },
         );
         Ok(plan_id)
+    }
+
+    /// Restore a plan retained by a durable control plane after a restart.
+    /// The caller supplies the remaining lifetime; validation is repeated so
+    /// persisted plans cannot bypass current session/revision checks.
+    pub fn restore_plan_with_ttl(
+        &mut self,
+        plan_id: EntityId,
+        session_id: &EntityId,
+        base_revision: u64,
+        candidate: Session,
+        ttl: std::time::Duration,
+    ) -> Result<(), StoreError> {
+        let current = self
+            .sessions
+            .get(session_id)
+            .ok_or(StoreError::SessionNotFound)?;
+        if current.revision != base_revision {
+            return Err(StoreError::RevisionConflict {
+                expected: base_revision,
+                actual: current.revision,
+            });
+        }
+        if candidate.id != *session_id {
+            return Err(StoreError::SessionNotFound);
+        }
+        validate_session(&candidate).map_err(StoreError::InvalidGraph)?;
+        self.plans.insert(
+            plan_id,
+            GraphPlan {
+                session_id: session_id.clone(),
+                base_revision,
+                candidate,
+                expires_at: std::time::Instant::now() + ttl,
+            },
+        );
+        Ok(())
     }
 
     pub fn commit_graph(

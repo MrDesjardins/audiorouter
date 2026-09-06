@@ -74,6 +74,16 @@ API-05: plans now expire after five minutes (`expiresInMs: 300000`). The domain
 TTL override remains available for expiry tests, so deterministic short-lived
 plan coverage is preserved.
 
+## 2026-09-06 — Durable uncommitted graph plans
+
+SQLite-backed control planes now retain graph plan IDs, candidates, base
+revisions, and expiry timestamps. A new control instance hydrates the current
+session, revalidates the retained candidate and revision, then commits through
+the normal graph store and journal path. Expired rows are pruned and successful
+commits remove the retained plan. The restart regression passes, including the
+fresh-commit response shape (`idempotentReplay: false`); 45 control tests, 24
+storage tests, and strict Clippy pass.
+
 ## 2026-09-06 — Recording CLI parity
 
 Added `recordings list`, `recordings get`, and `recordings remove-entry` to the
