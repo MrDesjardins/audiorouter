@@ -1750,6 +1750,45 @@ mod tests {
     }
 
     #[test]
+    fn history_exposes_revision_cursor_pages() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-history-page-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let storage = Storage::open(&database).unwrap();
+        let mut first: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        first.id = EntityId::new("history-page");
+        storage.save_session(&first).unwrap();
+        let mut second = first.clone();
+        second.revision = 1;
+        second.name = "Updated".into();
+        storage.save_session(&second).unwrap();
+        drop(storage);
+        let database_arg = database.to_string_lossy().into_owned();
+        let page: Value = serde_json::from_str(
+            &run([
+                "history",
+                "history-page",
+                "--cursor",
+                "2",
+                "--limit",
+                "1",
+                "--database",
+                &database_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(page["items"][0]["revision"], 1);
+        assert_eq!(page["nextCursor"], "1");
+        let _ = std::fs::remove_file(database);
+    }
+
+    #[test]
     fn diagnostics_convenience_command_uses_read_only_dispatch() {
         let diagnostics: Value =
             serde_json::from_str(&run(["diagnostics", "--json"]).unwrap()).unwrap();
