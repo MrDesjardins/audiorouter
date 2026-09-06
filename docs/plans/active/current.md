@@ -145,6 +145,11 @@ This establishes that Codex can continue documentation and portable implementati
 - No default endpoint, volume, mute, privacy, or persistent audio configuration was changed. Generated executable/object files were removed after testing.
 - The Rust scaffold was updated to call `GetActivateResult` and remains compile-validated, but its opt-in runtime still aborts in COM teardown with heap corruption. It is not enabled in the normal probe and is not counted as a runtime pass; the native WRL harness remains the safe reference path.
 
+### 2026-09-05 — Per-user backend singleton
+
+- Added a runtime-scoped `Local\AudioRouter-*` named mutex around the multi-connection backend server. A competing backend using the same pipe name now fails before creating pipe instances, while distinct pipe names remain independent.
+- The Windows transport suite passed all 11 tests, including a same-user collision test and two sequential authenticated connections. The mutex is released on server shutdown and no audio or persistent machine configuration is touched.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.

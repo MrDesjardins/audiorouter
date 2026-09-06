@@ -30,7 +30,8 @@ mod windows_pipe {
     use std::os::windows::ffi::OsStrExt;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{
-        CloseHandle, LocalFree, GENERIC_READ, GENERIC_WRITE, HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
+        CloseHandle, GetLastError, LocalFree, ERROR_ALREADY_EXISTS, GENERIC_READ, GENERIC_WRITE,
+        HANDLE, HLOCAL, INVALID_HANDLE_VALUE,
     };
     use windows::Win32::Security::Authorization::{
         ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
@@ -45,11 +46,38 @@ mod windows_pipe {
         PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
     };
     use windows::Win32::System::Threading::{
-        OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+        CreateMutexW, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
     };
 
     fn wide(value: &str) -> Vec<u16> {
         OsStr::new(value).encode_wide().chain(once(0)).collect()
+    }
+
+    fn singleton_name(pipe_name: &str) -> Vec<u16> {
+        let suffix: String = pipe_name
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() {
+                    character
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        wide(&format!(r"Local\AudioRouter-{suffix}"))
+    }
+
+    fn acquire_singleton(pipe_name: &str) -> Result<Handle, TransportError> {
+        let name = singleton_name(pipe_name);
+        let handle =
+            unsafe { CreateMutexW(None, true, PCWSTR(name.as_ptr())) }.map_err(win_error)?;
+        if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+            drop(Handle(handle));
+            return Err(TransportError::Windows(
+                "another backend already owns this user pipe".into(),
+            ));
+        }
+        Ok(Handle(handle))
     }
 
     fn check_name(name: &str) -> Result<(), TransportError> {
@@ -304,6 +332,7 @@ mod windows_pipe {
     where
         F: FnMut(u32, &[u8]) -> Result<Vec<u8>, TransportError>,
     {
+        let _singleton = acquire_singleton(name)?;
         for _ in 0..connections {
             serve_once_with_client(name, |client_pid, frame| handler(client_pid, frame))?;
         }
@@ -847,6 +876,34 @@ mod tests {
             .unwrap();
             round_trip(&name, &request).unwrap();
         }
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_backend_is_singleton_per_user_name() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-singleton-test-{}",
+            std::process::id()
+        );
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_connections(&server_name, 2, |_, frame| echo_handler(frame))
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let competing = serve_connections(&name, 1, |_, frame| echo_handler(frame));
+        assert!(matches!(
+            competing,
+            Err(TransportError::Windows(message)) if message.contains("already owns")
+        ));
+        let request = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 41,
+            "method": "status.get"
+        }))
+        .unwrap();
+        round_trip(&name, &request).unwrap();
+        round_trip(&name, &request).unwrap();
         server.join().unwrap().unwrap();
     }
 }
