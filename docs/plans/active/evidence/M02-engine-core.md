@@ -67,6 +67,11 @@ code need not depend on the atomic meter storage representation. Snapshot reads
 remain lock-free and bounded; transport publication and reset authorization
 remain outside this portable engine slice.
 
+Graph meters now expose explicit reset semantics, and `RuntimeProcessor::publish`
+clears a graph's meter history at each activation boundary. This prevents
+readings from a prior generation being reported after reuse; the reset remains
+process-local until a live scheduler/API authorizes its publication.
+
 ## 2026-09-06 — Graph processor parameter integration
 
 The domain `Node` contract now carries a backward-compatible parameter map.

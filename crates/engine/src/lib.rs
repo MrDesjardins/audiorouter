@@ -1604,6 +1604,7 @@ pub struct RuntimeProcessor {
 
 impl RuntimeProcessor {
     pub fn publish(&self, graph: RuntimeGraph) {
+        graph.reset_meters();
         self.publication.publish(graph);
     }
 
@@ -1732,6 +1733,14 @@ impl RuntimeGraph {
 
     pub fn meter_snapshot(&self, index: usize) -> Option<BlockMeterSnapshot> {
         self.meter(index).map(BlockMeter::snapshot)
+    }
+
+    /// Clear all prepared node meters at an activation boundary. This is
+    /// lock-free and does not change the immutable processing schedule.
+    pub fn reset_meters(&self) {
+        for meter in &self.meters {
+            meter.reset();
+        }
     }
 
     pub fn process(&self, block: &mut AudioBlock) -> usize {
@@ -2642,6 +2651,9 @@ mod tests {
                 clipped_samples: 1,
             })
         );
+        graph.reset_meters();
+        assert_eq!(graph.meter_snapshot(0).unwrap().peak_abs, 0.0);
+        assert_eq!(graph.meter_snapshot(1).unwrap().clipped_samples, 0);
         assert!(graph.meter(2).is_none());
     }
 
