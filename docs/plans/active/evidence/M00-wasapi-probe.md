@@ -65,4 +65,6 @@ The same executable's process-loopback path, targeting the current Explorer proc
 
 The opt-in `capture 0 200` command then exercised the native capture data path on active capture endpoint 0. `Start`, ten packet reads, and 4,800 frames over 200 ms returned success; samples were counted and discarded, followed by successful `Stop` and `Reset`. This confirms native shared-mode capture data flow for that endpoint without persisting audio or changing the user's configuration. It does not establish all-endpoint behavior, process-tree capture data, render-to-capture routing, or physical/loopback latency.
 
+The probe source also contains an opt-in silent `render [endpoint-index] [milliseconds]` path that compiles against the same toolchain and submits only `AUDCLNT_BUFFERFLAGS_SILENT` buffers before stopping/resetting. Runtime execution of the newly built unsigned binary was blocked by the host's Windows Application Control policy, so render data-path success is not claimed. No security policy or signing setting was changed to bypass this block.
+
 No endpoint was started, no buffer was read, no default device/volume/mute/format setting was changed, and no driver was installed or loaded.

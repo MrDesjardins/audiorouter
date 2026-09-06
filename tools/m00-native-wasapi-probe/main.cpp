@@ -222,6 +222,81 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
     return SUCCEEDED(hr) && packet_count > 0 ? 0 : 1;
 }
 
+static int render_data_probe(UINT target_index, DWORD duration_ms) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("render_enumerator", hr); return 1; }
+    IMMDeviceCollection* devices = nullptr;
+    hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &devices);
+    if (FAILED(hr)) { print_hr("render_enum", hr); enumerator->Release(); return 1; }
+    UINT count = 0;
+    devices->GetCount(&count);
+    if (target_index >= count) {
+        std::cout << "render_index_out_of_range=" << target_index << " count=" << count << '\n';
+        devices->Release(); enumerator->Release(); return 1;
+    }
+    IMMDevice* device = nullptr;
+    hr = devices->Item(target_index, &device);
+    print_hr("render_item", hr);
+    if (FAILED(hr)) { devices->Release(); enumerator->Release(); return 1; }
+    IAudioClient* client = nullptr;
+    hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                          reinterpret_cast<void**>(&client));
+    print_hr("render_activate", hr);
+    WAVEFORMATEX* format = nullptr;
+    if (SUCCEEDED(hr)) hr = client->GetMixFormat(&format);
+    print_hr("render_get_mix_format", hr);
+    if (SUCCEEDED(hr)) {
+        print_format(format);
+        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED,
+                                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                                1000000, 0, format, nullptr);
+        print_hr("render_initialize", hr);
+    }
+    IAudioRenderClient* render = nullptr;
+    UINT32 buffer_size = 0;
+    if (SUCCEEDED(hr)) {
+        hr = client->GetBufferSize(&buffer_size);
+        print_hr("render_get_buffer_size", hr);
+        hr = client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render));
+        print_hr("render_get_service", hr);
+    }
+    UINT32 submitted_frames = 0;
+    if (SUCCEEDED(hr)) {
+        hr = client->Start();
+        print_hr("render_start", hr);
+        if (SUCCEEDED(hr)) {
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
+            while (std::chrono::steady_clock::now() < deadline) {
+                UINT32 padding = 0;
+                hr = client->GetCurrentPadding(&padding);
+                if (FAILED(hr)) break;
+                const UINT32 available = buffer_size - padding;
+                if (available != 0) {
+                    BYTE* data = nullptr;
+                    hr = render->GetBuffer(available, &data);
+                    if (FAILED(hr)) break;
+                    hr = render->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
+                    if (FAILED(hr)) break;
+                    submitted_frames += available;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            print_hr("render_silent_submit", hr);
+            std::cout << "render_buffer_size=" << buffer_size
+                      << " render_submitted_frames=" << submitted_frames << '\n';
+            print_hr("render_stop", client->Stop());
+            print_hr("render_reset", client->Reset());
+        }
+    }
+    if (render) render->Release();
+    if (format) CoTaskMemFree(format);
+    if (client) client->Release();
+    device->Release(); devices->Release(); enumerator->Release();
+    return SUCCEEDED(hr) && submitted_frames > 0 ? 0 : 1;
+}
+
 int main(int argc, char** argv) {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(hr)) { print_hr("CoInitializeEx", hr); return 1; }
@@ -230,6 +305,13 @@ int main(int argc, char** argv) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
         int result = capture_data_probe(target_index, duration_ms);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "render") == 0) {
+        UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
+        int result = render_data_probe(target_index, duration_ms);
         CoUninitialize();
         return result;
     }
