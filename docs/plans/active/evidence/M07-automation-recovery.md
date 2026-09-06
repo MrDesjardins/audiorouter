@@ -637,3 +637,9 @@ The complete headless wrapper was rerun at clean revision `e377adc`. M01 CLI
 (22 tests), MCP stdio, 68 control tests, 31 plugin-host tests, 8 worker-process
 tests, and strict Clippy passed; graph-plan and diagnostics output paths remain
 disposable and no audio or machine configuration was accessed.
+
+The complete headless wrapper was rerun at clean revision `308a5c9` after the
+M08 release qualification. M01 CLI (22 tests), MCP stdio, 68 control tests,
+31 plugin-host tests, 8 worker-process tests, and strict Clippy passed. The
+wrapper used temporary state only and did not access audio devices, drivers,
+or machine configuration.
