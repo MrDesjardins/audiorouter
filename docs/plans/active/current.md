@@ -120,6 +120,8 @@ This establishes that Codex can continue documentation and portable implementati
 - Checks: `cargo test --workspace` — all 47 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory SQLite; no user database path was opened.
 - Made current-session and revision-history persistence atomic with one SQLite transaction, closing the partial-write window between those related tables.
 - Checks: `cargo test --workspace` — all 47 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. Tests used only in-memory SQLite; no user database path was opened.
+- Added SQLite online backup support through rusqlite’s backup API, with a live-database round-trip test using temporary project files and cleanup.
+- Checks: `cargo test --workspace` — all 48 unit tests and doc tests passed; `cargo fmt --all` and `git diff --check` passed. No user database path was opened.
 
 ## Decisions and assumptions
 

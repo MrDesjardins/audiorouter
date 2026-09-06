@@ -46,6 +46,13 @@ impl Storage {
         Ok(storage)
     }
 
+    /// Create a consistent SQLite backup while the source connection remains open.
+    pub fn backup_to(&self, destination: impl AsRef<std::path::Path>) -> Result<(), StorageError> {
+        self.connection
+            .backup(rusqlite::DatabaseName::Main, destination, None)
+            .map_err(StorageError::Sql)
+    }
+
     fn migrate(&self) -> Result<(), StorageError> {
         self.connection.execute_batch(
             "PRAGMA foreign_keys = ON;
@@ -290,5 +297,24 @@ mod tests {
             storage.load_session(&EntityId::new("missing")).unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn online_backup_round_trips_a_live_database() {
+        let suffix = format!("audiorouter-storage-backup-{}", std::process::id());
+        let source = std::env::temp_dir().join(format!("{suffix}-source.sqlite"));
+        let destination = std::env::temp_dir().join(format!("{suffix}-destination.sqlite"));
+        let _ = std::fs::remove_file(&source);
+        let _ = std::fs::remove_file(&destination);
+        let storage = Storage::open(&source).unwrap();
+        let original = session();
+        storage.save_session(&original).unwrap();
+        storage.backup_to(&destination).unwrap();
+        let backup = Storage::open(&destination).unwrap();
+        assert_eq!(backup.load_session(&original.id).unwrap(), Some(original));
+        drop(backup);
+        drop(storage);
+        let _ = std::fs::remove_file(source);
+        let _ = std::fs::remove_file(destination);
     }
 }
