@@ -161,7 +161,11 @@ impl AudioError {
 impl fmt::Display for AudioError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Windows(error) => write!(formatter, "Windows audio error: {error}"),
+            Self::Windows(error) => write!(
+                formatter,
+                "Windows audio error 0x{:08X}: {error}",
+                error.code().0 as u32
+            ),
             Self::InvalidUtf16 => formatter.write_str("endpoint ID was not valid UTF-16"),
             Self::BufferTooSmall {
                 required,
@@ -1103,6 +1107,12 @@ mod tests {
             .kind(),
             AudioFailureKind::BufferConstraint
         );
+        let invalid_argument = AudioError::Windows(windows::core::Error::new(
+            windows::core::HRESULT(0x80070057_u32 as i32),
+            "invalid argument",
+        ));
+        assert_eq!(invalid_argument.kind(), AudioFailureKind::InvalidArgument);
+        assert!(invalid_argument.to_string().contains("0x80070057"));
     }
 
     #[test]

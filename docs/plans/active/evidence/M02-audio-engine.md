@@ -88,3 +88,10 @@ and doc-test targets. Contracts/UI typechecks, 23 UI tests, and the production
 Vite build also passed. This confirms regression health for the portable
 boundaries; live graph-to-device scheduling, physical latency, and driver
 lifecycle remain open.
+
+The Windows adapter now includes the numeric HRESULT in displayed audio errors
+while retaining stable failure classification. A regression confirms
+`0x80070057` is reported as `InvalidArgument` and remains visible in the
+diagnostic text. This improves investigation of the unresolved Rust
+`IAudioClient::Initialize` discrepancy; it does not claim that discrepancy is
+fixed and does not open or start an audio stream.
