@@ -1,6 +1,6 @@
 # M01 — Domain, local API, storage, and CLI foundation
 
-Status: not started. Prerequisite: M00 decisions and gate evidence. Outcome: a headless, inspectable control system operating a deterministic fake engine.
+Status: foundation implemented; M00 prerequisite and final acceptance remain open. Outcome: a headless, inspectable control system operating a deterministic fake engine.
 
 ## Read first
 

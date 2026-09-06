@@ -244,3 +244,11 @@ Continue [M00](../../milestones/M00-feasibility.md) in an authorized Visual Stud
 ## Handoff rule
 
 When work begins, add objective, requirement IDs, task checklist, changes, decisions, checks, environment, results, blockers, rollback, and next action here. After the milestone gate passes, archive the execution plan under `archived/` and link its evidence. Future ideas belong in `future/`, not this active task.
+
+### 2026-09-05 — Bounded bundle staging
+
+- Added storage-side v1 `.audiorouter` ZIP staging and import. The validator requires absolute non-symlink bundle/staging paths, caps compressed size at 100 MiB, expanded size at 250 MiB, entries at 1,000, and individual assets at 16 MiB.
+- Rejected archive paths include absolute paths, `..` traversal, duplicates, symlinks, and executable extensions. Manifest format/schema and referenced graph/assets must be present before the staged graph is passed to the existing session validator.
+- Extraction uses a unique child of the caller-owned staging directory and `create_new`, removes that child on rejection, and imports only after validation. No live database or path outside staging is written by the bundle boundary.
+- Added tests for valid staging/import, traversal rejection with outside-path protection, and oversized-asset rejection. Added the pinned `zip` dependency and lockfile entries.
+- Check: `cargo test -p audiorouter-storage` passed 12 tests plus doc tests. No Windows audio settings, defaults, streams, drivers, or SDK configuration were changed.

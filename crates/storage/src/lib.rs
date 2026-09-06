@@ -2,6 +2,11 @@
 
 use audiorouter_domain::{validate_session, EntityId, Session};
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::Deserialize;
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::Read;
+use zip::ZipArchive;
 
 #[derive(Debug)]
 pub enum StorageError {
@@ -9,12 +14,46 @@ pub enum StorageError {
     Json(serde_json::Error),
     Io(std::io::Error),
     InvalidSession(String),
+    InvalidBundle(String),
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
 }
 
 pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
 pub const MAX_BACKUP_BYTES: u64 = 64 * 1024 * 1024;
+pub const MAX_BUNDLE_COMPRESSED_BYTES: u64 = 100 * 1024 * 1024;
+pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
+pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
+pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
+
+fn is_executable_name(name: &str) -> bool {
+    matches!(
+        std::path::Path::new(name)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some("exe")
+            | Some("dll")
+            | Some("sys")
+            | Some("com")
+            | Some("bat")
+            | Some("cmd")
+            | Some("ps1")
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct BundleManifest {
+    #[serde(rename = "format")]
+    format: String,
+    #[serde(rename = "schemaVersion")]
+    schema_version: u32,
+    #[serde(rename = "graphPath")]
+    graph_path: String,
+    #[serde(default)]
+    assets: Vec<String>,
+}
 
 impl From<rusqlite::Error> for StorageError {
     fn from(error: rusqlite::Error) -> Self {
@@ -286,6 +325,180 @@ impl Storage {
         Ok(session)
     }
 
+    /// Safely stage and import a `.audiorouter` ZIP bundle. The staging root
+    /// is caller-owned and must already exist; this method never writes
+    /// anywhere else and never overwrites an existing staged file.
+    pub fn import_bundle(
+        &self,
+        bundle: impl AsRef<std::path::Path>,
+        staging_root: impl AsRef<std::path::Path>,
+    ) -> Result<Session, StorageError> {
+        let bundle = bundle.as_ref();
+        let staging_root = staging_root.as_ref();
+        if !bundle.is_absolute() || !staging_root.is_absolute() {
+            return Err(StorageError::InvalidBundle(
+                "bundle and staging paths must be absolute".into(),
+            ));
+        }
+        if !bundle.is_file() || std::fs::symlink_metadata(bundle)?.file_type().is_symlink() {
+            return Err(StorageError::InvalidBundle(
+                "bundle must be a regular non-symlink file".into(),
+            ));
+        }
+        if !staging_root.is_dir()
+            || std::fs::symlink_metadata(staging_root)?
+                .file_type()
+                .is_symlink()
+        {
+            return Err(StorageError::InvalidBundle(
+                "staging root must be an existing non-symlink directory".into(),
+            ));
+        }
+        let compressed = std::fs::metadata(bundle)?.len();
+        if compressed > MAX_BUNDLE_COMPRESSED_BYTES {
+            return Err(StorageError::DocumentTooLarge {
+                bytes: compressed as usize,
+                maximum: MAX_BUNDLE_COMPRESSED_BYTES as usize,
+            });
+        }
+        let file = File::open(bundle)?;
+        let mut archive = ZipArchive::new(file)
+            .map_err(|error| StorageError::InvalidBundle(format!("invalid ZIP: {error}")))?;
+        if archive.len() > MAX_BUNDLE_ENTRIES {
+            return Err(StorageError::InvalidBundle(
+                "too many bundle entries".into(),
+            ));
+        }
+        let staging = staging_root.join(format!(
+            "audiorouter-import-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|error| StorageError::InvalidBundle(error.to_string()))?
+                .as_nanos()
+        ));
+        std::fs::create_dir(&staging)?;
+        let result = Self::stage_bundle(&mut archive, &staging).and_then(|manifest| {
+            let graph = std::fs::read_to_string(staging.join(&manifest.graph_path))?;
+            self.import_session(&graph)
+        });
+        if result.is_err() {
+            let _ = std::fs::remove_dir_all(&staging);
+        }
+        result
+    }
+
+    fn stage_bundle(
+        archive: &mut ZipArchive<File>,
+        staging: &std::path::Path,
+    ) -> Result<BundleManifest, StorageError> {
+        let mut paths = HashSet::new();
+        let mut expanded = 0u64;
+        let mut manifest = None;
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).map_err(|error| {
+                StorageError::InvalidBundle(format!("cannot read ZIP entry: {error}"))
+            })?;
+            let name = entry.name().replace('\\', "/");
+            let path = std::path::Path::new(&name);
+            if name.is_empty()
+                || name.starts_with('/')
+                || name.contains(':')
+                || path
+                    .components()
+                    .any(|component| matches!(component, std::path::Component::ParentDir))
+            {
+                return Err(StorageError::InvalidBundle(format!(
+                    "unsafe archive path: {name}"
+                )));
+            }
+            if !paths.insert(name.clone()) {
+                return Err(StorageError::InvalidBundle(format!(
+                    "duplicate archive path: {name}"
+                )));
+            }
+            if entry.is_dir() {
+                continue;
+            }
+            if entry
+                .unix_mode()
+                .is_some_and(|mode| mode & 0o170000 == 0o120000)
+            {
+                return Err(StorageError::InvalidBundle(format!(
+                    "symbolic links are not allowed: {name}"
+                )));
+            }
+            if is_executable_name(&name) {
+                return Err(StorageError::InvalidBundle(format!(
+                    "executable content is not allowed: {name}"
+                )));
+            }
+            let declared_size = entry.size();
+            let entry_limit = if name == "manifest.json" {
+                MAX_SESSION_DOCUMENT_BYTES as u64
+            } else {
+                MAX_BUNDLE_ASSET_BYTES
+            };
+            if declared_size > entry_limit {
+                return Err(StorageError::DocumentTooLarge {
+                    bytes: declared_size as usize,
+                    maximum: entry_limit as usize,
+                });
+            }
+            let mut bytes = Vec::with_capacity(declared_size.min(1024 * 1024) as usize);
+            let actual_size = (&mut entry).take(entry_limit + 1).read_to_end(&mut bytes)? as u64;
+            if actual_size > entry_limit {
+                return Err(StorageError::DocumentTooLarge {
+                    bytes: actual_size as usize,
+                    maximum: entry_limit as usize,
+                });
+            }
+            expanded = expanded.checked_add(actual_size).ok_or_else(|| {
+                StorageError::InvalidBundle("bundle expanded size overflow".into())
+            })?;
+            if expanded > MAX_BUNDLE_EXPANDED_BYTES {
+                return Err(StorageError::DocumentTooLarge {
+                    bytes: expanded as usize,
+                    maximum: MAX_BUNDLE_EXPANDED_BYTES as usize,
+                });
+            }
+            let output = staging.join(path);
+            if !output.starts_with(staging) {
+                return Err(StorageError::InvalidBundle("staging escape".into()));
+            }
+            if let Some(parent) = output.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let mut target = std::fs::OpenOptions::new();
+            target.write(true).create_new(true);
+            use std::io::Write;
+            let mut target = target.open(&output)?;
+            target.write_all(&bytes)?;
+            if name == "manifest.json" {
+                manifest = Some(serde_json::from_slice::<BundleManifest>(&bytes)?);
+            }
+        }
+        let manifest = manifest
+            .ok_or_else(|| StorageError::InvalidBundle("manifest.json is required".into()))?;
+        if manifest.format != "audiorouter.session" || manifest.schema_version != 1 {
+            return Err(StorageError::InvalidBundle(
+                "unsupported bundle manifest".into(),
+            ));
+        }
+        for path in std::iter::once(&manifest.graph_path).chain(manifest.assets.iter()) {
+            if !paths.contains(path)
+                || path.starts_with('/')
+                || path.contains(':')
+                || path.contains("..")
+            {
+                return Err(StorageError::InvalidBundle(format!(
+                    "manifest references unsafe or missing path: {path}"
+                )));
+            }
+        }
+        Ok(manifest)
+    }
+
     pub fn journal_result(&self, key: &str) -> Result<Option<String>, StorageError> {
         self.connection
             .query_row(
@@ -398,6 +611,7 @@ impl Storage {
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
+    use std::io::Write;
 
     fn session() -> Session {
         Session {
@@ -441,6 +655,22 @@ mod tests {
                 enabled: true,
             }],
         }
+    }
+
+    fn write_bundle(path: &std::path::Path, entries: &[(&str, &[u8])]) {
+        let file = File::create(path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        for (name, bytes) in entries {
+            writer
+                .start_file(*name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+
+    fn bundle_manifest() -> Vec<u8> {
+        br#"{"format":"audiorouter.session","schemaVersion":1,"graphPath":"session.json","assets":[]}"#.to_vec()
     }
 
     #[test]
@@ -506,6 +736,74 @@ mod tests {
             storage.load_session(&EntityId::new("missing")).unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn bundle_import_stages_a_valid_session_before_commit() {
+        let suffix = format!("audiorouter-bundle-valid-{}", std::process::id());
+        let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
+        let staging = std::env::temp_dir().join(format!("{suffix}-staging"));
+        let _ = std::fs::remove_file(&bundle);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir(&staging).unwrap();
+        let document = serde_json::to_vec(&session()).unwrap();
+        write_bundle(
+            &bundle,
+            &[
+                ("manifest.json", &bundle_manifest()),
+                ("session.json", &document),
+            ],
+        );
+        let storage = Storage::open_memory().unwrap();
+        let imported = storage.import_bundle(&bundle, &staging).unwrap();
+        assert_eq!(imported, session());
+        assert_eq!(
+            storage.load_session(&EntityId::new("session")).unwrap(),
+            Some(session())
+        );
+        drop(storage);
+        let _ = std::fs::remove_file(bundle);
+        let _ = std::fs::remove_dir_all(staging);
+    }
+
+    #[test]
+    fn bundle_import_rejects_traversal_without_writing_outside_staging() {
+        let suffix = format!("audiorouter-bundle-traversal-{}", std::process::id());
+        let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
+        let staging = std::env::temp_dir().join(format!("{suffix}-staging"));
+        let outside = std::env::temp_dir().join(format!("{suffix}-outside.txt"));
+        let _ = std::fs::remove_file(&bundle);
+        let _ = std::fs::remove_file(&outside);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir(&staging).unwrap();
+        write_bundle(&bundle, &[("../outside.txt", b"must not escape")]);
+        let error = Storage::open_memory()
+            .unwrap()
+            .import_bundle(&bundle, &staging);
+        assert!(matches!(error, Err(StorageError::InvalidBundle(_))));
+        assert!(!outside.exists());
+        assert_eq!(std::fs::read_dir(&staging).unwrap().count(), 0);
+        let _ = std::fs::remove_file(bundle);
+        let _ = std::fs::remove_dir_all(staging);
+    }
+
+    #[test]
+    fn bundle_import_rejects_oversized_assets_before_extraction() {
+        let suffix = format!("audiorouter-bundle-size-{}", std::process::id());
+        let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
+        let staging = std::env::temp_dir().join(format!("{suffix}-staging"));
+        let _ = std::fs::remove_file(&bundle);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir(&staging).unwrap();
+        let oversized = vec![0u8; MAX_BUNDLE_ASSET_BYTES as usize + 1];
+        write_bundle(&bundle, &[("asset.bin", &oversized)]);
+        let error = Storage::open_memory()
+            .unwrap()
+            .import_bundle(&bundle, &staging);
+        assert!(matches!(error, Err(StorageError::DocumentTooLarge { .. })));
+        assert_eq!(std::fs::read_dir(&staging).unwrap().count(), 0);
+        let _ = std::fs::remove_file(bundle);
+        let _ = std::fs::remove_dir_all(staging);
     }
 
     #[test]
