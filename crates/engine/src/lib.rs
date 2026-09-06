@@ -459,6 +459,29 @@ impl AudioBlock {
         }
     }
 
+    /// Apply a same-channel destination-major matrix in place. The fixed
+    /// two-channel scratch array keeps this operation allocation-free.
+    pub fn apply_channel_matrix(&mut self, matrix: &[f32]) -> Result<(), BlockError> {
+        if matrix.len() != self.channels * self.channels {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for frame in 0..self.frames {
+            let mut input = [0.0; MAX_CHANNELS];
+            for (channel, sample) in input.iter_mut().enumerate().take(self.channels) {
+                *sample = self.channel(channel).unwrap()[frame];
+            }
+            for destination_channel in 0..self.channels {
+                let mut value = 0.0;
+                for source_channel in 0..self.channels {
+                    let coefficient = matrix[destination_channel * self.channels + source_channel];
+                    value += input[source_channel] * coefficient;
+                }
+                self.channel_mut(destination_channel).unwrap()[frame] = value;
+            }
+        }
+        Ok(())
+    }
+
     /// Add a same-shaped source block into this block without allocating.
     pub fn mix_from(&mut self, source: &Self, gain: f32) -> Result<(), BlockError> {
         if self.channels != source.channels || self.frames != source.frames {
@@ -705,10 +728,11 @@ impl DriftController {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ProcessingStage {
     Gain { linear: f32 },
     Mute { muted: bool },
+    ChannelMatrix { coefficients: Vec<f32> },
 }
 
 #[derive(Debug, Default)]
@@ -807,10 +831,11 @@ pub enum GraphCompileError {
 }
 
 /// Prepare the currently supported processing subset of a validated domain
-/// graph. Device nodes and edge mixing are intentionally not activated here;
-/// they remain owned by the Windows scheduler milestone. A graph containing
-/// enabled edges is rejected until buffer routing is implemented. Gain has no
-/// scalar field in the v1 domain contract yet, so a non-bypassed gain is unity.
+/// graph. The currently supported edge form is one same-channel linear path;
+/// it uses in-place channel matrices. Fan-out, mixer convergence, device
+/// activation, and disabled-node routing remain owned by the Windows
+/// scheduler milestone. Gain has no scalar field in the v1 domain contract
+/// yet, so a non-bypassed gain is unity.
 pub fn compile_session(
     session: &audiorouter_domain::Session,
     generation: RuntimeGeneration,
@@ -819,8 +844,64 @@ pub fn compile_session(
     use std::collections::{HashMap, VecDeque};
 
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
-    if session.edges.iter().any(|edge| edge.enabled) {
-        return Err(GraphCompileError::UnsupportedTopology);
+    let enabled_edges = session
+        .edges
+        .iter()
+        .filter(|edge| edge.enabled)
+        .collect::<Vec<_>>();
+    if !enabled_edges.is_empty() {
+        let mut incoming =
+            HashMap::<audiorouter_domain::EntityId, &audiorouter_domain::Edge>::new();
+        let mut outgoing =
+            HashMap::<audiorouter_domain::EntityId, &audiorouter_domain::Edge>::new();
+        for edge in &enabled_edges {
+            if incoming
+                .insert(edge.destination_node.clone(), edge)
+                .is_some()
+                || outgoing.insert(edge.source_node.clone(), edge).is_some()
+            {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            let source = session
+                .nodes
+                .iter()
+                .find(|node| node.id == edge.source_node)
+                .unwrap();
+            let destination = session
+                .nodes
+                .iter()
+                .find(|node| node.id == edge.destination_node)
+                .unwrap();
+            if !source.enabled || source.bypass || !destination.enabled || destination.bypass {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            let source_port = source
+                .ports
+                .iter()
+                .find(|port| port.name == edge.source_port);
+            let destination_port = destination
+                .ports
+                .iter()
+                .find(|port| port.name == edge.destination_port);
+            let (Some(source_port), Some(destination_port)) = (source_port, destination_port)
+            else {
+                return Err(GraphCompileError::UnsupportedTopology);
+            };
+            if source_port.channels != destination_port.channels
+                || edge.matrix.len() != usize::from(source_port.channels).pow(2)
+            {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+        }
+        if enabled_edges.len() + 1
+            != enabled_edges
+                .iter()
+                .flat_map(|edge| [edge.source_node.clone(), edge.destination_node.clone()])
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+        {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
     }
     let mut indegree = session
         .nodes
@@ -856,6 +937,7 @@ pub fn compile_session(
     }
 
     let mut stages = Vec::new();
+    let mut previous_node = None;
     for node_id in order {
         let node = session
             .nodes
@@ -864,6 +946,17 @@ pub fn compile_session(
             .unwrap();
         if !node.enabled || node.bypass {
             continue;
+        }
+        if let Some(edge) = enabled_edges
+            .iter()
+            .find(|edge| edge.destination_node == node_id)
+        {
+            if previous_node.as_ref() != Some(&edge.source_node) {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            stages.push(ProcessingStage::ChannelMatrix {
+                coefficients: edge.matrix.clone(),
+            });
         }
         match node.kind {
             NodeKind::Gain => stages.push(ProcessingStage::Gain { linear: 1.0 }),
@@ -875,6 +968,7 @@ pub fn compile_session(
             | NodeKind::Mixer
             | NodeKind::Meter => {}
         }
+        previous_node = Some(node_id);
     }
     Ok(RuntimeGraph::prepare(generation, stages))
 }
@@ -1059,10 +1153,15 @@ impl RuntimeGraph {
 
     fn process_inner(&self, block: &mut AudioBlock, metrics: Option<&CallbackMetrics>) -> usize {
         for stage in &self.stages {
-            match *stage {
-                ProcessingStage::Gain { linear } => block.apply_gain(linear),
+            match stage {
+                ProcessingStage::Gain { linear } => block.apply_gain(*linear),
                 ProcessingStage::Mute { muted: true } => block.clear(),
                 ProcessingStage::Mute { muted: false } => {}
+                ProcessingStage::ChannelMatrix { coefficients } => {
+                    if block.apply_channel_matrix(coefficients).is_err() {
+                        block.clear();
+                    }
+                }
             }
         }
         let repaired = block.sanitize_non_finite();
@@ -1435,6 +1534,58 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(graph.generation().value(), 3);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn compiler_prepares_a_valid_linear_edge_and_channel_matrix() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "linear-route".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                Node {
+                    id: EntityId::new("source"),
+                    kind: NodeKind::PhysicalInput,
+                    name: "Source".into(),
+                    enabled: true,
+                    bypass: false,
+                    ports: vec![Port {
+                        name: "main".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    }],
+                },
+                Node {
+                    id: EntityId::new("sink"),
+                    kind: NodeKind::PhysicalOutput,
+                    name: "Sink".into(),
+                    enabled: true,
+                    bypass: false,
+                    ports: vec![Port {
+                        name: "main".into(),
+                        direction: PortDirection::Input,
+                        channels: 1,
+                    }],
+                },
+            ],
+            edges: vec![Edge {
+                id: EntityId::new("route"),
+                source_node: EntityId::new("source"),
+                source_port: "main".into(),
+                destination_node: EntityId::new("sink"),
+                destination_port: "main".into(),
+                matrix: vec![0.5],
+                enabled: true,
+            }],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(4)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.5, 0.5]);
     }
 
     #[test]

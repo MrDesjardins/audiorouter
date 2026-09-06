@@ -52,6 +52,8 @@ The original nine-test baseline is retained in the history above; the current en
 
 `RuntimeProcessor::process_ring_once` now demonstrates pooled transfer from an input ring through the prepared graph into destination-owned output storage. Input and output blocks are recycled independently; output-pool starvation is recorded as an xrun. The API intentionally documents pool membership as a caller invariant: fixed shape alone cannot prove that an externally supplied block came from the preallocated pool.
 
+The compiler now accepts a narrow linear topology: every enabled node has at most one incoming and outgoing edge, all participating ports have the same mono/stereo channel count, and each edge matrix is applied in place before the destination node stage. A 0.5 mono route test passes. Branches, mixer fan-in, disabled-node semantics, endpoint resources, and native scheduling remain explicitly outside this subset.
+
 Pool release now clears the block before returning it to the free set. The test verifies that samples written before release are silent on the next acquire, closing a stale-audio ownership hazard without adding work to the allocation path.
 
 The ring-processing tests also cover output-pool starvation: the input block returns to its free pool, no output is published, and one xrun is recorded. No fallback allocation or silent ownership loss is used.
