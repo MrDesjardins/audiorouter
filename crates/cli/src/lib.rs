@@ -1705,6 +1705,13 @@ mod tests {
             .iter()
             .all(|preset| preset["name"].as_str().is_some()
                 && preset["description"].as_str().is_some()));
+        let eq = presets["eq"].as_array().unwrap();
+        assert_eq!(
+            eq.iter()
+                .map(|preset| preset["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["voiceNeutral", "hum50Hz", "hum60Hz"]
+        );
     }
 
     #[test]

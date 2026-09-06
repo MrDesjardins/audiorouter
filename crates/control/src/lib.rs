@@ -448,9 +448,22 @@ fn method_output_schema(name: &str) -> Value {
                                 "required": ["id", "name", "description"],
                                 "additionalProperties": false
                             }
+                        },
+                        "eq": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": { "type": "string", "minLength": 1 },
+                                    "name": { "type": "string", "minLength": 1 },
+                                    "description": { "type": "string", "minLength": 1 }
+                                },
+                                "required": ["id", "name", "description"],
+                                "additionalProperties": false
+                            }
                         }
                     },
-                    "required": ["voiceChains"],
+                    "required": ["voiceChains", "eq"],
                     "additionalProperties": false
                 },
                 "limits": {
@@ -841,9 +854,22 @@ fn method_output_schema(name: &str) -> Value {
                         "required": ["id", "name", "description"],
                         "additionalProperties": false
                     }
+                },
+                "eq": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "string", "minLength": 1 },
+                            "name": { "type": "string", "minLength": 1 },
+                            "description": { "type": "string", "minLength": 1 }
+                        },
+                        "required": ["id", "name", "description"],
+                        "additionalProperties": false
+                    }
                 }
             },
-            "required": ["voiceChains"],
+            "required": ["voiceChains", "eq"],
             "additionalProperties": false
         }),
         "clients.list" => json!({
@@ -1911,13 +1937,23 @@ impl ControlPlane {
                 })
             })
             .collect::<Vec<_>>();
+        let eq = audiorouter_dsp::EqPresetId::ALL
+            .into_iter()
+            .map(|preset| {
+                json!({
+                    "id": preset.id(),
+                    "name": preset.name(),
+                    "description": preset.description()
+                })
+            })
+            .collect::<Vec<_>>();
         json!({
             "protocolVersion": { "major": 1, "minor": 0 },
             "schemaVersion": 1,
             "build": self.build,
             "methods": methods,
             "nodeTypes": nodes,
-            "presets": { "voiceChains": voice_chains },
+            "presets": { "voiceChains": voice_chains, "eq": eq },
             "limits": {
                 "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION,
                 "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION,
@@ -4417,19 +4453,17 @@ mod tests {
         assert!(description["presets"]["voiceChains"][0]["description"]
             .as_str()
             .is_some_and(|value| !value.is_empty()));
+        assert_eq!(description["presets"]["eq"].as_array().unwrap().len(), 3);
+        assert_eq!(description["presets"]["eq"][1]["id"], "hum50Hz");
         let presets = ControlPlane::default().dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
             method: "presets.list".into(),
             params: None,
         });
-        assert_eq!(
-            presets.result.unwrap()["voiceChains"]
-                .as_array()
-                .unwrap()
-                .len(),
-            2
-        );
+        let result = presets.result.unwrap();
+        assert_eq!(result["voiceChains"].as_array().unwrap().len(), 2);
+        assert_eq!(result["eq"].as_array().unwrap().len(), 3);
     }
 
     #[test]

@@ -143,6 +143,34 @@ pub enum EqPresetId {
     Hum60Hz,
 }
 
+impl EqPresetId {
+    pub const ALL: [Self; 3] = [Self::VoiceNeutral, Self::Hum50Hz, Self::Hum60Hz];
+
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::VoiceNeutral => "voiceNeutral",
+            Self::Hum50Hz => "hum50Hz",
+            Self::Hum60Hz => "hum60Hz",
+        }
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::VoiceNeutral => "Voice neutral",
+            Self::Hum50Hz => "50 Hz hum notch",
+            Self::Hum60Hz => "60 Hz hum notch",
+        }
+    }
+
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::VoiceNeutral => "Flat EQ starting point with all bands disabled.",
+            Self::Hum50Hz => "Narrow 50 Hz notch starting point for mains hum.",
+            Self::Hum60Hz => "Narrow 60 Hz notch starting point for mains hum.",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EqPreset {
     pub id: EqPresetId,

@@ -265,6 +265,11 @@ export interface DiscoveryDocument {
       name: string;
       description: string;
     }>;
+    eq: Array<{
+      id: string;
+      name: string;
+      description: string;
+    }>;
   };
   limits: {
     maxNodesPerSession: number;

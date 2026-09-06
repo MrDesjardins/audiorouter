@@ -25,6 +25,12 @@ The CLI regression now verifies both stable voice-chain IDs and the presence of
 user-facing names/descriptions, keeping the headless catalog aligned with the
 shared discovery contract.
 
+The same catalog now includes the three built-in EQ starting points: voice
+neutral, 50 Hz hum notch, and 60 Hz hum notch. Their stable IDs and explanatory
+metadata are exposed through `system.describe`, `presets.list`, and the CLI;
+the control and CLI regressions verify the complete set. Presets remain
+preparation-only and are not applied automatically.
+
 ## 2026-09-06 â€” Worker checkpoint boundary
 
 `WavRecorder` and `BufferedFlacRecorder` now expose validated controller
