@@ -446,3 +446,12 @@ changed, and restored; and a 180-byte component state payload round-tripped.
 The generated executable/object were removed afterward. No audio endpoint or
 machine configuration was accessed; worker integration, full OS sandboxing,
 and production plugin execution remain open.
+
+## 2026-09-06 - SDK installation verification
+
+Ran the repository-local SDK setup script after the Visual Studio/WDK update.
+The pinned Steinberg source checkout is present at `third_party/vst3sdk` at
+revision `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`, recursive submodules are
+initialized, and the required hosting headers are available. This is a
+project-local source SDK, not a global installer; no system plugin, audio
+configuration, or machine-wide SDK setting was changed.
