@@ -335,3 +335,8 @@ Worker launch now clears the inherited environment and supplies configuration
 only through validated arguments and owned protocol handles. This reduces
 backend credential/configuration leakage while retaining the Job Object limits;
 it is not a substitute for Windows filesystem/network sandboxing.
+
+MCP now exposes the same maintenance operation as
+`clear_recovery_safe_mode`. An operator-scope grant succeeds while a read-only
+grant is rejected, and the tool routes through the shared control dispatcher;
+no session or audio restart is performed.
