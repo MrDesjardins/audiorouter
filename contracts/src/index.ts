@@ -108,6 +108,11 @@ export interface RecordingRow extends RecordingMetadata {
   missing: boolean;
 }
 
+export interface RecordingListPage {
+  items: RecordingRow[];
+  nextCursor: string | null;
+}
+
 export interface GraphHistoryPage {
   items: Session[];
   nextCursor: string | null;
@@ -308,7 +313,9 @@ export type MethodParams = {
   "clients.revoke": { clientId: string };
   "operations.get": { operationId: string };
   "operations.cancel": { operationId: string };
-  "recordings.list": { sessionId?: EntityId | null } | undefined;
+  "recordings.list":
+    | { sessionId?: EntityId | null; cursor?: string | null; limit?: number }
+    | undefined;
   "recordings.get": { recordingId: EntityId };
   "recordings.recovery": { recordingId: EntityId };
   "recordings.reveal": { recordingId: EntityId };
@@ -373,7 +380,7 @@ export type MethodResult = {
   "clients.revoke": Record<string, unknown>;
   "operations.get": Record<string, unknown>;
   "operations.cancel": Record<string, unknown>;
-  "recordings.list": RecordingRow[];
+  "recordings.list": RecordingRow[] | RecordingListPage;
   "recordings.get": RecordingRow;
   "recordings.recovery": Record<string, unknown>;
   "recordings.reveal": Record<string, unknown>;

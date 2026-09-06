@@ -33,6 +33,17 @@ and parameter remain unchanged.
 Invalid object/array/null values are rejected before validation, and normal
 non-dry-run calls still require a bounded idempotency key.
 
+## 2026-09-06 — Recording-list cursor parity
+
+The recordings list method now accepts optional cursor and bounded limit fields.
+Without either field it preserves the established array response; with paging
+requested it returns an items/nextCursor envelope using stable persisted
+recording ordering and recording-ID cursors. Unknown cursor IDs and invalid
+limits are rejected. The shared contract describes both response forms, and
+the connected UI normalizes the page form back to its existing row list.
+Control coverage, contracts/UI typechecks, and UI tests pass; no recording
+bytes are read or changed.
+
 ## 2026-09-06 — Session-list CLI cursor parity
 
 `session list` now accepts optional `--cursor ID` in addition to its bounded

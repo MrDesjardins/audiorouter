@@ -184,7 +184,8 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
       });
     },
     async listRecordings(recordingSessionId = sessionId) {
-      return client.request("recordings.list", { sessionId: recordingSessionId });
+      const result = await client.request("recordings.list", { sessionId: recordingSessionId });
+      return Array.isArray(result) ? result : result.items;
     },
     async listApplications() {
       return client.request("applications.list", undefined);

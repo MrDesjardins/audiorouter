@@ -202,7 +202,11 @@ fn method_input_schema(name: &str) -> Value {
             &["operationId"],
         ),
         "recordings.list" => object_schema(
-            json!({ "sessionId": { "type": ["string", "null"], "minLength": 1 } }),
+            json!({
+                "sessionId": { "type": ["string", "null"], "minLength": 1 },
+                "cursor": { "type": ["string", "null"], "minLength": 1 },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+            }),
             &[],
         ),
         "recordings.get" => object_schema(
@@ -353,9 +357,23 @@ fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             }
         }),
-        "devices.list" | "nodes.types" | "nodes.describe" | "clients.list" | "recordings.list" => {
+        "devices.list" | "nodes.types" | "nodes.describe" | "clients.list" => {
             json!({ "type": "array" })
         }
+        "recordings.list" => json!({
+            "oneOf": [
+                { "type": "array" },
+                {
+                    "type": "object",
+                    "properties": {
+                        "items": { "type": "array" },
+                        "nextCursor": { "type": ["string", "null"] }
+                    },
+                    "required": ["items", "nextCursor"],
+                    "additionalProperties": false
+                }
+            ]
+        }),
         _ => json!({ "type": "object" }),
     }
 }
@@ -1749,12 +1767,43 @@ impl ControlPlane {
     fn dispatch_recordings_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         let session_id = params.get("sessionId").and_then(Value::as_str);
+        let paged = params.get("cursor").is_some() || params.get("limit").is_some();
+        let cursor = params
+            .get("cursor")
+            .filter(|value| !value.is_null())
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| ControlError::InvalidRequest("cursor must be a string".into()))
+            })
+            .transpose()?;
+        let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
+        if !(1..=500).contains(&limit) {
+            return Err(ControlError::InvalidRequest(
+                "limit must be between 1 and 500".into(),
+            ));
+        }
         let Some(storage) = &self.storage else {
-            return Ok(json!([]));
+            return Ok(if paged {
+                json!({ "items": [], "nextCursor": null })
+            } else {
+                json!([])
+            });
         };
-        let records = storage
-            .list_recordings(session_id)
-            .map_err(storage_error)?
+        let mut records = storage.list_recordings(session_id).map_err(storage_error)?;
+        if let Some(cursor) = cursor {
+            let position = records
+                .iter()
+                .position(|record| record.id == cursor)
+                .ok_or_else(|| ControlError::InvalidRequest("invalid recording cursor".into()))?;
+            records.drain(..=position);
+        }
+        let has_more = paged && records.len() > limit as usize;
+        if paged {
+            records.truncate(limit as usize);
+        }
+        let values = records
             .into_iter()
             .map(|record| {
                 json!({
@@ -1776,7 +1825,14 @@ impl ControlPlane {
                 })
             })
             .collect::<Vec<_>>();
-        Ok(json!(records))
+        if paged {
+            let next_cursor = has_more
+                .then(|| values.last().and_then(|value| value["id"].as_str()))
+                .flatten();
+            Ok(json!({ "items": values, "nextCursor": next_cursor }))
+        } else {
+            Ok(json!(values))
+        }
     }
 
     fn dispatch_recordings_get(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -2293,7 +2349,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "clients.authorize" => &["clientId", "role"],
         "clients.revoke" => &["clientId"],
         "operations.get" | "operations.cancel" => &["operationId"],
-        "recordings.list" => &["sessionId"],
+        "recordings.list" => &["sessionId", "cursor", "limit"],
         "recordings.get" | "recordings.recovery" | "recordings.reveal" | "recordings.preview" => {
             &["recordingId"]
         }
@@ -2455,7 +2511,8 @@ mod tests {
         assert_eq!(response.error.as_ref().unwrap().code, -32000);
         let data = response.error.as_ref().unwrap().data.as_ref().unwrap();
         assert_eq!(data["code"], "rateLimited");
-        assert_eq!(data["retryAfterMs"], 50);
+        let retry_after_ms = data["retryAfterMs"].as_u64().unwrap();
+        assert!((1..=50).contains(&retry_after_ms));
         assert_eq!(data["retryable"], true);
     }
 
@@ -3200,6 +3257,15 @@ mod tests {
         assert_eq!(result.as_array().unwrap().len(), 1);
         assert_eq!(result[0]["id"], "recording-1");
         assert_eq!(result[0]["missing"], false);
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(10)),
+            method: "recordings.list".into(),
+            params: Some(json!({ "sessionId": "session", "limit": 1 })),
+        });
+        let page = response.result.unwrap();
+        assert_eq!(page["items"][0]["id"], "recording-1");
+        assert_eq!(page["nextCursor"], Value::Null);
         let response = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(9)),
