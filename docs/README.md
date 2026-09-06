@@ -44,6 +44,11 @@ The [development release notes](operations/release-notes.md) summarize the
 current tested snapshot, supported boundary, known limitations, and safety
 conditions without claiming a releasable installer.
 
+The [privacy and permissions guide](operations/privacy-permissions.md) explains
+the local trust boundary, grant scopes, recording/capture limits, and safe
+diagnostics handling. The [plugin compatibility snapshot](operations/plugin-compatibility.md)
+records the verified local VST3 fixture and the remaining execution limits.
+
 ## Plans versus specifications
 
 - [Active](plans/active/current.md): execution state, evidence, and next steps. Start here when resuming work.
