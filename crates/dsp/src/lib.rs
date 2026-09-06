@@ -93,10 +93,67 @@ struct Coefficients {
     a2: f32,
 }
 
+impl Coefficients {
+    const fn zero() -> Self {
+        Self {
+            b0: 0.0,
+            b1: 0.0,
+            b2: 0.0,
+            a1: 0.0,
+            a2: 0.0,
+        }
+    }
+}
+
+impl std::ops::Sub for Coefficients {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            b0: self.b0 - rhs.b0,
+            b1: self.b1 - rhs.b1,
+            b2: self.b2 - rhs.b2,
+            a1: self.a1 - rhs.a1,
+            a2: self.a2 - rhs.a2,
+        }
+    }
+}
+
+impl std::ops::Add for Coefficients {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            b0: self.b0 + rhs.b0,
+            b1: self.b1 + rhs.b1,
+            b2: self.b2 + rhs.b2,
+            a1: self.a1 + rhs.a1,
+            a2: self.a2 + rhs.a2,
+        }
+    }
+}
+
+impl std::ops::Div<f32> for Coefficients {
+    type Output = Self;
+
+    fn div(self, rhs: f32) -> Self::Output {
+        Self {
+            b0: self.b0 / rhs,
+            b1: self.b1 / rhs,
+            b2: self.b2 / rhs,
+            a1: self.a1 / rhs,
+            a2: self.a2 / rhs,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Biquad {
     params: BiquadParams,
     coefficients: Coefficients,
+    target_coefficients: Coefficients,
+    ramp_step: Coefficients,
+    ramp_remaining: usize,
     channels: usize,
     z1: [f32; 2],
     z2: [f32; 2],
@@ -256,6 +313,9 @@ impl Biquad {
         validate(params, channels)?;
         Ok(Self {
             coefficients: coefficients(params),
+            target_coefficients: coefficients(params),
+            ramp_step: Coefficients::zero(),
+            ramp_remaining: 0,
             params,
             channels,
             z1: [0.0; 2],
@@ -271,6 +331,31 @@ impl Biquad {
         validate(params, self.channels)?;
         self.params = params;
         self.coefficients = coefficients(params);
+        self.target_coefficients = self.coefficients;
+        self.ramp_step = Coefficients::zero();
+        self.ramp_remaining = 0;
+        Ok(())
+    }
+
+    /// Schedules a coefficient transition over a fixed number of samples.
+    /// The transition is prepared on the control thread and applied without
+    /// allocation during processing.
+    pub fn set_params_ramped(
+        &mut self,
+        params: BiquadParams,
+        frames: usize,
+    ) -> Result<(), BiquadError> {
+        validate(params, self.channels)?;
+        self.params = params;
+        self.target_coefficients = coefficients(params);
+        if frames == 0 {
+            self.coefficients = self.target_coefficients;
+            self.ramp_step = Coefficients::zero();
+            self.ramp_remaining = 0;
+        } else {
+            self.ramp_step = (self.target_coefficients - self.coefficients) / frames as f32;
+            self.ramp_remaining = frames;
+        }
         Ok(())
     }
 
@@ -311,6 +396,7 @@ impl Biquad {
     /// Non-finite input is repaired to silence and output is kept finite.
     pub fn process_interleaved(&mut self, samples: &mut [f32]) {
         for (index, sample) in samples.iter_mut().enumerate() {
+            self.advance_ramp();
             let channel = index % self.channels;
             let input = if sample.is_finite() { *sample } else { 0.0 };
             let output = self.coefficients.b0 * input + self.z1[channel];
@@ -318,6 +404,17 @@ impl Biquad {
                 self.coefficients.b1 * input - self.coefficients.a1 * output + self.z2[channel];
             self.z2[channel] = self.coefficients.b2 * input - self.coefficients.a2 * output;
             *sample = if output.is_finite() { output } else { 0.0 };
+        }
+    }
+
+    fn advance_ramp(&mut self) {
+        if self.ramp_remaining != 0 {
+            self.coefficients = self.coefficients + self.ramp_step;
+            self.ramp_remaining -= 1;
+            if self.ramp_remaining == 0 {
+                self.coefficients = self.target_coefficients;
+                self.ramp_step = Coefficients::zero();
+            }
         }
     }
 }
@@ -901,6 +998,30 @@ mod tests {
             notch.magnitude_db_at(30_000.0),
             Err(BiquadError::InvalidFrequency)
         ));
+    }
+
+    #[test]
+    fn biquad_parameter_ramp_reaches_target_without_discontinuity_api() {
+        let mut filter = Biquad::new(
+            BiquadParams {
+                gain_db: 0.0,
+                ..params(FilterKind::Peaking)
+            },
+            1,
+        )
+        .unwrap();
+        let initial = filter.magnitude_db_at(1_000.0).unwrap();
+        filter
+            .set_params_ramped(params(FilterKind::Peaking), 8)
+            .unwrap();
+        let mut samples = [1.0; 8];
+        filter.process_interleaved(&mut samples);
+        assert!(samples.iter().all(|sample| sample.is_finite()));
+        assert!((filter.magnitude_db_at(1_000.0).unwrap() - 6.0).abs() < 0.02);
+        assert!(samples
+            .windows(2)
+            .all(|pair| (pair[1] - pair[0]).abs() < 0.5));
+        assert!((initial - 0.0).abs() < 1e-4);
     }
 
     #[test]

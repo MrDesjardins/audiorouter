@@ -143,3 +143,11 @@ eligibility, uses the shared peaking biquad path, prebuilds all state, and
 processes without allocation. Tests cover flat response, gain updates, band
 bounds, and invalid gain rejection. Fourteen DSP tests and strict Clippy pass;
 graph/API wiring and parameter smoothing remain open.
+
+`Biquad::set_params_ramped` now supplies a de-clicking coefficient transition
+primitive. It validates the new parameters off the audio path, interpolates
+the five normalized coefficients over a caller-selected frame count, and
+snaps to the target exactly without allocating during processing. A reference
+test verifies target response, finite output, and bounded sample-to-sample
+change. Fifteen DSP tests and strict Clippy pass; higher-level automation and
+graph/API integration remain open.
