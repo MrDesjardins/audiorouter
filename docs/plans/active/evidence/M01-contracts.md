@@ -131,6 +131,8 @@ The API now exposes the specification’s canonical `applications.list` method w
 
 Node discovery now includes parameter descriptors for implemented built-in processors: Gain exposes `gainDb` in the bounded -60 to 12 dB range with a zero default, and Mute exposes the boolean `muted` parameter. The TypeScript contract models these descriptors. Source compilation and strict Clippy pass; runtime control regression execution is blocked by Windows Application Control (OS error 4551), so this slice does not claim a fresh executable test pass.
 
+Checked-in golden fixtures now cover a protocol handshake request and exact response. The control regression deserializes both fixtures and compares the actual dispatcher response, providing a parity anchor for future CLI/UI/MCP adapters. Compilation and strict Clippy pass; execution remains blocked by the host Application Control policy.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.

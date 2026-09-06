@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "id": "handshake-fixture",
+  "result": {
+    "compatible": true,
+    "requested": {
+      "major": 1,
+      "minor": 0
+    },
+    "negotiated": {
+      "major": 1,
+      "minor": 0
+    },
+    "schemaVersion": 1
+  }
+}

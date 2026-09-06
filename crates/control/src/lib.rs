@@ -1864,6 +1864,19 @@ mod tests {
     }
 
     #[test]
+    fn handshake_golden_fixture_matches_dispatch_response() {
+        let request: JsonRpcRequest = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/system-handshake-request.json"
+        ))
+        .unwrap();
+        let expected: JsonRpcResponse = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/system-handshake-response.json"
+        ))
+        .unwrap();
+        assert_eq!(ControlPlane::default().dispatch(request), expected);
+    }
+
+    #[test]
     fn routes_inspect_dispatch_returns_desired_provenance() {
         let mut plane = ControlPlane::default();
         let graph = session();
