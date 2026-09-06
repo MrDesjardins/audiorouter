@@ -436,6 +436,14 @@ MCP now exposes the same maintenance operation as
 `clear_recovery_safe_mode`. An operator-scope grant succeeds while a read-only
 grant is rejected, and the tool routes through the shared control dispatcher;
 no session or audio restart is performed.
+
+The control plane now exposes `record_runtime_crash(timestamp_seconds)` as the
+portable supervisor integration boundary. It persists crash markers when SQLite
+is present, evaluates the durable safe-mode latch, and returns a single bounded
+`RecoveryDecision` containing the mode and eligible currently running sessions.
+Memory and SQLite-backed control regressions cover restore eligibility and the
+three-crash safe-mode transition. This method does not create processes, restart
+sessions, or open audio streams; native supervisor orchestration remains open.
 The MCP stdio interoperability regression was updated to account for the
 published `clear_recovery_safe_mode` tool. The catalog now contains 23 tools,
 including the recovery maintenance operation, and the locked workspace test
