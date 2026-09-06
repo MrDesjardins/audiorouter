@@ -537,7 +537,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path>", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -668,6 +668,11 @@ fn render_human(command: &str, value: &Value) -> String {
 pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
     let database_path = option_value_owned(args, "--database")?;
     let client_id = option_value_owned(args, "--client-id")?;
+    let pipe_name = args
+        .iter()
+        .position(|value| value == "--pipe")
+        .and_then(|index| args.get(index + 1))
+        .cloned();
     let database_path = std::path::PathBuf::from(database_path);
     if !database_path.is_absolute() {
         return Err(CliError::InvalidArguments(
@@ -723,15 +728,23 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             "tools/list" if initialized => Some(json!({
                 "jsonrpc": "2.0", "id": id, "result": { "tools": mcp_tools() }
             })),
-            "tools/call" if initialized => {
-                Some(mcp_tool_call(&mut plane, &client_id, &grant, &message))
-            }
+            "tools/call" if initialized => Some(mcp_tool_call(
+                &mut plane,
+                &client_id,
+                &grant,
+                pipe_name.as_deref(),
+                &message,
+            )),
             "resources/list" if initialized => Some(json!({
                 "jsonrpc": "2.0", "id": id, "result": { "resources": mcp_resources() }
             })),
-            "resources/read" if initialized => {
-                Some(mcp_resource_read(&mut plane, &client_id, &grant, &message))
-            }
+            "resources/read" if initialized => Some(mcp_resource_read(
+                &mut plane,
+                &client_id,
+                &grant,
+                pipe_name.as_deref(),
+                &message,
+            )),
             _ => Some(mcp_error(
                 id,
                 -32002,
@@ -791,46 +804,11 @@ fn mcp_resources() -> Value {
     ])
 }
 
-fn mcp_resource_read(
-    plane: &mut ControlPlane,
-    client_id: &str,
-    grant: &audiorouter_control::ClientGrant,
-    message: &Value,
-) -> Value {
-    let id = message.get("id").cloned();
-    let uri = message["params"]["uri"].as_str().unwrap_or_default();
-    let (mime_type, text) = match uri {
-        "audiorouter://capabilities" | "audiorouter://diagnostics" => {
-            let method = if uri.ends_with("capabilities") {
-                "system.describe"
-            } else {
-                "system.diagnostics"
-            };
-            let payload = plane.dispatch_authorized_for_client(
-                audiorouter_protocol::JsonRpcRequest {
-                    jsonrpc: "2.0".into(),
-                    id: Some(json!(1)),
-                    method: method.into(),
-                    params: None,
-                },
-                client_id,
-                grant,
-            );
-            ("application/json", serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into()))
-        }
-        "audiorouter://workflow/headless" => (
-            "text/plain",
-            "Read capabilities and the current session revision; plan the smallest change; inspect warnings; apply with a unique idempotency key; confirm operation status and events; on conflict, reread and replan. Imports are stopped and never arm recording or install drivers automatically.".into(),
-        ),
-        _ => return mcp_error(id, -32602, "unknown resource URI"),
-    };
-    json!({ "jsonrpc": "2.0", "id": id, "result": { "contents": [{ "uri": uri, "mimeType": mime_type, "text": text }] } })
-}
-
 fn mcp_tool_call(
     plane: &mut ControlPlane,
     client_id: &str,
     grant: &audiorouter_control::ClientGrant,
+    pipe_name: Option<&str>,
     message: &Value,
 ) -> Value {
     let id = message.get("id").cloned();
@@ -849,35 +827,86 @@ fn mcp_tool_call(
             if method.is_empty() {
                 return mcp_tool_error(id, "call_api requires a method");
             }
-            return mcp_dispatch_tool(plane, client_id, grant, id, method, params);
+            return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, method, params);
         }
         _ => return mcp_tool_error(id, "unknown tool"),
     };
-    mcp_dispatch_tool(plane, client_id, grant, id, method, params)
+    mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, method, params)
+}
+
+fn mcp_resource_read(
+    plane: &mut ControlPlane,
+    client_id: &str,
+    grant: &audiorouter_control::ClientGrant,
+    pipe_name: Option<&str>,
+    message: &Value,
+) -> Value {
+    let id = message.get("id").cloned();
+    let uri = message["params"]["uri"].as_str().unwrap_or_default();
+    let (mime_type, text) = match uri {
+        "audiorouter://capabilities" | "audiorouter://diagnostics" => {
+            let method = if uri.ends_with("capabilities") {
+                "system.describe"
+            } else {
+                "system.diagnostics"
+            };
+            let payload = match mcp_api_value(plane, client_id, grant, pipe_name, method, None) {
+                Ok(payload) => payload,
+                Err(error) => return mcp_error(id, -32003, &error),
+            };
+            ("application/json", serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into()))
+        }
+        "audiorouter://workflow/headless" => (
+            "text/plain",
+            "Read capabilities and the current session revision; plan the smallest change; inspect warnings; apply with a unique idempotency key; confirm operation status and events; on conflict, reread and replan. Imports are stopped and never arm recording or install drivers automatically.".into(),
+        ),
+        _ => return mcp_error(id, -32602, "unknown resource URI"),
+    };
+    json!({ "jsonrpc": "2.0", "id": id, "result": { "contents": [{ "uri": uri, "mimeType": mime_type, "text": text }] } })
 }
 
 fn mcp_dispatch_tool(
     plane: &mut ControlPlane,
     client_id: &str,
     grant: &audiorouter_control::ClientGrant,
+    pipe_name: Option<&str>,
     id: Option<Value>,
     method: &str,
     params: Option<Value>,
 ) -> Value {
-    let response = plane.dispatch_authorized_for_client(
-        audiorouter_protocol::JsonRpcRequest {
-            jsonrpc: "2.0".into(),
-            id: id.clone(),
-            method: method.into(),
-            params,
-        },
-        client_id,
-        grant,
-    );
-    let is_error = response.error.is_some();
-    let payload = serde_json::to_value(response)
-        .unwrap_or_else(|_| json!({ "error": { "message": "response serialization failed" } }));
+    let payload = match mcp_api_value(plane, client_id, grant, pipe_name, method, params) {
+        Ok(payload) => payload,
+        Err(error) => return mcp_error(id, -32003, &error),
+    };
+    let is_error = payload.get("error").is_some();
     json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into()) }], "isError": is_error, "structuredContent": payload } })
+}
+
+fn mcp_api_value(
+    plane: &mut ControlPlane,
+    client_id: &str,
+    grant: &audiorouter_control::ClientGrant,
+    pipe_name: Option<&str>,
+    method: &str,
+    params: Option<Value>,
+) -> Result<Value, String> {
+    let request = audiorouter_protocol::JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: method.into(),
+        params,
+    };
+    if let Some(pipe_name) = pipe_name {
+        let frame = audiorouter_protocol::encode_frame(&request)
+            .map_err(|error| format!("cannot encode backend request: {error}"))?;
+        let response = audiorouter_transport::round_trip(pipe_name, &frame)
+            .map_err(|error| format!("backend pipe request failed: {error}"))?;
+        return audiorouter_protocol::decode_frame::<Value>(&response)
+            .map_err(|error| format!("invalid backend response: {error}"));
+    }
+    let response = plane.dispatch_authorized_for_client(request, client_id, grant);
+    serde_json::to_value(response)
+        .map_err(|error| format!("response serialization failed: {error}"))
 }
 
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
@@ -1157,6 +1186,7 @@ mod tests {
             &mut plane,
             "mcp-test",
             &grant,
+            None,
             &json!({
                 "id": 7,
                 "params": {

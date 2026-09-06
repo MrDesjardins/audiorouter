@@ -10,4 +10,5 @@ audiorouter-control = { path = "../control" }
 audiorouter-domain = { path = "../domain" }
 audiorouter-storage = { path = "../storage" }
 audiorouter-protocol = { path = "../protocol" }
+audiorouter-transport = { path = "../transport" }
 serde_json = { workspace = true }
