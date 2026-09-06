@@ -3,6 +3,7 @@
 //! This crate intentionally does not load or execute plugin code. Discovery
 //! produces identity evidence for a later disposable worker boundary.
 
+use memmap2::{MmapMut, MmapOptions};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
@@ -1197,7 +1198,7 @@ impl WorkerFrame {
 
 pub const SHARED_AUDIO_HEADER_BYTES: usize = 32;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SharedAudioError {
     InvalidChannels,
     BufferTooSmall,
@@ -1205,6 +1206,95 @@ pub enum SharedAudioError {
     InvalidVersion,
     InvalidFrameCount,
     InvalidFrame(WorkerFrameError),
+    InvalidPath,
+    Exists,
+    Io(String),
+}
+
+/// File-backed shared memory for one bounded audio slot. The file is an
+/// explicit caller-owned IPC endpoint; this type never chooses a machine-wide
+/// name and never touches audio or plugin state.
+pub struct SharedAudioRegion {
+    file: fs::File,
+    map: MmapMut,
+    layout: SharedAudioLayout,
+}
+
+impl SharedAudioRegion {
+    pub fn create(
+        path: impl AsRef<Path>,
+        layout: SharedAudioLayout,
+    ) -> Result<Self, SharedAudioError> {
+        let path = path.as_ref();
+        if !path.is_absolute() {
+            return Err(SharedAudioError::InvalidPath);
+        }
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    SharedAudioError::Exists
+                } else {
+                    SharedAudioError::Io(error.to_string())
+                }
+            })?;
+        file.set_len(layout.buffer_len() as u64)
+            .map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        let map = unsafe { MmapOptions::new().len(layout.buffer_len()).map_mut(&file) }
+            .map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        Ok(Self { file, map, layout })
+    }
+
+    pub fn open(
+        path: impl AsRef<Path>,
+        layout: SharedAudioLayout,
+    ) -> Result<Self, SharedAudioError> {
+        let path = path.as_ref();
+        if !path.is_absolute() {
+            return Err(SharedAudioError::InvalidPath);
+        }
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        if file
+            .metadata()
+            .map_err(|error| SharedAudioError::Io(error.to_string()))?
+            .len()
+            < layout.buffer_len() as u64
+        {
+            return Err(SharedAudioError::BufferTooSmall);
+        }
+        let map = unsafe { MmapOptions::new().len(layout.buffer_len()).map_mut(&file) }
+            .map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        Ok(Self { file, map, layout })
+    }
+
+    pub fn write(&mut self, frame: &WorkerFrame) -> Result<(), SharedAudioError> {
+        self.layout.write(&mut self.map, frame)
+    }
+
+    pub fn read(&self) -> Result<WorkerFrame, SharedAudioError> {
+        self.layout.read(&self.map)
+    }
+
+    pub fn flush(&mut self) -> Result<(), SharedAudioError> {
+        self.map
+            .flush()
+            .map_err(|error| SharedAudioError::Io(error.to_string()))
+    }
+
+    pub fn layout(&self) -> SharedAudioLayout {
+        self.layout
+    }
+
+    pub fn file(&self) -> &fs::File {
+        &self.file
+    }
 }
 
 /// Describes one fixed-capacity audio slot for a future OS shared mapping.
@@ -1844,5 +1934,26 @@ mod tests {
             layout.write(&mut slot[..31], &frame),
             Err(SharedAudioError::BufferTooSmall)
         );
+    }
+
+    #[test]
+    fn shared_audio_region_is_reopenable_and_refuses_relative_paths() {
+        let layout = SharedAudioLayout::new(1).unwrap();
+        let path =
+            std::env::temp_dir().join(format!("audiorouter-shared-audio-{}", std::process::id()));
+        let _ = fs::remove_file(&path);
+        let frame = WorkerFrame::new(4, 90, 1, vec![0.125, -0.25]).unwrap();
+        let mut writer = SharedAudioRegion::create(&path, layout).unwrap();
+        writer.write(&frame).unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        let reader = SharedAudioRegion::open(&path, layout).unwrap();
+        assert_eq!(reader.read().unwrap(), frame);
+        assert!(matches!(
+            SharedAudioRegion::open("relative-slot", layout),
+            Err(SharedAudioError::InvalidPath)
+        ));
+        drop(reader);
+        fs::remove_file(path).unwrap();
     }
 }

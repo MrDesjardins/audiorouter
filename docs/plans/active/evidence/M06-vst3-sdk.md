@@ -231,3 +231,12 @@ little-endian form, and rejects bad magic/version/counts, non-finite samples,
 and malformed frames. The round-trip/corruption regression passes; the
 plugin-host suite now has 23 tests with strict Clippy clean. OS mapping,
 cross-process synchronization, and plugin execution remain open.
+
+Added `SharedAudioRegion`, a file-backed memory mapping over the fixed slot.
+Creation requires an absolute caller-selected path and refuses an existing
+target; reopening validates the minimum mapping size. Explicit write, read,
+and flush operations support a future worker pair without machine-wide names
+or audio access. The reopen/round-trip and relative-path regression passes;
+the plugin-host suite now has 24 tests with strict Clippy clean. A complete
+cross-process ownership/synchronization protocol and plugin execution remain
+open.
