@@ -541,6 +541,7 @@ impl EventLog {
         session_id: Option<EntityId>,
         retained_at: Instant,
     ) -> u64 {
+        self.prune_expired(retained_at);
         let sequence = self.next_sequence;
         self.next_sequence = self.next_sequence.saturating_add(1);
         self.events.push_back(RetainedEvent {
@@ -560,15 +561,7 @@ impl EventLog {
         sequence
     }
 
-    pub fn since(
-        &mut self,
-        after_sequence: u64,
-        limit: usize,
-    ) -> Result<Vec<StateEvent>, EventReplayError> {
-        if !(1..=500).contains(&limit) {
-            return Err(EventReplayError::InvalidLimit);
-        }
-        let now = Instant::now();
+    fn prune_expired(&mut self, now: Instant) {
         while self
             .events
             .front()
@@ -577,6 +570,17 @@ impl EventLog {
         {
             self.events.pop_front();
         }
+    }
+
+    pub fn since(
+        &mut self,
+        after_sequence: u64,
+        limit: usize,
+    ) -> Result<Vec<StateEvent>, EventReplayError> {
+        if !(1..=500).contains(&limit) {
+            return Err(EventReplayError::InvalidLimit);
+        }
+        self.prune_expired(Instant::now());
         if let Some(first) = self.events.front() {
             if after_sequence.saturating_add(1) < first.event.sequence {
                 return Err(EventReplayError::ResyncRequired);
@@ -1163,6 +1167,7 @@ mod tests {
             now - EVENT_RETENTION - Duration::from_secs(1),
         );
         log.append_at(2, None, "current", None, now);
+        assert_eq!(log.len(), 1);
         assert_eq!(log.since(0, 10), Err(EventReplayError::ResyncRequired));
         assert_eq!(log.since(1, 10).unwrap()[0].category, "current");
     }
