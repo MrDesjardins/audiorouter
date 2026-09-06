@@ -1,8 +1,9 @@
 //! Windows named-pipe transport for the local JSON-RPC boundary.
 //!
 //! The transport deliberately does not change audio configuration or open an
-//! audio endpoint.  Authentication/ACL policy is a separate boundary and is
-//! not implied by the default pipe security descriptor used by this prototype.
+//! audio endpoint. Native server pipes use an owner-only ACL and validate the
+//! connected process SID before reading requests; method-level grants remain a
+//! separate authorization boundary in the control plane.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransportError {
