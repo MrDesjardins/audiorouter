@@ -1548,6 +1548,7 @@ pub struct ControlPlane {
     virtual_buses: VirtualBusRegistry,
     virtual_bus_plans: HashMap<EntityId, VirtualBusPlan>,
     next_virtual_bus_plan: u64,
+    active_idempotency_scope: Option<String>,
 }
 
 impl Default for ControlPlane {
@@ -1576,6 +1577,7 @@ impl ControlPlane {
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_plans: HashMap::new(),
             next_virtual_bus_plan: 1,
+            active_idempotency_scope: None,
         }
     }
 
@@ -1621,7 +1623,27 @@ impl ControlPlane {
             virtual_buses,
             virtual_bus_plans,
             next_virtual_bus_plan: 1,
+            active_idempotency_scope: None,
         }
+    }
+
+    fn scoped_idempotency_key(&self, method: &str, key: &str) -> String {
+        self.active_idempotency_scope
+            .as_ref()
+            .map(|client| format!("{client}\0{method}\0{key}"))
+            .unwrap_or_else(|| key.to_owned())
+    }
+
+    fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {
+        self.active_idempotency_scope
+            .as_ref()
+            .map(|client| {
+                vec![
+                    format!("{client}\0graph.commit\0{operation_id}"),
+                    format!("{client}\0virtualDevices.apply\0{operation_id}"),
+                ]
+            })
+            .unwrap_or_else(|| vec![operation_id.to_owned()])
     }
 
     fn remember_operation_outcome(
@@ -1846,39 +1868,44 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        let lookup_keys = self.operation_lookup_keys(operation_id);
         if let Some(storage) = &self.storage {
-            if let Some((operation, result, revision, created_at)) = storage
-                .operation_status(operation_id)
-                .map_err(storage_error)?
-            {
-                let result: Value = serde_json::from_str(&result)
-                    .map_err(|error| ControlError::Json(error.to_string()))?;
+            for lookup_key in &lookup_keys {
+                if let Some((operation, result, revision, created_at)) = storage
+                    .operation_status(lookup_key)
+                    .map_err(storage_error)?
+                {
+                    let result: Value = serde_json::from_str(&result)
+                        .map_err(|error| ControlError::Json(error.to_string()))?;
+                    return Ok(json!({
+                        "operationId": operation_id,
+                        "operation": operation,
+                        "status": "completed",
+                        "durable": true,
+                        "revision": revision,
+                        "createdAt": created_at,
+                        "result": result
+                    }));
+                }
+            }
+        }
+        for lookup_key in &lookup_keys {
+            if let Some(result) = self.operation_outcomes.get(lookup_key) {
+                let operation = self
+                    .operation_names
+                    .get(lookup_key)
+                    .map(String::as_str)
+                    .unwrap_or("graph.commit");
                 return Ok(json!({
                     "operationId": operation_id,
                     "operation": operation,
                     "status": "completed",
-                    "durable": true,
-                    "revision": revision,
-                    "createdAt": created_at,
+                    "durable": false,
+                    "revision": result["revision"],
+                    "createdAt": Value::Null,
                     "result": result
                 }));
             }
-        }
-        if let Some(result) = self.operation_outcomes.get(operation_id) {
-            let operation = self
-                .operation_names
-                .get(operation_id)
-                .map(String::as_str)
-                .unwrap_or("graph.commit");
-            return Ok(json!({
-                "operationId": operation_id,
-                "operation": operation,
-                "status": "completed",
-                "durable": false,
-                "revision": result["revision"],
-                "createdAt": Value::Null,
-                "result": result
-            }));
         }
         if self.storage.is_some() {
             return Err(ControlError::InvalidRequest("operation not found".into()));
@@ -1898,13 +1925,21 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        let lookup_keys = self.operation_lookup_keys(operation_id);
         let exists = if let Some(storage) = &self.storage {
-            storage
-                .operation_status(operation_id)
-                .map_err(storage_error)?
-                .is_some()
+            lookup_keys.iter().try_fold(false, |found, key| {
+                Ok::<_, ControlError>(
+                    found
+                        || storage
+                            .operation_status(key)
+                            .map_err(storage_error)?
+                            .is_some(),
+                )
+            })?
         } else {
-            self.operation_outcomes.contains_key(operation_id)
+            lookup_keys
+                .iter()
+                .any(|key| self.operation_outcomes.contains_key(key))
         };
         if !exists {
             return Err(ControlError::InvalidRequest("operation not found".into()));
@@ -2308,6 +2343,16 @@ impl ControlPlane {
         base_revision: u64,
         idempotency_key: &str,
     ) -> Result<Value, ControlError> {
+        self.commit_graph_scoped(plan_id, base_revision, idempotency_key, idempotency_key)
+    }
+
+    fn commit_graph_scoped(
+        &mut self,
+        plan_id: &EntityId,
+        base_revision: u64,
+        idempotency_key: &str,
+        display_operation_id: &str,
+    ) -> Result<Value, ControlError> {
         let checkpoint = self.store.clone();
         let fingerprint = format!("graph.commit:{}:{}", plan_id.as_str(), base_revision);
         let request_hash = format!("{:x}", Sha256::digest(fingerprint.as_bytes()));
@@ -2388,7 +2433,7 @@ impl ControlPlane {
         if !result.idempotent_replay {
             self.events.append(
                 result.revision,
-                Some(idempotency_key.into()),
+                Some(display_operation_id.into()),
                 "graph.committed",
                 Some(result.session_id.clone()),
             );
@@ -2423,7 +2468,7 @@ impl ControlPlane {
                 .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
             self.events.append(
                 result.revision,
-                Some(idempotency_key.into()),
+                Some(display_operation_id.into()),
                 "runtime.activated",
                 Some(result.session_id.clone()),
             );
@@ -2669,7 +2714,15 @@ impl ControlPlane {
                 }
             }
         }
-        self.dispatch(request)
+        let previous_scope = std::mem::replace(
+            &mut self.active_idempotency_scope,
+            client_id
+                .filter(|client| !client.is_empty())
+                .map(str::to_owned),
+        );
+        let response = self.dispatch(request);
+        self.active_idempotency_scope = previous_scope;
+        response
     }
 
     pub fn dispatch_message(&mut self, message: RpcMessage) -> Vec<JsonRpcResponse> {
@@ -2909,7 +2962,8 @@ impl ControlPlane {
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
-        self.commit_graph(&plan_id, base_revision, key)
+        let scoped_key = self.scoped_idempotency_key("graph.commit", key);
+        self.commit_graph_scoped(&plan_id, base_revision, &scoped_key, key)
     }
 
     fn dispatch_session_start(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -3749,11 +3803,12 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let storage_key = self.scoped_idempotency_key("virtualDevices.apply", idempotency_key);
         let request_hash = virtual_device_request_hash(plan_id);
-        if let Some(previous) = self.operation_outcomes.get(idempotency_key) {
+        if let Some(previous) = self.operation_outcomes.get(&storage_key) {
             if self
                 .virtual_bus_idempotency_hashes
-                .get(idempotency_key)
+                .get(&storage_key)
                 .is_some_and(|hash| hash == &request_hash)
             {
                 return Ok(previous.clone());
@@ -3762,13 +3817,13 @@ impl ControlPlane {
         }
         if let Some(storage) = &self.storage {
             if let Some(previous) = storage
-                .journal_result_checked(idempotency_key, &request_hash)
+                .journal_result_checked(&storage_key, &request_hash)
                 .map_err(storage_error)?
             {
                 let previous: Value = serde_json::from_str(&previous)
                     .map_err(|error| ControlError::Json(error.to_string()))?;
                 self.remember_operation_outcome(
-                    idempotency_key,
+                    &storage_key,
                     previous.clone(),
                     "virtualDevices.apply",
                     Some(&request_hash),
@@ -3802,7 +3857,7 @@ impl ControlPlane {
             if let Err(error) = storage.save_virtual_buses_and_journal(
                 &self.virtual_buses,
                 &EntityId::new(plan_id),
-                idempotency_key,
+                &storage_key,
                 &request_hash,
                 &result,
             ) {
@@ -3812,7 +3867,7 @@ impl ControlPlane {
         }
         self.virtual_bus_plans.remove(&EntityId::new(plan_id));
         self.remember_operation_outcome(
-            idempotency_key,
+            &storage_key,
             result.clone(),
             "virtualDevices.apply",
             Some(&request_hash),
@@ -5866,6 +5921,58 @@ mod tests {
         let result = plane.commit_graph(&plan, 0, "op-1").unwrap();
         assert_eq!(result["revision"], 1);
         assert_eq!(plane.get_session(&original.id).unwrap().name, "changed");
+    }
+
+    #[test]
+    fn authorized_idempotency_keys_are_scoped_to_client_and_method() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let grant = ClientGrant::for_role(ClientRole::Editor);
+        let same_key = "shared-client-key";
+
+        let mut first_candidate = original.clone();
+        first_candidate.name = "first-client-change".into();
+        let first_plan = plane.plan_graph(&original.id, 0, first_candidate).unwrap();
+        let first = plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "graph.commit".into(),
+                params: Some(json!({
+                    "planId": first_plan,
+                    "baseRevision": 0,
+                    "idempotencyKey": same_key
+                })),
+            },
+            "client-a",
+            &grant,
+        );
+        assert_eq!(first.result.unwrap()["revision"], 1);
+
+        let committed = plane.get_session(&original.id).unwrap().clone();
+        let mut second_candidate = committed.clone();
+        second_candidate.name = "second-client-change".into();
+        let second_plan = plane.plan_graph(&original.id, 1, second_candidate).unwrap();
+        let second = plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "graph.commit".into(),
+                params: Some(json!({
+                    "planId": second_plan,
+                    "baseRevision": 1,
+                    "idempotencyKey": same_key
+                })),
+            },
+            "client-b",
+            &grant,
+        );
+        assert_eq!(second.result.unwrap()["revision"], 2);
+        assert_eq!(
+            plane.get_session(&original.id).unwrap().name,
+            "second-client-change"
+        );
     }
 
     #[test]

@@ -47,6 +47,16 @@ tests, 31 plugin-host unit tests, 8 worker-process tests, and strict Clippy all
 passed; the scope remained free of audio-device and machine-configuration
 actions.
 
+## 2026-09-06 — Client-scoped idempotency
+
+Authenticated dispatch now scopes graph-commit and virtual-device-apply
+idempotency records by authenticated client and method internally, while
+retaining the caller's original operation ID in responses and events. This
+prevents two clients using the same human-readable key from replaying or
+conflicting with one another. Operation lookup/cancel resolves only the
+requesting client's scoped records. A regression proves two clients can each
+commit with the same key; control coverage is 68 tests with strict Clippy.
+
 ## 2026-09-06 — Scan cancellation during bounded binary reads
 
 Plugin discovery now gives each candidate its own ten-second inspection window
