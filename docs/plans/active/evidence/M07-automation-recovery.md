@@ -244,6 +244,12 @@ running, non-recording sessions as automatic recovery candidates. Stable-run
 reset and expiry are covered by domain tests; this is policy evidence only and
 does not claim persisted crash markers, process restart orchestration, Windows
 startup integration, or automatic audio restart.
+
+Storage now persists the bounded crash markers in a dedicated SQLite table with
+expiry, a three-marker cap, count, and explicit clear operations. Storage tests
+cover expiry and invalid timestamp rejection. The control/supervisor integration
+still remains to be implemented; no automatic restart or audio resume is
+claimed.
 Backup and restore destinations now use `symlink_metadata` presence checks
 instead of relying on `Path::exists()`. This rejects dangling symlinks before
 SQLite creates or restores a file, closing a path-safety bypass; the regression

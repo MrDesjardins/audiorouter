@@ -1,6 +1,9 @@
 //! SQLite persistence boundary for M01.
 
-use audiorouter_domain::{node_registry, validate_session, EntityId, Session};
+use audiorouter_domain::{
+    node_registry, validate_session, EntityId, Session, RECOVERY_CRASH_WINDOW_SECONDS,
+    RECOVERY_SAFE_MODE_CRASHES,
+};
 use audiorouter_recording::RecorderCheckpoint;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
@@ -26,6 +29,7 @@ pub enum StorageError {
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
+    InvalidRecoveryTimestamp,
 }
 
 pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
@@ -458,6 +462,12 @@ impl Storage {
                  key TEXT PRIMARY KEY,
                  value TEXT NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS recovery_crashes (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 occurred_at INTEGER NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS recovery_crashes_occurred_at
+                 ON recovery_crashes(occurred_at);
              CREATE TABLE IF NOT EXISTS client_enrollments (
                  client_id TEXT PRIMARY KEY,
                  role TEXT NOT NULL CHECK(role IN ('observer', 'editor', 'operator')),
@@ -1515,6 +1525,58 @@ impl Storage {
             == Some("true"))
     }
 
+    /// Persist one bounded crash marker and return the number of recent
+    /// markers. The supervisor supplies epoch seconds; no restart or audio
+    /// action is performed by this storage primitive.
+    pub fn record_recovery_crash(&self, timestamp_seconds: u64) -> Result<usize, StorageError> {
+        let timestamp =
+            i64::try_from(timestamp_seconds).map_err(|_| StorageError::InvalidRecoveryTimestamp)?;
+        let cutoff = timestamp.saturating_sub(RECOVERY_CRASH_WINDOW_SECONDS as i64);
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute(
+            "DELETE FROM recovery_crashes WHERE occurred_at < ?1",
+            params![cutoff],
+        )?;
+        transaction.execute(
+            "INSERT INTO recovery_crashes(occurred_at) VALUES (?1)",
+            params![timestamp],
+        )?;
+        transaction.execute(
+            "DELETE FROM recovery_crashes
+             WHERE id NOT IN (
+                 SELECT id FROM recovery_crashes ORDER BY id DESC LIMIT ?1
+             )",
+            params![RECOVERY_SAFE_MODE_CRASHES as i64],
+        )?;
+        let count = transaction.query_row(
+            "SELECT COUNT(*) FROM recovery_crashes WHERE occurred_at >= ?1",
+            params![cutoff],
+            |row| row.get::<_, i64>(0),
+        )?;
+        transaction.commit()?;
+        Ok(count as usize)
+    }
+
+    pub fn recovery_crash_count(&self, timestamp_seconds: u64) -> Result<usize, StorageError> {
+        let timestamp =
+            i64::try_from(timestamp_seconds).map_err(|_| StorageError::InvalidRecoveryTimestamp)?;
+        let cutoff = timestamp.saturating_sub(RECOVERY_CRASH_WINDOW_SECONDS as i64);
+        self.connection
+            .query_row(
+                "SELECT COUNT(*) FROM recovery_crashes WHERE occurred_at >= ?1",
+                params![cutoff],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|count| count as usize)
+            .map_err(StorageError::Sql)
+    }
+
+    pub fn clear_recovery_crashes(&self) -> Result<(), StorageError> {
+        self.connection
+            .execute("DELETE FROM recovery_crashes", [])?;
+        Ok(())
+    }
+
     fn prune_expired_graph_plans(&self) -> Result<(), StorageError> {
         self.connection.execute(
             "DELETE FROM graph_plans WHERE expires_at <= unixepoch('now')",
@@ -1677,6 +1739,37 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn recovery_crash_markers_are_bounded_and_expire() {
+        let storage = Storage::open_memory().unwrap();
+        assert_eq!(storage.record_recovery_crash(100).unwrap(), 1);
+        assert_eq!(storage.record_recovery_crash(101).unwrap(), 2);
+        assert_eq!(storage.record_recovery_crash(102).unwrap(), 3);
+        assert_eq!(storage.recovery_crash_count(102).unwrap(), 3);
+        assert_eq!(storage.record_recovery_crash(103).unwrap(), 3);
+        assert_eq!(
+            storage
+                .recovery_crash_count(100 + RECOVERY_CRASH_WINDOW_SECONDS + 4)
+                .unwrap(),
+            0
+        );
+        storage.clear_recovery_crashes().unwrap();
+        assert_eq!(storage.recovery_crash_count(103).unwrap(), 0);
+    }
+
+    #[test]
+    fn recovery_crash_markers_reject_unrepresentable_timestamps() {
+        let storage = Storage::open_memory().unwrap();
+        assert!(matches!(
+            storage.record_recovery_crash(u64::MAX),
+            Err(StorageError::InvalidRecoveryTimestamp)
+        ));
+        assert!(matches!(
+            storage.recovery_crash_count(u64::MAX),
+            Err(StorageError::InvalidRecoveryTimestamp)
+        ));
     }
 
     #[test]
