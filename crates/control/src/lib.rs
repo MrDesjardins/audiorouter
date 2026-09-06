@@ -469,6 +469,45 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["sessionId", "revision"],
             "additionalProperties": false
         }),
+        "operations.get" => json!({
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "operationId": { "type": "string", "minLength": 1 },
+                        "operation": { "type": "string", "minLength": 1 },
+                        "status": { "const": "completed" },
+                        "durable": { "type": "boolean" },
+                        "revision": { "type": "integer", "minimum": 0 },
+                        "createdAt": { "type": ["integer", "null"] },
+                        "result": { "type": "object" }
+                    },
+                    "required": ["operationId", "operation", "status", "durable", "revision", "createdAt", "result"],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "operationId": { "type": "string", "minLength": 1 },
+                        "status": { "const": "unknown" },
+                        "durable": { "const": false }
+                    },
+                    "required": ["operationId", "status", "durable"],
+                    "additionalProperties": false
+                }
+            ]
+        }),
+        "operations.cancel" => json!({
+            "type": "object",
+            "properties": {
+                "operationId": { "type": "string", "minLength": 1 },
+                "status": { "const": "completed" },
+                "cancelled": { "const": false },
+                "reason": { "const": "alreadyCompleted" }
+            },
+            "required": ["operationId", "status", "cancelled", "reason"],
+            "additionalProperties": false
+        }),
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -3333,6 +3372,22 @@ mod tests {
         assert_eq!(
             commit["outputSchema"]["properties"]["revision"]["minimum"],
             0
+        );
+        let operation = methods
+            .iter()
+            .find(|method| method["name"] == "operations.get")
+            .unwrap();
+        assert_eq!(
+            operation["outputSchema"]["oneOf"][1]["properties"]["status"]["const"],
+            "unknown"
+        );
+        let cancel = methods
+            .iter()
+            .find(|method| method["name"] == "operations.cancel")
+            .unwrap();
+        assert_eq!(
+            cancel["outputSchema"]["properties"]["reason"]["const"],
+            "alreadyCompleted"
         );
         let applications = methods
             .iter()

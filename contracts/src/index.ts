@@ -85,6 +85,29 @@ export interface GraphCommitResult {
   activation?: Record<string, unknown>;
 }
 
+export interface OperationCompleted {
+  operationId: EntityId;
+  operation: string;
+  status: "completed";
+  durable: boolean;
+  revision: number;
+  createdAt: number | null;
+  result: Record<string, unknown>;
+}
+
+export interface OperationUnknown {
+  operationId: EntityId;
+  status: "unknown";
+  durable: false;
+}
+
+export interface OperationCancelled {
+  operationId: EntityId;
+  status: "completed";
+  cancelled: false;
+  reason: "alreadyCompleted";
+}
+
 export type RecordingState = "armed" | "recording" | "paused" | "completed" | "failed";
 
 export interface RecordingMetadata {
@@ -418,8 +441,8 @@ export type MethodResult = {
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
   "clients.authorize": Record<string, unknown>;
   "clients.revoke": Record<string, unknown>;
-  "operations.get": Record<string, unknown>;
-  "operations.cancel": Record<string, unknown>;
+  "operations.get": OperationCompleted | OperationUnknown;
+  "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
   "recordings.get": RecordingRow;
   "recordings.recovery": Record<string, unknown>;

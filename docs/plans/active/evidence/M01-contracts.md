@@ -222,3 +222,9 @@ expiry, diff, affected destinations, warnings, and required scopes; commits
 expose session/revision identity and optional activation metadata. These are
 covered by discovery assertions and preserve the existing plan-only/native-
 audio-unavailable boundary.
+
+Operation status and cancellation results now have explicit schemas and shared
+types. `operations.get` distinguishes completed durable/in-memory outcomes from
+unknown in-memory operations, while `operations.cancel` reports the existing
+completed operation without undoing it; no operation state was changed by the
+schema work.
