@@ -2361,6 +2361,23 @@ mod tests {
             );
             fs::remove_file(&link).unwrap();
         }
+        let target_dir = root.join("state-target");
+        fs::create_dir(&target_dir).unwrap();
+        let nested_target = target_dir.join("nested.bin");
+        fs::write(&nested_target, &asset.bytes).unwrap();
+        let nested_link = root.join("state-directory-link");
+        #[cfg(windows)]
+        let nested_link_result = std::os::windows::fs::symlink_dir(&target_dir, &nested_link);
+        #[cfg(unix)]
+        let nested_link_result = std::os::unix::fs::symlink(&target_dir, &nested_link);
+        if nested_link_result.is_ok() {
+            let nested_path = nested_link.join("nested.bin");
+            assert_eq!(
+                read_state_asset(&root, &nested_path, 4, &asset.sha256),
+                Err(StateFileError::OutsideRoot)
+            );
+            fs::remove_dir(&nested_link).unwrap();
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

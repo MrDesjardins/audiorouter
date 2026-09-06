@@ -409,3 +409,9 @@ component is rejected before canonicalization and file opening, closing the
 nested junction/symlink traversal case. Plugin-host unit and worker-process
 tests pass with strict Clippy. This remains path hardening, not a complete OS
 filesystem/network sandbox for plugin execution.
+
+The regression suite also creates a linked state directory where the host allows
+it and verifies that a file beneath that directory is rejected. This covers the
+case where the leaf itself is regular but an intermediate component redirects
+outside the approved root; link creation is conditional because Windows may
+require a separate developer-mode or privilege setting.
