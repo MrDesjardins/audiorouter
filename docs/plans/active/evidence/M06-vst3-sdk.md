@@ -420,3 +420,12 @@ State reads additionally require the canonical asset to be a direct child of
 the approved root, matching the flat layout produced by `write_state_asset`.
 This removes nested path ambiguity and reduces the state-file TOCTOU surface;
 full OS filesystem/network sandboxing for plugin execution remains open.
+
+## 2026-09-06 — Worker executable provenance
+
+`WorkerProcess` now validates its executable before spawning: the path must be
+absolute, resolve canonically, identify a regular file, and carry no symlink or
+Windows reparse metadata. This prevents an accidental relative/PATH resolution
+from selecting an unintended worker binary. The plugin-host suite passes 27 unit
+tests plus 4 worker-process tests with strict Clippy; this is launch provenance,
+not full OS sandbox enforcement or actual plugin execution.

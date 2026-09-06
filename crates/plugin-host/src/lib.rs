@@ -1152,13 +1152,15 @@ impl WorkerProcess {
         channels: u16,
         mut shared: Option<SharedAudioTransport>,
     ) -> Result<Self, WorkerProcessError> {
+        let executable =
+            validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
         if !is_sha256(plugin_sha256) {
             return Err(WorkerProcessError::Protocol("invalid plugin hash".into()));
         }
         if !matches!(channels, 1 | 2) {
             return Err(WorkerProcessError::Protocol("invalid channel count".into()));
         }
-        let mut command = Command::new(executable.as_ref());
+        let mut command = Command::new(&executable);
         command.args([
             "--plugin-sha256",
             plugin_sha256,
@@ -1361,6 +1363,19 @@ fn receive_worker_message(
     reader
         .recv_timeout(timeout)
         .map_err(|error| WorkerMessageError::Io(error.to_string()))?
+}
+
+fn validate_worker_executable(path: &Path) -> Result<PathBuf, String> {
+    if !path.is_absolute() {
+        return Err("worker executable path must be absolute".into());
+    }
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| format!("worker executable metadata failed: {error}"))?;
+    if is_reparse_point(&metadata) || !metadata.is_file() {
+        return Err("worker executable must be a regular non-reparse file".into());
+    }
+    fs::canonicalize(path)
+        .map_err(|error| format!("worker executable canonicalization failed: {error}"))
 }
 
 impl Drop for WorkerProcess {
@@ -2381,6 +2396,21 @@ mod tests {
             );
             fs::remove_dir(&nested_link).unwrap();
         }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn worker_executable_requires_an_absolute_regular_path() {
+        assert!(validate_worker_executable(Path::new("worker.exe"))
+            .unwrap_err()
+            .contains("must be absolute"));
+        let root = temp_root();
+        let executable = root.join("worker.exe");
+        fs::write(&executable, b"fixture").unwrap();
+        assert_eq!(
+            validate_worker_executable(&executable).unwrap(),
+            executable.canonicalize().unwrap()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
