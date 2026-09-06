@@ -128,7 +128,7 @@ fn method_description(name: &str) -> &'static str {
         }
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
-            "List discoverable application identities for binding."
+            "List discoverable application identities and observed Windows audio-session activity for binding."
         }
         "nodes.types" => "List supported node types and their availability.",
         "routes.inspect" => "Inspect upstream route provenance for a destination node.",

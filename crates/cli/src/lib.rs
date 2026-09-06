@@ -1182,7 +1182,7 @@ fn mcp_tools() -> Value {
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_devices", "description": "List authoritative audio endpoint descriptors.", "inputSchema": { "type": "object", "additionalProperties": false } },
-        { "name": "list_applications", "description": "List discoverable application identities.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
