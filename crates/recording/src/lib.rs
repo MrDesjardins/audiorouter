@@ -536,6 +536,109 @@ pub enum RecordingFileStatus {
     Invalid,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum RecordingLibraryError {
+    PathOutsideRoot,
+    InvalidPath,
+    NotFound,
+    Io(std::io::ErrorKind),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordingEntry {
+    pub id: u64,
+    pub session: String,
+    pub recorder: String,
+    pub path: std::path::PathBuf,
+    pub status: RecordingFileStatus,
+}
+
+/// Root-scoped recording index. It owns metadata entries only; removing an
+/// entry deliberately leaves the referenced recording bytes untouched.
+pub struct RecordingLibrary {
+    root: std::path::PathBuf,
+    entries: Vec<RecordingEntry>,
+    next_id: u64,
+}
+
+impl RecordingLibrary {
+    pub fn new(policy: &RecordingPathPolicy) -> Self {
+        Self {
+            root: policy.root().to_path_buf(),
+            entries: Vec::new(),
+            next_id: 1,
+        }
+    }
+
+    pub fn register(
+        &mut self,
+        session: impl Into<String>,
+        recorder: impl Into<String>,
+        path: impl AsRef<Path>,
+    ) -> Result<u64, RecordingLibraryError> {
+        let path = self.validate_path(path.as_ref())?;
+        if self.entries.iter().any(|entry| entry.path == path) {
+            return Err(RecordingLibraryError::InvalidPath);
+        }
+        let status = inspect_recording(&path).map_err(|error| match error {
+            RecordingError::Io(error) => RecordingLibraryError::Io(error.kind()),
+            _ => RecordingLibraryError::InvalidPath,
+        })?;
+        let id = self.next_id;
+        self.next_id = self.next_id.saturating_add(1);
+        self.entries.push(RecordingEntry {
+            id,
+            session: session.into(),
+            recorder: recorder.into(),
+            path,
+            status,
+        });
+        Ok(id)
+    }
+
+    pub fn refresh(&mut self, id: u64) -> Result<(), RecordingLibraryError> {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.id == id)
+            .ok_or(RecordingLibraryError::NotFound)?;
+        entry.status = inspect_recording(&entry.path).map_err(|error| match error {
+            RecordingError::Io(error) => RecordingLibraryError::Io(error.kind()),
+            _ => RecordingLibraryError::InvalidPath,
+        })?;
+        Ok(())
+    }
+
+    pub fn list(&self, session: Option<&str>) -> Vec<&RecordingEntry> {
+        self.entries
+            .iter()
+            .filter(|entry| session.map_or(true, |session| entry.session == session))
+            .collect()
+    }
+
+    pub fn remove_entry(&mut self, id: u64) -> Result<RecordingEntry, RecordingLibraryError> {
+        let index = self
+            .entries
+            .iter()
+            .position(|entry| entry.id == id)
+            .ok_or(RecordingLibraryError::NotFound)?;
+        Ok(self.entries.remove(index))
+    }
+
+    fn validate_path(&self, path: &Path) -> Result<PathBuf, RecordingLibraryError> {
+        let filename = path.file_name().ok_or(RecordingLibraryError::InvalidPath)?;
+        let parent = path
+            .parent()
+            .ok_or(RecordingLibraryError::InvalidPath)?
+            .canonicalize()
+            .map_err(|error| RecordingLibraryError::Io(error.kind()))?;
+        if parent != self.root || filename.to_string_lossy().contains(['/', '\\']) {
+            return Err(RecordingLibraryError::PathOutsideRoot);
+        }
+        Ok(parent.join(filename))
+    }
+}
+
 /// Reads the canonical WAV files produced by this crate for library indexing.
 /// It validates the fixed PCM/IEEE-float header and exact data bounds but does
 /// not decode samples or touch any audio device.
@@ -1156,6 +1259,44 @@ mod tests {
             RecordingFileStatus::Invalid
         );
         let _ = std::fs::remove_file(invalid);
+    }
+
+    #[test]
+    fn library_lists_missing_entries_and_removal_keeps_file() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-recording-library-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let (path, file) = policy.create_file("session", "voice", 0, "wav").unwrap();
+        let mut writer = WavWriter::new(file, WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        writer.write_interleaved(&[0.25, -0.25]).unwrap();
+        writer.finish().unwrap();
+
+        let mut library = RecordingLibrary::new(&policy);
+        let id = library.register("session", "voice", &path).unwrap();
+        let missing = library
+            .register("session", "missing", root.join("missing-1.wav"))
+            .unwrap();
+        assert!(matches!(
+            library.list(Some("session"))[0].status,
+            RecordingFileStatus::Present(_)
+        ));
+        assert_eq!(
+            library.list(Some("session"))[1].status,
+            RecordingFileStatus::Missing
+        );
+        library.refresh(missing).unwrap();
+        let removed = library.remove_entry(id).unwrap();
+        assert_eq!(removed.path, path);
+        assert!(path.exists());
+        assert!(matches!(
+            library.register("other", "voice", root.join("..\\escape.wav")),
+            Err(RecordingLibraryError::PathOutsideRoot)
+        ));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

@@ -108,6 +108,16 @@ checks sample identity. This dependency API is batch-oriented, so bounded
 streaming FLAC worker integration, partial-file recovery, and metadata blocks
 remain open.
 
+## Root-scoped library index
+
+`RecordingLibrary` is the first non-destructive library boundary. It is created
+from an approved `RecordingPathPolicy`, validates each file's canonical parent,
+stores session/recorder/path/status entries, refreshes status, filters by
+session, and removes only an index entry. A temporary-file regression confirms
+valid and missing entries, traversal rejection, and that removing an entry
+leaves the recording bytes present. Durable persistence, rename/title/artist/
+comment metadata, preview, and separately authorized recycle remain open.
+
 ## Initial built-in DSP slice
 
 The new `audiorouter-dsp` crate provides an allocation-free, caller-owned
