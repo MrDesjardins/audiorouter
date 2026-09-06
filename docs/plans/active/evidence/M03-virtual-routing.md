@@ -50,6 +50,13 @@ regression confirms an empty initial managed inventory rather than inventing
 third-party cable endpoints. Lifecycle mutation, persistence, and native driver
 integration remain open.
 
+Desired bus inventory is now durable in SQLite. The storage layer persists
+stable ID, validated name, and enabled state transactionally; leases are
+runtime-only and are intentionally clear after restart. Control-plane methods
+persist successful create, rename, enable/disable, and delete operations and
+roll back the in-memory registry if storage fails. Storage and control restart
+regressions verify the behavior without creating endpoints.
+
 The UI backend now exposes the same inventory through `listVirtualDevices`,
 normalizing the bounded page shape for React consumers. Its regression confirms
 the client requests `virtualDevices.list` and preserves the unavailable/empty

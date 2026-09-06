@@ -1342,6 +1342,7 @@ impl ControlPlane {
         // Fail closed if the durable latch cannot be read: a persistence
         // failure must never silently unmute a capture path.
         let privacy_muted = storage.load_privacy_mute().unwrap_or(true);
+        let virtual_buses = storage.load_virtual_buses().unwrap_or_default();
         Self {
             store: GraphStore::default(),
             build: build.into(),
@@ -1354,8 +1355,76 @@ impl ControlPlane {
             application_snapshot: None,
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
-            virtual_buses: VirtualBusRegistry::default(),
+            virtual_buses,
         }
+    }
+
+    pub fn create_virtual_bus(
+        &mut self,
+        id: EntityId,
+        name: impl Into<String>,
+    ) -> Result<(), ControlError> {
+        let checkpoint = self.virtual_buses.clone();
+        self.virtual_buses
+            .create(id, name)
+            .map_err(virtual_bus_control_error)?;
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+                self.virtual_buses = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn rename_virtual_bus(
+        &mut self,
+        id: &EntityId,
+        name: impl Into<String>,
+    ) -> Result<(), ControlError> {
+        let checkpoint = self.virtual_buses.clone();
+        self.virtual_buses
+            .rename(id, name)
+            .map_err(virtual_bus_control_error)?;
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+                self.virtual_buses = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_virtual_bus_enabled(
+        &mut self,
+        id: &EntityId,
+        enabled: bool,
+    ) -> Result<(), ControlError> {
+        let checkpoint = self.virtual_buses.clone();
+        self.virtual_buses
+            .set_enabled(id, enabled)
+            .map_err(virtual_bus_control_error)?;
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+                self.virtual_buses = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        Ok(())
+    }
+
+    pub fn delete_virtual_bus(&mut self, id: &EntityId) -> Result<(), ControlError> {
+        let checkpoint = self.virtual_buses.clone();
+        self.virtual_buses
+            .delete(id)
+            .map_err(virtual_bus_control_error)?;
+        if let Some(storage) = &self.storage {
+            if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
+                self.virtual_buses = checkpoint;
+                return Err(storage_error(error));
+            }
+        }
+        Ok(())
     }
 
     pub fn enroll_client(
@@ -3409,6 +3478,10 @@ fn storage_error(error: StorageError) -> ControlError {
     }
 }
 
+fn virtual_bus_control_error(error: audiorouter_domain::VirtualBusError) -> ControlError {
+    ControlError::InvalidRequest(format!("virtual bus operation rejected: {error:?}"))
+}
+
 fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpcResponse {
     let code = match &error {
         ControlError::Store(error) => match error {
@@ -4201,6 +4274,40 @@ mod tests {
         assert_eq!(result["sessionCount"], 1);
         assert_eq!(result["activeSessionCount"], 0);
         assert_eq!(result["eventCursor"]["latestSequence"], 1);
+    }
+
+    #[test]
+    fn storage_backed_virtual_bus_inventory_survives_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-virtual-bus-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let mut plane =
+                ControlPlane::with_storage("virtual-bus-first", Storage::open(&path).unwrap());
+            plane
+                .create_virtual_bus(EntityId::new("bus-1"), "Desktop In")
+                .unwrap();
+            plane
+                .set_virtual_bus_enabled(&EntityId::new("bus-1"), false)
+                .unwrap();
+        }
+        let mut restarted =
+            ControlPlane::with_storage("virtual-bus-second", Storage::open(&path).unwrap());
+        let result = restarted
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "virtualDevices.list".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert_eq!(result[0]["id"], "bus-1");
+        assert_eq!(result[0]["enabled"], false);
+        assert_eq!(result[0]["leaseOwner"], Value::Null);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

@@ -203,6 +203,14 @@ pub struct VirtualBus {
     lease: VirtualBusLease,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualBusSnapshot {
+    pub id: EntityId,
+    pub name: String,
+    pub enabled: bool,
+}
+
 impl VirtualBus {
     pub fn id(&self) -> &EntityId {
         &self.id
@@ -233,6 +241,31 @@ pub struct VirtualBusRegistry {
 impl VirtualBusRegistry {
     pub fn list(&self) -> &[VirtualBus] {
         &self.buses
+    }
+
+    pub fn snapshots(&self) -> Vec<VirtualBusSnapshot> {
+        self.buses
+            .iter()
+            .map(|bus| VirtualBusSnapshot {
+                id: bus.id.clone(),
+                name: bus.name.clone(),
+                enabled: bus.enabled,
+            })
+            .collect()
+    }
+
+    pub fn from_snapshots(
+        snapshots: impl IntoIterator<Item = VirtualBusSnapshot>,
+    ) -> Result<Self, VirtualBusError> {
+        let mut registry = Self::default();
+        for snapshot in snapshots {
+            let id = snapshot.id;
+            registry.create(id.clone(), snapshot.name)?;
+            if !snapshot.enabled {
+                registry.set_enabled(&id, false)?;
+            }
+        }
+        Ok(registry)
     }
 
     pub fn create(&mut self, id: EntityId, name: impl Into<String>) -> Result<(), VirtualBusError> {

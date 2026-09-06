@@ -1,8 +1,8 @@
 //! SQLite persistence boundary for M01.
 
 use audiorouter_domain::{
-    node_registry, validate_session, EntityId, Session, RECOVERY_CRASH_WINDOW_SECONDS,
-    RECOVERY_SAFE_MODE_CRASHES,
+    node_registry, validate_session, EntityId, Session, VirtualBusRegistry, VirtualBusSnapshot,
+    RECOVERY_CRASH_WINDOW_SECONDS, RECOVERY_SAFE_MODE_CRASHES,
 };
 use audiorouter_recording::RecorderCheckpoint;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -489,6 +489,11 @@ impl Storage {
                  key TEXT PRIMARY KEY,
                  value TEXT NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS virtual_buses (
+                 id TEXT PRIMARY KEY,
+                 name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                 enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1))
+             );
              CREATE TABLE IF NOT EXISTS recovery_crashes (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  occurred_at INTEGER NOT NULL
@@ -554,6 +559,47 @@ impl Storage {
             [],
         )?;
         Ok(())
+    }
+
+    pub fn save_virtual_buses(&self, registry: &VirtualBusRegistry) -> Result<(), StorageError> {
+        let snapshots = registry.snapshots();
+        if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
+            return Err(StorageError::InvalidSession(
+                "too many virtual buses".into(),
+            ));
+        }
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute("DELETE FROM virtual_buses", [])?;
+        for snapshot in snapshots {
+            transaction.execute(
+                "INSERT INTO virtual_buses(id, name, enabled) VALUES (?1, ?2, ?3)",
+                params![
+                    snapshot.id.as_str(),
+                    snapshot.name,
+                    i64::from(snapshot.enabled)
+                ],
+            )?;
+        }
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn load_virtual_buses(&self) -> Result<VirtualBusRegistry, StorageError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id, name, enabled FROM virtual_buses ORDER BY id ASC")?;
+        let snapshots = statement
+            .query_map([], |row| {
+                Ok(VirtualBusSnapshot {
+                    id: EntityId::new(row.get::<_, String>(0)?),
+                    name: row.get(1)?,
+                    enabled: row.get::<_, i64>(2)? != 0,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        VirtualBusRegistry::from_snapshots(snapshots).map_err(|error| {
+            StorageError::InvalidSession(format!("invalid virtual bus: {error:?}"))
+        })
     }
 
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
@@ -1879,6 +1925,42 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn virtual_bus_inventory_round_trips_without_persisting_runtime_leases() {
+        let storage = Storage::open_memory().unwrap();
+        let mut registry = VirtualBusRegistry::default();
+        registry
+            .create(EntityId::new("bus-2"), "Voice Chat")
+            .unwrap();
+        registry
+            .create(EntityId::new("bus-1"), "Desktop In")
+            .unwrap();
+        registry
+            .set_enabled(&EntityId::new("bus-1"), false)
+            .unwrap();
+        registry
+            .acquire_lease(&EntityId::new("bus-2"), EntityId::new("session"))
+            .unwrap();
+
+        storage.save_virtual_buses(&registry).unwrap();
+        let restored = storage.load_virtual_buses().unwrap();
+        assert_eq!(
+            restored
+                .list()
+                .iter()
+                .map(|bus| (bus.id().as_str(), bus.name(), bus.enabled()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("bus-1", "Desktop In", false),
+                ("bus-2", "Voice Chat", true)
+            ]
+        );
+        assert!(restored
+            .list()
+            .iter()
+            .all(|bus| bus.lease().owner().is_none()));
     }
 
     #[test]
