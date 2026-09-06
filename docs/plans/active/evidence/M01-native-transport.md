@@ -59,3 +59,12 @@ verifies an enrolled same-user client can dispatch discovery.
 The
 native C++/WDK audio and process-loopback gates remain blocked by the missing
 Visual Studio/WDK toolchain.
+
+## Toolchain update (2026-09-05)
+
+The missing-toolchain statement above is superseded by the later M00 evidence:
+Visual Studio 2026 and matching SDK/WDK 28000 are installed. The native
+process-loopback harness now passes activation and initialization. Physical
+capture remains blocked at native `IAudioClient::Initialize` with
+`E_INVALIDARG` on all 13 tested capture endpoints; driver and signing gates
+remain open.
