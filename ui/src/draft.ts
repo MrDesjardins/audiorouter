@@ -134,6 +134,28 @@ export function removeDraftNode(session: Session, nodeId: EntityId): Session {
   };
 }
 
+/** Duplicates one node as an unconnected draft node with a deterministic ID. */
+export function duplicateDraftNode(session: Session, nodeId: EntityId): Session {
+  const original = session.nodes.find((node) => node.id === nodeId);
+  if (!original) throw new Error(`Unknown draft node: ${nodeId}`);
+  let suffix = 1;
+  let id = `${nodeId}-copy-${suffix}`;
+  while (session.nodes.some((node) => node.id === id)) {
+    suffix += 1;
+    id = `${nodeId}-copy-${suffix}`;
+  }
+  return {
+    ...session,
+    nodes: [...session.nodes, {
+      ...original,
+      id,
+      name: `${original.name} copy ${suffix}`,
+      parameters: { ...original.parameters },
+      ports: original.ports.map((port) => ({ ...port })),
+    }],
+  };
+}
+
 /**
  * Creates a UI candidate without changing the authoritative session revision.
  * Validation and commit remain backend responsibilities.

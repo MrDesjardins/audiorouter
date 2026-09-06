@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, removeDraftNode, setNodeDraftName } from "./draft";
+import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, removeDraftNode, setNodeDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -45,5 +45,16 @@ describe("appendLibraryNode", () => {
     expect(reduced.edges).toEqual([]);
     expect(reduced.revision).toBe(demoSession.revision);
     expect(() => removeDraftNode(reduced, "voice")).toThrow("Unknown draft node");
+  });
+
+  it("duplicates a node without copying edges or changing the revision", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const duplicated = duplicateDraftNode(connected, "voice");
+    const copy = duplicated.nodes.at(-1);
+    expect(copy).toMatchObject({ id: "voice-copy-1", name: "Voice gain copy 1", kind: "gain", parameters: { gainDb: 0 } });
+    expect(duplicated.edges).toEqual(connected.edges);
+    expect(duplicated.revision).toBe(demoSession.revision);
+    const twice = duplicateDraftNode(duplicated, "voice");
+    expect(twice.nodes.at(-1)?.id).toBe("voice-copy-2");
   });
 });

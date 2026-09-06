@@ -176,6 +176,13 @@ while the session revision and committed state remain unchanged until backend
 planning and commit; disconnected mode disables the action. UI coverage is 35
 tests with typecheck and production build passing.
 
+The inspector now supports duplicating the selected node into the draft. The
+copy receives a deterministic unique identity and cloned parameters/ports but
+no implicit edges, preventing accidental rerouting. The committed session and
+revision remain unchanged until backend plan/commit; disconnected mode disables
+the action. UI coverage is 36 tests with typecheck and production build
+passing.
+
 The recording library Search control is now functional as a bounded local
 filter over authorized metadata (identity, title, artist, comment, and path).
 It reports filtered counts and an explicit no-match state, while never opening
