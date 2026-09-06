@@ -37,6 +37,8 @@ Still not evidenced: required-node-type/type-version compatibility beyond the fr
 
 The read-only `routes.inspect` method now validates a session and returns all enabled desired upstream paths to a requested destination as ordered node and edge IDs. Disabled edges produce an unreachable destination path, and unknown destinations return a path-specific validation error. This is desired-topology provenance only; it does not claim a running graph or physical audio reachability.
 
+Each inspected path now also includes the validated `channelMaps` in edge order. This keeps mono/stereo conversion visible to clients instead of inferring or hiding it; the current fixture verifies the identity map, while live adapter conversion remains an M02 concern.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

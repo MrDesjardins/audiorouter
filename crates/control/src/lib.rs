@@ -687,6 +687,7 @@ mod tests {
         assert_eq!(result["reachable"], true);
         assert_eq!(result["paths"][0]["nodes"], json!(["in", "out"]));
         assert_eq!(result["paths"][0]["edges"], json!(["edge"]));
+        assert_eq!(result["paths"][0]["channelMaps"], json!([[1.0]]));
     }
 
     #[test]

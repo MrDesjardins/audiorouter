@@ -351,3 +351,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Hardened pool recycling to clear every block before it becomes available again, preventing stale audio from crossing ownership cycles; the engine suite remains at 25 passing tests.
 - Added a regression test for output-pool starvation: input is recycled, output remains empty, and exactly one xrun is recorded without fallback allocation.
 - Added read-only `routes.inspect` domain/control support. It validates the desired session graph and returns enabled upstream node/edge provenance for a destination, with disabled-edge and missing-destination tests; running-resource paths remain separate until M02 activation exists.
+- Extended `routes.inspect` paths with the validated destination-major channel matrices for every edge, preserving conversion visibility required by GRAPH-03/12; contracts typecheck remains green.

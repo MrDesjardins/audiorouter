@@ -408,13 +408,16 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoutePath {
     pub nodes: Vec<EntityId>,
     pub edges: Vec<EntityId>,
+    pub channel_maps: Vec<Vec<f32>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RouteInspection {
     pub destination_node: EntityId,
     pub reachable: bool,
@@ -451,31 +454,44 @@ pub fn inspect_routes(
         incoming: &HashMap<EntityId, Vec<&Edge>>,
         nodes: &mut Vec<EntityId>,
         edges: &mut Vec<EntityId>,
+        channel_maps: &mut Vec<Vec<f32>>,
         paths: &mut Vec<RoutePath>,
     ) {
         let Some(parents) = incoming.get(node) else {
             paths.push(RoutePath {
                 nodes: nodes.iter().rev().cloned().collect(),
                 edges: edges.iter().rev().cloned().collect(),
+                channel_maps: channel_maps.iter().rev().cloned().collect(),
             });
             return;
         };
         for edge in parents {
             nodes.push(edge.source_node.clone());
             edges.push(edge.id.clone());
-            walk(&edge.source_node, incoming, nodes, edges, paths);
+            channel_maps.push(edge.matrix.clone());
+            walk(
+                &edge.source_node,
+                incoming,
+                nodes,
+                edges,
+                channel_maps,
+                paths,
+            );
             nodes.pop();
             edges.pop();
+            channel_maps.pop();
         }
     }
     let mut nodes = vec![destination_node.clone()];
     let mut edges = Vec::new();
+    let mut channel_maps = Vec::new();
     let mut paths = Vec::new();
     walk(
         destination_node,
         &incoming,
         &mut nodes,
         &mut edges,
+        &mut channel_maps,
         &mut paths,
     );
     Ok(RouteInspection {
@@ -786,6 +802,7 @@ mod tests {
             vec![EntityId::new("in"), EntityId::new("out")]
         );
         assert_eq!(inspection.paths[0].edges, vec![EntityId::new("in-out")]);
+        assert_eq!(inspection.paths[0].channel_maps, vec![vec![1.0]]);
     }
 
     #[test]
