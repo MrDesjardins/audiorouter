@@ -101,3 +101,15 @@ The same workspace validation was rerun at the later current tip after the
 control-pipe singleton and UI event-cursor reliability changes. The complete
 locked test suite and strict workspace Clippy, format, and diff checks remained
 green; no audio endpoint or machine configuration was touched.
+
+## 2026-09-06 — Current-tip unsigned artifact requalification
+
+The locked release preparation was rerun from the clean current revision using
+the installed Visual Studio 2026 toolchain. Optimized `audiorouter-cli.exe` and
+`audiorouter-plugin-worker.exe` builds completed; the script generated the full
+locked Cargo SBOM and provenance manifest, and `verify-artifacts.ps1` accepted
+the recorded SHA-256 hashes and byte counts. The temporary output directory was
+removed afterward. The manifest continues to state `signed: false` and
+`publicationReady: false`; production signing, driver packaging/install,
+installer, and clean-machine acceptance remain open. No audio endpoint or
+machine configuration was changed.
