@@ -104,6 +104,59 @@ pub struct AudioBlockPool {
     shape: (usize, usize),
 }
 
+/// A bounded producer/consumer ring whose blocks are recycled from a fixed
+/// pool. The normal acquire-submit-receive-recycle cycle does not allocate or
+/// deallocate; callers retain ownership when a boundary is full or empty.
+pub struct AudioBlockRing {
+    free: AudioBlockPool,
+    ready: AudioBlockQueue,
+}
+
+impl AudioBlockRing {
+    pub fn new(capacity: usize, channels: usize, frames: usize) -> Result<Self, QueueError> {
+        Ok(Self {
+            free: AudioBlockPool::new(capacity, channels, frames)?,
+            ready: AudioBlockQueue::new_for_shape(capacity, channels, frames)?,
+        })
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.free.capacity()
+    }
+
+    pub fn available(&self) -> usize {
+        self.free.available()
+    }
+
+    pub fn ready(&self) -> usize {
+        self.ready.len()
+    }
+
+    pub fn try_acquire(&self) -> Option<AudioBlock> {
+        self.free.try_acquire()
+    }
+
+    pub fn try_submit(&self, block: AudioBlock) -> Result<(), AudioBlock> {
+        self.ready.try_push(block)
+    }
+
+    pub fn try_receive(&self) -> Option<AudioBlock> {
+        self.ready.try_pop()
+    }
+
+    pub fn try_recycle(&self, block: AudioBlock) -> Result<(), AudioBlock> {
+        self.free.try_release(block)
+    }
+
+    pub fn overruns(&self) -> u64 {
+        self.ready.overruns()
+    }
+
+    pub fn underruns(&self) -> u64 {
+        self.ready.underruns()
+    }
+}
+
 impl AudioBlockPool {
     pub fn new(capacity: usize, channels: usize, frames: usize) -> Result<Self, QueueError> {
         if capacity == 0 {
@@ -1060,6 +1113,35 @@ mod tests {
         assert!(pool.try_acquire().is_some());
         assert!(pool.try_acquire().is_some());
         assert!(pool.try_acquire().is_none());
+    }
+
+    #[test]
+    fn block_ring_transfers_and_recycles_without_losing_ownership() {
+        let ring = AudioBlockRing::new(1, 1, 2).unwrap();
+        let mut block = ring.try_acquire().unwrap();
+        assert_eq!(ring.available(), 0);
+        block.channel_mut(0).unwrap()[0] = 0.5;
+        ring.try_submit(block).unwrap();
+        assert_eq!(ring.ready(), 1);
+        assert!(ring.try_acquire().is_none());
+
+        let block = ring.try_receive().unwrap();
+        assert_eq!(block.channel(0).unwrap()[0], 0.5);
+        ring.try_recycle(block).unwrap();
+        assert_eq!(ring.available(), 1);
+        assert_eq!(ring.ready(), 0);
+        assert!(ring.try_receive().is_none());
+        assert_eq!(ring.underruns(), 1);
+    }
+
+    #[test]
+    fn block_ring_returns_full_submission_to_caller() {
+        let ring = AudioBlockRing::new(1, 1, 2).unwrap();
+        let first = ring.try_acquire().unwrap();
+        ring.try_submit(first).unwrap();
+        let second = AudioBlock::new(1, 2).unwrap();
+        assert!(ring.try_submit(second).is_err());
+        assert_eq!(ring.overruns(), 1);
     }
 
     #[test]
