@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import { createDisconnectedBackend } from "./backend";
-import { demoSession } from "./fixtures";
+import { demoSession, demoSessions } from "./fixtures";
 
 const backend = createDisconnectedBackend();
 
@@ -20,6 +20,7 @@ function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean;
 
 export function App() {
   const [snapshot, setSnapshot] = useState<Awaited<ReturnType<typeof backend.snapshot>> | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState(demoSession.id);
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
   useEffect(() => {
     let mounted = true;
@@ -28,7 +29,8 @@ export function App() {
     });
     return () => { mounted = false; };
   }, []);
-  const session = snapshot?.session ?? demoSession;
+  const availableSessions = snapshot ? [snapshot.session, ...demoSessions.filter((item) => item.id !== snapshot.session.id)] : demoSessions;
+  const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
   const selectedNode = session.nodes.find((node) => node.id === selectedNodeId) ?? session.nodes[0];
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
   return (
@@ -45,6 +47,7 @@ export function App() {
       <div className="workspace-grid">
         <aside className="sidebar" aria-label="Sessions">
           <div className="section-heading"><h2>Sessions</h2><button type="button" aria-label="Create session">+</button></div>
+          <label className="session-picker">Preview session<select value={session.id} onChange={(event) => setSelectedSessionId(event.target.value)}>{availableSessions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           <button type="button" className="session-item selected"><span>{demoSession.name}</span><small>Stopped · rev {demoSession.revision}</small></button>
           <button type="button" className="session-item"><span>Processed microphone</span><small>Stopped · rev 2</small></button>
           <button type="button" className="session-item"><span>Desktop recording</span><small>Missing device</small></button>

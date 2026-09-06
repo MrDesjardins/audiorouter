@@ -39,3 +39,9 @@ The shell now hydrates its selected-node view from the backend snapshot on
 mount, with local fixture data as the safe initial state. Snapshot completion
 is guarded against an unmounted React tree; no mutation or device call is
 introduced. TypeScript checking and the production Vite build pass.
+
+The disconnected preview now exposes a typed session picker backed by the
+same session-shaped fixtures used by the snapshot seam. Switching sessions
+updates local presentation state only; it does not call a control method or
+alter audio configuration. TypeScript checking and the production Vite build
+pass.

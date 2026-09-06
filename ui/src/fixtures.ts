@@ -13,3 +13,9 @@ export const demoSession: Session = {
   ],
   edges: [],
 };
+
+export const demoSessions: Session[] = [
+  demoSession,
+  { ...demoSession, id: "processed-microphone", name: "Processed microphone", revision: 2 },
+  { ...demoSession, id: "desktop-recording", name: "Desktop recording", revision: 1 },
+];
