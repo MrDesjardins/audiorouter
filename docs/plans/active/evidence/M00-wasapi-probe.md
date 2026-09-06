@@ -162,3 +162,10 @@ flags while retaining shared initialization. Both Rust variants still returned
 event-handle creation, or the `AUTOCONVERTPCM` flag. Temporary diagnostics were
 removed after the run; the next fix must address the generated COM call/ABI
 boundary or replace that binding path with a verified native shim.
+
+A final control variation used a stack-owned simple PCM/IEEE-float
+`WAVEFORMATEX` with the endpoint's observed 48 kHz, two-channel, 32-bit shape;
+Rust `Initialize` still returned `E_INVALIDARG`. This rules out the
+`WAVEFORMATEXTENSIBLE` payload as the determining factor. No temporary test
+code remains in the adapter, and the native C++ reference path remains the
+only live-initialization implementation qualified on this host.
