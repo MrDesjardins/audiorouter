@@ -1,6 +1,6 @@
 //! SQLite persistence boundary for M01.
 
-use audiorouter_domain::{validate_session, EntityId, Session};
+use audiorouter_domain::{node_registry, validate_session, EntityId, Session};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -55,6 +55,15 @@ struct BundleManifest {
     graph_path: String,
     #[serde(default)]
     assets: Vec<BundleAsset>,
+    #[serde(rename = "requiredNodeTypes", default)]
+    required_node_types: Vec<RequiredNodeType>,
+}
+
+#[derive(Clone, Debug, Deserialize, serde::Serialize)]
+struct RequiredNodeType {
+    #[serde(rename = "type")]
+    type_name: String,
+    version: u32,
 }
 
 #[derive(serde::Serialize)]
@@ -67,6 +76,8 @@ struct ExportBundleManifest<'a> {
     #[serde(rename = "graphPath")]
     graph_path: &'a str,
     assets: Vec<String>,
+    #[serde(rename = "requiredNodeTypes")]
+    required_node_types: Vec<RequiredNodeType>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -381,6 +392,7 @@ impl Storage {
         let document = self
             .export_session(id)?
             .ok_or_else(|| StorageError::InvalidBundle("session not found".into()))?;
+        let exported_session: Session = serde_json::from_str(&document)?;
         let file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -392,6 +404,19 @@ impl Storage {
             created_with: "0.1.0",
             graph_path: "session.json",
             assets: Vec::new(),
+            required_node_types: node_registry()
+                .iter()
+                .filter(|spec| {
+                    exported_session
+                        .nodes
+                        .iter()
+                        .any(|node| node.kind.type_name() == spec.kind.type_name())
+                })
+                .map(|spec| RequiredNodeType {
+                    type_name: spec.kind.type_name().into(),
+                    version: spec.version,
+                })
+                .collect(),
         };
         let result = (|| -> Result<(), StorageError> {
             archive
@@ -598,6 +623,18 @@ impl Storage {
             return Err(StorageError::InvalidBundle(
                 "unsupported bundle manifest".into(),
             ));
+        }
+        let registry = node_registry();
+        for required in &manifest.required_node_types {
+            let supported = registry
+                .iter()
+                .find(|spec| spec.kind.type_name() == required.type_name);
+            if supported.map_or(true, |spec| spec.version != required.version) {
+                return Err(StorageError::InvalidBundle(format!(
+                    "unsupported required node type: {} v{}",
+                    required.type_name, required.version
+                )));
+            }
         }
         for asset in &manifest.assets {
             let path = asset.path();
@@ -906,6 +943,41 @@ mod tests {
             Some(session())
         );
         drop(storage);
+        let _ = std::fs::remove_file(bundle);
+        let _ = std::fs::remove_dir_all(staging);
+    }
+
+    #[test]
+    fn bundle_import_rejects_unknown_required_node_type_before_commit() {
+        let suffix = format!("audiorouter-bundle-node-type-{}", std::process::id());
+        let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
+        let staging = std::env::temp_dir().join(format!("{suffix}-staging"));
+        let _ = std::fs::remove_file(&bundle);
+        let _ = std::fs::remove_dir_all(&staging);
+        std::fs::create_dir(&staging).unwrap();
+        let manifest = serde_json::to_vec(&serde_json::json!({
+            "format": "audiorouter.session",
+            "schemaVersion": 1,
+            "graphPath": "session.json",
+            "assets": [],
+            "requiredNodeTypes": [{"type": "future-node", "version": 1}]
+        }))
+        .unwrap();
+        let document = serde_json::to_vec(&session()).unwrap();
+        write_bundle(
+            &bundle,
+            &[("manifest.json", &manifest), ("session.json", &document)],
+        );
+        let storage = Storage::open_memory().unwrap();
+        let error = storage.import_bundle(&bundle, &staging);
+        assert!(
+            matches!(error, Err(StorageError::InvalidBundle(message)) if message.contains("required node type"))
+        );
+        assert!(storage
+            .load_session(&EntityId::new("session"))
+            .unwrap()
+            .is_none());
+        assert_eq!(std::fs::read_dir(&staging).unwrap().count(), 0);
         let _ = std::fs::remove_file(bundle);
         let _ = std::fs::remove_dir_all(staging);
     }

@@ -69,6 +69,8 @@ Session resource listing now includes `sessions.list` and `session list --databa
 
 In-memory graph idempotency now binds each committed key to its original plan ID. A repeated commit of the same plan replays the original result, but reusing that key for another plan is rejected as an idempotency conflict. The durable journal still needs request-hash validation and bounded expiry across process restarts.
 
+Bundle manifests now optionally carry `requiredNodeTypes` entries with a type name and version. Export derives the list from the session, and import rejects unknown or mismatched versions before writing the session; the existing v1 fixture remains compatible. The storage suite passed 15 tests with strict Clippy. The rebuilt CLI test executable was blocked from launch by the host Application Control policy (OS error 4551), so no CLI result is claimed for this slice.
+
 ## Next action
 
-Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.
+Implement durable idempotency request hashing and bounded expiry across control-process restarts using the existing SQLite journal transaction. Keep a portable fake transport for deterministic tests and do not add an HTTP listener.
