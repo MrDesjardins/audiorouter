@@ -10,4 +10,6 @@ The engine now exposes `compile_session`, which validates a domain session and p
 
 Optional `CallbackMetrics` records processed quanta and repaired sample counts using relaxed atomics. Instrumented processing remains bounded and free of locks, logging, I/O, and allocation; twelve engine tests pass.
 
+`GainRamp` provides a preallocated per-frame transition for de-clicked gain and privacy-mute changes. It clamps invalid targets to silence, supports immediate changes, and reaches its target exactly at the configured boundary. The engine suite now contains 13 passing tests.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.

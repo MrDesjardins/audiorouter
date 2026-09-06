@@ -26,6 +26,65 @@ pub struct AudioBlock {
     samples: Vec<f32>,
 }
 
+/// Bounded per-frame gain transition for de-clicked parameter changes.
+/// Construction and target changes occur off the callback thread; applying a
+/// ramp only updates existing block samples and this small state object.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GainRamp {
+    current: f32,
+    target: f32,
+    step: f32,
+    remaining_frames: usize,
+}
+
+impl GainRamp {
+    pub fn new(initial: f32) -> Self {
+        let initial = initial.is_finite().then_some(initial).unwrap_or(0.0);
+        Self {
+            current: initial,
+            target: initial,
+            step: 0.0,
+            remaining_frames: 0,
+        }
+    }
+
+    pub fn current(&self) -> f32 {
+        self.current
+    }
+
+    /// Set a finite target and transition over at most `ramp_frames` frames.
+    /// A zero-length ramp changes the gain immediately.
+    pub fn set_target(&mut self, target: f32, ramp_frames: usize) {
+        let target = target.is_finite().then_some(target).unwrap_or(0.0);
+        self.target = target;
+        if ramp_frames == 0 {
+            self.current = target;
+            self.step = 0.0;
+            self.remaining_frames = 0;
+        } else {
+            self.step = (target - self.current) / ramp_frames as f32;
+            self.remaining_frames = ramp_frames;
+        }
+    }
+
+    /// Apply the current ramp to every channel of a block without allocating.
+    pub fn apply(&mut self, block: &mut AudioBlock) {
+        for frame in 0..block.frames {
+            if self.remaining_frames > 0 {
+                self.current += self.step;
+                self.remaining_frames -= 1;
+                if self.remaining_frames == 0 {
+                    self.current = self.target;
+                    self.step = 0.0;
+                }
+            }
+            for channel in 0..block.channels {
+                block.channel_mut(channel).unwrap()[frame] *= self.current;
+            }
+        }
+    }
+}
+
 impl AudioBlock {
     /// Allocate a block during preparation, before entering the realtime path.
     pub fn new(channels: usize, frames: usize) -> Result<Self, BlockError> {
@@ -607,5 +666,19 @@ mod tests {
         assert_eq!(graph.process_instrumented(&mut block, &metrics), 1);
         assert_eq!(metrics.processed_quanta(), 1);
         assert_eq!(metrics.repaired_samples(), 1);
+    }
+
+    #[test]
+    fn gain_ramp_reaches_target_without_a_block_discontinuity() {
+        let mut ramp = GainRamp::new(0.0);
+        ramp.set_target(1.0, 4);
+        let mut block = AudioBlock::new(1, 4).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        ramp.apply(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.25, 0.5, 0.75, 1.0]);
+        assert_eq!(ramp.current(), 1.0);
+
+        ramp.set_target(0.0, 0);
+        assert_eq!(ramp.current(), 0.0);
     }
 }
