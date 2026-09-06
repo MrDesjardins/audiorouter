@@ -168,3 +168,14 @@ disposable temporary directory. `verify-artifacts.ps1` accepted the manifest,
 hashes, and byte counts, after which the temporary directory was removed.
 This is unsigned artifact evidence only; no driver, installer, signature, or
 audio configuration was created or changed.
+
+## 2026-09-06 - Current-tip qualification after SDK verification
+
+The preparation flow was rerun from clean revision
+`4aa534fcc781e3245f3d861270c108279c11cd39`. Locked optimized CLI and plugin
+worker binaries, the complete Cargo metadata SBOM, dependency notices, and
+the provenance manifest were generated in a disposable temporary directory.
+The artifact verifier and runbook-command regression passed, and the
+temporary directory was removed. The manifest remains explicitly unsigned
+and not publication-ready; driver/signing, installer, and clean-machine gates
+remain open.
