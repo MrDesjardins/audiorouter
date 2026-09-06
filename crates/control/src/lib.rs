@@ -462,7 +462,7 @@ impl ControlPlane {
                 audiorouter_domain::CapabilityAvailability::Available => json!({ "status": "available" }),
                 audiorouter_domain::CapabilityAvailability::Unavailable(reason) => json!({ "status": "unavailable", "reason": reason }),
             };
-            json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class })
+            json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class, "parameters": Self::node_parameter_schema(spec.kind) })
         }).collect();
         json!({
             "protocolVersion": { "major": 1, "minor": 0 },
@@ -493,6 +493,25 @@ impl ControlPlane {
                 }
             }
         })
+    }
+
+    fn node_parameter_schema(kind: audiorouter_domain::NodeKind) -> Value {
+        match kind {
+            audiorouter_domain::NodeKind::Gain => json!([{
+                "name": "gainDb",
+                "type": "number",
+                "unit": "dB",
+                "minimum": -60.0,
+                "maximum": 12.0,
+                "default": 0.0
+            }]),
+            audiorouter_domain::NodeKind::Mute => json!([{
+                "name": "muted",
+                "type": "boolean",
+                "default": false
+            }]),
+            _ => json!([]),
+        }
     }
 
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
@@ -1746,6 +1765,15 @@ mod tests {
             .iter()
             .any(|node| node["type"] == "physical-input@1"
                 && node["availability"]["status"] == "unavailable"));
+        let gain = description["nodeTypes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["type"] == "gain@1")
+            .unwrap();
+        assert_eq!(gain["parameters"][0]["name"], "gainDb");
+        assert_eq!(gain["parameters"][0]["minimum"], -60.0);
+        assert_eq!(gain["parameters"][0]["maximum"], 12.0);
     }
 
     #[test]

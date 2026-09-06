@@ -92,6 +92,14 @@ export interface DiscoveryDocument {
     type: `${NodeKind}@${number}`;
     availability: { status: "available" | "unavailable"; reason?: string };
     realtimeCostClass: string;
+    parameters: Array<{
+      name: string;
+      type: string;
+      unit?: string;
+      minimum?: number;
+      maximum?: number;
+      default?: boolean | number | string;
+    }>;
   }>;
   limits: {
     maxNodesPerSession: number;
