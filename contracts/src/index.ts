@@ -175,6 +175,14 @@ export interface VirtualDeviceInfo {
     render: string | null;
     capture: string | null;
   };
+  capabilities: {
+    render: false;
+    capture: false;
+    channels: 2;
+  };
+  privilege: "deviceAdministration";
+  restartRequired: false;
+  clientImpacts: string[];
   leaseOwner: string | null;
 }
 

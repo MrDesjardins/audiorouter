@@ -1214,9 +1214,22 @@ fn virtual_device_item_schema() -> Value {
                 "required": ["render", "capture"],
                 "additionalProperties": false
             },
+            "capabilities": {
+                "type": "object",
+                "properties": {
+                    "render": { "const": false },
+                    "capture": { "const": false },
+                    "channels": { "const": 2 }
+                },
+                "required": ["render", "capture", "channels"],
+                "additionalProperties": false
+            },
+            "privilege": { "const": "deviceAdministration" },
+            "restartRequired": { "const": false },
+            "clientImpacts": { "type": "array", "items": { "type": "string" } },
             "leaseOwner": { "type": ["string", "null"] }
         },
-        "required": ["id", "name", "direction", "channels", "enabled", "availability", "endpointIds", "leaseOwner"],
+        "required": ["id", "name", "direction", "channels", "enabled", "availability", "endpointIds", "capabilities", "privilege", "restartRequired", "clientImpacts", "leaseOwner"],
         "additionalProperties": false
     })
 }
@@ -3508,6 +3521,10 @@ impl ControlPlane {
                         "reason": "requires M03 managed virtual driver"
                     },
                     "endpointIds": { "render": null, "capture": null },
+                    "capabilities": { "render": false, "capture": false, "channels": 2 },
+                    "privilege": "deviceAdministration",
+                    "restartRequired": false,
+                    "clientImpacts": [],
                     "leaseOwner": bus.lease().owner()
                 })
             })
@@ -3978,6 +3995,13 @@ mod tests {
             .unwrap();
         assert_eq!(inventory[0]["name"], "Desktop In");
         assert_eq!(inventory[0]["endpointIds"]["render"], Value::Null);
+        assert_eq!(
+            inventory[0]["capabilities"],
+            json!({ "render": false, "capture": false, "channels": 2 })
+        );
+        assert_eq!(inventory[0]["privilege"], "deviceAdministration");
+        assert_eq!(inventory[0]["restartRequired"], false);
+        assert_eq!(inventory[0]["clientImpacts"], json!([]));
     }
 
     #[test]
