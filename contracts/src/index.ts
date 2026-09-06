@@ -86,7 +86,7 @@ export interface DiscoveryDocument {
 export interface ApplicationInfo {
   processId: number;
   executable: string;
-  creationTime100ns: number | null;
+  creationTime100ns: string | null;
 }
 
 export interface JsonRpcRequest<Params = unknown> {

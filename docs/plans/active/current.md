@@ -337,4 +337,5 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Extended read-only application discovery with optional Windows process creation timestamps, allowing future process-loopback bindings to verify PID plus creation time and reject PID reuse; command lines and full paths remain excluded.
 - Added `bind_application`, which requires PID, executable name, and creation timestamp to match the observed process before a future loopback activation; the Windows identity test passes without opening an audio stream.
 - Tightened `bind_application` so an unavailable creation timestamp is rejected rather than treated as a valid identity; PID/name alone can no longer authorize a future loopback binding.
+- Changed control/API serialization of process creation timestamps to exact decimal strings, preventing JavaScript precision loss for Windows `FILETIME` values; control tests, contracts typecheck, and strict control Clippy pass.
 - Corrected the failure taxonomy so undersized caller buffers report `BufferConstraint` rather than being conflated with malformed arguments; seven adapter tests and strict adapter Clippy pass.

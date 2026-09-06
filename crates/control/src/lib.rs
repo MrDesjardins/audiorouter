@@ -527,7 +527,7 @@ impl ControlPlane {
             .map(|application| json!({
                 "processId": application.process_id,
                 "executable": application.executable,
-                "creationTime100ns": application.creation_time_100ns,
+                "creationTime100ns": application.creation_time_100ns.map(|value| value.to_string()),
             }))
             .collect::<Vec<_>>()))
     }
