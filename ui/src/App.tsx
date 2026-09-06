@@ -36,7 +36,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [listView, setListView] = useState(false);
   const [createdSessions, setCreatedSessions] = useState<import("@audiorouter/contracts").Session[]>([]);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
-  useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) setSnapshotState(nextState); }); return () => { mounted = false; }; }, [backend, snapshotCache]);
+  useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
     void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(error instanceof Error ? error.message : "Recording library unavailable"); });
@@ -60,10 +60,14 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       try {
         const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch);
         if (!active) return;
-        eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
         if (result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend);
-          if (active) setSnapshotState(nextState);
+          if (active) {
+            setSnapshotState(nextState);
+            if (!nextState.stale) eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
+          }
+        } else {
+          eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
         }
       } catch (error) {
         if (active) setSnapshotState((current) => ({ ...current, stale: true, error: error instanceof Error ? error.message : "Event subscription failed" }));

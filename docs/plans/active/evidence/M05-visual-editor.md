@@ -17,6 +17,15 @@ the production-only dependency audit reports no vulnerabilities. Native shell,
 transport wiring, live snapshots/events, graph editing, and accessibility
 manual testing remain open.
 
+## 2026-09-06 — Event cursor refresh safety
+
+The connected React editor now seeds its event cursor from the initial
+authoritative snapshot. When an event requires a refresh, it advances the cursor
+only after that snapshot succeeds; a failed refresh therefore retries the same
+event range instead of silently treating it as consumed. The UI suite passes 20
+tests with TypeScript typecheck and production build green. Native transport and
+manual visual acceptance remain open.
+
 The shell now supports local presentation-only node selection through mouse or
 keyboard Enter/Space. The selected card and inspector are exposed with
 accessible labels and `aria-current`; mutation controls stay disabled while
