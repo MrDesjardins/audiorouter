@@ -96,6 +96,9 @@ fn method_description(name: &str) -> &'static str {
         "clients.revoke" => "Revoke a client enrollment without deleting its audit record.",
         "operations.get" => "Read the durable outcome of an idempotent operation.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
+        "recordings.get" => {
+            "Read one persisted recording metadata resource without touching its file."
+        }
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities for binding."
@@ -170,6 +173,10 @@ fn method_input_schema(name: &str) -> Value {
         "recordings.list" => object_schema(
             json!({ "sessionId": { "type": ["string", "null"], "minLength": 1 } }),
             &[],
+        ),
+        "recordings.get" => object_schema(
+            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            &["recordingId"],
         ),
         "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
         | "session.stop" | "sessions.stop" => object_schema(
@@ -1010,6 +1017,7 @@ impl ControlPlane {
                     "clients.revoke" => self.dispatch_client_revoke(request.params),
                     "operations.get" => self.dispatch_operation_get(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
+                    "recordings.get" => self.dispatch_recordings_get(request.params),
                     "devices.list" => self.dispatch_devices_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
@@ -1513,6 +1521,41 @@ impl ControlPlane {
         Ok(json!(records))
     }
 
+    fn dispatch_recordings_get(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let recording_id = params
+            .and_then(|params| {
+                params
+                    .get("recordingId")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let Some(storage) = &self.storage else {
+            return Err(ControlError::InvalidRequest("recording not found".into()));
+        };
+        let record = storage
+            .get_recording(&recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        Ok(json!({
+            "id": record.id,
+            "sessionId": record.session_id,
+            "recorderId": record.recorder_id,
+            "path": record.path,
+            "format": record.format,
+            "channels": record.channels,
+            "sampleRate": record.sample_rate,
+            "frames": record.frames,
+            "fileBytes": record.file_bytes,
+            "startTime": record.start_time,
+            "state": record.state,
+            "missing": record.missing,
+            "title": record.title,
+            "artist": record.artist,
+            "comment": record.comment
+        }))
+    }
+
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         if let Some(requested_epoch) = params.get("backendEpoch").and_then(Value::as_u64) {
@@ -1680,6 +1723,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "clients.revoke" => &["clientId"],
         "operations.get" => &["operationId"],
         "recordings.list" => &["sessionId"],
+        "recordings.get" => &["recordingId"],
         "system.describe" | "status.get" | "system.diagnostics" | "devices.list" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
@@ -2434,6 +2478,13 @@ mod tests {
         assert_eq!(result.as_array().unwrap().len(), 1);
         assert_eq!(result[0]["id"], "recording-1");
         assert_eq!(result[0]["missing"], false);
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(9)),
+            method: "recordings.get".into(),
+            params: Some(json!({ "recordingId": "recording-1" })),
+        });
+        assert_eq!(response.result.unwrap()["title"], "Test");
     }
 
     #[test]

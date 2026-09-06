@@ -502,6 +502,13 @@ impl Storage {
         Ok(records)
     }
 
+    pub fn get_recording(&self, id: &str) -> Result<Option<RecordingRecord>, StorageError> {
+        Ok(self
+            .list_recordings(None)?
+            .into_iter()
+            .find(|recording| recording.id == id))
+    }
+
     /// Removes only the durable library row; it never touches the recording path.
     pub fn remove_recording_entry(&self, id: &str) -> Result<bool, StorageError> {
         Ok(self

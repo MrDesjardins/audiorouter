@@ -38,3 +38,7 @@ Added optional `--pipe <\\.\\pipe\\name>` mode to MCP serve. API tool and capabi
 ## 2026-09-06 — Recording metadata API parity
 
 Added `recordings.list` to `API_METHODS`, discovery schemas, stable unknown-parameter validation, and control dispatch. Storage-backed results expose recording identity, session/recorder association, format/shape, frame/file counts, lifecycle state, missing flag, and user metadata; the method performs no file or audio action. The MCP adapter exposes the same operation as `list_recordings`. Control tests pass 43 cases, CLI tests pass 7 cases, and strict Clippy passes.
+
+## 2026-09-06 — Single recording metadata API
+
+Added `recordings.get` with validated `recordingId` input and storage lookup, plus MCP `get_recording`. Missing IDs return an actionable not-found response; successful results contain the same metadata shape as list entries and never open or modify the recording path. Targeted storage/control/CLI tests pass (24/43/7) with strict Clippy.

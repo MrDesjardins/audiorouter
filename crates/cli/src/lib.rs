@@ -793,6 +793,7 @@ fn mcp_tools() -> Value {
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] } }, "additionalProperties": false } },
+        { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "call_api", "description": "Call one validated permitted AudioRouter API method.", "inputSchema": { "type": "object", "properties": { "method": { "type": "string" }, "params": { "type": ["object", "null"] } }, "required": ["method"], "additionalProperties": false } }
     ])
 }
@@ -823,6 +824,7 @@ fn mcp_tool_call(
         "inspect_routes" => ("routes.inspect", Some(arguments)),
         "get_operation" => ("operations.get", Some(arguments)),
         "list_recordings" => ("recordings.list", Some(arguments)),
+        "get_recording" => ("recordings.get", Some(arguments)),
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
             let params = arguments.get("params").cloned();
@@ -1218,7 +1220,7 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 8);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 9);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
     }
 }
