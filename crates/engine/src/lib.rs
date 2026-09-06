@@ -149,6 +149,40 @@ impl RuntimeGeneration {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ProcessingStage {
+    Gain { linear: f32 },
+    Mute { muted: bool },
+}
+
+/// An immutable, prepared processing schedule. The stage vector is created
+/// before realtime execution; `process` only mutates the caller's block.
+pub struct RuntimeGraph {
+    stages: Vec<ProcessingStage>,
+    generation: RuntimeGeneration,
+}
+
+impl RuntimeGraph {
+    pub fn prepare(generation: RuntimeGeneration, stages: Vec<ProcessingStage>) -> Self {
+        Self { stages, generation }
+    }
+
+    pub fn generation(&self) -> RuntimeGeneration {
+        self.generation
+    }
+
+    pub fn process(&self, block: &mut AudioBlock) -> usize {
+        for stage in &self.stages {
+            match *stage {
+                ProcessingStage::Gain { linear } => block.apply_gain(linear),
+                ProcessingStage::Mute { muted: true } => block.clear(),
+                ProcessingStage::Mute { muted: false } => {}
+            }
+        }
+        block.sanitize_non_finite()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,5 +266,29 @@ mod tests {
             destination.map_from(&source, &[1.0]),
             Err(BlockError::ShapeMismatch)
         );
+    }
+
+    #[test]
+    fn prepared_runtime_graph_processes_stages_in_order() {
+        let graph = RuntimeGraph::prepare(
+            RuntimeGeneration::new(7),
+            vec![
+                ProcessingStage::Gain { linear: 2.0 },
+                ProcessingStage::Mute { muted: false },
+                ProcessingStage::Gain { linear: 0.5 },
+            ],
+        );
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(0.75);
+        assert_eq!(graph.process(&mut block), 0);
+        assert_eq!(graph.generation().value(), 7);
+        assert_eq!(block.channel(0).unwrap(), &[0.75, 0.75]);
+
+        let mute = RuntimeGraph::prepare(
+            RuntimeGeneration::new(8),
+            vec![ProcessingStage::Mute { muted: true }],
+        );
+        assert_eq!(mute.process(&mut block), 0);
+        assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
     }
 }
