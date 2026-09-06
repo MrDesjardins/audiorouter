@@ -210,3 +210,11 @@ Reset clears the meter, and regression coverage distinguishes quiet
 below-threshold audio from compressed audio. Fifteen DSP tests and strict
 Clippy pass; broader per-channel RMS/peak telemetry and graph/API integration
 remain open.
+
+`audiorouter-storage` now persists recording-library rows in SQLite. The schema
+stores session/recorder identity, path, format, channels, sample rate, frame
+and byte counts, start/state/missing fields, and bounded title/artist/comment
+metadata. Save/list/update/remove-entry methods preserve row-only removal; a
+file-backed test reopens the database and verifies persistence and ordering.
+Storage coverage is 21 tests with strict Clippy. Control/API integration,
+embedded file tags, rename, preview, and recycle remain open.

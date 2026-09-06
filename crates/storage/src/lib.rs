@@ -17,6 +17,7 @@ pub enum StorageError {
     Io(std::io::Error),
     InvalidSession(String),
     InvalidBundle(String),
+    InvalidRecording(String),
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
@@ -131,6 +132,25 @@ impl From<std::io::Error> for StorageError {
 pub struct Storage {
     connection: Connection,
     database_path: Option<std::path::PathBuf>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordingRecord {
+    pub id: String,
+    pub session_id: String,
+    pub recorder_id: String,
+    pub path: String,
+    pub format: String,
+    pub channels: u16,
+    pub sample_rate: u32,
+    pub frames: u64,
+    pub file_bytes: u64,
+    pub start_time: String,
+    pub state: String,
+    pub missing: bool,
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub comment: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -301,6 +321,24 @@ impl Storage {
                  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                  revoked_at TEXT
              );
+             CREATE TABLE IF NOT EXISTS recordings (
+                 id TEXT PRIMARY KEY,
+                 session_id TEXT NOT NULL,
+                 recorder_id TEXT NOT NULL,
+                 path TEXT NOT NULL,
+                 format TEXT NOT NULL,
+                 channels INTEGER NOT NULL,
+                 sample_rate INTEGER NOT NULL,
+                 frames INTEGER NOT NULL,
+                 file_bytes INTEGER NOT NULL,
+                 start_time TEXT NOT NULL,
+                 state TEXT NOT NULL,
+                 missing INTEGER NOT NULL DEFAULT 0 CHECK(missing IN (0, 1)),
+                 title TEXT,
+                 artist TEXT,
+                 comment TEXT
+             );
+             CREATE INDEX IF NOT EXISTS recordings_session_id ON recordings(session_id);
              INSERT OR IGNORE INTO schema_migrations(version) VALUES (1);",
         )?;
         let has_request_hash = self
@@ -348,6 +386,116 @@ impl Storage {
         )?;
         transaction.commit()?;
         Ok(changed != 0)
+    }
+
+    pub fn save_recording(&self, recording: &RecordingRecord) -> Result<(), StorageError> {
+        if recording.id.is_empty()
+            || recording.session_id.is_empty()
+            || recording.recorder_id.is_empty()
+            || recording.path.is_empty()
+            || recording.format.is_empty()
+            || recording.start_time.is_empty()
+            || recording.state.is_empty()
+            || !matches!(recording.channels, 1 | 2)
+            || !matches!(recording.sample_rate, 44_100 | 48_000)
+        {
+            return Err(StorageError::InvalidRecording(
+                "invalid recording fields".into(),
+            ));
+        }
+        self.connection.execute(
+            "INSERT INTO recordings
+             (id, session_id, recorder_id, path, format, channels, sample_rate, frames,
+              file_bytes, start_time, state, missing, title, artist, comment)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+             ON CONFLICT(id) DO UPDATE SET
+               session_id=excluded.session_id, recorder_id=excluded.recorder_id,
+               path=excluded.path, format=excluded.format, channels=excluded.channels,
+               sample_rate=excluded.sample_rate, frames=excluded.frames,
+               file_bytes=excluded.file_bytes, start_time=excluded.start_time,
+               state=excluded.state, missing=excluded.missing, title=excluded.title,
+               artist=excluded.artist, comment=excluded.comment",
+            params![
+                recording.id,
+                recording.session_id,
+                recording.recorder_id,
+                recording.path,
+                recording.format,
+                i64::from(recording.channels),
+                i64::from(recording.sample_rate),
+                recording.frames as i64,
+                recording.file_bytes as i64,
+                recording.start_time,
+                recording.state,
+                recording.missing as i64,
+                recording.title,
+                recording.artist,
+                recording.comment,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn list_recordings(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<Vec<RecordingRecord>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
+                    frames, file_bytes, start_time, state, missing, title, artist, comment
+             FROM recordings
+             WHERE (?1 IS NULL OR session_id = ?1)
+             ORDER BY start_time ASC, id ASC",
+        )?;
+        let records = statement
+            .query_map(params![session_id], |row| {
+                Ok(RecordingRecord {
+                    id: row.get(0)?,
+                    session_id: row.get(1)?,
+                    recorder_id: row.get(2)?,
+                    path: row.get(3)?,
+                    format: row.get(4)?,
+                    channels: row.get::<_, i64>(5)? as u16,
+                    sample_rate: row.get::<_, i64>(6)? as u32,
+                    frames: row.get::<_, i64>(7)? as u64,
+                    file_bytes: row.get::<_, i64>(8)? as u64,
+                    start_time: row.get(9)?,
+                    state: row.get(10)?,
+                    missing: row.get::<_, i64>(11)? != 0,
+                    title: row.get(12)?,
+                    artist: row.get(13)?,
+                    comment: row.get(14)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(records)
+    }
+
+    /// Removes only the durable library row; it never touches the recording path.
+    pub fn remove_recording_entry(&self, id: &str) -> Result<bool, StorageError> {
+        Ok(self
+            .connection
+            .execute("DELETE FROM recordings WHERE id = ?1", params![id])?
+            == 1)
+    }
+
+    pub fn update_recording_metadata(
+        &self,
+        id: &str,
+        title: Option<&str>,
+        artist: Option<&str>,
+        comment: Option<&str>,
+    ) -> Result<bool, StorageError> {
+        for value in [title, artist, comment].into_iter().flatten() {
+            if value.chars().count() > 256 || value.chars().any(|character| character.is_control())
+            {
+                return Err(StorageError::InvalidRecording("invalid metadata".into()));
+            }
+        }
+        Ok(self.connection.execute(
+            "UPDATE recordings SET title = ?2, artist = ?3, comment = ?4 WHERE id = ?1",
+            params![id, title, artist, comment],
+        )? == 1)
     }
 
     pub fn load_history(&self, id: &EntityId, limit: usize) -> Result<Vec<Session>, StorageError> {
@@ -1507,5 +1655,56 @@ mod tests {
             storage.load_client_enrollment("client").unwrap(),
             Some(("observer".into(), false))
         );
+    }
+
+    #[test]
+    fn recording_library_rows_persist_and_remove_without_file_action() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recording-storage-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let storage = Storage::open(&path).unwrap();
+        let recording = RecordingRecord {
+            id: "rec-1".into(),
+            session_id: "session".into(),
+            recorder_id: "voice".into(),
+            path: "C:\\Recordings\\voice.wav".into(),
+            format: "wav".into(),
+            channels: 2,
+            sample_rate: 48_000,
+            frames: 480,
+            file_bytes: 1_964,
+            start_time: "2026-09-05T12:00:00Z".into(),
+            state: "completed".into(),
+            missing: false,
+            title: None,
+            artist: None,
+            comment: None,
+        };
+        storage.save_recording(&recording).unwrap();
+        let mut second = recording.clone();
+        second.id = "rec-2".into();
+        second.start_time = "2026-09-05T12:01:00Z".into();
+        second.missing = true;
+        storage.save_recording(&second).unwrap();
+        assert_eq!(storage.list_recordings(Some("session")).unwrap().len(), 2);
+        assert!(storage
+            .update_recording_metadata("rec-1", Some("Take 1"), Some("User"), None)
+            .unwrap());
+        assert!(matches!(
+            storage.update_recording_metadata("rec-1", Some("bad\nvalue"), None, None),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        drop(storage);
+        let reopened = Storage::open(&path).unwrap();
+        assert_eq!(
+            reopened.list_recordings(Some("session")).unwrap()[0].title,
+            Some("Take 1".into())
+        );
+        assert!(reopened.remove_recording_entry("rec-1").unwrap());
+        assert!(!reopened.remove_recording_entry("rec-1").unwrap());
+        assert_eq!(reopened.list_recordings(None).unwrap().len(), 1);
+        let _ = std::fs::remove_file(path);
     }
 }
