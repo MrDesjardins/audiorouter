@@ -1356,6 +1356,18 @@ mod tests {
     }
 
     #[test]
+    fn compressor_transfer_curve_reference_vectors_are_deterministic() {
+        let threshold = -18.0;
+        let ratio = 3.0;
+        let knee = 6.0;
+        assert_eq!(compression_reduction(-30.0, threshold, ratio, knee), 0.0);
+        assert!((compression_reduction(-18.0, threshold, ratio, knee) - 0.5).abs() < 1e-6);
+        assert!((compression_reduction(-19.5, threshold, ratio, knee) - 0.125).abs() < 1e-6);
+        assert!((compression_reduction(-12.0, threshold, ratio, knee) - 4.0).abs() < 1e-6);
+        assert!((compression_reduction(0.0, threshold, ratio, knee) - 12.0).abs() < 1e-6);
+    }
+
+    #[test]
     fn biquad_parameter_ramp_reaches_target_without_discontinuity_api() {
         let mut filter = Biquad::new(
             BiquadParams {

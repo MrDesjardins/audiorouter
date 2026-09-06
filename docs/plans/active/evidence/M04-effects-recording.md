@@ -349,3 +349,10 @@ failure transitions the worker to `Failed` before more audio is accepted;
 ordinary draining remains unchanged. The recording suite passes 23 tests with
 strict Clippy and formatting checks. This is the durable scheduling seam; true
 incremental FLAC encoding and native realtime integration remain open.
+
+Added deterministic compressor transfer-curve reference vectors covering below
+threshold, the soft-knee center and boundary, and the hard-knee ceiling. The
+vectors exercise the same `compression_reduction` function used by processing;
+the DSP suite now has 21 tests and strict Clippy/formatting pass. Dynamic
+detector timing and native scheduler integration remain separate acceptance
+work.
