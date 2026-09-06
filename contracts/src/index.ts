@@ -113,6 +113,27 @@ export interface RecordingListPage {
   nextCursor: string | null;
 }
 
+export interface DeviceInfo {
+  id: string;
+  direction: "capture" | "render";
+  state: "active";
+  format: {
+    sampleRateHz: number;
+    channels: number;
+    bitsPerSample: number;
+    formatTag: number;
+  };
+  periods: {
+    default100ns: number;
+    minimum100ns: number;
+  };
+}
+
+export interface DeviceListPage {
+  items: DeviceInfo[];
+  nextCursor: string | null;
+}
+
 export interface GraphHistoryPage {
   items: Session[];
   nextCursor: string | null;
@@ -392,7 +413,7 @@ export type MethodResult = {
   "recovery.clearSafeMode": { safeMode: false; recentCrashes: number; persistence: "durable" | "memory" };
   "safety.setPrivacyMute": Record<string, unknown>;
   "startup.get": Record<string, unknown>;
-  "devices.list": unknown[];
+  "devices.list": DeviceInfo[] | DeviceListPage;
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];
   "nodes.types": DiscoveryDocument["nodeTypes"];

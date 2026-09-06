@@ -209,6 +209,13 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &[],
         ),
+        "devices.list" => object_schema(
+            json!({
+                "cursor": { "type": ["string", "null"], "minLength": 1 },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+            }),
+            &[],
+        ),
         "recordings.get" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
@@ -357,9 +364,24 @@ fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             }
         }),
-        "devices.list" | "nodes.types" | "nodes.describe" | "clients.list" => {
-            json!({ "type": "array" })
+        "devices.list" => {
+            let item = device_item_schema();
+            json!({
+                "oneOf": [
+                    { "type": "array", "items": item.clone() },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "items": { "type": "array", "items": item },
+                            "nextCursor": { "type": ["string", "null"] }
+                        },
+                        "required": ["items", "nextCursor"],
+                        "additionalProperties": false
+                    }
+                ]
+            })
         }
+        "nodes.types" | "nodes.describe" | "clients.list" => json!({ "type": "array" }),
         "recordings.list" => {
             let item = recording_item_schema();
             json!({
@@ -407,6 +429,39 @@ fn recording_item_schema() -> Value {
             "sampleRate", "frames", "fileBytes", "startTime", "state",
             "missing", "title", "artist", "comment"
         ],
+        "additionalProperties": false
+    })
+}
+
+fn device_item_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "direction": { "enum": ["capture", "render"] },
+            "state": { "const": "active" },
+            "format": {
+                "type": "object",
+                "properties": {
+                    "sampleRateHz": { "type": "integer", "minimum": 1 },
+                    "channels": { "type": "integer", "minimum": 1 },
+                    "bitsPerSample": { "type": "integer", "minimum": 1 },
+                    "formatTag": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["sampleRateHz", "channels", "bitsPerSample", "formatTag"],
+                "additionalProperties": false
+            },
+            "periods": {
+                "type": "object",
+                "properties": {
+                    "default100ns": { "type": "integer", "minimum": 0 },
+                    "minimum100ns": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["default100ns", "minimum100ns"],
+                "additionalProperties": false
+            }
+        },
+        "required": ["id", "direction", "state", "format", "periods"],
         "additionalProperties": false
     })
 }
@@ -1309,7 +1364,7 @@ impl ControlPlane {
                         "registration": "unavailable",
                         "reason": "sign-in startup registration is not implemented in this build"
                     })),
-                    "devices.list" => self.dispatch_devices_list(),
+                    "devices.list" => self.dispatch_devices_list(request.params),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
@@ -2254,30 +2309,66 @@ impl ControlPlane {
         }))
     }
 
-    fn dispatch_devices_list(&self) -> Result<Value, ControlError> {
+    fn dispatch_devices_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
+        let paged = params.get("cursor").is_some() || params.get("limit").is_some();
+        let cursor = params
+            .get("cursor")
+            .filter(|value| !value.is_null())
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| ControlError::InvalidRequest("cursor must be a string".into()))
+            })
+            .transpose()?;
+        let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
+        if !(1..=500).contains(&limit) {
+            return Err(ControlError::InvalidRequest(
+                "limit must be between 1 and 500".into(),
+            ));
+        }
         let endpoints = audiorouter_windows_audio::enumerate_active_endpoints()
             .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
-        Ok(json!(endpoints
+        let mut devices = endpoints
             .into_iter()
-            .map(|endpoint| json!({
-                "id": endpoint.id,
-                "direction": match endpoint.direction {
-                    audiorouter_windows_audio::EndpointDirection::Capture => "capture",
-                    audiorouter_windows_audio::EndpointDirection::Render => "render",
-                },
-                "state": "active",
-                "format": {
-                    "sampleRateHz": endpoint.sample_rate_hz,
-                    "channels": endpoint.channels,
-                    "bitsPerSample": endpoint.bits_per_sample,
-                    "formatTag": endpoint.format_tag,
-                },
-                "periods": {
-                    "default100ns": endpoint.default_period_100ns,
-                    "minimum100ns": endpoint.minimum_period_100ns,
-                },
-            }))
-            .collect::<Vec<_>>()))
+            .map(|endpoint| {
+                json!({
+                    "id": endpoint.id,
+                    "direction": match endpoint.direction {
+                        audiorouter_windows_audio::EndpointDirection::Capture => "capture",
+                        audiorouter_windows_audio::EndpointDirection::Render => "render",
+                    },
+                    "state": "active",
+                    "format": {
+                        "sampleRateHz": endpoint.sample_rate_hz,
+                        "channels": endpoint.channels,
+                        "bitsPerSample": endpoint.bits_per_sample,
+                        "formatTag": endpoint.format_tag,
+                    },
+                    "periods": {
+                        "default100ns": endpoint.default_period_100ns,
+                        "minimum100ns": endpoint.minimum_period_100ns,
+                    },
+                })
+            })
+            .collect::<Vec<_>>();
+        devices.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+        if let Some(cursor) = cursor {
+            let Some(index) = devices.iter().position(|device| device["id"] == cursor) else {
+                return Err(ControlError::InvalidRequest("invalid device cursor".into()));
+            };
+            devices.drain(..=index);
+        }
+        if !paged {
+            return Ok(json!(devices));
+        }
+        let has_more = devices.len() > limit as usize;
+        devices.truncate(limit as usize);
+        let next_cursor = has_more
+            .then(|| devices.last().and_then(|device| device["id"].as_str()))
+            .flatten();
+        Ok(json!({ "items": devices, "nextCursor": next_cursor }))
     }
 
     fn dispatch_apps_list(&mut self) -> Result<Value, ControlError> {
@@ -2390,9 +2481,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recovery.clearSafeMode" => &[],
         "recordings.removeEntry" => &["recordingId"],
         "recordings.recycle" => &["recordingId", "confirm"],
-        "system.describe" | "status.get" | "system.diagnostics" | "startup.get"
-        | "devices.list" | "apps.list" | "applications.list" | "nodes.types" | "nodes.describe"
-        | "clients.list" => &[],
+        "devices.list" => &["cursor", "limit"],
+        "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
+        | "applications.list" | "nodes.types" | "nodes.describe" | "clients.list" => &[],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -2780,7 +2871,20 @@ mod tests {
             .find(|method| method["name"] == "devices.list")
             .unwrap();
         assert_eq!(devices["inputSchema"]["additionalProperties"], false);
-        assert_eq!(devices["outputSchema"]["type"], "array");
+        assert_eq!(
+            devices["inputSchema"]["properties"]["limit"]["maximum"],
+            500
+        );
+        assert_eq!(
+            devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
+                ["direction"]["enum"],
+            json!(["capture", "render"])
+        );
+        assert_eq!(
+            devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
+                ["format"]["required"],
+            json!(["sampleRateHz", "channels", "bitsPerSample", "formatTag"])
+        );
         let applications = methods
             .iter()
             .find(|method| method["name"] == "applications.list")
@@ -2834,6 +2938,24 @@ mod tests {
             params: Some(json!([])),
         });
         assert_eq!(response.error.unwrap().code, -32602);
+    }
+
+    #[test]
+    fn devices_list_rejects_invalid_paging_parameters_before_enumeration() {
+        let mut plane = ControlPlane::default();
+        for (id, params) in [
+            (1, json!({ "limit": 0 })),
+            (2, json!({ "limit": 501 })),
+            (3, json!({ "cursor": 42 })),
+        ] {
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(id)),
+                method: "devices.list".into(),
+                params: Some(params),
+            });
+            assert_eq!(response.error.unwrap().code, -32602);
+        }
     }
 
     #[test]
