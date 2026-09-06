@@ -201,3 +201,8 @@ generated; `verify-artifacts.ps1` passed. The manifest remains explicitly
 `signed: false` and `publicationReady: false`, with driver/signing, installer,
 and clean-machine blockers retained. The temporary output was removed after
 verification.
+
+The checked-in `tests/acceptance/m08-release.ps1` now reproduces this flow,
+asserts that unsigned artifacts retain at least the three known release
+blockers, and removes its uniquely named temporary output in a `finally`
+cleanup. It does not install an artifact or change machine configuration.
