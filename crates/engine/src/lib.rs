@@ -1608,6 +1608,22 @@ impl RuntimeProcessor {
         self.publication.publish(graph);
     }
 
+    /// Compile and atomically activate a supported session candidate.
+    ///
+    /// Preparation happens before publication, so an invalid or unsupported
+    /// candidate cannot replace the currently active generation. The caller
+    /// owns the generation identity; native device activation remains outside
+    /// this portable boundary.
+    pub fn activate_session(
+        &self,
+        session: &audiorouter_domain::Session,
+        generation: RuntimeGeneration,
+    ) -> Result<(), GraphCompileError> {
+        let graph = compile_session(session, generation)?;
+        self.publish(graph);
+        Ok(())
+    }
+
     pub fn deactivate(&self) {
         self.publication.clear();
     }
@@ -2770,6 +2786,32 @@ mod tests {
         assert_eq!(block.channel(0).unwrap(), &[0.5; 2]);
         assert_eq!(processor.process_queued(&queue, &mut block).unwrap(), None);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn session_activation_keeps_previous_generation_when_preparation_fails() {
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let processor = RuntimeProcessor::default();
+        processor
+            .activate_session(&session, RuntimeGeneration::new(20))
+            .unwrap();
+
+        let mut invalid = session.clone();
+        invalid.edges[0].matrix.clear();
+        assert!(matches!(
+            processor.activate_session(&invalid, RuntimeGeneration::new(21)),
+            Err(GraphCompileError::InvalidGraph(_))
+        ));
+
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        assert_eq!(
+            processor.process(&mut block).map(RuntimeGeneration::value),
+            Some(20)
+        );
+        assert_eq!(block.channel(0).unwrap(), &[0.25; 2]);
     }
 
     #[test]

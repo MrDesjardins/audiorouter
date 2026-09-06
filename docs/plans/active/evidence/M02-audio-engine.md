@@ -68,3 +68,14 @@ Results are sorted case-insensitively by executable and then PID, making
 read-only UI/CLI refreshes deterministic even though Toolhelp enumeration
 order is not guaranteed.
 The policy has both a synthetic regression and a live Windows snapshot check.
+
+## 2026-09-06 — Prepared session activation boundary
+
+`RuntimeProcessor::activate_session` now compiles a complete session candidate
+before publishing its immutable runtime graph. If validation or supported-topology
+preparation fails, no publication occurs and the previously active generation
+continues processing. A regression uses a valid fixture followed by an invalid
+matrix and verifies that generation and output remain on the original graph.
+The engine suite passes 40 tests with strict Clippy. This is a portable
+publication/rollback boundary; WASAPI scheduling, device-resource activation,
+and live routing remain open.
