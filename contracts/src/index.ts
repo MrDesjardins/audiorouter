@@ -182,7 +182,9 @@ export type ImplementedMethod =
   | "graph.plan"
   | "graph.commit"
   | "session.start"
-  | "session.stop";
+  | "sessions.start"
+  | "session.stop"
+  | "sessions.stop";
 
 export type MethodParams = {
   "system.describe": undefined;
@@ -215,7 +217,9 @@ export type MethodParams = {
   "graph.plan": { sessionId: EntityId; baseRevision: number; candidate: Session };
   "graph.commit": { planId: EntityId; baseRevision: number; idempotencyKey: string };
   "session.start": { sessionId: EntityId };
+  "sessions.start": { sessionId: EntityId };
   "session.stop": { sessionId: EntityId };
+  "sessions.stop": { sessionId: EntityId };
 };
 
 export type MethodResult = {
@@ -248,7 +252,9 @@ export type MethodResult = {
   "graph.plan": Record<string, unknown>;
   "graph.commit": Record<string, unknown>;
   "session.start": Record<string, unknown>;
+  "sessions.start": Record<string, unknown>;
   "session.stop": Record<string, unknown>;
+  "sessions.stop": Record<string, unknown>;
 };
 
 export interface RpcTransport {

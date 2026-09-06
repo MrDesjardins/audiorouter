@@ -110,8 +110,12 @@ fn method_description(name: &str) -> &'static str {
         "sessions.delete" => "Delete a stopped session resource and its history.",
         "graph.plan" => "Validate and preview a graph candidate without mutation.",
         "graph.commit" => "Commit an unexpired graph plan with idempotent mutation.",
-        "session.start" => "Start a session runtime through the available backend.",
-        "session.stop" => "Stop a session runtime and publish its lifecycle result.",
+        "session.start" | "sessions.start" => {
+            "Start a session runtime through the available backend."
+        }
+        "session.stop" | "sessions.stop" => {
+            "Stop a session runtime and publish its lifecycle result."
+        }
         _ => "Invoke an AudioRouter control-plane method.",
     }
 }
@@ -156,7 +160,8 @@ fn method_input_schema(name: &str) -> Value {
             json!({ "clientId": { "type": "string", "minLength": 1 } }),
             &["clientId"],
         ),
-        "sessions.get" | "sessions.delete" | "session.start" | "session.stop" => object_schema(
+        "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
+        | "session.stop" | "sessions.stop" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1 } }),
             &["sessionId"],
         ),
@@ -918,8 +923,8 @@ impl ControlPlane {
             "graph.history" => self.dispatch_graph_history(request.params),
             "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
             "events.subscribe" => self.dispatch_events_subscribe(request.params),
-            "session.start" => self.dispatch_session_start(request.params),
-            "session.stop" => self.dispatch_session_stop(request.params),
+            "session.start" | "sessions.start" => self.dispatch_session_start(request.params),
+            "session.stop" | "sessions.stop" => self.dispatch_session_stop(request.params),
             "graph.plan" => self.dispatch_plan(request.params),
             "graph.commit" => self.dispatch_commit(request.params),
             _ => Err(ControlError::InvalidRequest("method not found".into())),
@@ -1059,7 +1064,9 @@ impl ControlPlane {
                             | "graph.undoPlan"
                             | "graph.commit"
                             | "session.start"
+                            | "sessions.start"
                             | "session.stop"
+                            | "sessions.stop"
                     );
                 let response = self.dispatch_authorized_with_client(request, grant, client_id);
                 if omit {
@@ -1078,7 +1085,9 @@ impl ControlPlane {
                                 | "graph.undoPlan"
                                 | "graph.commit"
                                 | "session.start"
+                                | "sessions.start"
                                 | "session.stop"
+                                | "sessions.stop"
                         );
                     let response = self.dispatch_authorized_with_client(request, grant, client_id);
                     if omit {
@@ -1506,7 +1515,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         ));
     };
     let allowed: &[&str] = match method {
-        "sessions.get" | "sessions.delete" | "session.start" | "session.stop" => &["sessionId"],
+        "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
+        | "session.stop" | "sessions.stop" => &["sessionId"],
         "sessions.list" => &["cursor", "limit"],
         "sessions.create" => &["session"],
         "sessions.duplicate" => &["sourceSessionId", "sessionId", "name"],
@@ -1558,7 +1568,9 @@ fn is_mutating_method(method: &str) -> bool {
             | "graph.undoPlan"
             | "graph.commit"
             | "session.start"
+            | "sessions.start"
             | "session.stop"
+            | "sessions.stop"
             | "sessions.create"
             | "sessions.duplicate"
             | "sessions.delete"
