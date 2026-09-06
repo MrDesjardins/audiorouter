@@ -4,6 +4,8 @@
 
 Added `crates/windows-audio` as the first reusable Windows adapter boundary. It explicitly owns COM initialization/uninitialization, enumerates active capture and render endpoints, copies the COM-owned `WAVEFORMATEX` metadata before freeing it, and returns endpoint ID, direction, shared-mode periods, sample rate, channels, bits, and format tag. It also provides a shared-capture lifecycle wrapper with exact endpoint selection, bounded initialization, start/stop/reset, and packet metadata reads that release the underlying device buffer immediately.
 
+The control plane now uses this adapter for `devices.list`, returning active endpoint IDs, direction, state, format, and period metadata. `apps.list` and full `status` remain explicitly unavailable until process discovery and the realtime graph are implemented.
+
 Verification on the Windows 11 host:
 
 ```powershell

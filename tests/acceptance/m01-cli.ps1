@@ -13,7 +13,8 @@ try {
     if ($status.audio -ne "unavailable") { throw "M01 status must identify real audio as unavailable" }
 
     $devices = cargo run --quiet -p audiorouter-cli -- --json devices list | ConvertFrom-Json
-    if ($devices.Count -ne 0) { throw "Offline M01 device discovery must not invent devices" }
+    if ($devices.Count -eq 0) { throw "Windows device discovery returned no active endpoints" }
+    if ($null -eq ($devices | Where-Object { $_.state -eq "active" -and $_.id })) { throw "Active endpoint metadata missing" }
 
     $nodes = cargo run --quiet -p audiorouter-cli -- --json nodes types | ConvertFrom-Json
     $physicalInput = $nodes | Where-Object { $_.type -eq "physical-input@1" }

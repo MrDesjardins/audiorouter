@@ -252,7 +252,11 @@ mod tests {
     fn list_commands_use_discovery_and_do_not_fake_devices() {
         let devices: Value =
             serde_json::from_str(&run(["devices", "list", "--json"]).unwrap()).unwrap();
-        assert_eq!(devices, json!([]));
+        assert!(devices
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|device| { device["state"] == "active" && device["id"].as_str().is_some() }));
         let nodes: Value =
             serde_json::from_str(&run(["nodes", "types", "--json"]).unwrap()).unwrap();
         assert!(nodes

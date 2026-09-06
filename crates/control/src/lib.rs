@@ -301,7 +301,8 @@ impl ControlPlane {
             "status.get" => Ok(
                 json!({ "build": self.build, "audio": "unavailable", "reason": "M02 Windows audio adapters not implemented" }),
             ),
-            "devices.list" | "apps.list" => Ok(json!([])),
+            "devices.list" => self.dispatch_devices_list(),
+            "apps.list" => Ok(json!([])),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
             "session.start" => self.dispatch_session_start(request.params),
             "session.stop" => self.dispatch_session_stop(request.params),
@@ -490,6 +491,32 @@ impl ControlPlane {
     fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let id = session_id_from_params(params)?;
         self.session_stop(&id)
+    }
+
+    fn dispatch_devices_list(&self) -> Result<Value, ControlError> {
+        let endpoints = audiorouter_windows_audio::enumerate_active_endpoints()
+            .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        Ok(json!(endpoints
+            .into_iter()
+            .map(|endpoint| json!({
+                "id": endpoint.id,
+                "direction": match endpoint.direction {
+                    audiorouter_windows_audio::EndpointDirection::Capture => "capture",
+                    audiorouter_windows_audio::EndpointDirection::Render => "render",
+                },
+                "state": "active",
+                "format": {
+                    "sampleRateHz": endpoint.sample_rate_hz,
+                    "channels": endpoint.channels,
+                    "bitsPerSample": endpoint.bits_per_sample,
+                    "formatTag": endpoint.format_tag,
+                },
+                "periods": {
+                    "default100ns": endpoint.default_period_100ns,
+                    "minimum100ns": endpoint.minimum_period_100ns,
+                },
+            }))
+            .collect::<Vec<_>>()))
     }
 }
 
