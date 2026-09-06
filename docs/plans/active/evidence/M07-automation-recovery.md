@@ -628,3 +628,7 @@ After the explicit `diagnostics export` command was added, the complete wrapper
 was rerun at clean revision `c133b23`. M01 CLI (21 tests), MCP stdio, 68
 control tests, 31 plugin-host tests, 8 worker-process tests, and strict Clippy
 passed; graph-plan and diagnostics outputs remained disposable and protected.
+
+Direct CLI writer coverage also verifies that relative output paths and missing
+parents are rejected before any destination file or directory is created.
+Focused CLI tests and strict Clippy pass.

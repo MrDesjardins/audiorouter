@@ -2152,6 +2152,22 @@ mod tests {
     }
 
     #[test]
+    fn output_writer_rejects_unsafe_parent_before_creating_a_file() {
+        let relative = std::path::Path::new("diagnostics.json");
+        assert!(write_new_file(relative, b"{}").is_err());
+
+        let missing_parent = std::env::temp_dir().join(format!(
+            "audiorouter-cli-missing-output-parent-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&missing_parent);
+        let destination = missing_parent.join("diagnostics.json");
+        assert!(write_new_file(&destination, b"{}").is_err());
+        assert!(!destination.exists());
+        assert!(!missing_parent.exists());
+    }
+
+    #[test]
     fn startup_convenience_command_reports_capability_without_registration() {
         let startup: Value =
             serde_json::from_str(&run(["startup", "get", "--json"]).unwrap()).unwrap();
