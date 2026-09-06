@@ -185,6 +185,12 @@ and backend plan/commit. Template regressions cover matrix shape, independent
 snapshots, and distinct names; UI coverage is 41 tests with typecheck and
 production build passing.
 
+Route explanations now annotate each reported node with its authoritative
+enabled, bypassed, muted, or disabled state. Unknown node IDs remain visible
+instead of being silently dropped. A pure formatter regression was added; UI
+coverage is 50 tests with typecheck and production build passing. Inspection
+remains read-only and does not infer or alter topology.
+
 Canvas node cards now expose every port's direction, role, and channel count,
 so users can inspect connection endpoints without relying on proximity or
 color. A pure port-label regression was added; UI coverage is 49 tests with
