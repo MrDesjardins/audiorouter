@@ -1,6 +1,8 @@
 //! Offline M01 CLI command surface.
 
 use audiorouter_control::ControlPlane;
+use audiorouter_domain::EntityId;
+use audiorouter_storage::Storage;
 use serde_json::{json, Value};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -13,6 +15,8 @@ pub enum OutputMode {
 pub enum CliError {
     InvalidArguments(String),
     UnknownCommand(String),
+    Io(String),
+    Storage(String),
 }
 
 pub fn run<I, S>(args: I) -> Result<String, CliError>
@@ -44,6 +48,8 @@ where
         "apps" => list_subcommand(&command_args, "apps")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
         "api" => list_subcommand(&command_args, "api")?,
+        "export" => export_session(&command_args)?,
+        "import" => import_session(&command_args)?,
         other => return Err(CliError::UnknownCommand(other.into())),
     };
     match mode {
@@ -101,7 +107,61 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "api methods"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+}
+
+fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
+    let index = args
+        .iter()
+        .position(|argument| *argument == option)
+        .ok_or_else(|| CliError::InvalidArguments(format!("{option} is required")))?;
+    args.get(index + 1)
+        .copied()
+        .filter(|value| !value.is_empty() && !value.starts_with('-'))
+        .ok_or_else(|| CliError::InvalidArguments(format!("{option} requires a value")))
+}
+
+fn database(args: &[&str]) -> Result<Storage, CliError> {
+    let path = option_value(args, "--database")?;
+    if !std::path::Path::new(path).is_absolute() {
+        return Err(CliError::InvalidArguments(
+            "--database path must be absolute".into(),
+        ));
+    }
+    Storage::open(path).map_err(|error| CliError::Storage(format!("{error:?}")))
+}
+
+fn export_session(args: &[&str]) -> Result<Value, CliError> {
+    let id = args
+        .get(1)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| {
+            CliError::InvalidArguments("usage: export <session-id> --database <path>".into())
+        })?;
+    let storage = database(args)?;
+    let document = storage
+        .export_session(&EntityId::new(id))
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?
+        .ok_or_else(|| CliError::InvalidArguments("session not found".into()))?;
+    serde_json::from_str(&document).map_err(|error| CliError::InvalidArguments(error.to_string()))
+}
+
+fn import_session(args: &[&str]) -> Result<Value, CliError> {
+    let path = args
+        .get(1)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| {
+            CliError::InvalidArguments("usage: import <document-path> --database <path>".into())
+        })?;
+    let document =
+        std::fs::read_to_string(path).map_err(|error| CliError::Io(error.to_string()))?;
+    let storage = database(args)?;
+    let session = storage
+        .import_session(&document)
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?;
+    serde_json::to_value(session).map_err(|error| CliError::InvalidArguments(error.to_string()))
 }
 
 fn render_human(command: &str, value: &Value) -> String {
@@ -154,5 +214,41 @@ mod tests {
             Err(CliError::InvalidArguments(_))
         ));
         assert_eq!(run(["nope"]), Err(CliError::UnknownCommand("nope".into())));
+    }
+
+    #[test]
+    fn import_and_export_use_validated_persistent_storage() {
+        let suffix = format!("audiorouter-cli-{}", std::process::id());
+        let database = std::env::temp_dir().join(format!("{suffix}.sqlite"));
+        let document = std::env::temp_dir().join(format!("{suffix}.json"));
+        let _ = std::fs::remove_file(&database);
+        std::fs::write(
+            &document,
+            include_str!("../../../tests/fixtures/valid-session.json"),
+        )
+        .unwrap();
+        let database_arg = database.to_string_lossy().into_owned();
+        let document_arg = document.to_string_lossy().into_owned();
+        let imported = run([
+            "import",
+            &document_arg,
+            "--database",
+            &database_arg,
+            "--json",
+        ])
+        .unwrap();
+        assert!(imported.contains("session"));
+        let exported = run([
+            "export",
+            "session-fixture",
+            "--database",
+            &database_arg,
+            "--json",
+        ])
+        .unwrap();
+        let exported: Value = serde_json::from_str(&exported).unwrap();
+        assert_eq!(exported["id"], "session-fixture");
+        let _ = std::fs::remove_file(database);
+        let _ = std::fs::remove_file(document);
     }
 }

@@ -7,5 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 audiorouter-control = { path = "../control" }
+audiorouter-domain = { path = "../domain" }
+audiorouter-storage = { path = "../storage" }
 audiorouter-protocol = { path = "../protocol" }
 serde_json = { workspace = true }

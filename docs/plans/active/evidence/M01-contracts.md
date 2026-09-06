@@ -25,7 +25,7 @@ cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m01-cli.ps1
 ```
 
-On 2026-09-05, the workspace suite passed 3 CLI, 16 control, 12 domain, 5 protocol, 9 storage, and 12 transport tests. The standalone WASAPI probe checked successfully. The CLI acceptance script reported `M01 CLI acceptance passed`. The script-policy bypass was process-scoped; Windows execution policy was not changed.
+On 2026-09-05, the workspace suite passed 4 CLI, 16 control, 12 domain, 5 protocol, 9 storage, and 12 transport tests. The standalone WASAPI probe checked successfully. The CLI acceptance script reported `M01 CLI acceptance passed`. The script-policy bypass was process-scoped; Windows execution policy was not changed.
 
 ## Requirement evidence
 

@@ -162,6 +162,11 @@ This establishes that Codex can continue documentation and portable implementati
 - Added `Storage::restore_backup`, which requires absolute paths, a regular non-symlink source, a destination parent that already exists, a new destination file, a 64 MiB bound, and SQLite `integrity_check` success before restoring.
 - The restore test verifies data round-trip and rejects a second restore over an existing destination. Storage coverage is now 9 tests; no live database or machine configuration is overwritten.
 
+### 2026-09-05 — Persistent CLI import/export
+
+- Added real `import <document-path> --database <absolute-path>` and `export <session-id> --database <absolute-path>` commands. Import delegates to the storage validator and export reads the persisted session; both support human and `--json` output.
+- Added a fixture-backed round-trip test and retained the M01 CLI acceptance suite. CLI coverage is now 4 tests; no default database or machine configuration is created by the offline commands.
+
 ## Decisions and assumptions
 
 - Required UI: React, TypeScript, Vite; proposed shell: Tauri/WebView2.
