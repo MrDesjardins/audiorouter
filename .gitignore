@@ -3,3 +3,4 @@
 /ui/dist/
 /target/
 **/target/
+/third_party/
