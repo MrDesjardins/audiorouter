@@ -33,6 +33,12 @@ pub enum StorageError {
     InvalidRecoveryTimestamp,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RecoveryStatus {
+    pub recent_crashes: usize,
+    pub safe_mode: bool,
+}
+
 pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
 pub const MAX_BACKUP_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_BUNDLE_COMPRESSED_BYTES: u64 = 100 * 1024 * 1024;
@@ -1579,6 +1585,35 @@ impl Storage {
             .map_err(StorageError::Sql)
     }
 
+    /// Read the bounded crash count and durable safe-mode latch from one
+    /// SQLite read transaction. This is the consistent persisted input for a
+    /// future process supervisor.
+    pub fn recovery_status(&self, timestamp_seconds: u64) -> Result<RecoveryStatus, StorageError> {
+        let timestamp =
+            i64::try_from(timestamp_seconds).map_err(|_| StorageError::InvalidRecoveryTimestamp)?;
+        let cutoff = timestamp.saturating_sub(RECOVERY_CRASH_WINDOW_SECONDS as i64);
+        let transaction = self.connection.unchecked_transaction()?;
+        let recent_crashes = transaction.query_row(
+            "SELECT COUNT(*) FROM recovery_crashes WHERE occurred_at >= ?1",
+            params![cutoff],
+            |row| row.get::<_, i64>(0),
+        )?;
+        let safe_mode = transaction
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'recoverySafeMode'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .as_deref()
+            == Some("true");
+        transaction.commit()?;
+        Ok(RecoveryStatus {
+            recent_crashes: recent_crashes as usize,
+            safe_mode,
+        })
+    }
+
     pub fn clear_recovery_crashes(&self) -> Result<(), StorageError> {
         let transaction = self.connection.unchecked_transaction()?;
         transaction.execute("DELETE FROM recovery_crashes", [])?;
@@ -1784,6 +1819,13 @@ mod tests {
         assert_eq!(storage.record_recovery_crash(100).unwrap(), 1);
         assert_eq!(storage.record_recovery_crash(101).unwrap(), 2);
         assert_eq!(storage.record_recovery_crash(102).unwrap(), 3);
+        assert_eq!(
+            storage.recovery_status(102).unwrap(),
+            RecoveryStatus {
+                recent_crashes: 3,
+                safe_mode: true,
+            }
+        );
         assert!(storage.recovery_safe_mode().unwrap());
         assert_eq!(storage.recovery_crash_count(102).unwrap(), 3);
         assert_eq!(storage.record_recovery_crash(103).unwrap(), 3);

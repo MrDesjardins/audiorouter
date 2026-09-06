@@ -305,3 +305,8 @@ automatic-restore session set as one deterministic result. This gives the
 future supervisor an atomic decision boundary: safe mode cannot be observed
 alongside a stale restore list. It remains portable policy evidence; process
 creation, crash recording, and native route restart are still unimplemented.
+
+`Storage::recovery_status` now reads the bounded recent-crash count and the
+durable safe-mode latch in one SQLite transaction, giving supervisor wiring a
+consistent persisted snapshot. This remains storage evidence only; it does
+not record crashes, create processes, or restart audio routes.
