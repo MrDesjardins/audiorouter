@@ -40,6 +40,7 @@ describe("snapshot cache", () => {
       setPrivacyMute: async () => { throw new Error("not connected"); },
       clearRecoverySafeMode: async () => { throw new Error("not connected"); },
       removeRecordingEntry: async () => { throw new Error("not connected"); },
+      recycleRecording: async () => { throw new Error("not connected"); },
       createSession: async () => { throw new Error("not connected"); },
       duplicateSession: async () => { throw new Error("not connected"); },
       deleteSession: async () => { throw new Error("not connected"); },
@@ -168,6 +169,18 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", status: "missing" }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).getRecordingRecovery("take-1")).resolves.toEqual({ recordingId: "take-1", status: "missing" });
     expect(received).toEqual({ method: "recordings.recovery", params: { recordingId: "take-1" } });
+  });
+
+  it("forwards explicit recording recycle confirmation through the API", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { recordingId: "take-1", path: "C:\\approved\\take.wav", fileAction: "recycle", preview: true };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).recycleRecording("take-1", false)).resolves.toMatchObject({ preview: true });
+    expect(received).toEqual({ method: "recordings.recycle", params: { recordingId: "take-1", confirm: false } });
   });
 
   it("forwards metadata edits without changing the recording path", async () => {

@@ -329,3 +329,9 @@ backend adapter: connected mode forwards `session.start` and `session.stop`,
 while disconnected preview rejects both operations. The control is accompanied
 by a forwarding regression; 25 UI tests, typecheck, and the production build
 pass. The current control runtime is fake, so this slice opens no audio stream.
+
+The UI backend adapter now also exposes explicit recording recycle forwarding
+with a required confirmation value and typed preview/result variants. It is not
+automatically invoked by the editor; disconnected mode rejects it, and the live
+adapter regression checks only the request shape. UI coverage is 26 tests with
+typecheck and production build validation; no file action was performed.

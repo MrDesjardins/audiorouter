@@ -12,6 +12,7 @@ import type {
   RecordingMetadataResult,
   RecordingPreviewResult,
   RecordingRecoveryResult,
+  RecordingRecycleResult,
   RecordingRemoveResult,
   RecordingRow,
   RouteInspection,
@@ -50,6 +51,7 @@ export interface UiBackend {
   setPrivacyMute(muted: boolean): Promise<PrivacyMuteResult>;
   clearRecoverySafeMode(): Promise<RecoveryClearResult>;
   removeRecordingEntry(recordingId: string): Promise<RecordingRemoveResult>;
+  recycleRecording(recordingId: string, confirm: boolean): Promise<RecordingRecycleResult>;
   createSession(session: Session): Promise<SessionCreateResult>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<SessionCreateResult>;
   deleteSession(sessionId: string): Promise<SessionDeleteResult>;
@@ -150,6 +152,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async removeRecordingEntry() {
       throw new Error("The backend is disconnected; recording removal is unavailable.");
     },
+    async recycleRecording() {
+      throw new Error("The backend is disconnected; recording recycle is unavailable.");
+    },
     async createSession() {
       throw new Error("The backend is disconnected; session creation is unavailable.");
     },
@@ -234,6 +239,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async removeRecordingEntry(recordingId) {
       return client.request("recordings.removeEntry", { recordingId });
+    },
+    async recycleRecording(recordingId, confirm) {
+      return client.request("recordings.recycle", { recordingId, confirm });
     },
     async createSession(session) {
       return client.request("sessions.create", { session });
