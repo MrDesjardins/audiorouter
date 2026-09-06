@@ -221,3 +221,8 @@ After the verifier was tightened to reject unlisted package entries, the full
 `tests/acceptance/m08-release.ps1` wrapper passed again from clean revision
 `1b5094e`. The generated package's listed binaries, SBOM, notices, and
 manifest were verified and the disposable directory was removed.
+
+After preparation was tightened to require an existing non-reparse output
+parent, `tests/acceptance/m08-release.ps1` passed again from clean revision
+`ddfa192`. Artifact generation, exact-content verification, unsigned blocker
+assertions, and temporary-directory cleanup all succeeded.
