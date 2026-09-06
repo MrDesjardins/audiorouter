@@ -77,3 +77,5 @@ Pool release now clears the block before returning it to the free set. The test 
 The ring-processing tests also cover output-pool starvation: the input block returns to its free pool, no output is published, and one xrun is recorded. No fallback allocation or silent ownership loss is used.
 
 The linear compiler now honors bypass for compatible processing nodes (`Gain`, `Mute`, and `Meter`) by preserving the surrounding channel-matrix path and omitting the processor stage. A regression proves a bypassed gain passes dry samples unchanged; bypass on device-bound nodes remains rejected. The engine suite passes 35 tests with strict Clippy.
+
+Disabled device-bound nodes in the supported linear subset now insert an explicit silence stage, while disabled compatible processors retain their defined dry bypass. The regression covers both disabled source and disabled sink paths and confirms zero output without allocation or device access; the 35-test engine suite and strict Clippy remain green. Native endpoint lifecycle and disabled-recorder finalization are still open.

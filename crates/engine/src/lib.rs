@@ -990,9 +990,9 @@ pub enum GraphCompileError {
 /// Prepare the currently supported processing subset of a validated domain
 /// graph. The currently supported edge form is one same-channel linear path;
 /// it uses in-place channel matrices. Fan-out, mixer convergence, device
-/// activation, and disabled-node routing remain owned by the Windows
-/// scheduler milestone. Compatible processing nodes may be bypassed and
-/// preserve the dry path; device-bound bypass remains unsupported.
+/// activation remain owned by the Windows scheduler milestone. Compatible
+/// processing nodes may be bypassed and preserve the dry path; disabled
+/// device-bound nodes contribute silence in this supported linear subset.
 pub fn compile_session(
     session: &audiorouter_domain::Session,
     generation: RuntimeGeneration,
@@ -1029,9 +1029,6 @@ pub fn compile_session(
                 .iter()
                 .find(|node| node.id == edge.destination_node)
                 .unwrap();
-            if !source.enabled || !destination.enabled {
-                return Err(GraphCompileError::UnsupportedTopology);
-            }
             if (source.bypass
                 && !matches!(
                     source.kind,
@@ -1114,9 +1111,6 @@ pub fn compile_session(
             .iter()
             .find(|node| node.id == node_id)
             .unwrap();
-        if !node.enabled {
-            continue;
-        }
         if let Some(edge) = enabled_edges
             .iter()
             .find(|edge| edge.destination_node == node_id)
@@ -1127,6 +1121,21 @@ pub fn compile_session(
             stages.push(ProcessingStage::ChannelMatrix {
                 coefficients: edge.matrix.clone(),
             });
+        }
+        if !node.enabled {
+            if matches!(
+                node.kind,
+                NodeKind::PhysicalInput
+                    | NodeKind::ApplicationCapture
+                    | NodeKind::EndpointLoopback
+                    | NodeKind::PhysicalOutput
+                    | NodeKind::Mixer
+            ) {
+                stages.push(ProcessingStage::Mute { muted: true });
+            }
+            // A disabled compatible processor uses its defined dry bypass.
+            previous_node = Some(node_id);
+            continue;
         }
         if node.bypass {
             // Surrounding edge matrix stages preserve the dry signal.
@@ -2219,6 +2228,22 @@ mod tests {
         block.channel_mut(0).unwrap().copy_from_slice(&[0.25, -0.5]);
         graph.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.25, -0.5]);
+
+        let mut disabled_source = session.clone();
+        disabled_source.nodes[0].enabled = false;
+        let graph = compile_session(&disabled_source, RuntimeGeneration::new(10)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
+
+        let mut disabled_sink = session;
+        disabled_sink.nodes[2].enabled = false;
+        let graph = compile_session(&disabled_sink, RuntimeGeneration::new(11)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
     }
 
     #[test]
