@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import { createDisconnectedBackend, SnapshotCache, type UiBackend } from "./backend";
 import { applyGraphDraft, setNodeDraftFlag } from "./draft";
@@ -17,12 +17,38 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
   const [draft, setDraft] = useState(demoSession);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) setSnapshotState(nextState); }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refresh = () => { void snapshotCache.refresh(backend).then(setSnapshotState); };
   const snapshot = snapshotState.snapshot;
   const availableSessions = snapshot ? [snapshot.session, ...demoSessions.filter((item) => item.id !== snapshot.session.id)] : demoSessions;
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
   useEffect(() => { setDraft(session); setSelectedNodeId(session.nodes[0]?.id ?? ""); setActionMessage(null); }, [session]);
+  useEffect(() => {
+    if (!backend.connected) return;
+    let active = true;
+    let polling = false;
+    const poll = async () => {
+      if (!active || polling) return;
+      polling = true;
+      try {
+        const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch);
+        if (!active) return;
+        eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
+        if (result.resyncRequired || result.events.length > 0) {
+          const nextState = await snapshotCache.refresh(backend);
+          if (active) setSnapshotState(nextState);
+        }
+      } catch (error) {
+        if (active) setSnapshotState((current) => ({ ...current, stale: true, error: error instanceof Error ? error.message : "Event subscription failed" }));
+      } finally {
+        polling = false;
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [backend, session.id, snapshotCache]);
   const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) ?? draft.nodes[0];
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
   const statusSummary = snapshot ? `${snapshot.status.audio} audio - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot";

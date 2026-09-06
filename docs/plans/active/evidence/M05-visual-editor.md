@@ -127,3 +127,10 @@ plan/commit workflow with visible success or error status. The disconnected
 adapter keeps the controls and commit actions disabled, preserving the safe
 read-only preview. Vitest (6 tests), TypeScript typecheck, production build,
 and diff checks pass.
+
+Connected UI sessions now maintain a bounded event cursor and poll the shared
+`events.subscribe` adapter once per second. The known backend epoch and replay
+cursor are forwarded; any event or `resyncRequired` result triggers an
+authoritative snapshot refresh, while failures retain the last view as stale.
+The disconnected adapter does not poll or mutate. The adapter regression,
+seven UI tests, typecheck, production build, and diff checks pass.

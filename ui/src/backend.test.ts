@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDisconnectedBackend, SnapshotCache, type UiBackend } from "./backend";
+import { createDisconnectedBackend, createLiveBackend, SnapshotCache, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag } from "./draft";
 
@@ -34,6 +34,24 @@ describe("snapshot cache", () => {
     expect(second.snapshot?.session.id).toBe(demoSession.id);
     expect(second.stale).toBe(true);
     expect(second.error).toBe("pipe closed");
+  });
+});
+
+describe("live event cursor", () => {
+  it("forwards the backend epoch and bounded cursor to the shared client", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { backendEpoch: 8, events: [], nextSequence: 12 };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await backend.subscribe(7, demoSession.id, 8);
+    expect(received).toEqual({
+      method: "events.subscribe",
+      params: { afterSequence: 7, limit: 500, backendEpoch: 8, sessionId: demoSession.id },
+    });
   });
 });
 
