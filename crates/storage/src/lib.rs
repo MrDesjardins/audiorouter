@@ -975,6 +975,43 @@ mod tests {
     }
 
     #[test]
+    fn legacy_journal_schema_is_upgraded_with_a_conservative_empty_hash() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-legacy-journal-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    "CREATE TABLE operation_journal (
+                        idempotency_key TEXT PRIMARY KEY,
+                        operation TEXT NOT NULL,
+                        result TEXT NOT NULL,
+                        committed_revision INTEGER NOT NULL,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                    INSERT INTO operation_journal
+                        (idempotency_key, operation, result, committed_revision)
+                    VALUES ('legacy', 'graph.commit', 'old-result', 1);",
+                )
+                .unwrap();
+        }
+        let storage = Storage::open(&path).unwrap();
+        assert_eq!(
+            storage.journal_result_checked("legacy", "").unwrap(),
+            Some("old-result".into())
+        );
+        assert!(matches!(
+            storage.journal_result_checked("legacy", "new-hash"),
+            Err(StorageError::IdempotencyConflict)
+        ));
+        drop(storage);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn expired_journal_entries_are_pruned_before_replay() {
         let storage = Storage::open_memory().unwrap();
         assert!(storage
