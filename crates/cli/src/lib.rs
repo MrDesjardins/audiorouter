@@ -4,6 +4,7 @@ use audiorouter_control::ControlPlane;
 use audiorouter_domain::{inspect_routes, EntityId};
 use audiorouter_storage::Storage;
 use serde_json::{json, Value};
+use std::io::Read;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputMode {
@@ -50,7 +51,7 @@ where
         "routes" => routes_subcommand(&command_args)?,
         "history" => history_command(&command_args)?,
         "session" => session_command(&command_args)?,
-        "api" => list_subcommand(&command_args, "api")?,
+        "api" => api_subcommand(&command_args)?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
         "export-bundle" => export_bundle(&command_args)?,
@@ -107,6 +108,67 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
         "api" => plane.describe()["methods"].clone(),
         _ => unreachable!(),
     })
+}
+
+fn api_subcommand(args: &[&str]) -> Result<Value, CliError> {
+    match args.get(1).copied() {
+        Some("methods") => list_subcommand(args, "api"),
+        Some("call") => {
+            let method = args.get(2).copied().ok_or_else(|| {
+                CliError::InvalidArguments(
+                    "usage: api call <method> [<params-json-file|->] [--database <path>]".into(),
+                )
+            })?;
+            let params = match args.get(3).copied() {
+                None => None,
+                Some("-") => {
+                    let mut document = String::new();
+                    std::io::stdin()
+                        .read_to_string(&mut document)
+                        .map_err(|error| CliError::Io(error.to_string()))?;
+                    Some(parse_api_params(&document)?)
+                }
+                Some(path) => {
+                    let path = std::path::Path::new(path);
+                    if !path.is_absolute() {
+                        return Err(CliError::InvalidArguments(
+                            "params file path must be absolute".into(),
+                        ));
+                    }
+                    let document = std::fs::read_to_string(path)
+                        .map_err(|error| CliError::Io(error.to_string()))?;
+                    Some(parse_api_params(&document)?)
+                }
+            };
+            let request = audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params,
+            };
+            let response = if args.contains(&"--database") {
+                let storage = database(args)?;
+                ControlPlane::with_storage("cli", storage).dispatch(request)
+            } else {
+                ControlPlane::default().dispatch(request)
+            };
+            serde_json::to_value(response)
+                .map_err(|error| CliError::InvalidArguments(error.to_string()))
+        }
+        _ => Err(CliError::InvalidArguments(
+            "usage: api methods|call <method> [<params-json-file|->] [--database <path>]".into(),
+        )),
+    }
+}
+
+fn parse_api_params(document: &str) -> Result<Value, CliError> {
+    if document.len() > 4 * 1024 * 1024 {
+        return Err(CliError::InvalidArguments(
+            "API params exceed the 4 MiB limit".into(),
+        ));
+    }
+    serde_json::from_str(document)
+        .map_err(|error| CliError::InvalidArguments(format!("invalid API params JSON: {error}")))
 }
 
 fn routes_subcommand(args: &[&str]) -> Result<Value, CliError> {
@@ -296,7 +358,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -471,6 +533,25 @@ mod tests {
             Err(CliError::InvalidArguments(_))
         ));
         assert_eq!(run(["nope"]), Err(CliError::UnknownCommand("nope".into())));
+    }
+
+    #[test]
+    fn generic_api_call_uses_the_shared_dispatcher() {
+        let response: Value =
+            serde_json::from_str(&run(["api", "call", "status.get", "--json"]).unwrap()).unwrap();
+        assert_eq!(response["jsonrpc"], "2.0");
+        assert_eq!(response["result"]["audio"], "unavailable");
+
+        let path =
+            std::env::temp_dir().join(format!("audiorouter-cli-api-{}.json", std::process::id()));
+        std::fs::write(&path, r#"{"protocolVersion":{"major":1,"minor":0}}"#).unwrap();
+        let path_string = path.to_string_lossy().into_owned();
+        let response: Value = serde_json::from_str(
+            &run(["api", "call", "system.handshake", &path_string, "--json"]).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(response["result"]["compatible"], true);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
