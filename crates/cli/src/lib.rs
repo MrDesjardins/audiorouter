@@ -45,6 +45,7 @@ where
             .result
             .unwrap_or_else(|| json!({ "error": "status unavailable" })),
         "schema" => plane.describe(),
+        "diagnostics" => diagnostics_command(&command_args)?,
         "devices" => list_subcommand(&command_args, "devices")?,
         "apps" => list_subcommand(&command_args, "apps")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
@@ -53,6 +54,7 @@ where
         "graph" => graph_command(&command_args)?,
         "session" => session_command(&command_args)?,
         "api" => api_subcommand(&command_args)?,
+        "operation" => operation_command(&command_args)?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
         "export-bundle" => export_bundle(&command_args)?,
@@ -73,6 +75,38 @@ fn status_request() -> audiorouter_protocol::JsonRpcRequest {
         method: "status.get".into(),
         params: None,
     }
+}
+
+fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
+    let request = request("system.diagnostics");
+    let response = if args.contains(&"--database") {
+        ControlPlane::with_storage("cli", database(args)?).dispatch(request)
+    } else {
+        ControlPlane::default().dispatch(request)
+    };
+    response
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("diagnostics unavailable".into()))
+}
+
+fn operation_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("get") {
+        return Err(CliError::InvalidArguments(
+            "usage: operation get <operation-id> --database <path>".into(),
+        ));
+    }
+    let operation_id = positional(args, 2, "operation id")?;
+    let response = ControlPlane::with_storage("cli", database(args)?).dispatch(
+        audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "operations.get".into(),
+            params: Some(json!({ "operationId": operation_id })),
+        },
+    );
+    response
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("operation not found".into()))
 }
 
 fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
@@ -537,7 +571,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." })
+    json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path>", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -959,6 +993,7 @@ mod tests {
     fn help_and_json_schema_are_available_offline() {
         let help = run(["help", "--json"]).unwrap();
         assert!(help.contains("devices list"));
+        assert!(help.contains("operation get"));
         let schema: Value = serde_json::from_str(&run(["schema", "--json"]).unwrap()).unwrap();
         assert_eq!(schema["protocolVersion"]["major"], 1);
     }
@@ -1000,6 +1035,18 @@ mod tests {
             Err(CliError::InvalidArguments(_))
         ));
         assert_eq!(run(["nope"]), Err(CliError::UnknownCommand("nope".into())));
+        assert!(matches!(
+            run(["operation", "oops"]),
+            Err(CliError::InvalidArguments(_))
+        ));
+    }
+
+    #[test]
+    fn diagnostics_convenience_command_uses_read_only_dispatch() {
+        let diagnostics: Value =
+            serde_json::from_str(&run(["diagnostics", "--json"]).unwrap()).unwrap();
+        assert_eq!(diagnostics["redacted"], true);
+        assert_eq!(diagnostics["audio"]["state"], "unavailable");
     }
 
     #[test]

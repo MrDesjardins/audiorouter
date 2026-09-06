@@ -58,3 +58,7 @@ Added `plan_graph_change`, `apply_graph_change`, and `control_session` MCP tools
 ## 2026-09-06 — Application snapshot alias parity
 
 Fixed a race in adjacent `apps.list` and `applications.list` requests by retaining one live process enumeration for 100 ms in the control plane. Both aliases now return the same coherent snapshot while still refreshing promptly. Control tests pass 44 cases with strict Clippy.
+
+## 2026-09-06 — Typed CLI read parity
+
+Added `diagnostics [--database <path>]` and `operation get <operation-id> --database <path>` convenience commands. Both use the shared dispatcher and preserve read-only semantics; help now advertises their exact forms. CLI tests pass 8 cases with strict Clippy.
