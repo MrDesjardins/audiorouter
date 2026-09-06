@@ -59,6 +59,8 @@ The CLI now supports `session start|stop <session-id> --database <absolute-path>
 
 Read parity now includes `sessions.get` and `session get <session-id> --database <absolute-path>`. The CLI acceptance round trip reads the imported fixture and verifies its ID/revision before starting the fake runtime, keeping persisted configuration inspection separate from external audio activation.
 
+Session resource listing now includes `sessions.list` and `session list --database <absolute-path> [--limit N]`. Storage returns sessions in stable ID order with a 1–500 bound; the acceptance script verifies the imported fixture is listed. Cursor pagination and create/duplicate/delete operations remain future API work.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

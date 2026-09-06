@@ -174,13 +174,39 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: session <get|start|stop> <session-id> --database <path>".into(),
+            "usage: session <get|list|start|stop> [<session-id>] --database <path>".into(),
         )
     })?;
-    if !matches!(action, "get" | "start" | "stop") {
+    if !matches!(action, "get" | "list" | "start" | "stop") {
         return Err(CliError::InvalidArguments(
-            "usage: session <get|start|stop> <session-id> --database <path>".into(),
+            "usage: session <get|list|start|stop> [<session-id>] --database <path>".into(),
         ));
+    }
+    let storage = database(args)?;
+    if action == "list" {
+        let limit = args
+            .iter()
+            .position(|argument| *argument == "--limit")
+            .map(|index| {
+                args.get(index + 1)
+                    .copied()
+                    .ok_or_else(|| CliError::InvalidArguments("--limit requires a value".into()))?
+                    .parse::<usize>()
+                    .map_err(|_| CliError::InvalidArguments("--limit must be an integer".into()))
+            })
+            .transpose()?
+            .unwrap_or(100);
+        if !(1..=500).contains(&limit) {
+            return Err(CliError::InvalidArguments(
+                "--limit must be between 1 and 500".into(),
+            ));
+        }
+        return serde_json::to_value(
+            storage
+                .list_sessions(limit)
+                .map_err(|error| CliError::Storage(format!("{error:?}")))?,
+        )
+        .map_err(|error| CliError::InvalidArguments(error.to_string()));
     }
     let id = args
         .get(2)
@@ -188,10 +214,9 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
             CliError::InvalidArguments(
-                "usage: session <get|start|stop> <session-id> --database <path>".into(),
+                "usage: session <get|list|start|stop> [<session-id>] --database <path>".into(),
             )
         })?;
-    let storage = database(args)?;
     let id = EntityId::new(id);
     if action == "get" {
         let session = storage
@@ -220,7 +245,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|start|stop> <session-id> --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "session <get|list|start|stop> [<session-id>] --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {

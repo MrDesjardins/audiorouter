@@ -124,6 +124,7 @@ export type ImplementedMethod =
   | "events.subscribe"
   | "nodes.describe"
   | "sessions.get"
+  | "sessions.list"
   | "graph.plan"
   | "graph.commit"
   | "session.start"

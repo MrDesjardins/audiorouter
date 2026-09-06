@@ -122,7 +122,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 15] = [
+pub const API_METHODS: [ApiMethodSpec; 16] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -175,6 +175,11 @@ pub const API_METHODS: [ApiMethodSpec; 15] = [
     },
     ApiMethodSpec {
         name: "sessions.get",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "sessions.list",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
@@ -732,6 +737,13 @@ impl GraphStore {
 
     pub fn session(&self, id: &EntityId) -> Option<&Session> {
         self.sessions.get(id)
+    }
+
+    pub fn sessions(&self, limit: usize) -> Vec<Session> {
+        let mut sessions = self.sessions.values().cloned().collect::<Vec<_>>();
+        sessions.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
+        sessions.truncate(limit.min(500));
+        sessions
     }
 
     pub fn history(&self, id: &EntityId, limit: usize) -> Vec<Session> {

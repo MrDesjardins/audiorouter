@@ -338,6 +338,18 @@ impl Storage {
             .map_err(Into::into)
     }
 
+    pub fn list_sessions(&self, limit: usize) -> Result<Vec<Session>, StorageError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT document FROM sessions ORDER BY id ASC LIMIT ?1")?;
+        let rows = statement.query_map(params![limit as i64], |row| row.get::<_, String>(0))?;
+        rows.map(|row| {
+            let document = row?;
+            serde_json::from_str(&document).map_err(StorageError::Json)
+        })
+        .collect()
+    }
+
     pub fn export_session(&self, id: &EntityId) -> Result<Option<String>, StorageError> {
         self.load_session(id)?
             .map(|session| serde_json::to_string(&session).map_err(StorageError::Json))

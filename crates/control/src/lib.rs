@@ -260,6 +260,20 @@ impl ControlPlane {
             .map_err(Into::into)
     }
 
+    pub fn sessions_list(&self, limit: usize) -> Result<Value, ControlError> {
+        if !(1..=500).contains(&limit) {
+            return Err(ControlError::InvalidRequest(
+                "limit must be between 1 and 500".into(),
+            ));
+        }
+        let sessions = if let Some(storage) = &self.storage {
+            storage.list_sessions(limit).map_err(storage_error)?
+        } else {
+            self.store.sessions(limit)
+        };
+        serde_json::to_value(sessions).map_err(|error| ControlError::Json(error.to_string()))
+    }
+
     pub fn plan_graph(
         &mut self,
         session_id: &EntityId,
@@ -386,6 +400,7 @@ impl ControlPlane {
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
             "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
             "sessions.get" => self.dispatch_session_get(request.params),
+            "sessions.list" => self.dispatch_sessions_list(request.params),
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "graph.history" => self.dispatch_graph_history(request.params),
             "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
@@ -595,6 +610,15 @@ impl ControlPlane {
         self.ensure_session_loaded(&id)?;
         serde_json::to_value(self.get_session(&id)?)
             .map_err(|error| ControlError::Json(error.to_string()))
+    }
+
+    fn dispatch_sessions_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let limit = params
+            .as_ref()
+            .and_then(|value| value.get("limit"))
+            .and_then(Value::as_u64)
+            .unwrap_or(100);
+        self.sessions_list(limit as usize)
     }
 
     fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
