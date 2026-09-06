@@ -64,6 +64,7 @@ impl MutationRateLimiter {
 #[serde(rename_all = "camelCase")]
 pub struct MethodDescription {
     pub name: &'static str,
+    pub description: &'static str,
     pub permission: audiorouter_domain::PermissionScope,
     pub side_effect: audiorouter_domain::SideEffectClass,
     pub input_schema: Value,
@@ -74,11 +75,37 @@ impl From<ApiMethodSpec> for MethodDescription {
     fn from(spec: ApiMethodSpec) -> Self {
         Self {
             name: spec.name,
+            description: method_description(spec.name),
             permission: spec.permission,
             side_effect: spec.side_effect,
             input_schema: method_input_schema(spec.name),
             output_schema: method_output_schema(spec.name),
         }
+    }
+}
+
+fn method_description(name: &str) -> &'static str {
+    match name {
+        "system.describe" => "Describe protocol capabilities, methods, node types, and limits.",
+        "status.get" => "Return backend, runtime, and audio availability status.",
+        "devices.list" => "List authoritative audio endpoint descriptors.",
+        "apps.list" => "List discoverable application identities for binding.",
+        "nodes.types" => "List supported node types and their availability.",
+        "routes.inspect" => "Inspect upstream route provenance for a destination node.",
+        "graph.history" => "List bounded committed graph revisions for a session.",
+        "graph.undoPlan" => "Prepare an inverse graph plan from retained history.",
+        "events.subscribe" => "Replay retained state events from an optional cursor.",
+        "nodes.describe" => "Describe node types, availability, and realtime cost.",
+        "sessions.get" => "Return one session resource by opaque identifier.",
+        "sessions.list" => "List session resources with stable cursor pagination.",
+        "sessions.create" => "Create a validated stopped session resource.",
+        "sessions.duplicate" => "Clone a session into a new stopped resource.",
+        "sessions.delete" => "Delete a stopped session resource and its history.",
+        "graph.plan" => "Validate and preview a graph candidate without mutation.",
+        "graph.commit" => "Commit an unexpired graph plan with idempotent mutation.",
+        "session.start" => "Start a session runtime through the available backend.",
+        "session.stop" => "Stop a session runtime and publish its lifecycle result.",
+        _ => "Invoke an AudioRouter control-plane method.",
     }
 }
 
@@ -1568,6 +1595,10 @@ mod tests {
             .iter()
             .find(|method| method["name"] == "graph.commit")
             .unwrap();
+        assert_eq!(
+            commit["description"],
+            "Commit an unexpired graph plan with idempotent mutation."
+        );
         assert_eq!(
             commit["inputSchema"]["required"],
             json!(["planId", "baseRevision", "idempotencyKey"])

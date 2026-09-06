@@ -76,6 +76,7 @@ export type SideEffectClass =
 
 export interface MethodDescription {
   name: string;
+  description: string;
   permission: PermissionScope;
   sideEffect: SideEffectClass;
   inputSchema: unknown;

@@ -113,6 +113,8 @@ Status correction for the earlier coverage summary: subsequent native evidence n
 
 Discovery method descriptions now include JSON-Schema-style `inputSchema` and `outputSchema` fields. Required identifiers, graph commit/plan fields, and pagination bounds are described for clients, while read-only array results are distinguished from object results. Rust discovery regression and TypeScript contract typecheck pass; runtime schema enforcement and generated client validation remain future work.
 
+Each discovered method now also carries a human-readable `description`, keeping purpose, permission, side-effect class, and machine-readable schemas together in the offline contract. The control discovery regression and TypeScript typecheck pass.
+
 When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.
