@@ -202,3 +202,8 @@ The fixed `startup.get` capability response and `recovery.clearSafeMode` result
 now have explicit output schemas and shared TypeScript types. Their
 unavailable/cleared-state invariants are discovery-tested without registering
 startup or mutating recovery state.
+
+The paged `sessions.list` and `graph.history` responses now advertise explicit
+page envelopes and serialized session snapshots, including graph nodes, ports,
+edges, and channel matrices. Discovery assertions cover the cursor and revision
+fields; the change is contract-only and does not mutate sessions.

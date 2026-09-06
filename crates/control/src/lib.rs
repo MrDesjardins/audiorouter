@@ -367,6 +367,18 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["enabled", "registration", "reason"],
             "additionalProperties": false
         }),
+        "sessions.list" | "graph.history" => {
+            let item = session_item_schema();
+            json!({
+                "type": "object",
+                "properties": {
+                    "items": { "type": "array", "items": item },
+                    "nextCursor": { "type": ["string", "null"] }
+                },
+                "required": ["items", "nextCursor"],
+                "additionalProperties": false
+            })
+        }
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -636,6 +648,66 @@ fn node_type_item_schema() -> Value {
             }
         },
         "required": ["type", "availability", "realtimeCostClass", "parameters"],
+        "additionalProperties": false
+    })
+}
+
+fn session_item_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "name": { "type": "string", "minLength": 1 },
+            "schemaVersion": { "type": "integer", "minimum": 1 },
+            "revision": { "type": "integer", "minimum": 0 },
+            "nodes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "minLength": 1 },
+                        "kind": { "type": "string", "minLength": 1 },
+                        "name": { "type": "string", "minLength": 1 },
+                        "enabled": { "type": "boolean" },
+                        "bypass": { "type": "boolean" },
+                        "parameters": { "type": "object" },
+                        "ports": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": { "type": "string", "minLength": 1 },
+                                    "direction": { "enum": ["input", "output"] },
+                                    "channels": { "type": "integer", "minimum": 1, "maximum": 8 }
+                                },
+                                "required": ["name", "direction", "channels"],
+                                "additionalProperties": false
+                            }
+                        }
+                    },
+                    "required": ["id", "kind", "name", "enabled", "bypass", "parameters", "ports"],
+                    "additionalProperties": false
+                }
+            },
+            "edges": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": { "type": "string", "minLength": 1 },
+                        "sourceNode": { "type": "string", "minLength": 1 },
+                        "sourcePort": { "type": "string", "minLength": 1 },
+                        "destinationNode": { "type": "string", "minLength": 1 },
+                        "destinationPort": { "type": "string", "minLength": 1 },
+                        "matrix": { "type": "array", "items": { "type": "number" } },
+                        "enabled": { "type": "boolean" }
+                    },
+                    "required": ["id", "sourceNode", "sourcePort", "destinationNode", "destinationPort", "matrix", "enabled"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "required": ["id", "name", "schemaVersion", "revision", "nodes", "edges"],
         "additionalProperties": false
     })
 }
@@ -3118,6 +3190,27 @@ mod tests {
         assert_eq!(
             recovery_clear["outputSchema"]["properties"]["safeMode"]["const"],
             false
+        );
+        let sessions = methods
+            .iter()
+            .find(|method| method["name"] == "sessions.list")
+            .unwrap();
+        assert_eq!(
+            sessions["outputSchema"]["properties"]["nextCursor"]["type"],
+            json!(["string", "null"])
+        );
+        assert_eq!(
+            sessions["outputSchema"]["properties"]["items"]["items"]["properties"]["revision"]
+                ["minimum"],
+            0
+        );
+        let history = methods
+            .iter()
+            .find(|method| method["name"] == "graph.history")
+            .unwrap();
+        assert_eq!(
+            history["outputSchema"]["properties"]["items"]["type"],
+            "array"
         );
         let applications = methods
             .iter()
