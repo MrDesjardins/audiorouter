@@ -474,6 +474,24 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        if let Some(storage) = &self.storage {
+            if let Some((operation, result, revision, created_at)) = storage
+                .operation_status(operation_id)
+                .map_err(storage_error)?
+            {
+                let result: Value = serde_json::from_str(&result)
+                    .map_err(|error| ControlError::Json(error.to_string()))?;
+                return Ok(json!({
+                    "operationId": operation_id,
+                    "operation": operation,
+                    "status": "completed",
+                    "durable": true,
+                    "revision": revision,
+                    "createdAt": created_at,
+                    "result": result
+                }));
+            }
+        }
         if let Some(result) = self.operation_outcomes.get(operation_id) {
             return Ok(json!({
                 "operationId": operation_id,
@@ -485,29 +503,13 @@ impl ControlPlane {
                 "result": result
             }));
         }
-        let Some(storage) = &self.storage else {
-            return Ok(json!({
-                "operationId": operation_id,
-                "status": "unknown",
-                "durable": false
-            }));
-        };
-        let Some((operation, result, revision, created_at)) = storage
-            .operation_status(operation_id)
-            .map_err(storage_error)?
-        else {
+        if self.storage.is_some() {
             return Err(ControlError::InvalidRequest("operation not found".into()));
-        };
-        let result: Value =
-            serde_json::from_str(&result).map_err(|error| ControlError::Json(error.to_string()))?;
+        }
         Ok(json!({
             "operationId": operation_id,
-            "operation": operation,
-            "status": "completed",
-            "durable": true,
-            "revision": revision,
-            "createdAt": created_at,
-            "result": result
+            "status": "unknown",
+            "durable": false
         }))
     }
 
