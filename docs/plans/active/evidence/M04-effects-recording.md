@@ -263,3 +263,10 @@ collisions, performs the filesystem move before updating the library row, and
 attempts rollback if the row update fails. The regression confirms the source
 disappears, the destination exists, and the durable path is updated; 25 storage
 tests, 46 control tests, and 9 CLI tests pass with strict Clippy.
+
+Added authorized `recordings.reveal`, `recordings reveal`, and MCP
+`reveal_recording`. The operation obtains the path only from the persisted
+recording identity, returns an explicit missing result without spawning a
+process, and on Windows launches `explorer.exe` with a separate `/select,`
+argument for an existing regular file. It does not modify the file or library
+row. Domain/control/CLI tests and strict Clippy pass.

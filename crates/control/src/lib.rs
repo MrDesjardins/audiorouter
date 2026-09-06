@@ -108,6 +108,7 @@ fn method_description(name: &str) -> &'static str {
         "recordings.get" => {
             "Read one persisted recording metadata resource without touching its file."
         }
+        "recordings.reveal" => "Reveal a recorded file in the operating system file browser.",
         "recordings.preview" => "Inspect recording file format metadata without decoding audio.",
         "recordings.setMetadata" => {
             "Update recording metadata without changing audio content or path."
@@ -195,6 +196,10 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "recordings.get" => object_schema(
+            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            &["recordingId"],
+        ),
+        "recordings.reveal" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
         ),
@@ -1173,6 +1178,7 @@ impl ControlPlane {
                     "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
                     "recordings.get" => self.dispatch_recordings_get(request.params),
+                    "recordings.reveal" => self.dispatch_recording_reveal(request.params),
                     "recordings.preview" => self.dispatch_recordings_preview(request.params),
                     "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
                     "recordings.rename" => self.dispatch_recording_rename(request.params),
@@ -1734,6 +1740,47 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_recording_reveal(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let recording_id = params
+            .and_then(|params| {
+                params
+                    .get("recordingId")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            })
+            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let storage = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let record = storage
+            .get_recording(&recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let path = std::path::Path::new(&record.path);
+        if !path.is_absolute() {
+            return Err(ControlError::InvalidRequest(
+                "recording path must be absolute".into(),
+            ));
+        }
+        if !path.is_file() {
+            return Ok(
+                json!({ "recordingId": recording_id, "path": record.path, "revealed": false, "reason": "missing" }),
+            );
+        }
+        #[cfg(windows)]
+        let revealed = std::process::Command::new("explorer.exe")
+            .args(["/select,", &record.path])
+            .spawn()
+            .map(|_| true)
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("unable to reveal recording: {error}"))
+            })?;
+        #[cfg(not(windows))]
+        let revealed = false;
+        Ok(json!({ "recordingId": recording_id, "path": record.path, "revealed": revealed }))
+    }
+
     fn dispatch_recordings_preview(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let recording_id = params
             .and_then(|params| {
@@ -2062,7 +2109,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "clients.revoke" => &["clientId"],
         "operations.get" | "operations.cancel" => &["operationId"],
         "recordings.list" => &["sessionId"],
-        "recordings.get" | "recordings.preview" => &["recordingId"],
+        "recordings.get" | "recordings.reveal" | "recordings.preview" => &["recordingId"],
         "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
         "recordings.rename" => &["recordingId", "newPath"],
         "safety.setPrivacyMute" => &["muted"],

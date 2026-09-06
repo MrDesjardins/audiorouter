@@ -119,7 +119,7 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
 fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: recordings <list|get|preview|set-metadata|rename|remove-entry> [<recording-id>] --database <path>"
+            "usage: recordings <list|get|preview|reveal|set-metadata|rename|remove-entry> [<recording-id>] --database <path>"
                 .into(),
         )
     })?;
@@ -150,6 +150,12 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
         ),
         "preview" => (
             "recordings.preview",
+            Some(json!({
+                "recordingId": positional(args, 2, "recording id")?
+            })),
+        ),
+        "reveal" => (
+            "recordings.reveal",
             Some(json!({
                 "recordingId": positional(args, 2, "recording id")?
             })),
@@ -188,7 +194,7 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
             })),
         ),
         _ => return Err(CliError::InvalidArguments(
-            "usage: recordings <list|get|preview|set-metadata|rename|remove-entry> [<recording-id>] --database <path>"
+            "usage: recordings <list|get|preview|reveal|set-metadata|rename|remove-entry> [<recording-id>] --database <path>"
                 .into(),
         )),
     };
@@ -1005,6 +1011,7 @@ fn mcp_tools() -> Value {
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] } }, "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "preview_recording", "description": "Inspect recording file metadata without decoding audio; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
+        { "name": "reveal_recording", "description": "Reveal a recording in the operating system file browser; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "set_recording_metadata", "description": "Update recording metadata without changing its audio or path; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "title": { "type": ["string", "null"], "maxLength": 256 }, "artist": { "type": ["string", "null"], "maxLength": 256 }, "comment": { "type": ["string", "null"], "maxLength": 256 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "rename_recording", "description": "Rename a recording within its approved directory; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "newPath": { "type": "string", "minLength": 1 } }, "required": ["recordingId", "newPath"], "additionalProperties": false } },
         { "name": "set_privacy_mute", "description": "Latch or clear process-local privacy mute; requires capture scope.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" } }, "required": ["muted"], "additionalProperties": false } },
@@ -1045,6 +1052,7 @@ fn mcp_tool_call(
         "list_recordings" => ("recordings.list", Some(arguments)),
         "get_recording" => ("recordings.get", Some(arguments)),
         "preview_recording" => ("recordings.preview", Some(arguments)),
+        "reveal_recording" => ("recordings.reveal", Some(arguments)),
         "set_recording_metadata" => ("recordings.setMetadata", Some(arguments)),
         "rename_recording" => ("recordings.rename", Some(arguments)),
         "set_privacy_mute" => ("safety.setPrivacyMute", Some(arguments)),
@@ -1584,7 +1592,7 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 18);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 19);
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
             &mut plane,
