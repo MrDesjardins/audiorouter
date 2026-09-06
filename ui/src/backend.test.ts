@@ -35,6 +35,7 @@ describe("snapshot cache", () => {
       commitGraph: async () => { throw new Error("not connected"); },
       listRecordings: async () => [],
       listApplications: async () => [],
+      listDevices: async () => [],
       previewRecording: async () => { throw new Error("not connected"); },
       setPrivacyMute: async () => { throw new Error("not connected"); },
       clearRecoverySafeMode: async () => { throw new Error("not connected"); },

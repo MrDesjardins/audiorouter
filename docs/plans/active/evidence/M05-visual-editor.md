@@ -311,3 +311,9 @@ Session list and workspace headings now use `status.get.activeSessionIds` to
 label the selected and listed sessions as Running or Stopped. The UI no longer
 claims a running authoritative session is stopped; disconnected preview still
 uses its safe stopped fixture state.
+The UI now includes a read-only Windows endpoint inventory backed by the typed
+`devices.list` API. Connected refreshes request at most 500 descriptors and
+render direction, sample rate, channel count, and default period; disconnected
+startup remains empty and safe. The adapter does not start streams or change
+endpoint configuration. UI coverage remains green at 23 tests with typecheck
+and production build validation.
