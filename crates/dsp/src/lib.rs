@@ -74,7 +74,7 @@ pub struct BiquadParams {
     pub sample_rate: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BiquadError {
     InvalidSampleRate,
     InvalidFrequency,
@@ -714,7 +714,7 @@ impl PeakLimiter {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DelayError {
     InvalidSampleRate,
     InvalidChannels,
@@ -733,6 +733,120 @@ pub struct DelayLine {
     delay_frames: usize,
     buffer: Vec<f32>,
     write_frame: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct VoiceChainConfig {
+    pub sample_rate: f32,
+    pub eq: Option<EqPresetId>,
+    pub gate: Option<GateParams>,
+    pub compressor: Option<CompressorParams>,
+    pub delay_max_ms: Option<f32>,
+    pub delay_ms: f32,
+    pub limiter: LimiterParams,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VoiceChainError {
+    Biquad(BiquadError),
+    Delay(DelayError),
+}
+
+impl From<BiquadError> for VoiceChainError {
+    fn from(error: BiquadError) -> Self {
+        Self::Biquad(error)
+    }
+}
+
+impl From<DelayError> for VoiceChainError {
+    fn from(error: DelayError) -> Self {
+        Self::Delay(error)
+    }
+}
+
+/// Prepared built-in processing order for a worker-side voice branch:
+/// EQ, gate, compressor, delay, limiter, and telemetry. All optional state is
+/// constructed before processing and the process method allocates nothing.
+#[derive(Clone, Debug)]
+pub struct VoiceChain {
+    eq: Option<ParametricEq>,
+    gate: Option<Gate>,
+    compressor: Option<Compressor>,
+    delay: Option<DelayLine>,
+    limiter: PeakLimiter,
+    meter: SignalMeter,
+}
+
+impl VoiceChain {
+    pub fn new(config: VoiceChainConfig, channels: usize) -> Result<Self, VoiceChainError> {
+        let eq = config
+            .eq
+            .map(|id| eq_preset(id, config.sample_rate))
+            .transpose()?
+            .map(|preset| ParametricEq::from_preset(preset, channels))
+            .transpose()?;
+        let gate = config
+            .gate
+            .map(|params| Gate::new(params, channels))
+            .transpose()?;
+        let compressor = config
+            .compressor
+            .map(|params| Compressor::new(params, channels))
+            .transpose()?;
+        let delay = config
+            .delay_max_ms
+            .map(|max_ms| {
+                let mut delay = DelayLine::new(max_ms, config.sample_rate, channels)?;
+                delay.set_delay_ms(config.delay_ms)?;
+                Ok::<_, DelayError>(delay)
+            })
+            .transpose()?;
+        Ok(Self {
+            eq,
+            gate,
+            compressor,
+            delay,
+            limiter: PeakLimiter::new(config.limiter)?,
+            meter: SignalMeter::new(channels)?,
+        })
+    }
+
+    pub fn process_interleaved(&mut self, samples: &mut [f32]) {
+        if let Some(eq) = &mut self.eq {
+            eq.process_interleaved(samples);
+        }
+        if let Some(gate) = &mut self.gate {
+            gate.process_interleaved(samples);
+        }
+        if let Some(compressor) = &mut self.compressor {
+            compressor.process_interleaved(samples);
+        }
+        if let Some(delay) = &mut self.delay {
+            delay.process_interleaved(samples);
+        }
+        self.limiter.process_interleaved(samples);
+        self.meter.process_interleaved(samples);
+    }
+
+    pub fn meter(&self) -> MeterSnapshot {
+        self.meter.snapshot()
+    }
+
+    pub fn reset(&mut self) {
+        if let Some(eq) = &mut self.eq {
+            eq.reset();
+        }
+        if let Some(gate) = &mut self.gate {
+            gate.reset();
+        }
+        if let Some(compressor) = &mut self.compressor {
+            compressor.reset();
+        }
+        if let Some(delay) = &mut self.delay {
+            delay.reset();
+        }
+        self.meter.reset();
+    }
 }
 
 impl DelayLine {
@@ -1347,6 +1461,46 @@ mod tests {
         let silence = meter.snapshot();
         assert_eq!(silence.peak, [0.0, 0.0]);
         assert_eq!(silence.rms_db, [-120.0, -120.0]);
+    }
+
+    #[test]
+    fn voice_chain_prepares_optional_stages_and_reports_finite_output() {
+        let mut chain = VoiceChain::new(
+            VoiceChainConfig {
+                sample_rate: 48_000.0,
+                eq: Some(EqPresetId::Hum50Hz),
+                gate: Some(GateParams {
+                    threshold_db: -45.0,
+                    hysteresis_db: 3.0,
+                    ratio: 4.0,
+                    range_db: 60.0,
+                    attack_ms: 5.0,
+                    hold_ms: 50.0,
+                    release_ms: 150.0,
+                    sample_rate: 48_000.0,
+                }),
+                compressor: Some(CompressorParams {
+                    threshold_db: -18.0,
+                    ratio: 3.0,
+                    attack_ms: 10.0,
+                    release_ms: 150.0,
+                    knee_db: 6.0,
+                    makeup_db: 0.0,
+                    sample_rate: 48_000.0,
+                }),
+                delay_max_ms: Some(5.0),
+                delay_ms: 0.0,
+                limiter: LimiterParams { ceiling_db: -1.0 },
+            },
+            1,
+        )
+        .unwrap();
+        let mut samples = [0.0, 0.5, -0.5, f32::NAN];
+        chain.process_interleaved(&mut samples);
+        assert!(samples.iter().all(|sample| sample.is_finite()));
+        assert!(chain.meter().peak[0] <= 10.0_f32.powf(-1.0 / 20.0));
+        chain.reset();
+        assert_eq!(chain.meter().peak, [0.0, 0.0]);
     }
 
     #[test]

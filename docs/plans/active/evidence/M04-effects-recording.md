@@ -65,6 +65,14 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+`VoiceChain` now provides a reusable worker-side composition boundary for the
+implemented built-ins. It prepares optional parametric EQ, gate, compressor,
+delay, mandatory sample-peak limiter, and signal meter, then processes in the
+declared EQ → gate → compressor → delay → limiter → meter order without
+allocation. A regression verifies finite output, limiter ceiling, telemetry,
+and reset. Seventeen DSP tests and strict Clippy pass; live graph publication,
+parameter API wiring, and scheduler integration remain open.
+
 `GraphicEq::magnitude_db_at` now exposes the aggregate magnitude response by
 summing the ten exact band responses used during processing. This keeps the
 future response curve tied to effective coefficients; regression coverage
