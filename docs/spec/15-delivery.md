@@ -63,11 +63,11 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | --- | --- | --- |
 | DEC-01 | Windows 11 x64 only | Scope baseline; ARM support deferred explicitly |
 | DEC-02 | Rust domain/control/engine; narrow Windows FFI | Baseline; maintainability and ownership boundaries |
-| DEC-03 | React + TypeScript + Vite, Tauri/WebView2 shell | Required UI stack; shell choice provisional to M00 |
+| DEC-03 | React + TypeScript + Vite, Tauri/WebView2 shell | React/TypeScript/Vite is implemented and validated in M05; the native shell choice remains provisional until live transport injection and manual acceptance |
 | DEC-04 | Shared JSON-RPC application API over restricted named pipe | Baseline; local headless/GUI parity without exposed TCP |
 | DEC-05 | Per-user background engine, sign-in startup | Baseline; separate user capture from privileged driver lifecycle |
-| DEC-06 | 48 kHz float32, initial 128-frame quantum | Provisional to M00 measurements; boundary resampling required |
-| DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Required outcome; vendor/project driver selection unresolved |
+| DEC-06 | 48 kHz float32, initial 128-frame quantum | Retained as the graph baseline; native endpoint formats and process-loopback evidence exist, but physical latency/quantum measurements are still required before making the quantum final |
+| DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Project-owned SysVAD-derived prototype selected for technical evaluation; production package, adaptation, target-machine validation, and signing remain release blockers |
 | DEC-08 | VST3 x64 plus built-ins; legacy plugin support deferred | Baseline; actual binary/SDK compatibility must be verified |
 | DEC-09 | Explicit virtual desktop render route; capture-only app sources | Baseline; automatic capture-and-mute not assumed |
 | DEC-10 | Protected voice paths silence on effect failure | Baseline; deliberate user bypass is a separate action |

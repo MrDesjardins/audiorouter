@@ -23,7 +23,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 - Objective: establish Windows feasibility evidence and driver/toolchain decisions before M01.
 - Requirement IDs: CAP-01–08, ARCH-05/07/08, VDEV-02/09, NFR-01–03, and ENG-03/04.
 - Completed in this pass: native machine/OS/toolchain/device inventory and evidence record.
-- Remaining checklist: physical loopback latency; controlled process-tree tone attribution; process restart/PID-reuse runtime evidence; managed-driver production integration/signing evaluation; DEC-03/06/07 decision update. Endpoint enumeration, shared capture, and process-loopback include/exclude data paths now have native evidence.
+- Remaining checklist: physical loopback latency; controlled process-tree tone attribution; process restart/PID-reuse runtime evidence; managed-driver production integration/signing evaluation; live shell injection/manual UI acceptance. DEC-03/06/07 are now synchronized with the available evidence: the React/TypeScript/Vite stack is confirmed, the 48 kHz/128-frame graph baseline remains provisional pending physical timing, and project-owned SysVAD evaluation is selected while production driver/signing remains blocked. Endpoint enumeration, shared capture, and process-loopback include/exclude data paths now have native evidence.
 - Rollback: documentation-only changes can be reverted; no system state was changed.
 
 ## M01 continuation scope
