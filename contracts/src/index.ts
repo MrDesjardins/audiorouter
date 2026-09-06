@@ -216,6 +216,18 @@ export interface StatusSnapshot {
   eventCursor: { backendEpoch: number; latestSequence: number };
 }
 
+export interface DiagnosticsSnapshot {
+  build: string;
+  backend: "control-plane";
+  storage: "memory" | "sqlite";
+  audio: { state: "unavailable"; reason: string };
+  nativeAdapter: "not activated";
+  privacyMute: { muted: boolean; persistence: "durable" | "memory" };
+  recovery: { safeMode: boolean; recentCrashes: number; persistence: "durable" | "memory" };
+  eventLog: { latestSequence: number; retained: number };
+  redacted: true;
+}
+
 export interface StateEvent {
   sequence: number;
   backendEpoch: number;
@@ -395,7 +407,7 @@ export type MethodResult = {
     schemaVersion: number;
   };
   "status.get": StatusSnapshot;
-  "system.diagnostics": Record<string, unknown>;
+  "system.diagnostics": DiagnosticsSnapshot;
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
   "clients.authorize": Record<string, unknown>;
   "clients.revoke": Record<string, unknown>;

@@ -346,6 +346,7 @@ fn method_input_schema(name: &str) -> Value {
 fn method_output_schema(name: &str) -> Value {
     match name {
         "status.get" => status_output_schema(),
+        "system.diagnostics" => diagnostics_output_schema(),
         "apps.list" | "applications.list" => json!({
             "type": "array",
             "items": {
@@ -464,6 +465,58 @@ fn status_output_schema() -> Value {
             }
         },
         "required": ["build", "audio", "deviceDiscovery", "reason", "storage", "sessionCount", "activeSessionCount", "activeSessionIds", "privacyMute", "recovery", "eventCursor"],
+        "additionalProperties": false
+    })
+}
+
+fn diagnostics_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "build": { "type": "string" },
+            "backend": { "const": "control-plane" },
+            "storage": { "enum": ["memory", "sqlite"] },
+            "audio": {
+                "type": "object",
+                "properties": {
+                    "state": { "const": "unavailable" },
+                    "reason": { "type": "string", "minLength": 1 }
+                },
+                "required": ["state", "reason"],
+                "additionalProperties": false
+            },
+            "nativeAdapter": { "const": "not activated" },
+            "privacyMute": {
+                "type": "object",
+                "properties": {
+                    "muted": { "type": "boolean" },
+                    "persistence": { "enum": ["durable", "memory"] }
+                },
+                "required": ["muted", "persistence"],
+                "additionalProperties": false
+            },
+            "recovery": {
+                "type": "object",
+                "properties": {
+                    "safeMode": { "type": "boolean" },
+                    "recentCrashes": { "type": "integer", "minimum": 0 },
+                    "persistence": { "enum": ["durable", "memory"] }
+                },
+                "required": ["safeMode", "recentCrashes", "persistence"],
+                "additionalProperties": false
+            },
+            "eventLog": {
+                "type": "object",
+                "properties": {
+                    "latestSequence": { "type": "integer", "minimum": 0 },
+                    "retained": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["latestSequence", "retained"],
+                "additionalProperties": false
+            },
+            "redacted": { "const": true }
+        },
+        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "privacyMute", "recovery", "eventLog", "redacted"],
         "additionalProperties": false
     })
 }
@@ -3017,6 +3070,18 @@ mod tests {
         assert_eq!(
             status["outputSchema"]["properties"]["eventCursor"]["required"],
             json!(["backendEpoch", "latestSequence"])
+        );
+        let diagnostics = methods
+            .iter()
+            .find(|method| method["name"] == "system.diagnostics")
+            .unwrap();
+        assert_eq!(
+            diagnostics["outputSchema"]["properties"]["redacted"]["const"],
+            true
+        );
+        assert_eq!(
+            diagnostics["outputSchema"]["properties"]["eventLog"]["required"],
+            json!(["latestSequence", "retained"])
         );
         let applications = methods
             .iter()

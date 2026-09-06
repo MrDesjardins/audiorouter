@@ -192,3 +192,8 @@ The `status.get` output schema now models the stable snapshot returned by the
 control plane, including capability strings, session counters/IDs, privacy and
 recovery state, and event cursors. The schema is covered by control discovery
 tests and remains a read-only contract.
+
+The `system.diagnostics` output schema now explicitly models its redacted
+backend, unavailable-audio, privacy/recovery, and event-log fields. Discovery
+tests verify the redaction marker and bounded counters; the operation remains
+read-only.
