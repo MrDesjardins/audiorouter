@@ -11,7 +11,7 @@ Implemented the portable AUTO-04 CLI slice in `crates/cli`:
 
 Regression coverage verifies an independent CLI-process-equivalent plan, inspect, and apply sequence. `cargo test -p audiorouter-cli` passes 6 tests. The implementation is configuration-only: it does not open audio devices, install drivers, or change machine audio settings.
 
-Remaining AUTO-04 work includes durable server-side plan retention/expiry across backend restarts, warning acknowledgments, and parity for all convenience commands.
+Remaining AUTO-04 work includes parity for the remaining convenience commands and full end-to-end warning-producing operations.
 
 ## 2026-09-06 — Event epoch reconnect guard
 
