@@ -203,3 +203,9 @@ remains disabled while disconnected, reports success/failure, and routes only
 through the authorized API; it does not change Windows privacy settings or
 audio defaults. UI coverage is 14 tests with typecheck and production build
 passing.
+
+Connected recording rows now also offer an explicit-confirmation
+`recordings.removeEntry` action. The UI removes only the library row after the
+authorized backend succeeds and reports that the underlying audio file was
+preserved. Disconnected mode keeps the action disabled. UI coverage is 15
+tests with typecheck and production build passing.

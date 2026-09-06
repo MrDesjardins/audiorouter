@@ -33,6 +33,7 @@ describe("snapshot cache", () => {
       listRecordings: async () => [],
       previewRecording: async () => { throw new Error("not connected"); },
       setPrivacyMute: async () => { throw new Error("not connected"); },
+      removeRecordingEntry: async () => { throw new Error("not connected"); },
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);
@@ -102,6 +103,13 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { muted: true }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).setPrivacyMute(true)).resolves.toEqual({ muted: true });
     expect(received).toEqual({ method: "safety.setPrivacyMute", params: { muted: true } });
+  });
+
+  it("forwards metadata-only recording entry removal", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { fileAction: "none" }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).removeRecordingEntry("take-1")).resolves.toEqual({ fileAction: "none" });
+    expect(received).toEqual({ method: "recordings.removeEntry", params: { recordingId: "take-1" } });
   });
 });
 
