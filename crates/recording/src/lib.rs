@@ -2259,7 +2259,27 @@ fn write_header<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
+    use std::io::{Cursor, Seek, SeekFrom};
+
+    struct FlushFails {
+        inner: Cursor<Vec<u8>>,
+    }
+
+    impl Write for FlushFails {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.inner.write(bytes)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Err(std::io::Error::other("flush failed"))
+        }
+    }
+
+    impl Seek for FlushFails {
+        fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(position)
+        }
+    }
 
     #[test]
     fn pcm16_finalizes_header_and_counts_frames() {
@@ -2510,6 +2530,38 @@ mod tests {
         let result =
             recorder.drain_queue_with_checkpoint(&queue, 1, |_| Err(RecordingError::InvalidWav));
         assert!(matches!(result, Err(RecordingError::InvalidWav)));
+        assert_eq!(recorder.state(), RecorderState::Failed);
+    }
+
+    #[test]
+    fn writer_flush_failure_fails_wav_worker_before_checkpoint() {
+        let writer = WavWriter::new(
+            FlushFails {
+                inner: Cursor::new(Vec::new()),
+            },
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            false,
+        )
+        .unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(1).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.0],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        let mut checkpoints = 0;
+        let result = recorder.drain_queue_with_checkpoint(&queue, 1, |_| {
+            checkpoints += 1;
+            Ok(())
+        });
+        assert!(matches!(result, Err(RecordingError::Io(_))));
+        assert_eq!(checkpoints, 0);
         assert_eq!(recorder.state(), RecorderState::Failed);
     }
 

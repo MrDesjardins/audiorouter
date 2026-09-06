@@ -419,6 +419,12 @@ the caller's durable checkpoint hook. A flush failure transitions the worker to
 writer. The recording suite passes 27 tests with strict Clippy; OS-level
 `sync_all` policy and native realtime integration remain separate work.
 
+The regression suite includes a destination whose `flush` operation fails. The
+WAV worker returns the I/O error, enters terminal `Failed` state, and does not
+invoke the checkpoint hook; this prevents persistence from claiming a boundary
+after a failed writer flush. Recording coverage is now 28 tests with strict
+Clippy.
+
 Added recover_streaming_flac_file for conservative crash recovery of the
 incremental writer's verbatim layout. It validates the FLAC metadata chain,
 scans complete bounded frames and CRCs without decoding the audio payload,
