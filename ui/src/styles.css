@@ -30,3 +30,9 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
 @media (forced-colors: active) { button, .session-picker select { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; } .node-card.selected, .session-item.selected { outline: 2px solid Highlight; outline-offset: 2px; } .status-dot { forced-color-adjust: none; background: Highlight; } }
 @media (max-width: 760px) { .topbar, .workspace-title { align-items: flex-start; flex-direction: column; } .workspace-grid { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid #293344; } .main-content { padding: 1rem; } .lower-grid { grid-template-columns: 1fr; } }
+.session-flow-canvas { height: 520px; min-height: 360px; margin-top: 1rem; border: 1px solid #293344; border-radius: 8px; overflow: hidden; background: #101722; }
+.session-flow-canvas .react-flow__node { font-size: .85rem; }
+.session-flow-canvas .react-flow__handle { opacity: 0; }
+.flow-node-content { display: grid; gap: .25rem; text-align: left; }
+.flow-node-content strong { font-size: .95rem; }
+.flow-node-content small { color: #a9b7ca; }

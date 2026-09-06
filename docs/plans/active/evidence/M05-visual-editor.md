@@ -335,3 +335,12 @@ with a required confirmation value and typed preview/result variants. It is not
 automatically invoked by the editor; disconnected mode rejects it, and the live
 adapter regression checks only the request shape. UI coverage is 26 tests with
 typecheck and production build validation; no file action was performed.
+
+The visual editor now renders the session graph with a repository-local React
+Flow canvas. It maps nodes and edges from the authoritative session draft,
+highlights the selected node, and exposes fit-view, pan/zoom, and minimap
+presentation controls while keeping nodes and connections non-editable. The
+existing list view remains available as a keyboard-friendly alternative. UI
+tests (26), TypeScript typecheck, production build, and diff checks pass; no
+graph commit, stream activation, or machine configuration change is performed
+by the canvas.
