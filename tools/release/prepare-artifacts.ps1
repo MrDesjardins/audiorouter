@@ -11,6 +11,14 @@ $output = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $output) {
     throw "Output directory already exists; refusing to overwrite release artifacts: $output"
 }
+$outputParent = Split-Path -Parent $output
+if (-not (Test-Path -LiteralPath $outputParent -PathType Container)) {
+    throw "Output directory parent must already exist: $outputParent"
+}
+$outputParentItem = Get-Item -LiteralPath $outputParent -Force
+if (($outputParentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw "Output directory parent must not be a reparse point: $outputParent"
+}
 
 Push-Location $workspace
 try {
