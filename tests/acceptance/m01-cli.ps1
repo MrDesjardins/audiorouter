@@ -35,6 +35,9 @@ try {
         Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
         Copy-Item -LiteralPath (Join-Path $repoRoot "tests/fixtures/valid-session.json") -Destination $document
         cargo run --quiet -p audiorouter-cli -- import $document --database $database | Out-Null
+        $routes = cargo run --quiet -p audiorouter-cli -- --json routes inspect session-fixture output --database $database | ConvertFrom-Json
+        if (-not $routes.reachable) { throw "Route inspection did not find the fixture input" }
+        if ($routes.paths.Count -eq 0 -or $routes.paths[0].channelMaps.Count -eq 0) { throw "Route channel map missing" }
         cargo run --quiet -p audiorouter-cli -- export-bundle session-fixture --database $database --output $bundle | Out-Null
         New-Item -ItemType Directory -Path $staging | Out-Null
         $imported = cargo run --quiet -p audiorouter-cli -- --json import-bundle $bundle --database $importedDatabase --staging $staging | ConvertFrom-Json

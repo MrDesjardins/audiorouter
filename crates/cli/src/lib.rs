@@ -1,7 +1,7 @@
 //! Offline M01 CLI command surface.
 
 use audiorouter_control::ControlPlane;
-use audiorouter_domain::EntityId;
+use audiorouter_domain::{inspect_routes, EntityId};
 use audiorouter_storage::Storage;
 use serde_json::{json, Value};
 
@@ -47,6 +47,7 @@ where
         "devices" => list_subcommand(&command_args, "devices")?,
         "apps" => list_subcommand(&command_args, "apps")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
+        "routes" => routes_subcommand(&command_args)?,
         "api" => list_subcommand(&command_args, "api")?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
@@ -99,6 +100,41 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
     })
 }
 
+fn routes_subcommand(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("inspect") {
+        return Err(CliError::InvalidArguments(
+            "usage: routes inspect <session-id> <destination-node> --database <path>".into(),
+        ));
+    }
+    let id = args
+        .get(2)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| {
+            CliError::InvalidArguments(
+                "usage: routes inspect <session-id> <destination-node> --database <path>".into(),
+            )
+        })?;
+    let storage = database(args)?;
+    let destination = args
+        .get(3)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| {
+            CliError::InvalidArguments(
+                "usage: routes inspect <session-id> <destination-node> --database <path>".into(),
+            )
+        })?;
+    let session = storage
+        .load_session(&EntityId::new(id))
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?
+        .ok_or_else(|| CliError::InvalidArguments("session not found".into()))?;
+    let inspection = inspect_routes(&session, &EntityId::new(destination)).map_err(|errors| {
+        CliError::InvalidArguments(format!("invalid destination or graph: {errors:?}"))
+    })?;
+    serde_json::to_value(inspection).map_err(|error| CliError::InvalidArguments(error.to_string()))
+}
+
 fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
     audiorouter_protocol::JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -109,7 +145,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "routes inspect <session-id> <destination-node> --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
