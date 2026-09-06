@@ -537,6 +537,13 @@ argument failures visible instead of silently accepting a partial probe. The
 fixture was rebuilt and rerun successfully after this change; no endpoint or
 machine configuration was touched.
 
+The loader now validates that the resolved target is a regular file and uses
+`LoadLibraryExW` with `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` and
+`LOAD_LIBRARY_SEARCH_DEFAULT_DIRS`, avoiding the broader legacy DLL search
+behavior. The local fixture was rebuilt and rerun successfully after this
+change. This remains a user-space probe; no audio endpoint or persistent
+machine configuration was touched.
+
 The probe was hardened to require that at least one factory class actually
 passes the compatible audio-effect path. A bundle containing only non-audio
 classes can no longer produce a success-shaped result. The rebuilt probe was

@@ -145,9 +145,16 @@ int wmain(int argc, wchar_t** argv) {
     bool processed_audio_effect = false;
     try {
         const auto binary = fs::absolute(resolve_binary(argv[1]));
-        module = LoadLibraryW(binary.c_str());
+        if (!fs::is_regular_file(binary)) {
+            throw std::runtime_error("resolved plugin binary is not a regular file");
+        }
+        constexpr DWORD load_library_search_dll_load_dir = 0x00000100;
+        constexpr DWORD load_library_search_default_dirs = 0x00001000;
+        module = LoadLibraryExW(
+            binary.c_str(), nullptr,
+            load_library_search_dll_load_dir | load_library_search_default_dirs);
         if (!module) {
-            throw std::runtime_error("LoadLibraryW failed");
+            throw std::runtime_error("LoadLibraryExW with restricted search paths failed");
         }
         const auto get_factory = reinterpret_cast<GetPluginFactoryProc>(
             GetProcAddress(module, "GetPluginFactory"));
