@@ -387,6 +387,13 @@ streaming file with all three tags, reopens it through the bounded metadata
 reader, and verifies the tags and frame count. This is file-format evidence;
 durable library/API mutation and native realtime integration remain separate.
 
+The DSP compressor remains a tested portable component, but it is not yet
+advertised as a graph node. Its detector state cannot safely be inserted into
+the current immutable published `Arc<RuntimeGraph>` without a scheduler-owned
+mutable state boundary. The attempted graph integration was rejected during
+compile validation rather than weakening state continuity or introducing
+unsafe aliasing; this remains an explicit engine/scheduler task.
+
 Added deterministic compressor transfer-curve reference vectors covering below
 threshold, the soft-knee center and boundary, and the hard-knee ceiling. The
 vectors exercise the same `compression_reduction` function used by processing;
