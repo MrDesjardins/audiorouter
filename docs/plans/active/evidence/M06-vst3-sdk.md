@@ -156,3 +156,10 @@ State-file writes now validate the asset's own versioned digest before creating
 the file, rejecting caller-side mutation of the public asset fields. The
 corruption-on-write regression passes; the plugin-host suite remains at 16
 passing tests with strict Clippy clean.
+
+Added a bounded framed worker-control protocol with Hello/Ready, Process,
+Processed, Shutdown, and Failure messages. Decode validates frame shape,
+channel/sample bounds, and parameter bounds before a future worker can accept
+audio. Round-trip, malformed, and oversized-frame regressions pass; the suite
+now has 18 passing tests and strict Clippy is clean. This is protocol evidence
+only; no worker process or plugin execution is claimed.

@@ -3,6 +3,7 @@
 //! This crate intentionally does not load or execute plugin code. Discovery
 //! produces identity evidence for a later disposable worker boundary.
 
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 use std::fs;
@@ -23,6 +24,7 @@ pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 pub const MAX_PARAMETER_EVENTS: usize = 128;
+pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginFormat {
@@ -481,6 +483,16 @@ pub enum WorkerFrameError {
     DeadlineExpired,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum WorkerMessageError {
+    TooShort,
+    TooLarge { length: usize, maximum: usize },
+    LengthMismatch { declared: usize, actual: usize },
+    Json(String),
+    InvalidFrame(WorkerFrameError),
+    InvalidParameter(ParameterEventError),
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerFailureAction {
     Silence,
@@ -595,7 +607,7 @@ impl WorkerFailurePolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WorkerFrame {
     pub sequence: u64,
     pub deadline_tick: u64,
@@ -610,11 +622,114 @@ pub struct BoundedFrameQueue {
     overflow_count: u64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParameterEvent {
     pub parameter_id: u32,
     pub normalized_value: f32,
     pub sample_offset: usize,
+}
+
+/// Control messages for the future disposable native worker. Audio payloads
+/// are bounded here for testability; the production transport may replace the
+/// samples with shared-memory handles without changing lifecycle semantics.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload")]
+pub enum WorkerMessage {
+    Hello {
+        protocol_version: u16,
+        plugin_sha256: String,
+        channels: u16,
+    },
+    Ready,
+    Process {
+        frame: WorkerFrame,
+        parameters: Vec<ParameterEvent>,
+    },
+    Processed {
+        frame: WorkerFrame,
+    },
+    Shutdown,
+    Failure {
+        code: String,
+    },
+}
+
+pub fn encode_worker_message(message: &WorkerMessage) -> Result<Vec<u8>, WorkerMessageError> {
+    let payload =
+        serde_json::to_vec(message).map_err(|error| WorkerMessageError::Json(error.to_string()))?;
+    if payload.len() > MAX_WORKER_MESSAGE_BYTES {
+        return Err(WorkerMessageError::TooLarge {
+            length: payload.len(),
+            maximum: MAX_WORKER_MESSAGE_BYTES,
+        });
+    }
+    let length = u32::try_from(payload.len()).map_err(|_| WorkerMessageError::TooLarge {
+        length: payload.len(),
+        maximum: MAX_WORKER_MESSAGE_BYTES,
+    })?;
+    let mut frame = Vec::with_capacity(4 + payload.len());
+    frame.extend_from_slice(&length.to_le_bytes());
+    frame.extend_from_slice(&payload);
+    Ok(frame)
+}
+
+pub fn decode_worker_message(frame: &[u8]) -> Result<WorkerMessage, WorkerMessageError> {
+    if frame.len() < 4 {
+        return Err(WorkerMessageError::TooShort);
+    }
+    let declared = u32::from_le_bytes(frame[..4].try_into().unwrap()) as usize;
+    if declared > MAX_WORKER_MESSAGE_BYTES {
+        return Err(WorkerMessageError::TooLarge {
+            length: declared,
+            maximum: MAX_WORKER_MESSAGE_BYTES,
+        });
+    }
+    let actual = frame.len() - 4;
+    if declared != actual {
+        return Err(WorkerMessageError::LengthMismatch { declared, actual });
+    }
+    let message: WorkerMessage = serde_json::from_slice(&frame[4..])
+        .map_err(|error| WorkerMessageError::Json(error.to_string()))?;
+    validate_worker_message(&message)?;
+    Ok(message)
+}
+
+fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageError> {
+    match message {
+        WorkerMessage::Process { frame, parameters } => {
+            WorkerFrame::new(
+                frame.sequence,
+                frame.deadline_tick,
+                frame.channels,
+                frame.samples.clone(),
+            )
+            .map_err(WorkerMessageError::InvalidFrame)?;
+            if parameters.len() > MAX_PARAMETER_EVENTS {
+                return Err(WorkerMessageError::InvalidParameter(
+                    ParameterEventError::OffsetOutOfRange,
+                ));
+            }
+            for parameter in parameters {
+                ParameterEvent::new(
+                    parameter.parameter_id,
+                    parameter.normalized_value,
+                    parameter.sample_offset,
+                )
+                .map_err(WorkerMessageError::InvalidParameter)?;
+            }
+        }
+        WorkerMessage::Processed { frame } => {
+            WorkerFrame::new(
+                frame.sequence,
+                frame.deadline_tick,
+                frame.channels,
+                frame.samples.clone(),
+            )
+            .map_err(WorkerMessageError::InvalidFrame)?;
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1087,5 +1202,49 @@ mod tests {
         assert_eq!(queue.push(event), Err(event));
         assert_eq!(queue.overflow_count(), 1);
         assert_eq!(queue.pop(), Some(event));
+    }
+
+    #[test]
+    fn worker_messages_round_trip_and_revalidate_audio_payloads() {
+        let message = WorkerMessage::Process {
+            frame: WorkerFrame::new(7, 100, 2, vec![0.25, -0.25, 0.0, 0.1]).unwrap(),
+            parameters: vec![ParameterEvent::new(3, 0.75, 2).unwrap()],
+        };
+        let encoded = encode_worker_message(&message).unwrap();
+        assert_eq!(decode_worker_message(&encoded).unwrap(), message);
+
+        let mut invalid = Vec::new();
+        let payload = serde_json::to_vec(&WorkerMessage::Process {
+            frame: WorkerFrame {
+                sequence: 7,
+                deadline_tick: 100,
+                channels: 3,
+                samples: vec![0.0, 0.0, 0.0],
+            },
+            parameters: Vec::new(),
+        })
+        .unwrap();
+        invalid.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        invalid.extend_from_slice(&payload);
+        assert!(matches!(
+            decode_worker_message(&invalid),
+            Err(WorkerMessageError::InvalidFrame(
+                WorkerFrameError::InvalidChannels
+            ))
+        ));
+    }
+
+    #[test]
+    fn worker_messages_reject_truncated_and_oversized_frames() {
+        assert_eq!(
+            decode_worker_message(&[]),
+            Err(WorkerMessageError::TooShort)
+        );
+        let mut oversized = Vec::new();
+        oversized.extend_from_slice(&((MAX_WORKER_MESSAGE_BYTES as u32) + 1).to_le_bytes());
+        assert!(matches!(
+            decode_worker_message(&oversized),
+            Err(WorkerMessageError::TooLarge { .. })
+        ));
     }
 }
