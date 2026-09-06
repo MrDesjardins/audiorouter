@@ -108,6 +108,7 @@ dependencies = [
  "audiorouter-domain",
  "audiorouter-dsp",
  "crossbeam-queue",
+ "serde_json",
 ]
 
 [[package]]

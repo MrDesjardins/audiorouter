@@ -1414,6 +1414,7 @@ mod tests {
                     name: "Input".into(),
                     enabled: true,
                     bypass: false,
+                    parameters: Default::default(),
                     ports: vec![Port {
                         name: "main".into(),
                         direction: PortDirection::Output,
@@ -1426,6 +1427,7 @@ mod tests {
                     name: "Output".into(),
                     enabled: true,
                     bypass: false,
+                    parameters: Default::default(),
                     ports: vec![Port {
                         name: "main".into(),
                         direction: PortDirection::Input,
