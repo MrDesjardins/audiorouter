@@ -182,6 +182,55 @@ impl RuntimeGeneration {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DriftController {
+    nominal_ratio: f64,
+    correction_ppm: f64,
+    target_frames: f64,
+    max_correction_ppm: f64,
+}
+
+impl DriftController {
+    pub fn new(
+        input_rate_hz: u32,
+        output_rate_hz: u32,
+        target_frames: usize,
+        max_correction_ppm: f64,
+    ) -> Result<Self, BlockError> {
+        if input_rate_hz == 0
+            || output_rate_hz == 0
+            || target_frames == 0
+            || !max_correction_ppm.is_finite()
+            || max_correction_ppm < 0.0
+        {
+            return Err(BlockError::InvalidSampleRate);
+        }
+        Ok(Self {
+            nominal_ratio: input_rate_hz as f64 / output_rate_hz as f64,
+            correction_ppm: 0.0,
+            target_frames: target_frames as f64,
+            max_correction_ppm,
+        })
+    }
+
+    /// Update correction from bounded FIFO occupancy. The proportional gain
+    /// is deliberately conservative; callers still need xrun/discontinuity
+    /// policy around the stream scheduler.
+    pub fn observe_queue(&mut self, queue_frames: usize) {
+        let error = (queue_frames as f64 - self.target_frames) / self.target_frames;
+        let requested = error * self.max_correction_ppm;
+        self.correction_ppm = requested.clamp(-self.max_correction_ppm, self.max_correction_ppm);
+    }
+
+    pub fn correction_ppm(&self) -> f64 {
+        self.correction_ppm
+    }
+
+    pub fn adjusted_ratio(&self) -> f64 {
+        self.nominal_ratio * (1.0 + self.correction_ppm / 1_000_000.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ProcessingStage {
     Gain { linear: f32 },
     Mute { muted: bool },
@@ -314,6 +363,20 @@ mod tests {
         assert_eq!(output.channel(0).unwrap(), &[0.0, 2.0]);
         assert!(matches!(
             output.resample_linear_from(&source, 0, 48_000),
+            Err(BlockError::InvalidSampleRate)
+        ));
+    }
+
+    #[test]
+    fn drift_controller_clamps_fifo_correction() {
+        let mut controller = DriftController::new(48_000, 48_000, 128, 100.0).unwrap();
+        controller.observe_queue(256);
+        assert_eq!(controller.correction_ppm(), 100.0);
+        assert!(controller.adjusted_ratio() > 1.0);
+        controller.observe_queue(0);
+        assert_eq!(controller.correction_ppm(), -100.0);
+        assert!(matches!(
+            DriftController::new(0, 48_000, 128, 100.0),
             Err(BlockError::InvalidSampleRate)
         ));
     }
