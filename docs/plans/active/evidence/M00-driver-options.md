@@ -52,6 +52,24 @@ Conclusion: the installed WDK is sufficient to compile the sample's core x64
 driver target, but the full sample dependency/validation path and any
 AudioRouter-owned SysVAD adaptation remain open. This does not satisfy the
 managed-driver or production-signing gates.
+
+## 2026-09-06 — WIL dependency follow-up
+
+The SysVAD README identifies WIL as a Git submodule at the sample repository
+root. A disposable sparse checkout was populated with WIL revision
+`81abc8e44c075eba65fe4b68ea2f08525cc701e8` and rebuilt with normal validation.
+The earlier `wil/com.h` errors disappeared: the APO projects, EndpointsCommon,
+and TabletAudioSample all compiled and the driver was locally auto-signed by
+the sample build.
+
+The solution still failed at the same host-side WDK validation boundary:
+`InfVerif.dll` could not be loaded from the WDK x86 path, and the subsequent
+ApiValidator invocation returned exit code 193/-1. This is now isolated from
+the WIL dependency. The generated driver/APO outputs and both temporary
+checkouts were removed. No driver was installed, no test-signing mode was
+enabled, and no machine audio configuration changed. Production signing,
+package validation, target-machine testing, and AudioRouter-specific driver
+adaptation remain open.
 No driver was copied into AudioRouter, installed, registered, loaded, or
 changed, and production signing remains unresolved.
 
