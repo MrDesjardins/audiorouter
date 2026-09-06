@@ -79,6 +79,8 @@ pub struct ApplicationInfo {
 pub enum AudioError {
     Windows(windows::core::Error),
     InvalidUtf16,
+    BufferTooSmall { required: usize, available: usize },
+    InvalidFrameSize,
 }
 
 impl fmt::Display for AudioError {
@@ -86,6 +88,16 @@ impl fmt::Display for AudioError {
         match self {
             Self::Windows(error) => write!(formatter, "Windows audio error: {error}"),
             Self::InvalidUtf16 => formatter.write_str("endpoint ID was not valid UTF-16"),
+            Self::BufferTooSmall {
+                required,
+                available,
+            } => {
+                write!(
+                    formatter,
+                    "capture buffer too small: need {required} bytes, have {available}"
+                )
+            }
+            Self::InvalidFrameSize => formatter.write_str("audio frame size was invalid"),
         }
     }
 }
@@ -251,6 +263,71 @@ impl SharedCapture {
             device_position,
             qpc_position,
         }))
+    }
+
+    /// Copy one packet into caller-owned storage and release the WASAPI
+    /// buffer before returning. `bytes_per_frame` must describe the endpoint's
+    /// mix format; the destination must be sized for the largest packet the
+    /// caller permits. No allocation or borrowed device memory escapes.
+    pub fn next_packet_into(
+        &self,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        use windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_SILENT;
+
+        if bytes_per_frame == 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let frames = unsafe { self.capture.GetNextPacketSize()? } as usize;
+        if frames == 0 {
+            return Ok(None);
+        }
+        let required = frames
+            .checked_mul(bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        if destination.len() < required {
+            return Err(AudioError::BufferTooSmall {
+                required,
+                available: destination.len(),
+            });
+        }
+        let mut data = std::ptr::null_mut();
+        let mut packet_frames = frames as u32;
+        let mut flags = 0;
+        let mut device_position = 0;
+        let mut qpc_position = 0;
+        unsafe {
+            self.capture.GetBuffer(
+                &mut data,
+                &mut packet_frames,
+                &mut flags,
+                Some(&mut device_position),
+                Some(&mut qpc_position),
+            )?;
+            let packet_bytes = (packet_frames as usize)
+                .checked_mul(bytes_per_frame)
+                .ok_or(AudioError::InvalidFrameSize)?;
+            if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
+                destination[..packet_bytes].fill(0);
+            } else {
+                std::ptr::copy_nonoverlapping(
+                    data.cast::<u8>(),
+                    destination.as_mut_ptr(),
+                    packet_bytes,
+                );
+            }
+            self.capture.ReleaseBuffer(packet_frames)?;
+            Ok(Some((
+                CapturePacket {
+                    frames: packet_frames,
+                    flags,
+                    device_position,
+                    qpc_position,
+                },
+                packet_bytes,
+            )))
+        }
     }
 
     /// Wait for the event-driven client to signal available data. Packet reads
