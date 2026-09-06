@@ -119,6 +119,7 @@ export type ImplementedMethod =
   | "apps.list"
   | "nodes.types"
   | "routes.inspect"
+  | "graph.history"
   | "graph.plan"
   | "graph.commit"
   | "session.start"

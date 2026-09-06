@@ -41,6 +41,8 @@ Each inspected path now also includes the validated `channelMaps` in edge order.
 
 The CLI exposes the same read-only inspection through `routes inspect <session-id> <destination-node> --database <absolute-path>`. The M01 acceptance script imports the checked-in fixture into a temporary database, inspects the output route, verifies reachability and channel-map presence, and then removes all temporary files.
 
+`graph.history` is now advertised as a read-only method with a bounded `limit` (default 100, maximum 500). The domain store retains at least the newest 100 in-memory snapshots, and the control method uses durable SQLite history when the session is not loaded in memory. Tests verify newest-first ordering and bounded retrieval; undo planning and event replay remain separate plan items.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

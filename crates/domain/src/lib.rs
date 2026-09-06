@@ -121,7 +121,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 10] = [
+pub const API_METHODS: [ApiMethodSpec; 11] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -149,6 +149,11 @@ pub const API_METHODS: [ApiMethodSpec; 10] = [
     },
     ApiMethodSpec {
         name: "routes.inspect",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "graph.history",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },
@@ -584,6 +589,7 @@ struct GraphPlan {
 #[derive(Debug, Default)]
 pub struct GraphStore {
     sessions: HashMap<EntityId, Session>,
+    history: HashMap<EntityId, Vec<Session>>,
     plans: HashMap<EntityId, GraphPlan>,
     committed_keys: HashMap<String, CommitResult>,
     next_plan: u64,
@@ -592,12 +598,27 @@ pub struct GraphStore {
 impl GraphStore {
     pub fn insert_session(&mut self, session: Session) -> Result<(), StoreError> {
         validate_session(&session).map_err(StoreError::InvalidGraph)?;
+        self.history
+            .entry(session.id.clone())
+            .or_default()
+            .push(session.clone());
         self.sessions.insert(session.id.clone(), session);
         Ok(())
     }
 
     pub fn session(&self, id: &EntityId) -> Option<&Session> {
         self.sessions.get(id)
+    }
+
+    pub fn history(&self, id: &EntityId, limit: usize) -> Vec<Session> {
+        self.history
+            .get(id)
+            .into_iter()
+            .flatten()
+            .rev()
+            .take(limit.min(100))
+            .cloned()
+            .collect()
     }
 
     pub fn plan_graph(
@@ -689,6 +710,10 @@ impl GraphStore {
             revision: committed.revision,
             idempotent_replay: false,
         };
+        self.history
+            .entry(committed.id.clone())
+            .or_default()
+            .push(committed.clone());
         self.sessions.insert(committed.id.clone(), committed);
         self.committed_keys
             .insert(idempotency_key.into(), result.clone());
@@ -966,6 +991,27 @@ mod tests {
                 actual: 1
             })
         );
+    }
+
+    #[test]
+    fn graph_store_returns_newest_bounded_revision_history() {
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        let mut store = GraphStore::default();
+        store.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "updated".into();
+        let plan = store.plan_graph(&original.id, 0, candidate).unwrap();
+        store.commit_graph(&plan, 0, "history-1").unwrap();
+        let history = store.history(&original.id, 1);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].revision, 1);
+        assert_eq!(history[0].name, "updated");
     }
 
     #[test]

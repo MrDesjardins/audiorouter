@@ -223,6 +223,24 @@ impl ControlPlane {
         .map_err(|error| ControlError::Json(error.to_string()))
     }
 
+    pub fn graph_history(
+        &self,
+        session_id: &EntityId,
+        limit: usize,
+    ) -> Result<Value, ControlError> {
+        let limit = limit.clamp(1, 500);
+        let history = if self.store.session(session_id).is_some() {
+            self.store.history(session_id, limit)
+        } else if let Some(storage) = &self.storage {
+            storage
+                .load_history(session_id, limit)
+                .map_err(storage_error)?
+        } else {
+            Vec::new()
+        };
+        serde_json::to_value(history).map_err(|error| ControlError::Json(error.to_string()))
+    }
+
     pub fn plan_graph(
         &mut self,
         session_id: &EntityId,
@@ -319,6 +337,7 @@ impl ControlPlane {
             "apps.list" => self.dispatch_apps_list(),
             "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
+            "graph.history" => self.dispatch_graph_history(request.params),
             "session.start" => self.dispatch_session_start(request.params),
             "session.stop" => self.dispatch_session_stop(request.params),
             "graph.plan" => self.dispatch_plan(request.params),
@@ -527,6 +546,26 @@ impl ControlPlane {
         self.inspect_routes(&session_id, &destination_node)
     }
 
+    fn dispatch_graph_history(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("graph.history params are required".into())
+        })?;
+        let session_id: EntityId = serde_json::from_value(
+            params
+                .get("sessionId")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?,
+        )
+        .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))?;
+        let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
+        if limit == 0 || limit > 500 {
+            return Err(ControlError::InvalidRequest(
+                "limit must be between 1 and 500".into(),
+            ));
+        }
+        self.graph_history(&session_id, limit as usize)
+    }
+
     fn dispatch_devices_list(&self) -> Result<Value, ControlError> {
         let endpoints = audiorouter_windows_audio::enumerate_active_endpoints()
             .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
@@ -688,6 +727,27 @@ mod tests {
         assert_eq!(result["paths"][0]["nodes"], json!(["in", "out"]));
         assert_eq!(result["paths"][0]["edges"], json!(["edge"]));
         assert_eq!(result["paths"][0]["channelMaps"], json!([[1.0]]));
+    }
+
+    #[test]
+    fn graph_history_dispatch_returns_newest_snapshot_first() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "revision-one".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "history-api").unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "graph.history".into(),
+            params: Some(json!({ "sessionId": "session", "limit": 1 })),
+        });
+        let history = response.result.unwrap();
+        assert_eq!(history.as_array().unwrap().len(), 1);
+        assert_eq!(history[0]["revision"], 1);
+        assert_eq!(history[0]["name"], "revision-one");
     }
 
     #[test]
