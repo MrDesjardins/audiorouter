@@ -463,6 +463,51 @@ impl RuntimePublication {
     }
 }
 
+/// Integrated block-processing boundary used by a future Windows scheduler.
+/// It provides safe silence before activation, publishes only prepared graphs,
+/// applies the process-local privacy gate, and exposes callback counters.
+pub struct RuntimeProcessor {
+    publication: RuntimePublication,
+    privacy_mute: PrivacyMute,
+    metrics: CallbackMetrics,
+}
+
+impl Default for RuntimeProcessor {
+    fn default() -> Self {
+        Self {
+            publication: RuntimePublication::default(),
+            privacy_mute: PrivacyMute::default(),
+            metrics: CallbackMetrics::default(),
+        }
+    }
+}
+
+impl RuntimeProcessor {
+    pub fn publish(&self, graph: RuntimeGraph) {
+        self.publication.publish(graph);
+    }
+
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.privacy_mute.set_muted(muted);
+    }
+
+    pub fn metrics(&self) -> &CallbackMetrics {
+        &self.metrics
+    }
+
+    /// Process one block and return the active generation. Before a graph is
+    /// published, the block is cleared and `None` is returned.
+    pub fn process(&self, block: &mut AudioBlock) -> Option<RuntimeGeneration> {
+        let Some(graph) = self.publication.load() else {
+            block.clear();
+            return None;
+        };
+        graph.process_instrumented(block, &self.metrics);
+        self.privacy_mute.apply(block);
+        Some(graph.generation())
+    }
+}
+
 impl RuntimeGraph {
     pub fn prepare(generation: RuntimeGeneration, stages: Vec<ProcessingStage>) -> Self {
         Self { stages, generation }
@@ -718,5 +763,29 @@ mod tests {
         block.channel_mut(0).unwrap().fill(1.0);
         mute.apply(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[1.0; 2]);
+    }
+
+    #[test]
+    fn processor_silences_before_activation_and_applies_published_generation() {
+        let processor = RuntimeProcessor::default();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        assert_eq!(processor.process(&mut block), None);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+
+        processor.publish(RuntimeGraph::prepare(
+            RuntimeGeneration::new(9),
+            vec![ProcessingStage::Gain { linear: 2.0 }],
+        ));
+        block.channel_mut(0).unwrap().fill(1.0);
+        assert_eq!(
+            processor.process(&mut block).map(RuntimeGeneration::value),
+            Some(9)
+        );
+        assert_eq!(block.channel(0).unwrap(), &[2.0; 2]);
+        processor.set_privacy_muted(true);
+        processor.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+        assert_eq!(processor.metrics().processed_quanta(), 2);
     }
 }
