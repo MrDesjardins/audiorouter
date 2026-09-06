@@ -726,6 +726,12 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             "tools/call" if initialized => {
                 Some(mcp_tool_call(&mut plane, &client_id, &grant, &message))
             }
+            "resources/list" if initialized => Some(json!({
+                "jsonrpc": "2.0", "id": id, "result": { "resources": mcp_resources() }
+            })),
+            "resources/read" if initialized => {
+                Some(mcp_resource_read(&mut plane, &client_id, &grant, &message))
+            }
             _ => Some(mcp_error(
                 id,
                 -32002,
@@ -775,6 +781,50 @@ fn mcp_tools() -> Value {
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
         { "name": "call_api", "description": "Call one validated permitted AudioRouter API method.", "inputSchema": { "type": "object", "properties": { "method": { "type": "string" }, "params": { "type": ["object", "null"] } }, "required": ["method"], "additionalProperties": false } }
     ])
+}
+
+fn mcp_resources() -> Value {
+    json!([
+        { "uri": "audiorouter://capabilities", "name": "AudioRouter capabilities", "description": "Current backend capabilities, method schemas, and limits.", "mimeType": "application/json" },
+        { "uri": "audiorouter://diagnostics", "name": "Redacted diagnostics", "description": "Current redacted backend diagnostic snapshot.", "mimeType": "application/json" },
+        { "uri": "audiorouter://workflow/headless", "name": "Headless workflow", "description": "Safe plan, apply, confirmation, and recovery guidance.", "mimeType": "text/plain" }
+    ])
+}
+
+fn mcp_resource_read(
+    plane: &mut ControlPlane,
+    client_id: &str,
+    grant: &audiorouter_control::ClientGrant,
+    message: &Value,
+) -> Value {
+    let id = message.get("id").cloned();
+    let uri = message["params"]["uri"].as_str().unwrap_or_default();
+    let (mime_type, text) = match uri {
+        "audiorouter://capabilities" | "audiorouter://diagnostics" => {
+            let method = if uri.ends_with("capabilities") {
+                "system.describe"
+            } else {
+                "system.diagnostics"
+            };
+            let payload = plane.dispatch_authorized_for_client(
+                audiorouter_protocol::JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: method.into(),
+                    params: None,
+                },
+                client_id,
+                grant,
+            );
+            ("application/json", serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into()))
+        }
+        "audiorouter://workflow/headless" => (
+            "text/plain",
+            "Read capabilities and the current session revision; plan the smallest change; inspect warnings; apply with a unique idempotency key; confirm operation status and events; on conflict, reread and replan. Imports are stopped and never arm recording or install drivers automatically.".into(),
+        ),
+        _ => return mcp_error(id, -32602, "unknown resource URI"),
+    };
+    json!({ "jsonrpc": "2.0", "id": id, "result": { "contents": [{ "uri": uri, "mimeType": mime_type, "text": text }] } })
 }
 
 fn mcp_tool_call(
@@ -1120,5 +1170,6 @@ mod tests {
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
         assert_eq!(mcp_tools().as_array().unwrap().len(), 7);
+        assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
     }
 }
