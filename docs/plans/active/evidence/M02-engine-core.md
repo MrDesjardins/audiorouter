@@ -48,6 +48,8 @@ Prepared mixer and fan-out stages now sanitize non-finite samples at their outpu
 
 `CompiledFanoutGraph::process` now preflights every destination's frame count, channel count, and matrix shape before mutating any branch. A regression verifies that a later invalid destination leaves an earlier destination unchanged; the 33-test engine suite and strict Clippy remain green.
 
+Prepared mixer construction now applies the domain contract's finite coefficient range of -2 through +2, rejecting NaN/Inf and out-of-range values before runtime use. The engine suite contains 34 passing tests with strict Clippy.
+
 `AudioBlock` now exposes per-channel sample peak, per-channel RMS, and aggregate RMS without allocation. Non-finite samples are excluded from meter calculations and invalid channels return `None`; the engine suite contains 20 passing tests and strict engine Clippy passes.
 
 `RmsWindow` adds a preallocated rolling RMS window with explicit capacity and reset behavior. It treats non-finite input as silence and performs no allocation while pushing blocks; the engine suite contains 21 passing tests and strict engine Clippy passes.

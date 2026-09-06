@@ -771,7 +771,9 @@ impl MixerStage {
         if matrices.iter().any(|matrix| {
             matrix.is_empty()
                 || matrix.len() % output_channels != 0
-                || matrix.iter().any(|coefficient| !coefficient.is_finite())
+                || matrix.iter().any(|coefficient| {
+                    !coefficient.is_finite() || !(-2.0..=2.0).contains(coefficient)
+                })
         }) {
             return Err(MixerError::InvalidMatrix);
         }
@@ -1551,6 +1553,18 @@ mod tests {
         assert!(matches!(
             MixerStage::new(1, matrices),
             Err(MixerError::InputLimit)
+        ));
+    }
+
+    #[test]
+    fn prepared_mixer_rejects_out_of_range_coefficients() {
+        assert!(matches!(
+            MixerStage::new(1, vec![vec![2.1]]),
+            Err(MixerError::InvalidMatrix)
+        ));
+        assert!(matches!(
+            MixerStage::new(1, vec![vec![f32::NAN]]),
+            Err(MixerError::InvalidMatrix)
         ));
     }
 
