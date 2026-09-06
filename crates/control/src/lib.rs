@@ -741,7 +741,7 @@ impl ControlPlane {
                 "mutating notifications are not supported",
             );
         }
-        let result = match request.method.as_str() {
+        let result = validate_method_params(&request.method, request.params.as_ref()).and_then(|_| match request.method.as_str() {
             "system.describe" => Ok(self.describe()),
             "status.get" => Ok(
                 json!({ "build": self.build, "audio": "unavailable", "deviceDiscovery": "available", "reason": "M02 realtime graph engine and routing are not implemented" }),
@@ -764,7 +764,7 @@ impl ControlPlane {
             "graph.plan" => self.dispatch_plan(request.params),
             "graph.commit" => self.dispatch_commit(request.params),
             _ => Err(ControlError::InvalidRequest("method not found".into())),
-        };
+        });
         match result {
             Ok(value) => JsonRpcResponse::success(id, value),
             Err(ControlError::InvalidRequest(message)) if message == "method not found" => {
@@ -1302,6 +1302,41 @@ fn graph_diff(before: &Session, after: &Session) -> Vec<Value> {
     diff
 }
 
+fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), ControlError> {
+    let Some(params) = params else {
+        return Ok(());
+    };
+    let Some(object) = params.as_object() else {
+        return Err(ControlError::InvalidRequest(
+            "method params must be an object".into(),
+        ));
+    };
+    let allowed: &[&str] = match method {
+        "sessions.get" | "sessions.delete" | "session.start" | "session.stop" => &["sessionId"],
+        "sessions.list" => &["cursor", "limit"],
+        "sessions.create" => &["session"],
+        "sessions.duplicate" => &["sourceSessionId", "sessionId", "name"],
+        "routes.inspect" => &["sessionId", "destinationNode"],
+        "graph.history" => &["sessionId", "cursor", "limit"],
+        "graph.undoPlan" => &["sessionId", "baseRevision"],
+        "events.subscribe" => &["afterSequence", "limit", "sessionId"],
+        "graph.plan" => &["sessionId", "baseRevision", "candidate"],
+        "graph.commit" => &["planId", "baseRevision", "idempotencyKey"],
+        "system.describe" | "status.get" | "devices.list" | "apps.list" | "nodes.types"
+        | "nodes.describe" => &[],
+        _ => return Ok(()),
+    };
+    if let Some(field) = object
+        .keys()
+        .find(|field| !allowed.contains(&field.as_str()))
+    {
+        return Err(ControlError::InvalidRequest(format!(
+            "unknown parameter: {field}"
+        )));
+    }
+    Ok(())
+}
+
 fn role_name(role: ClientRole) -> &'static str {
     match role {
         ClientRole::Observer => "observer",
@@ -1610,6 +1645,26 @@ mod tests {
             .unwrap();
         assert_eq!(devices["inputSchema"]["additionalProperties"], false);
         assert_eq!(devices["outputSchema"]["type"], "array");
+    }
+
+    #[test]
+    fn dispatch_rejects_parameters_outside_discovered_schema() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.list".into(),
+            params: Some(json!({ "unexpected": true })),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
+
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "devices.list".into(),
+            params: Some(json!([])),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
     }
 
     #[test]
