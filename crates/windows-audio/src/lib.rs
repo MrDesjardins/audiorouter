@@ -86,6 +86,7 @@ pub enum AudioError {
     InvalidFrameSize,
     ApplicationNotFound { process_id: u32 },
     ApplicationIdentityChanged { process_id: u32 },
+    ApplicationIdentityUnavailable { process_id: u32 },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -114,6 +115,7 @@ impl AudioError {
             | Self::InvalidFrameSize
             | Self::ApplicationNotFound { .. }
             | Self::ApplicationIdentityChanged { .. } => 0x80070057,
+            Self::ApplicationIdentityUnavailable { .. } => 0x80070005,
             Self::BufferTooSmall { .. } => unreachable!(),
         };
         match code {
@@ -151,6 +153,12 @@ impl fmt::Display for AudioError {
                 write!(
                     formatter,
                     "application process {process_id} identity changed"
+                )
+            }
+            Self::ApplicationIdentityUnavailable { process_id } => {
+                write!(
+                    formatter,
+                    "application process {process_id} identity unavailable"
                 )
             }
         }
@@ -748,6 +756,9 @@ pub fn bind_application(
     expected_executable: &str,
     expected_creation_time_100ns: Option<u64>,
 ) -> Result<ApplicationInfo, AudioError> {
+    if expected_creation_time_100ns.is_none() {
+        return Err(AudioError::ApplicationIdentityUnavailable { process_id });
+    }
     let application = enumerate_applications()?
         .into_iter()
         .find(|application| application.process_id == process_id)
@@ -896,6 +907,10 @@ mod tests {
         assert!(matches!(
             bind_application(process_id, "different.exe", application.creation_time_100ns),
             Err(AudioError::ApplicationIdentityChanged { .. })
+        ));
+        assert!(matches!(
+            bind_application(process_id, &application.executable, None),
+            Err(AudioError::ApplicationIdentityUnavailable { .. })
         ));
     }
 
