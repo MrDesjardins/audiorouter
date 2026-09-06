@@ -16,6 +16,49 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::time::Instant;
+
+const MUTATION_RATE_PER_SECOND: f64 = 20.0;
+const MUTATION_BURST: f64 = 40.0;
+
+#[derive(Debug)]
+struct MutationBucket {
+    tokens: f64,
+    last_refill: Instant,
+}
+
+#[derive(Debug, Default)]
+struct MutationRateLimiter {
+    buckets: HashMap<String, MutationBucket>,
+}
+
+impl MutationRateLimiter {
+    fn allow(&mut self, client_id: &str) -> Result<(), u64> {
+        self.allow_at(client_id, Instant::now())
+    }
+
+    fn allow_at(&mut self, client_id: &str, now: Instant) -> Result<(), u64> {
+        let bucket = self
+            .buckets
+            .entry(client_id.to_owned())
+            .or_insert_with(|| MutationBucket {
+                tokens: MUTATION_BURST,
+                last_refill: now,
+            });
+        let elapsed = now
+            .saturating_duration_since(bucket.last_refill)
+            .as_secs_f64();
+        bucket.tokens = (bucket.tokens + elapsed * MUTATION_RATE_PER_SECOND).min(MUTATION_BURST);
+        bucket.last_refill = now;
+        if bucket.tokens < 1.0 {
+            let retry_after_ms =
+                (((1.0 - bucket.tokens) / MUTATION_RATE_PER_SECOND) * 1000.0).ceil() as u64;
+            return Err(retry_after_ms.max(1));
+        }
+        bucket.tokens -= 1.0;
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct MethodDescription {
@@ -100,6 +143,7 @@ pub struct ControlPlane {
     storage: Option<Storage>,
     enrollments: HashMap<String, (ClientRole, bool)>,
     events: EventLog,
+    mutation_limiter: MutationRateLimiter,
 }
 
 impl Default for ControlPlane {
@@ -117,6 +161,7 @@ impl ControlPlane {
             storage: None,
             enrollments: HashMap::new(),
             events: EventLog::new(1),
+            mutation_limiter: MutationRateLimiter::default(),
         }
     }
 
@@ -128,6 +173,7 @@ impl ControlPlane {
             storage: Some(storage),
             enrollments: HashMap::new(),
             events: EventLog::new(1),
+            mutation_limiter: MutationRateLimiter::default(),
         }
     }
 
@@ -513,6 +559,27 @@ impl ControlPlane {
         request: JsonRpcRequest,
         grant: &ClientGrant,
     ) -> JsonRpcResponse {
+        self.dispatch_authorized_with_client(request, grant, None)
+    }
+
+    /// Dispatch an authenticated request with a stable client identity for
+    /// mutation rate limiting. The identity is intentionally supplied by the
+    /// transport after it has authenticated the caller.
+    pub fn dispatch_authorized_for_client(
+        &mut self,
+        request: JsonRpcRequest,
+        client_id: &str,
+        grant: &ClientGrant,
+    ) -> JsonRpcResponse {
+        self.dispatch_authorized_with_client(request, grant, Some(client_id))
+    }
+
+    fn dispatch_authorized_with_client(
+        &mut self,
+        request: JsonRpcRequest,
+        grant: &ClientGrant,
+        client_id: Option<&str>,
+    ) -> JsonRpcResponse {
         let id = request.id.clone();
         let Some(spec) = API_METHODS.iter().find(|spec| spec.name == request.method) else {
             return self.dispatch(request);
@@ -523,6 +590,20 @@ impl ControlPlane {
                 -32001,
                 format!("permission denied: {:?}", spec.permission),
             );
+        }
+        if is_mutating_method(&request.method) {
+            if let Some(client_id) = client_id {
+                if let Err(retry_after_ms) = self.mutation_limiter.allow(client_id) {
+                    let mut response = JsonRpcResponse::failure(id, -32000, "rate limited");
+                    if let Some(error) = response.error.as_mut() {
+                        error.data = Some(json!({
+                            "code": "rateLimited",
+                            "retryAfterMs": retry_after_ms
+                        }));
+                    }
+                    return response;
+                }
+            }
         }
         self.dispatch(request)
     }
@@ -577,6 +658,24 @@ impl ControlPlane {
         message: RpcMessage,
         grant: &ClientGrant,
     ) -> Vec<JsonRpcResponse> {
+        self.dispatch_message_authorized_with_client(message, grant, None)
+    }
+
+    pub fn dispatch_message_authorized_for_client(
+        &mut self,
+        message: RpcMessage,
+        client_id: &str,
+        grant: &ClientGrant,
+    ) -> Vec<JsonRpcResponse> {
+        self.dispatch_message_authorized_with_client(message, grant, Some(client_id))
+    }
+
+    fn dispatch_message_authorized_with_client(
+        &mut self,
+        message: RpcMessage,
+        grant: &ClientGrant,
+        client_id: Option<&str>,
+    ) -> Vec<JsonRpcResponse> {
         match message {
             RpcMessage::Single(request) => {
                 let omit = request.is_notification()
@@ -588,7 +687,7 @@ impl ControlPlane {
                             | "session.start"
                             | "session.stop"
                     );
-                let response = self.dispatch_authorized(request, grant);
+                let response = self.dispatch_authorized_with_client(request, grant, client_id);
                 if omit {
                     Vec::new()
                 } else {
@@ -607,7 +706,7 @@ impl ControlPlane {
                                 | "session.start"
                                 | "session.stop"
                         );
-                    let response = self.dispatch_authorized(request, grant);
+                    let response = self.dispatch_authorized_with_client(request, grant, client_id);
                     if omit {
                         None
                     } else {
@@ -633,6 +732,19 @@ impl ControlPlane {
     ) -> Result<Vec<Vec<u8>>, FrameError> {
         let message = decode_rpc_frame(frame)?;
         self.dispatch_message_authorized(message, grant)
+            .into_iter()
+            .map(|response| encode_frame(&response))
+            .collect()
+    }
+
+    pub fn dispatch_frame_authorized_for_client(
+        &mut self,
+        frame: &[u8],
+        client_id: &str,
+        grant: &ClientGrant,
+    ) -> Result<Vec<Vec<u8>>, FrameError> {
+        let message = decode_rpc_frame(frame)?;
+        self.dispatch_message_authorized_for_client(message, client_id, grant)
             .into_iter()
             .map(|response| encode_frame(&response))
             .collect()
@@ -931,6 +1043,13 @@ fn role_from_name(name: &str) -> Option<ClientRole> {
     }
 }
 
+fn is_mutating_method(method: &str) -> bool {
+    matches!(
+        method,
+        "graph.plan" | "graph.undoPlan" | "graph.commit" | "session.start" | "session.stop"
+    )
+}
+
 fn storage_error(error: StorageError) -> ControlError {
     ControlError::Storage(format!("{error:?}"))
 }
@@ -939,6 +1058,19 @@ fn storage_error(error: StorageError) -> ControlError {
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
+
+    #[test]
+    fn mutation_rate_limiter_enforces_burst_and_refill_rate() {
+        let mut limiter = MutationRateLimiter::default();
+        let start = Instant::now();
+        for _ in 0..40 {
+            assert!(limiter.allow_at("client", start).is_ok());
+        }
+        assert_eq!(limiter.allow_at("client", start), Err(50));
+        assert!(limiter
+            .allow_at("client", start + std::time::Duration::from_millis(50))
+            .is_ok());
+    }
 
     fn session() -> Session {
         Session {

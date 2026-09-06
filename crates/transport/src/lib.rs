@@ -584,9 +584,10 @@ pub fn serve_control_connections(
     grant: audiorouter_control::ClientGrant,
 ) -> Result<(), TransportError> {
     for _ in 0..connections {
-        serve_once_with_client_optional(name, |_, frame| {
+        serve_once_with_client_optional(name, |client_pid, frame| {
+            let client_id = client_user_sid(client_pid)?;
             let responses = plane
-                .dispatch_frame_authorized(frame, &grant)
+                .dispatch_frame_authorized_for_client(frame, &client_id, &grant)
                 .map_err(|error| TransportError::Protocol(error.to_string()))?;
             if responses.is_empty() {
                 Ok(None)
@@ -616,9 +617,10 @@ pub fn serve_control_sessions(
     grant: audiorouter_control::ClientGrant,
 ) -> Result<(), TransportError> {
     for _ in 0..sessions {
-        serve_session(name, frames_per_session, |_, frame| {
+        serve_session(name, frames_per_session, |client_pid, frame| {
+            let client_id = client_user_sid(client_pid)?;
             let responses = plane
-                .dispatch_frame_authorized(frame, &grant)
+                .dispatch_frame_authorized_for_client(frame, &client_id, &grant)
                 .map_err(|error| TransportError::Protocol(error.to_string()))?;
             if responses.is_empty() {
                 Ok(None)
