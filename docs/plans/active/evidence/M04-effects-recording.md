@@ -20,6 +20,11 @@ now 26 tests with strict Clippy. The streaming writer uses deterministic
 verbatim frames; compression tuning and native realtime integration remain
 open.
 
+StreamingFlacRecorder now connects the incremental writer to the bounded
+RecordingQueue and the same lifecycle/checkpoint contract used by WAV. Its
+regression persists two contiguous boundaries through the callback and
+finalizes a valid FLAC stream. No native callback or audio device is involved.
+
 ## 2026-09-06 â€” FLAC metadata tags
 
 The bounded batch FLAC encoder now optionally inserts a standards-shaped
