@@ -171,3 +171,7 @@ The rendered recording panel now requests the authorized session-scoped
 `recordings.list` result and displays persisted title, state, missing status,
 and path metadata. Disconnected mode returns an empty list and performs no
 mutation. UI coverage is 11 tests with typecheck and production build passing.
+
+Recording query failures are now rendered as an explicit unavailable state,
+rather than being confused with an empty library. This preserves actionable
+permission/backend feedback while retaining the safe disconnected empty state.
