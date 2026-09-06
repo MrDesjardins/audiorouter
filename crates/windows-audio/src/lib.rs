@@ -231,7 +231,9 @@ pub struct SharedRender {
 impl SharedCapture {
     /// Open an exact active capture endpoint using its opaque endpoint ID.
     /// The stream is initialized but remains stopped until `start` is called.
-    pub fn open(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+    /// The duration argument is retained for API compatibility; event-driven
+    /// shared-mode WASAPI requires `Initialize` to receive zero here.
+    pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eCapture, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
             AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
@@ -277,7 +279,7 @@ impl SharedCapture {
                 // the request exact avoids format/flag combinations that
                 // some drivers reject with E_INVALIDARG.
                 AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
-                buffer_duration_100ns,
+                0,
                 0,
                 format,
                 None,
@@ -429,7 +431,9 @@ impl Drop for SharedCapture {
 impl SharedRender {
     /// Open an exact active render endpoint using its opaque endpoint ID.
     /// The stream is initialized but remains stopped until `start` is called.
-    pub fn open(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+    /// The duration argument is retained for API compatibility; event-driven
+    /// shared-mode WASAPI requires `Initialize` to receive zero here.
+    pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
             AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
@@ -471,7 +475,7 @@ impl SharedRender {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
                 AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
-                buffer_duration_100ns,
+                0,
                 0,
                 format,
                 None,
