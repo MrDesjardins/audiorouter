@@ -241,3 +241,9 @@ TypeScript types. The schemas capture negotiated version fields, stopped or
 running fake-runtime invariants, plan expiry, and privacy persistence metadata;
 discovery tests verify representative fields without starting audio or changing
 machine privacy configuration.
+
+Client authorization/revocation and recording metadata/file-action results now
+also have explicit schemas and shared result types. Rename, remove, and reveal
+contracts describe their stable identifiers and file-action outcomes, including
+the safe missing-file reveal branch. Discovery tests cover these shapes without
+launching a shell, moving files, or reading audio payloads.

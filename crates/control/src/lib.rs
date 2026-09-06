@@ -648,6 +648,26 @@ fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             }
         }),
+        "clients.authorize" => json!({
+            "type": "object",
+            "properties": {
+                "clientId": { "type": "string", "minLength": 1 },
+                "role": { "enum": ["observer", "editor", "operator"] },
+                "revoked": { "const": false }
+            },
+            "required": ["clientId", "role", "revoked"],
+            "additionalProperties": false
+        }),
+        "clients.revoke" => json!({
+            "type": "object",
+            "properties": {
+                "clientId": { "type": "string", "minLength": 1 },
+                "revoked": { "const": true },
+                "changed": { "type": "boolean" }
+            },
+            "required": ["clientId", "revoked", "changed"],
+            "additionalProperties": false
+        }),
         "recordings.list" => {
             let item = recording_item_schema();
             json!({
@@ -666,6 +686,74 @@ fn method_output_schema(name: &str) -> Value {
             })
         }
         "recordings.get" => recording_item_schema(),
+        "recordings.setMetadata" => json!({
+            "type": "object",
+            "properties": {
+                "recordingId": { "type": "string", "minLength": 1 },
+                "updated": { "const": true }
+            },
+            "required": ["recordingId", "updated"],
+            "additionalProperties": false
+        }),
+        "recordings.rename" => json!({
+            "type": "object",
+            "properties": {
+                "recordingId": { "type": "string", "minLength": 1 },
+                "renamed": { "const": true },
+                "path": { "type": "string", "minLength": 1 },
+                "fileAction": { "const": "renamed" }
+            },
+            "required": ["recordingId", "renamed", "path", "fileAction"],
+            "additionalProperties": false
+        }),
+        "recordings.removeEntry" => json!({
+            "type": "object",
+            "properties": {
+                "recordingId": { "type": "string", "minLength": 1 },
+                "removed": { "const": true },
+                "fileAction": { "const": "none" }
+            },
+            "required": ["recordingId", "removed", "fileAction"],
+            "additionalProperties": false
+        }),
+        "recordings.reveal" => json!({
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "recordingId": { "type": "string", "minLength": 1 },
+                        "path": { "type": "string", "minLength": 1 },
+                        "revealed": { "const": true }
+                    },
+                    "required": ["recordingId", "path", "revealed"],
+                    "additionalProperties": false
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "recordingId": { "type": "string", "minLength": 1 },
+                        "path": { "type": "string", "minLength": 1 },
+                        "revealed": { "const": false },
+                        "reason": { "const": "missing" }
+                    },
+                    "required": ["recordingId", "path", "revealed", "reason"],
+                    "additionalProperties": false
+                }
+            ]
+        }),
+        "recordings.recycle" => json!({
+            "type": "object",
+            "properties": {
+                "recordingId": { "type": "string", "minLength": 1 },
+                "path": { "type": "string", "minLength": 1 },
+                "fileAction": { "enum": ["recycle", "recycled", "none"] },
+                "preview": { "const": true },
+                "missing": { "const": true },
+                "reason": { "enum": ["missing", "recycleUnavailable"] }
+            },
+            "required": ["recordingId", "path", "fileAction"],
+            "additionalProperties": false
+        }),
         _ => json!({ "type": "object" }),
     }
 }
@@ -3474,6 +3562,35 @@ mod tests {
             privacy["outputSchema"]["properties"]["muted"]["type"],
             "boolean"
         );
+        let authorize = methods
+            .iter()
+            .find(|method| method["name"] == "clients.authorize")
+            .unwrap();
+        assert_eq!(
+            authorize["outputSchema"]["properties"]["revoked"]["const"],
+            false
+        );
+        let metadata = methods
+            .iter()
+            .find(|method| method["name"] == "recordings.setMetadata")
+            .unwrap();
+        assert_eq!(
+            metadata["outputSchema"]["required"],
+            json!(["recordingId", "updated"])
+        );
+        let rename = methods
+            .iter()
+            .find(|method| method["name"] == "recordings.rename")
+            .unwrap();
+        assert_eq!(
+            rename["outputSchema"]["properties"]["fileAction"]["const"],
+            "renamed"
+        );
+        let reveal = methods
+            .iter()
+            .find(|method| method["name"] == "recordings.reveal")
+            .unwrap();
+        assert_eq!(reveal["outputSchema"]["oneOf"].as_array().unwrap().len(), 2);
         let history = methods
             .iter()
             .find(|method| method["name"] == "graph.history")

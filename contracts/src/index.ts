@@ -299,6 +299,40 @@ export interface PrivacyMuteResult {
   audioEffect: string;
 }
 
+export interface ClientAuthorizeResult {
+  clientId: EntityId;
+  role: "observer" | "editor" | "operator";
+  revoked: false;
+}
+
+export interface ClientRevokeResult {
+  clientId: EntityId;
+  revoked: true;
+  changed: boolean;
+}
+
+export interface RecordingMetadataResult {
+  recordingId: EntityId;
+  updated: true;
+}
+
+export interface RecordingRenameResult {
+  recordingId: EntityId;
+  renamed: true;
+  path: string;
+  fileAction: "renamed";
+}
+
+export interface RecordingRemoveResult {
+  recordingId: EntityId;
+  removed: true;
+  fileAction: "none";
+}
+
+export type RecordingRevealResult =
+  | { recordingId: EntityId; path: string; revealed: true }
+  | { recordingId: EntityId; path: string; revealed: false; reason: "missing" };
+
 export interface StateEvent {
   sequence: number;
   backendEpoch: number;
@@ -481,18 +515,18 @@ export type MethodResult = {
   "status.get": StatusSnapshot;
   "system.diagnostics": DiagnosticsSnapshot;
   "clients.list": Array<{ clientId: string; role: string; revoked: boolean }>;
-  "clients.authorize": Record<string, unknown>;
-  "clients.revoke": Record<string, unknown>;
+  "clients.authorize": ClientAuthorizeResult;
+  "clients.revoke": ClientRevokeResult;
   "operations.get": OperationCompleted | OperationUnknown;
   "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
   "recordings.get": RecordingRow;
   "recordings.recovery": Record<string, unknown>;
-  "recordings.reveal": Record<string, unknown>;
+  "recordings.reveal": RecordingRevealResult;
   "recordings.preview": Record<string, unknown>;
-  "recordings.setMetadata": Record<string, unknown>;
-  "recordings.rename": Record<string, unknown>;
-  "recordings.removeEntry": Record<string, unknown>;
+  "recordings.setMetadata": RecordingMetadataResult;
+  "recordings.rename": RecordingRenameResult;
+  "recordings.removeEntry": RecordingRemoveResult;
   "recordings.recycle": Record<string, unknown>;
   "recovery.clearSafeMode": { safeMode: false; recentCrashes: number; persistence: "durable" | "memory" };
   "safety.setPrivacyMute": PrivacyMuteResult;
