@@ -69,6 +69,13 @@ and SHA-256, and verifies both before restore. Empty, oversized, mismatched,
 and tampered state are rejected. Nine plugin-host tests and strict Clippy pass;
 durable asset storage and plugin-specific state serialization remain open.
 
+`FailureLedger` now expires its rolling failure count after ten minutes, with
+an injectable clock for deterministic tests. The new test compiles and strict
+Clippy passes, but Windows Application Control blocked launching the generated
+test executable twice with OS error 4551 before test execution. The prior nine
+plugin-host tests passed before this policy block; this new runtime regression
+remains pending execution-policy remediation.
+
 The scanner no longer labels arbitrary `.dll` files as VST2. DLL candidates
 are retained with `PluginFormat::Unknown`, while only the `.vst3` extension
 receives VST3 classification; this prevents false ReaPlugs/legacy support

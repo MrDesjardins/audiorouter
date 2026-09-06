@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 pub const MAX_PLUGIN_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_FAILURES_BEFORE_QUARANTINE: u32 = 3;
+pub const FAILURE_WINDOW: Duration = Duration::from_secs(10 * 60);
 pub const MAX_WORKER_FRAMES: usize = 2048;
 pub const MAX_SCAN_CANDIDATES: usize = 256;
 pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
@@ -278,6 +279,7 @@ fn parse_pe_architecture(bytes: &[u8]) -> Option<PeArchitecture> {
 pub struct FailureLedger {
     failures: u32,
     quarantined: bool,
+    window_started: Option<Instant>,
 }
 
 impl FailureLedger {
@@ -285,6 +287,7 @@ impl FailureLedger {
         Self {
             failures: 0,
             quarantined: false,
+            window_started: None,
         }
     }
     pub fn failures(&self) -> u32 {
@@ -294,6 +297,21 @@ impl FailureLedger {
         self.quarantined
     }
     pub fn record_failure(&mut self) {
+        self.record_failure_at(Instant::now());
+    }
+
+    pub fn record_failure_at(&mut self, now: Instant) {
+        if self
+            .window_started
+            .is_some_and(|started| now.saturating_duration_since(started) > FAILURE_WINDOW)
+        {
+            self.failures = 0;
+            self.quarantined = false;
+            self.window_started = None;
+        }
+        if self.window_started.is_none() {
+            self.window_started = Some(now);
+        }
         self.failures = self.failures.saturating_add(1);
         if self.failures >= MAX_FAILURES_BEFORE_QUARANTINE {
             self.quarantined = true;
@@ -302,6 +320,7 @@ impl FailureLedger {
     pub fn deliberate_retry(&mut self) {
         self.failures = 0;
         self.quarantined = false;
+        self.window_started = None;
     }
 }
 
@@ -584,5 +603,16 @@ mod tests {
             Err(StateError::IntegrityMismatch)
         );
         assert_eq!(PluginStateAsset::new(1, Vec::new()), Err(StateError::Empty));
+    }
+
+    #[test]
+    fn quarantine_failures_expire_after_the_ten_minute_window() {
+        let start = Instant::now();
+        let mut ledger = FailureLedger::new();
+        ledger.record_failure_at(start);
+        ledger.record_failure_at(start + Duration::from_secs(1));
+        ledger.record_failure_at(start + Duration::from_secs(FAILURE_WINDOW.as_secs() + 1));
+        assert_eq!(ledger.failures(), 1);
+        assert!(!ledger.quarantined());
     }
 }
