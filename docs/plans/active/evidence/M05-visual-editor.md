@@ -23,3 +23,14 @@ accessible labels and `aria-current`; mutation controls stay disabled while
 disconnected and explain that a backend connection is required. This preserves
 the rule that the UI cannot duplicate or bypass graph authority. The
 production build and full dependency audit pass.
+
+## Typed backend snapshot seam
+
+`ui/src/backend.ts` now defines the UI-facing `UiBackend` boundary and a
+`UiBackendSnapshot` containing status, discovery, and the selected session.
+`createLiveBackend` uses the shared typed `AudioRouterClient` for the three
+read-only protocol calls needed to hydrate that snapshot. The default
+`createDisconnectedBackend` returns only local fixture data and exposes no
+mutation surface, preserving safe disconnected startup. The React shell now
+uses that backend state for its connection label. TypeScript checking and the
+production Vite build pass.

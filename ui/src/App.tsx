@@ -1,18 +1,9 @@
 import { useState } from "react";
-import type { Node, Session } from "@audiorouter/contracts";
+import type { Node } from "@audiorouter/contracts";
+import { createDisconnectedBackend } from "./backend";
+import { demoSession } from "./fixtures";
 
-const demoSession: Session = {
-  id: "demo-session",
-  name: "Gaming + Discord",
-  schemaVersion: 1,
-  revision: 7,
-  nodes: [
-    { id: "mic", kind: "physicalInput", name: "Microphone", enabled: true, bypass: false, ports: [{ name: "out", direction: "output", channels: 1 }] },
-    { id: "voice", kind: "gain", name: "Voice gain", enabled: true, bypass: false, ports: [{ name: "in", direction: "input", channels: 1 }, { name: "out", direction: "output", channels: 1 }] },
-    { id: "headphones", kind: "physicalOutput", name: "Headphones", enabled: true, bypass: false, ports: [{ name: "in", direction: "input", channels: 2 }] },
-  ],
-  edges: [],
-};
+const backend = createDisconnectedBackend();
 
 function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean; onSelect: () => void }) {
   return (
@@ -30,13 +21,14 @@ function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean;
 export function App() {
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
   const selectedNode = demoSession.nodes.find((node) => node.id === selectedNodeId) ?? demoSession.nodes[0];
+  const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
   return (
     <div className="app-shell">
       <header className="topbar">
         <div><p className="eyebrow">AudioRouter</p><h1>Routing workspace</h1></div>
         <div className="status-cluster" aria-live="polite">
           <span className="status-dot disconnected" aria-hidden="true" />
-          <span>Backend disconnected</span>
+          <span>{connectionLabel}</span>
           <button type="button">Reconnect</button>
         </div>
       </header>
