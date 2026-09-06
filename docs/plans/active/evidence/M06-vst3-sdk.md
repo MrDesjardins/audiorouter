@@ -140,3 +140,9 @@ automation: normalized values must be finite and within 0..1, sample offsets
 must fit the 2048-frame block, and queue overflow returns ownership with a
 counter. The new test compiles and strict Clippy passes; runtime plugin-host
 execution remains blocked by OS error 4551.
+
+The locally built `mda-vst3.vst3` sample bundle was also run through the
+official SDK validator. It completed with exit code 0 and reported 1,598 tests
+passed and 0 tests failed. The sample was validated in its build directory
+only; it was not installed as a system plugin and no audio endpoint or machine
+audio configuration was touched.
