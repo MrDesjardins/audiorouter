@@ -603,6 +603,7 @@ pub enum WorkerState {
 pub enum WorkerStartError {
     UnsupportedPlugin,
     Quarantined,
+    AlreadyRunning,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -631,6 +632,9 @@ impl WorkerSupervisor {
         identity: &PluginIdentity,
         now: Instant,
     ) -> Result<(), WorkerStartError> {
+        if self.state == WorkerState::Running {
+            return Err(WorkerStartError::AlreadyRunning);
+        }
         if self.failures.quarantined() {
             self.state = WorkerState::Quarantined;
             return Err(WorkerStartError::Quarantined);
@@ -2362,6 +2366,10 @@ mod tests {
         let now = Instant::now();
         let mut supervisor = WorkerSupervisor::new();
         assert_eq!(supervisor.start(&identity, now), Ok(()));
+        assert_eq!(
+            supervisor.start(&identity, now + Duration::from_secs(1)),
+            Err(WorkerStartError::AlreadyRunning)
+        );
         assert_eq!(
             supervisor.poll(now + WORKER_HEARTBEAT_TIMEOUT + Duration::from_millis(1)),
             WorkerState::Failed
