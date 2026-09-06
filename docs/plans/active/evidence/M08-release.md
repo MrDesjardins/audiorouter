@@ -159,3 +159,12 @@ validated without producing a release package.
 The artifact verifier regression and release qualification command-documentation
 regression both passed at the current branch. These checks use disposable
 fixtures and do not produce a signed package or alter audio/driver state.
+## 2026-09-06 — Current unsigned qualification
+
+The actual preparation flow was rerun from the clean current revision. Locked
+optimized CLI and plugin-worker binaries, `sbom.cargo.json`,
+`THIRD-PARTY-NOTICES.txt`, and `release-manifest.json` were generated in a
+disposable temporary directory. `verify-artifacts.ps1` accepted the manifest,
+hashes, and byte counts, after which the temporary directory was removed.
+This is unsigned artifact evidence only; no driver, installer, signature, or
+audio configuration was created or changed.
