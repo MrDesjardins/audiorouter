@@ -13,6 +13,11 @@ The preset IDs also expose stable user-facing names and short descriptions so
 clients can explain the starting point before applying it; the DSP layer does
 not apply presets to a session by itself.
 
+The control discovery document now publishes the same voice-chain catalog
+(`voiceNeutral` and `voiceGateAndCompression`) with names and descriptions.
+The TypeScript discovery contract mirrors this shape; discovery is read-only
+and applying a preset still requires an explicit graph plan/commit.
+
 ## 2026-09-06 â€” Worker checkpoint boundary
 
 `WavRecorder` and `BufferedFlacRecorder` now expose validated controller

@@ -1034,6 +1034,13 @@ impl VoiceChainPresetId {
         }
     }
 
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::VoiceNeutral => "voiceNeutral",
+            Self::VoiceGateAndCompression => "voiceGateAndCompression",
+        }
+    }
+
     pub const fn description(self) -> &'static str {
         match self {
             Self::VoiceNeutral => {

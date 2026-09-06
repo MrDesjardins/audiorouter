@@ -259,6 +259,13 @@ export interface DiscoveryDocument {
       default?: boolean | number | string;
     }>;
   }>;
+  presets: {
+    voiceChains: Array<{
+      id: string;
+      name: string;
+      description: string;
+    }>;
+  };
   limits: {
     maxNodesPerSession: number;
     maxEdgesPerSession: number;

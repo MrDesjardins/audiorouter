@@ -432,6 +432,26 @@ fn method_output_schema(name: &str) -> Value {
                     }
                 },
                 "nodeTypes": { "type": "array", "items": { "type": "object" } },
+                "presets": {
+                    "type": "object",
+                    "properties": {
+                        "voiceChains": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": { "type": "string", "minLength": 1 },
+                                    "name": { "type": "string", "minLength": 1 },
+                                    "description": { "type": "string", "minLength": 1 }
+                                },
+                                "required": ["id", "name", "description"],
+                                "additionalProperties": false
+                            }
+                        }
+                    },
+                    "required": ["voiceChains"],
+                    "additionalProperties": false
+                },
                 "limits": {
                     "type": "object",
                     "properties": {
@@ -463,7 +483,7 @@ fn method_output_schema(name: &str) -> Value {
                     "additionalProperties": false
                 }
             },
-            "required": ["protocolVersion", "schemaVersion", "build", "methods", "nodeTypes", "limits", "events"],
+            "required": ["protocolVersion", "schemaVersion", "build", "methods", "nodeTypes", "presets", "limits", "events"],
             "additionalProperties": false
         }),
         "system.handshake" => json!({
@@ -1860,12 +1880,23 @@ impl ControlPlane {
             };
             json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class, "parameters": Self::node_parameter_schema(spec.kind) })
         }).collect();
+        let voice_chains = audiorouter_dsp::VoiceChainPresetId::ALL
+            .into_iter()
+            .map(|preset| {
+                json!({
+                    "id": preset.id(),
+                    "name": preset.name(),
+                    "description": preset.description()
+                })
+            })
+            .collect::<Vec<_>>();
         json!({
             "protocolVersion": { "major": 1, "minor": 0 },
             "schemaVersion": 1,
             "build": self.build,
             "methods": methods,
             "nodeTypes": nodes,
+            "presets": { "voiceChains": voice_chains },
             "limits": {
                 "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION,
                 "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION,
@@ -4352,6 +4383,17 @@ mod tests {
         assert_eq!(gain["parameters"][0]["name"], "gainDb");
         assert_eq!(gain["parameters"][0]["minimum"], -60.0);
         assert_eq!(gain["parameters"][0]["maximum"], 12.0);
+        assert_eq!(
+            description["presets"]["voiceChains"][0]["id"],
+            "voiceNeutral"
+        );
+        assert_eq!(
+            description["presets"]["voiceChains"][1]["name"],
+            "Voice gate and compression"
+        );
+        assert!(description["presets"]["voiceChains"][0]["description"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
     }
 
     #[test]
