@@ -51,6 +51,8 @@ Control now owns an event log and exposes `events.subscribe` with optional `afte
 
 `nodes.describe` is now a documented read-only method and `nodes describe` is available in the CLI. Both expose the same registry entries as `nodes.types`, including availability and realtime cost class; the M01 acceptance script verifies equal entry counts while real device/plugin schemas remain future milestone work.
 
+The CLI now exposes persisted revision history through `history <session-id> --database <absolute-path> [--limit N]`. It reads the bounded SQLite history newest-first, rejects limits outside 1–500, and is covered by the M01 acceptance round trip using temporary files.
+
 ## Next action
 
 Implement backup restore from a validated staging area over the now-tested local transport. Keep a portable fake transport for deterministic tests and do not add an HTTP listener. Bundle staging now has bounded v1 ZIP validation and optional asset hash/size verification; remaining bundle work is required-node-type compatibility and API integration.

@@ -48,6 +48,7 @@ where
         "apps" => list_subcommand(&command_args, "apps")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
         "routes" => routes_subcommand(&command_args)?,
+        "history" => history_command(&command_args)?,
         "api" => list_subcommand(&command_args, "api")?,
         "export" => export_session(&command_args)?,
         "import" => import_session(&command_args)?,
@@ -137,6 +138,38 @@ fn routes_subcommand(args: &[&str]) -> Result<Value, CliError> {
     serde_json::to_value(inspection).map_err(|error| CliError::InvalidArguments(error.to_string()))
 }
 
+fn history_command(args: &[&str]) -> Result<Value, CliError> {
+    let id = args
+        .get(1)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| {
+            CliError::InvalidArguments("usage: history <session-id> --database <path>".into())
+        })?;
+    let limit = args
+        .iter()
+        .position(|argument| *argument == "--limit")
+        .map(|index| {
+            args.get(index + 1)
+                .copied()
+                .ok_or_else(|| CliError::InvalidArguments("--limit requires a value".into()))?
+                .parse::<usize>()
+                .map_err(|_| CliError::InvalidArguments("--limit must be an integer".into()))
+        })
+        .transpose()?
+        .unwrap_or(100);
+    if !(1..=500).contains(&limit) {
+        return Err(CliError::InvalidArguments(
+            "--limit must be between 1 and 500".into(),
+        ));
+    }
+    let storage = database(args)?;
+    let history = storage
+        .load_history(&EntityId::new(id), limit)
+        .map_err(|error| CliError::Storage(format!("{error:?}")))?;
+    serde_json::to_value(history).map_err(|error| CliError::InvalidArguments(error.to_string()))
+}
+
 fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
     audiorouter_protocol::JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -147,7 +180,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
+    json!({ "commands": ["help", "status", "schema", "devices list", "apps list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N]", "api methods", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "This M01 CLI reports offline control-plane capabilities; real Windows audio is added in M02." })
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {
@@ -342,6 +375,18 @@ mod tests {
         ])
         .unwrap();
         assert!(imported.contains("session"));
+        let history = run([
+            "history",
+            "session-fixture",
+            "--database",
+            &database_arg,
+            "--limit",
+            "1",
+            "--json",
+        ])
+        .unwrap();
+        let history: Value = serde_json::from_str(&history).unwrap();
+        assert_eq!(history.as_array().unwrap().len(), 1);
         let exported = run([
             "export",
             "session-fixture",

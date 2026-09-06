@@ -40,6 +40,8 @@ try {
         $routes = cargo run --quiet -p audiorouter-cli -- --json routes inspect session-fixture output --database $database | ConvertFrom-Json
         if (-not $routes.reachable) { throw "Route inspection did not find the fixture input" }
         if ($routes.paths.Count -eq 0 -or $routes.paths[0].channelMaps.Count -eq 0) { throw "Route channel map missing" }
+        $history = cargo run --quiet -p audiorouter-cli -- --json history session-fixture --database $database --limit 1 | ConvertFrom-Json
+        if ($history.Count -ne 1 -or $history[0].revision -ne 0) { throw "Revision history command returned the wrong snapshot" }
         cargo run --quiet -p audiorouter-cli -- export-bundle session-fixture --database $database --output $bundle | Out-Null
         New-Item -ItemType Directory -Path $staging | Out-Null
         $imported = cargo run --quiet -p audiorouter-cli -- --json import-bundle $bundle --database $importedDatabase --staging $staging | ConvertFrom-Json
