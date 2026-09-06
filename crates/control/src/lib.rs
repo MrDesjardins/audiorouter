@@ -255,6 +255,17 @@ impl ControlPlane {
         session_id: &EntityId,
         base_revision: u64,
     ) -> Result<EntityId, ControlError> {
+        self.ensure_session_loaded(session_id)?;
+        if self.store.history(session_id, 2).len() < 2 {
+            if let Some(storage) = &self.storage {
+                let entries = storage
+                    .load_history(session_id, 100)
+                    .map_err(storage_error)?;
+                self.store
+                    .restore_history(entries)
+                    .map_err(ControlError::from)?;
+            }
+        }
         self.store
             .undo_plan(session_id, base_revision)
             .map_err(Into::into)
@@ -1022,6 +1033,33 @@ mod tests {
         let result = response.result.unwrap();
         assert_eq!(result["baseRevision"], 1);
         assert!(result["planId"].as_str().unwrap().starts_with("plan-"));
+    }
+
+    #[test]
+    fn graph_undo_plan_hydrates_prior_history_after_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-undo-restart-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let mut plane = ControlPlane::with_storage("first", Storage::open(&path).unwrap());
+            let original = session();
+            plane.insert_session(original.clone()).unwrap();
+            let mut candidate = original.clone();
+            candidate.name = "persisted-edit".into();
+            let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+            plane.commit_graph(&plan, 0, "restart-undo").unwrap();
+        }
+        let mut restarted = ControlPlane::with_storage("restarted", Storage::open(&path).unwrap());
+        let response = restarted.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(5)),
+            method: "graph.undoPlan".into(),
+            params: Some(json!({ "sessionId": "session", "baseRevision": 1 })),
+        });
+        assert!(response.result.unwrap()["planId"].as_str().is_some());
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

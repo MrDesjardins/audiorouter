@@ -757,6 +757,31 @@ impl GraphStore {
             .collect()
     }
 
+    pub fn restore_history(&mut self, entries: Vec<Session>) -> Result<(), StoreError> {
+        for session in entries.into_iter().rev() {
+            validate_session(&session).map_err(StoreError::InvalidGraph)?;
+            let history = self.history.entry(session.id.clone()).or_default();
+            if history
+                .iter()
+                .all(|existing| existing.revision != session.revision)
+            {
+                history.push(session.clone());
+                if history.len() > 100 {
+                    history.remove(0);
+                }
+            }
+            let replace = self
+                .sessions
+                .get(&session.id)
+                .map(|current| current.revision <= session.revision)
+                .unwrap_or(true);
+            if replace {
+                self.sessions.insert(session.id.clone(), session);
+            }
+        }
+        Ok(())
+    }
+
     pub fn undo_plan(
         &mut self,
         session_id: &EntityId,
