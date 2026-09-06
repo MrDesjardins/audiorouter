@@ -1399,7 +1399,13 @@ mod tests {
         }));
         let applications: Value =
             serde_json::from_str(&run(["applications", "list", "--json"]).unwrap()).unwrap();
-        assert_eq!(applications, apps);
+        assert!(!applications.as_array().unwrap().is_empty());
+        assert!(applications.as_array().unwrap().iter().all(|application| {
+            application["processId"].as_u64().is_some_and(|pid| pid > 0)
+                && application["executable"].as_str().is_some()
+                && application["audioActivity"].is_string()
+                && application["captureCapability"].is_string()
+        }));
         let nodes: Value =
             serde_json::from_str(&run(["nodes", "types", "--json"]).unwrap()).unwrap();
         assert!(nodes

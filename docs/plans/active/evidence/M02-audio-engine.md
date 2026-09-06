@@ -60,3 +60,6 @@ manager boundaries: an aggregate session, inaccessible endpoint, or transient
 session disappearance is skipped while the rest of the process inventory is
 retained. The adapter regression still verifies nonzero process identities and
 consistent session-count bounds.
+
+The process inventory also excludes Windows' PID-0 system pseudo-process so
+every returned application satisfies the API's positive-PID schema constraint.

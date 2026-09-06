@@ -788,6 +788,12 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                     .unwrap_or(entry.szExeFile.len());
                 let executable = String::from_utf16(&entry.szExeFile[..length])
                     .map_err(|_| AudioError::InvalidUtf16)?;
+                if entry.th32ProcessID == 0 {
+                    if Process32NextW(snapshot, &mut entry).is_err() {
+                        break;
+                    }
+                    continue;
+                }
                 let creation_time_100ns = OpenProcess(
                     PROCESS_QUERY_LIMITED_INFORMATION,
                     false,
