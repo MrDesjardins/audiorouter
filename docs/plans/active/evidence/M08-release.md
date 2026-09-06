@@ -190,3 +190,14 @@ all four artifacts, and the manifest explicitly reported `signed: false` and
 `publicationReady: false`; the temporary directory was removed afterward.
 No signing, driver installation, installer action, or audio configuration was
 performed.
+
+## 2026-09-06 - Current-tip qualification after preset and UI alignment
+
+From source revision `d035bf8458e48255102865a816951d7d8fa5f92b`, the unsigned
+preparation scripts were rerun with the installed VS2026 toolchain in a new
+temporary directory. Optimized x64 CLI and plugin-worker binaries, locked Cargo
+SBOM metadata, third-party notices, checksums, and the release manifest were
+generated; `verify-artifacts.ps1` passed. The manifest remains explicitly
+`signed: false` and `publicationReady: false`, with driver/signing, installer,
+and clean-machine blockers retained. The temporary output was removed after
+verification.
