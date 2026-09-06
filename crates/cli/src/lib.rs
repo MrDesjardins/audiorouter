@@ -191,7 +191,7 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
 fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path>"
+            "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path> [--limit N] [--cursor ID]"
                 .into(),
         )
     })?;
@@ -209,10 +209,40 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
                         })
                 })
                 .transpose()?;
-            (
-                "recordings.list",
-                session_id.map(|id| json!({ "sessionId": id })),
-            )
+            let cursor = optional_option_value(args, "--cursor")?;
+            let limit = args
+                .iter()
+                .position(|argument| *argument == "--limit")
+                .map(|index| {
+                    args.get(index + 1)
+                        .copied()
+                        .ok_or_else(|| {
+                            CliError::InvalidArguments("--limit requires a value".into())
+                        })?
+                        .parse::<u64>()
+                        .map_err(|_| {
+                            CliError::InvalidArguments("--limit must be an integer".into())
+                        })
+                })
+                .transpose()?;
+            if let Some(limit) = limit {
+                if !(1..=500).contains(&limit) {
+                    return Err(CliError::InvalidArguments(
+                        "--limit must be between 1 and 500".into(),
+                    ));
+                }
+            }
+            let paged = cursor.is_some() || limit.is_some();
+            let params = if paged {
+                Some(json!({
+                    "sessionId": session_id,
+                    "cursor": cursor,
+                    "limit": limit
+                }))
+            } else {
+                session_id.map(|id| json!({ "sessionId": id }))
+            };
+            ("recordings.list", params)
         }
         "get" => (
             "recordings.get",
@@ -279,7 +309,7 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
             })),
         ),
         _ => return Err(CliError::InvalidArguments(
-                "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path>"
+        "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path> [--limit N] [--cursor ID]"
                 .into(),
         )),
     };
@@ -1038,7 +1068,7 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         15,
-        json!("recordings list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle [<recording-id>] --database <path>"),
+        json!("recordings list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle [<recording-id>] --database <path> [--limit N] [--cursor ID]"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
@@ -1587,6 +1617,23 @@ mod tests {
         )
         .unwrap();
         assert_eq!(listed[0]["id"], "recording-cli");
+        let paged: Value = serde_json::from_str(
+            &run([
+                "recordings",
+                "list",
+                "--session",
+                "session-cli",
+                "--limit",
+                "1",
+                "--database",
+                &database,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(paged["items"][0]["id"], "recording-cli");
+        assert_eq!(paged["nextCursor"], Value::Null);
         let fetched: Value = serde_json::from_str(
             &run([
                 "recordings",

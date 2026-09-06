@@ -44,6 +44,11 @@ the connected UI normalizes the page form back to its existing row list.
 Control coverage, contracts/UI typechecks, and UI tests pass; no recording
 bytes are read or changed.
 
+The CLI now exposes the same optional recording cursor and limit fields. A
+regression verifies `recordings list --limit 1` returns the page envelope while
+the existing unpaged command continues to return its legacy array. CLI and
+control suites, contracts/UI typechecks, and UI tests pass.
+
 ## 2026-09-06 — Session-list CLI cursor parity
 
 `session list` now accepts optional `--cursor ID` in addition to its bounded
