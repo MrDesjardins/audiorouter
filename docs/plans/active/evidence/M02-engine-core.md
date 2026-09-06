@@ -26,4 +26,6 @@ Optional `CallbackMetrics` records processed quanta and repaired sample counts u
 
 `AudioBlockQueue` adds a fixed-capacity lock-free queue for preallocated `AudioBlock` values. It explicitly reports full/empty states rather than blocking or dropping silently; queue sizing and recorder-specific overflow policy remain scheduler/recorder work. The engine suite now contains 19 passing tests.
 
+Queue full/empty events now increment atomic overrun/underrun counters while still returning immediately. The queue test verifies both counters; correlation with native device callbacks and external health publication remain open.
+
 The nine deterministic unit tests cover gain/mix, shape and bound rejection, NaN/Inf repair, non-finite gain safety, mono/stereo conversion, invalid matrix rejection, linear rate conversion, bounded drift correction, and ordered runtime stages. No Windows API, stream, driver, filesystem, or control-plane operation is performed by this crate. WASAPI event callbacks, graph compilation from domain sessions, cross-block continuity, and live generation publication remain unimplemented.

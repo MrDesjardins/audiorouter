@@ -19,6 +19,8 @@ pub enum QueueError {
 /// allocates its slots during construction; push/pop never wait or allocate.
 pub struct AudioBlockQueue {
     blocks: crossbeam_queue::ArrayQueue<AudioBlock>,
+    overruns: AtomicU64,
+    underruns: AtomicU64,
 }
 
 impl AudioBlockQueue {
@@ -28,6 +30,8 @@ impl AudioBlockQueue {
         }
         Ok(Self {
             blocks: crossbeam_queue::ArrayQueue::new(capacity),
+            overruns: AtomicU64::new(0),
+            underruns: AtomicU64::new(0),
         })
     }
 
@@ -43,12 +47,32 @@ impl AudioBlockQueue {
         self.blocks.is_empty()
     }
 
+    pub fn overruns(&self) -> u64 {
+        self.overruns.load(Ordering::Relaxed)
+    }
+
+    pub fn underruns(&self) -> u64 {
+        self.underruns.load(Ordering::Relaxed)
+    }
+
     pub fn try_push(&self, block: AudioBlock) -> Result<(), AudioBlock> {
-        self.blocks.push(block)
+        match self.blocks.push(block) {
+            Ok(()) => Ok(()),
+            Err(block) => {
+                self.overruns.fetch_add(1, Ordering::Relaxed);
+                Err(block)
+            }
+        }
     }
 
     pub fn try_pop(&self) -> Option<AudioBlock> {
-        self.blocks.pop()
+        match self.blocks.pop() {
+            Some(block) => Some(block),
+            None => {
+                self.underruns.fetch_add(1, Ordering::Relaxed);
+                None
+            }
+        }
     }
 }
 
@@ -764,8 +788,10 @@ mod tests {
         assert_eq!(queue.len(), 1);
         let returned = queue.try_push(second).unwrap_err();
         assert_eq!(returned.frames(), 2);
+        assert_eq!(queue.overruns(), 1);
         assert!(queue.try_pop().is_some());
         assert!(queue.try_pop().is_none());
+        assert_eq!(queue.underruns(), 1);
     }
 
     #[test]
