@@ -175,3 +175,8 @@ mutation. UI coverage is 11 tests with typecheck and production build passing.
 Recording query failures are now rendered as an explicit unavailable state,
 rather than being confused with an empty library. This preserves actionable
 permission/backend feedback while retaining the safe disconnected empty state.
+
+The shared TypeScript `graph.commit` parameters now include the nullable
+optional `acknowledgments` array, matching the Rust schema's bounded warning
+ID validation. Contracts typecheck and the dependent UI test/typecheck/build
+checks remain green.

@@ -328,7 +328,12 @@ export type MethodParams = {
   };
   "sessions.delete": { sessionId: EntityId };
   "graph.plan": { sessionId: EntityId; baseRevision: number; candidate: Session };
-  "graph.commit": { planId: EntityId; baseRevision: number; idempotencyKey: string };
+  "graph.commit": {
+    planId: EntityId;
+    baseRevision: number;
+    idempotencyKey: string;
+    acknowledgments?: string[] | null;
+  };
   "session.start": { sessionId: EntityId };
   "sessions.start": { sessionId: EntityId };
   "session.stop": { sessionId: EntityId };
