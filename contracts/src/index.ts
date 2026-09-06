@@ -121,6 +121,7 @@ export type ImplementedMethod =
   | "routes.inspect"
   | "graph.history"
   | "graph.undoPlan"
+  | "events.subscribe"
   | "graph.plan"
   | "graph.commit"
   | "session.start"

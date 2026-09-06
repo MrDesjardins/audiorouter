@@ -122,7 +122,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 12] = [
+pub const API_METHODS: [ApiMethodSpec; 13] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -162,6 +162,11 @@ pub const API_METHODS: [ApiMethodSpec; 12] = [
         name: "graph.undoPlan",
         permission: PermissionScope::GraphWrite,
         side_effect: SideEffectClass::PlanOnly,
+    },
+    ApiMethodSpec {
+        name: "events.subscribe",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
         name: "graph.plan",

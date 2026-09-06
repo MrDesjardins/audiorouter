@@ -5,8 +5,8 @@
 //! authority and that unsupported audio capabilities are discoverable.
 
 use audiorouter_domain::{
-    inspect_routes, node_registry, ApiMethodSpec, EntityId, FakeRuntime, GraphStore,
-    PermissionScope, RuntimeError, RuntimeState, Session, API_METHODS,
+    inspect_routes, node_registry, ApiMethodSpec, EntityId, EventLog, EventReplayError,
+    FakeRuntime, GraphStore, PermissionScope, RuntimeError, RuntimeState, Session, API_METHODS,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -98,6 +98,7 @@ pub struct ControlPlane {
     runtimes: HashMap<EntityId, FakeRuntime>,
     storage: Option<Storage>,
     enrollments: HashMap<String, (ClientRole, bool)>,
+    events: EventLog,
 }
 
 impl Default for ControlPlane {
@@ -114,6 +115,7 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             storage: None,
             enrollments: HashMap::new(),
+            events: EventLog::new(1),
         }
     }
 
@@ -124,6 +126,7 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             storage: Some(storage),
             enrollments: HashMap::new(),
+            events: EventLog::new(1),
         }
     }
 
@@ -188,6 +191,12 @@ impl ControlPlane {
         if let Some(storage) = &self.storage {
             storage.save_session(&session).map_err(storage_error)?;
         }
+        self.events.append(
+            session.revision,
+            None,
+            "session.created",
+            Some(session.id.clone()),
+        );
         Ok(())
     }
 
@@ -287,6 +296,14 @@ impl ControlPlane {
                 )
                 .map_err(storage_error)?;
         }
+        if !result.idempotent_replay {
+            self.events.append(
+                result.revision,
+                Some(idempotency_key.into()),
+                "graph.committed",
+                Some(result.session_id.clone()),
+            );
+        }
         serde_json::to_value(result).map_err(|error| ControlError::Json(error.to_string()))
     }
 
@@ -309,6 +326,8 @@ impl ControlPlane {
         let generation = runtime
             .start()
             .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
+        self.events
+            .append(session.revision, None, "runtime.started", Some(id.clone()));
         Ok(
             json!({ "sessionId": id, "state": "running", "generation": generation, "runtime": "fake" }),
         )
@@ -319,6 +338,8 @@ impl ControlPlane {
         if let Some(runtime) = self.runtimes.get_mut(id) {
             runtime.stop();
         }
+        self.events
+            .append(0, None, "runtime.stopped", Some(id.clone()));
         Ok(json!({ "sessionId": id, "state": "stopped", "runtime": "fake" }))
     }
 
@@ -349,6 +370,7 @@ impl ControlPlane {
             "routes.inspect" => self.dispatch_routes_inspect(request.params),
             "graph.history" => self.dispatch_graph_history(request.params),
             "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
+            "events.subscribe" => self.dispatch_events_subscribe(request.params),
             "session.start" => self.dispatch_session_start(request.params),
             "session.stop" => self.dispatch_session_stop(request.params),
             "graph.plan" => self.dispatch_plan(request.params),
@@ -612,6 +634,51 @@ impl ControlPlane {
         Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 30000 }))
     }
 
+    fn dispatch_events_subscribe(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
+        let after_sequence = params
+            .get("afterSequence")
+            .and_then(Value::as_u64)
+            .unwrap_or(0);
+        let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
+        if !(1..=500).contains(&limit) {
+            return Err(ControlError::InvalidRequest(
+                "limit must be between 1 and 500".into(),
+            ));
+        }
+        let session_filter = params
+            .get("sessionId")
+            .map(|value| {
+                serde_json::from_value::<EntityId>(value.clone())
+                    .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
+            })
+            .transpose()?;
+        let events = self
+            .events
+            .since(after_sequence, limit as usize)
+            .map_err(|error| match error {
+                EventReplayError::InvalidLimit => {
+                    ControlError::InvalidRequest("limit must be between 1 and 500".into())
+                }
+                EventReplayError::ResyncRequired => {
+                    ControlError::InvalidRequest("resyncRequired".into())
+                }
+            })?
+            .into_iter()
+            .filter(|event| {
+                session_filter
+                    .as_ref()
+                    .map(|id| event.session_id.as_ref() == Some(id))
+                    .unwrap_or(true)
+            })
+            .collect::<Vec<_>>();
+        Ok(json!({
+            "backendEpoch": self.events.backend_epoch(),
+            "events": events,
+            "nextSequence": self.events.latest_sequence(),
+        }))
+    }
+
     fn dispatch_devices_list(&self) -> Result<Value, ControlError> {
         let endpoints = audiorouter_windows_audio::enumerate_active_endpoints()
             .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
@@ -814,6 +881,27 @@ mod tests {
         let result = response.result.unwrap();
         assert_eq!(result["baseRevision"], 1);
         assert!(result["planId"].as_str().unwrap().starts_with("plan-"));
+    }
+
+    #[test]
+    fn events_subscribe_replays_filtered_control_state() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "evented".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "event-commit").unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "events.subscribe".into(),
+            params: Some(json!({ "sessionId": "session", "afterSequence": 0 })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["backendEpoch"], 1);
+        assert_eq!(result["events"].as_array().unwrap().len(), 2);
+        assert_eq!(result["events"][1]["operationId"], "event-commit");
     }
 
     #[test]
