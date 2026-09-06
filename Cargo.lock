@@ -91,6 +91,7 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "audiorouter-domain",
+ "audiorouter-dsp",
  "crossbeam-queue",
 ]
 

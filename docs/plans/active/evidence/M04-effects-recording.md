@@ -65,6 +65,13 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+`audiorouter-engine` now provides `VoiceChainBlockProcessor` for the worker
+boundary. It preallocates interleaved scratch for a declared channel/frame
+shape, copies planar blocks into `VoiceChain`, copies results back, and rejects
+shape changes without allocating during processing. Engine tests verify stereo
+limiter output and mismatch handling; 36 engine tests and strict Clippy pass.
+Native callback scheduling and live graph publication remain open.
+
 `VoiceChain` now provides a reusable worker-side composition boundary for the
 implemented built-ins. It prepares optional parametric EQ, gate, compressor,
 delay, mandatory sample-peak limiter, and signal meter, then processes in the

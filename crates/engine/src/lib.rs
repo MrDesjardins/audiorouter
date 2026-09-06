@@ -668,6 +668,60 @@ impl AudioBlock {
     }
 }
 
+/// Fixed-quantum worker adapter for the prepared built-in DSP chain. Planar
+/// engine blocks are copied through construction-time interleaved scratch;
+/// `process` performs no allocation and rejects shape changes explicitly.
+pub struct VoiceChainBlockProcessor {
+    chain: audiorouter_dsp::VoiceChain,
+    scratch: Vec<f32>,
+    channels: usize,
+    frames: usize,
+}
+
+impl VoiceChainBlockProcessor {
+    pub fn new(
+        config: audiorouter_dsp::VoiceChainConfig,
+        channels: usize,
+        frames: usize,
+    ) -> Result<Self, audiorouter_dsp::VoiceChainError> {
+        let chain = audiorouter_dsp::VoiceChain::new(config, channels)?;
+        Ok(Self {
+            chain,
+            scratch: vec![0.0; channels.saturating_mul(frames)],
+            channels,
+            frames,
+        })
+    }
+
+    pub fn process(&mut self, block: &mut AudioBlock) -> Result<(), BlockError> {
+        if block.channels() != self.channels || block.frames() != self.frames {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for frame in 0..self.frames {
+            for channel in 0..self.channels {
+                self.scratch[frame * self.channels + channel] =
+                    block.channel(channel).unwrap()[frame];
+            }
+        }
+        self.chain.process_interleaved(&mut self.scratch);
+        for frame in 0..self.frames {
+            for channel in 0..self.channels {
+                block.channel_mut(channel).unwrap()[frame] =
+                    self.scratch[frame * self.channels + channel];
+            }
+        }
+        Ok(())
+    }
+
+    pub fn meter(&self) -> audiorouter_dsp::MeterSnapshot {
+        self.chain.meter()
+    }
+
+    pub fn reset(&mut self) {
+        self.chain.reset();
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RuntimeGeneration(u64);
 
@@ -2069,6 +2123,31 @@ mod tests {
         );
         assert_eq!(mute.process(&mut block), 0);
         assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
+    }
+
+    #[test]
+    fn voice_chain_block_processor_bridges_planar_and_interleaved_storage() {
+        let config = audiorouter_dsp::VoiceChainConfig {
+            sample_rate: 48_000.0,
+            eq: None,
+            gate: None,
+            compressor: None,
+            delay_max_ms: None,
+            delay_ms: 0.0,
+            limiter: audiorouter_dsp::LimiterParams { ceiling_db: -1.0 },
+        };
+        let mut processor = VoiceChainBlockProcessor::new(config, 2, 4).unwrap();
+        let mut block = AudioBlock::new(2, 4).unwrap();
+        block.channel_mut(0).unwrap().fill(2.0);
+        block.channel_mut(1).unwrap().fill(-2.0);
+        processor.process(&mut block).unwrap();
+        let ceiling = 10.0_f32.powf(-1.0 / 20.0);
+        assert_eq!(block.channel(0).unwrap(), &[ceiling; 4]);
+        assert_eq!(block.channel(1).unwrap(), &[-ceiling; 4]);
+        assert!(processor
+            .process(&mut AudioBlock::new(1, 4).unwrap())
+            .is_err());
+        processor.reset();
     }
 
     #[test]
