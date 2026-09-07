@@ -455,7 +455,7 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
 fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
     if args.get(1).copied() != Some("mute") {
         return Err(CliError::InvalidArguments(
-            "usage: privacy mute <on|off> --database <path>".into(),
+            "usage: privacy mute <on|off> --database <path> [--idempotency-key KEY]".into(),
         ));
     }
     let muted = match args.get(2).copied() {
@@ -463,17 +463,21 @@ fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
         Some("off") => false,
         _ => {
             return Err(CliError::InvalidArguments(
-                "usage: privacy mute <on|off> --database <path>".into(),
+                "usage: privacy mute <on|off> --database <path> [--idempotency-key KEY]".into(),
             ))
         }
     };
+    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
     let mut plane = ControlPlane::with_storage("cli", database(args)?);
     plane
         .dispatch(audiorouter_protocol::JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
             method: "safety.setPrivacyMute".into(),
-            params: Some(json!({ "muted": muted })),
+            params: Some(json!({
+                "muted": muted,
+                "idempotencyKey": idempotency_key
+            })),
         })
         .result
         .ok_or_else(|| CliError::InvalidArguments("privacy mute update failed".into()))
@@ -482,15 +486,16 @@ fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
 fn recovery_command(args: &[&str]) -> Result<Value, CliError> {
     if args.get(1).copied() != Some("clear-safe-mode") {
         return Err(CliError::InvalidArguments(
-            "usage: recovery clear-safe-mode --database <path>".into(),
+            "usage: recovery clear-safe-mode --database <path> [--idempotency-key KEY]".into(),
         ));
     }
+    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
     let response = ControlPlane::with_storage("cli", database(args)?).dispatch(
         audiorouter_protocol::JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
             method: "recovery.clearSafeMode".into(),
-            params: None,
+            params: Some(json!({ "idempotencyKey": idempotency_key })),
         },
     );
     response
