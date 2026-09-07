@@ -558,7 +558,7 @@ fn method_output_schema(name: &str) -> Value {
                     }
                 },
                 "nodeTypes": { "type": "array", "items": { "type": "object" } },
-                "processors": { "type": "array", "items": { "type": "object" } },
+                "processors": { "type": "array", "items": processor_item_schema() },
                 "presets": {
                     "type": "object",
                     "properties": {
@@ -1077,19 +1077,7 @@ fn method_output_schema(name: &str) -> Value {
         }),
         "processors.list" => json!({
             "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "id": { "type": "string", "minLength": 1 },
-                    "version": { "type": "integer", "minimum": 1 },
-                    "category": { "type": "string", "minLength": 1 },
-                    "availability": { "type": "object" },
-                    "latencySamples": { "type": "integer", "minimum": 0 },
-                    "parameters": { "type": "array" }
-                },
-                "required": ["id", "version", "category", "availability", "latencySamples", "parameters"],
-                "additionalProperties": false
-            }
+            "items": processor_item_schema()
         }),
         "clients.list" => json!({
             "type": "array",
@@ -1553,6 +1541,45 @@ fn node_type_item_schema() -> Value {
             }
         },
         "required": ["type", "availability", "realtimeCostClass", "parameters"],
+        "additionalProperties": false
+    })
+}
+
+fn processor_item_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "version": { "type": "integer", "minimum": 1 },
+            "category": { "type": "string", "minLength": 1 },
+            "availability": {
+                "type": "object",
+                "properties": {
+                    "status": { "enum": ["available", "unavailable"] },
+                    "reason": { "type": "string", "minLength": 1 }
+                },
+                "required": ["status"],
+                "additionalProperties": false
+            },
+            "latencySamples": { "type": "integer", "minimum": 0 },
+            "parameters": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "minLength": 1 },
+                        "type": { "enum": ["boolean", "number", "string"] },
+                        "unit": { "type": "string", "minLength": 1 },
+                        "minimum": { "type": "number" },
+                        "maximum": { "type": "number" },
+                        "default": {}
+                    },
+                    "required": ["name", "type"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "required": ["id", "version", "category", "availability", "latencySamples", "parameters"],
         "additionalProperties": false
     })
 }
@@ -5687,6 +5714,24 @@ mod tests {
             .any(|node| node["type"] == "physical-input@1"
                 && node["availability"]["status"] == "unavailable"));
         assert_eq!(description["processors"].as_array().unwrap().len(), 7);
+        assert_eq!(
+            description["processors"][0]["availability"]["status"],
+            "unavailable"
+        );
+        assert_eq!(
+            description["processors"][0]["parameters"][0]["type"],
+            "number"
+        );
+        assert_eq!(
+            description["methods"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|method| method["name"] == "processors.list")
+                .unwrap()["outputSchema"]["items"]["properties"]["availability"]["properties"]
+                ["status"]["enum"][1],
+            "unavailable"
+        );
         let pitch = description["processors"]
             .as_array()
             .unwrap()
