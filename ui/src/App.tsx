@@ -13,12 +13,12 @@ import { routeNodeLabels } from "./graphView";
 import { readTheme, writeTheme, type ThemeMode } from "./preferences";
 import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
-import { processorAvailabilityText, processorLatencyText, type ProcessorDescriptor } from "./processorCatalog";
+import { processorAvailabilityText, processorLatencyText, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
 
 const defaultBackend = createDisconnectedBackend();
 
 function ProcessorCatalog({ processors }: { processors: ProcessorDescriptor[] | null }) {
-  return <section className="panel processor-catalog" aria-labelledby="processor-catalog-heading"><div className="section-heading"><div><p className="eyebrow">DSP catalog</p><h2 id="processor-catalog-heading">Built-in processors</h2></div><span className="badge">{processors?.length ?? 0}</span></div>{processors === null ? <p className="muted">Connect to the backend to load the authoritative processor catalog.</p> : processors.length === 0 ? <p className="muted">No built-in processors are advertised.</p> : <ul aria-label="Built-in processor catalog">{processors.map((processor) => <li key={`${processor.id}@${processor.version}`}><strong>{processor.id}</strong> <small>{processor.category} · {processorAvailabilityText(processor)} · {processorLatencyText(processor)}</small></li>)}</ul>}<p className="muted">This catalog is read-only. Unavailable processors cannot be added or activated.</p></section>;
+  return <section className="panel processor-catalog" aria-labelledby="processor-catalog-heading"><div className="section-heading"><div><p className="eyebrow">DSP catalog</p><h2 id="processor-catalog-heading">Built-in processors</h2></div><span className="badge">{processors?.length ?? 0}</span></div>{processors === null ? <p className="muted">Connect to the backend to load the authoritative processor catalog.</p> : processors.length === 0 ? <p className="muted">No built-in processors are advertised.</p> : <ul aria-label="Built-in processor catalog">{processors.map((processor) => <li key={`${processor.id}@${processor.version}`}><strong>{processor.id}</strong> <small>{processor.category} · {processorAvailabilityText(processor)} · {processorLatencyText(processor)}</small><br /><small>Parameters: {processorParametersText(processor)}</small></li>)}</ul>}<p className="muted">This catalog is read-only. Unavailable processors cannot be added or activated.</p></section>;
 }
 
 function RecorderActions({ backend, sessionId, connected }: { backend: UiBackend; sessionId: string; connected: boolean }) {

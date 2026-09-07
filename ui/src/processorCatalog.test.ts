@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processorAvailabilityText, processorLatencyText, type ProcessorDescriptor } from "./processorCatalog";
+import { processorAvailabilityText, processorLatencyText, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
 
 const pitch: ProcessorDescriptor = {
   id: "pitch",
@@ -18,5 +18,13 @@ describe("processor catalog presentation", () => {
 
   it("does not invent latency for zero-latency processors", () => {
     expect(processorLatencyText({ ...pitch, latencySamples: 0 })).toBe("no declared latency");
+  });
+
+  it("shows typed parameter ranges without inventing empty parameters", () => {
+    expect(processorParametersText({
+      ...pitch,
+      parameters: [{ name: "semitones", type: "number", unit: "st", minimum: -12, maximum: 12, default: 0 }],
+    })).toBe("semitones: number st, -12..12");
+    expect(processorParametersText(pitch)).toBe("no parameters");
   });
 });

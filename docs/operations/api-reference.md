@@ -109,6 +109,8 @@ implemented DSP primitives and their typed parameter ranges. It currently lists
 `graphicEq`, `parametricEq`, `gate`, `compressor`, `limiter`, `delay`, and
 `pitch`; each remains explicitly unavailable until graph/runtime integration is
 completed. The pitch entry reports its 1,024-sample algorithmic latency.
+The UI displays these parameter types and ranges as read-only metadata; it does
+not imply that an unavailable processor can be activated.
 
 The built-in preset catalog is exposed by `presets.list`. It currently includes
 the voice-chain presets `voiceNeutral` and `voiceGateAndCompression`, plus EQ
