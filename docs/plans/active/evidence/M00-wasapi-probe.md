@@ -484,3 +484,13 @@ but no measurable impulse returned to the microphone, so the current physical
 setup cannot qualify the required acoustic latency distribution. The result
 is recorded as an explicit failed/unqualified gate; the threshold was not
 lowered to turn ambient/noise data into a latency pass.
+
+## Current-head digital impulse requalification (2026-09-07)
+
+The authorized VB-Audio digital loopback was rerun from the current head with
+the pinned 1,000-impulse, 10 ms configuration. The analyzer detected 997/1,000
+groups, measured zero-frame p95 inter-impulse spacing error, and estimated a
+63.73 ms digital onset. The media identity/state snapshot was unchanged and
+the wrapper removed its temporary executable, object, logs, and raw capture.
+This confirms repeatable digital correlation only; it does not promote the
+estimate to calibrated speaker-to-microphone latency evidence.
