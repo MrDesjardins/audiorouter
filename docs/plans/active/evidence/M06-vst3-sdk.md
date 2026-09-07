@@ -615,3 +615,11 @@ subsequent M06 acceptance passed with 51 SDK self-tests, 1,598 official
 validator tests, and the offline fixture loader. This remains a
 repository-local source SDK setup, not a global Windows SDK or system plugin
 installation; no audio configuration was changed.
+
+The installer and full acceptance were rerun again at the current repository
+tip. The first build attempt was stopped by the restricted host with
+`E_ACCESSDENIED` from MSBuild file tracking before compilation. With authorized
+native build access, the same acceptance passed: 51 SDK self-tests, the
+official validator at 1,598 passed and 0 failed, and the offline loader over
+the local `mda-vst3` fixture. Temporary generated probe outputs were cleaned;
+no global SDK/plugin registration or audio configuration changed.
