@@ -29,7 +29,7 @@ jobs:
         run: npm ci
       - name: Check contracts
         working-directory: contracts
-        run: npm run typecheck
+        run: npm run typecheck && npm run check:drift
       - name: Install UI dependencies
         working-directory: ui
         run: npm ci
