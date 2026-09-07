@@ -16,8 +16,8 @@ The reproducible preparation flow is:
 Preparation requires a clean worktree, locked Cargo inputs, and a new output
 directory. It produces unsigned x64 CLI and disposable-worker artifacts, a
 disposable zipped UI bundle, locked Cargo SBOM metadata, the authoritative UI
-`package-lock.json` as npm dependency provenance, and checksums. It does not
-produce an installer or install a driver.
+`package-lock.json` plus a deterministic CycloneDX npm SBOM generated from the
+lockfile, and checksums. It does not produce an installer or install a driver.
 
 ## Current qualification snapshot
 

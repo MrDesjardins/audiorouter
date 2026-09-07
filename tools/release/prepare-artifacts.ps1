@@ -81,6 +81,11 @@ try {
     }
     Compress-Archive -Path (Join-Path $uiBuild "*") -DestinationPath (Join-Path $output "audiorouter-ui.zip") -CompressionLevel Optimal
     Copy-Item -LiteralPath $uiLock -Destination (Join-Path $output "sbom.npm.package-lock.json")
+    $npmSbom = Join-Path $output "sbom.npm.json"
+    & node.exe (Join-Path $workspace "tools/release/generate-npm-sbom.mjs") $uiLock $npmSbom
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $npmSbom -PathType Leaf)) {
+        throw "UI npm SBOM generation failed"
+    }
 
     $metadata = & cargo metadata --locked --format-version 1
     if ($LASTEXITCODE -ne 0) {
