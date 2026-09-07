@@ -381,10 +381,12 @@ impl SharedCapture {
             ))
         })?;
         let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
-        let format = unsafe { client.GetMixFormat()? };
         let event = EventHandle(unsafe {
             windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
         });
+        // Create the event before requesting the COM-allocated format so an
+        // event-creation failure cannot leak the format buffer.
+        let format = unsafe { client.GetMixFormat()? };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -584,10 +586,12 @@ impl SharedRender {
             ))
         })?;
         let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
-        let format = unsafe { client.GetMixFormat()? };
         let event = EventHandle(unsafe {
             windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
         });
+        // Create the event before requesting the COM-allocated format so an
+        // event-creation failure cannot leak the format buffer.
+        let format = unsafe { client.GetMixFormat()? };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
