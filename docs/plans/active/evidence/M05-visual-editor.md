@@ -566,6 +566,14 @@ preview separately from the confirmation-required action. All controls are
 disabled while disconnected. UI typecheck, all 61 tests, and the disposable
 three-file production build pass; no recording file or machine configuration
 was changed.
+
+## Session inventory failure safety (2026-09-07)
+
+Connected session inventory failures now clear the listed-session set and show
+an explicit unavailable status instead of retaining disconnected demo sessions
+as if they were backend resources. The disconnected preview still uses local
+fixtures, and known point-in-time/created sessions remain available. M05
+typecheck, 73 UI tests, and the disposable production build passed.
 ## 2026-09-06 — Current-tip UI acceptance
 
 The complete M05 acceptance was rerun at the current tip. TypeScript
