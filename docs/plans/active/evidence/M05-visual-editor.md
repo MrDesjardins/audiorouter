@@ -526,3 +526,8 @@ The typed UI backend now forwards the existing explicit `recordings.rename`
 operation with its recording ID and requested destination path. A regression
 verifies the method and payload, while the disconnected backend remains
 fail-closed. UI typecheck and all 60 tests pass; no recording file was changed.
+
+The typed UI backend also forwards `recordings.reveal` without opening the
+path itself. A regression verifies the method and recording ID payload using a
+missing-file result, and the disconnected adapter remains fail-closed. UI
+typecheck and all 61 tests pass; no file or Explorer action was performed.
