@@ -219,37 +219,42 @@ fn adapter_smoke(
                             }
                             graph_blocks = graph_blocks.saturating_add(1);
                             scheduler_frames = scheduler_frames.saturating_add(128);
-                            if route {
-                                let required = 128 * render_bytes_per_frame;
-                                if render_source.len() < required {
-                                    return Err(AudioError::BufferTooSmall {
-                                        required,
-                                        available: render_source.len(),
-                                    });
-                                }
-                                for frame in 0..128 {
-                                    for channel in 0..usize::from(render_info.channels) {
-                                        let sample = output
-                                            .channel(channel)
-                                            .ok_or(AudioError::InvalidFrameSize)?[frame];
-                                        let offset = frame * render_bytes_per_frame + channel * 4;
-                                        render_source[offset..offset + 4]
-                                            .copy_from_slice(&sample.to_le_bytes());
+                            let route_result = if route {
+                                (|| {
+                                    let required = 128 * render_bytes_per_frame;
+                                    if render_source.len() < required {
+                                        return Err(AudioError::BufferTooSmall {
+                                            required,
+                                            available: render_source.len(),
+                                        });
                                     }
-                                }
-                                let submitted = render.submit_bytes(
-                                    &render_source[..required],
-                                    render_bytes_per_frame,
-                                )?;
-                                routed_frames = routed_frames.saturating_add(submitted);
-                                render_submitted_frames =
-                                    render_submitted_frames.saturating_add(submitted);
-                                render_submitted = submitted > 0;
-                            }
-                            scheduler
-                                .output()
-                                .try_recycle(output)
-                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                                    for frame in 0..128 {
+                                        for channel in 0..usize::from(render_info.channels) {
+                                            let sample = output
+                                                .channel(channel)
+                                                .ok_or(AudioError::InvalidFrameSize)?[frame];
+                                            let offset =
+                                                frame * render_bytes_per_frame + channel * 4;
+                                            render_source[offset..offset + 4]
+                                                .copy_from_slice(&sample.to_le_bytes());
+                                        }
+                                    }
+                                    let submitted = render.submit_bytes(
+                                        &render_source[..required],
+                                        render_bytes_per_frame,
+                                    )?;
+                                    routed_frames = routed_frames.saturating_add(submitted);
+                                    render_submitted_frames =
+                                        render_submitted_frames.saturating_add(submitted);
+                                    render_submitted = submitted > 0;
+                                    Ok(())
+                                })()
+                            } else {
+                                Ok(())
+                            };
+                            let recycle_result = scheduler.output().try_recycle(output);
+                            route_result?;
+                            recycle_result.map_err(|_| AudioError::InvalidFrameSize)?;
                         }
                         pending_frames = 0;
                     }

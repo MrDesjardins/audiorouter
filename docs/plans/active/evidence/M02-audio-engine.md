@@ -206,3 +206,12 @@ and generated object, and never changes defaults, volume, mute, privacy,
 drivers, signing, or startup configuration. This qualifies the digital
 adapter-to-render data path, not physical acoustic latency, arbitrary format
 conversion, or production graph lifecycle.
+
+## Route output ownership cleanup (2026-09-07)
+
+The adapter-route probe now separates render serialization/submission errors
+from scheduler-output recycling, so every received processed block is returned
+to the bounded output pool even when routing fails. The compile check and a
+guarded 500 ms VB-Audio route acceptance passed again with 24,480 captured,
+24,448 scheduled, and 24,448 routed frames; the media snapshot and temporary
+artifact cleanup remained unchanged.
