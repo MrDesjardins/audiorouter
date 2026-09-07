@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 58 methods, including the session portability,
+The current catalog contains 59 methods, including the session portability,
 recorder lifecycle, and plugin inventory/retry methods added after the initial
 47-method reference.
 
@@ -61,6 +61,7 @@ recorder lifecycle, and plugin inventory/retry methods added after the initial
 | `nodes.types` | `read` | read-only |
 | `nodes.describe` | `read` | read-only |
 | `presets.list` | `read` | read-only |
+| `processors.list` | `read` | read-only |
 | `routes.inspect` | `read` | read-only |
 | `graph.history` | `read` | read-only |
 | `graph.undoPlan` | `graphWrite` | plan-only |

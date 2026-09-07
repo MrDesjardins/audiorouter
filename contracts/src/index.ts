@@ -624,6 +624,7 @@ export type ImplementedMethod =
   | "events.subscribe"
   | "nodes.describe"
   | "presets.list"
+  | "processors.list"
   | "sessions.get"
   | "sessions.export"
   | "sessions.importPlan"
@@ -694,6 +695,7 @@ export type MethodParams = {
     | undefined;
   "nodes.describe": undefined;
   "presets.list": undefined;
+  "processors.list": undefined;
   "sessions.get": { sessionId: EntityId };
   "sessions.export": { sessionId: EntityId };
   "sessions.importPlan": { session: Session };
@@ -770,6 +772,7 @@ export type MethodResult = {
   "events.subscribe": EventsSubscribeResult;
   "nodes.describe": DiscoveryDocument["nodeTypes"];
   "presets.list": DiscoveryDocument["presets"];
+  "processors.list": DiscoveryDocument["processors"];
   "sessions.get": Session;
   "sessions.export": Session;
   "sessions.importPlan": { planId: EntityId; expiresInMs: number; session: Session };

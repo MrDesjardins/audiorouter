@@ -174,6 +174,7 @@ fn method_description(name: &str) -> &'static str {
         "events.subscribe" => "Replay retained state events from an optional cursor.",
         "nodes.describe" => "Describe node types, availability, and realtime cost.",
         "presets.list" => "List explainable built-in processing presets.",
+        "processors.list" => "List built-in DSP processor metadata and availability.",
         "sessions.get" => "Return one session resource by opaque identifier.",
         "sessions.export" => "Export one persisted canonical session document without changing state.",
         "sessions.importPlan" => "Validate a stopped session import without persisting it.",
@@ -1073,6 +1074,22 @@ fn method_output_schema(name: &str) -> Value {
             },
             "required": ["voiceChains", "eq"],
             "additionalProperties": false
+        }),
+        "processors.list" => json!({
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string", "minLength": 1 },
+                    "version": { "type": "integer", "minimum": 1 },
+                    "category": { "type": "string", "minLength": 1 },
+                    "availability": { "type": "object" },
+                    "latencySamples": { "type": "integer", "minimum": 0 },
+                    "parameters": { "type": "array" }
+                },
+                "required": ["id", "version", "category", "availability", "latencySamples", "parameters"],
+                "additionalProperties": false
+            }
         }),
         "clients.list" => json!({
             "type": "array",
@@ -3025,6 +3042,7 @@ impl ControlPlane {
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
                     "presets.list" => Ok(self.describe()["presets"].clone()),
+                    "processors.list" => Ok(self.describe()["processors"].clone()),
                     "sessions.get" => self.dispatch_session_get(request.params),
                     "sessions.export" => self.dispatch_session_export(request.params),
                     "sessions.importPlan" => self.dispatch_session_import_plan(request.params),
@@ -5101,7 +5119,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "presets.list"
-        | "clients.list" => &[],
+        | "processors.list" | "clients.list" => &[],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -5708,6 +5726,15 @@ mod tests {
         let result = presets.result.unwrap();
         assert_eq!(result["voiceChains"].as_array().unwrap().len(), 2);
         assert_eq!(result["eq"].as_array().unwrap().len(), 3);
+        let processors = ControlPlane::default().dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "processors.list".into(),
+            params: None,
+        });
+        let result = processors.result.unwrap();
+        assert_eq!(result.as_array().unwrap().len(), 7);
+        assert_eq!(result[0]["availability"]["status"], "unavailable");
     }
 
     #[test]

@@ -50,6 +50,7 @@ where
         "virtual-devices" => list_subcommand(&command_args, "virtual-devices")?,
         "plugins" => plugins_command(&command_args)?,
         "presets" => presets_command(&command_args)?,
+        "processors" => list_subcommand(&command_args, "processors")?,
         "apps" => list_subcommand(&command_args, "apps")?,
         "applications" => list_subcommand(&command_args, "applications")?,
         "nodes" => list_subcommand(&command_args, "nodes")?,
@@ -582,6 +583,10 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
         "nodes" if matches!(expected, "types" | "describe") => {
             plane.describe()["nodeTypes"].clone()
         }
+        "processors" => plane
+            .dispatch(request("processors.list"))
+            .result
+            .unwrap_or_else(|| json!([])),
         "api" => plane.describe()["methods"].clone(),
         _ => unreachable!(),
     })
@@ -1397,6 +1402,10 @@ fn help_value() -> Value {
     value["commands"]
         .as_array_mut()
         .unwrap()
+        .insert(7, json!("processors list"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
         .insert(5, json!("backup prune --directory <path>"));
     value["commands"]
         .as_array_mut()
@@ -1734,6 +1743,7 @@ fn mcp_tools() -> Value {
         { "name": "plan_virtual_device", "description": "Validate a managed virtual bus lifecycle operation without applying it.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "list_processors", "description": "List built-in DSP processor metadata and explicit availability without changing audio state.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "export_session", "description": "Read the canonical session document without changing state.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "plan_session_import", "description": "Validate a stopped session import without persisting it.", "inputSchema": { "type": "object", "properties": { "session": { "type": "object" } }, "required": ["session"], "additionalProperties": false } },
@@ -1793,6 +1803,7 @@ fn mcp_tool_call(
         "plan_virtual_device" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
         "list_applications" => ("apps.list", None),
+        "list_processors" => ("processors.list", None),
         "get_session" => ("sessions.get", Some(arguments)),
         "export_session" => ("sessions.export", Some(arguments)),
         "plan_session_import" => ("sessions.importPlan", Some(arguments)),
@@ -2933,7 +2944,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 37);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 38);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()
