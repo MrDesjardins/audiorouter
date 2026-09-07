@@ -2619,7 +2619,7 @@ impl ControlPlane {
             "build": self.build,
             "audio": "unavailable",
             "deviceDiscovery": "available",
-            "reason": "M02 realtime graph engine and routing are not implemented",
+            "reason": "native realtime scheduler and endpoint routing are not implemented",
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
             "sessionCount": session_count,
             "activeSessionCount": active_session_ids.len(),
@@ -3013,7 +3013,7 @@ impl ControlPlane {
                         "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
                         "audio": {
                             "state": "unavailable",
-                            "reason": "M02 realtime graph engine and routing are not implemented"
+                            "reason": "native realtime scheduler and endpoint routing are not implemented"
                         },
                         "nativeAdapter": "not activated",
                         "privacyMute": {

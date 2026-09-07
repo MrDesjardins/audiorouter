@@ -82,6 +82,9 @@ third-party virtual cable as if it were an AudioRouter-managed endpoint.
   ordinary endpoint contention is not the current explanation. The Rust path
   remains unavailable until this discrepancy is fixed; ordinary tests do not
   work around it by changing device settings.
+- The backend may report audio as unavailable even though portable graph and
+  DSP tests pass; the remaining unavailable capability is the native realtime
+  scheduler and endpoint routing integration.
 - MSBuild FileTracker access errors are host/tool-process restrictions. Retry
   the same SDK acceptance command in an approved elevated build shell; do not
   disable Windows security features.
