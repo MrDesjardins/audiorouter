@@ -254,7 +254,9 @@ static int process_loopback_probe(DWORD target_process_id, bool read_data, bool 
     return SUCCEEDED(hr) && completed && SUCCEEDED(activation) && data_ok ? 0 : 1;
 }
 
-static int capture_data_probe(UINT target_index, DWORD duration_ms, const char* output_path = nullptr) {
+static int capture_data_probe(UINT target_index, DWORD duration_ms,
+                              const char* output_path = nullptr,
+                              bool event_driven = false) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -277,14 +279,25 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms, const char* 
                           reinterpret_cast<void**>(&client));
     print_hr("capture_activate", hr);
     WAVEFORMATEX* format = nullptr;
+    HANDLE ready_event = nullptr;
+    if (SUCCEEDED(hr) && event_driven) {
+        ready_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (!ready_event) hr = HRESULT_FROM_WIN32(GetLastError());
+    }
     if (SUCCEEDED(hr)) hr = client->GetMixFormat(&format);
     print_hr("capture_get_mix_format", hr);
     if (SUCCEEDED(hr)) {
         print_format(format);
-        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED,
-                                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+        DWORD stream_flags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
+                             AUDCLNT_STREAMFLAGS_NOPERSIST;
+        if (event_driven) stream_flags |= AUDCLNT_STREAMFLAGS_EVENTCALLBACK;
+        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, stream_flags,
                                 1000000, 0, format, nullptr);
         print_hr("capture_initialize", hr);
+        if (SUCCEEDED(hr) && event_driven) {
+            hr = client->SetEventHandle(ready_event);
+            print_hr("capture_set_event", hr);
+        }
         if (SUCCEEDED(hr)) {
             REFERENCE_TIME default_period = 0;
             REFERENCE_TIME minimum_period = 0;
@@ -329,6 +342,14 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms, const char* 
                                   std::chrono::milliseconds(duration_ms);
             while (std::chrono::steady_clock::now() < deadline && SUCCEEDED(hr)) {
                 UINT32 frames = 0;
+                if (event_driven) {
+                    const DWORD wait = WaitForSingleObject(ready_event, 50);
+                    if (wait == WAIT_FAILED) {
+                        hr = HRESULT_FROM_WIN32(GetLastError());
+                        break;
+                    }
+                    if (wait == WAIT_TIMEOUT) continue;
+                }
                 hr = capture->GetNextPacketSize(&frames);
                 if (FAILED(hr)) break;
                 if (frames == 0) {
@@ -372,6 +393,7 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms, const char* 
         }
     }
     if (capture) capture->Release();
+    if (ready_event) CloseHandle(ready_event);
     if (format) CoTaskMemFree(format);
     if (client) client->Release();
     device->Release(); devices->Release(); enumerator->Release();
@@ -754,6 +776,13 @@ int main(int argc, char** argv) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
         int result = capture_data_probe(target_index, duration_ms);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "event-capture") == 0) {
+        UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 500;
+        int result = capture_data_probe(target_index, duration_ms, nullptr, true);
         CoUninitialize();
         return result;
     }

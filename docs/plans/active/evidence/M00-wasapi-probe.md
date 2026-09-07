@@ -514,6 +514,18 @@ and temporary executable/object/log outputs were removed. This remains stream
 lifecycle evidence; it does not qualify physical latency or driver behavior,
 and no default, volume, mute, privacy, startup, or other machine audio setting
 was changed.
+
+## Event-driven capture data path (2026-09-07)
+
+The native probe now exposes an opt-in `event-capture` command. It creates an
+event, initializes shared capture with `AUDCLNT_STREAMFLAGS_EVENTCALLBACK`,
+registers the event before starting, waits for event notifications, drains
+available packets, and keeps the event alive through stop/reset. An authorized
+500 ms run on capture endpoint 0 completed initialization, event registration,
+start, 50 packets/24,000 frames, stop, and reset successfully. The selected
+endpoint returned zero nonzero payload bytes during this interval, so this
+qualifies event-driven lifecycle and packet draining only; it does not claim
+signal propagation, physical latency, or native realtime graph scheduling.
 ## 2026-09-07 — Lifecycle regression after format-identity hardening
 
 The authorized `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`
