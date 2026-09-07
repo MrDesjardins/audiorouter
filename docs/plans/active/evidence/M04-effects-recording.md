@@ -495,6 +495,11 @@ policy remain unchanged. Recording coverage is now 30 tests with strict
 Clippy; native realtime integration remains separate work.
 
 The M04 acceptance wrapper was requalified at clean revision `e34438f`.
+
+At the current head, the checked-in wrapper passed 25 DSP tests and 30 recording
+tests, including the 60-second pitch-duration extremes. The process-scoped
+PowerShell execution-policy bypass was not persisted; no audio device or machine
+configuration was accessed.
 All 25 DSP tests and 30 recording tests passed, including the dedicated
 sixty-second pitch-duration regression, incremental WAV/FLAC recovery, and
 metadata/path safeguards. Formatting, strict Clippy, and diff checks passed.
