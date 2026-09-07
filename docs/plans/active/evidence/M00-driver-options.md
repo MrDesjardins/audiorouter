@@ -97,3 +97,10 @@ This resolves the earlier host-build limitation: 32-bit MSBuild selected the
 absent x86 validator path. It does not close AudioRouter-specific driver
 adaptation, isolated target-machine behavior, uninstall/recovery, or
 production-signing gates.
+
+The repeatable wrapper is checked in at
+`tests/acceptance/m00-sysvad-build.ps1`. It requires a disposable SysVAD/WIL
+checkout under the system temporary directory, selects the 64-bit MSBuild
+host, requires normal package/API validation, checks the driver and catalog
+outputs, and removes generated `x64` directories by default. It performs no
+driver installation or machine configuration operation.
