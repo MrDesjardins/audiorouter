@@ -623,3 +623,11 @@ native build access, the same acceptance passed: 51 SDK self-tests, the
 official validator at 1,598 passed and 0 failed, and the offline loader over
 the local `mda-vst3` fixture. Temporary generated probe outputs were cleaned;
 no global SDK/plugin registration or audio configuration changed.
+## Current-tip SDK qualification (2026-09-06)
+
+The M06 acceptance wrapper rebuilt the pinned repository-local SDK with
+Visual Studio Community 2026, passed all 51 SDK self-tests and 1,598 official
+validator tests with zero failures, and completed the offline VST3 fixture
+loader (68 classes, finite stereo block, parameter automation, and 180-byte
+state round trip). Build outputs were cleaned. This does not claim realtime
+plugin execution, full sandboxing, or system plugin installation.
