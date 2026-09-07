@@ -3,9 +3,18 @@
 version = 4
 
 [[package]]
+name = "audiorouter-windows-audio"
+version = "0.1.0"
+dependencies = [
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "m00-wasapi-probe"
 version = "0.1.0"
 dependencies = [
+ "audiorouter-windows-audio",
  "windows",
  "windows-core",
 ]

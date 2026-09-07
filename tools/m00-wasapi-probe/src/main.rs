@@ -1,10 +1,13 @@
-//! Read-only M00 WASAPI endpoint inventory.
+//! M00 WASAPI endpoint inventory and opt-in adapter smoke probe.
 //!
-//! This probe intentionally does not capture audio, alter defaults, install drivers,
-//! or write outside stdout. It may initialize a shared-mode client briefly to test
-//! capability and buffer negotiation, then resets and releases it. Stream data and
-//! process-loopback probes remain separate follow-up work.
+//! The default inventory path does not capture audio, alter defaults, install
+//! drivers, or write outside stdout. The explicit `adapter-smoke` mode opens
+//! bounded production Rust capture/render clients, reads caller-owned capture
+//! data, submits only silent render buffers, then stops and resets both streams.
 
+use audiorouter_windows_audio::{
+    enumerate_active_endpoints, AudioError, EndpointDirection, SharedCapture, SharedRender,
+};
 use std::sync::{Arc, Condvar, Mutex};
 use windows::core::Result;
 use windows::core::{implement, Interface};
@@ -29,12 +32,96 @@ use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::System::Variant::VT_BLOB;
 
 fn main() -> Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("adapter-smoke") {
+        let duration_ms = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(500);
+        if let Err(error) = adapter_smoke(duration_ms) {
+            eprintln!("adapter_smoke_error={error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
         let result = enumerate();
         CoUninitialize();
         result
     }
+}
+
+fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
+    let endpoints = enumerate_active_endpoints()?;
+    let capture_info = endpoints
+        .iter()
+        .find(|endpoint| endpoint.direction == EndpointDirection::Capture)
+        .ok_or_else(|| {
+            AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80070490u32 as i32),
+                "no active capture endpoint",
+            ))
+        })?;
+    let render_info = endpoints
+        .iter()
+        .find(|endpoint| endpoint.direction == EndpointDirection::Render)
+        .ok_or_else(|| {
+            AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80070490u32 as i32),
+                "no active render endpoint",
+            ))
+        })?;
+    let capture_bytes_per_frame = usize::from(capture_info.channels)
+        .checked_mul(usize::from(capture_info.bits_per_sample / 8))
+        .ok_or(AudioError::InvalidFrameSize)?;
+    if capture_bytes_per_frame == 0 {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    let mut capture = SharedCapture::open(&capture_info.id, 1_000_000)?;
+    let mut render = SharedRender::open(&render_info.id, 1_000_000)?;
+    capture.start()?;
+    render.start()?;
+    let result = (|| {
+        let deadline = std::time::Instant::now()
+            .checked_add(std::time::Duration::from_millis(duration_ms))
+            .unwrap_or_else(std::time::Instant::now);
+        let mut capture_packets = 0u32;
+        let mut capture_frames = 0u32;
+        let mut capture_bytes = 0usize;
+        let mut render_frames = 0u32;
+        let mut destination = vec![0u8; 1_048_576];
+        while std::time::Instant::now() < deadline {
+            if capture.wait_for_data(10)? {
+                while let Some((packet, bytes)) =
+                    capture.next_packet_into(&mut destination, capture_bytes_per_frame)?
+                {
+                    capture_packets = capture_packets.saturating_add(1);
+                    capture_frames = capture_frames.saturating_add(packet.frames);
+                    capture_bytes = capture_bytes.saturating_add(bytes);
+                }
+            }
+            render_frames = render_frames.saturating_add(render.submit_silence()?);
+        }
+        if capture_packets == 0 || render_frames == 0 {
+            return Err(AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80004005u32 as i32),
+                "adapter smoke test received no bounded stream data",
+            )));
+        }
+        println!(
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} render_frames={}",
+            capture_info.id,
+            render_info.id,
+            capture_packets,
+            capture_frames,
+            capture_bytes,
+            render_frames
+        );
+        Ok(())
+    })();
+    let capture_stop = capture.stop();
+    let render_stop = render.stop();
+    result.and(capture_stop).and(render_stop)
 }
 
 #[implement(IActivateAudioInterfaceCompletionHandler)]

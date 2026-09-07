@@ -119,3 +119,15 @@ name (`IAudioClient::Initialize(capture)` or `(render)`) while preserving the
 underlying HRESULT and `AudioFailureKind`. The Windows-audio regression covers
 the formatted invalid-argument path; this remains diagnostic hardening only,
 not a fix or evidence of a started stream.
+
+## Production Rust adapter smoke (2026-09-07)
+
+The standalone M00 probe now has an explicit `adapter-smoke` mode that uses the
+production `SharedCapture` and `SharedRender` types. On the current host it
+opened the first active capture and render endpoints, started both streams,
+read capture packets into a preallocated caller-owned buffer, submitted only
+silent render buffers, and stopped/reset both clients. A 500 ms run collected
+51 capture packets/24,480 frames/195,840 bytes and submitted 25,536 silent
+render frames. This qualifies the Rust adapter's bounded stream data path and
+cleanup, but not graph-to-device scheduling or audible end-to-end routing.
+The final media snapshot remained ten present devices, all `OK`.
