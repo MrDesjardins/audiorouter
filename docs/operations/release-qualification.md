@@ -27,7 +27,7 @@ surface is green:
   and strict workspace Clippy.
 - M04 passes 25 DSP and 30 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 64 UI tests, and a disposable production
+- M05 passes TypeScript typecheck, 68 UI tests, and a disposable production
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
