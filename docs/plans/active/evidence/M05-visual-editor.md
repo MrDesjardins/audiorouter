@@ -531,3 +531,9 @@ The typed UI backend also forwards `recordings.reveal` without opening the
 path itself. A regression verifies the method and recording ID payload using a
 missing-file result, and the disconnected adapter remains fail-closed. UI
 typecheck and all 61 tests pass; no file or Explorer action was performed.
+
+The complete `tests/acceptance/m05-ui.ps1` wrapper was requalified at the
+current revision. TypeScript typecheck, all 61 Vitest tests, and a disposable
+three-file Vite production build passed; the temporary output was removed.
+Manual visual/accessibility acceptance and native shell injection remain open.
+No audio, driver, or machine configuration was changed.
