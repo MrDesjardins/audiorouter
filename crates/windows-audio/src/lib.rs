@@ -1,8 +1,10 @@
 //! Windows audio device metadata boundary for M02.
 //!
-//! This first adapter slice is intentionally read-only: it enumerates active
-//! endpoints and reports the endpoint-owned shared-mode format and periods.
-//! It does not initialize, start, or read an audio stream.
+//! The adapter keeps endpoint enumeration and process/session discovery
+//! read-only, while its explicit `SharedCapture` and `SharedRender` clients
+//! provide bounded, caller-owned shared-mode stream I/O for the native audio
+//! milestone. Streams are never opened implicitly by metadata discovery; a
+//! caller must explicitly select an endpoint and invoke the stream methods.
 
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -87,6 +87,17 @@ read-only UI/CLI refreshes deterministic even though Toolhelp enumeration
 order is not guaranteed.
 The policy has both a synthetic regression and a live Windows snapshot check.
 
+## Current adapter status (2026-09-07)
+
+The earlier introductory read-only wording in this report is superseded by
+the later production-adapter smoke evidence below. `SharedCapture` and
+`SharedRender` now provide explicit bounded stream ownership, event/polling
+delivery, caller-owned packet copies, and lifecycle cleanup; metadata and
+application/session discovery remain read-only. The guarded adapter-to-engine
+and virtual-cable runs are the current runtime evidence. Native graph-to-device
+scheduling, dual-device drift, failure recovery, and measured physical latency
+remain open.
+
 ## 2026-09-06 — Prepared session activation boundary
 
 `RuntimeProcessor::activate_session` now compiles a complete session candidate
