@@ -367,6 +367,22 @@ export interface StartupStatus {
   reason: string;
 }
 
+export interface StartupPlanResult {
+  planId: EntityId;
+  enabled: boolean;
+  registration: "unavailable";
+  reason: string;
+  requiredScopes: string[];
+  warnings: string[];
+}
+
+export interface StartupApplyResult {
+  planId: EntityId;
+  state: "unavailable";
+  registration: "unavailable";
+  reason: string;
+}
+
 export interface RecoveryClearResult {
   safeMode: false;
   recentCrashes: 0;
@@ -676,6 +692,8 @@ export type MethodParams = {
   "recovery.clearSafeMode": { idempotencyKey?: string } | undefined;
   "safety.setPrivacyMute": { muted: boolean; idempotencyKey?: string };
   "startup.get": undefined;
+  "startup.plan": { enabled: boolean };
+  "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
@@ -755,6 +773,8 @@ export type MethodResult = {
   "recovery.clearSafeMode": RecoveryClearResult;
   "safety.setPrivacyMute": PrivacyMuteResult;
   "startup.get": StartupStatus;
+  "startup.plan": StartupPlanResult;
+  "startup.apply": StartupApplyResult;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;

@@ -152,6 +152,8 @@ fn method_description(name: &str) -> &'static str {
             "Clear the latched crash-recovery safe mode after an operator confirms stability."
         }
         "startup.get" => "Report the desired sign-in startup policy and registration capability.",
+        "startup.plan" => "Preview a sign-in startup policy change without applying OS registration.",
+        "startup.apply" => "Apply a validated sign-in startup policy when native registration is available.",
         "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
         "recordings.recycle" => {
             "Move a recording to the operating system Recycle Bin after explicit confirmation."
@@ -369,6 +371,14 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "startup.get" => object_schema(json!({}), &[]),
+        "startup.plan" => object_schema(json!({ "enabled": { "type": "boolean" } }), &["enabled"]),
+        "startup.apply" => object_schema(
+            json!({
+                "planId": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
+            &["planId", "idempotencyKey"],
+        ),
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
@@ -673,6 +683,30 @@ fn method_output_schema(name: &str) -> Value {
                 "reason": { "type": "string", "minLength": 1 }
             },
             "required": ["enabled", "registration", "reason"],
+            "additionalProperties": false
+        }),
+        "startup.plan" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string", "minLength": 1 },
+                "enabled": { "type": "boolean" },
+                "registration": { "const": "unavailable" },
+                "reason": { "type": "string", "minLength": 1 },
+                "requiredScopes": { "type": "array", "items": { "type": "string" } },
+                "warnings": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["planId", "enabled", "registration", "reason", "requiredScopes", "warnings"],
+            "additionalProperties": false
+        }),
+        "startup.apply" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string", "minLength": 1 },
+                "state": { "const": "unavailable" },
+                "registration": { "const": "unavailable" },
+                "reason": { "type": "string", "minLength": 1 }
+            },
+            "required": ["planId", "state", "registration", "reason"],
             "additionalProperties": false
         }),
         "sessions.list" | "graph.history" => {
@@ -1725,6 +1759,8 @@ pub struct ControlPlane {
     virtual_buses: VirtualBusRegistry,
     virtual_bus_plans: HashMap<EntityId, VirtualBusPlan>,
     next_virtual_bus_plan: u64,
+    startup_plans: HashMap<EntityId, (bool, Instant)>,
+    next_startup_plan: u64,
     session_import_plans: HashMap<EntityId, (Session, Instant)>,
     next_session_import_plan: u64,
     active_idempotency_scope: Option<String>,
@@ -1758,6 +1794,8 @@ impl ControlPlane {
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_plans: HashMap::new(),
             next_virtual_bus_plan: 1,
+            startup_plans: HashMap::new(),
+            next_startup_plan: 1,
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
@@ -1819,6 +1857,8 @@ impl ControlPlane {
             virtual_buses,
             virtual_bus_plans,
             next_virtual_bus_plan: 1,
+            startup_plans: HashMap::new(),
+            next_startup_plan: 1,
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
@@ -3057,6 +3097,8 @@ impl ControlPlane {
                         "registration": "unavailable",
                         "reason": "sign-in startup registration is not implemented in this build"
                     })),
+                    "startup.plan" => self.dispatch_startup_plan(request.params),
+                    "startup.apply" => self.dispatch_startup_apply(request.params),
                     "devices.list" => self.dispatch_devices_list(request.params),
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
                     "plugins.list" => self.dispatch_plugins_list(request.params),
@@ -4731,6 +4773,79 @@ impl ControlPlane {
         Ok(result)
     }
 
+    fn dispatch_startup_plan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let enabled = params
+            .as_ref()
+            .and_then(|value| value.get("enabled"))
+            .and_then(Value::as_bool)
+            .ok_or_else(|| ControlError::InvalidRequest("enabled is required".into()))?;
+        let plan_id = EntityId::new(format!(
+            "startup-plan-{}-{}",
+            unix_epoch_millis(),
+            self.next_startup_plan
+        ));
+        self.next_startup_plan = self.next_startup_plan.saturating_add(1);
+        self.startup_plans.insert(
+            plan_id.clone(),
+            (enabled, Instant::now() + VIRTUAL_DEVICE_PLAN_TTL),
+        );
+        Ok(json!({
+            "planId": plan_id,
+            "enabled": enabled,
+            "registration": "unavailable",
+            "reason": "sign-in startup registration is not implemented in this build",
+            "requiredScopes": ["sessionControl"],
+            "warnings": ["planning does not change Windows startup registration"]
+        }))
+    }
+
+    fn dispatch_startup_apply(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("planId is required".into()))?;
+        let plan_id = params
+            .get("planId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("planId is required".into()))?;
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let plan_id_value = EntityId::new(plan_id);
+        let Some((enabled, expires_at)) = self.startup_plans.get(&plan_id_value).copied() else {
+            return Err(ControlError::InvalidRequest(
+                "startup plan was not found".into(),
+            ));
+        };
+        if Instant::now() >= expires_at {
+            self.startup_plans.remove(&plan_id_value);
+            return Err(ControlError::InvalidRequest(
+                "startup plan has expired".into(),
+            ));
+        }
+        let scoped_key = self.scoped_idempotency_key("startup.apply", idempotency_key);
+        let request_hash = Self::request_hash(&json!({ "planId": plan_id, "enabled": enabled }));
+        if let Some(previous) = self.operation_outcomes.get(&scoped_key) {
+            if self
+                .idempotency_hashes
+                .get(&scoped_key)
+                .is_some_and(|hash| hash == &request_hash)
+            {
+                return Ok(previous.clone());
+            }
+            return Err(ControlError::IdempotencyConflict);
+        }
+        let result = json!({
+            "planId": plan_id,
+            "state": "unavailable",
+            "registration": "unavailable",
+            "reason": "sign-in startup registration is not implemented in this build"
+        });
+        self.journal_idempotent_result(&scoped_key, "startup.apply", &request_hash, &result)?;
+        Ok(result)
+    }
+
     fn dispatch_virtual_devices_plan(
         &mut self,
         params: Option<Value>,
@@ -5144,6 +5259,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
+        "startup.plan" => &["enabled"],
+        "startup.apply" => &["planId", "idempotencyKey"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "presets.list"
         | "processors.list" | "clients.list" => &[],
@@ -6891,6 +7008,36 @@ mod tests {
         });
         let result = response.result.unwrap();
         assert_eq!(result["enabled"], false);
+        assert_eq!(result["registration"], "unavailable");
+        assert_eq!(
+            result["reason"],
+            "sign-in startup registration is not implemented in this build"
+        );
+    }
+
+    #[test]
+    fn startup_plan_and_apply_are_explicitly_fail_closed() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "startup.plan".into(),
+            params: Some(json!({ "enabled": true })),
+        });
+        let plan = response.result.unwrap();
+        assert_eq!(plan["enabled"], true);
+        assert_eq!(plan["registration"], "unavailable");
+        assert_eq!(plan["requiredScopes"], json!(["sessionControl"]));
+        let plan_id = plan["planId"].as_str().unwrap().to_owned();
+
+        let apply = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "startup.apply".into(),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-1" })),
+        });
+        let result = apply.result.unwrap();
+        assert_eq!(result["state"], "unavailable");
         assert_eq!(result["registration"], "unavailable");
         assert_eq!(
             result["reason"],

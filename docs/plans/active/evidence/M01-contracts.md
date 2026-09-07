@@ -203,6 +203,13 @@ now have explicit output schemas and shared TypeScript types. Their
 unavailable/cleared-state invariants are discovery-tested without registering
 startup or mutating recovery state.
 
+The startup contract now also exposes `startup.plan` and `startup.apply`.
+Planning validates the desired enabled flag and returns an expiring unavailable
+registration plan; apply is idempotency-keyed but returns `state: unavailable`
+before any operating-system registration because the native sign-in lifecycle
+is not implemented. Control and TypeScript contracts cover both methods, and no
+startup or machine configuration is changed.
+
 The paged `sessions.list` and `graph.history` responses now advertise explicit
 page envelopes and serialized session snapshots, including graph nodes, ports,
 edges, and channel matrices. Discovery assertions cover the cursor and revision

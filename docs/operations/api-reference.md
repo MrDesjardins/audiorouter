@@ -15,9 +15,9 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 59 methods, including the session portability,
-recorder lifecycle, and plugin inventory/retry methods added after the initial
-47-method reference.
+The current catalog contains 61 methods, including the session portability,
+recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
+after the initial 47-method reference.
 
 | Method | Permission | Side effect |
 | --- | --- | --- |
@@ -48,6 +48,8 @@ recorder lifecycle, and plugin inventory/retry methods added after the initial
 | `safety.setPrivacyMute` | `capture` | mutating |
 | `recovery.clearSafeMode` | `sessionControl` | mutating |
 | `startup.get` | `read` | read-only |
+| `startup.plan` | `sessionControl` | plan-only |
+| `startup.apply` | `sessionControl` | mutating |
 | `devices.list` | `read` | read-only |
 | `plugins.scan` | `pluginScan` | read-only |
 | `plugins.list` | `pluginScan` | read-only |
