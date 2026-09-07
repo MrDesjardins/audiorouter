@@ -397,7 +397,14 @@ impl VirtualBusBridge {
             }
             let _ = self.render.try_recycle(input);
             match self.capture.try_submit(output) {
-                Ok(()) => processed += 1,
+                Ok(()) if self.owns_generation(generation) => processed += 1,
+                Ok(()) => {
+                    // Activation may have drained just before the submit. A
+                    // post-submit check closes that window and removes the
+                    // raced stale block before the new owner can consume it.
+                    self.dropped.fetch_add(1, Ordering::Relaxed);
+                    self.drain_capture();
+                }
                 Err(output) => {
                     self.dropped.fetch_add(1, Ordering::Relaxed);
                     let _ = self.capture.try_recycle(output);
@@ -496,6 +503,10 @@ impl VirtualBusBridge {
         while let Some(block) = self.render.try_receive() {
             let _ = self.render.try_recycle(block);
         }
+        self.drain_capture();
+    }
+
+    fn drain_capture(&self) {
         while let Some(block) = self.capture.try_receive() {
             let _ = self.capture.try_recycle(block);
         }
