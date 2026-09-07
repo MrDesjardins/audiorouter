@@ -491,9 +491,23 @@ impl SharedCapture {
                 Some(&mut device_position),
                 Some(&mut qpc_position),
             )?;
-            let packet_bytes = (packet_frames as usize)
-                .checked_mul(bytes_per_frame)
-                .ok_or(AudioError::InvalidFrameSize)?;
+            let packet_bytes = match (packet_frames as usize).checked_mul(bytes_per_frame) {
+                Some(bytes) => bytes,
+                None => {
+                    // GetBuffer has transferred ownership of the packet
+                    // until ReleaseBuffer, including when post-acquisition
+                    // validation fails.
+                    let _ = self.capture.ReleaseBuffer(packet_frames);
+                    return Err(AudioError::InvalidFrameSize);
+                }
+            };
+            if packet_bytes > destination.len() {
+                let _ = self.capture.ReleaseBuffer(packet_frames);
+                return Err(AudioError::BufferTooSmall {
+                    required: packet_bytes,
+                    available: destination.len(),
+                });
+            }
             if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                 destination[..packet_bytes].fill(0);
             } else {
