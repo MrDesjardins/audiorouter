@@ -3453,6 +3453,24 @@ impl ControlPlane {
             return Err(ControlError::InvalidRequest("session not found".into()));
         }
         let frame = params.get("frame").and_then(Value::as_u64);
+        let idempotency = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|key| !key.is_empty())
+            .map(str::to_owned);
+        let request_hash = Self::request_hash(&json!({
+            "method": method,
+            "sessionId": session_id,
+            "frame": frame,
+        }));
+        let scoped_key = idempotency
+            .as_deref()
+            .map(|key| self.scoped_idempotency_key(method, key));
+        if let Some(key) = scoped_key.as_deref() {
+            if let Some(result) = self.lookup_idempotent_result(key, &request_hash)? {
+                return Ok(result);
+            }
+        }
         let recorder = self.recorders.entry(session_id.clone()).or_default();
         let result = match method {
             "recorders.arm" => recorder.arm(),
@@ -3477,13 +3495,17 @@ impl ControlPlane {
             ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
         })?;
         let checkpoint = recorder.checkpoint();
-        Ok(json!({
+        let result = json!({
             "sessionId": session_id,
             "state": serde_json::to_value(recorder.state()).map_err(|error| ControlError::Json(error.to_string()))?,
             "parts": checkpoint.parts,
             "pauses": checkpoint.pauses,
             "lastFrame": checkpoint.last_frame,
-        }))
+        });
+        if let Some(key) = scoped_key {
+            self.journal_idempotent_result(&key, method, &request_hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_recordings_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -7398,5 +7420,44 @@ mod tests {
             params: Some(json!({"sessionId": "session", "frame": 50})),
         });
         assert!(response.error.is_some());
+    }
+
+    #[test]
+    fn recorder_idempotency_replays_and_rejects_hash_conflicts() {
+        let mut plane = ControlPlane::default();
+        plane.create_session(session()).unwrap();
+        let grant = ClientGrant::with_scopes([PermissionScope::Read, PermissionScope::Record]);
+        let request = |frame| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(frame)),
+            method: "recorders.start".into(),
+            params: Some(json!({
+                "sessionId": "session",
+                "frame": frame,
+                "idempotencyKey": "start-once"
+            })),
+        };
+        let arm = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "recorders.arm".into(),
+                params: Some(json!({
+                    "sessionId": "session",
+                    "idempotencyKey": "arm-once"
+                })),
+            },
+            &grant,
+        );
+        assert!(arm.error.is_none());
+        let first = plane.dispatch_authorized(request(10), &grant);
+        let first_result = first.result.clone().unwrap();
+        let replay = plane.dispatch_authorized(request(10), &grant);
+        assert_eq!(replay.result.unwrap(), first_result);
+        let conflict = plane.dispatch_authorized(request(11), &grant);
+        assert_eq!(
+            conflict.error.unwrap().message,
+            "idempotency key is already used for a different request"
+        );
     }
 }
