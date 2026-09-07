@@ -98,6 +98,22 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     );
     assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 38);
 
+    let processors = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": { "name": "list_processors", "arguments": {} }
+        }),
+    );
+    assert_eq!(processors["result"]["isError"], false);
+    assert_eq!(
+        processors["result"]["structuredContent"]["result"][0]["id"],
+        "graphicEq"
+    );
+
     let resources = send(
         &mut input,
         &mut output,

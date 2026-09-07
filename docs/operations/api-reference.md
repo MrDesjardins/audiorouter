@@ -127,6 +127,9 @@ audiorouter diagnostics --output C:\path\diagnostics.json --json
 audiorouter diagnostics export --output C:\path\diagnostics.json --json
 ```
 
+The processor catalog is also available through the typed read-only command
+`audiorouter processors list --json`.
+
 The diagnostics export is a redacted, read-only JSON snapshot. Its destination
 must be absolute and must not already exist; this prevents accidental overwrite
 of an earlier support bundle. The explicit `diagnostics export` form and the

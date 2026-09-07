@@ -2008,6 +2008,14 @@ mod tests {
             descriptions.as_array().unwrap().len(),
             nodes.as_array().unwrap().len()
         );
+        let processors: Value =
+            serde_json::from_str(&run(["processors", "list", "--json"]).unwrap()).unwrap();
+        assert_eq!(processors.as_array().unwrap().len(), 7);
+        assert!(processors
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|processor| processor["availability"]["status"] == "unavailable"));
     }
 
     #[test]
