@@ -2293,6 +2293,7 @@ impl ControlPlane {
                     "privacy.muteEnabled",
                     "privacy.muteDisabled",
                     "virtualDevice.changed",
+                    "recorder.changed",
                     "recording.metadataChanged",
                     "recording.renamed",
                     "recording.entryRemoved",
@@ -3541,6 +3542,13 @@ impl ControlPlane {
         if let Some(key) = scoped_key {
             self.journal_idempotent_result(&key, method, &request_hash, &result)?;
         }
+        let revision = self
+            .store
+            .session(&session_id)
+            .map(|session| session.revision)
+            .unwrap_or_default();
+        self.events
+            .append(revision, None, "recorder.changed", Some(session_id.clone()));
         Ok(result)
     }
 
