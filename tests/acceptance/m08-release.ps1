@@ -28,6 +28,7 @@ try {
         throw "release manifest must include exactly one audiorouter-ui.zip artifact"
     }
     $uiZip = Join-Path $output "audiorouter-ui.zip"
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($uiZip)
     try {
         if ($null -eq $archive.GetEntry("index.html")) {
