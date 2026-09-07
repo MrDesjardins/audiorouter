@@ -279,3 +279,9 @@ regular non-reparse directory before validating the manifest, SBOM, notices,
 and artifacts. This closes redirected-root verification paths while retaining
 the existing per-file checks; no installer, signing, driver, audio, or machine
 configuration action is performed.
+## Lexical release-root reparse protection (2026-09-06)
+
+The verifier now audits the manifest path and each lexical parent before
+`Resolve-Path` canonicalization, preventing a symlinked artifact root from
+being silently normalized into an apparently safe directory. The disposable
+verifier regression covers this path when symbolic-link creation is available.

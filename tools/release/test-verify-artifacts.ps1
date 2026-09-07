@@ -107,6 +107,23 @@ try {
             throw
         }
     }
+
+    $linkedRoot = Join-Path $root "linked-root"
+    try {
+        New-Item -ItemType SymbolicLink -Path $linkedRoot -Target $root -ErrorAction Stop | Out-Null
+        try {
+            & $verifier (Join-Path $linkedRoot "release-manifest.json") | Out-Null
+            throw "verifier accepted a reparse-point manifest root"
+        } catch {
+            if ($_.Exception.Message -eq "verifier accepted a reparse-point manifest root") {
+                throw
+            }
+        }
+    } catch {
+        if ($_.Exception.Message -notmatch "privilege|symbolic|not permitted|cannot create") {
+            throw
+        }
+    }
     Write-Output "Release artifact verifier tests passed"
 }
 finally {

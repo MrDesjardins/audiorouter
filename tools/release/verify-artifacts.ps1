@@ -5,6 +5,21 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$requestedManifest = [IO.Path]::GetFullPath($ManifestPath)
+$requestedItem = Get-Item -LiteralPath $requestedManifest -Force -ErrorAction Stop
+if (($requestedItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw "release manifest path must not be a reparse point: $requestedManifest"
+}
+$requestedParent = Split-Path -Parent $requestedManifest
+while (-not [string]::IsNullOrWhiteSpace($requestedParent)) {
+    $parentItem = Get-Item -LiteralPath $requestedParent -Force -ErrorAction Stop
+    if (($parentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "release manifest parent must not be a reparse point: $requestedParent"
+    }
+    $nextParent = Split-Path -Parent $requestedParent
+    if ($nextParent -eq $requestedParent) { break }
+    $requestedParent = $nextParent
+}
 $manifestFile = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction Stop).Path
 $root = Split-Path -Parent $manifestFile
 
