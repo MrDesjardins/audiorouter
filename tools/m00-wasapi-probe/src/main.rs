@@ -6,7 +6,7 @@
 //! data, submits zero-valued caller-owned render buffers, then stops and resets
 //! both streams.
 
-use audiorouter_engine::{RealtimeScheduler, RuntimeGeneration, RuntimeGraph};
+use audiorouter_engine::{ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph};
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, SharedCapture, SharedRender,
 };
@@ -89,9 +89,11 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
     let mut render = SharedRender::open(&render_info.id, 1_000_000)?;
     let scheduler = RealtimeScheduler::new(8, usize::from(capture_info.channels), 128)
         .map_err(|_| AudioError::InvalidFrameSize)?;
-    scheduler
-        .processor()
-        .publish(RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]));
+    let generation = RuntimeGeneration::new(1);
+    scheduler.processor().publish(RuntimeGraph::prepare(
+        generation,
+        vec![ProcessingStage::Gain { linear: 0.5 }],
+    ));
     capture.start()?;
     render.start()?;
     let result = (|| {
@@ -102,6 +104,7 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
         let mut capture_frames = 0u32;
         let mut capture_bytes = 0usize;
         let mut scheduler_frames = 0u32;
+        let mut graph_blocks = 0u32;
         let mut render_frames = 0u32;
         let mut destination = vec![0u8; 1_048_576];
         let render_source = vec![0u8; 1_048_576];
@@ -155,14 +158,31 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
                                 .map_err(|_| AudioError::InvalidFrameSize)?;
                             continue;
                         }
-                        scheduler
+                        let processed_generation = scheduler
                             .process_once()
                             .map_err(|_| AudioError::InvalidFrameSize)?;
                         if let Some(output) = scheduler.receive_output() {
+                            if processed_generation != Some(generation)
+                                || (0..output.channels()).any(|channel| {
+                                    output.channel(channel).is_none_or(|samples| {
+                                        samples.iter().any(|sample| !sample.is_finite())
+                                    })
+                                })
+                            {
+                                scheduler
+                                    .output()
+                                    .try_recycle(output)
+                                    .map_err(|_| AudioError::InvalidFrameSize)?;
+                                return Err(AudioError::Windows(windows::core::Error::new(
+                                    windows::core::HRESULT(0x80004005u32 as i32),
+                                    "adapter smoke graph output was invalid",
+                                )));
+                            }
                             scheduler
                                 .output()
                                 .try_recycle(output)
                                 .map_err(|_| AudioError::InvalidFrameSize)?;
+                            graph_blocks = graph_blocks.saturating_add(1);
                             scheduler_frames = scheduler_frames.saturating_add(128);
                         }
                         pending_frames = 0;
@@ -179,12 +199,14 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} scheduler_frames={} pending_frames={} render_frames={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={}",
             capture_info.id,
             render_info.id,
             capture_packets,
             capture_frames,
             capture_bytes,
+            generation.value(),
+            graph_blocks,
             scheduler_frames,
             pending_frames,
             render_frames

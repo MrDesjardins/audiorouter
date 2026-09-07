@@ -168,3 +168,12 @@ frames, retained the final 64-frame remainder at bounded shutdown, and
 submitted 15,936 zero-valued render frames. Counts vary with scheduling during
 the bounded window; this validates packet-to-quantum carry rather than assuming
 packet/quantum alignment.
+
+The smoke now publishes a prepared generation-1 graph containing the portable
+0.5x gain stage. It verifies that every returned scheduler block belongs to
+that generation and contains only finite samples. A guarded 300 ms run passed
+with 32 packets/15,360 capture frames, 120 graph blocks/15,360 processed
+frames, no pending remainder, and 16,032 zero-valued render frames. The media
+device identity/state snapshot remained identical; this qualifies graph
+activation and finite-output handling at the adapter boundary, not audible
+routing or physical latency.
