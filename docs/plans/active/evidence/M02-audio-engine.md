@@ -213,11 +213,12 @@ fails closed rather than dropping a processed block or allocating without a
 limit.
 
 The route now supports explicit mono-to-stereo duplication and stereo-to-mono
-averaging for compatible 32-bit endpoints, while retaining a fail-closed
-sample-rate match requirement until resampling is connected at this boundary.
-Three pure mapping regressions and strict probe Clippy pass; the existing
-stereo VB-Audio route also passed again with 24,480 captured, 24,448 scheduled,
-and 23,968 routed frames.
+averaging for compatible 32-bit endpoints, plus fixed-quantum linear
+sample-rate conversion into preallocated graph blocks. Three pure mapping
+regressions and strict probe Clippy pass; the existing stereo VB-Audio route
+also passed again with 24,480 captured, 24,448 scheduled, and 23,904 routed
+frames. Cross-block clock-drift correction and hardware synchronization remain
+separate open gates.
 
 The endpoint selector has two additional pure regressions: an opaque ID must
 match the requested direction, and an omitted ID may select only within the

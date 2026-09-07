@@ -7,7 +7,9 @@
 //! both streams. The separately named `adapter-route` mode is an opt-in,
 //! endpoint-ID-selected digital route smoke for compatible 32-bit endpoints.
 
-use audiorouter_engine::{ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph};
+use audiorouter_engine::{
+    AudioBlock, ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph,
+};
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, SharedCapture, SharedRender,
 };
@@ -108,8 +110,7 @@ fn adapter_smoke(
     if route
         && (render_info.bits_per_sample != 32
             || render_info.channels == 0
-            || render_info.channels > 2
-            || render_info.sample_rate_hz != capture_info.sample_rate_hz)
+            || render_info.channels > 2)
     {
         return Err(AudioError::InvalidFrameSize);
     }
@@ -143,6 +144,8 @@ fn adapter_smoke(
         let mut render_pending = vec![0u8; render_pending_capacity];
         let mut render_pending_bytes = 0usize;
         let mut staging = vec![0u8; 128 * capture_bytes_per_frame];
+        let mut source_block = AudioBlock::new(usize::from(capture_info.channels), 128)
+            .map_err(|_| AudioError::InvalidFrameSize)?;
         let mut pending_frames = 0usize;
         let mut routed_frames = 0u32;
         while std::time::Instant::now() < deadline {
@@ -185,8 +188,25 @@ fn adapter_smoke(
                                         .try_into()
                                         .map_err(|_| AudioError::InvalidFrameSize)?,
                                 );
-                                block.channel_mut(channel).unwrap()[frame] = sample;
+                                source_block.channel_mut(channel).unwrap()[frame] = sample;
                             }
+                        }
+                        if capture_info.sample_rate_hz == render_info.sample_rate_hz {
+                            for channel in 0..usize::from(capture_info.channels) {
+                                block.channel_mut(channel).unwrap().copy_from_slice(
+                                    source_block
+                                        .channel(channel)
+                                        .ok_or(AudioError::InvalidFrameSize)?,
+                                );
+                            }
+                        } else {
+                            block
+                                .resample_linear_from(
+                                    &source_block,
+                                    capture_info.sample_rate_hz,
+                                    render_info.sample_rate_hz,
+                                )
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
                         }
                         if let Err(block) = scheduler.submit_input(block) {
                             scheduler
