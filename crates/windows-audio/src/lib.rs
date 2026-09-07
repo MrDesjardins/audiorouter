@@ -235,6 +235,9 @@ pub enum AudioError {
     ApplicationRestartIdentityUnavailable {
         executable: String,
     },
+    EndpointBinding {
+        resolution: Box<EndpointBindingResolution>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -293,7 +296,8 @@ impl AudioError {
             | Self::ApplicationIdentityChanged { .. }
             | Self::ApplicationRestartNotFound { .. }
             | Self::ApplicationRestartAmbiguous { .. }
-            | Self::BufferTooSmall { .. } => 0x80070057,
+            | Self::BufferTooSmall { .. }
+            | Self::EndpointBinding { .. } => 0x80070057,
             Self::ApplicationIdentityUnavailable { .. }
             | Self::ApplicationRestartIdentityUnavailable { .. } => 0x80070005,
         }
@@ -382,6 +386,12 @@ impl fmt::Display for AudioError {
                 formatter,
                 "restart candidate for executable {executable} has no creation identity"
             ),
+            Self::EndpointBinding { resolution } => {
+                write!(
+                    formatter,
+                    "audio endpoint binding is not available: {resolution:?}"
+                )
+            }
         }
     }
 }
@@ -454,6 +464,20 @@ pub struct SharedRender {
 }
 
 impl SharedCapture {
+    /// Open an endpoint only when the monitor still reports the exact
+    /// persisted ID, direction, and mix format. A stale binding fails before
+    /// COM activation; the caller must deliberately renegotiate or select a
+    /// replacement. Endpoint changes between this check and activation remain
+    /// visible as the underlying WASAPI error.
+    pub fn open_bound(
+        monitor: &EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
+        let endpoint_id = bound_endpoint_id(monitor, expected, EndpointDirection::Capture)?;
+        Self::open(&endpoint_id, buffer_duration_100ns)
+    }
+
     /// Open an exact active capture endpoint using its opaque endpoint ID.
     /// The stream is initialized but remains stopped until `start` is called.
     /// The duration argument is retained for API compatibility; event-driven
@@ -738,6 +762,19 @@ impl Drop for SharedCapture {
 }
 
 impl SharedRender {
+    /// Open an endpoint only when the monitor still reports the exact
+    /// persisted ID, direction, and mix format. A stale binding fails before
+    /// COM activation; endpoint changes after validation remain visible as
+    /// the underlying WASAPI error.
+    pub fn open_bound(
+        monitor: &EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
+        let endpoint_id = bound_endpoint_id(monitor, expected, EndpointDirection::Render)?;
+        Self::open(&endpoint_id, buffer_duration_100ns)
+    }
+
     /// Open an exact active render endpoint using its opaque endpoint ID.
     /// The stream is initialized but remains stopped until `start` is called.
     /// The duration argument is retained for API compatibility; event-driven
@@ -885,6 +922,28 @@ impl SharedRender {
 impl Drop for SharedRender {
     fn drop(&mut self) {
         let _ = self.stop();
+    }
+}
+
+fn bound_endpoint_id(
+    monitor: &EndpointMonitor,
+    expected: &EndpointInfo,
+    direction: EndpointDirection,
+) -> Result<String, AudioError> {
+    if expected.direction != direction {
+        return Err(AudioError::EndpointBinding {
+            resolution: Box::new(EndpointBindingResolution::DirectionChanged {
+                id: expected.id.clone(),
+                expected: direction,
+                actual: expected.direction,
+            }),
+        });
+    }
+    match monitor.resolve_binding(expected) {
+        EndpointBindingResolution::Available(actual) => Ok(actual.id),
+        resolution => Err(AudioError::EndpointBinding {
+            resolution: Box::new(resolution),
+        }),
     }
 }
 

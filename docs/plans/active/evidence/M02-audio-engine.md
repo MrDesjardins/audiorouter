@@ -284,3 +284,11 @@ enumeration even when no dirty notification is visible. The method clears the
 coalesced notification flag, returns the same deterministic diff, and remains
 metadata-only; stream reopen, renegotiation, and replacement selection remain
 deliberate caller operations.
+
+The stream clients now expose `open_bound` entry points that enforce this
+decision immediately before activation. Missing, direction-changed, or format-
+changed bindings return a structured `AudioError::EndpointBinding` without
+activating WASAPI; a topology race after validation remains surfaced by the
+underlying WASAPI HRESULT. The new error payload is boxed so ordinary audio
+errors remain small, and native stream recovery still requires the caller to
+refresh and deliberately retry or renegotiate.
