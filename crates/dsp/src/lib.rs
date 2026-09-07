@@ -30,6 +30,74 @@ pub struct PitchShifter {
     grain_frames: usize,
 }
 
+/// Prepared block-streaming pitch shifter. The state is allocated at
+/// construction and each call accepts exactly one 128-frame interleaved block,
+/// making the processing boundary suitable for a future realtime graph stage.
+pub struct StreamingPitchShifter {
+    params: PitchShiftParams,
+    shifters: Vec<pitch_shift::Shifter<Box<[f32; pitch_shift::TOTAL_F32]>>>,
+}
+
+impl StreamingPitchShifter {
+    pub const BLOCK_FRAMES: usize = 128;
+
+    pub fn new(params: PitchShiftParams) -> Result<Self, PitchShiftError> {
+        let validated = PitchShifter::new(params)?;
+        let shifters = (0..params.channels)
+            .map(|_| {
+                let state: Box<[f32; pitch_shift::TOTAL_F32]> =
+                    vec![0.0_f32; pitch_shift::TOTAL_F32]
+                        .try_into()
+                        .expect("pitch shifter state has a fixed size");
+                pitch_shift::Shifter::new(state)
+            })
+            .collect();
+        Ok(Self {
+            params: validated.params,
+            shifters,
+        })
+    }
+
+    pub fn params(&self) -> PitchShiftParams {
+        self.params
+    }
+
+    /// Processes one fixed-size interleaved block into caller-owned storage.
+    /// Non-finite input is repaired to silence and output is always finite.
+    pub fn process_block(
+        &mut self,
+        input: &[f32],
+        output: &mut [f32],
+    ) -> Result<(), PitchShiftError> {
+        if input.len() != Self::BLOCK_FRAMES * self.params.channels || output.len() != input.len() {
+            return Err(PitchShiftError::InvalidInput);
+        }
+        if self.params.bypass {
+            for (destination, source) in output.iter_mut().zip(input) {
+                *destination = finite_or_zero(*source);
+            }
+            return Ok(());
+        }
+        let shift = self.params.semitones + self.params.cents / 100.0;
+        for channel in 0..self.params.channels {
+            let mut input_block = [0.0_f32; Self::BLOCK_FRAMES];
+            for frame in 0..Self::BLOCK_FRAMES {
+                input_block[frame] = finite_or_zero(input[frame * self.params.channels + channel]);
+            }
+            let shifted = self.shifters[channel].shift(
+                &input_block,
+                shift,
+                Self::BLOCK_FRAMES,
+                self.params.sample_rate,
+            );
+            for frame in 0..Self::BLOCK_FRAMES {
+                output[frame * self.params.channels + channel] = finite_or_zero(shifted[frame]);
+            }
+        }
+        Ok(())
+    }
+}
+
 impl PitchShifter {
     pub const GRAIN_FRAMES: usize = 1_024;
 
@@ -2030,6 +2098,26 @@ mod tests {
             shifter.process_offline(&[f32::NAN, 0.25]).unwrap(),
             vec![0.0, 0.25]
         );
+    }
+
+    #[test]
+    fn streaming_pitch_shifter_uses_caller_owned_fixed_blocks() {
+        let mut shifter = StreamingPitchShifter::new(PitchShiftParams {
+            semitones: 0.0,
+            cents: 0.0,
+            sample_rate: 48_000.0,
+            channels: 2,
+            bypass: true,
+        })
+        .unwrap();
+        let input = vec![f32::NAN; StreamingPitchShifter::BLOCK_FRAMES * 2];
+        let mut output = vec![1.0; input.len()];
+        shifter.process_block(&input, &mut output).unwrap();
+        assert!(output.iter().all(|sample| *sample == 0.0));
+        assert!(matches!(
+            shifter.process_block(&input[..input.len() - 1], &mut output),
+            Err(PitchShiftError::InvalidInput)
+        ));
     }
 
     #[test]

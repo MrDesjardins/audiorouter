@@ -171,6 +171,12 @@ before publication and processed per channel through the existing allocation-fre
 DSP implementation. This is portable graph evidence only; native callback timing
 and hardware response measurements remain open.
 
+The pitch DSP also has a prepared 128-frame streaming boundary with state
+allocated at construction and caller-owned buffers. Its finite-safe bypass and
+shape checks are covered, but it is not yet exposed as a graph node: reset and
+reconnect semantics plus measured realtime quality/latency evidence are still
+required.
+
 ## 2026-09-07 — Compressor graph integration
 
 The portable graph now includes the validated `compressor@1` node. Domain
