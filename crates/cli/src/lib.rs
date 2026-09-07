@@ -47,7 +47,7 @@ where
         "schema" => plane.describe(),
         "diagnostics" => diagnostics_command(&command_args)?,
         "devices" => list_subcommand(&command_args, "devices")?,
-        "virtual-devices" => list_subcommand(&command_args, "virtual-devices")?,
+        "virtual-devices" => virtual_devices_command(&command_args)?,
         "plugins" => plugins_command(&command_args)?,
         "presets" => presets_command(&command_args)?,
         "processors" => list_subcommand(&command_args, "processors")?,
@@ -632,6 +632,61 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
         "api" => plane.describe()["methods"].clone(),
         _ => unreachable!(),
     })
+}
+
+fn virtual_devices_command(args: &[&str]) -> Result<Value, CliError> {
+    match args.get(1).copied() {
+        Some("list") => list_subcommand(args, "virtual-devices"),
+        Some("plan") => {
+            let operation_path = absolute_option(args, "--operation")?;
+            let operation = read_json_object(&operation_path)?;
+            let response = ControlPlane::with_storage("cli", database(args)?).dispatch_authorized(
+                audiorouter_protocol::JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: "virtualDevices.plan".into(),
+                    params: Some(json!({ "operation": operation })),
+                },
+                &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
+            );
+            response.result.ok_or_else(|| {
+                CliError::InvalidArguments(response.error.map_or_else(
+                    || "virtual device plan failed".into(),
+                    |error| error.message,
+                ))
+            })
+        }
+        Some("apply") => {
+            let plan_id = positional(args, 2, "plan-id")?;
+            let idempotency_key = option_value(args, "--idempotency-key")?;
+            if idempotency_key.len() > 256 {
+                return Err(CliError::InvalidArguments(
+                    "--idempotency-key must contain at most 256 characters".into(),
+                ));
+            }
+            let response = ControlPlane::with_storage("cli", database(args)?).dispatch_authorized(
+                audiorouter_protocol::JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: "virtualDevices.apply".into(),
+                    params: Some(json!({
+                        "planId": plan_id,
+                        "idempotencyKey": idempotency_key,
+                    })),
+                },
+                &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
+            );
+            response.result.ok_or_else(|| {
+                CliError::InvalidArguments(response.error.map_or_else(
+                    || "virtual device apply failed".into(),
+                    |error| error.message,
+                ))
+            })
+        }
+        _ => Err(CliError::InvalidArguments(
+            "usage: virtual-devices <list|plan|apply> [options]".into(),
+        )),
+    }
 }
 
 fn api_subcommand(args: &[&str]) -> Result<Value, CliError> {
@@ -1421,6 +1476,14 @@ fn help_value() -> Value {
         .as_array_mut()
         .unwrap()
         .insert(5, json!("virtual-devices list [--limit N] [--cursor ID]"));
+    value["commands"].as_array_mut().unwrap().insert(
+        6,
+        json!("virtual-devices plan --operation <json-file> --database <path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        7,
+        json!("virtual-devices apply <plan-id> --idempotency-key KEY --database <path>"),
+    );
     value["commands"]
         .as_array_mut()
         .unwrap()
@@ -2070,6 +2133,62 @@ mod tests {
             .unwrap()
             .iter()
             .all(|processor| processor["availability"]["status"] == "unavailable"));
+    }
+
+    #[test]
+    fn virtual_device_plan_and_apply_use_durable_authorized_commands() {
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let database =
+            std::env::temp_dir().join(format!("audiorouter-cli-virtual-{suffix}.sqlite"));
+        let operation = std::env::temp_dir().join(format!("audiorouter-cli-virtual-{suffix}.json"));
+        let _ = std::fs::remove_file(&database);
+        let _ = std::fs::remove_file(&operation);
+        std::fs::write(
+            &operation,
+            r#"{"action":"create","id":"bus-cli","name":"Desktop In"}"#,
+        )
+        .unwrap();
+        let plan: Value = serde_json::from_str(
+            &run([
+                "virtual-devices",
+                "plan",
+                "--operation",
+                operation.to_str().unwrap(),
+                "--database",
+                database.to_str().unwrap(),
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        let plan_id = plan["planId"].as_str().unwrap();
+        assert_eq!(plan["operation"]["action"], "create");
+        let applied: Value = serde_json::from_str(
+            &run([
+                "virtual-devices",
+                "apply",
+                plan_id,
+                "--idempotency-key",
+                "cli-virtual-apply",
+                "--database",
+                database.to_str().unwrap(),
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(applied["state"], "applied");
+        assert_eq!(applied["availability"]["status"], "unavailable");
+        assert_eq!(applied["operation"]["action"], "create");
+        let _ = std::fs::remove_file(database);
+        let _ = std::fs::remove_file(operation);
     }
 
     #[test]

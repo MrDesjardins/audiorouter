@@ -151,3 +151,14 @@ over its current sessions. The 38-test domain suite and strict Clippy pass.
 This is a portable control-plane proof only. It does not identify native
 endpoint identities, inspect unknown external application selections, install a
 driver, or open a live audio stream; those M03 gates remain open.
+
+## CLI lifecycle parity (2026-09-07)
+
+The CLI now exposes `virtual-devices plan --operation <json-file> --database
+<path>` and `virtual-devices apply <plan-id> --idempotency-key <key>
+--database <path>`. Both commands use the explicit `deviceAdministration`
+grant and the durable control-plane plan/journal. The focused CLI/MCP process
+suite passes with 25 CLI tests and two interoperability tests. Apply persists
+the desired bus state and reports `state: applied` with endpoint availability
+still `unavailable` until the managed driver exists. No endpoint, driver, or
+machine audio configuration is changed.

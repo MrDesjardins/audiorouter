@@ -34,6 +34,30 @@ audiorouter graph apply C:\path\change.plan.json `
 
 Apply rereads the current revision and refuses a stale plan. If the caller loses the response, query `operations.get` through `api call` before retrying.
 
+## Plan and apply virtual-bus desired state
+
+Virtual-bus lifecycle changes use the same explicit plan/apply boundary. The
+CLI requires the `deviceAdministration` scope and persists desired state in
+the selected database; until the managed driver is available, apply reports
+the operation as applied while its endpoint availability remains unavailable:
+
+```powershell
+audiorouter virtual-devices plan `
+  --operation C:\path\virtual-bus-operation.json `
+  --database C:\path\audiorouter.sqlite `
+  --json
+
+audiorouter virtual-devices apply virtual-plan-1 `
+  --idempotency-key virtual-change-20260907-001 `
+  --database C:\path\audiorouter.sqlite `
+  --json
+```
+
+The operation file contains one lifecycle object, for example
+`{"action":"create","id":"desktop-in","name":"Desktop In"}`. These
+commands do not install a driver, create a Windows endpoint, or change audio
+configuration.
+
 ## Watch bounded state events
 
 Replay state events for one session from an opaque cursor. Repeat `--category`
