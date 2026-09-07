@@ -679,7 +679,9 @@ impl SharedRender {
         }
         let padding = unsafe { self.client.GetCurrentPadding()? };
         let available = self.buffer_size.saturating_sub(padding);
-        let frames = available.min((source.len() / bytes_per_frame) as u32);
+        let source_frames = u32::try_from(source.len() / bytes_per_frame)
+            .map_err(|_| AudioError::InvalidFrameSize)?;
+        let frames = available.min(source_frames);
         if frames == 0 {
             return Ok(0);
         }
