@@ -1358,6 +1358,20 @@ impl SupervisedWorkerProcess {
         self.supervisor.poll(now)
     }
 
+    /// Poll the worker once and perform at most one replacement when the
+    /// bounded supervisor marks it failed. Quarantine is never bypassed, and
+    /// this method does not loop or silently restore a route; the owning
+    /// runtime decides when to call the next recovery attempt.
+    pub fn poll_and_restart(
+        mut self,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        if self.poll(now) == WorkerState::Running {
+            return Ok(self);
+        }
+        self.restart(now)
+    }
+
     /// Record a process exit or other failure observed by an outer runtime
     /// adapter. The process is not restarted here; callers must discard this
     /// wrapper and deliberately construct a replacement after policy allows.

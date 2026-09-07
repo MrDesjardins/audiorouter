@@ -546,6 +546,13 @@ shared frame sequence after restart and verifies a successful round trip; the
 plugin-host suite, strict Clippy, and complete M07 headless acceptance pass.
 This is worker recovery evidence only and does not claim automatic route
 restart, production plugin execution, or full filesystem/network sandboxing.
+
+Added `SupervisedWorkerProcess::poll_and_restart` as a bounded outer-supervisor
+convenience. It polls once, replaces only a failed worker, carries shared
+transport when present, and delegates quarantine and spawn failures to the
+existing supervisor ledger. It never loops, restores sessions, or changes
+audio state. The plugin-host tests, strict Clippy, formatting, and complete
+M07 headless acceptance pass.
 ## Operation metadata correction (2026-09-06)
 
 In-memory idempotent outcomes now retain their operation name alongside the

@@ -125,11 +125,26 @@ fn supervised_worker_fails_closed_after_heartbeat_timeout() {
     );
     let frame =
         WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 1, vec![0.5]).unwrap();
-    let error = worker.process(frame, Vec::new(), start).unwrap_err();
+    let error = worker
+        .process(frame.clone(), Vec::new(), start)
+        .unwrap_err();
     assert!(
         matches!(error, audiorouter_plugin_host::WorkerProcessError::Protocol(message) if message.contains("not running under supervision"))
     );
-    assert!(worker.shutdown().unwrap().success());
+    let mut replacement = worker
+        .poll_and_restart(start)
+        .expect("recover failed worker");
+    assert_eq!(
+        replacement.state(),
+        audiorouter_plugin_host::WorkerState::Running
+    );
+    assert_eq!(
+        replacement
+            .process(frame.clone(), Vec::new(), start)
+            .unwrap(),
+        frame
+    );
+    assert!(replacement.shutdown().unwrap().success());
 }
 
 #[test]
