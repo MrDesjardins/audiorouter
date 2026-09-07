@@ -347,7 +347,7 @@ pub struct SharedCapture {
     client: windows::Win32::Media::Audio::IAudioClient,
     capture: windows::Win32::Media::Audio::IAudioCaptureClient,
     started: bool,
-    event: EventHandle,
+    event: Option<EventHandle>,
     _com: ComApartment,
 }
 
@@ -369,6 +369,30 @@ impl SharedCapture {
     /// The duration argument is retained for API compatibility; event-driven
     /// shared-mode WASAPI requires `Initialize` to receive zero here.
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+        Self::open_internal(endpoint_id, true, 0)
+    }
+
+    /// Open a shared capture endpoint with timer/polling delivery.
+    ///
+    /// Some endpoint drivers accept the exact mix format for ordinary shared
+    /// initialization but reject the additional event-callback request with
+    /// `E_INVALIDARG`. The native M00 reference path qualifies this mode with
+    /// a bounded buffer duration. Keeping it explicit avoids silently changing
+    /// the event-driven contract while providing a compatibility path.
+    pub fn open_polling(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
+        let duration = if buffer_duration_100ns > 0 {
+            buffer_duration_100ns
+        } else {
+            1_000_000
+        };
+        Self::open_internal(endpoint_id, false, duration)
+    }
+
+    fn open_internal(
+        endpoint_id: &str,
+        event_driven: bool,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eCapture, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
             AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
@@ -402,12 +426,21 @@ impl SharedCapture {
             ))
         })?;
         let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None)? };
-        let event = EventHandle(unsafe {
-            windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
-        });
+        let event = if event_driven {
+            Some(EventHandle(unsafe {
+                windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
+            }))
+        } else {
+            None
+        };
         // Create the event before requesting the COM-allocated format so an
         // event-creation failure cannot leak the format buffer.
         let format = unsafe { client.GetMixFormat()? };
+        let stream_flags = if event_driven {
+            AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST
+        } else {
+            AUDCLNT_STREAMFLAGS_NOPERSIST
+        };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
@@ -415,8 +448,8 @@ impl SharedCapture {
                 // conversion is neither needed nor desirable here. Keeping
                 // the request exact avoids format/flag combinations that
                 // some drivers reject with E_INVALIDARG.
-                AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
-                0,
+                stream_flags,
+                buffer_duration_100ns,
                 0,
                 format,
                 None,
@@ -427,7 +460,9 @@ impl SharedCapture {
             operation: "IAudioClient::Initialize(capture)",
             error,
         })?;
-        unsafe { client.SetEventHandle(event.0)? };
+        if let Some(event) = &event {
+            unsafe { client.SetEventHandle(event.0)? };
+        }
         let capture: IAudioCaptureClient = unsafe { client.GetService()? };
         Ok(Self {
             client,
@@ -555,12 +590,26 @@ impl SharedCapture {
         }
     }
 
-    /// Wait for the event-driven client to signal available data. Packet reads
+    /// Wait for available data. Event-driven clients wait on their callback
+    /// handle; polling clients use bounded packet-size polling. Packet reads
     /// remain explicit and bounded; a timeout is reported as `false`.
     pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
-        let result = unsafe {
-            windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
+        let Some(event) = &self.event else {
+            let deadline = std::time::Instant::now()
+                .checked_add(std::time::Duration::from_millis(u64::from(timeout_ms)))
+                .unwrap_or_else(std::time::Instant::now);
+            loop {
+                if unsafe { self.capture.GetNextPacketSize()? } != 0 {
+                    return Ok(true);
+                }
+                if std::time::Instant::now() >= deadline {
+                    return Ok(false);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
         };
+        let result =
+            unsafe { windows::Win32::System::Threading::WaitForSingleObject(event.0, timeout_ms) };
         if result == windows::Win32::Foundation::WAIT_OBJECT_0 {
             Ok(true)
         } else if result == windows::Win32::Foundation::WAIT_TIMEOUT {

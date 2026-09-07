@@ -1,5 +1,16 @@
 # M02 audio adapter groundwork
 
+## 2026-09-07 — Rust capture compatibility mode
+
+The Windows adapter now exposes an explicit `SharedCapture::open_polling`
+path. It uses the native-qualified shared-mode request (exact endpoint mix
+format, `AUDCLNT_STREAMFLAGS_NOPERSIST`, and a bounded buffer duration) and
+polls packet availability, while the existing event-driven `open` path remains
+unchanged. This addresses the observed distinction between successful native
+non-event initialization and the Rust event-callback `E_INVALIDARG` path
+without silently weakening the event-driven contract. The adapter package's
+14 tests and strict Clippy pass; no live stream was opened for this change.
+
 ## 2026-09-05 — Read-only endpoint adapter
 
 Added `crates/windows-audio` as the first reusable Windows adapter boundary. It explicitly owns COM initialization/uninitialization, enumerates active capture and render endpoints, copies the COM-owned `WAVEFORMATEX` metadata before freeing it, and returns endpoint ID, direction, shared-mode periods, sample rate, channels, bits, and format tag. It also provides shared capture/render lifecycle wrappers with exact endpoint selection, bounded event-driven initialization, owned event handles, start/stop/reset, timeout waits, and packet/buffer operations that release device buffers immediately.
