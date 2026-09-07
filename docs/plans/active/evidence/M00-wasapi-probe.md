@@ -322,6 +322,10 @@ run. The media-device snapshot remained ten present devices, all `OK`. This
 qualifies process-tree inclusion and non-silent attribution; physical output
 latency and restart/PID-reuse behavior remain open.
 
+This supersedes the earlier compile-only and “implementation-ready but
+unverified” entries in this evidence file. Those entries remain as historical
+test records; the current qualification is the bounded live result above.
+
 ## Extensible format diagnostics (2026-09-07)
 
 The probe now reports the WAVEFORMATEXTENSIBLE capture channel mask and
