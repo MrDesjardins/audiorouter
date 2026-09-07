@@ -6278,6 +6278,21 @@ mod tests {
         assert_eq!(decision.session_ids, vec![EntityId::new("running")]);
         let status = plane.status_snapshot().unwrap();
         assert_eq!(status["activeSessionIds"], json!(["running"]));
+        let events = plane.events.since(0, 500).unwrap();
+        let categories = events
+            .iter()
+            .map(|event| event.category.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &categories[2..],
+            [
+                "runtime.started",
+                "runtime.started",
+                "runtime.crashed",
+                "runtime.crashed",
+                "runtime.started"
+            ]
+        );
     }
 
     #[test]

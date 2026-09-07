@@ -728,6 +728,10 @@ the existing `runtime.started` event. This keeps event consumers informed of
 the stop/restart boundary without exposing audio payloads or implying native
 route recovery.
 
+The recovery regression now verifies the complete event sequence, including
+the pre-existing session-start events, both crash notifications, and the one
+eligible restart event.
+
 The complete M07 headless acceptance was then rerun at commit `5a58a13`.
 CLI (23), MCP stdio/named-pipe interoperability (2), control (78),
 plugin-host (31), worker-process (8), and strict Clippy checks passed. The
