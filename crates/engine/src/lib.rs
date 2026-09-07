@@ -13,6 +13,7 @@ pub const MAX_MIXER_INPUTS: usize = 8;
 pub const MAX_FANOUT_BRANCHES: usize = 8;
 pub const MAX_EXTRA_COMPENSATION_MS: u32 = 250;
 pub const MAX_DELAY_FRAMES: usize = 48_000;
+pub const MAX_DRIFT_CORRECTION_PPM: f64 = 999_999.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LatencyCompensationError {
@@ -685,6 +686,7 @@ pub enum BlockError {
     InvalidFrameCount,
     ShapeMismatch,
     InvalidSampleRate,
+    InvalidDriftCorrection,
 }
 
 /// A preallocated planar float32 block. Samples are stored channel-major:
@@ -1180,9 +1182,15 @@ impl DriftController {
             || output_rate_hz == 0
             || target_frames == 0
             || !max_correction_ppm.is_finite()
-            || max_correction_ppm < 0.0
+            || !(0.0..=MAX_DRIFT_CORRECTION_PPM).contains(&max_correction_ppm)
         {
-            return Err(BlockError::InvalidSampleRate);
+            return Err(
+                if input_rate_hz == 0 || output_rate_hz == 0 || target_frames == 0 {
+                    BlockError::InvalidSampleRate
+                } else {
+                    BlockError::InvalidDriftCorrection
+                },
+            );
         }
         Ok(Self {
             nominal_ratio: input_rate_hz as f64 / output_rate_hz as f64,
@@ -3414,6 +3422,14 @@ mod tests {
         assert!(matches!(
             DriftController::new(0, 48_000, 128, 100.0),
             Err(BlockError::InvalidSampleRate)
+        ));
+        assert!(matches!(
+            DriftController::new(48_000, 48_000, 128, 1_000_000.0),
+            Err(BlockError::InvalidDriftCorrection)
+        ));
+        assert!(matches!(
+            DriftController::new(48_000, 48_000, 128, f64::NAN),
+            Err(BlockError::InvalidDriftCorrection)
         ));
     }
 
