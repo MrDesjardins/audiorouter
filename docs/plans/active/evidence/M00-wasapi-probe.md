@@ -300,6 +300,16 @@ script removed its temporary executable/object outputs; the probe was not
 executed, so no audio stream, driver, signing mode, or machine configuration
 was touched.
 
+## Silent shared-render lifecycle (2026-09-07)
+
+The native probe completed a bounded 200 ms shared-render lifecycle on an
+active endpoint using its 48 kHz, two-channel, 32-bit extensible mix format.
+Activation, format retrieval, initialization, buffer/service acquisition,
+start, silent submission, stop, and reset all returned success. The stream
+submitted 14,400 silent frames from a 4,800-frame buffer. A post-test media
+snapshot remained ten present devices, all `OK`; no audible tone or persistent
+audio configuration change was made.
+
 ## Controlled process-tree attribution (2026-09-07)
 
 The native probe launched its temporary child tone process and captured that
