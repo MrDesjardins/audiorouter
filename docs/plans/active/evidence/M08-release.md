@@ -10,6 +10,14 @@ directory was cleaned afterward. This remains unsigned preparation evidence;
 driver packaging, production signing, installer/upgrade/rollback, clean
 machine validation, and native audio gates remain open.
 
+## 2026-09-07 — Current-head unsigned requalification
+
+The unsigned release-preparation wrapper passed again at the current head.
+Optimized locked artifacts, manifest, notices/SBOM, provenance, checksums, and
+verification were created and checked in a disposable directory, then removed.
+This does not provide production signing, installer, driver, clean-machine, or
+native-audio evidence.
+
 ## 2026-09-06 — Reproducible unsigned artifact preparation
 
 Added `tools/release/prepare-artifacts.ps1`, which:
