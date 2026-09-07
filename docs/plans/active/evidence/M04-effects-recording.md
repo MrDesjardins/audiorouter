@@ -313,15 +313,15 @@ to its declared ceiling and explicitly makes no true-peak or lookahead claim.
 The delay allocates its fixed ring at construction, bounds changes to the
 declared maximum, preserves channel order, and supports reset. Ten DSP tests
 cover ceiling enforcement, finite repair, delay timing, bounds, and reset.
-Graph/API integration, de-clicked automation, and measured transfer vectors
-remain open.
+Graph/API integration for the limiter and delay, de-clicked automation, and
+measured transfer vectors remain open.
 
 The DSP crate now includes a stereo-linked gate/downward expander. It applies
 bounded threshold, hysteresis, ratio, range, attack, hold, and release
 parameters, exposes its open state, and performs finite-safe interleaved
 processing without allocation. Tests cover quiet-signal attenuation, linked
-loud-signal opening, and hysteresis behavior. Limiter, delay, graph/API
-integration, and measured transfer vectors remain open.
+loud-signal opening, and hysteresis behavior. Graph/API integration for the
+remaining dynamics controls and measured transfer vectors remain open.
 
 `ParametricEq` now turns the eight-band preset contract into a reusable
 stateful processor. It constructs enabled `Biquad` state before processing,
