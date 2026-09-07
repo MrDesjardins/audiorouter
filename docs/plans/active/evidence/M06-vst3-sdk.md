@@ -29,6 +29,13 @@ Control coverage (82), plugin-host coverage (33), strict Clippy, contracts
 typecheck, and documentation validation passed. No plugin code was loaded or
 executed.
 
+The installer now validates recursive submodule status after updating it: all
+seven declared submodule paths must be present and initialized, and Git's
+uninitialized or commit-mismatch markers are rejected. The check uses Git for
+Windows Bash because this host's PowerShell Git launcher does not reliably
+provide the POSIX helper commands to direct `git submodule` calls. The real
+installer and disposable origin/reparse provenance acceptance both passed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

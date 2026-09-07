@@ -57,6 +57,37 @@ function Update-Submodules {
     }
 }
 
+function Assert-Submodules {
+    $expectedSubmodules = @('base', 'cmake', 'doc', 'pluginterfaces', 'public.sdk', 'tutorials', 'vstgui4')
+    $bash = Join-Path $gitRoot 'usr\bin\bash.exe'
+    $cygpath = Join-Path $gitRoot 'usr\bin\cygpath.exe'
+    if (-not (Test-Path -LiteralPath $bash) -or -not (Test-Path -LiteralPath $cygpath)) {
+        throw 'Git for Windows bash/cygpath is required to inspect SDK submodules'
+    }
+    $posixDestination = (& $cygpath -u $destinationPath).Trim()
+    $status = @(& $bash -lc "git -C '$posixDestination' submodule status --recursive")
+    if ($LASTEXITCODE -ne 0) {
+        throw 'unable to inspect SDK submodule status'
+    }
+    $status = @($status | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($status.Count -ne $expectedSubmodules.Count) {
+        throw "SDK submodule count mismatch: expected $($expectedSubmodules.Count), found $($status.Count)"
+    }
+    foreach ($line in $status) {
+        if ($line.Length -lt 2 -or $line[0] -ne ' ') {
+            throw "SDK submodule is not initialized at the recorded commit: $line"
+        }
+    }
+    $statusPaths = @($status | ForEach-Object {
+            if ($_ -match '^\s*[+-]?\S+\s+(\S+)') { $Matches[1] }
+        })
+    foreach ($relativePath in $expectedSubmodules) {
+        if ($statusPaths -notcontains $relativePath) {
+            throw "SDK submodule is missing from recursive status: $relativePath"
+        }
+    }
+}
+
 Assert-NoReparseParents $destinationPath
 if (Test-Path -LiteralPath $destinationPath) {
     $destinationItem = Get-Item -LiteralPath $destinationPath
@@ -85,6 +116,7 @@ if (Test-Path -LiteralPath $destinationPath) {
 }
 
 Update-Submodules
+Assert-Submodules
 
 $required = @(
     'CMakeLists.txt',
