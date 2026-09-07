@@ -111,9 +111,10 @@ fn adapter_smoke(
     {
         return Err(AudioError::InvalidFrameSize);
     }
-    let monitor = EndpointMonitor::start()?;
-    let mut capture = SharedCapture::open_bound(&monitor, capture_info, 1_000_000)?;
-    let mut render = SharedRender::open_bound(&monitor, render_info, 1_000_000)?;
+    let mut monitor = EndpointMonitor::start()?;
+    let mut capture =
+        SharedCapture::open_refreshed_bound(&mut monitor, capture_info, 1_000_000)?;
+    let mut render = SharedRender::open_refreshed_bound(&mut monitor, render_info, 1_000_000)?;
     let scheduler = RealtimeScheduler::new(8, usize::from(capture_info.channels), 128)
         .map_err(|_| AudioError::InvalidFrameSize)?;
     let generation = RuntimeGeneration::new(1);

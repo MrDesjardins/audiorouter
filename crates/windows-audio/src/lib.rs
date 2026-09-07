@@ -478,6 +478,18 @@ pub struct SharedRender {
 }
 
 impl SharedCapture {
+    /// Refresh endpoint metadata and then open only the exact persisted
+    /// capture binding. This is the preferred recovery entry point because a
+    /// coalesced notification cannot leave validation against an old snapshot.
+    pub fn open_refreshed_bound(
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
+        monitor.refresh_changes()?;
+        Self::open_bound(monitor, expected, buffer_duration_100ns)
+    }
+
     /// Open an endpoint only when the monitor still reports the exact
     /// persisted ID, direction, and mix format. A stale binding fails before
     /// COM activation; the caller must deliberately renegotiate or select a
@@ -776,6 +788,18 @@ impl Drop for SharedCapture {
 }
 
 impl SharedRender {
+    /// Refresh endpoint metadata and then open only the exact persisted render
+    /// binding. This is the preferred recovery entry point; a topology race
+    /// after validation remains visible through the underlying WASAPI error.
+    pub fn open_refreshed_bound(
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
+        monitor.refresh_changes()?;
+        Self::open_bound(monitor, expected, buffer_duration_100ns)
+    }
+
     /// Open an endpoint only when the monitor still reports the exact
     /// persisted ID, direction, and mix format. A stale binding fails before
     /// COM activation; endpoint changes after validation remain visible as

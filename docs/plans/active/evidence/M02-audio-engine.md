@@ -285,6 +285,12 @@ coalesced notification flag, returns the same deterministic diff, and remains
 metadata-only; stream reopen, renegotiation, and replacement selection remain
 deliberate caller operations.
 
+The stream clients now also expose `open_refreshed_bound`, which refreshes the
+monitor snapshot immediately before applying the exact ID/direction/format
+guard. The adapter route uses this entry point for both streams, reducing the
+window in which a pending coalesced notification could leave validation stale;
+an endpoint change after validation is still reported by WASAPI.
+
 The stream clients now expose `open_bound` entry points that enforce this
 decision immediately before activation. Missing, direction-changed, or format-
 changed bindings return a structured `AudioError::EndpointBinding` without
