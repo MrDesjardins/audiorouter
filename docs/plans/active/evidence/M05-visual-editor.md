@@ -537,3 +537,15 @@ current revision. TypeScript typecheck, all 61 Vitest tests, and a disposable
 three-file Vite production build passed; the temporary output was removed.
 Manual visual/accessibility acceptance and native shell injection remain open.
 No audio, driver, or machine configuration was changed.
+
+## Explicit recording file actions (2026-09-06)
+
+The rendered UI now includes a connected-only recording action panel for the
+existing authorized `recordings.rename`, `recordings.reveal`, and
+`recordings.recycle` operations. Rename accepts an explicit destination and
+continues to rely on the backend's approved-directory check. Reveal reports a
+missing file without opening anything, while recycle exposes a non-mutating
+preview separately from the confirmation-required action. All controls are
+disabled while disconnected. UI typecheck, all 61 tests, and the disposable
+three-file production build pass; no recording file or machine configuration
+was changed.
