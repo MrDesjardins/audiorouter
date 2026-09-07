@@ -500,6 +500,11 @@ impl Storage {
                  operation TEXT NOT NULL,
                  expires_at INTEGER NOT NULL
              );
+             CREATE TABLE IF NOT EXISTS startup_plans (
+                 id TEXT PRIMARY KEY,
+                 enabled INTEGER NOT NULL CHECK(enabled IN (0, 1)),
+                 expires_at INTEGER NOT NULL
+             );
              CREATE TABLE IF NOT EXISTS recovery_crashes (
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  occurred_at INTEGER NOT NULL
@@ -752,6 +757,43 @@ impl Storage {
             .collect::<Result<Vec<_>, _>>()
             .map_err(StorageError::Sql);
         plans
+    }
+
+    pub fn save_startup_plan(
+        &self,
+        id: &EntityId,
+        enabled: bool,
+        expires_at: i64,
+    ) -> Result<(), StorageError> {
+        self.connection.execute(
+            "INSERT OR REPLACE INTO startup_plans(id, enabled, expires_at)
+             VALUES (?1, ?2, ?3)",
+            params![id.as_str(), if enabled { 1 } else { 0 }, expires_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_startup_plans(&self) -> Result<Vec<(EntityId, bool, i64)>, StorageError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id, enabled, expires_at FROM startup_plans ORDER BY id")?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                EntityId::new(row.get::<_, String>(0)?),
+                row.get::<_, i64>(1)? != 0,
+                row.get(2)?,
+            ))
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::Sql)
+    }
+
+    pub fn delete_startup_plan(&self, id: &EntityId) -> Result<(), StorageError> {
+        self.connection.execute(
+            "DELETE FROM startup_plans WHERE id = ?1",
+            params![id.as_str()],
+        )?;
+        Ok(())
     }
 
     pub fn delete_virtual_device_plan(&self, id: &EntityId) -> Result<(), StorageError> {
@@ -2099,6 +2141,23 @@ mod tests {
         assert_eq!(plans[0].1["action"], "create");
         storage.delete_virtual_device_plan(&live_id).unwrap();
         assert!(storage.load_virtual_device_plans().unwrap().is_empty());
+    }
+
+    #[test]
+    fn startup_plans_round_trip_and_delete_without_os_side_effects() {
+        let storage = Storage::open_memory().unwrap();
+        let plan_id = EntityId::new("startup-plan-live");
+        storage.save_startup_plan(&plan_id, true, i64::MAX).unwrap();
+        storage
+            .save_startup_plan(&EntityId::new("startup-plan-expired"), false, 0)
+            .unwrap();
+        let plans = storage.load_startup_plans().unwrap();
+        assert_eq!(plans.len(), 2);
+        assert!(plans.iter().any(|(id, enabled, expires_at)| {
+            id == &plan_id && *enabled && *expires_at == i64::MAX
+        }));
+        storage.delete_startup_plan(&plan_id).unwrap();
+        assert_eq!(storage.load_startup_plans().unwrap().len(), 1);
     }
 
     #[test]

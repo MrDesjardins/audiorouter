@@ -1837,6 +1837,21 @@ impl ControlPlane {
                 );
             }
         }
+        let mut startup_plans = HashMap::new();
+        if let Ok(plans) = storage.load_startup_plans() {
+            for (id, enabled, expires_at) in plans {
+                let Some(remaining) = expires_at.checked_sub(now) else {
+                    continue;
+                };
+                startup_plans.insert(
+                    id,
+                    (
+                        enabled,
+                        Instant::now() + Duration::from_secs(remaining as u64),
+                    ),
+                );
+            }
+        }
         Self {
             store,
             build: build.into(),
@@ -1857,7 +1872,7 @@ impl ControlPlane {
             virtual_buses,
             virtual_bus_plans,
             next_virtual_bus_plan: 1,
-            startup_plans: HashMap::new(),
+            startup_plans,
             next_startup_plan: 1,
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
@@ -4789,6 +4804,13 @@ impl ControlPlane {
             plan_id.clone(),
             (enabled, Instant::now() + VIRTUAL_DEVICE_PLAN_TTL),
         );
+        if let Some(storage) = &self.storage {
+            let expires_at = unix_epoch_seconds() + VIRTUAL_DEVICE_PLAN_TTL.as_secs() as i64;
+            if let Err(error) = storage.save_startup_plan(&plan_id, enabled, expires_at) {
+                self.startup_plans.remove(&plan_id);
+                return Err(storage_error(error));
+            }
+        }
         Ok(json!({
             "planId": plan_id,
             "enabled": enabled,
@@ -7043,6 +7065,41 @@ mod tests {
             result["reason"],
             "sign-in startup registration is not implemented in this build"
         );
+    }
+
+    #[test]
+    fn storage_backed_startup_plan_survives_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-startup-plan-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let plan_id = {
+            let mut plane =
+                ControlPlane::with_storage("startup-first", Storage::open(&path).unwrap());
+            plane
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: "startup.plan".into(),
+                    params: Some(json!({ "enabled": true })),
+                })
+                .result
+                .unwrap()["planId"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let mut restarted =
+            ControlPlane::with_storage("startup-second", Storage::open(&path).unwrap());
+        let applied = restarted.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "startup.apply".into(),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-restart" })),
+        });
+        assert_eq!(applied.result.unwrap()["state"], "unavailable");
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

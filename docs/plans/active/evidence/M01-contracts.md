@@ -210,6 +210,12 @@ before any operating-system registration because the native sign-in lifecycle
 is not implemented. Control and TypeScript contracts cover both methods, and no
 startup or machine configuration is changed.
 
+Startup plan metadata is now persisted in SQLite and reloaded by a new control
+plane instance, closing the restart gap for durable backends. The restart
+regression passes; the standalone storage test executable is blocked before
+launch by Windows Application Control error 4551, so no standalone storage test
+count is claimed for this slice.
+
 The paged `sessions.list` and `graph.history` responses now advertise explicit
 page envelopes and serialized session snapshots, including graph nodes, ports,
 edges, and channel matrices. Discovery assertions cover the cursor and revision
