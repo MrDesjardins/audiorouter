@@ -812,3 +812,10 @@ the built x64 fixture and processed a finite block.
 The generated SDK build tree is repository-local and ignored. No system-wide
 SDK installation, plugin registration, driver action, audio stream, or machine
 audio configuration change occurred.
+
+The full safe sweep also exercised M06 after other acceptance jobs had
+completed. A concurrent first attempt encountered an MSBuild `FileTracker`
+access conflict in the shared ignored build directory; it did not indicate an
+SDK or source failure. A sequential rerun passed the same 51 self-tests, 1,598
+validator tests, and offline loader checks, after which the exact generated
+build directory was removed.
