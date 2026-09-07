@@ -249,6 +249,14 @@ script removed its temporary executable/object outputs; the probe was not
 executed, so no audio stream, driver, signing mode, or machine configuration
 was touched.
 
+## Shared-mode buffer correction (2026-09-07)
+
+The probe previously requested a one-second shared-mode buffer for capture
+endpoints. That caller-sized duration was removed: shared render and capture
+initialization now pass zero so the audio engine selects the buffer period.
+This is a source-level correction for a plausible `E_INVALIDARG` cause; the
+probe was compile-checked but not executed, so no new live-audio claim is made.
+
 ## Current-tip compile-only qualification (2026-09-07)
 
 The checked-in native probe compiled successfully with the installed Visual
