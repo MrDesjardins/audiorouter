@@ -255,7 +255,7 @@ fn supervised_worker_replacement_preserves_quarantine_history() {
         Err(result) => result,
     };
     assert!(
-        matches!(error, audiorouter_plugin_host::WorkerProcessError::Protocol(ref message) if message.contains("Quarantined")),
+        matches!(error, audiorouter_plugin_host::WorkerProcessError::Quarantined),
         "unexpected quarantine error: {error:?}"
     );
     assert_eq!(supervisor.state(), audiorouter_plugin_host::WorkerState::Quarantined);

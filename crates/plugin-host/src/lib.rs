@@ -1057,6 +1057,9 @@ pub enum WorkerProcessError {
     Spawn(String),
     Message(WorkerMessageError),
     Protocol(String),
+    /// The bounded failure policy has latched quarantine; replacement is not
+    /// permitted until an explicit operator retry clears that policy.
+    Quarantined,
     Exited,
     Timeout,
 }
@@ -1266,6 +1269,9 @@ impl SupervisedWorkerProcess {
             }
         };
         if let Err(error) = supervisor.start(identity, now) {
+            if error == WorkerStartError::Quarantined {
+                return Err((WorkerProcessError::Quarantined, supervisor));
+            }
             return Err((
                 WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
                 supervisor,
@@ -1321,6 +1327,9 @@ impl SupervisedWorkerProcess {
             }
         };
         if let Err(error) = supervisor.start(identity, now) {
+            if error == WorkerStartError::Quarantined {
+                return Err((WorkerProcessError::Quarantined, supervisor));
+            }
             return Err((
                 WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
                 supervisor,
