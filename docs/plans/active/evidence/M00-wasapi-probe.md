@@ -248,3 +248,11 @@ Studio Community 2026/MSVC and Windows SDK/WDK toolchain. The acceptance
 script removed its temporary executable/object outputs; the probe was not
 executed, so no audio stream, driver, signing mode, or machine configuration
 was touched.
+
+## Current-tip compile-only qualification (2026-09-07)
+
+The checked-in native probe compiled successfully with the installed Visual
+Studio Community 2026/MSVC and Windows SDK/WDK toolchain. The acceptance
+script removed its temporary executable/object outputs; the probe was not
+executed, so no audio stream, driver, signing mode, or machine configuration
+was touched.
