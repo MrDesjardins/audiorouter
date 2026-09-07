@@ -180,13 +180,11 @@ impl AudioFailureKind {
 }
 
 impl AudioError {
-    /// Classify errors for stable control-plane behavior while retaining the
-    /// original HRESULT for diagnostics.
-    pub fn kind(&self) -> AudioFailureKind {
-        if matches!(self, Self::BufferTooSmall { .. }) {
-            return AudioFailureKind::BufferConstraint;
-        }
-        let code = match self {
+    /// Return the stable unsigned HRESULT represented by this error. Local
+    /// validation failures use the corresponding Win32 HRESULT so callers can
+    /// emit one machine-readable diagnostic without parsing display text.
+    pub fn hresult(&self) -> u32 {
+        match self {
             Self::Windows(error) => error.code().0 as u32,
             Self::WindowsOperation { error, .. } => error.code().0 as u32,
             Self::InvalidUtf16
@@ -194,11 +192,20 @@ impl AudioError {
             | Self::ApplicationNotFound { .. }
             | Self::ApplicationIdentityChanged { .. }
             | Self::ApplicationRestartNotFound { .. }
-            | Self::ApplicationRestartAmbiguous { .. } => 0x80070057,
+            | Self::ApplicationRestartAmbiguous { .. }
+            | Self::BufferTooSmall { .. } => 0x80070057,
             Self::ApplicationIdentityUnavailable { .. }
             | Self::ApplicationRestartIdentityUnavailable { .. } => 0x80070005,
-            Self::BufferTooSmall { .. } => unreachable!(),
-        };
+        }
+    }
+
+    /// Classify errors for stable control-plane behavior while retaining the
+    /// original HRESULT for diagnostics.
+    pub fn kind(&self) -> AudioFailureKind {
+        if matches!(self, Self::BufferTooSmall { .. }) {
+            return AudioFailureKind::BufferConstraint;
+        }
+        let code = self.hresult();
         match code {
             0x80070057 => AudioFailureKind::InvalidArgument,
             0x80070005 => AudioFailureKind::AccessDenied,
@@ -1236,6 +1243,14 @@ mod tests {
             .kind(),
             AudioFailureKind::BufferConstraint
         );
+        assert_eq!(
+            AudioError::BufferTooSmall {
+                required: 8,
+                available: 4
+            }
+            .hresult(),
+            0x80070057
+        );
         let invalid_argument = AudioError::Windows(windows::core::Error::new(
             windows::core::HRESULT(0x80070057_u32 as i32),
             "invalid argument",
@@ -1250,6 +1265,7 @@ mod tests {
             ),
         };
         assert_eq!(initialize_failure.kind(), AudioFailureKind::InvalidArgument);
+        assert_eq!(initialize_failure.hresult(), 0x80070057);
         assert!(initialize_failure
             .to_string()
             .contains("IAudioClient::Initialize(capture)"));
