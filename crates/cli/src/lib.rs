@@ -1621,6 +1621,12 @@ fn mcp_tools() -> Value {
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
         { "name": "cancel_operation", "description": "Request cancellation; completed operations are never undone.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1 } }, "required": ["operationId"], "additionalProperties": false } },
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content; requires recording scope. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] }, "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
+        { "name": "arm_recorder", "description": "Arm a session recorder at the control boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "start_recorder", "description": "Start a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
+        { "name": "pause_recorder", "description": "Pause a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
+        { "name": "resume_recorder", "description": "Resume a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
+        { "name": "split_recorder", "description": "Split a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
+        { "name": "stop_recorder", "description": "Stop a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "get_recording_recovery", "description": "Read a validated recorder recovery checkpoint without audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "preview_recording", "description": "Inspect recording file metadata without decoding audio; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
@@ -1669,6 +1675,12 @@ fn mcp_tool_call(
         "get_operation" => ("operations.get", Some(arguments)),
         "cancel_operation" => ("operations.cancel", Some(arguments)),
         "list_recordings" => ("recordings.list", Some(arguments)),
+        "arm_recorder" => ("recorders.arm", Some(arguments)),
+        "start_recorder" => ("recorders.start", Some(arguments)),
+        "pause_recorder" => ("recorders.pause", Some(arguments)),
+        "resume_recorder" => ("recorders.resume", Some(arguments)),
+        "split_recorder" => ("recorders.split", Some(arguments)),
+        "stop_recorder" => ("recorders.stop", Some(arguments)),
         "get_recording" => ("recordings.get", Some(arguments)),
         "get_recording_recovery" => ("recordings.recovery", Some(arguments)),
         "preview_recording" => ("recordings.preview", Some(arguments)),
@@ -2795,7 +2807,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 26);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 32);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()
