@@ -238,3 +238,14 @@ to the bounded output pool even when routing fails. The compile check and a
 guarded 500 ms VB-Audio route acceptance passed again with 24,480 captured,
 24,448 scheduled, and 24,448 routed frames; the media snapshot and temporary
 artifact cleanup remained unchanged.
+
+## Current-head one-second adapter-route requalification (2026-09-07)
+
+The authorized Rust adapter-route wrapper was rerun for 1,000 ms using the
+explicitly selected VB-Audio render and capture endpoint IDs. Capture delivered
+48,960 frames; the fixed-quantum scheduler processed 48,896 frames; and
+48,384 frames were routed through the generation-1 graph. The endpoint/media
+snapshot remained unchanged and temporary native outputs were removed. This
+extends the adapter data-path evidence under a longer bounded window; it does
+not qualify cross-device clock synchronization, physical latency, driver
+integration, or production graph lifecycle.
