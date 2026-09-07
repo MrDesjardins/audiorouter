@@ -567,3 +567,11 @@ injection remain open.
 Removed the unused legacy `VirtualDevicePanel` component so the connected UI
 has one authoritative virtual-device lifecycle surface. The M05 typecheck,
 all 63 Vitest tests, and disposable production build still pass.
+## UI mutation idempotency completion (2026-09-06)
+
+All connected UI mutation paths now use the shared UUID-backed idempotency-key
+helper: graph commit, virtual-device apply, recording-entry removal, and
+session create, duplicate, and delete. Entity IDs remain separate from retry
+keys. UI typecheck, all 63 Vitest tests, and the disposable three-file Vite
+production build pass; no audio, driver, recording file, or machine
+configuration was accessed.
