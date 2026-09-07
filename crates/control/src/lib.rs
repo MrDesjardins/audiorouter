@@ -214,12 +214,16 @@ fn method_input_schema(name: &str) -> Value {
         "clients.authorize" => object_schema(
             json!({
                 "clientId": { "type": "string", "minLength": 1 },
-                "role": { "enum": ["observer", "editor", "operator"] }
+                "role": { "enum": ["observer", "editor", "operator"] },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["clientId", "role"],
         ),
         "clients.revoke" => object_schema(
-            json!({ "clientId": { "type": "string", "minLength": 1 } }),
+            json!({
+                "clientId": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
             &["clientId"],
         ),
         "operations.get" => object_schema(
@@ -1684,6 +1688,8 @@ impl ControlPlane {
                     format!("{client}\0sessions.duplicate\0{operation_id}"),
                     format!("{client}\0safety.setPrivacyMute\0{operation_id}"),
                     format!("{client}\0recovery.clearSafeMode\0{operation_id}"),
+                    format!("{client}\0clients.authorize\0{operation_id}"),
+                    format!("{client}\0clients.revoke\0{operation_id}"),
                 ]
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
@@ -1936,8 +1942,28 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("role is required".into()))?;
         let role = role_from_name(role_name_value)
             .ok_or_else(|| ControlError::InvalidRequest("unknown client role".into()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "clientId": client_id, "role": role_name_value });
+                (
+                    self.scoped_idempotency_key("clients.authorize", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         self.enroll_client(client_id, role)?;
-        Ok(json!({ "clientId": client_id, "role": role_name_value, "revoked": false }))
+        let result = json!({ "clientId": client_id, "role": role_name_value, "revoked": false });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "clients.authorize", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_client_revoke(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -1948,8 +1974,28 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("clientId is required".into()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "clientId": client_id });
+                (
+                    self.scoped_idempotency_key("clients.revoke", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         let changed = self.revoke_client(client_id)?;
-        Ok(json!({ "clientId": client_id, "revoked": true, "changed": changed }))
+        let result = json!({ "clientId": client_id, "revoked": true, "changed": changed });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "clients.revoke", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_operation_get(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4527,8 +4573,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             "acknowledgments",
         ],
         "system.handshake" => &["protocolVersion"],
-        "clients.authorize" => &["clientId", "role"],
-        "clients.revoke" => &["clientId"],
+        "clients.authorize" => &["clientId", "role", "idempotencyKey"],
+        "clients.revoke" => &["clientId", "idempotencyKey"],
         "operations.get" | "operations.cancel" => &["operationId"],
         "recordings.list" => &["sessionId", "cursor", "limit"],
         "recordings.get" | "recordings.recovery" | "recordings.reveal" | "recordings.preview" => {
