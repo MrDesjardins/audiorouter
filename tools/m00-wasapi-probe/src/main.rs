@@ -6,6 +6,7 @@
 //! data, submits zero-valued caller-owned render buffers, then stops and resets
 //! both streams.
 
+use audiorouter_engine::{RealtimeScheduler, RuntimeGeneration, RuntimeGraph};
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, SharedCapture, SharedRender,
 };
@@ -81,8 +82,16 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
     if capture_bytes_per_frame == 0 || render_bytes_per_frame == 0 {
         return Err(AudioError::InvalidFrameSize);
     }
+    if capture_info.bits_per_sample != 32 || capture_info.channels > 2 {
+        return Err(AudioError::InvalidFrameSize);
+    }
     let mut capture = SharedCapture::open(&capture_info.id, 1_000_000)?;
     let mut render = SharedRender::open(&render_info.id, 1_000_000)?;
+    let scheduler = RealtimeScheduler::new(8, usize::from(capture_info.channels), 128)
+        .map_err(|_| AudioError::InvalidFrameSize)?;
+    scheduler
+        .processor()
+        .publish(RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]));
     capture.start()?;
     render.start()?;
     let result = (|| {
@@ -92,6 +101,7 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
         let mut capture_packets = 0u32;
         let mut capture_frames = 0u32;
         let mut capture_bytes = 0usize;
+        let mut scheduler_frames = 0u32;
         let mut render_frames = 0u32;
         let mut destination = vec![0u8; 1_048_576];
         let render_source = vec![0u8; 1_048_576];
@@ -103,24 +113,64 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
                     capture_packets = capture_packets.saturating_add(1);
                     capture_frames = capture_frames.saturating_add(packet.frames);
                     capture_bytes = capture_bytes.saturating_add(bytes);
+                    let complete_blocks = packet.frames as usize / 128;
+                    for block_index in 0..complete_blocks {
+                        let mut block =
+                            scheduler
+                                .acquire_input()
+                                .ok_or(AudioError::BufferTooSmall {
+                                    required: 128,
+                                    available: 0,
+                                })?;
+                        for frame in 0..128 {
+                            for channel in 0..usize::from(capture_info.channels) {
+                                let offset = (block_index * 128 + frame) * capture_bytes_per_frame
+                                    + channel * 4;
+                                let sample = f32::from_le_bytes(
+                                    destination[offset..offset + 4]
+                                        .try_into()
+                                        .map_err(|_| AudioError::InvalidFrameSize)?,
+                                );
+                                block.channel_mut(channel).unwrap()[frame] = sample;
+                            }
+                        }
+                        if let Err(block) = scheduler.submit_input(block) {
+                            scheduler
+                                .input()
+                                .try_recycle(block)
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                            continue;
+                        }
+                        scheduler
+                            .process_once()
+                            .map_err(|_| AudioError::InvalidFrameSize)?;
+                        if let Some(output) = scheduler.receive_output() {
+                            scheduler
+                                .output()
+                                .try_recycle(output)
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                            scheduler_frames = scheduler_frames.saturating_add(128);
+                        }
+                    }
                 }
             }
             render_frames = render_frames
                 .saturating_add(render.submit_bytes(&render_source, render_bytes_per_frame)?);
         }
-        if capture_packets == 0 || render_frames == 0 {
+        if capture_packets == 0 || scheduler_frames == 0 || render_frames == 0 {
             return Err(AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80004005u32 as i32),
                 "adapter smoke test received no bounded stream data",
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} render_frames={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} scheduler_frames={} render_frames={}",
             capture_info.id,
             render_info.id,
             capture_packets,
             capture_frames,
             capture_bytes,
+            scheduler_frames,
             render_frames
         );
         Ok(())

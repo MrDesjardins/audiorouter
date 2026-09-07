@@ -149,3 +149,14 @@ passed again with 21 capture packets/10,080 frames/80,640 bytes and 10,656
 zero-valued render frames; the media-device identity/state snapshot remained
 identical. This validates the caller-owned render-copy path without generating
 an audible signal.
+
+## Adapter-to-engine block smoke (2026-09-07)
+
+The opt-in smoke was extended to feed the captured 32-bit samples into the
+portable `RealtimeScheduler` in fixed 128-frame blocks. A guarded 200 ms live
+run processed 8,064 capture frames through the scheduler while submitting
+11,136 zero-valued render frames through `SharedRender::submit_bytes`; capture
+and render clients stopped/reset successfully and the media-device snapshot
+remained identical. This qualifies bounded adapter-to-engine ownership and
+block processing, not complete graph activation, audible routing, or physical
+latency.

@@ -28,7 +28,7 @@ if ($cargoExitCode -ne 0) {
     throw "production Rust adapter smoke failed with exit code $cargoExitCode`n$($output -join [Environment]::NewLine)"
 }
 $line = $output | Where-Object { $_ -match '^adapter_smoke ' } | Select-Object -Last 1
-if (-not $line -or $line -notmatch 'capture_packets=(\d+)' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'render_frames=(\d+)') {
+if (-not $line -or $line -notmatch 'capture_packets=(\d+)' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'scheduler_frames=(\d+)' -or $line -notmatch 'render_frames=(\d+)') {
     throw "adapter smoke did not report bounded capture/render counts`n$($output -join [Environment]::NewLine)"
 }
 $capturePackets = [int]([regex]::Match($line, 'capture_packets=(\d+)').Groups[1].Value)
@@ -36,8 +36,9 @@ if ($capturePackets -le 0) {
     throw 'adapter smoke reported no capture packets'
 }
 $captureFrames = [int]([regex]::Match($line, 'capture_frames=(\d+)').Groups[1].Value)
+$schedulerFrames = [int]([regex]::Match($line, 'scheduler_frames=(\d+)').Groups[1].Value)
 $renderFrames = [int]([regex]::Match($line, 'render_frames=(\d+)').Groups[1].Value)
-if ($captureFrames -le 0 -or $renderFrames -le 0) {
+if ($captureFrames -le 0 -or $schedulerFrames -le 0 -or $renderFrames -le 0) {
     throw "adapter smoke reported invalid frame counts: $line"
 }
 $after = Get-MediaSnapshot
