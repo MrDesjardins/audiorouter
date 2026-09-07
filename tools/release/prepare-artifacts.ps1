@@ -27,6 +27,7 @@ while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
 }
 
 Push-Location $workspace
+$uiBuild = Join-Path ([IO.Path]::GetTempPath()) "audiorouter-ui-release-$PID"
 try {
     $dirty = & git status --porcelain --untracked-files=all
     if ($LASTEXITCODE -ne 0) {
@@ -38,6 +39,23 @@ try {
     & cargo build --release --locked -p audiorouter-cli -p audiorouter-plugin-host
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
+    }
+
+    if (Test-Path -LiteralPath $uiBuild) {
+        throw "temporary UI build directory already exists; refusing to reuse it: $uiBuild"
+    }
+    Push-Location (Join-Path $workspace "ui")
+    try {
+        & npm.cmd run build -- --outDir $uiBuild
+        if ($LASTEXITCODE -ne 0) {
+            throw "UI release build failed with exit code $LASTEXITCODE"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $uiBuild "index.html") -PathType Leaf)) {
+        throw "UI release build did not produce index.html: $uiBuild"
     }
 
     New-Item -ItemType Directory -Path $output | Out-Null
@@ -53,6 +71,7 @@ try {
         }
         Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary)
     }
+    Compress-Archive -Path (Join-Path $uiBuild "*") -DestinationPath (Join-Path $output "audiorouter-ui.zip") -CompressionLevel Optimal
 
     $metadata = & cargo metadata --locked --format-version 1
     if ($LASTEXITCODE -ne 0) {
@@ -115,6 +134,9 @@ try {
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output "release-manifest.json") -Encoding utf8
 }
 finally {
+    if (Test-Path -LiteralPath $uiBuild) {
+        Remove-Item -LiteralPath $uiBuild -Recurse -Force
+    }
     Pop-Location
 }
 

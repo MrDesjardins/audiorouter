@@ -330,3 +330,14 @@ content verification, and unsigned publication-blocker assertions succeeded
 in a disposable temporary directory, which was removed afterward. Signing,
 driver, installer, clean-machine, and native-audio gates remain open; no
 machine configuration was changed.
+
+## Disposable UI release artifact (2026-09-07)
+
+Release preparation now builds the UI with the locked local npm inputs into an
+isolated temporary directory and packages the resulting static bundle as
+`audiorouter-ui.zip` beside the CLI and plugin-worker binaries. The artifact is
+included in the same SHA-256 manifest and exact-content verification; the
+temporary UI build directory is removed in the preparation `finally` path.
+The release acceptance passed with the unsigned status and driver/signing,
+installer, and clean-machine blockers preserved. No UI was installed, and no
+audio or machine configuration was changed.

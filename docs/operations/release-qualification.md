@@ -14,9 +14,9 @@ The reproducible preparation flow is:
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\release\verify-artifacts.ps1 -ManifestPath <prepared-directory>\release-manifest.json
 
 Preparation requires a clean worktree, locked Cargo inputs, and a new output
-directory. It produces unsigned x64 CLI and disposable-worker artifacts,
-locked Cargo SBOM metadata, and checksums. It does not produce an installer or
-install a driver.
+directory. It produces unsigned x64 CLI and disposable-worker artifacts, a
+disposable zipped UI bundle, locked Cargo SBOM metadata, and checksums. It does
+not produce an installer or install a driver.
 
 ## Current qualification snapshot
 
