@@ -599,3 +599,19 @@ toolchain. The loader executable and object were removed in the acceptance
 cleanup; the ignored SDK build directory is retained for repeatable local
 builds. No system plugin registration, driver installation, endpoint change,
 or other audio configuration was performed.
+
+## Installer verification on the current tip (2026-09-06)
+
+The repository installer was run with a process-scoped PowerShell execution
+policy bypass because the host policy blocks direct script invocation:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\m06-vst3-sdk\install.ps1
+```
+
+It confirmed the source checkout at
+`3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96` and required hosting headers. The
+subsequent M06 acceptance passed with 51 SDK self-tests, 1,598 official
+validator tests, and the offline fixture loader. This remains a
+repository-local source SDK setup, not a global Windows SDK or system plugin
+installation; no audio configuration was changed.
