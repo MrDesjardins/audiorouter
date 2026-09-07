@@ -2353,6 +2353,7 @@ impl ControlPlane {
                     "session.created",
                     "session.deleted",
                     "graph.committed",
+                    "runtime.crashed",
                     "runtime.started",
                     "runtime.activated",
                     "runtime.stopped",
@@ -2468,6 +2469,17 @@ impl ControlPlane {
         timestamp_seconds: u64,
     ) -> Result<RecoveryDecision, ControlError> {
         let decision = self.record_runtime_crash(timestamp_seconds)?;
+        let crashed_session_ids = self
+            .runtimes
+            .iter()
+            .filter(|(_, runtime)| runtime.state() == RuntimeState::Running)
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        for session_id in &crashed_session_ids {
+            let revision = self.get_session(session_id)?.revision;
+            self.events
+                .append(revision, None, "runtime.crashed", Some(session_id.clone()));
+        }
         for runtime in self.runtimes.values_mut() {
             if runtime.state() == RuntimeState::Running {
                 runtime.stop();

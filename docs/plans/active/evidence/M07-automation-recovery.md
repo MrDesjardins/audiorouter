@@ -722,6 +722,12 @@ leaves all sessions stopped. Control coverage verifies both restoration and
 safe-mode behavior. This is a supervisor-facing portable boundary only: it
 does not spawn a process, open an audio stream, or claim native route restart.
 
+Recovery now also publishes a `runtime.crashed` state event for each affected
+session before applying the policy; successfully restored fake sessions use
+the existing `runtime.started` event. This keeps event consumers informed of
+the stop/restart boundary without exposing audio payloads or implying native
+route recovery.
+
 The complete M07 headless acceptance was then rerun at commit `5a58a13`.
 CLI (23), MCP stdio/named-pipe interoperability (2), control (78),
 plugin-host (31), worker-process (8), and strict Clippy checks passed. The
