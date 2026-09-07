@@ -252,6 +252,11 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
         ));
     }
     let operation_id = positional(args, 2, "operation id")?;
+    let idempotency_key = if action == Some("cancel") {
+        optional_option_value(args, "--idempotency-key")?
+    } else {
+        None
+    };
     let response = ControlPlane::with_storage("cli", database(args)?).dispatch(
         audiorouter_protocol::JsonRpcRequest {
             jsonrpc: "2.0".into(),
@@ -261,7 +266,10 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
             } else {
                 "operations.get".into()
             },
-            params: Some(json!({ "operationId": operation_id })),
+            params: Some(json!({
+                "operationId": operation_id,
+                "idempotencyKey": idempotency_key
+            })),
         },
     );
     response

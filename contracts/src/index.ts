@@ -602,7 +602,7 @@ export type MethodParams = {
   "clients.authorize": { clientId: string; role: "observer" | "editor" | "operator" };
   "clients.revoke": { clientId: string };
   "operations.get": { operationId: string };
-  "operations.cancel": { operationId: string };
+  "operations.cancel": { operationId: string; idempotencyKey?: string };
   "recordings.list":
     | { sessionId?: EntityId | null; cursor?: string | null; limit?: number }
     | undefined;
