@@ -3598,7 +3598,7 @@ impl ControlPlane {
         .filter(|event| {
             let session_matches = session_filter
                 .as_ref()
-                .map(|id| event.session_id.as_ref() == Some(id))
+                .map(|id| event.session_id.is_none() || event.session_id.as_ref() == Some(id))
                 .unwrap_or(true);
             let category_matches = category_filter
                 .as_ref()
@@ -3914,6 +3914,8 @@ impl ControlPlane {
             "virtualDevices.apply",
             Some(&request_hash),
         );
+        self.events
+            .append(0, Some(plan_id.to_owned()), "virtualDevice.changed", None);
         Ok(result)
     }
 
@@ -4429,6 +4431,19 @@ mod tests {
         };
         let applied = plane.dispatch(request(4, &plan_id)).result.unwrap();
         assert_eq!(applied["state"], "applied");
+        let events = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(40)),
+                method: "events.subscribe".into(),
+                params: Some(json!({
+                    "afterSequence": 0,
+                    "sessionId": "unrelated-session"
+                })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(events["events"][0]["category"], "virtualDevice.changed");
         let operation = plane
             .dispatch(JsonRpcRequest {
                 jsonrpc: "2.0".into(),

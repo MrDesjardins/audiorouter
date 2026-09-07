@@ -266,3 +266,9 @@ uses a dedicated result type with the cleared-latch invariant, while graph
 commit activation is represented as either pending or running fake-runtime
 state. Contracts and UI typechecks, UI tests, and the workspace compile check
 pass without starting audio or changing machine configuration.
+
+Virtual-device desired-state applies now append a bounded global
+`virtualDevice.changed` event. Session-filtered subscriptions retain global
+events while continuing to exclude events belonging to other sessions, allowing
+connected clients to refresh their managed-bus inventory. Control coverage and
+strict Clippy pass; native driver lifecycle remains open.
