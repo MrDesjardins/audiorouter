@@ -244,6 +244,13 @@ recovered without persisting samples or file handles. Storage coverage is now
 30 tests with strict Clippy; true incremental FLAC encoding and native
 realtime integration remain open.
 
+Successful recording mutations now publish session-scoped state events:
+`recording.metadataChanged`, `recording.renamed`, `recording.entryRemoved`, and
+`recording.recycled`. Preview and missing-file responses remain non-mutating and
+do not emit events. Control coverage verifies the metadata event while storage
+and file-safety behavior remain unchanged; native realtime integration remains
+open.
+
 ## Initial built-in DSP slice
 
 The new `audiorouter-dsp` crate provides an allocation-free, caller-owned

@@ -3343,7 +3343,10 @@ impl ControlPlane {
         Ok(json!({ "recordingId": recording_id, "preview": result }))
     }
 
-    fn dispatch_recording_metadata(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_recording_metadata(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
         let params =
             params.ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
         let recording_id = params
@@ -3354,6 +3357,11 @@ impl ControlPlane {
             .storage
             .as_ref()
             .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let session_id = storage
+            .get_recording(recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?
+            .session_id;
         let updated = storage
             .update_recording_metadata(
                 recording_id,
@@ -3365,10 +3373,16 @@ impl ControlPlane {
         if !updated {
             return Err(ControlError::InvalidRequest("recording not found".into()));
         }
+        self.events.append(
+            0,
+            None,
+            "recording.metadataChanged",
+            Some(EntityId::new(session_id)),
+        );
         Ok(json!({ "recordingId": recording_id, "updated": true }))
     }
 
-    fn dispatch_recording_rename(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_recording_rename(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("recordingId and newPath are required".into())
         })?;
@@ -3386,12 +3400,23 @@ impl ControlPlane {
             .storage
             .as_ref()
             .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let session_id = storage
+            .get_recording(recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?
+            .session_id;
         if !storage
             .rename_recording(recording_id, new_path)
             .map_err(storage_error)?
         {
             return Err(ControlError::InvalidRequest("recording not found".into()));
         }
+        self.events.append(
+            0,
+            None,
+            "recording.renamed",
+            Some(EntityId::new(session_id)),
+        );
         Ok(json!({
             "recordingId": recording_id,
             "renamed": true,
@@ -3400,7 +3425,7 @@ impl ControlPlane {
         }))
     }
 
-    fn dispatch_recording_remove(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_recording_remove(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let recording_id = params
             .and_then(|params| {
                 params
@@ -3413,16 +3438,27 @@ impl ControlPlane {
             .storage
             .as_ref()
             .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let session_id = storage
+            .get_recording(&recording_id)
+            .map_err(storage_error)?
+            .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?
+            .session_id;
         if !storage
             .remove_recording_entry(&recording_id)
             .map_err(storage_error)?
         {
             return Err(ControlError::InvalidRequest("recording not found".into()));
         }
+        self.events.append(
+            0,
+            None,
+            "recording.entryRemoved",
+            Some(EntityId::new(session_id)),
+        );
         Ok(json!({ "recordingId": recording_id, "removed": true, "fileAction": "none" }))
     }
 
-    fn dispatch_recording_recycle(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_recording_recycle(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("recordingId and confirm are required".into())
         })?;
@@ -3467,6 +3503,12 @@ impl ControlPlane {
             storage
                 .set_recording_missing(recording_id, true)
                 .map_err(storage_error)?;
+            self.events.append(
+                0,
+                None,
+                "recording.recycled",
+                Some(EntityId::new(record.session_id.clone())),
+            );
             Ok(
                 json!({ "recordingId": recording_id, "path": record.path, "fileAction": "recycled", "missing": true }),
             )
@@ -6028,6 +6070,16 @@ mod tests {
             .unwrap();
         assert_eq!(record.path, "C:\\recordings\\keep.wav");
         assert_eq!(record.title.as_deref(), Some("Edited"));
+        let events = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(12)),
+                method: "events.subscribe".into(),
+                params: Some(json!({ "afterSequence": 0, "sessionId": "session" })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(events["events"][0]["category"], "recording.metadataChanged");
         let response = plane.dispatch_authorized(
             JsonRpcRequest {
                 jsonrpc: "2.0".into(),
