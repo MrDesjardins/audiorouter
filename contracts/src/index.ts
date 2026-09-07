@@ -615,10 +615,11 @@ export type MethodParams = {
     title?: string | null;
     artist?: string | null;
     comment?: string | null;
+    idempotencyKey?: string;
   };
-  "recordings.rename": { recordingId: EntityId; newPath: string };
-  "recordings.removeEntry": { recordingId: EntityId };
-  "recordings.recycle": { recordingId: EntityId; confirm?: boolean };
+  "recordings.rename": { recordingId: EntityId; newPath: string; idempotencyKey?: string };
+  "recordings.removeEntry": { recordingId: EntityId; idempotencyKey?: string };
+  "recordings.recycle": { recordingId: EntityId; confirm?: boolean; idempotencyKey?: string };
   "recovery.clearSafeMode": undefined;
   "safety.setPrivacyMute": { muted: boolean };
   "startup.get": undefined;

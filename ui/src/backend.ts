@@ -57,12 +57,12 @@ export interface UiBackend {
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
   getRecordingRecovery(recordingId: string): Promise<RecordingRecoveryResult>;
   revealRecording(recordingId: string): Promise<RecordingRevealResult>;
-  setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<RecordingMetadataResult>;
-  renameRecording(recordingId: string, newPath: string): Promise<RecordingRenameResult>;
+  setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null; idempotencyKey?: string }): Promise<RecordingMetadataResult>;
+  renameRecording(recordingId: string, newPath: string, idempotencyKey?: string): Promise<RecordingRenameResult>;
   setPrivacyMute(muted: boolean): Promise<PrivacyMuteResult>;
   clearRecoverySafeMode(): Promise<RecoveryClearResult>;
-  removeRecordingEntry(recordingId: string): Promise<RecordingRemoveResult>;
-  recycleRecording(recordingId: string, confirm: boolean): Promise<RecordingRecycleResult>;
+  removeRecordingEntry(recordingId: string, idempotencyKey?: string): Promise<RecordingRemoveResult>;
+  recycleRecording(recordingId: string, confirm: boolean, idempotencyKey?: string): Promise<RecordingRecycleResult>;
   createSession(session: Session): Promise<SessionCreateResult>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string): Promise<SessionCreateResult>;
   deleteSession(sessionId: string): Promise<SessionDeleteResult>;
@@ -278,8 +278,8 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     async setRecordingMetadata(recordingId, metadata) {
       return client.request("recordings.setMetadata", { recordingId, ...metadata });
     },
-    async renameRecording(recordingId, newPath) {
-      return client.request("recordings.rename", { recordingId, newPath });
+    async renameRecording(recordingId, newPath, idempotencyKey) {
+      return client.request("recordings.rename", { recordingId, newPath, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
     async setPrivacyMute(muted) {
       return client.request("safety.setPrivacyMute", { muted });
@@ -287,11 +287,11 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     async clearRecoverySafeMode() {
       return client.request("recovery.clearSafeMode", undefined);
     },
-    async removeRecordingEntry(recordingId) {
-      return client.request("recordings.removeEntry", { recordingId });
+    async removeRecordingEntry(recordingId, idempotencyKey) {
+      return client.request("recordings.removeEntry", { recordingId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
-    async recycleRecording(recordingId, confirm) {
-      return client.request("recordings.recycle", { recordingId, confirm });
+    async recycleRecording(recordingId, confirm, idempotencyKey) {
+      return client.request("recordings.recycle", { recordingId, confirm, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
     async createSession(session) {
       return client.request("sessions.create", { session });

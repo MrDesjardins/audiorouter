@@ -500,3 +500,15 @@ sixty-second pitch-duration regression, incremental WAV/FLAC recovery, and
 metadata/path safeguards. Formatting, strict Clippy, and diff checks passed.
 The wrapper used temporary test state only and did not access audio devices or
 change machine configuration.
+
+## 2026-09-06 — Recording mutation idempotency
+
+Recording metadata, rename, library-entry removal, and confirmed recycle
+mutations now accept an optional idempotency key. When supplied, the control
+plane scopes the key to the authenticated client and method, hashes the
+normalized request, journals the JSON outcome for the configured retention
+window, and replays it after a control restart. Reusing a key with a different
+payload returns `idempotencyConflict`. Preview and missing-file outcomes do not
+create mutation journal entries. The control suite (71 tests), full locked
+workspace, formatting, and strict Clippy pass; no audio endpoint or machine
+configuration was accessed.
