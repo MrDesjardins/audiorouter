@@ -220,6 +220,11 @@ also passed again with 24,480 captured, 24,448 scheduled, and 23,904 routed
 frames. Cross-block clock-drift correction and hardware synchronization remain
 separate open gates.
 
+The route uses the existing preallocated linear resampler when the selected
+capture and render rates differ, preserving the fixed 128-frame graph quantum.
+It does not yet maintain a cross-block fractional phase or feed FIFO occupancy
+back into `DriftController`; those remain native scheduler work.
+
 The endpoint selector has two additional pure regressions: an opaque ID must
 match the requested direction, and an omitted ID may select only within the
 requested direction. The standalone probe tests, strict Clippy, and locked
