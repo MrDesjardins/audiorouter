@@ -172,6 +172,15 @@ constant. Control tests (81), strict Clippy, and documentation validation pass.
 This reports desired-state capacity only; it does not imply that native driver
 endpoints exist.
 
+## Portable bridge boundary (2026-09-07)
+
+The engine now provides `VirtualBusBridge`, a fixed-capacity render-to-capture
+boundary for the future managed driver. It copies only same-shaped blocks,
+starts inactive and silent, rejects stale ownership generations, clears queued
+blocks on deactivation or replacement, and drops input when the capture ring is
+full rather than growing memory. The 45-test engine suite and strict Clippy
+pass. This is not native endpoint or driver evidence and does not open audio.
+
 ## Global validation hardening (2026-09-07)
 
 The reusable global validator now rejects aggregate node/edge counts above the

@@ -4,7 +4,7 @@
 //! `AudioBlock` exists, the operations below reuse its storage and perform no
 //! heap allocation, locking, I/O, or logging.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
@@ -275,6 +275,125 @@ impl AudioBlockRing {
 
     pub fn underruns(&self) -> u64 {
         self.ready.underruns()
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum VirtualBusBridgeError {
+    InvalidGeneration,
+}
+
+/// Portable bridge boundary for a managed virtual bus. Render input is
+/// bounded and is copied into a separate bounded capture ring. The bridge is
+/// silent while inactive, rejects stale generations, and drops rather than
+/// buffering without bound when the capture side has no free block.
+pub struct VirtualBusBridge {
+    render: AudioBlockRing,
+    capture: AudioBlockRing,
+    active: AtomicBool,
+    generation: AtomicU64,
+    dropped: AtomicU64,
+}
+
+impl VirtualBusBridge {
+    pub fn new(capacity: usize, channels: usize, frames: usize) -> Result<Self, QueueError> {
+        Ok(Self {
+            render: AudioBlockRing::new(capacity, channels, frames)?,
+            capture: AudioBlockRing::new(capacity, channels, frames)?,
+            active: AtomicBool::new(false),
+            generation: AtomicU64::new(0),
+            dropped: AtomicU64::new(0),
+        })
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active.load(Ordering::Acquire)
+    }
+
+    pub fn dropped(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
+    }
+
+    /// Start a new ownership generation. Changing generations first discards
+    /// all queued data so a replacement owner cannot receive stale frames.
+    pub fn activate(&self, generation: u64) -> Result<(), VirtualBusBridgeError> {
+        let previous = self.generation.load(Ordering::Acquire);
+        if generation == 0 || generation <= previous {
+            return Err(VirtualBusBridgeError::InvalidGeneration);
+        }
+        self.active.store(false, Ordering::Release);
+        self.drain();
+        self.generation.store(generation, Ordering::Release);
+        self.active.store(true, Ordering::Release);
+        Ok(())
+    }
+
+    /// Stop processing and clear both bounded rings. Clearing is the safe
+    /// silence/recovery behavior for backend or owner loss.
+    pub fn deactivate(&self) {
+        self.active.store(false, Ordering::Release);
+        self.drain();
+    }
+
+    pub fn submit_render(&self, generation: u64, block: AudioBlock) -> Result<(), AudioBlock> {
+        if !self.is_active() || self.generation() != generation {
+            return Err(block);
+        }
+        self.render.try_submit(block)
+    }
+
+    /// Move as many render blocks as possible into the capture ring. The
+    /// returned count is the number of captured blocks, not the number
+    /// received from the producer; overflow is counted and recycled.
+    pub fn process_once(&self) -> usize {
+        if !self.is_active() {
+            self.drain();
+            return 0;
+        }
+        let mut processed = 0;
+        while let Some(input) = self.render.try_receive() {
+            let Some(mut output) = self.capture.try_acquire() else {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+                let _ = self.render.try_recycle(input);
+                continue;
+            };
+            if output.copy_from(&input).is_err() {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+                let _ = self.capture.try_recycle(output);
+                let _ = self.render.try_recycle(input);
+                continue;
+            }
+            let _ = self.render.try_recycle(input);
+            match self.capture.try_submit(output) {
+                Ok(()) => processed += 1,
+                Err(output) => {
+                    self.dropped.fetch_add(1, Ordering::Relaxed);
+                    let _ = self.capture.try_recycle(output);
+                }
+            }
+        }
+        processed
+    }
+
+    pub fn try_receive_capture(&self) -> Option<AudioBlock> {
+        self.capture.try_receive()
+    }
+
+    pub fn try_recycle_capture(&self, block: AudioBlock) -> Result<(), AudioBlock> {
+        self.capture.try_recycle(block)
+    }
+
+    fn drain(&self) {
+        while let Some(block) = self.render.try_receive() {
+            let _ = self.render.try_recycle(block);
+        }
+        while let Some(block) = self.capture.try_receive() {
+            let _ = self.capture.try_recycle(block);
+        }
     }
 }
 
@@ -2229,6 +2348,51 @@ mod tests {
         assert_eq!(ring.ready(), 0);
         assert!(ring.try_receive().is_none());
         assert_eq!(ring.underruns(), 1);
+    }
+
+    #[test]
+    fn virtual_bus_bridge_is_silent_bounded_and_generation_safe() {
+        let bridge = VirtualBusBridge::new(1, 1, 2).unwrap();
+        let mut inactive = AudioBlock::new(1, 2).unwrap();
+        inactive.channel_mut(0).unwrap().fill(1.0);
+        assert!(bridge.submit_render(1, inactive).is_err());
+        assert_eq!(bridge.process_once(), 0);
+
+        bridge.activate(1).unwrap();
+        let mut input = AudioBlock::new(1, 2).unwrap();
+        input.channel_mut(0).unwrap().copy_from_slice(&[0.25, 0.5]);
+        bridge.submit_render(1, input).unwrap();
+        assert_eq!(bridge.process_once(), 1);
+        let output = bridge.try_receive_capture().unwrap();
+        assert_eq!(output.channel(0).unwrap(), &[0.25, 0.5]);
+        bridge.try_recycle_capture(output).unwrap();
+
+        let stale = AudioBlock::new(1, 2).unwrap();
+        assert!(bridge.submit_render(0, stale).is_err());
+        bridge.deactivate();
+        assert!(!bridge.is_active());
+        assert!(bridge.try_receive_capture().is_none());
+        assert_eq!(bridge.generation(), 1);
+        assert_eq!(bridge.dropped(), 0);
+        assert_eq!(
+            bridge.activate(1),
+            Err(VirtualBusBridgeError::InvalidGeneration)
+        );
+    }
+
+    #[test]
+    fn virtual_bus_bridge_drops_when_capture_has_no_free_block() {
+        let bridge = VirtualBusBridge::new(1, 1, 2).unwrap();
+        bridge.activate(1).unwrap();
+        bridge
+            .submit_render(1, AudioBlock::new(1, 2).unwrap())
+            .unwrap();
+        assert_eq!(bridge.process_once(), 1);
+        bridge
+            .submit_render(1, AudioBlock::new(1, 2).unwrap())
+            .unwrap();
+        assert_eq!(bridge.process_once(), 0);
+        assert_eq!(bridge.dropped(), 1);
     }
 
     #[test]
