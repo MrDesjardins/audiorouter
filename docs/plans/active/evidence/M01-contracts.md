@@ -59,7 +59,7 @@ The CLI now supports `session start|stop <session-id> --database <absolute-path>
 
 Read parity now includes `sessions.get` and `session get <session-id> --database <absolute-path>`. The CLI acceptance round trip reads the imported fixture and verifies its ID/revision before starting the fake runtime, keeping persisted configuration inspection separate from external audio activation.
 
-Session resource listing now includes `sessions.list` and `session list --database <absolute-path> [--limit N]`. Storage returns sessions in stable ID order with a 1–500 bound; the acceptance script verifies the imported fixture is listed. Cursor pagination and create/duplicate/delete operations remain future API work.
+Session resource listing now includes `sessions.list` and `session list --database <absolute-path> [--limit N] [--cursor ID]`. Storage returns sessions in stable ID order with a 1–500 bound and opaque stable cursors; the acceptance script verifies the imported fixture is listed. Create/duplicate/delete operations are implemented through the same authorized control path, while native resource activation remains open.
 
 `graph.plan` now returns a deterministic preview containing changed `/name`, `/nodes`, or `/edges` entries, physical-output destinations, warnings, required scope, and expiry duration in addition to its plan ID. The control test verifies the diff and scope fields; capability resolution, external-resource activation, and full typed-operation semantics remain open.
 
