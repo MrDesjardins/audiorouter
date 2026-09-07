@@ -228,3 +228,12 @@ unit/integration tests and all doc-tests, followed by strict all-target,
 all-feature Clippy with `-D warnings`. The result validates the portable engine
 and its cross-crate consumers; native endpoint scheduling, driver lifecycle,
 signing, and installer gates remain separate.
+
+## Scheduler-owned graph lifecycle
+
+`RealtimeScheduler` now exposes `activate_session` and `deactivate` wrappers
+around its processor publication boundary. Deactivation is tested to consume a
+queued block as explicit silence, while invalid activation continues to retain
+the previous prepared generation. This keeps graph lifecycle ownership beside
+the bounded input/output rings without opening devices; native endpoint
+scheduling and stream recovery remain separate gates.

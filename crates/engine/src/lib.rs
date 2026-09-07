@@ -2413,6 +2413,22 @@ impl RealtimeScheduler {
         &self.processor
     }
 
+    /// Prepare and publish a graph through the scheduler's own lifecycle
+    /// boundary. Invalid candidates are rejected before replacing the active
+    /// generation, preserving the previous graph.
+    pub fn activate_session(
+        &self,
+        session: &audiorouter_domain::Session,
+        generation: RuntimeGeneration,
+    ) -> Result<(), GraphCompileError> {
+        self.processor.activate_session(session, generation)
+    }
+
+    /// Remove the active graph and leave subsequent scheduler steps silent.
+    pub fn deactivate(&self) {
+        self.processor.deactivate();
+    }
+
     pub fn input(&self) -> &AudioBlockRing {
         &self.input
     }
@@ -3219,6 +3235,14 @@ mod tests {
         scheduler.output().try_recycle(output).unwrap();
         assert_eq!(scheduler.input().ready(), 0);
         assert_eq!(scheduler.output().ready(), 0);
+        scheduler.deactivate();
+        let mut silent = scheduler.acquire_input().unwrap();
+        silent.channel_mut(0).unwrap().copy_from_slice(&[1.0, 1.0]);
+        scheduler.submit_input(silent).unwrap();
+        assert_eq!(scheduler.process_once().unwrap(), None);
+        let muted = scheduler.receive_output().unwrap();
+        assert_eq!(muted.channel(0).unwrap(), &[0.0, 0.0]);
+        scheduler.output().try_recycle(muted).unwrap();
     }
 
     #[test]
