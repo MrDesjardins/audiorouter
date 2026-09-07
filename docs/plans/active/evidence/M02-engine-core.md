@@ -175,7 +175,15 @@ The runtime processor now has a regression that publishes two complete graph
 generations concurrently with repeated processing. Every observed result must
 be a matching generation/gain pair, proving immutable snapshot publication
 does not expose a torn graph. This is portable publication evidence only; live
-native scheduler edits remain open.
+ native scheduler edits remain open.
+
+## Delay reconfiguration safety (2026-09-07)
+
+`FixedDelay::set_delay_frames` now clears the preallocated delay history when
+the schedule changes, preventing samples from the old delay configuration from
+being replayed after a reconfiguration. A regression verifies the changed
+delay starts with silence; the engine suite passes 54 tests with strict
+Clippy. Native scheduler reconfiguration remains open.
 
 The drift controller now exposes an explicit reset for stream/reconnect
 boundaries, clearing learned integral correction while preserving the nominal

@@ -67,6 +67,11 @@ impl FixedDelay {
         if delay_frames >= self.capacity_frames {
             return Err(FixedDelayError::InvalidDelay);
         }
+        if self.delay_frames != delay_frames {
+            // A changed delay index must not reinterpret samples written for
+            // the previous schedule as valid audio in the new generation.
+            self.reset();
+        }
         self.delay_frames = delay_frames;
         Ok(())
     }
@@ -3560,5 +3565,18 @@ mod tests {
             delay.set_delay_frames(3),
             Err(FixedDelayError::InvalidDelay)
         );
+    }
+
+    #[test]
+    fn changing_fixed_delay_discards_old_ring_history() {
+        let mut delay = FixedDelay::new(1, 4).unwrap();
+        delay.set_delay_frames(2).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+        delay.process(&mut block).unwrap();
+        delay.set_delay_frames(1).unwrap();
+        block.channel_mut(0).unwrap().fill(2.0);
+        delay.process(&mut block).unwrap();
+        assert_eq!(block.channel(0).unwrap(), &[0.0, 2.0]);
     }
 }
