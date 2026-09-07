@@ -3535,6 +3535,37 @@ mod tests {
     }
 
     #[test]
+    fn compiler_prepares_graphic_eq_node_from_declared_band_parameters() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+        let mut parameters = serde_json::Map::new();
+        parameters.insert("band0Db".into(), serde_json::json!(6.0));
+        let session = Session {
+            id: EntityId::new("graphic-eq-session"),
+            name: "graphic-eq".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: EntityId::new("graphic-eq"),
+                kind: NodeKind::GraphicEq,
+                type_version: 1,
+                name: "Graphic EQ".into(),
+                enabled: true,
+                bypass: false,
+                parameters,
+                ports: vec![],
+            }],
+            edges: vec![],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(4)).unwrap();
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        let before = block.channel(0).unwrap().to_vec();
+        graph.process(&mut block);
+        assert!(block.all_finite());
+        assert_ne!(block.channel(0).unwrap(), before.as_slice());
+    }
+
+    #[test]
     fn compiler_rejects_multiple_disconnected_nodes() {
         use audiorouter_domain::{EntityId, Node, NodeKind, Session};
 
