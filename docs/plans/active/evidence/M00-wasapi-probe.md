@@ -514,3 +514,13 @@ and temporary executable/object/log outputs were removed. This remains stream
 lifecycle evidence; it does not qualify physical latency or driver behavior,
 and no default, volume, mute, privacy, startup, or other machine audio setting
 was changed.
+## 2026-09-07 — Lifecycle regression after format-identity hardening
+
+The authorized `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`
+wrapper was rerun after endpoint enumeration began preserving extensible channel
+mask and subformat identity. It discovered 13 capture endpoints and 21 render
+endpoints; all bounded capture and silent-render lifecycle checks passed, with
+one render endpoint correctly classified as occupied. The media-device snapshot
+was unchanged and the temporary executable was removed. Defaults, volume, mute,
+privacy, drivers, signing, startup registration, and other persistent audio
+configuration were not changed.
