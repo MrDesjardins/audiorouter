@@ -165,6 +165,12 @@ open.
 The dedicated engine regression also confirms that a prepared compressor stage
 reduces sustained level over successive blocks while retaining finite output.
 
+The portable graph now integrates `graphic-eq@1` with ten validated band-gain
+parameters (`band0Db` through `band9Db`). All fixed-band filter state is built
+before publication and processed per channel through the existing allocation-free
+DSP implementation. This is portable graph evidence only; native callback timing
+and hardware response measurements remain open.
+
 ## 2026-09-07 — Compressor graph integration
 
 The portable graph now includes the validated `compressor@1` node. Domain

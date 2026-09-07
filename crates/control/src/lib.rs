@@ -2523,6 +2523,12 @@ impl ControlPlane {
             audiorouter_domain::NodeKind::Delay => json!([
                 { "name": "delayMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 1000.0, "default": 0.0 }
             ]),
+            audiorouter_domain::NodeKind::GraphicEq => json!((0..10)
+                .map(|index| json!({
+                    "name": format!("band{index}Db"), "type": "number", "unit": "dB",
+                    "minimum": -18.0, "maximum": 18.0, "default": 0.0
+                }))
+                .collect::<Vec<_>>()),
             _ => json!([]),
         }
     }
@@ -2536,8 +2542,8 @@ impl ControlPlane {
         json!([
             {
                 "id": "graphicEq", "version": 1, "category": "equalizer",
-                "availability": unavailable, "latencySamples": 0,
-                "parameters": [{ "name": "bandGainDb", "type": "number", "unit": "dB", "minimum": -18.0, "maximum": 18.0, "default": 0.0 }]
+                "availability": available, "latencySamples": 0,
+                "parameters": (0..10).map(|index| json!({ "name": format!("band{index}Db"), "type": "number", "unit": "dB", "minimum": -18.0, "maximum": 18.0, "default": 0.0 })).collect::<Vec<_>>()
             },
             {
                 "id": "parametricEq", "version": 1, "category": "equalizer",
@@ -5970,7 +5976,7 @@ mod tests {
         assert_eq!(description["processors"].as_array().unwrap().len(), 7);
         assert_eq!(
             description["processors"][0]["availability"]["status"],
-            "unavailable"
+            "available"
         );
         assert_eq!(
             description["processors"][0]["parameters"][0]["type"],
@@ -6033,7 +6039,7 @@ mod tests {
         });
         let result = processors.result.unwrap();
         assert_eq!(result.as_array().unwrap().len(), 7);
-        assert_eq!(result[0]["availability"]["status"], "unavailable");
+        assert_eq!(result[0]["availability"]["status"], "available");
     }
 
     #[test]

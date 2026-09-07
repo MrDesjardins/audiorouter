@@ -52,10 +52,11 @@ pub enum NodeKind {
     Gate,
     Limiter,
     Delay,
+    GraphicEq,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -71,6 +72,7 @@ impl NodeKind {
         Self::Gate,
         Self::Limiter,
         Self::Delay,
+        Self::GraphicEq,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -90,6 +92,7 @@ impl NodeKind {
             Self::Gate => "gate",
             Self::Limiter => "limiter",
             Self::Delay => "delay",
+            Self::GraphicEq => "graphic-eq",
         }
     }
 }
@@ -108,7 +111,7 @@ pub struct NodeTypeSpec {
     pub realtime_cost_class: &'static str,
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 15] {
+pub fn node_registry() -> [NodeTypeSpec; 16] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -122,6 +125,7 @@ pub fn node_registry() -> [NodeTypeSpec; 15] {
             NodeKind::Gate => CapabilityAvailability::Available,
             NodeKind::Limiter => CapabilityAvailability::Available,
             NodeKind::Delay => CapabilityAvailability::Available,
+            NodeKind::GraphicEq => CapabilityAvailability::Available,
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -139,6 +143,7 @@ pub fn node_registry() -> [NodeTypeSpec; 15] {
             NodeKind::Gate => "medium",
             NodeKind::Limiter => "low",
             NodeKind::Delay => "medium",
+            NodeKind::GraphicEq => "medium",
             _ => "device-bound",
         },
     })
@@ -1093,6 +1098,17 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Delay, "delayMs") => value
                     .as_f64()
                     .is_some_and(|delay| delay.is_finite() && (0.0..=1_000.0).contains(&delay)),
+                (NodeKind::GraphicEq, name)
+                    if name
+                        .strip_prefix("band")
+                        .and_then(|suffix| suffix.strip_suffix("Db"))
+                        .and_then(|index| index.parse::<usize>().ok())
+                        .is_some_and(|index| index < 10) =>
+                {
+                    value
+                        .as_f64()
+                        .is_some_and(|gain| gain.is_finite() && (-18.0..=18.0).contains(&gain))
+                }
                 _ => false,
             };
             if !valid {
@@ -2432,7 +2448,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 15);
+        assert_eq!(registry.len(), 16);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

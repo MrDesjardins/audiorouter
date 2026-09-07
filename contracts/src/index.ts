@@ -19,7 +19,8 @@ export type NodeKind =
   | "compressor"
   | "gate"
   | "limiter"
-  | "delay";
+  | "delay"
+  | "graphicEq";
 
 export type PortDirection = "input" | "output";
 

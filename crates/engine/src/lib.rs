@@ -1255,6 +1255,10 @@ pub enum ProcessingStage {
         left: Box<std::sync::Mutex<audiorouter_dsp::DelayLine>>,
         right: Option<Box<std::sync::Mutex<audiorouter_dsp::DelayLine>>>,
     },
+    GraphicEq {
+        left: Box<std::sync::Mutex<audiorouter_dsp::GraphicEq>>,
+        right: Option<Box<std::sync::Mutex<audiorouter_dsp::GraphicEq>>>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1576,6 +1580,7 @@ pub fn compile_session(
                         | NodeKind::Gate
                         | NodeKind::Limiter
                         | NodeKind::Delay
+                        | NodeKind::GraphicEq
                 ))
                 || (destination.bypass
                     && !matches!(
@@ -1588,6 +1593,7 @@ pub fn compile_session(
                             | NodeKind::Gate
                             | NodeKind::Limiter
                             | NodeKind::Delay
+                            | NodeKind::GraphicEq
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -1916,6 +1922,34 @@ pub fn compile_session(
                 stages.push(ProcessingStage::Delay {
                     left: Box::new(std::sync::Mutex::new(left)),
                     right: right.map(|delay| Box::new(std::sync::Mutex::new(delay))),
+                });
+            }
+            NodeKind::GraphicEq => {
+                let gains = std::array::from_fn(|index| {
+                    node.parameters
+                        .get(&format!("band{index}Db"))
+                        .and_then(|value| value.as_f64())
+                        .unwrap_or(0.0) as f32
+                });
+                let input_channels = node
+                    .ports
+                    .iter()
+                    .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                    .map(|port| usize::from(port.channels))
+                    .unwrap_or(1);
+                let left = audiorouter_dsp::GraphicEq::new(gains, 48_000.0, 1)
+                    .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                let right = if input_channels == 2 {
+                    Some(
+                        audiorouter_dsp::GraphicEq::new(gains, 48_000.0, 1)
+                            .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                    )
+                } else {
+                    None
+                };
+                stages.push(ProcessingStage::GraphicEq {
+                    left: Box::new(std::sync::Mutex::new(left)),
+                    right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
                 });
             }
             NodeKind::PhysicalInput
@@ -2513,6 +2547,26 @@ impl RuntimeGraph {
                         {
                             if let Ok(mut delay) = delay.try_lock() {
                                 delay.process_interleaved(samples);
+                            } else {
+                                block.clear();
+                            }
+                        }
+                    }
+                }
+                ProcessingStage::GraphicEq { left, right } => {
+                    let Ok(mut left) = left.try_lock() else {
+                        block.clear();
+                        continue;
+                    };
+                    if let Some(samples) = block.channel_mut(0) {
+                        left.process_interleaved(samples);
+                    }
+                    if block.channels() == 2 {
+                        if let (Some(processor), Some(samples)) =
+                            (right.as_ref(), block.channel_mut(1))
+                        {
+                            if let Ok(mut processor) = processor.try_lock() {
+                                processor.process_interleaved(samples);
                             } else {
                                 block.clear();
                             }
@@ -3402,6 +3456,28 @@ mod tests {
             .unwrap()
             .iter()
             .all(|sample| sample.abs() < 1.0));
+    }
+
+    #[test]
+    fn prepared_graphic_eq_processes_planar_audio_and_stays_finite() {
+        let stage = ProcessingStage::GraphicEq {
+            left: Box::new(std::sync::Mutex::new(
+                audiorouter_dsp::GraphicEq::new(
+                    [6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    48_000.0,
+                    1,
+                )
+                .unwrap(),
+            )),
+            right: None,
+        };
+        let graph = RuntimeGraph::prepare(RuntimeGeneration::new(12), vec![stage]);
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        let before = block.channel(0).unwrap().to_vec();
+        graph.process(&mut block);
+        assert!(block.all_finite());
+        assert_ne!(block.channel(0).unwrap(), before.as_slice());
     }
 
     #[test]
