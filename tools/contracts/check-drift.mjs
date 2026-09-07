@@ -90,12 +90,27 @@ const libraryKinds = [...library.matchAll(/kind:\s*"([^"]+)"/g)].map(
   (match) => match[1],
 );
 const discoveredProcessors = (schema.processors ?? []).map((processor) => processor.id);
+const duplicateLibraryKinds = libraryKinds.filter(
+  (kind, index) => libraryKinds.indexOf(kind) !== index,
+);
+if (duplicateLibraryKinds.length > 0) {
+  throw new Error(
+    `duplicate processor entries in the UI library: ${[...new Set(duplicateLibraryKinds)].join(", ")}`,
+  );
+}
 const missingProcessors = discoveredProcessors.filter(
   (processor) => !libraryKinds.includes(processor),
 );
-if (missingProcessors.length > 0) {
+const extraProcessors = libraryKinds.filter(
+  (kind) => !["mixer", "gain", "mute", "meter"].includes(kind)
+    && !discoveredProcessors.includes(kind),
+);
+if (missingProcessors.length > 0 || extraProcessors.length > 0) {
   throw new Error(
-    `processor catalog entries missing from the UI library: ${missingProcessors.join(", ")}`,
+    `processor/UI catalog drift: ${[
+      missingProcessors.length > 0 ? `missing from UI: ${missingProcessors.join(", ")}` : "",
+      extraProcessors.length > 0 ? `not advertised by CLI: ${extraProcessors.join(", ")}` : "",
+    ].filter(Boolean).join("; ")}`,
   );
 }
 
