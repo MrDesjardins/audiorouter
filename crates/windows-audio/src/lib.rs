@@ -1192,6 +1192,20 @@ mod tests {
             "exclusive",
         ));
         assert_eq!(error.kind(), AudioFailureKind::ExclusiveModeOnly);
+        assert!(!error.is_retryable());
+        assert_eq!(
+            error.remediation(),
+            "use a compatible shared-mode endpoint or exclusive stream"
+        );
+        let busy = AudioError::Windows(windows::core::Error::new(
+            windows::core::HRESULT(0x8889000A_u32 as i32),
+            "busy",
+        ));
+        assert!(busy.is_retryable());
+        assert_eq!(
+            busy.remediation(),
+            "close the competing exclusive stream and retry"
+        );
         assert_eq!(
             AudioError::InvalidFrameSize.kind(),
             AudioFailureKind::InvalidArgument
