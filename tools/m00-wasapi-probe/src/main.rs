@@ -79,20 +79,14 @@ fn adapter_smoke(
     route: bool,
 ) -> std::result::Result<(), AudioError> {
     let endpoints = enumerate_active_endpoints()?;
-    let capture_info = endpoints
-        .iter()
-        .filter(|endpoint| endpoint.direction == EndpointDirection::Capture)
-        .find(|endpoint| capture_id.is_none_or(|id| endpoint.id == id))
+    let capture_info = select_endpoint(&endpoints, EndpointDirection::Capture, capture_id)
         .ok_or_else(|| {
             AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80070490u32 as i32),
                 "no active capture endpoint",
             ))
         })?;
-    let render_info = endpoints
-        .iter()
-        .filter(|endpoint| endpoint.direction == EndpointDirection::Render)
-        .find(|endpoint| render_id.is_none_or(|id| endpoint.id == id))
+    let render_info = select_endpoint(&endpoints, EndpointDirection::Render, render_id)
         .ok_or_else(|| {
             AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80070490u32 as i32),
@@ -305,6 +299,16 @@ fn adapter_smoke(
     let capture_stop = capture.stop();
     let render_stop = render.stop();
     result.and(capture_stop).and(render_stop)
+}
+
+fn select_endpoint<'a>(
+    endpoints: &'a [audiorouter_windows_audio::EndpointInfo],
+    direction: EndpointDirection,
+    endpoint_id: Option<&str>,
+) -> Option<&'a audiorouter_windows_audio::EndpointInfo> {
+    endpoints.iter().find(|endpoint| {
+        endpoint.direction == direction && endpoint_id.is_none_or(|id| endpoint.id == id)
+    })
 }
 
 fn drain_render_pending(
@@ -642,7 +646,7 @@ unsafe fn capture_initialize_variant(
     let initialize_format = match mode {
         0 => format,
         1 => std::ptr::addr_of!(copied_extensible.Format) as *mut WAVEFORMATEX,
-        _ => std::ptr::addr_of!(float_format) as *const WAVEFORMATEX as *mut WAVEFORMATEX,
+        _ => std::ptr::addr_of!(float_format) as *mut WAVEFORMATEX,
     };
     let result = client.Initialize(AUDCLNT_SHAREMODE_SHARED, 0, 0, 0, initialize_format, None);
     let hresult = match result {
@@ -676,4 +680,54 @@ unsafe fn format_support(
         CoTaskMemFree(Some(closest.cast()));
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::select_endpoint;
+    use audiorouter_windows_audio::{EndpointDirection, EndpointInfo};
+
+    fn endpoint(id: &str, direction: EndpointDirection) -> EndpointInfo {
+        EndpointInfo {
+            id: id.into(),
+            direction,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+        }
+    }
+
+    #[test]
+    fn route_selection_matches_opaque_id_and_direction() {
+        let endpoints = vec![
+            endpoint("capture-a", EndpointDirection::Capture),
+            endpoint("render-a", EndpointDirection::Render),
+            endpoint("capture-b", EndpointDirection::Capture),
+        ];
+        assert_eq!(
+            select_endpoint(&endpoints, EndpointDirection::Capture, Some("capture-b"))
+                .map(|item| item.id.as_str()),
+            Some("capture-b")
+        );
+        assert!(
+            select_endpoint(&endpoints, EndpointDirection::Render, Some("capture-b")).is_none()
+        );
+        assert!(select_endpoint(&endpoints, EndpointDirection::Capture, Some("missing")).is_none());
+    }
+
+    #[test]
+    fn route_selection_without_id_only_supports_explicit_direction() {
+        let endpoints = vec![
+            endpoint("render-a", EndpointDirection::Render),
+            endpoint("capture-a", EndpointDirection::Capture),
+        ];
+        assert_eq!(
+            select_endpoint(&endpoints, EndpointDirection::Capture, None)
+                .map(|item| item.id.as_str()),
+            Some("capture-a")
+        );
+    }
 }
