@@ -5,8 +5,8 @@
 The Windows adapter now exposes an explicit `SharedCapture::open_polling`
 path. It uses the native-qualified shared-mode request (exact endpoint mix
 format, `AUDCLNT_STREAMFLAGS_NOPERSIST`, and a bounded buffer duration) and
-polls packet availability, while the existing event-driven `open` path remains
-unchanged. This addresses the observed distinction between successful native
+polls packet availability, while the event-driven request remains the primary
+`open` behavior. This addresses the observed distinction between successful native
 non-event initialization and the Rust event-callback `E_INVALIDARG` path
 without silently weakening the event-driven contract. The adapter package's
 14 tests and strict Clippy pass; no live stream was opened for this change.
