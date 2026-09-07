@@ -320,3 +320,10 @@ closing a format-confusion data-path risk.
 recovery callers without requiring string parsing. This preserves explicit
 handling for endpoint disappearance, direction changes, and deliberate format
 renegotiation while retaining the stable HRESULT/error-kind classification.
+
+Each stream client now exposes `replace_with_refreshed_bound`. This explicit
+recovery operation stops/resets and drops the old client before forcing a fresh
+metadata snapshot and reopening the exact binding. If refresh or validation
+fails, no replacement stream is opened; callers must deliberately renegotiate
+or choose another endpoint. This closes the portable recovery orchestration
+boundary while native device-invalidation fault injection remains open.

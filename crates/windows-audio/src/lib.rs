@@ -489,6 +489,22 @@ pub struct SharedRender {
 }
 
 impl SharedCapture {
+    /// Stop and release this capture client, refresh endpoint metadata, and
+    /// open the same verified binding as a new client. The old client is
+    /// always dropped before activation; missing/direction-changed/format-
+    /// changed bindings fail closed without selecting a substitute.
+    pub fn replace_with_refreshed_bound(
+        mut self,
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
+        let stop_result = self.stop();
+        drop(self);
+        stop_result?;
+        Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns)
+    }
+
     /// Refresh endpoint metadata and then open only the exact persisted
     /// capture binding. This is the preferred recovery entry point because a
     /// coalesced notification cannot leave validation against an old snapshot.
@@ -799,6 +815,21 @@ impl Drop for SharedCapture {
 }
 
 impl SharedRender {
+    /// Stop and release this render client, refresh endpoint metadata, and
+    /// open the same verified binding as a new client. The old client is
+    /// always dropped before activation; endpoint changes fail closed.
+    pub fn replace_with_refreshed_bound(
+        mut self,
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+    ) -> Result<Self, AudioError> {
+        let stop_result = self.stop();
+        drop(self);
+        stop_result?;
+        Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns)
+    }
+
     /// Refresh endpoint metadata and then open only the exact persisted render
     /// binding. This is the preferred recovery entry point; a topology race
     /// after validation remains visible through the underlying WASAPI error.
