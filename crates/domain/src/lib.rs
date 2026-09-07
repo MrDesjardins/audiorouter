@@ -50,10 +50,11 @@ pub enum NodeKind {
     ParametricEq,
     Compressor,
     Gate,
+    Limiter,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -67,6 +68,7 @@ impl NodeKind {
         Self::ParametricEq,
         Self::Compressor,
         Self::Gate,
+        Self::Limiter,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -84,6 +86,7 @@ impl NodeKind {
             Self::ParametricEq => "parametric-eq",
             Self::Compressor => "compressor",
             Self::Gate => "gate",
+            Self::Limiter => "limiter",
         }
     }
 }
@@ -102,7 +105,7 @@ pub struct NodeTypeSpec {
     pub realtime_cost_class: &'static str,
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 13] {
+pub fn node_registry() -> [NodeTypeSpec; 14] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -114,6 +117,7 @@ pub fn node_registry() -> [NodeTypeSpec; 13] {
             | NodeKind::ParametricEq => CapabilityAvailability::Available,
             NodeKind::Compressor => CapabilityAvailability::Available,
             NodeKind::Gate => CapabilityAvailability::Available,
+            NodeKind::Limiter => CapabilityAvailability::Available,
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -129,6 +133,7 @@ pub fn node_registry() -> [NodeTypeSpec; 13] {
             NodeKind::ParametricEq => "medium",
             NodeKind::Compressor => "medium",
             NodeKind::Gate => "medium",
+            NodeKind::Limiter => "low",
             _ => "device-bound",
         },
     })
@@ -1077,6 +1082,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Gate, "releaseMs") => value.as_f64().is_some_and(|release| {
                     release.is_finite() && (10.0..=2_000.0).contains(&release)
                 }),
+                (NodeKind::Limiter, "ceilingDb") => value
+                    .as_f64()
+                    .is_some_and(|ceiling| ceiling.is_finite() && (-12.0..=0.0).contains(&ceiling)),
                 _ => false,
             };
             if !valid {
@@ -2416,7 +2424,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 13);
+        assert_eq!(registry.len(), 14);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

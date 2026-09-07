@@ -150,6 +150,11 @@ Its validated parameters are exposed through discovery and the UI library, and
 prepared state is retained across blocks with fail-closed processing behavior.
 This does not claim native realtime or hardware evidence.
 
+The graph now also integrates `limiter@1`, with bounded ceiling validation and
+finite sample-peak limiting on each prepared channel. This is portable graph
+evidence only; true-peak/lookahead behavior and native hardware timing remain
+open.
+
 The dedicated engine regression also confirms that a prepared compressor stage
 reduces sustained level over successive blocks while retaining finite output.
 

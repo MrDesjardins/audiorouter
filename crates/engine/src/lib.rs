@@ -1248,6 +1248,9 @@ pub enum ProcessingStage {
         left: Box<std::sync::Mutex<audiorouter_dsp::Gate>>,
         right: Option<Box<std::sync::Mutex<audiorouter_dsp::Gate>>>,
     },
+    Limiter {
+        limiter: audiorouter_dsp::PeakLimiter,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1567,6 +1570,7 @@ pub fn compile_session(
                         | NodeKind::ParametricEq
                         | NodeKind::Compressor
                         | NodeKind::Gate
+                        | NodeKind::Limiter
                 ))
                 || (destination.bypass
                     && !matches!(
@@ -1577,6 +1581,7 @@ pub fn compile_session(
                             | NodeKind::ParametricEq
                             | NodeKind::Compressor
                             | NodeKind::Gate
+                            | NodeKind::Limiter
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -1859,6 +1864,18 @@ pub fn compile_session(
                     left: Box::new(std::sync::Mutex::new(left)),
                     right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
                 });
+            }
+            NodeKind::Limiter => {
+                let ceiling_db = node
+                    .parameters
+                    .get("ceilingDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(-1.0) as f32;
+                let limiter = audiorouter_dsp::PeakLimiter::new(audiorouter_dsp::LimiterParams {
+                    ceiling_db,
+                })
+                .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                stages.push(ProcessingStage::Limiter { limiter });
             }
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
@@ -2432,6 +2449,13 @@ impl RuntimeGraph {
                             } else {
                                 block.clear();
                             }
+                        }
+                    }
+                }
+                ProcessingStage::Limiter { limiter } => {
+                    for channel in 0..block.channels() {
+                        if let Some(samples) = block.channel_mut(channel) {
+                            limiter.process_interleaved(samples);
                         }
                     }
                 }

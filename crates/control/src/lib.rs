@@ -2517,6 +2517,9 @@ impl ControlPlane {
                 { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 100.0, "default": 5.0 },
                 { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 }
             ]),
+            audiorouter_domain::NodeKind::Limiter => json!([
+                { "name": "ceilingDb", "type": "number", "unit": "dBFS", "minimum": -12.0, "maximum": 0.0, "default": -1.0 }
+            ]),
             _ => json!([]),
         }
     }
@@ -2565,7 +2568,7 @@ impl ControlPlane {
             },
             {
                 "id": "limiter", "version": 1, "category": "dynamics",
-                "availability": unavailable, "latencySamples": 0,
+                "availability": available, "latencySamples": 0,
                 "parameters": [{ "name": "ceilingDb", "type": "number", "unit": "dBFS", "minimum": -12.0, "maximum": 0.0, "default": -1.0 }]
             },
             {
