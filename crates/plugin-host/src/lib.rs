@@ -1851,6 +1851,9 @@ fn validate_worker_executable(path: &Path) -> Result<PathBuf, String> {
     if is_reparse_point(&metadata) || !metadata.is_file() {
         return Err("worker executable must be a regular non-reparse file".into());
     }
+    if path_has_reparse_ancestor(path) {
+        return Err("worker executable path must not have a reparse-point ancestor".into());
+    }
     fs::canonicalize(path)
         .map_err(|error| format!("worker executable canonicalization failed: {error}"))
 }
@@ -3013,6 +3016,28 @@ mod tests {
             validate_worker_executable(&executable).unwrap(),
             executable.canonicalize().unwrap()
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn worker_executable_rejects_a_reparse_point_ancestor() {
+        let root = temp_root();
+        let target = root.join("target");
+        fs::create_dir(&target).unwrap();
+        let executable = target.join("worker.exe");
+        fs::write(&executable, b"fixture").unwrap();
+        let link = root.join("redirected");
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_dir(&target, &link);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&target, &link);
+        if link_result.is_ok() {
+            let redirected_executable = link.join("worker.exe");
+            assert!(validate_worker_executable(&redirected_executable)
+                .unwrap_err()
+                .contains("reparse-point ancestor"));
+            fs::remove_dir(&link).unwrap();
+        }
         fs::remove_dir_all(root).unwrap();
     }
 
