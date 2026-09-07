@@ -1,5 +1,15 @@
 # M08 release evidence
 
+## Current-tip unsigned qualification (2026-09-07)
+
+The complete release-preparation acceptance passed at the current head. It
+built the locked optimized artifacts and verified the manifest, third-party
+notices/SBOM, sanitized provenance, checksums, explicit blocker assertions,
+and artifact verification in a disposable temporary directory. The temporary
+directory was cleaned afterward. This remains unsigned preparation evidence;
+driver packaging, production signing, installer/upgrade/rollback, clean
+machine validation, and native audio gates remain open.
+
 ## 2026-09-06 — Reproducible unsigned artifact preparation
 
 Added `tools/release/prepare-artifacts.ps1`, which:
