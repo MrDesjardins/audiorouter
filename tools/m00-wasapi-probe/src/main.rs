@@ -101,11 +101,11 @@ fn adapter_smoke(
     if capture_bytes_per_frame == 0 || render_bytes_per_frame == 0 {
         return Err(AudioError::InvalidFrameSize);
     }
-    if capture_info.bits_per_sample != 32 || capture_info.channels > 2 {
+    if !capture_info.is_ieee_float32() || capture_info.channels > 2 {
         return Err(AudioError::InvalidFrameSize);
     }
     if route
-        && (render_info.bits_per_sample != 32
+        && (!render_info.is_ieee_float32()
             || render_info.channels == 0
             || render_info.channels > 2)
     {

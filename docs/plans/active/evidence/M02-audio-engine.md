@@ -304,3 +304,8 @@ The one-second authorized route also asserted scheduler telemetry before
 stopping: processed quanta matched graph blocks, the active generation remained
 current, and input/output overruns plus XRuns were zero. This is bounded route
 health evidence, not proof of long-run native callback timing.
+
+The adapter route now requires `EndpointInfo::is_ieee_float32` for both selected
+streams. This accepts legacy IEEE-float tags and extensible float subformats,
+but rejects 32-bit integer PCM before any packet bytes are decoded as floats,
+closing a format-confusion data-path risk.

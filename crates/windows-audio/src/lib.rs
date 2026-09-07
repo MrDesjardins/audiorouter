@@ -31,6 +31,20 @@ pub struct EndpointInfo {
 }
 
 impl EndpointInfo {
+    /// Whether this metadata describes interleaved IEEE float32 samples.
+    /// Extensible formats are accepted only when their preserved subformat
+    /// identity identifies IEEE float; a generic 32-bit container is not
+    /// sufficient for callers that decode samples as `f32`.
+    pub fn is_ieee_float32(&self) -> bool {
+        self.bits_per_sample == 32
+            && (self.format_tag == 3
+                || (self.format_tag == 0xfffe
+                    && self
+                        .subformat_guid
+                        .to_ascii_lowercase()
+                        .contains("00000003")))
+    }
+
     /// Return the interleaved byte stride implied by the endpoint's mix
     /// format. This is a checked metadata helper for packet-copy callers; it
     /// does not open or initialize the endpoint.
@@ -1444,6 +1458,26 @@ mod tests {
             info.bytes_per_frame(),
             Err(AudioError::InvalidFrameSize)
         ));
+    }
+
+    #[test]
+    fn endpoint_format_predicate_rejects_integer_32_bit_audio() {
+        let mut info = EndpointInfo {
+            id: "endpoint".into(),
+            direction: EndpointDirection::Capture,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 1,
+            channel_mask: 0,
+            subformat_guid: String::new(),
+        };
+        assert!(!info.is_ieee_float32());
+        info.format_tag = 0xfffe;
+        info.subformat_guid = "{00000003-0000-0010-8000-00aa00389b71}".into();
+        assert!(info.is_ieee_float32());
     }
 
     #[test]
