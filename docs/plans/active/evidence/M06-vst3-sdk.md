@@ -674,3 +674,15 @@ build passed, all 51 SDK self-tests passed, the official validator reported
 finite stereo processing, five-parameter automation, and a 180-byte state
 round-trip. Temporary loader outputs were removed. No system plugin
 registration, audio stream, driver, or machine configuration was changed.
+
+## Project-local SDK installation confirmation (2026-09-07)
+
+The repository-local installer was run successfully from PowerShell. It
+confirmed the pinned checkout at
+`3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`, initialized all seven SDK
+submodules, and found the required hosting header. The complete M06
+acceptance then passed: 51 SDK self-tests, 1,598 official validator tests,
+and the offline loader's 68-class, finite-processing, automation, and
+180-byte state checks. The checkout is intentionally project-local under
+the ignored `third_party/vst3sdk` path; no global SDK/plugin registration,
+driver, audio stream, or machine audio configuration was changed.
