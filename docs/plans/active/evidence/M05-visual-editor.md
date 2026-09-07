@@ -673,3 +673,12 @@ messages remain ignored and therefore cannot resolve a pending UI request.
 M05 acceptance passed with TypeScript typechecking, 85 Vitest tests, and a
 disposable three-file Vite production build. No native host, audio stream,
 driver, or machine configuration was accessed.
+
+## WebView2 outbound request bounds (2026-09-07)
+
+The WebView2 transport now validates outbound JSON-RPC version, nonempty bounded
+method names, and finite safe request IDs before posting to the native bridge.
+Invalid requests are rejected locally and never cross the page/host boundary.
+M05 acceptance passed with TypeScript typechecking, 86 Vitest tests, and a
+disposable three-file Vite production build. No native host, audio stream,
+driver, or machine configuration was accessed.

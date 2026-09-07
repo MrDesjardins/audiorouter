@@ -38,7 +38,7 @@ export class WebView2RpcTransport implements RpcTransport {
 
   send(request: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (this.closed) return Promise.reject(new Error("WebView2 transport is closed"));
-    if (request.id === undefined || request.id === null) return Promise.reject(new Error("WebView2 transport requires an identified request"));
+    if (!isWebView2Request(request)) return Promise.reject(new Error("WebView2 transport rejected the request shape"));
     if (this.pending.size >= this.maxPending) return Promise.reject(new Error("WebView2 transport pending request limit reached"));
     const key = requestKey(request.id);
     if (this.pending.has(key)) return Promise.reject(new Error("WebView2 request ID is already pending"));
@@ -93,6 +93,17 @@ function isJsonRpcResponse(value: object): value is JsonRpcResponse {
   if (typeof error !== "object" || error === null) return false;
   const candidate = error as { code?: unknown; message?: unknown };
   return typeof candidate.code === "number" && Number.isFinite(candidate.code) && typeof candidate.message === "string";
+}
+
+function isWebView2Request(value: unknown): value is JsonRpcRequest {
+  if (typeof value !== "object" || value === null) return false;
+  const request = value as { jsonrpc?: unknown; id?: unknown; method?: unknown };
+  return request.jsonrpc === "2.0" &&
+    typeof request.method === "string" &&
+    request.method.length > 0 &&
+    request.method.length <= 256 &&
+    ((typeof request.id === "string" && request.id.length > 0 && request.id.length <= 128) ||
+      (typeof request.id === "number" && Number.isFinite(request.id) && Number.isSafeInteger(request.id)));
 }
 
 declare global {

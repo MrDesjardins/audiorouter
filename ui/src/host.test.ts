@@ -53,6 +53,20 @@ describe("native host bridge", () => {
     transport.dispose();
   });
 
+  it("rejects unbounded or non-JSON-RPC outbound requests before posting", async () => {
+    const posted: unknown[] = [];
+    const webview: WebView2Webview = {
+      postMessage: (message) => posted.push(message),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+    const transport = new WebView2RpcTransport(webview);
+    await expect(transport.send({ jsonrpc: "2.0", id: 1.5, method: "status.get" } as JsonRpcRequest)).rejects.toThrow("request shape");
+    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "x".repeat(257) })).rejects.toThrow("request shape");
+    expect(posted).toHaveLength(0);
+    transport.dispose();
+  });
+
   it("rejects duplicate IDs and cleans pending requests on disposal", async () => {
     const listeners = new Set<(event: { data: unknown }) => void>();
     const webview: WebView2Webview = {
