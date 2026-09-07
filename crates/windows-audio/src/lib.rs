@@ -1015,6 +1015,14 @@ impl EndpointMonitor {
         if !self.notifications.take_dirty() {
             return Ok(Vec::new());
         }
+        self.refresh_changes()
+    }
+
+    /// Force a read-only endpoint resnapshot and return metadata changes.
+    /// This is useful during recovery when a notification may have been
+    /// coalesced or missed; it never opens a stream or selects a replacement.
+    pub fn refresh_changes(&mut self) -> Result<Vec<EndpointChange>, AudioError> {
+        self.notifications.take_dirty();
         let current = enumerate_active_endpoints()?;
         let changes = diff_endpoint_snapshots(&self.snapshot, &current);
         self.snapshot = current;

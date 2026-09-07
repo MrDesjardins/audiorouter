@@ -278,3 +278,9 @@ Persisted endpoint format identity also includes the extensible channel mask and
 subformat GUID. A changed mask or subformat now returns `FormatChanged`, just
 like a changed rate, channel count, bit depth, or format tag; recovery must
 explicitly renegotiate rather than reopening a materially different stream.
+
+Recovery can call `EndpointMonitor::refresh_changes` to force a fresh endpoint
+enumeration even when no dirty notification is visible. The method clears the
+coalesced notification flag, returns the same deterministic diff, and remains
+metadata-only; stream reopen, renegotiation, and replacement selection remain
+deliberate caller operations.
