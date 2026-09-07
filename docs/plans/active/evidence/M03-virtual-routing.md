@@ -196,3 +196,12 @@ declared virtual buses through the real plan/apply path, verifies the resulting
 inventory, and confirms that a ninth create plan is rejected at the lifecycle
 boundary. The control suite passes 82 tests with strict Clippy. Desired state is
 persisted and clearly remains unavailable until native driver provisioning.
+
+## Portable bounded fan-out (2026-09-07)
+
+`VirtualBusBridge::fanout_once` now copies each accepted render block into
+multiple caller-owned destination rings. Delivery is independently bounded per
+destination, and a full/slow destination cannot block or grow the others. The
+engine suite passes 46 tests with strict Clippy. This supports the portable
+one-to-many bridge contract only; native virtual endpoints and live routing
+remain unimplemented.

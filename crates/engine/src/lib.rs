@@ -379,6 +379,43 @@ impl VirtualBusBridge {
         processed
     }
 
+    /// Fan out render blocks into caller-owned bounded destination rings.
+    /// Each destination receives an independent copy when it has capacity;
+    /// one slow destination cannot block the others or grow memory.
+    pub fn fanout_once(&self, destinations: &[&AudioBlockRing]) -> usize {
+        if !self.is_active() {
+            self.drain();
+            return 0;
+        }
+        let mut deliveries = 0;
+        while let Some(input) = self.render.try_receive() {
+            let mut delivered = 0;
+            for destination in destinations {
+                let Some(mut output) = destination.try_acquire() else {
+                    continue;
+                };
+                if output.copy_from(&input).is_err() {
+                    let _ = destination.try_recycle(output);
+                    continue;
+                }
+                match destination.try_submit(output) {
+                    Ok(()) => {
+                        delivered += 1;
+                        deliveries += 1;
+                    }
+                    Err(output) => {
+                        let _ = destination.try_recycle(output);
+                    }
+                }
+            }
+            if delivered == 0 {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+            }
+            let _ = self.render.try_recycle(input);
+        }
+        deliveries
+    }
+
     pub fn try_receive_capture(&self) -> Option<AudioBlock> {
         self.capture.try_receive()
     }
@@ -2393,6 +2430,28 @@ mod tests {
             .unwrap();
         assert_eq!(bridge.process_once(), 0);
         assert_eq!(bridge.dropped(), 1);
+    }
+
+    #[test]
+    fn virtual_bus_bridge_fans_out_independent_copies() {
+        let bridge = VirtualBusBridge::new(1, 1, 2).unwrap();
+        let first = AudioBlockRing::new(1, 1, 2).unwrap();
+        let second = AudioBlockRing::new(1, 1, 2).unwrap();
+        bridge.activate(1).unwrap();
+        let mut input = AudioBlock::new(1, 2).unwrap();
+        input
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.125, 0.875]);
+        bridge.submit_render(1, input).unwrap();
+        assert_eq!(bridge.fanout_once(&[&first, &second]), 2);
+
+        let first_block = first.try_receive().unwrap();
+        let second_block = second.try_receive().unwrap();
+        assert_eq!(first_block.channel(0).unwrap(), &[0.125, 0.875]);
+        assert_eq!(second_block.channel(0).unwrap(), &[0.125, 0.875]);
+        first.try_recycle(first_block).unwrap();
+        second.try_recycle(second_block).unwrap();
     }
 
     #[test]
