@@ -636,6 +636,8 @@ export type ImplementedMethod =
   | "recovery.clearSafeMode"
   | "safety.setPrivacyMute"
   | "startup.get"
+  | "startup.plan"
+  | "startup.apply"
   | "devices.list"
   | "plugins.scan"
   | "plugins.list"

@@ -32,6 +32,9 @@ import type {
   SessionStopResult,
   SessionImportPlanResult,
   SessionImportCommitResult,
+  StartupStatus,
+  StartupPlanResult,
+  StartupApplyResult,
   StatusSnapshot,
   RpcTransport,
 } from "@audiorouter/contracts";
@@ -87,6 +90,9 @@ export interface UiBackend {
   exportSession(sessionId: string): Promise<Session>;
   planSessionImport(session: Session): Promise<SessionImportPlanResult>;
   commitSessionImport(planId: string, idempotencyKey: string): Promise<SessionImportCommitResult>;
+  getStartup(): Promise<StartupStatus>;
+  planStartup(enabled: boolean): Promise<StartupPlanResult>;
+  applyStartup(planId: string, idempotencyKey: string): Promise<StartupApplyResult>;
 }
 
 export type UiSnapshotState = {
@@ -264,6 +270,15 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async commitSessionImport() {
       throw new Error("The backend is disconnected; session import is unavailable.");
     },
+    async getStartup() {
+      return { enabled: false, registration: "unavailable", reason: "The control backend is disconnected." };
+    },
+    async planStartup() {
+      throw new Error("The backend is disconnected; startup planning is unavailable.");
+    },
+    async applyStartup() {
+      throw new Error("The backend is disconnected; startup apply is unavailable.");
+    },
   };
 }
 
@@ -411,6 +426,15 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async commitSessionImport(planId, idempotencyKey) {
       return client.request("sessions.importCommit", { planId, idempotencyKey });
+    },
+    async getStartup() {
+      return client.request("startup.get", undefined);
+    },
+    async planStartup(enabled) {
+      return client.request("startup.plan", { enabled });
+    },
+    async applyStartup(planId, idempotencyKey) {
+      return client.request("startup.apply", { planId, idempotencyKey });
     },
   };
 }

@@ -64,6 +64,9 @@ describe("snapshot cache", () => {
       exportSession: async () => { throw new Error("not connected"); },
       planSessionImport: async () => { throw new Error("not connected"); },
       commitSessionImport: async () => { throw new Error("not connected"); },
+      getStartup: async () => ({ enabled: false, registration: "unavailable", reason: "not connected" }),
+      planStartup: async () => { throw new Error("not connected"); },
+      applyStartup: async () => { throw new Error("not connected"); },
       getRecordingRecovery: async () => { throw new Error("not connected"); },
       revealRecording: async () => { throw new Error("not connected"); },
       setRecordingMetadata: async () => { throw new Error("not connected"); },
@@ -241,6 +244,27 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { safeMode: false, recentCrashes: 0, persistence: "durable" }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).clearRecoverySafeMode()).resolves.toMatchObject({ safeMode: false });
     expect(received).toEqual({ method: "recovery.clearSafeMode", params: undefined });
+  });
+
+  it("forwards the explicit startup status and plan/apply boundary", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        calls.push({ method, params });
+        if (method === "startup.get") return { enabled: false, registration: "unavailable", reason: "native registration unavailable" };
+        if (method === "startup.plan") return { planId: "startup-plan", enabled: true, registration: "unavailable", reason: "native registration unavailable", requiredScopes: ["sessionControl"], warnings: [] };
+        return { planId: "startup-plan", state: "unavailable", registration: "unavailable", reason: "native registration unavailable" };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.getStartup()).resolves.toMatchObject({ registration: "unavailable" });
+    await expect(backend.planStartup(true)).resolves.toMatchObject({ planId: "startup-plan" });
+    await expect(backend.applyStartup("startup-plan", "startup-key")).resolves.toMatchObject({ state: "unavailable" });
+    expect(calls).toEqual([
+      { method: "startup.get", params: undefined },
+      { method: "startup.plan", params: { enabled: true } },
+      { method: "startup.apply", params: { planId: "startup-plan", idempotencyKey: "startup-key" } },
+    ]);
   });
 
   it("forwards metadata-only recording entry removal", async () => {

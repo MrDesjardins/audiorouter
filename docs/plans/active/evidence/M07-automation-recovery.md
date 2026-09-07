@@ -818,6 +818,15 @@ The subsequent authority-ordering regression increased the UI suite to 73
 tests and confirms that a fresher `sessions.get` snapshot cannot be replaced
 by stale inventory data.
 
+## Startup lifecycle UI parity (2026-09-07)
+
+The UI now exposes `startup.get`, `startup.plan`, and `startup.apply` through a
+connected-only lifecycle panel. It displays the unavailable registration
+capability, requires an explicit desired policy and plan/apply sequence, and
+uses one idempotency key for apply. The TypeScript method union now includes
+all three startup methods; contracts typecheck, UI typecheck, 74 UI tests, and
+the disposable M05 build passed. No Windows startup registration occurred.
+
 The current M07 headless acceptance also passed at this revision: 25 CLI tests,
 2 MCP interoperability tests, 83 control tests, 33 plugin-host tests, 8
 worker-process tests, and strict Clippy. M01 CLI acceptance passed as part of
