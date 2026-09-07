@@ -15,6 +15,10 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
+The current catalog contains 58 methods, including the session portability,
+recorder lifecycle, and plugin inventory/retry methods added after the initial
+47-method reference.
+
 | Method | Permission | Side effect |
 | --- | --- | --- |
 | `system.describe` | `read` | read-only |
