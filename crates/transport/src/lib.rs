@@ -1160,6 +1160,51 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn native_control_session_replays_state_after_a_distinct_mutation_request() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-control-session-{}",
+            std::process::id()
+        );
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_control_sessions(
+                &server_name,
+                1,
+                2,
+                ControlPlane::new("persistent-control-test"),
+                ClientGrant::for_role(ClientRole::Operator),
+            )
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let clear = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 301,
+            "method": "recovery.clearSafeMode"
+        }))
+        .unwrap();
+        let subscribe = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 302,
+            "method": "events.subscribe",
+            "params": { "afterSequence": 0, "categories": ["recovery.safeModeCleared"] }
+        }))
+        .unwrap();
+        let requests = [clear.as_slice(), subscribe.as_slice()];
+        let responses = round_trip_session_many(&name, &requests).unwrap();
+        let first = serde_json::from_slice::<serde_json::Value>(&responses[0][4..]).unwrap();
+        let second = serde_json::from_slice::<serde_json::Value>(&responses[1][4..]).unwrap();
+        assert_eq!(first["id"], 301);
+        assert_eq!(second["id"], 302);
+        assert_eq!(second["result"]["events"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            second["result"]["events"][0]["category"],
+            "recovery.safeModeCleared"
+        );
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn native_pipe_backend_is_singleton_per_user_name() {
         let name = format!(
             r"\\.\pipe\audiorouter-singleton-test-{}",
