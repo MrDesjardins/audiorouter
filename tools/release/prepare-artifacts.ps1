@@ -15,9 +15,15 @@ $outputParent = Split-Path -Parent $output
 if (-not (Test-Path -LiteralPath $outputParent -PathType Container)) {
     throw "Output directory parent must already exist: $outputParent"
 }
-$outputParentItem = Get-Item -LiteralPath $outputParent -Force
-if (($outputParentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-    throw "Output directory parent must not be a reparse point: $outputParent"
+$parentPath = $outputParent
+while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
+    $parentItem = Get-Item -LiteralPath $parentPath -Force
+    if (($parentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Output directory parent must not be a reparse point: $parentPath"
+    }
+    $nextParent = Split-Path -Parent $parentPath
+    if ($nextParent -eq $parentPath) { break }
+    $parentPath = $nextParent
 }
 
 Push-Location $workspace

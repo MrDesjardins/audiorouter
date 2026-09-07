@@ -285,3 +285,9 @@ The verifier now audits the manifest path and each lexical parent before
 `Resolve-Path` canonicalization, preventing a symlinked artifact root from
 being silently normalized into an apparently safe directory. The disposable
 verifier regression covers this path when symbolic-link creation is available.
+## Full output-parent reparse protection (2026-09-06)
+
+Artifact preparation now checks every existing parent from the requested output
+directory up to the filesystem root, not only the immediate parent. This
+prevents a redirected grandparent from receiving unsigned release artifacts;
+the existing disposable path-safety suite continues to pass.
