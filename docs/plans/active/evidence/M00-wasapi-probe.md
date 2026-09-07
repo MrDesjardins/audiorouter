@@ -322,6 +322,18 @@ run. The media-device snapshot remained ten present devices, all `OK`. This
 qualifies process-tree inclusion and non-silent attribution; physical output
 latency and restart/PID-reuse behavior remain open.
 
+## Endpoint timing baseline (2026-09-07)
+
+The probe now records `GetDevicePeriod` and `GetStreamLatency` after
+initialization/start. On the qualified endpoint, the 48 kHz capture stream
+reported a 10 ms default period, 3 ms minimum period, and
+`GetStreamLatency=0` (100-ns units). The silent render stream reported a 10 ms
+default period, 2 ms minimum period, a 4,800-frame buffer, and
+`GetStreamLatency=0`. Both streams ran for 200 ms and completed stop/reset.
+These are endpoint API timing values, not acoustic speaker-to-microphone
+latency; the physical loopback measurement remains open. The post-test media
+snapshot contained ten present devices, all `OK`.
+
 This supersedes the earlier compile-only and “implementation-ready but
 unverified” entries in this evidence file. Those entries remain as historical
 test records; the current qualification is the bounded live result above.

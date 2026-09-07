@@ -255,6 +255,16 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
                                 AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
                                 1000000, 0, format, nullptr);
         print_hr("capture_initialize", hr);
+        if (SUCCEEDED(hr)) {
+            REFERENCE_TIME default_period = 0;
+            REFERENCE_TIME minimum_period = 0;
+            const HRESULT period_hr = client->GetDevicePeriod(&default_period, &minimum_period);
+            print_hr("capture_get_device_period", period_hr);
+            if (SUCCEEDED(period_hr)) {
+                std::cout << "capture_default_period_100ns=" << default_period
+                          << " capture_minimum_period_100ns=" << minimum_period << '\n';
+            }
+        }
     }
     IAudioCaptureClient* capture = nullptr;
     if (SUCCEEDED(hr)) {
@@ -267,6 +277,12 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
         hr = client->Start();
         print_hr("capture_start", hr);
         if (SUCCEEDED(hr)) {
+            REFERENCE_TIME stream_latency = 0;
+            const HRESULT latency_hr = client->GetStreamLatency(&stream_latency);
+            print_hr("capture_get_stream_latency", latency_hr);
+            if (SUCCEEDED(latency_hr)) {
+                std::cout << "capture_stream_latency_100ns=" << stream_latency << '\n';
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(duration_ms));
             while (true) {
                 UINT32 frames = 0;
@@ -363,6 +379,16 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
                                 AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
                                 1000000, 0, format, nullptr);
         print_hr("render_initialize", hr);
+        if (SUCCEEDED(hr)) {
+            REFERENCE_TIME default_period = 0;
+            REFERENCE_TIME minimum_period = 0;
+            const HRESULT period_hr = client->GetDevicePeriod(&default_period, &minimum_period);
+            print_hr("render_get_device_period", period_hr);
+            if (SUCCEEDED(period_hr)) {
+                std::cout << "render_default_period_100ns=" << default_period
+                          << " render_minimum_period_100ns=" << minimum_period << '\n';
+            }
+        }
     }
     IAudioRenderClient* render = nullptr;
     UINT32 buffer_size = 0;
@@ -379,6 +405,12 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
         hr = client->Start();
         print_hr("render_start", hr);
         if (SUCCEEDED(hr)) {
+            REFERENCE_TIME stream_latency = 0;
+            const HRESULT latency_hr = client->GetStreamLatency(&stream_latency);
+            print_hr("render_get_stream_latency", latency_hr);
+            if (SUCCEEDED(latency_hr)) {
+                std::cout << "render_stream_latency_100ns=" << stream_latency << '\n';
+            }
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
             while (std::chrono::steady_clock::now() < deadline) {
                 UINT32 padding = 0;
