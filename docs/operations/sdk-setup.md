@@ -70,15 +70,22 @@ MSVC toolset and Windows SDK containing the required headers. See
 `docs/plans/active/evidence/M06-vst3-sdk.md` for measured SDK validation
 evidence.
 
-For a compile-only SysVAD feasibility check, use a disposable checkout of the
-Microsoft driver samples and populate its WIL submodule, then run
-`tests/acceptance/m00-sysvad-build.ps1 -SourceRoot <checkout>`. The wrapper
-requires the checkout to be under the system temporary directory, selects the
-64-bit Visual Studio MSBuild host, runs normal x64 package/API validation, and
-removes generated `x64` output directories. Remove the disposable checkout
-afterward. This validates the reference sample only; it does not adapt,
-install, load, or production-sign a driver. See the [M00 driver evidence](../plans/active/evidence/M00-driver-options.md)
-for the exact result and remaining product gates.
+For a compile-only SysVAD feasibility check, run the repository helper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\m00-sysvad\qualify.ps1
+```
+
+It creates a disposable Microsoft driver-samples checkout, populates its WIL
+submodule, selects 64-bit Visual Studio MSBuild, runs normal x64 package/API
+validation, checks the driver and catalog outputs, and removes the exact
+checkout and generated `x64` output directories. Use `-KeepCheckout` only when
+inspecting a failed result. The helper never adapts, installs, loads, or
+production-signs a driver. The lower-level
+`tests/acceptance/m00-sysvad-build.ps1 -SourceRoot <checkout>` wrapper remains
+available for an already prepared temporary checkout. See the [M00 driver
+evidence](../plans/active/evidence/M00-driver-options.md) for the exact result
+and remaining product gates.
 
 For a repeatable local acceptance run, use:
 
