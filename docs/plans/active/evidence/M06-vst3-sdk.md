@@ -496,13 +496,14 @@ exercises three deliberate generations and confirms the third failure enters
 quarantine rather than resetting the count. The suite passes 29 unit tests and
 8 process/integration tests with strict Clippy.
 
-`SupervisedWorkerProcess::restart` now provides the deliberate replacement
-operation for non-shared workers. It drops the failed process before spawning,
-retains the supervisor ledger, rejects running/shared restart requests with
-explicit protocol errors, and returns the ledger alongside spawn errors. The
-three-generation regression uses this public API and confirms quarantine is
-still reached after repeated failures. No plugin is loaded and no audio
-endpoint or machine configuration is touched.
+`SupervisedWorkerProcess::restart` provides deliberate replacement for both
+pipe-only and shared-memory workers. It drops the failed process before
+spawning, carries the caller-owned mapped transport into a shared replacement,
+retains the supervisor ledger, rejects a running worker with an explicit
+protocol error, and returns the ledger alongside spawn errors. The
+three-generation and shared round-trip regressions confirm quarantine history
+and transport continuity. No plugin is loaded and no audio endpoint or machine
+configuration is touched.
 
 ## Native loader compile revalidation (2026-09-06)
 
