@@ -1735,6 +1735,59 @@ impl RuntimeProcessor {
     }
 }
 
+/// Portable ownership boundary for a future native audio callback.
+///
+/// The scheduler owns fixed-shape input/output rings and performs one bounded
+/// nonblocking processing step at a time. Native capture/render adapters can
+/// bridge their endpoint buffers to these rings later; this type deliberately
+/// does not open devices, wait on events, or change endpoint configuration.
+pub struct RealtimeScheduler {
+    processor: RuntimeProcessor,
+    input: AudioBlockRing,
+    output: AudioBlockRing,
+}
+
+impl RealtimeScheduler {
+    pub fn new(capacity: usize, channels: usize, frames: usize) -> Result<Self, QueueError> {
+        Ok(Self {
+            processor: RuntimeProcessor::default(),
+            input: AudioBlockRing::new(capacity, channels, frames)?,
+            output: AudioBlockRing::new(capacity, channels, frames)?,
+        })
+    }
+
+    pub fn processor(&self) -> &RuntimeProcessor {
+        &self.processor
+    }
+
+    pub fn input(&self) -> &AudioBlockRing {
+        &self.input
+    }
+
+    pub fn output(&self) -> &AudioBlockRing {
+        &self.output
+    }
+
+    /// Acquire an input block from the scheduler's bounded pool.
+    pub fn acquire_input(&self) -> Option<AudioBlock> {
+        self.input.try_acquire()
+    }
+
+    /// Submit a block previously acquired with [`Self::acquire_input`].
+    pub fn submit_input(&self, block: AudioBlock) -> Result<(), AudioBlock> {
+        self.input.try_submit(block)
+    }
+
+    pub fn receive_output(&self) -> Option<AudioBlock> {
+        self.output.try_receive()
+    }
+
+    /// Execute one nonblocking ownership-preserving scheduler step.
+    pub fn process_once(&self) -> Result<Option<RuntimeGeneration>, BlockError> {
+        self.processor.process_ring_once(&self.input, &self.output)
+    }
+}
+
 impl RuntimeGraph {
     pub fn prepare(generation: RuntimeGeneration, stages: Vec<ProcessingStage>) -> Self {
         let meter_count = stages
@@ -2159,6 +2212,27 @@ mod tests {
         assert_eq!(block.channel(0).unwrap(), &[0.5, 0.5]);
         output.try_recycle(block).unwrap();
         assert_eq!(processor.metrics().xruns(), 0);
+    }
+
+    #[test]
+    fn realtime_scheduler_owns_bounded_rings_and_processes_without_activation() {
+        let scheduler = RealtimeScheduler::new(1, 1, 2).unwrap();
+        scheduler.processor().publish(RuntimeGraph::prepare(
+            RuntimeGeneration::new(21),
+            vec![ProcessingStage::Gain { linear: 2.0 }],
+        ));
+        let mut input = scheduler.acquire_input().unwrap();
+        input.channel_mut(0).unwrap().copy_from_slice(&[0.25, -0.5]);
+        scheduler.submit_input(input).unwrap();
+        assert_eq!(
+            scheduler.process_once().unwrap(),
+            Some(RuntimeGeneration::new(21))
+        );
+        let output = scheduler.receive_output().unwrap();
+        assert_eq!(output.channel(0).unwrap(), &[0.5, -1.0]);
+        scheduler.output().try_recycle(output).unwrap();
+        assert_eq!(scheduler.input().ready(), 0);
+        assert_eq!(scheduler.output().ready(), 0);
     }
 
     #[test]
