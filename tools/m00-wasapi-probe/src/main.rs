@@ -8,7 +8,8 @@
 //! endpoint-ID-selected digital route smoke for compatible 32-bit endpoints.
 
 use audiorouter_engine::{
-    AudioBlock, ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph,
+    AudioBlock, DriftController, ProcessingStage, RealtimeScheduler, RuntimeGeneration,
+    RuntimeGraph,
 };
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor, SharedCapture,
@@ -147,6 +148,10 @@ fn adapter_smoke(
             .map_err(|_| AudioError::InvalidFrameSize)?;
         let mut pending_frames = 0usize;
         let mut routed_frames = 0u32;
+        let mut drift = (capture_info.sample_rate_hz != render_info.sample_rate_hz)
+            .then(|| DriftController::new(capture_info.sample_rate_hz, render_info.sample_rate_hz, 64 * 128, 100.0))
+            .transpose()
+            .map_err(|_| AudioError::InvalidFrameSize)?;
         while std::time::Instant::now() < deadline {
             let mut render_submitted = false;
             let mut render_submitted_frames = 0u32;
@@ -199,11 +204,16 @@ fn adapter_smoke(
                                 );
                             }
                         } else {
+                            if let Some(controller) = drift.as_mut() {
+                                controller.observe_queue(render_pending_bytes / render_bytes_per_frame);
+                            }
                             block
-                                .resample_linear_from(
+                                .resample_linear_with_ratio(
                                     &source_block,
-                                    capture_info.sample_rate_hz,
-                                    render_info.sample_rate_hz,
+                                    drift.as_ref().map_or_else(
+                                        || capture_info.sample_rate_hz as f64 / render_info.sample_rate_hz as f64,
+                                        DriftController::adjusted_ratio,
+                                    ),
                                 )
                                 .map_err(|_| AudioError::InvalidFrameSize)?;
                         }

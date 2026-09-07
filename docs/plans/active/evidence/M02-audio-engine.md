@@ -327,3 +327,10 @@ metadata snapshot and reopening the exact binding. If refresh or validation
 fails, no replacement stream is opened; callers must deliberately renegotiate
 or choose another endpoint. This closes the portable recovery orchestration
 boundary while native device-invalidation fault injection remains open.
+
+The adapter now exposes a ratio-controlled resampler boundary and feeds the
+render-side bounded pending-frame occupancy into `DriftController` whenever
+capture and render rates differ. This makes the correction loop explicit and
+bounded at the route boundary, while cross-block fractional phase, sufficient
+FIFO depth for arbitrary rate ratios, and hardware clock qualification remain
+native scheduler work.

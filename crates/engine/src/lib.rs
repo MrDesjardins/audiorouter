@@ -974,13 +974,29 @@ impl AudioBlock {
         input_rate_hz: u32,
         output_rate_hz: u32,
     ) -> Result<(), BlockError> {
-        if self.channels != source.channels {
-            return Err(BlockError::ShapeMismatch);
-        }
         if input_rate_hz == 0 || output_rate_hz == 0 {
             return Err(BlockError::InvalidSampleRate);
         }
-        let ratio = input_rate_hz as f64 / output_rate_hz as f64;
+        self.resample_linear_with_ratio(source, input_rate_hz as f64 / output_rate_hz as f64)
+    }
+
+    /// Resample with a caller-supplied bounded ratio adjustment. The ratio is
+    /// intended for a prepared drift controller; callers retain ownership of
+    /// cross-block buffering and must provide a finite positive value.
+    pub fn resample_linear_with_ratio(
+        &mut self,
+        source: &Self,
+        ratio: f64,
+    ) -> Result<(), BlockError> {
+        if self.channels != source.channels {
+            return Err(BlockError::ShapeMismatch);
+        }
+        if !ratio.is_finite() || ratio <= 0.0 {
+            return Err(BlockError::InvalidSampleRate);
+        }
+        if source.frames == 0 {
+            return Err(BlockError::InvalidFrameCount);
+        }
         for destination_channel in 0..self.channels {
             let destination = self.channel_mut(destination_channel).unwrap();
             let input = source.channel(destination_channel).unwrap();
@@ -3461,8 +3477,14 @@ mod tests {
             .resample_linear_from(&source, 48_000, 24_000)
             .unwrap();
         assert_eq!(output.channel(0).unwrap(), &[0.0, 2.0]);
+        output.resample_linear_with_ratio(&source, 1.5).unwrap();
+        assert_eq!(output.channel(0).unwrap(), &[0.0, 1.5]);
         assert!(matches!(
             output.resample_linear_from(&source, 0, 48_000),
+            Err(BlockError::InvalidSampleRate)
+        ));
+        assert!(matches!(
+            output.resample_linear_with_ratio(&source, 0.0),
             Err(BlockError::InvalidSampleRate)
         ));
     }
