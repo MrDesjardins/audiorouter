@@ -756,6 +756,8 @@ mod tests {
             channels: 2,
             bits_per_sample: 32,
             format_tag: 3,
+            channel_mask: 0,
+            subformat_guid: String::new(),
         }
     }
 

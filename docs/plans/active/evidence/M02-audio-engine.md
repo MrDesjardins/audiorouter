@@ -273,3 +273,8 @@ recovery are still open.
 The resolver is now exposed on `EndpointMonitor` as a snapshot-only method,
 making the fail-closed decision available immediately after notification-driven
 refresh without coupling recovery code to enumeration or stream activation.
+
+Persisted endpoint format identity also includes the extensible channel mask and
+subformat GUID. A changed mask or subformat now returns `FormatChanged`, just
+like a changed rate, channel count, bit depth, or format tag; recovery must
+explicitly renegotiate rather than reopening a materially different stream.

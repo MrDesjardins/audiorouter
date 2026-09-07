@@ -26,6 +26,8 @@ pub struct EndpointInfo {
     pub channels: u16,
     pub bits_per_sample: u16,
     pub format_tag: u16,
+    pub channel_mask: u32,
+    pub subformat_guid: String,
 }
 
 impl EndpointInfo {
@@ -109,7 +111,9 @@ pub fn resolve_endpoint_binding_with_format(
             if actual.sample_rate_hz == expected.sample_rate_hz
                 && actual.channels == expected.channels
                 && actual.bits_per_sample == expected.bits_per_sample
-                && actual.format_tag == expected.format_tag =>
+                && actual.format_tag == expected.format_tag
+                && actual.channel_mask == expected.channel_mask
+                && actual.subformat_guid == expected.subformat_guid =>
         {
             EndpointBindingResolution::Available(actual)
         }
@@ -1272,7 +1276,7 @@ pub fn resolve_application_restart(
 unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
     use windows::Win32::Media::Audio::{
         eCapture, eRender, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
-        DEVICE_STATE_ACTIVE,
+        DEVICE_STATE_ACTIVE, WAVEFORMATEXTENSIBLE,
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -1297,6 +1301,15 @@ unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
             client.GetDevicePeriod(Some(&mut default_period), Some(&mut minimum_period))?;
             let format = client.GetMixFormat()?;
             let format_value = *format;
+            let (channel_mask, subformat_guid) = if format_value.wFormatTag == 0xfffe
+                && format_value.cbSize >= 22
+            {
+                let extensible = std::ptr::read_unaligned(format.cast::<WAVEFORMATEXTENSIBLE>());
+                let guid = std::ptr::read_unaligned(std::ptr::addr_of!(extensible.SubFormat));
+                (extensible.dwChannelMask, format!("{guid:?}"))
+            } else {
+                (0, String::new())
+            };
             endpoints.push(EndpointInfo {
                 id,
                 direction,
@@ -1306,6 +1319,8 @@ unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
                 channels: format_value.nChannels,
                 bits_per_sample: format_value.wBitsPerSample,
                 format_tag: format_value.wFormatTag,
+                channel_mask,
+                subformat_guid,
             });
             windows::Win32::System::Com::CoTaskMemFree(Some(format.cast()));
         }
@@ -1328,6 +1343,8 @@ mod tests {
             channels: 2,
             bits_per_sample: 32,
             format_tag: 0xfffe,
+            channel_mask: 0,
+            subformat_guid: String::new(),
         };
         assert_eq!(info.direction, EndpointDirection::Capture);
         assert!(info.minimum_period_100ns <= info.default_period_100ns);
@@ -1345,6 +1362,8 @@ mod tests {
             channels: 2,
             bits_per_sample: 24,
             format_tag: 1,
+            channel_mask: 0,
+            subformat_guid: String::new(),
         };
         assert_eq!(info.bytes_per_frame().unwrap(), 6);
         info.bits_per_sample = 20;
@@ -1371,6 +1390,8 @@ mod tests {
             channels: 1,
             bits_per_sample: 32,
             format_tag: 3,
+            channel_mask: 0,
+            subformat_guid: String::new(),
         };
         let mut after = before.clone();
         after.channels = 2;
@@ -1398,6 +1419,8 @@ mod tests {
             channels: 2,
             bits_per_sample: 32,
             format_tag: 3,
+            channel_mask: 0,
+            subformat_guid: String::new(),
         };
         let before = [endpoint("zulu"), endpoint("alpha")];
         let current = [endpoint("bravo"), endpoint("alpha")];
@@ -1422,6 +1445,8 @@ mod tests {
             channels: 1,
             bits_per_sample: 32,
             format_tag: 3,
+            channel_mask: 0,
+            subformat_guid: String::new(),
         };
         assert_eq!(
             resolve_endpoint_binding(
@@ -1463,6 +1488,8 @@ mod tests {
             channels: 2,
             bits_per_sample: 32,
             format_tag: 3,
+            channel_mask: 0,
+            subformat_guid: String::new(),
         };
         let mut actual = expected.clone();
         actual.sample_rate_hz = 44_100;
@@ -1470,6 +1497,34 @@ mod tests {
             resolve_endpoint_binding_with_format(std::slice::from_ref(&actual), &expected),
             EndpointBindingResolution::FormatChanged { expected, actual }
         );
+    }
+
+    #[test]
+    fn endpoint_binding_rejects_changed_extensible_format_details() {
+        let expected = EndpointInfo {
+            id: "stable-id".into(),
+            direction: EndpointDirection::Capture,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 0xfffe,
+            channel_mask: 3,
+            subformat_guid: "pcm".into(),
+        };
+        let mut actual = expected.clone();
+        actual.channel_mask = 0x33;
+        assert!(matches!(
+            resolve_endpoint_binding_with_format(std::slice::from_ref(&actual), &expected),
+            EndpointBindingResolution::FormatChanged { .. }
+        ));
+        actual = expected.clone();
+        actual.subformat_guid = "float".into();
+        assert!(matches!(
+            resolve_endpoint_binding_with_format(std::slice::from_ref(&actual), &expected),
+            EndpointBindingResolution::FormatChanged { .. }
+        ));
     }
 
     #[test]
