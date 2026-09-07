@@ -707,3 +707,7 @@ The run passed 22 CLI tests, MCP stdio and named-pipe interoperability tests,
 71 control tests, 31 plugin-host tests, 8 worker-process tests, and strict
 Clippy. M01 CLI acceptance also passed. All state was temporary; no audio
 device, driver, or machine configuration was accessed.
+
+The M07 wrapper was requalified again at the current tip. The same 22 CLI,
+MCP interoperability, 71 control, 31 plugin-host, and 8 worker-process tests
+passed with strict Clippy; temporary state only was used.

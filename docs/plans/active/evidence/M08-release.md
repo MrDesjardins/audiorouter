@@ -253,3 +253,8 @@ provenance, checksums, and exact-content verification all passed in a unique
 temporary directory. The wrapper asserted that the result remains unsigned
 and not publication-ready, then removed the temporary directory. No installer,
 driver, signing action, or audio configuration was involved.
+
+The M08 wrapper was requalified again at the current tip. Optimized locked
+CLI/plugin-worker artifacts, SBOM/notices, sanitized provenance, hashes, exact
+content verification, and unsigned publication-blocker assertions passed in a
+unique temporary directory, which was removed afterward.
