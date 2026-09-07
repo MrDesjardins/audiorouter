@@ -57,6 +57,7 @@ export interface UiBackend {
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
   scanPlugins(directory: string): Promise<PluginScanResult>;
+  listPlugins(directory: string): Promise<PluginScanResult>;
   retryPlugins(directory: string, idempotencyKey: string): Promise<PluginScanResult>;
   inspectPlugin(path: string): Promise<PluginScanEntry>;
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
@@ -164,6 +165,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async scanPlugins() {
       throw new Error("The backend is disconnected; plugin scanning is unavailable.");
+    },
+    async listPlugins() {
+      throw new Error("The backend is disconnected; plugin inventory is unavailable.");
     },
     async retryPlugins() {
       throw new Error("The backend is disconnected; plugin scan retry is unavailable.");
@@ -311,6 +315,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async scanPlugins(directory) {
       return client.request("plugins.scan", { directory });
+    },
+    async listPlugins(directory) {
+      return client.request("plugins.list", { directory });
     },
     async retryPlugins(directory, idempotencyKey) {
       return client.request("plugins.retry", { directory, idempotencyKey });

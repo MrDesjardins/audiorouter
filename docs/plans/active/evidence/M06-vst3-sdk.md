@@ -67,6 +67,12 @@ an explicitly selected directory. Each retry uses one generated idempotency
 key and remains bounded, read-only discovery; disconnected mode cannot invoke
 it. UI typecheck, 70 UI tests, and the disposable production build passed.
 
+The panel also exposes `plugins.list` as an explicit “load last scan” action.
+It reads the backend's retained result for the entered directory and does not
+start a new filesystem scan. UI typecheck, 70 UI tests, and the disposable
+production build passed; no plugin code, audio stream, or machine configuration
+was accessed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

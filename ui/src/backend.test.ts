@@ -37,6 +37,7 @@ describe("snapshot cache", () => {
       listApplications: async () => [],
       listDevices: async () => [],
       scanPlugins: async () => { throw new Error("not connected"); },
+      listPlugins: async () => { throw new Error("not connected"); },
       retryPlugins: async () => { throw new Error("not connected"); },
       inspectPlugin: async () => { throw new Error("not connected"); },
       listVirtualDevices: async () => [],
@@ -157,10 +158,12 @@ describe("live event cursor", () => {
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await backend.scanPlugins("C:\\Plugins");
+    await backend.listPlugins("C:\\Plugins");
     await backend.retryPlugins("C:\\Plugins", "retry-key");
     await backend.inspectPlugin("C:\\Plugins\\demo.vst3");
     expect(requests).toEqual([
       { method: "plugins.scan", params: { directory: "C:\\Plugins" } },
+      { method: "plugins.list", params: { directory: "C:\\Plugins" } },
       { method: "plugins.retry", params: { directory: "C:\\Plugins", idempotencyKey: "retry-key" } },
       { method: "plugins.inspect", params: { path: "C:\\Plugins\\demo.vst3" } },
     ]);
