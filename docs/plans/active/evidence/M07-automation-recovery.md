@@ -827,6 +827,11 @@ uses one idempotency key for apply. The TypeScript method union now includes
 all three startup methods; contracts typecheck, UI typecheck, 74 UI tests, and
 the disposable M05 build passed. No Windows startup registration occurred.
 
+The complete M07 headless wrapper was requalified at the same revision: M01
+CLI (25), MCP interoperability (2), control (83), plugin-host (33),
+worker-process (8), and strict Clippy passed. Temporary state only; no startup
+registration, audio device, driver, or machine configuration was accessed.
+
 The current M07 headless acceptance also passed at this revision: 25 CLI tests,
 2 MCP interoperability tests, 83 control tests, 33 plugin-host tests, 8
 worker-process tests, and strict Clippy. M01 CLI acceptance passed as part of
