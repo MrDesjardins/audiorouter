@@ -62,6 +62,11 @@ generic `invalidRequest`: `invalidRoot`, `tooManyCandidates`, `cancelled`,
 metadata. The new control regression and existing plugin-host/worker suites
 pass with strict Clippy; no plugin code is loaded or executed.
 
+The UI also exposes the existing authenticated `plugins.retry` operation for
+an explicitly selected directory. Each retry uses one generated idempotency
+key and remains bounded, read-only discovery; disconnected mode cannot invoke
+it. UI typecheck, 70 UI tests, and the disposable production build passed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06
