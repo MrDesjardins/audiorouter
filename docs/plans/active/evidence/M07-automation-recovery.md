@@ -711,3 +711,13 @@ device, driver, or machine configuration was accessed.
 The M07 wrapper was requalified again at the current tip. The same 22 CLI,
 MCP interoperability, 71 control, 31 plugin-host, and 8 worker-process tests
 passed with strict Clippy; temporary state only was used.
+## 2026-09-06 — Portable recovery supervisor application
+
+`ControlPlane::recover_after_runtime_crash` now applies the bounded crash
+policy to the portable fake runtime. It stops every currently running runtime
+after a crash, restarts only sessions returned as eligible, and excludes
+armed/recording/paused/stopping recorder sessions from automatic restoration.
+After the third recent crash, the durable or in-memory safe-mode decision
+leaves all sessions stopped. Control coverage verifies both restoration and
+safe-mode behavior. This is a supervisor-facing portable boundary only: it
+does not spawn a process, open an audio stream, or claim native route restart.

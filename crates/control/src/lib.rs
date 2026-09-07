@@ -12,7 +12,7 @@ use audiorouter_domain::{
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
 };
-use audiorouter_recording::RecorderController;
+use audiorouter_recording::{RecorderController, RecorderState};
 use audiorouter_storage::{GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -2435,12 +2435,50 @@ impl ControlPlane {
         } else {
             self.runtimes
                 .iter()
-                .filter(|(_, runtime)| runtime.state() == RuntimeState::Running)
+                .filter(|(id, runtime)| {
+                    runtime.state() == RuntimeState::Running
+                        && !self.recorders.get(*id).is_some_and(|recorder| {
+                            matches!(
+                                recorder.state(),
+                                RecorderState::Armed
+                                    | RecorderState::Recording
+                                    | RecorderState::Paused
+                                    | RecorderState::Stopping
+                            )
+                        })
+                })
                 .map(|(id, _)| id.clone())
                 .collect()
         };
         session_ids.sort_by(|left, right| left.as_str().cmp(right.as_str()));
         Ok(RecoveryDecision { mode, session_ids })
+    }
+
+    /// Apply one supervisor recovery decision to the portable runtime model.
+    ///
+    /// A crashed backend has no usable live runtime, so every currently
+    /// running fake runtime is stopped before the policy result is applied.
+    /// Only non-recording sessions returned by `record_runtime_crash` are
+    /// restarted, and safe mode therefore leaves all sessions stopped. This
+    /// method is deliberately limited to the fake runtime boundary: it does
+    /// not create a process, open an audio stream, or claim native route
+    /// recovery.
+    pub fn recover_after_runtime_crash(
+        &mut self,
+        timestamp_seconds: u64,
+    ) -> Result<RecoveryDecision, ControlError> {
+        let decision = self.record_runtime_crash(timestamp_seconds)?;
+        for runtime in self.runtimes.values_mut() {
+            if runtime.state() == RuntimeState::Running {
+                runtime.stop();
+            }
+        }
+        if decision.mode == RecoveryMode::RestoreEligible {
+            for session_id in &decision.session_ids {
+                self.session_start(session_id)?;
+            }
+        }
+        Ok(decision)
     }
 
     fn status_snapshot(&self) -> Result<Value, ControlError> {
@@ -6194,6 +6232,61 @@ mod tests {
         let third = plane.record_runtime_crash(102).unwrap();
         assert_eq!(third.mode, RecoveryMode::SafeMode);
         assert!(third.session_ids.is_empty());
+    }
+
+    #[test]
+    fn runtime_crash_recovery_restarts_only_eligible_fake_sessions() {
+        let mut plane = ControlPlane::default();
+        let mut running = session();
+        running.id = EntityId::new("running");
+        let mut recording = session();
+        recording.id = EntityId::new("recording");
+        plane.insert_session(running).unwrap();
+        plane.insert_session(recording).unwrap();
+        plane.session_start(&EntityId::new("running")).unwrap();
+        plane.session_start(&EntityId::new("recording")).unwrap();
+
+        let recorder = RecorderController::new();
+        plane.recorders.insert(EntityId::new("recording"), recorder);
+        plane
+            .recorders
+            .get_mut(&EntityId::new("recording"))
+            .unwrap()
+            .arm()
+            .unwrap();
+        plane
+            .recorders
+            .get_mut(&EntityId::new("recording"))
+            .unwrap()
+            .start(0)
+            .unwrap();
+
+        let decision = plane.recover_after_runtime_crash(100).unwrap();
+        assert_eq!(decision.mode, RecoveryMode::RestoreEligible);
+        assert_eq!(decision.session_ids, vec![EntityId::new("running")]);
+        let status = plane.status_snapshot().unwrap();
+        assert_eq!(status["activeSessionIds"], json!(["running"]));
+    }
+
+    #[test]
+    fn runtime_crash_recovery_enters_safe_mode_without_restarting_sessions() {
+        let mut plane = ControlPlane::default();
+        let value = session();
+        let session_id = value.id.clone();
+        plane.insert_session(value).unwrap();
+        plane.session_start(&session_id).unwrap();
+        plane.recover_after_runtime_crash(100).unwrap();
+        plane.session_start(&session_id).unwrap();
+        plane.recover_after_runtime_crash(101).unwrap();
+        plane.session_start(&session_id).unwrap();
+
+        let decision = plane.recover_after_runtime_crash(102).unwrap();
+        assert_eq!(decision.mode, RecoveryMode::SafeMode);
+        assert!(decision.session_ids.is_empty());
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([])
+        );
     }
 
     #[test]
