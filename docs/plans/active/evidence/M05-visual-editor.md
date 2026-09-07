@@ -663,3 +663,13 @@ preserving other listed sessions and locally created sessions. The regression
 suite covers both cases. M05 typecheck, 73 UI tests, and the disposable
 production build passed; no session was started and no audio or machine state
 was changed.
+
+## WebView2 response-shape hardening (2026-09-07)
+
+The bounded WebView2 transport now accepts only unambiguous JSON-RPC responses:
+exactly one of `result` or a finite numeric `error.code` plus string
+`error.message` must be present. Malformed, ambiguous, and wrong-typed host
+messages remain ignored and therefore cannot resolve a pending UI request.
+M05 acceptance passed with TypeScript typechecking, 85 Vitest tests, and a
+disposable three-file Vite production build. No native host, audio stream,
+driver, or machine configuration was accessed.
