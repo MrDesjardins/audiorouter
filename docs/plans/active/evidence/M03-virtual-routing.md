@@ -222,3 +222,11 @@ silence before publishing capture blocks or fan-out copies. The regression
 uses non-finite input and verifies finite zero output for every destination.
 The engine suite passes 46 tests with strict Clippy. This is portable safety
 evidence only and does not open a live endpoint.
+
+## Publication generation guard (2026-09-07)
+
+Bridge processing now rechecks active ownership and generation after copying
+and sanitizing, before publishing to capture or fan-out destinations. A block
+that observes deactivation or replacement is recycled and counted as dropped.
+The 46-test engine suite and strict Clippy pass. This closes a portable
+publication-safety boundary; native driver synchronization remains open.

@@ -356,6 +356,7 @@ impl VirtualBusBridge {
         }
         let mut processed = 0;
         while let Some(input) = self.render.try_receive() {
+            let generation = self.generation();
             let Some(mut output) = self.capture.try_acquire() else {
                 self.dropped.fetch_add(1, Ordering::Relaxed);
                 let _ = self.render.try_recycle(input);
@@ -368,6 +369,12 @@ impl VirtualBusBridge {
                 continue;
             }
             output.sanitize_non_finite();
+            if !self.owns_generation(generation) {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+                let _ = self.capture.try_recycle(output);
+                let _ = self.render.try_recycle(input);
+                continue;
+            }
             let _ = self.render.try_recycle(input);
             match self.capture.try_submit(output) {
                 Ok(()) => processed += 1,
@@ -390,8 +397,12 @@ impl VirtualBusBridge {
         }
         let mut deliveries = 0;
         while let Some(input) = self.render.try_receive() {
+            let generation = self.generation();
             let mut delivered = 0;
             for destination in destinations {
+                if !self.owns_generation(generation) {
+                    break;
+                }
                 let Some(mut output) = destination.try_acquire() else {
                     continue;
                 };
@@ -416,6 +427,10 @@ impl VirtualBusBridge {
             let _ = self.render.try_recycle(input);
         }
         deliveries
+    }
+
+    fn owns_generation(&self, generation: u64) -> bool {
+        self.active.load(Ordering::Acquire) && self.generation.load(Ordering::Acquire) == generation
     }
 
     pub fn try_receive_capture(&self) -> Option<AudioBlock> {
