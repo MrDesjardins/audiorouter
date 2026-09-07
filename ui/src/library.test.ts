@@ -4,7 +4,23 @@ import { filterLibraryEntries, libraryEntries } from "./library";
 describe("node library search", () => {
   it("matches labels, categories, and unavailable reasons", () => {
     expect(filterLibraryEntries(libraryEntries, "effect").map((entry) => entry.id)).toEqual(["gain", "mute"]);
-    expect(filterLibraryEntries(libraryEntries, "M02").map((entry) => entry.id)).toEqual(["physical-input"]);
+    expect(filterLibraryEntries(libraryEntries, "M02").map((entry) => entry.id)).toEqual([
+      "physical-input",
+      "application-capture",
+      "endpoint-loopback",
+      "physical-output",
+    ]);
+  });
+
+  it("keeps every M02 source and destination discoverable but unavailable", () => {
+    const entries = libraryEntries.filter((entry) => entry.unavailableReason?.includes("M02") === true);
+    expect(entries.map((entry) => entry.id)).toEqual([
+      "physical-input",
+      "application-capture",
+      "endpoint-loopback",
+      "physical-output",
+    ]);
+    expect(entries.every((entry) => entry.kind === undefined)).toBe(true);
   });
 
   it("keeps virtual bus entries discoverable but unavailable", () => {
