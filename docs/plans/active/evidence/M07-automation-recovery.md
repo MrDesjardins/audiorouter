@@ -737,6 +737,12 @@ boundary restores an eligible fake session after the first two crashes and
 keeps all sessions stopped with the durable safe-mode latch after the third.
 The complete control suite now passes 79 tests with strict Clippy.
 
+The complete M07 headless acceptance was rerun at commit `c4e8e73`.
+CLI (23), MCP stdio/named-pipe interoperability (2), control (79),
+plugin-host (31), worker-process (8), and strict Clippy passed. The run used
+temporary test state only and did not access audio devices, drivers, or
+machine configuration.
+
 The complete M07 headless acceptance was then rerun at commit `5a58a13`.
 CLI (23), MCP stdio/named-pipe interoperability (2), control (78),
 plugin-host (31), worker-process (8), and strict Clippy checks passed. The
