@@ -1453,11 +1453,17 @@ fn export_session(args: &[&str]) -> Result<Value, CliError> {
             CliError::InvalidArguments("usage: export <session-id> --database <path>".into())
         })?;
     let storage = database(args)?;
-    let document = storage
-        .export_session(&EntityId::new(id))
-        .map_err(|error| CliError::Storage(format!("{error:?}")))?
-        .ok_or_else(|| CliError::InvalidArguments("session not found".into()))?;
-    serde_json::from_str(&document).map_err(|error| CliError::InvalidArguments(error.to_string()))
+    let mut plane = ControlPlane::with_storage("cli", storage);
+    plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.export".into(),
+            params: Some(json!({ "sessionId": id })),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("session export failed".into()))
+        .map_err(|error| CliError::Storage(format!("{error:?}")))
 }
 
 fn import_session(args: &[&str]) -> Result<Value, CliError> {
@@ -1466,15 +1472,44 @@ fn import_session(args: &[&str]) -> Result<Value, CliError> {
         .copied()
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
-            CliError::InvalidArguments("usage: import <document-path> --database <path>".into())
+            CliError::InvalidArguments(
+                "usage: import <document-path> --database <path> [--idempotency-key KEY]".into(),
+            )
         })?;
     let document =
         std::fs::read_to_string(path).map_err(|error| CliError::Io(error.to_string()))?;
     let storage = database(args)?;
-    let session = storage
-        .import_session(&document)
+    let session: audiorouter_domain::Session = serde_json::from_str(&document)
+        .map_err(|error| CliError::InvalidArguments(error.to_string()))?;
+    let mut plane = ControlPlane::with_storage("cli", storage);
+    let planned = plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.importPlan".into(),
+            params: Some(json!({ "session": session })),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("session import plan failed".into()))
         .map_err(|error| CliError::Storage(format!("{error:?}")))?;
-    serde_json::to_value(session).map_err(|error| CliError::InvalidArguments(error.to_string()))
+    let idempotency_key = optional_option_value(args, "--idempotency-key")?
+        .map(str::to_owned)
+        .unwrap_or_else(|| {
+            format!(
+                "cli-import-{}",
+                planned["session"]["id"].as_str().unwrap_or("session")
+            )
+        });
+    plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "sessions.importCommit".into(),
+            params: Some(json!({ "planId": planned["planId"], "idempotencyKey": idempotency_key })),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("session import commit failed".into()))
+        .map_err(|error| CliError::Storage(format!("{error:?}")))
 }
 
 fn absolute_option(args: &[&str], option: &str) -> Result<std::path::PathBuf, CliError> {
