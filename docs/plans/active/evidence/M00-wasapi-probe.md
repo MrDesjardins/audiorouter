@@ -323,6 +323,9 @@ active process ID 35536, `voicemeeterpro.exe` at
 matching `AUDCLNT_E_DEVICE_IN_USE` returned by the render initialization
 probe. The process was only inspected and was not terminated; no Voicemeeter
 routing, defaults, volume, mute, or other machine setting was changed.
+The diagnostic now reports the executable image path directly through
+`QueryFullProcessImageNameW`, so this attribution does not require a separate
+shell process inspection.
 
 The result is reproducible with the opt-in
 `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio` wrapper. It discovers

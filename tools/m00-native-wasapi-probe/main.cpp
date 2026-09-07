@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include <ksmedia.h>
 #include <wrl.h>
 #include <wrl/implements.h>
@@ -44,6 +45,18 @@ static void print_format(const WAVEFORMATEX* format) {
 static void print_hr(const char* label, HRESULT hr) {
     std::cout << label << "=0x" << std::hex << static_cast<unsigned long>(hr)
               << std::dec << '\n';
+}
+
+static std::wstring process_image_path(DWORD process_id) {
+    if (process_id == 0) return L"<system-session>";
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, process_id);
+    if (!process) return L"<unavailable>";
+    std::vector<wchar_t> path(32768);
+    DWORD length = static_cast<DWORD>(path.size());
+    const BOOL queried = QueryFullProcessImageNameW(process, 0, path.data(), &length);
+    CloseHandle(process);
+    if (!queried) return L"<unavailable>";
+    return std::wstring(path.data(), length);
 }
 
 class ProcessLoopbackHandler final
@@ -497,6 +510,7 @@ static int render_session_inventory(UINT target_index) {
             std::wcout << L"ownership_session index=" << index
                        << L" process_id=" << process_id
                        << L" state=" << static_cast<int>(state)
+                       << L" image_path=" << process_image_path(process_id)
                        << L" display_name=" << (display_name ? display_name : L"<none>") << L'\n';
             CoTaskMemFree(display_name);
             if (control2) control2->Release();
