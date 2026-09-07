@@ -428,6 +428,13 @@ is a non-directory, reparse point, or descendant of a reparse-point ancestor
 before canonical containment checks. Regressions cover both redirected-root
 forms; plugin execution remains unavailable.
 
+## Current-tip headless qualification (2026-09-07)
+
+The complete M07 wrapper passed at the current head: M01 CLI (25 tests), MCP
+stdio/named-pipe interoperability (2), control (82), plugin-host (33),
+worker-process (8), and strict Clippy. Temporary test state only; no audio
+device, driver, or machine configuration was accessed.
+
 ## 2026-09-06 — Portable crash-loop policy
 
 The domain crate now contains a deterministic `CrashRecoveryTracker` for the
