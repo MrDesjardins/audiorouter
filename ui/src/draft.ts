@@ -285,7 +285,8 @@ export function setNodeDraftParameter(
 export function resetNodeDraftParameters(session: Session, nodeId: EntityId): Session {
   const node = session.nodes.find((item) => item.id === nodeId);
   if (!node) throw new Error(`Unknown node: ${nodeId}`);
-  const parameters: Record<string, boolean | number | string> = node.kind === "gain" ? { gainDb: 0 } : node.kind === "mute" ? { muted: false } : { ...node.parameters };
+  const definition = libraryNodeDefinitions[node.kind as LibraryNodeKind];
+  const parameters = definition ? { ...definition.parameters } : { ...node.parameters };
   return { ...session, nodes: session.nodes.map((item) => item.id === nodeId ? { ...item, parameters } : item) };
 }
 

@@ -66,6 +66,19 @@ describe("appendLibraryNode", () => {
     expect(() => resetNodeDraftParameters(demoSession, "mic")).not.toThrow();
   });
 
+  it("resets every built-in processor to its declared draft defaults", () => {
+    const withEq = appendLibraryNode(demoSession, "parametricEq");
+    const changed = {
+      ...withEq,
+      nodes: withEq.nodes.map((node) => node.kind === "parametricEq"
+        ? { ...node, parameters: { frequencyHz: 12_000, q: 8, gainDb: 18 } }
+        : node),
+    };
+    const reset = resetNodeDraftParameters(changed, "parametricEq-1");
+    expect(reset.nodes.at(-1)?.parameters).toEqual({ frequencyHz: 1000, q: 1, gainDb: 0 });
+    expect(reset.edges).toEqual(demoSession.edges);
+  });
+
   it("keeps gain drafts inside the documented range", () => {
     expect(setNodeDraftParameter(demoSession, "voice", "gainDb", GAIN_MAX_DB).nodes[1].parameters.gainDb).toBe(24);
     expect(setNodeDraftParameter(demoSession, "voice", "gainDb", GAIN_MIN_DB).nodes[1].parameters.gainDb).toBe(-60);
