@@ -12,16 +12,9 @@ import { nodePortLabels } from "./graphView";
 import { routeNodeLabels } from "./graphView";
 import { readTheme, writeTheme, type ThemeMode } from "./preferences";
 import { setupChecklist } from "./setup";
+import { uiIdempotencyKey } from "./idempotency";
 
 const defaultBackend = createDisconnectedBackend();
-let fallbackIdempotencyCounter = 0;
-
-function uiIdempotencyKey(operation: string): string {
-  const randomValues = globalThis.crypto?.getRandomValues?.(new Uint32Array(4));
-  const nonce = globalThis.crypto?.randomUUID?.()
-    ?? (randomValues ? Array.from(randomValues, value => value.toString(16).padStart(8, "0")).join("") : `${Date.now()}-${fallbackIdempotencyCounter++}`);
-  return `ui-${operation}-${nonce}`;
-}
 
 function RecorderActions({ backend, sessionId, connected }: { backend: UiBackend; sessionId: string; connected: boolean }) {
   const [frameText, setFrameText] = useState("0");

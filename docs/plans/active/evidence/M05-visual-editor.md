@@ -589,3 +589,9 @@ available, `crypto.getRandomValues()` as the browser fallback, and a
 timestamp/monotonic counter only when cryptographic APIs are unavailable. The
 M05 typecheck, 63-test suite, and disposable production build pass; no audio or
 machine configuration was accessed.
+## Direct idempotency helper coverage (2026-09-06)
+
+The retry-key helper is now an isolated UI module with a regression verifying
+operation scoping and distinct keys for repeated attempts. M05 typecheck, all
+64 Vitest tests, and the disposable three-file production build pass; no audio
+or machine configuration was accessed.
