@@ -563,3 +563,7 @@ production build produced three files. The temporary output was removed; this
 was UI-only validation and did not access audio, drivers, or machine
 configuration. Manual visual/accessibility acceptance and native shell
 injection remain open.
+
+Removed the unused legacy `VirtualDevicePanel` component so the connected UI
+has one authoritative virtual-device lifecycle surface. The M05 typecheck,
+all 63 Vitest tests, and disposable production build still pass.
