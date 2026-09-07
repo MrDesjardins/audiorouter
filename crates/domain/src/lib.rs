@@ -438,7 +438,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 47] = [
+pub const API_METHODS: [ApiMethodSpec; 53] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -488,6 +488,36 @@ pub const API_METHODS: [ApiMethodSpec; 47] = [
         name: "recordings.list",
         permission: PermissionScope::Record,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "recorders.arm",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recorders.start",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recorders.pause",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recorders.resume",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recorders.split",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "recorders.stop",
+        permission: PermissionScope::Record,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "recordings.get",

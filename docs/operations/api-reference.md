@@ -27,6 +27,12 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating |
 | `recordings.list` | `record` | read-only |
+| `recorders.arm` | `record` | mutating |
+| `recorders.start` | `record` | mutating |
+| `recorders.pause` | `record` | mutating |
+| `recorders.resume` | `record` | mutating |
+| `recorders.split` | `record` | mutating |
+| `recorders.stop` | `record` | mutating |
 | `recordings.get` | `record` | read-only |
 | `recordings.recovery` | `record` | read-only |
 | `recordings.reveal` | `record` | external operation |

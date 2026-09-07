@@ -12,6 +12,7 @@ use audiorouter_domain::{
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
 };
+use audiorouter_recording::RecorderController;
 use audiorouter_storage::{GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -128,6 +129,12 @@ fn method_description(name: &str) -> &'static str {
         "operations.get" => "Read the durable outcome of an idempotent operation.",
         "operations.cancel" => "Cancel a pending operation when it has not completed.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
+        "recorders.arm" => "Arm a session recorder without opening an audio device.",
+        "recorders.start" => "Start a recorder at an explicit engine frame boundary.",
+        "recorders.pause" => "Pause a recorder at an explicit engine frame boundary.",
+        "recorders.resume" => "Resume a recorder at an explicit engine frame boundary.",
+        "recorders.split" => "Split a recorder at an explicit engine frame boundary.",
+        "recorders.stop" => "Stop a recorder at an explicit engine frame boundary.",
         "recordings.get" => {
             "Read one persisted recording metadata resource without touching its file."
         }
@@ -245,6 +252,9 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &[],
         ),
+        "recorders.arm" => recorder_input_schema(false),
+        "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
+        | "recorders.stop" => recorder_input_schema(true),
         "devices.list" => object_schema(
             json!({
                 "cursor": { "type": ["string", "null"], "minLength": 1 },
@@ -454,8 +464,36 @@ fn method_input_schema(name: &str) -> Value {
     }
 }
 
+fn recorder_input_schema(frame_required: bool) -> Value {
+    let mut properties = json!({
+        "sessionId": { "type": "string", "minLength": 1 },
+        "idempotencyKey": { "type": "string", "minLength": 1 }
+    });
+    if frame_required {
+        properties["frame"] = json!({ "type": "integer", "minimum": 0 });
+    }
+    if frame_required {
+        object_schema(properties, &["sessionId", "frame"])
+    } else {
+        object_schema(properties, &["sessionId"])
+    }
+}
+
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "recorders.arm" | "recorders.start" | "recorders.pause" | "recorders.resume"
+        | "recorders.split" | "recorders.stop" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1 },
+                "state": { "enum": ["idle", "armed", "recording", "paused", "stopping", "completed", "failed"] },
+                "parts": { "type": "array" },
+                "pauses": { "type": "array" },
+                "lastFrame": { "type": ["integer", "null"] }
+            },
+            "required": ["sessionId", "state", "parts", "pauses", "lastFrame"],
+            "additionalProperties": false
+        }),
         "system.describe" => json!({
             "type": "object",
             "properties": {
@@ -1574,6 +1612,7 @@ pub struct ControlPlane {
     store: GraphStore,
     build: String,
     runtimes: HashMap<EntityId, FakeRuntime>,
+    recorders: HashMap<EntityId, RecorderController>,
     storage: Option<Storage>,
     enrollments: HashMap<String, (ClientRole, bool)>,
     events: EventLog,
@@ -1603,6 +1642,7 @@ impl ControlPlane {
             store: GraphStore::default(),
             build: build.into(),
             runtimes: HashMap::new(),
+            recorders: HashMap::new(),
             storage: None,
             enrollments: HashMap::new(),
             events: EventLog::new(1),
@@ -1650,6 +1690,7 @@ impl ControlPlane {
             store: GraphStore::default(),
             build: build.into(),
             runtimes: HashMap::new(),
+            recorders: HashMap::new(),
             storage: Some(storage),
             enrollments: HashMap::new(),
             events: EventLog::new(backend_epoch),
@@ -2767,6 +2808,10 @@ impl ControlPlane {
                     "operations.get" => self.dispatch_operation_get(request.params),
                     "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
+                    "recorders.arm" | "recorders.start" | "recorders.pause"
+                    | "recorders.resume" | "recorders.split" | "recorders.stop" => {
+                        self.dispatch_recorder(request.method.as_str(), request.params)
+                    }
                     "recordings.get" => self.dispatch_recordings_get(request.params),
                     "recordings.recovery" => self.dispatch_recording_recovery(request.params),
                     "recordings.reveal" => self.dispatch_recording_reveal(request.params),
@@ -3390,6 +3435,55 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("baseRevision is required".into()))?;
         let plan_id = self.graph_undo_plan(&session_id, base_revision)?;
         Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 300000 }))
+    }
+
+    fn dispatch_recorder(
+        &mut self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let session_id = EntityId::new(session_id);
+        if self.store.session(&session_id).is_none() {
+            return Err(ControlError::InvalidRequest("session not found".into()));
+        }
+        let frame = params.get("frame").and_then(Value::as_u64);
+        let recorder = self.recorders.entry(session_id.clone()).or_default();
+        let result = match method {
+            "recorders.arm" => recorder.arm(),
+            "recorders.start" => recorder.start(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.pause" => recorder.pause(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.resume" => recorder.resume(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.split" => recorder.split(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.stop" => recorder.stop(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            _ => return Err(ControlError::InvalidRequest("method not found".into())),
+        };
+        result.map_err(|error| {
+            ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
+        })?;
+        let checkpoint = recorder.checkpoint();
+        Ok(json!({
+            "sessionId": session_id,
+            "state": serde_json::to_value(recorder.state()).map_err(|error| ControlError::Json(error.to_string()))?,
+            "parts": checkpoint.parts,
+            "pauses": checkpoint.pauses,
+            "lastFrame": checkpoint.last_frame,
+        }))
     }
 
     fn dispatch_recordings_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4602,6 +4696,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "operations.get" => &["operationId"],
         "operations.cancel" => &["operationId", "idempotencyKey"],
         "recordings.list" => &["sessionId", "cursor", "limit"],
+        "recorders.arm" => &["sessionId", "idempotencyKey"],
+        "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
+        | "recorders.stop" => &["sessionId", "frame", "idempotencyKey"],
         "recordings.get" | "recordings.recovery" | "recordings.reveal" | "recordings.preview" => {
             &["recordingId"]
         }
@@ -7253,5 +7350,53 @@ mod tests {
         let data = error.data.unwrap();
         assert_eq!(data["code"], "corruptDatabase");
         assert_eq!(data["retryable"], false);
+    }
+
+    #[test]
+    fn recorder_lifecycle_preserves_frame_boundaries_without_audio_access() {
+        let mut plane = ControlPlane::default();
+        plane.create_session(session()).unwrap();
+        let grant = ClientGrant::with_scopes([PermissionScope::Read, PermissionScope::Record]);
+        for (method, params) in [
+            ("recorders.arm", json!({"sessionId": "session"})),
+            (
+                "recorders.start",
+                json!({"sessionId": "session", "frame": 10}),
+            ),
+            (
+                "recorders.pause",
+                json!({"sessionId": "session", "frame": 20}),
+            ),
+            (
+                "recorders.resume",
+                json!({"sessionId": "session", "frame": 30}),
+            ),
+            (
+                "recorders.split",
+                json!({"sessionId": "session", "frame": 40}),
+            ),
+            (
+                "recorders.stop",
+                json!({"sessionId": "session", "frame": 50}),
+            ),
+        ] {
+            let response = plane.dispatch_authorized(
+                JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(method)),
+                    method: method.into(),
+                    params: Some(params),
+                },
+                &grant,
+            );
+            assert!(response.error.is_none(), "{method}: {:?}", response.error);
+        }
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(7)),
+            method: "recorders.stop".into(),
+            params: Some(json!({"sessionId": "session", "frame": 50})),
+        });
+        assert!(response.error.is_some());
     }
 }

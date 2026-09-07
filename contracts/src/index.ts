@@ -154,6 +154,14 @@ export interface RecordingRow extends RecordingMetadata {
   missing: boolean;
 }
 
+export interface RecorderLifecycleResult {
+  sessionId: EntityId;
+  state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed";
+  parts: Array<{ index: number; startFrame: number; endFrame?: number | null }>;
+  pauses: Array<{ startFrame: number; endFrame: number }>;
+  lastFrame?: number | null;
+}
+
 export interface RecordingListPage {
   items: RecordingRow[];
   nextCursor: string | null;
@@ -555,6 +563,12 @@ export type ImplementedMethod =
   | "operations.get"
   | "operations.cancel"
   | "recordings.list"
+  | "recorders.arm"
+  | "recorders.start"
+  | "recorders.pause"
+  | "recorders.resume"
+  | "recorders.split"
+  | "recorders.stop"
   | "recordings.get"
   | "recordings.recovery"
   | "recordings.reveal"
@@ -606,6 +620,12 @@ export type MethodParams = {
   "recordings.list":
     | { sessionId?: EntityId | null; cursor?: string | null; limit?: number }
     | undefined;
+  "recorders.arm": { sessionId: EntityId; idempotencyKey?: string };
+  "recorders.start": { sessionId: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.pause": { sessionId: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.resume": { sessionId: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.split": { sessionId: EntityId; frame: number; idempotencyKey?: string };
+  "recorders.stop": { sessionId: EntityId; frame: number; idempotencyKey?: string };
   "recordings.get": { recordingId: EntityId };
   "recordings.recovery": { recordingId: EntityId };
   "recordings.reveal": { recordingId: EntityId };
@@ -679,6 +699,12 @@ export type MethodResult = {
   "operations.get": OperationCompleted | OperationUnknown;
   "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
+  "recorders.arm": RecorderLifecycleResult;
+  "recorders.start": RecorderLifecycleResult;
+  "recorders.pause": RecorderLifecycleResult;
+  "recorders.resume": RecorderLifecycleResult;
+  "recorders.split": RecorderLifecycleResult;
+  "recorders.stop": RecorderLifecycleResult;
   "recordings.get": RecordingRow;
   "recordings.recovery": RecordingRecoveryResult;
   "recordings.reveal": RecordingRevealResult;
