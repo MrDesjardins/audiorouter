@@ -494,3 +494,14 @@ groups, measured zero-frame p95 inter-impulse spacing error, and estimated a
 the wrapper removed its temporary executable, object, logs, and raw capture.
 This confirms repeatable digital correlation only; it does not promote the
 estimate to calibrated speaker-to-microphone latency evidence.
+
+## Current-head native lifecycle requalification (2026-09-07)
+
+The authorized bounded native live wrapper was rerun from the current head.
+It discovered 13 capture endpoints and 21 render endpoints, classified one
+render endpoint as occupied, and completed the 100 ms shared-capture and
+silent-render lifecycle checks successfully. The media inventory was unchanged
+and temporary executable/object/log outputs were removed. This remains stream
+lifecycle evidence; it does not qualify physical latency or driver behavior,
+and no default, volume, mute, privacy, startup, or other machine audio setting
+was changed.
