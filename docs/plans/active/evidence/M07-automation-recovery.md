@@ -701,3 +701,9 @@ that two successive control instances expose distinct epochs, while the
 storage regression proves monotonic behavior across repeated claims and a
 reopen. The 70-test control suite and 37-test storage suite pass with strict
 Clippy and formatting; only temporary test database state was used.
+
+The complete M07 headless acceptance was requalified at the current revision.
+The run passed 22 CLI tests, MCP stdio and named-pipe interoperability tests,
+71 control tests, 31 plugin-host tests, 8 worker-process tests, and strict
+Clippy. M01 CLI acceptance also passed. All state was temporary; no audio
+device, driver, or machine configuration was accessed.
