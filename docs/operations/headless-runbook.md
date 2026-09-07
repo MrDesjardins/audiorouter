@@ -88,6 +88,11 @@ audiorouter mcp serve --client-id enrolled-client --database C:\path\audiorouter
 
 Use `--pipe \\.\pipe\AudioRouter` when a running backend exposes that local named pipe. MCP stdout is reserved for newline-delimited JSON-RPC; diagnostics belong on stderr. The adapter exposes read tools/resources and forwards API calls through enrolled permissions. It does not accept remote HTTP connections or stream raw audio to tools.
 
+The native transport supports bounded persistent connections for clients that
+need to send distinct requests without reconnecting; each connection is capped
+at 500 request frames and is closed by the owning server after its session
+budget. A production daemon still owns the outer shutdown/restart policy.
+
 ## Recovery boundaries
 
 If a plan reports a revision conflict, reread the session and create a new plan. Preserve failed or partial recording files for inspection. Do not delete recordings as part of configuration cleanup. The current repository does not provide a signed installer or managed virtual-audio driver; a successful portable test or MCP response is not evidence that those components are installed or that machine audio has changed.

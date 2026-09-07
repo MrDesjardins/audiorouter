@@ -491,9 +491,26 @@ mod windows_pipe {
                 "session frame count must be between 1 and 500".into(),
             ));
         }
+        let requests = vec![request; frames];
+        round_trip_session_many(name, &requests)
+    }
+
+    /// Exchange distinct framed requests over one authenticated connection.
+    /// The request count is bounded so a caller cannot hold a pipe forever.
+    pub fn round_trip_session_many(
+        name: &str,
+        requests: &[&[u8]],
+    ) -> Result<Vec<Vec<u8>>, TransportError> {
+        if requests.is_empty() || requests.len() > MAX_SESSION_FRAMES {
+            return Err(TransportError::Protocol(
+                "session frame count must be between 1 and 500".into(),
+            ));
+        }
         check_name(name)?;
-        if request.len() < 4 || request.len() > MAX_FRAME_BYTES + 4 {
-            return Err(TransportError::Protocol("invalid request frame".into()));
+        for request in requests {
+            if request.len() < 4 || request.len() > MAX_FRAME_BYTES + 4 {
+                return Err(TransportError::Protocol("invalid request frame".into()));
+            }
         }
         let name = wide(name);
         let handle = (0..20)
@@ -529,8 +546,8 @@ mod windows_pipe {
                 ))
             })?;
         let handle = Handle(handle);
-        let mut responses = Vec::with_capacity(frames);
-        for _ in 0..frames {
+        let mut responses = Vec::with_capacity(requests.len());
+        for request in requests {
             write_all(handle.0, request)?;
             responses.push(read_frame(handle.0)?);
         }
@@ -591,8 +608,9 @@ mod windows_pipe {
 #[cfg(windows)]
 pub use windows_pipe::{
     acquire_server_singleton, client_is_same_user, client_user_sid, current_user_sid, echo_handler,
-    round_trip, round_trip_many, round_trip_session, send_oneway, serve_connections, serve_once,
-    serve_once_with_client, serve_once_with_client_optional, serve_session, ServerSingleton,
+    round_trip, round_trip_many, round_trip_session, round_trip_session_many, send_oneway,
+    serve_connections, serve_once, serve_once_with_client, serve_once_with_client_optional,
+    serve_session, ServerSingleton,
 };
 
 #[cfg(windows)]
@@ -731,6 +749,11 @@ pub fn round_trip_many(_: &str, _: &[u8], _: usize) -> Result<Vec<Vec<u8>>, Tran
 
 #[cfg(not(windows))]
 pub fn round_trip_session(_: &str, _: &[u8], _: usize) -> Result<Vec<Vec<u8>>, TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn round_trip_session_many(_: &str, _: &[&[u8]]) -> Result<Vec<Vec<u8>>, TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -1085,6 +1108,52 @@ mod tests {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&responses[1][4..]).unwrap()["ok"],
             true
+        );
+        server.join().unwrap().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_exchanges_distinct_requests_on_one_authenticated_session() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-distinct-session-{}",
+            std::process::id()
+        );
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_session(&server_name, 2, |client_pid, frame| {
+                assert!(client_is_same_user(client_pid).unwrap());
+                let request = audiorouter_protocol::decode_frame::<serde_json::Value>(frame)
+                    .map_err(|error| TransportError::Protocol(error.to_string()))?;
+                audiorouter_protocol::encode_frame(&serde_json::json!({
+                    "id": request["id"]
+                }))
+                .map(Some)
+                .map_err(|error| TransportError::Protocol(error.to_string()))
+            })
+        });
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let first = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 101,
+            "method": "status.get"
+        }))
+        .unwrap();
+        let second = encode_frame(&serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 202,
+            "method": "system.describe"
+        }))
+        .unwrap();
+        let requests = [first.as_slice(), second.as_slice()];
+        let responses = round_trip_session_many(&name, &requests).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&responses[0][4..]).unwrap()["id"],
+            101
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&responses[1][4..]).unwrap()["id"],
+            202
         );
         server.join().unwrap().unwrap();
     }
