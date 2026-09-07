@@ -59,6 +59,32 @@ if (schema.protocolVersion?.major !== 1) {
   throw new Error(`unexpected CLI protocol major: ${schema.protocolVersion?.major}`);
 }
 
+const nodeKindUnion = contracts.match(/export type NodeKind\s*=([\s\S]*?);/);
+if (!nodeKindUnion) {
+  throw new Error("NodeKind union is missing from contracts/src/index.ts");
+}
+const declaredNodeKinds = [...nodeKindUnion[1].matchAll(/"([^"]+)"/g)].map(
+  (match) => match[1],
+);
+const toWireNodeType = (kind) => kind.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+const discoveredNodeKinds = (schema.nodeTypes ?? []).map((node) => {
+  const type = String(node.type);
+  return type.endsWith("@1") ? type.slice(0, -2) : type;
+});
+const declaredWireNodeKinds = declaredNodeKinds.map(toWireNodeType);
+const missingNodeKinds = declaredWireNodeKinds.filter(
+  (kind) => !discoveredNodeKinds.includes(kind),
+);
+const extraNodeKinds = discoveredNodeKinds.filter(
+  (kind) => !declaredWireNodeKinds.includes(kind),
+);
+if (missingNodeKinds.length > 0 || extraNodeKinds.length > 0) {
+  const details = [];
+  if (missingNodeKinds.length > 0) details.push(`missing from CLI: ${missingNodeKinds.join(", ")}`);
+  if (extraNodeKinds.length > 0) details.push(`not declared in TypeScript: ${extraNodeKinds.join(", ")}`);
+  throw new Error(`contract node-kind drift detected (${details.join("; ")})`);
+}
+
 console.log(
-  `Contract drift check passed: ${declared.length} implemented methods match the CLI catalog.`,
+  `Contract drift check passed: ${declared.length} methods and ${declaredNodeKinds.length} node kinds match the CLI catalog.`,
 );
