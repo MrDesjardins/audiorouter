@@ -35,6 +35,24 @@ describe("native host bridge", () => {
     transport.dispose();
   });
 
+  it("does not resolve requests from malformed or ambiguous responses", async () => {
+    const listeners = new Set<(event: { data: unknown }) => void>();
+    const webview: WebView2Webview = {
+      postMessage: () => undefined,
+      addEventListener: (_type, listener) => { listeners.add(listener); },
+      removeEventListener: (_type, listener) => { listeners.delete(listener); },
+    };
+    const transport = new WebView2RpcTransport(webview, 20);
+    const pending = transport.send({ jsonrpc: "2.0", id: 8, method: "status.get" });
+    const emit = (response: unknown) => {
+      for (const listener of listeners) listener({ data: { type: "audiorouter.rpc.response", response } });
+    };
+    emit({ jsonrpc: "2.0", id: 8, result: {}, error: { code: -1, message: "ambiguous" } });
+    emit({ jsonrpc: "2.0", id: 8, error: { code: "-1", message: "wrong code" } });
+    await expect(pending).rejects.toThrow("timed out");
+    transport.dispose();
+  });
+
   it("rejects duplicate IDs and cleans pending requests on disposal", async () => {
     const listeners = new Set<(event: { data: unknown }) => void>();
     const webview: WebView2Webview = {

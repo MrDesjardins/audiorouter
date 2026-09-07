@@ -74,7 +74,7 @@ export class WebView2RpcTransport implements RpcTransport {
     const response = (value as { response?: unknown }).response;
     if (typeof response !== "object" || response === null || (response as { jsonrpc?: unknown }).jsonrpc !== "2.0") return;
     const id = (response as { id?: unknown }).id;
-    if ((typeof id !== "string" && typeof id !== "number") || !("result" in response || "error" in response)) return;
+    if ((typeof id !== "string" && typeof id !== "number") || !isJsonRpcResponse(response)) return;
     const key = requestKey(id);
     const pending = this.pending.get(key);
     if (!pending) return;
@@ -82,6 +82,17 @@ export class WebView2RpcTransport implements RpcTransport {
     clearTimeout(pending.timeout);
     pending.resolve(response as JsonRpcResponse);
   }
+}
+
+function isJsonRpcResponse(value: object): value is JsonRpcResponse {
+  const hasResult = "result" in value;
+  const error = (value as { error?: unknown }).error;
+  const hasError = error !== undefined;
+  if (hasResult === hasError) return false;
+  if (!hasError) return true;
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { code?: unknown; message?: unknown };
+  return typeof candidate.code === "number" && Number.isFinite(candidate.code) && typeof candidate.message === "string";
 }
 
 declare global {
