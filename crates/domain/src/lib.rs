@@ -112,6 +112,7 @@ pub struct NodeTypeSpec {
     pub version: u32,
     pub availability: CapabilityAvailability,
     pub realtime_cost_class: &'static str,
+    pub latency_samples: u32,
 }
 
 pub fn node_registry() -> [NodeTypeSpec; 17] {
@@ -150,6 +151,10 @@ pub fn node_registry() -> [NodeTypeSpec; 17] {
             NodeKind::GraphicEq => "medium",
             NodeKind::Pitch => "high",
             _ => "device-bound",
+        },
+        latency_samples: match kind {
+            NodeKind::Pitch => 1_024,
+            _ => 0,
         },
     })
 }

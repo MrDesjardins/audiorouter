@@ -298,6 +298,7 @@ export interface DiscoveryDocument {
     type: `${NodeKind}@${number}`;
     availability: { status: "available" | "unavailable"; reason?: string };
     realtimeCostClass: string;
+    latencySamples: number;
     parameters: Array<{
       name: string;
       type: string;

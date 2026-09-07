@@ -111,7 +111,7 @@ The current node catalog is available through `nodes.describe` and contains:
 | `limiter@1` | available | Sample-peak ceiling stage; -12 to 0 dBFS |
 | `delay@1` | available | Preallocated delay stage; 0 to 1,000 ms |
 | `graphic-eq@1` | available | Fixed ten-band EQ; `band0Db`–`band9Db`, -18 to +18 dB |
-| `pitch@1` | available | Fixed 128-frame streaming pitch stage; semitones -12 to +12 and cents -100 to +100 |
+| `pitch@1` | available | Fixed 128-frame streaming pitch stage; 1,024 estimated latency samples; semitones -12 to +12 and cents -100 to +100 |
 
 The separately reported `processors` catalog in `system.describe` documents the
 implemented DSP primitives and their typed parameter ranges. `parametricEq` is

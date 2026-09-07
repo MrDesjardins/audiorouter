@@ -1562,6 +1562,7 @@ fn node_type_item_schema() -> Value {
                 "additionalProperties": false
             },
             "realtimeCostClass": { "type": "string", "minLength": 1 },
+            "latencySamples": { "type": "integer", "minimum": 0 },
             "parameters": {
                 "type": "array",
                 "items": {
@@ -1579,7 +1580,7 @@ fn node_type_item_schema() -> Value {
                 }
             }
         },
-        "required": ["type", "availability", "realtimeCostClass", "parameters"],
+        "required": ["type", "availability", "realtimeCostClass", "latencySamples", "parameters"],
         "additionalProperties": false
     })
 }
@@ -2419,7 +2420,7 @@ impl ControlPlane {
                 audiorouter_domain::CapabilityAvailability::Available => json!({ "status": "available" }),
                 audiorouter_domain::CapabilityAvailability::Unavailable(reason) => json!({ "status": "unavailable", "reason": reason }),
             };
-            json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class, "parameters": Self::node_parameter_schema(spec.kind) })
+            json!({ "type": format!("{}@{}", spec.kind.type_name(), spec.version), "availability": availability, "realtimeCostClass": spec.realtime_cost_class, "latencySamples": spec.latency_samples, "parameters": Self::node_parameter_schema(spec.kind) })
         }).collect();
         let voice_chains = audiorouter_dsp::VoiceChainPresetId::ALL
             .into_iter()
