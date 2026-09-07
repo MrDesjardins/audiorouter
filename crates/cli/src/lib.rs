@@ -92,12 +92,54 @@ fn status_request() -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn startup_command(args: &[&str]) -> Result<Value, CliError> {
-    if args.get(1).copied() != Some("get") {
-        return Err(CliError::InvalidArguments(
-            "usage: startup get [--database <path>]".into(),
-        ));
-    }
-    let request = request("startup.get");
+    let action = args.get(1).copied().unwrap_or_default();
+    let (method, params) = match action {
+        "get" => ("startup.get", None),
+        "plan" => {
+            if !args.contains(&"--database") {
+                return Err(CliError::InvalidArguments(
+                    "startup plan requires --database <absolute-path>".into(),
+                ));
+            }
+            let enabled = match (args.contains(&"--enabled"), args.contains(&"--disabled")) {
+                (true, false) => true,
+                (false, true) => false,
+                _ => {
+                    return Err(CliError::InvalidArguments(
+                        "startup plan requires exactly one of --enabled or --disabled".into(),
+                    ));
+                }
+            };
+            ("startup.plan", Some(json!({ "enabled": enabled })))
+        }
+        "apply" => {
+            if !args.contains(&"--database") {
+                return Err(CliError::InvalidArguments(
+                    "startup apply requires --database <absolute-path>".into(),
+                ));
+            }
+            let plan_id = positional(args, 2, "plan-id")?;
+            let idempotency_key =
+                optional_option_value(args, "--idempotency-key")?.ok_or_else(|| {
+                    CliError::InvalidArguments(
+                        "startup apply requires --idempotency-key KEY".into(),
+                    )
+                })?;
+            (
+                "startup.apply",
+                Some(json!({ "planId": plan_id, "idempotencyKey": idempotency_key })),
+            )
+        }
+        _ => {
+            return Err(CliError::InvalidArguments(
+                "usage: startup <get|plan|apply> [options]".into(),
+            ));
+        }
+    };
+    let request = audiorouter_protocol::JsonRpcRequest {
+        params,
+        ..request(method)
+    };
     let response = if args.contains(&"--database") {
         ControlPlane::with_storage("cli", database(args)?).dispatch(request)
     } else {
@@ -105,7 +147,7 @@ fn startup_command(args: &[&str]) -> Result<Value, CliError> {
     };
     response
         .result
-        .ok_or_else(|| CliError::InvalidArguments("startup status unavailable".into()))
+        .ok_or_else(|| CliError::InvalidArguments("startup operation unavailable".into()))
 }
 
 fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1416,6 +1458,14 @@ fn help_value() -> Value {
         .unwrap()
         .insert(3, json!("startup get [--database <path>]"));
     value["commands"].as_array_mut().unwrap().insert(
+        4,
+        json!("startup plan --enabled|--disabled --database <absolute-path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        5,
+        json!("startup apply <plan-id> --idempotency-key KEY --database <absolute-path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
         7,
         json!("watch <session-id> --database <path> [--after N] [--limit N] [--category NAME]..."),
     );
@@ -2441,6 +2491,47 @@ mod tests {
             serde_json::from_str(&run(["startup", "get", "--json"]).unwrap()).unwrap();
         assert_eq!(startup["enabled"], false);
         assert_eq!(startup["registration"], "unavailable");
+    }
+
+    #[test]
+    fn startup_plan_and_apply_commands_use_durable_plan_storage() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-cli-startup-plan-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let path = path.to_string_lossy().into_owned();
+        let planned: Value = serde_json::from_str(
+            &run([
+                "startup",
+                "plan",
+                "--enabled",
+                "--database",
+                &path,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(planned["enabled"], true);
+        assert_eq!(planned["registration"], "unavailable");
+        let plan_id = planned["planId"].as_str().unwrap().to_owned();
+        let applied: Value = serde_json::from_str(
+            &run([
+                "startup",
+                "apply",
+                &plan_id,
+                "--idempotency-key",
+                "cli-startup-1",
+                "--database",
+                &path,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(applied["state"], "unavailable");
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

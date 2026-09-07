@@ -320,6 +320,13 @@ does not change machine configuration. Domain, control, and CLI validation is
 covered by the workspace test suite (50 control tests, 23 domain tests, and
 10 CLI tests).
 
+The CLI now adds `startup plan --enabled|--disabled` and
+`startup apply <plan-id>`, requiring an explicit absolute SQLite database so a
+plan can cross separate CLI processes. The apply result remains explicitly
+unavailable until native registration exists; 24 CLI/MCP process tests,
+formatting, strict Clippy, and documentation validation pass without changing
+startup or machine configuration.
+
 ## 2026-09-06 — Durable recording checkpoints
 
 SQLite now stores versioned `RecorderController` checkpoints separately from
