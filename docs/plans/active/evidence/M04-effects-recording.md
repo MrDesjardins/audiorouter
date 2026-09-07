@@ -486,3 +486,10 @@ an indexed FLAC is externally replaced, refresh now reloads its bounded Vorbis
 title metadata rather than retaining stale values; the file path and safety
 policy remain unchanged. Recording coverage is now 30 tests with strict
 Clippy; native realtime integration remains separate work.
+
+The M04 acceptance wrapper was requalified at clean revision `e34438f`.
+All 25 DSP tests and 30 recording tests passed, including the dedicated
+sixty-second pitch-duration regression, incremental WAV/FLAC recovery, and
+metadata/path safeguards. Formatting, strict Clippy, and diff checks passed.
+The wrapper used temporary test state only and did not access audio devices or
+change machine configuration.

@@ -516,3 +516,8 @@ and rejects non-finite or out-of-range gain values before they enter a draft.
 Boundary and rejection regressions pass; UI typecheck and all 59 Vitest tests
 pass. The single-line inspector markup now advertises the same +24 dB maximum;
 backend and draft validation remain authoritative.
+
+The M05 acceptance wrapper was requalified at clean revision `e34438f`.
+TypeScript typecheck and all 59 Vitest tests passed, followed by a disposable
+three-file Vite production build. Temporary output was removed and no audio,
+driver, or machine configuration was changed.
