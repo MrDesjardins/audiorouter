@@ -42,8 +42,15 @@ pub fn diff_endpoint_snapshots(
     previous: &[EndpointInfo],
     current: &[EndpointInfo],
 ) -> Vec<EndpointChange> {
+    // Windows does not promise a stable enumeration order. Sort private
+    // clones so reconnect/event consumers receive reproducible change order
+    // without mutating either caller-owned snapshot.
+    let mut previous = previous.to_vec();
+    let mut current = current.to_vec();
+    previous.sort_by(|left, right| left.id.cmp(&right.id));
+    current.sort_by(|left, right| left.id.cmp(&right.id));
     let mut changes = Vec::new();
-    for before in previous {
+    for before in &previous {
         match current.iter().find(|after| after.id == before.id) {
             Some(after) if after != before => changes.push(EndpointChange::Changed {
                 before: before.clone(),
@@ -53,7 +60,7 @@ pub fn diff_endpoint_snapshots(
             None => changes.push(EndpointChange::Removed(before.clone())),
         }
     }
-    for after in current {
+    for after in &current {
         if !previous.iter().any(|before| before.id == after.id) {
             changes.push(EndpointChange::Added(after.clone()));
         }
@@ -1112,6 +1119,30 @@ mod tests {
         assert_eq!(changes.len(), 2);
         assert!(changes.contains(&EndpointChange::Changed { before, after }));
         assert!(changes.contains(&EndpointChange::Added(added)));
+    }
+
+    #[test]
+    fn endpoint_snapshot_diff_is_deterministic_when_enumeration_order_changes() {
+        let endpoint = |id: &str| EndpointInfo {
+            id: id.into(),
+            direction: EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+        };
+        let before = [endpoint("zulu"), endpoint("alpha")];
+        let current = [endpoint("bravo"), endpoint("alpha")];
+        let changes = diff_endpoint_snapshots(&before, &current);
+        assert_eq!(
+            changes,
+            vec![
+                EndpointChange::Removed(endpoint("zulu")),
+                EndpointChange::Added(endpoint("bravo")),
+            ]
+        );
     }
 
     #[test]
