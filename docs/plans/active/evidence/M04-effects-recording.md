@@ -512,3 +512,14 @@ payload returns `idempotencyConflict`. Preview and missing-file outcomes do not
 create mutation journal entries. The control suite (71 tests), full locked
 workspace, formatting, and strict Clippy pass; no audio endpoint or machine
 configuration was accessed.
+## 2026-09-06 — Evidence reconciliation
+
+The earlier checkpoint and FLAC paragraphs above are historical snapshots and
+are superseded by the later implementation evidence in this file and the
+active plan. Durable SQLite checkpoint persistence is now wired into the
+control-plane recorder lifecycle, and the WAV/incremental-FLAC workers expose
+flush-ordered checkpoint hooks with recovery coverage. The incremental FLAC
+writer/recorder and bounded Vorbis metadata path are also implemented and
+tested. Remaining M04 limitations are native realtime graph integration,
+hardware timing, and production-scale compression/performance evaluation;
+portable tests do not claim those gates.
