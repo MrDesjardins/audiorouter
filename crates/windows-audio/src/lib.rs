@@ -52,6 +52,47 @@ pub enum EndpointChange {
     },
 }
 
+/// Result of resolving a previously persisted endpoint binding against a
+/// fresh read-only snapshot. Missing and direction-changed bindings are
+/// explicit so a reconnect path cannot silently substitute another device.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EndpointBindingResolution {
+    Available(EndpointInfo),
+    Missing {
+        id: String,
+        direction: EndpointDirection,
+    },
+    DirectionChanged {
+        id: String,
+        expected: EndpointDirection,
+        actual: EndpointDirection,
+    },
+}
+
+/// Resolve one exact opaque endpoint ID without opening or initializing it.
+/// A caller may decide how to present `Missing` or `DirectionChanged`, but the
+/// adapter deliberately does not choose a replacement endpoint.
+pub fn resolve_endpoint_binding(
+    snapshot: &[EndpointInfo],
+    id: &str,
+    direction: EndpointDirection,
+) -> EndpointBindingResolution {
+    match snapshot.iter().find(|endpoint| endpoint.id == id) {
+        Some(endpoint) if endpoint.direction == direction => {
+            EndpointBindingResolution::Available(endpoint.clone())
+        }
+        Some(endpoint) => EndpointBindingResolution::DirectionChanged {
+            id: id.to_owned(),
+            expected: direction,
+            actual: endpoint.direction,
+        },
+        None => EndpointBindingResolution::Missing {
+            id: id.to_owned(),
+            direction,
+        },
+    }
+}
+
 /// Diff two metadata snapshots by opaque endpoint ID. This is a control-plane
 /// polling helper; it never rebinding a missing endpoint or opens a stream.
 pub fn diff_endpoint_snapshots(
@@ -1332,6 +1373,47 @@ mod tests {
                 EndpointChange::Removed(endpoint("zulu")),
                 EndpointChange::Added(endpoint("bravo")),
             ]
+        );
+    }
+
+    #[test]
+    fn endpoint_binding_requires_exact_id_and_direction() {
+        let endpoint = EndpointInfo {
+            id: "stable-id".into(),
+            direction: EndpointDirection::Capture,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 1,
+            bits_per_sample: 32,
+            format_tag: 3,
+        };
+        assert_eq!(
+            resolve_endpoint_binding(
+                std::slice::from_ref(&endpoint),
+                "stable-id",
+                EndpointDirection::Capture
+            ),
+            EndpointBindingResolution::Available(endpoint.clone())
+        );
+        assert_eq!(
+            resolve_endpoint_binding(
+                std::slice::from_ref(&endpoint),
+                "stable-id",
+                EndpointDirection::Render
+            ),
+            EndpointBindingResolution::DirectionChanged {
+                id: "stable-id".into(),
+                expected: EndpointDirection::Render,
+                actual: EndpointDirection::Capture,
+            }
+        );
+        assert_eq!(
+            resolve_endpoint_binding(&[endpoint], "gone", EndpointDirection::Capture),
+            EndpointBindingResolution::Missing {
+                id: "gone".into(),
+                direction: EndpointDirection::Capture,
+            }
         );
     }
 

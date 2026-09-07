@@ -230,6 +230,16 @@ match the requested direction, and an omitted ID may select only within the
 requested direction. The standalone probe tests, strict Clippy, and locked
 compile check pass.
 
+## Fail-closed endpoint binding resolution (2026-09-07)
+
+The Windows-audio adapter now exposes `resolve_endpoint_binding` for a fresh
+read-only endpoint snapshot. It returns an endpoint only when the persisted
+opaque ID and expected direction both match; a missing ID or direction change
+is returned explicitly, with no friendly-name or enumeration-order fallback.
+The regression passes in the 18-test Windows-audio suite with strict Clippy
+and doc-tests. This is a recovery decision boundary only; native stream
+re-opening, hardware removal/reconnect, and graph rebind remain open.
+
 ## Route output ownership cleanup (2026-09-07)
 
 The adapter-route probe now separates render serialization/submission errors
