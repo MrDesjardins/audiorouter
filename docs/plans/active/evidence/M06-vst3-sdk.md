@@ -73,6 +73,12 @@ start a new filesystem scan. UI typecheck, 70 UI tests, and the disposable
 production build passed; no plugin code, audio stream, or machine configuration
 was accessed.
 
+Each scan result now also offers an explicit path-selection action for the
+inspection field. Selecting a result only copies the already returned path;
+the separate inspect action is still required, so discovery cannot implicitly
+load plugin code. M05 typecheck, 73 UI tests, and the disposable production
+build passed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06
