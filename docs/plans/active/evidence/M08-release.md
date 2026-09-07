@@ -291,3 +291,9 @@ Artifact preparation now checks every existing parent from the requested output
 directory up to the filesystem root, not only the immediate parent. This
 prevents a redirected grandparent from receiving unsigned release artifacts;
 the existing disposable path-safety suite continues to pass.
+## Post-hardening release qualification (2026-09-06)
+
+The complete M08 wrapper passed after lexical and parent-chain reparse
+hardening. Optimized unsigned artifacts, manifest provenance, notices/SBOM,
+checksums, explicit blocker assertions, and verification succeeded in a
+disposable directory; the directory was removed afterward.
