@@ -156,7 +156,7 @@ availability or mutate machine configuration.
 
 Status session counts now come from the durable SQLite table when a storage-backed control plane is used, avoiding false zero counts before lazy hydration; active IDs are sorted for deterministic output. Storage runtime tests pass 20 tests and compile/lint checks remain green.
 
-When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. A control regression covers the expired-cursor path; 24 control tests pass with strict Clippy. Transport subscriber lifetime and reconnect ownership remain open.
+When an event cursor falls outside retained history, `events.subscribe` now returns an explicit resync result containing `resyncRequired`, the backend epoch/current sequence, and a bounded current session snapshot. The subscription also accepts a bounded `categories` array and applies it together with the existing session filter, so clients do not need to replay unrelated state events. Control regressions cover category filtering, invalid filter sizes, and cursor expiry; transport subscriber lifetime and reconnect ownership remain open.
 
 The native transport now exposes a bounded persistent session API and a control-plane adapter. One authenticated named-pipe connection can carry a fixed number of framed requests before deterministic disconnect; the Windows transport suite passed 14 tests, including same-connection multi-frame exchange, with compile and strict Clippy green. The API remains bounded and does not claim an unbounded production daemon.
 

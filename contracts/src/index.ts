@@ -488,6 +488,14 @@ export interface EventsSubscribeResult {
   snapshot?: { sessions: SessionListPage };
 }
 
+export interface EventsSubscribeParams {
+  afterSequence?: number;
+  backendEpoch?: number;
+  categories?: string[];
+  limit?: number;
+  sessionId?: EntityId;
+}
+
 export interface ApplicationInfo {
   processId: number;
   executable: string;
@@ -627,7 +635,7 @@ export type MethodParams = {
   "graph.history": { sessionId: EntityId; cursor?: string; limit?: number };
   "graph.undoPlan": { sessionId: EntityId; baseRevision: number };
   "events.subscribe":
-    | { afterSequence?: number; backendEpoch?: number; limit?: number; sessionId?: EntityId }
+    | EventsSubscribeParams
     | undefined;
   "nodes.describe": undefined;
   "presets.list": undefined;

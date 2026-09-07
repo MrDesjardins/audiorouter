@@ -52,7 +52,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 | `routes.inspect` | `read` | read-only |
 | `graph.history` | `read` | read-only |
 | `graph.undoPlan` | `graphWrite` | plan-only |
-| `events.subscribe` | `read` | read-only |
+| `events.subscribe` | `read` | read-only; replays by cursor with optional session and bounded category filters |
 | `sessions.get` | `read` | read-only |
 | `sessions.list` | `read` | read-only |
 | `sessions.create` | `graphWrite` | mutating |

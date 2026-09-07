@@ -384,6 +384,11 @@ fn method_input_schema(name: &str) -> Value {
             json!({
                 "afterSequence": { "type": "integer", "minimum": 0 },
                 "backendEpoch": { "type": "integer", "minimum": 0 },
+                "categories": {
+                    "type": "array",
+                    "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+                    "maxItems": 32
+                },
                 "limit": { "type": "integer", "minimum": 1, "maximum": 500 },
                 "sessionId": { "type": ["string", "null"] }
             }),
@@ -3544,6 +3549,33 @@ impl ControlPlane {
                     .map_err(|_| ControlError::InvalidRequest("invalid sessionId".into()))
             })
             .transpose()?;
+        let category_filter = params
+            .get("categories")
+            .map(|value| {
+                let categories = value.as_array().ok_or_else(|| {
+                    ControlError::InvalidRequest("categories must be an array".into())
+                })?;
+                if categories.is_empty() || categories.len() > 32 {
+                    return Err(ControlError::InvalidRequest(
+                        "categories must contain between 1 and 32 items".into(),
+                    ));
+                }
+                categories
+                    .iter()
+                    .map(|category| {
+                        let category = category.as_str().ok_or_else(|| {
+                            ControlError::InvalidRequest("event categories must be strings".into())
+                        })?;
+                        if category.is_empty() || category.chars().count() > 128 {
+                            return Err(ControlError::InvalidRequest(
+                                "event category must contain 1 to 128 characters".into(),
+                            ));
+                        }
+                        Ok(category.to_owned())
+                    })
+                    .collect::<Result<Vec<_>, ControlError>>()
+            })
+            .transpose()?;
         let events = match self.events.since(after_sequence, limit as usize) {
             Ok(events) => events,
             Err(EventReplayError::InvalidLimit) => {
@@ -3563,10 +3595,19 @@ impl ControlPlane {
         }
         .into_iter()
         .filter(|event| {
-            session_filter
+            let session_matches = session_filter
                 .as_ref()
                 .map(|id| event.session_id.as_ref() == Some(id))
-                .unwrap_or(true)
+                .unwrap_or(true);
+            let category_matches = category_filter
+                .as_ref()
+                .map(|categories| {
+                    categories
+                        .iter()
+                        .any(|category| category == &event.category)
+                })
+                .unwrap_or(true);
+            session_matches && category_matches
         })
         .collect::<Vec<_>>();
         Ok(json!({
@@ -4097,7 +4138,13 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "routes.inspect" => &["sessionId", "destinationNode"],
         "graph.history" => &["sessionId", "cursor", "limit"],
         "graph.undoPlan" => &["sessionId", "baseRevision"],
-        "events.subscribe" => &["afterSequence", "backendEpoch", "limit", "sessionId"],
+        "events.subscribe" => &[
+            "afterSequence",
+            "backendEpoch",
+            "categories",
+            "limit",
+            "sessionId",
+        ],
         "graph.plan" => &["sessionId", "baseRevision", "candidate"],
         "graph.commit" => &[
             "planId",
@@ -5606,6 +5653,41 @@ mod tests {
         assert_eq!(result["backendEpoch"], 1);
         assert_eq!(result["events"].as_array().unwrap().len(), 2);
         assert_eq!(result["events"][1]["operationId"], "event-commit");
+    }
+
+    #[test]
+    fn events_subscribe_filters_by_category_and_rejects_unbounded_filters() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.name = "evented".into();
+        let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "category-filter").unwrap();
+
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(6)),
+            method: "events.subscribe".into(),
+            params: Some(json!({
+                "afterSequence": 0,
+                "categories": ["graph.committed"]
+            })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["events"].as_array().unwrap().len(), 1);
+        assert_eq!(result["events"][0]["category"], "graph.committed");
+
+        let too_many_categories = vec!["state.test"; 33];
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(7)),
+            method: "events.subscribe".into(),
+            params: Some(json!({
+                "categories": too_many_categories
+            })),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
     }
 
     #[test]
