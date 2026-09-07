@@ -104,3 +104,8 @@ checkout under the system temporary directory, selects the 64-bit MSBuild
 host, requires normal package/API validation, checks the driver and catalog
 outputs, and removes generated `x64` directories by default. It performs no
 driver installation or machine configuration operation.
+
+The checked-in wrapper was then executed against fresh disposable SysVAD and
+WIL checkouts. It passed the full x64 Release solution build, package/API
+validation, and output assertions, and removed generated output directories;
+the source checkout was removed separately afterward.
