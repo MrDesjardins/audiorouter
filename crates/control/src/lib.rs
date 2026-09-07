@@ -1667,6 +1667,11 @@ impl ControlPlane {
         let privacy_muted = storage.load_privacy_mute().unwrap_or(true);
         let backend_epoch = storage.claim_backend_epoch().unwrap_or(1);
         let virtual_buses = storage.load_virtual_buses().unwrap_or_default();
+        let persisted_sessions = storage.list_sessions(128).unwrap_or_default();
+        let mut store = GraphStore::default();
+        for session in persisted_sessions {
+            let _ = store.insert_session(session);
+        }
         let now = unix_epoch_seconds();
         let mut virtual_bus_plans = HashMap::new();
         if let Ok(plans) = storage.load_virtual_device_plans() {
@@ -1687,7 +1692,7 @@ impl ControlPlane {
             }
         }
         Self {
-            store: GraphStore::default(),
+            store,
             build: build.into(),
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
@@ -3471,6 +3476,25 @@ impl ControlPlane {
                 return Ok(result);
             }
         }
+        let restored = if self.recorders.contains_key(&session_id) {
+            None
+        } else {
+            self.storage
+                .as_ref()
+                .and_then(|storage| {
+                    storage
+                        .load_recording_checkpoint(session_id.as_str())
+                        .transpose()
+                })
+                .transpose()
+                .map_err(storage_error)?
+        };
+        if let Some(checkpoint) = restored {
+            let recorder = RecorderController::restore(checkpoint).map_err(|error| {
+                ControlError::InvalidRequest(format!("recorder checkpoint is invalid: {error:?}"))
+            })?;
+            self.recorders.insert(session_id.clone(), recorder);
+        }
         let recorder = self.recorders.entry(session_id.clone()).or_default();
         let result = match method {
             "recorders.arm" => recorder.arm(),
@@ -3497,11 +3521,23 @@ impl ControlPlane {
         let checkpoint = recorder.checkpoint();
         let result = json!({
             "sessionId": session_id,
-            "state": serde_json::to_value(recorder.state()).map_err(|error| ControlError::Json(error.to_string()))?,
-            "parts": checkpoint.parts,
-            "pauses": checkpoint.pauses,
+            "state": recorder_state_name(recorder.state()),
+            "parts": checkpoint.parts.iter().map(|part| json!({
+                "index": part.index,
+                "startFrame": part.start_frame,
+                "endFrame": part.end_frame,
+            })).collect::<Vec<_>>(),
+            "pauses": checkpoint.pauses.iter().map(|pause| json!({
+                "startFrame": pause.start_frame,
+                "endFrame": pause.end_frame,
+            })).collect::<Vec<_>>(),
             "lastFrame": checkpoint.last_frame,
         });
+        if let Some(storage) = &self.storage {
+            storage
+                .save_recording_checkpoint(session_id.as_str(), &checkpoint)
+                .map_err(storage_error)?;
+        }
         if let Some(key) = scoped_key {
             self.journal_idempotent_result(&key, method, &request_hash, &result)?;
         }
@@ -4787,6 +4823,18 @@ fn storage_error(error: StorageError) -> ControlError {
         StorageError::CorruptDatabase(message) => ControlError::CorruptDatabase(message),
         StorageError::IdempotencyConflict => ControlError::IdempotencyConflict,
         error => ControlError::Storage(format!("{error:?}")),
+    }
+}
+
+fn recorder_state_name(state: audiorouter_recording::RecorderState) -> &'static str {
+    match state {
+        audiorouter_recording::RecorderState::Idle => "idle",
+        audiorouter_recording::RecorderState::Armed => "armed",
+        audiorouter_recording::RecorderState::Recording => "recording",
+        audiorouter_recording::RecorderState::Paused => "paused",
+        audiorouter_recording::RecorderState::Stopping => "stopping",
+        audiorouter_recording::RecorderState::Completed => "completed",
+        audiorouter_recording::RecorderState::Failed => "failed",
     }
 }
 
@@ -7459,5 +7507,47 @@ mod tests {
             conflict.error.unwrap().message,
             "idempotency key is already used for a different request"
         );
+    }
+
+    #[test]
+    fn recorder_checkpoint_survives_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recorder-control-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let mut plane =
+                ControlPlane::with_storage("recorder-first", Storage::open(&path).unwrap());
+            plane.insert_session(session()).unwrap();
+            assert!(plane
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: "recorders.arm".into(),
+                    params: Some(json!({"sessionId": "session"})),
+                })
+                .result
+                .is_some());
+            assert!(plane
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(2)),
+                    method: "recorders.start".into(),
+                    params: Some(json!({"sessionId": "session", "frame": 128})),
+                })
+                .result
+                .is_some());
+        }
+        let mut restarted =
+            ControlPlane::with_storage("recorder-second", Storage::open(&path).unwrap());
+        let response = restarted.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "recorders.pause".into(),
+            params: Some(json!({"sessionId": "session", "frame": 256})),
+        });
+        assert_eq!(response.result.unwrap()["state"], "paused");
+        let _ = std::fs::remove_file(path);
     }
 }
