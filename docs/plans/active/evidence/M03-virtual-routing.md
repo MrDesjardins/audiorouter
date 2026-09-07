@@ -277,3 +277,8 @@ copies. Capture consumers reject and recycle stale tagged blocks, and the
 bounded ring exposes the same filter for fan-out consumers. Regression coverage
 verifies tag propagation and stale-block recycling; the engine suite passes 49
 tests with strict Clippy. Native driver synchronization remains open.
+
+Inactive capture now drains and rejects queued blocks before applying the
+generation filter, preserving the bridge's fail-silent shutdown contract even
+if a consumer races deactivation. The 49-test engine suite and strict Clippy
+remain green; no live endpoint is opened.

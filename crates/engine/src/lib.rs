@@ -488,6 +488,10 @@ impl VirtualBusBridge {
     }
 
     pub fn try_receive_capture(&self) -> Option<AudioBlock> {
+        if !self.is_active() {
+            self.drain_capture();
+            return None;
+        }
         self.capture.try_receive_generation(self.generation())
     }
 
