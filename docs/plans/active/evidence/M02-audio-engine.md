@@ -292,3 +292,10 @@ activating WASAPI; a topology race after validation remains surfaced by the
 underlying WASAPI HRESULT. The new error payload is boxed so ordinary audio
 errors remain small, and native stream recovery still requires the caller to
 refresh and deliberately retry or renegotiate.
+
+The adapter-route probe now creates an `EndpointMonitor` from the selected
+inventory and opens both streams through `SharedCapture::open_bound` and
+`SharedRender::open_bound`. Packet strides come from the validated endpoint
+metadata helper, so the live route cannot bypass the binding or frame-shape
+checks. The monitor validation remains a control-plane precondition; topology
+races after validation are still surfaced by WASAPI errors.

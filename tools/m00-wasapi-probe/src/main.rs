@@ -11,7 +11,8 @@ use audiorouter_engine::{
     AudioBlock, ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph,
 };
 use audiorouter_windows_audio::{
-    enumerate_active_endpoints, AudioError, EndpointDirection, SharedCapture, SharedRender,
+    enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor, SharedCapture,
+    SharedRender,
 };
 use std::sync::{Arc, Condvar, Mutex};
 use windows::core::Result;
@@ -95,12 +96,8 @@ fn adapter_smoke(
                 "no active render endpoint",
             ))
         })?;
-    let capture_bytes_per_frame = usize::from(capture_info.channels)
-        .checked_mul(usize::from(capture_info.bits_per_sample / 8))
-        .ok_or(AudioError::InvalidFrameSize)?;
-    let render_bytes_per_frame = usize::from(render_info.channels)
-        .checked_mul(usize::from(render_info.bits_per_sample / 8))
-        .ok_or(AudioError::InvalidFrameSize)?;
+    let capture_bytes_per_frame = capture_info.bytes_per_frame()?;
+    let render_bytes_per_frame = render_info.bytes_per_frame()?;
     if capture_bytes_per_frame == 0 || render_bytes_per_frame == 0 {
         return Err(AudioError::InvalidFrameSize);
     }
@@ -114,8 +111,9 @@ fn adapter_smoke(
     {
         return Err(AudioError::InvalidFrameSize);
     }
-    let mut capture = SharedCapture::open(&capture_info.id, 1_000_000)?;
-    let mut render = SharedRender::open(&render_info.id, 1_000_000)?;
+    let monitor = EndpointMonitor::start()?;
+    let mut capture = SharedCapture::open_bound(&monitor, capture_info, 1_000_000)?;
+    let mut render = SharedRender::open_bound(&monitor, render_info, 1_000_000)?;
     let scheduler = RealtimeScheduler::new(8, usize::from(capture_info.channels), 128)
         .map_err(|_| AudioError::InvalidFrameSize)?;
     let generation = RuntimeGeneration::new(1);
