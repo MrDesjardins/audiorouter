@@ -272,7 +272,7 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
 fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path> [--limit N] [--cursor ID]"
+            "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path> [--limit N] [--cursor ID] [--idempotency-key KEY]"
                 .into(),
         )
     })?;
@@ -390,12 +390,29 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
             })),
         ),
         _ => return Err(CliError::InvalidArguments(
-        "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path> [--limit N] [--cursor ID]"
+        "usage: recordings <list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle> [<recording-id>] --database <path> [--limit N] [--cursor ID] [--idempotency-key KEY]"
                 .into(),
         )),
     };
     let mut plane = ControlPlane::with_storage("cli", database(args)?);
     let mut params = params;
+    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    if let Some(key) = idempotency_key {
+        if !matches!(
+            method,
+            "recordings.setMetadata"
+                | "recordings.rename"
+                | "recordings.removeEntry"
+                | "recordings.recycle"
+        ) {
+            return Err(CliError::InvalidArguments(
+                "--idempotency-key is only valid for recording mutations".into(),
+            ));
+        }
+        if let Some(object) = params.as_mut().and_then(Value::as_object_mut) {
+            object.insert("idempotencyKey".into(), json!(key));
+        }
+    }
     if method == "recordings.setMetadata" {
         let recording_id = params
             .as_ref()
