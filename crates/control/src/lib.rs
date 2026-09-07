@@ -2504,6 +2504,13 @@ impl ControlPlane {
                 { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 },
                 { "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }
             ]),
+            audiorouter_domain::NodeKind::Compressor => json!([
+                { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -60.0, "maximum": 0.0, "default": -18.0 },
+                { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 3.0 },
+                { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 200.0, "default": 10.0 },
+                { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 },
+                { "name": "makeupDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 24.0, "default": 0.0 }
+            ]),
             _ => json!([]),
         }
     }
@@ -2541,7 +2548,7 @@ impl ControlPlane {
             },
             {
                 "id": "compressor", "version": 1, "category": "dynamics",
-                "availability": unavailable, "latencySamples": 0,
+                "availability": available, "latencySamples": 0,
                 "parameters": [
                     { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -60.0, "maximum": 0.0, "default": -18.0 },
                     { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 3.0 },

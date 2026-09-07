@@ -145,6 +145,19 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+The dedicated engine regression also confirms that a prepared compressor stage
+reduces sustained level over successive blocks while retaining finite output.
+
+## 2026-09-07 — Compressor graph integration
+
+The portable graph now includes the validated `compressor@1` node. Domain
+validation enforces threshold, ratio, attack, release, and makeup bounds;
+discovery advertises the processor as available; and the UI library can add a
+configured compressor to a draft. The engine prepares stateful compressor
+stages per active channel and fails closed if a state boundary is unavailable.
+This is portable graph evidence only; native callback scheduling, stereo-linked
+hardware routing, device activation, and production performance remain open.
+
 `audiorouter-engine` now provides `VoiceChainBlockProcessor` for the worker
 boundary. It preallocates interleaved scratch for a declared channel/frame
 shape, copies planar blocks into `VoiceChain`, copies results back, and rejects

@@ -2137,8 +2137,7 @@ mod tests {
             .iter()
             .any(|processor| processor["availability"]["status"] == "available"));
         assert!(processors.as_array().unwrap().iter().any(|processor| {
-            processor["id"] == "parametricEq"
-                && processor["availability"]["status"] == "available"
+            processor["id"] == "parametricEq" && processor["availability"]["status"] == "available"
         }));
     }
 

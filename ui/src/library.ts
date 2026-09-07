@@ -4,7 +4,7 @@ export type LibraryEntry = {
   id: string;
   label: string;
   category: string;
-  kind?: Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq">;
+  kind?: Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor">;
   unavailableReason?: string;
 };
 
@@ -21,6 +21,7 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "mute", label: "Mute", category: "Effect", kind: "mute" },
   { id: "meter", label: "Meter", category: "Monitor", kind: "meter" },
   { id: "parametric-eq", label: "Parametric EQ", category: "Effect", kind: "parametricEq" },
+  { id: "compressor", label: "Compressor", category: "Effect", kind: "compressor" },
 ];
 
 export function filterLibraryEntries(entries: LibraryEntry[], query: string): LibraryEntry[] {

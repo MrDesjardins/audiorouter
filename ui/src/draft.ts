@@ -10,9 +10,9 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq">;
+export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor">;
 
-const libraryNodeDefinitions: Record<Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq">, {
+const libraryNodeDefinitions: Record<LibraryNodeKind, {
   name: string;
   parameters: Record<string, boolean | number | string>;
   ports: Session["nodes"][number]["ports"];
@@ -49,6 +49,14 @@ const libraryNodeDefinitions: Record<Extract<NodeKind, "mixer" | "gain" | "mute"
   parametricEq: {
     name: "Parametric EQ",
     parameters: { frequencyHz: 1000, q: 1, gainDb: 0 },
+    ports: [
+      { name: "in", direction: "input", channels: 1 },
+      { name: "out", direction: "output", channels: 1 },
+    ],
+  },
+  compressor: {
+    name: "Compressor",
+    parameters: { thresholdDb: -18, ratio: 3, attackMs: 10, releaseMs: 150, makeupDb: 0 },
     ports: [
       { name: "in", direction: "input", channels: 1 },
       { name: "out", direction: "output", channels: 1 },
