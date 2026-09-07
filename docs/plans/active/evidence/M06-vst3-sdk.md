@@ -85,6 +85,12 @@ catalog failures are shown as unavailable and disconnected mode does not
 invent processor data. Contracts typecheck, UI typecheck, 75 UI tests, and the
 disposable M05 production build passed; no processor or plugin was executed.
 
+The UI now also consumes the dedicated read-only `presets.list` method and
+displays authoritative voice-chain and EQ metadata separately from local
+templates. Catalog failures remain visible and no preset is applied during
+refresh. Contracts typecheck, UI typecheck, 76 UI tests, and the disposable
+M05 production build passed; no plugin code or audio was executed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

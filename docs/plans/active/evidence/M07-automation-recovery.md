@@ -837,6 +837,11 @@ catalog path. Its result is read-only and failure-visible; no processor is
 activated by inventory refresh. Contracts typecheck, UI typecheck, 75 UI tests,
 and the M05 acceptance build passed.
 
+The UI/API parity surface now includes `presets.list`; its catalog is
+read-only, authorized through the shared adapter, and failure-visible. The
+dedicated adapter regression and M05 acceptance pass with 76 UI tests; no
+session, processor, plugin, or machine state is mutated by catalog refresh.
+
 The current M07 headless acceptance also passed at this revision: 25 CLI tests,
 2 MCP interoperability tests, 83 control tests, 33 plugin-host tests, 8
 worker-process tests, and strict Clippy. M01 CLI acceptance passed as part of

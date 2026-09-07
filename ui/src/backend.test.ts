@@ -39,6 +39,7 @@ describe("snapshot cache", () => {
       listApplications: async () => [],
       listDevices: async () => [],
       listProcessors: async () => [],
+      listPresets: async () => { throw new Error("not connected"); },
       scanPlugins: async () => { throw new Error("not connected"); },
       listPlugins: async () => { throw new Error("not connected"); },
       retryPlugins: async () => { throw new Error("not connected"); },
@@ -153,6 +154,18 @@ describe("live event cursor", () => {
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listProcessors()).resolves.toEqual([]);
     expect(received).toEqual({ method: "processors.list", params: undefined });
+  });
+
+  it("forwards the dedicated preset catalog method", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { voiceChains: [], eq: [] };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listPresets()).resolves.toEqual({ voiceChains: [], eq: [] });
+    expect(received).toEqual({ method: "presets.list", params: undefined });
   });
 
   it("maps application inventory to the canonical read method", async () => {
