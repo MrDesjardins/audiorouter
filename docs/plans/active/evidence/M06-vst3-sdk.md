@@ -651,3 +651,9 @@ The installer now audits the complete existing destination-parent chain before
 clone or checkout operations. Its disposable regression rejects both an
 unrelated Git origin and a destination below a symbolic-link parent when the
 host permits link creation; fixtures are removed afterward.
+## Missing-parent compatibility correction (2026-09-06)
+
+The installer preserves its original ability to create missing ordinary
+destination parents. It walks upward to the nearest existing ancestor before
+checking the full parent chain for reparse points, so redirected ancestors are
+rejected without imposing a pre-existing-parent requirement.

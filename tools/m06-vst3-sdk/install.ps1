@@ -19,6 +19,12 @@ $destinationPath = [System.IO.Path]::GetFullPath($Destination)
 function Assert-NoReparseParents {
     param([Parameter(Mandatory = $true)][string]$Path)
     $parentPath = Split-Path -Parent $Path
+    while (-not [string]::IsNullOrWhiteSpace($parentPath) -and
+        -not (Test-Path -LiteralPath $parentPath -PathType Container)) {
+        $nextParent = Split-Path -Parent $parentPath
+        if ($nextParent -eq $parentPath) { break }
+        $parentPath = $nextParent
+    }
     while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
         $parentItem = Get-Item -LiteralPath $parentPath -Force -ErrorAction Stop
         if (($parentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
