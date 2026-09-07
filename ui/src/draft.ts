@@ -65,6 +65,7 @@ export function appendLibraryNode(
       {
         id,
         kind,
+        typeVersion: 1,
         name: `${definition.name} ${suffix}`,
         enabled: true,
         bypass: false,

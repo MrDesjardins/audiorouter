@@ -48,7 +48,7 @@ export interface Edge {
 export interface Session {
   id: EntityId;
   name: string;
-  schemaVersion: number;
+  schemaVersion: 1;
   revision: number;
   nodes: Node[];
   edges: Edge[];
