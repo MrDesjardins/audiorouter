@@ -231,7 +231,10 @@ fn method_input_schema(name: &str) -> Value {
             &["operationId"],
         ),
         "operations.cancel" => object_schema(
-            json!({ "operationId": { "type": "string", "minLength": 1 } }),
+            json!({
+                "operationId": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
             &["operationId"],
         ),
         "recordings.list" => object_schema(
@@ -1690,6 +1693,7 @@ impl ControlPlane {
                     format!("{client}\0recovery.clearSafeMode\0{operation_id}"),
                     format!("{client}\0clients.authorize\0{operation_id}"),
                     format!("{client}\0clients.revoke\0{operation_id}"),
+                    format!("{client}\0operations.cancel\0{operation_id}"),
                 ]
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
@@ -2055,7 +2059,7 @@ impl ControlPlane {
         }))
     }
 
-    fn dispatch_operation_cancel(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_operation_cancel(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params =
             params.ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
         let operation_id = params
@@ -2063,6 +2067,22 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "operationId": operation_id });
+                (
+                    self.scoped_idempotency_key("operations.cancel", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         let lookup_keys = self.operation_lookup_keys(operation_id);
         let exists = if let Some(storage) = &self.storage {
             lookup_keys.iter().try_fold(false, |found, key| {
@@ -2082,12 +2102,16 @@ impl ControlPlane {
         if !exists {
             return Err(ControlError::InvalidRequest("operation not found".into()));
         }
-        Ok(json!({
+        let result = json!({
             "operationId": operation_id,
             "status": "completed",
             "cancelled": false,
             "reason": "alreadyCompleted"
-        }))
+        });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "operations.cancel", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
@@ -4575,7 +4599,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "system.handshake" => &["protocolVersion"],
         "clients.authorize" => &["clientId", "role", "idempotencyKey"],
         "clients.revoke" => &["clientId", "idempotencyKey"],
-        "operations.get" | "operations.cancel" => &["operationId"],
+        "operations.get" => &["operationId"],
+        "operations.cancel" => &["operationId", "idempotencyKey"],
         "recordings.list" => &["sessionId", "cursor", "limit"],
         "recordings.get" | "recordings.recovery" | "recordings.reveal" | "recordings.preview" => {
             &["recordingId"]
