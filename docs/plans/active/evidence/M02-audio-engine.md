@@ -142,3 +142,10 @@ The guarded wrapper was executed with `-AllowLiveAudio -DurationMilliseconds
 200` and passed: 21 capture packets/10,080 frames/80,640 bytes and 11,136
 silent render frames were observed, and the before/after media-device snapshot
 was identical.
+
+The smoke path was then tightened to exercise `SharedRender::submit_bytes`
+with a preallocated all-zero caller buffer. The guarded 200 ms acceptance
+passed again with 21 capture packets/10,080 frames/80,640 bytes and 10,656
+zero-valued render frames; the media-device identity/state snapshot remained
+identical. This validates the caller-owned render-copy path without generating
+an audible signal.

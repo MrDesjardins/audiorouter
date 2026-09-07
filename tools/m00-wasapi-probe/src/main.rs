@@ -3,7 +3,8 @@
 //! The default inventory path does not capture audio, alter defaults, install
 //! drivers, or write outside stdout. The explicit `adapter-smoke` mode opens
 //! bounded production Rust capture/render clients, reads caller-owned capture
-//! data, submits only silent render buffers, then stops and resets both streams.
+//! data, submits zero-valued caller-owned render buffers, then stops and resets
+//! both streams.
 
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, SharedCapture, SharedRender,
@@ -74,7 +75,10 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
     let capture_bytes_per_frame = usize::from(capture_info.channels)
         .checked_mul(usize::from(capture_info.bits_per_sample / 8))
         .ok_or(AudioError::InvalidFrameSize)?;
-    if capture_bytes_per_frame == 0 {
+    let render_bytes_per_frame = usize::from(render_info.channels)
+        .checked_mul(usize::from(render_info.bits_per_sample / 8))
+        .ok_or(AudioError::InvalidFrameSize)?;
+    if capture_bytes_per_frame == 0 || render_bytes_per_frame == 0 {
         return Err(AudioError::InvalidFrameSize);
     }
     let mut capture = SharedCapture::open(&capture_info.id, 1_000_000)?;
@@ -90,6 +94,7 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
         let mut capture_bytes = 0usize;
         let mut render_frames = 0u32;
         let mut destination = vec![0u8; 1_048_576];
+        let render_source = vec![0u8; 1_048_576];
         while std::time::Instant::now() < deadline {
             if capture.wait_for_data(10)? {
                 while let Some((packet, bytes)) =
@@ -100,7 +105,8 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
                     capture_bytes = capture_bytes.saturating_add(bytes);
                 }
             }
-            render_frames = render_frames.saturating_add(render.submit_silence()?);
+            render_frames = render_frames
+                .saturating_add(render.submit_bytes(&render_source, render_bytes_per_frame)?);
         }
         if capture_packets == 0 || render_frames == 0 {
             return Err(AudioError::Windows(windows::core::Error::new(

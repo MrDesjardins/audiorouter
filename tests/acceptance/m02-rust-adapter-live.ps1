@@ -45,4 +45,4 @@ if (Compare-Object -ReferenceObject $before -DifferenceObject $after) {
     throw 'media-device identity/state changed during live adapter acceptance'
 }
 Write-Output "M02 production Rust adapter live acceptance passed: $line"
-Write-Output 'Scope: explicit bounded live capture plus silent render; streams stop/reset; media-device identity/state unchanged.'
+Write-Output 'Scope: explicit bounded live capture plus zero-valued caller-owned render buffers; streams stop/reset; media-device identity/state unchanged.'
