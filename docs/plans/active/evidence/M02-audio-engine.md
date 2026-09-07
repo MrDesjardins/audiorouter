@@ -11,6 +11,13 @@ non-event initialization and the Rust event-callback `E_INVALIDARG` path
 without silently weakening the event-driven contract. The adapter package's
 14 tests and strict Clippy pass; no live stream was opened for this change.
 
+The normal `SharedCapture::open` path now retries that polling request only
+when event-callback initialization returns exactly `E_INVALIDARG`. Busy-device,
+permission, and endpoint-loss errors are not retried or relabeled. The retry
+uses a fresh COM client, so a failed initialization cannot leave a partially
+configured client in use. This is a compatibility implementation, not live
+Rust stream qualification.
+
 ## 2026-09-05 — Read-only endpoint adapter
 
 Added `crates/windows-audio` as the first reusable Windows adapter boundary. It explicitly owns COM initialization/uninitialization, enumerates active capture and render endpoints, copies the COM-owned `WAVEFORMATEX` metadata before freeing it, and returns endpoint ID, direction, shared-mode periods, sample rate, channels, bits, and format tag. It also provides shared capture/render lifecycle wrappers with exact endpoint selection, bounded event-driven initialization, owned event handles, start/stop/reset, timeout waits, and packet/buffer operations that release device buffers immediately.

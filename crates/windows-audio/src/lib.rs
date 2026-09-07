@@ -369,7 +369,19 @@ impl SharedCapture {
     /// The duration argument is retained for API compatibility; event-driven
     /// shared-mode WASAPI requires `Initialize` to receive zero here.
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
-        Self::open_internal(endpoint_id, true, 0)
+        match Self::open_internal(endpoint_id, true, 0) {
+            Err(AudioError::WindowsOperation { error, .. })
+                if error.code() == windows::core::HRESULT(0x80070057u32 as i32) =>
+            {
+                // The native M00 probe qualifies this exact fallback request.
+                // Retry only E_INVALIDARG: AUDCLNT_E_DEVICE_IN_USE,
+                // permission failures, and endpoint disappearance must remain
+                // visible to the caller instead of being relabeled as a mode
+                // compatibility issue.
+                Self::open_internal(endpoint_id, false, 1_000_000)
+            }
+            result => result,
+        }
     }
 
     /// Open a shared capture endpoint with timer/polling delivery.
@@ -377,8 +389,8 @@ impl SharedCapture {
     /// Some endpoint drivers accept the exact mix format for ordinary shared
     /// initialization but reject the additional event-callback request with
     /// `E_INVALIDARG`. The native M00 reference path qualifies this mode with
-    /// a bounded buffer duration. Keeping it explicit avoids silently changing
-    /// the event-driven contract while providing a compatibility path.
+    /// a bounded buffer duration. The normal `open` path retries this mode only
+    /// for the exact `E_INVALIDARG` event-callback incompatibility.
     pub fn open_polling(endpoint_id: &str, buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         let duration = if buffer_duration_100ns > 0 {
             buffer_duration_100ns
