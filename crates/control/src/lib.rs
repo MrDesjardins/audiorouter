@@ -4132,6 +4132,7 @@ impl ControlPlane {
                 json!({ "recordingId": recording_id, "path": record.path, "revealed": false, "reason": "missing" }),
             );
         }
+        audiorouter_storage::validate_recording_file_path(path).map_err(storage_error)?;
         #[cfg(windows)]
         let revealed = std::process::Command::new("explorer.exe")
             .args(["/select,", &record.path])
@@ -4162,6 +4163,15 @@ impl ControlPlane {
             .get_recording(&recording_id)
             .map_err(storage_error)?
             .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let path = std::path::Path::new(&record.path);
+        if !path.is_absolute() {
+            return Err(ControlError::InvalidRequest(
+                "recording path must be absolute".into(),
+            ));
+        }
+        if path.is_file() {
+            audiorouter_storage::validate_recording_file_path(path).map_err(storage_error)?;
+        }
         let status = audiorouter_recording::inspect_recording(&record.path).map_err(|error| {
             ControlError::InvalidRequest(format!("recording preview failed: {error:?}"))
         })?;
@@ -4404,6 +4414,7 @@ impl ControlPlane {
                 json!({ "recordingId": recording_id, "path": record.path, "fileAction": "none", "reason": "missing" }),
             );
         }
+        audiorouter_storage::validate_recording_file_path(path).map_err(storage_error)?;
         if !confirm {
             return Ok(
                 json!({ "recordingId": recording_id, "path": record.path, "fileAction": "recycle", "preview": true }),

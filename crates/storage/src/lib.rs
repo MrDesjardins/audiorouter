@@ -72,6 +72,23 @@ fn path_has_reparse_ancestor(path: &std::path::Path) -> bool {
     }
     false
 }
+
+/// Validate a recording file before an operation may inspect, reveal, or
+/// recycle it. Existing-file operations must not follow a redirected path.
+pub fn validate_recording_file_path(path: &std::path::Path) -> Result<(), StorageError> {
+    if !path.is_absolute() {
+        return Err(StorageError::InvalidRecording(
+            "recording path must be absolute".into(),
+        ));
+    }
+    let metadata = std::fs::symlink_metadata(path)?;
+    if !metadata.is_file() || is_reparse_point(&metadata) || path_has_reparse_ancestor(path) {
+        return Err(StorageError::InvalidRecording(
+            "recording path must be a regular non-reparse file".into(),
+        ));
+    }
+    Ok(())
+}
 pub const GRAPH_PLAN_RETENTION_SECONDS: i64 = 5 * 60;
 pub const DAILY_RECOVERY_BACKUP_LIMIT: usize = 10;
 
