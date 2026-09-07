@@ -772,6 +772,14 @@ interoperability (2), control (79), plugin-host (31), worker-process (8), and
 strict Clippy. Temporary state was isolated and removed; native process/audio
 restart and full plugin sandboxing remain open.
 
+## Current-tip headless acceptance after virtual-device CLI parity (2026-09-07)
+
+The complete M07 wrapper passed at the current head: M01 CLI (25 tests), MCP
+stdio/named-pipe interoperability (2), control (82), plugin-host (31),
+worker-process (8), and strict Clippy. Temporary test state was used and no
+audio device, driver, or machine configuration was accessed. Native startup,
+route restart, production plugin sandboxing, and installer gates remain open.
+
 At the current head, the wrapper passed M01 CLI (24 tests), MCP
 stdio/named-pipe interoperability (2), control (81), plugin-host (31),
 worker-process (8), and strict Clippy. Temporary test state only; no audio
