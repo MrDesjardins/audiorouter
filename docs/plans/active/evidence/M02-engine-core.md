@@ -169,6 +169,14 @@ and corrected the proportional-only controller's long-run FIFO drift. This is
 simulation evidence only; hardware clock behavior and native scheduling remain
 open.
 
+## Concurrent graph publication (2026-09-07)
+
+The runtime processor now has a regression that publishes two complete graph
+generations concurrently with repeated processing. Every observed result must
+be a matching generation/gain pair, proving immutable snapshot publication
+does not expose a torn graph. This is portable publication evidence only; live
+native scheduler edits remain open.
+
 The drift controller now exposes an explicit reset for stream/reconnect
 boundaries, clearing learned integral correction while preserving the nominal
 rate ratio and configured bounds. A regression verifies that a new stream does

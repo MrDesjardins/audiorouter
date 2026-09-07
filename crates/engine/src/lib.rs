@@ -3313,6 +3313,48 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_graph_publication_never_processes_a_torn_generation() {
+        use std::sync::{Arc, Barrier};
+        let processor = Arc::new(RuntimeProcessor::default());
+        processor.publish(RuntimeGraph::prepare(
+            RuntimeGeneration::new(1),
+            vec![ProcessingStage::Gain { linear: 1.0 }],
+        ));
+        let barrier = Arc::new(Barrier::new(2));
+        let reader_processor = Arc::clone(&processor);
+        let reader_barrier = Arc::clone(&barrier);
+        let reader = std::thread::spawn(move || {
+            reader_barrier.wait();
+            for _ in 0..10_000 {
+                let mut block = AudioBlock::new(1, 1).unwrap();
+                block.channel_mut(0).unwrap()[0] = 1.0;
+                let generation = reader_processor.process(&mut block).unwrap();
+                let sample = block.channel(0).unwrap()[0];
+                assert!(
+                    (generation.value() == 1 && sample == 1.0)
+                        || (generation.value() == 2 && sample == 2.0)
+                );
+            }
+        });
+        let writer_processor = Arc::clone(&processor);
+        let writer = std::thread::spawn(move || {
+            barrier.wait();
+            for _ in 0..100 {
+                writer_processor.publish(RuntimeGraph::prepare(
+                    RuntimeGeneration::new(2),
+                    vec![ProcessingStage::Gain { linear: 2.0 }],
+                ));
+                writer_processor.publish(RuntimeGraph::prepare(
+                    RuntimeGeneration::new(1),
+                    vec![ProcessingStage::Gain { linear: 1.0 }],
+                ));
+            }
+        });
+        reader.join().unwrap();
+        writer.join().unwrap();
+    }
+
+    #[test]
     fn prepared_meter_stages_publish_each_boundary_without_allocating() {
         let graph = RuntimeGraph::prepare(
             RuntimeGeneration::new(3),
