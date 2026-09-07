@@ -687,3 +687,10 @@ returned without replacement and successfully processes a subsequent bounded
 frame. Plugin-host tests and strict Clippy pass, and the complete M07 headless
 acceptance also passes with the MCP/worker lanes. No audio or machine
 configuration was accessed.
+
+Persisted the control-plane `backendEpoch` in SQLite and atomically claimed the
+next epoch when a durable control plane opens. A restart regression now proves
+that two successive control instances expose distinct epochs, while the
+storage regression proves monotonic behavior across repeated claims and a
+reopen. The 70-test control suite and 37-test storage suite pass with strict
+Clippy and formatting; only temporary test database state was used.

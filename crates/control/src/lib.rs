@@ -1590,6 +1590,7 @@ impl ControlPlane {
         // Fail closed if the durable latch cannot be read: a persistence
         // failure must never silently unmute a capture path.
         let privacy_muted = storage.load_privacy_mute().unwrap_or(true);
+        let backend_epoch = storage.claim_backend_epoch().unwrap_or(1);
         let virtual_buses = storage.load_virtual_buses().unwrap_or_default();
         let now = unix_epoch_seconds();
         let mut virtual_bus_plans = HashMap::new();
@@ -1616,7 +1617,7 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             storage: Some(storage),
             enrollments: HashMap::new(),
-            events: EventLog::new(1),
+            events: EventLog::new(backend_epoch),
             mutation_limiter: MutationRateLimiter::default(),
             operation_outcomes: HashMap::new(),
             operation_names: HashMap::new(),
@@ -5755,6 +5756,45 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn durable_control_restart_advances_backend_epoch() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-epoch-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let first_epoch = {
+            let mut plane = ControlPlane::with_storage("first", Storage::open(&path).unwrap());
+            plane
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: "status.get".into(),
+                    params: None,
+                })
+                .result
+                .unwrap()["eventCursor"]["backendEpoch"]
+                .as_u64()
+                .unwrap()
+        };
+        let second_epoch = {
+            let mut plane = ControlPlane::with_storage("second", Storage::open(&path).unwrap());
+            plane
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(2)),
+                    method: "status.get".into(),
+                    params: None,
+                })
+                .result
+                .unwrap()["eventCursor"]["backendEpoch"]
+                .as_u64()
+                .unwrap()
+        };
+        assert_eq!(second_epoch, first_epoch + 1);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

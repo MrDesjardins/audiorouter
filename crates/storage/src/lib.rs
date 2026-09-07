@@ -567,6 +567,38 @@ impl Storage {
         Ok(())
     }
 
+    /// Claim the next backend epoch for a durable control-plane instance.
+    ///
+    /// The epoch is intentionally advanced in the same database that holds
+    /// the control state, so a client can distinguish a restarted backend
+    /// from a delayed response or an exhausted event cursor.
+    pub fn claim_backend_epoch(&self) -> Result<u64, StorageError> {
+        let transaction = self.connection.unchecked_transaction()?;
+        let current = transaction
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'backendEpoch'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let current = match current {
+            Some(value) => value.parse::<u64>().map_err(|_| {
+                StorageError::CorruptDatabase("backendEpoch is not an unsigned integer".into())
+            })?,
+            None => 0,
+        };
+        let next = current
+            .checked_add(1)
+            .ok_or_else(|| StorageError::CorruptDatabase("backendEpoch overflow".into()))?;
+        transaction.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('backendEpoch', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![next.to_string()],
+        )?;
+        transaction.commit()?;
+        Ok(next)
+    }
+
     pub fn save_virtual_buses(&self, registry: &VirtualBusRegistry) -> Result<(), StorageError> {
         let snapshots = registry.snapshots();
         if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
@@ -2078,6 +2110,22 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn backend_epoch_claim_is_monotonic_and_durable() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-backend-epoch-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let first = Storage::open(&path).unwrap();
+        assert_eq!(first.claim_backend_epoch().unwrap(), 1);
+        assert_eq!(first.claim_backend_epoch().unwrap(), 2);
+        drop(first);
+        let second = Storage::open(&path).unwrap();
+        assert_eq!(second.claim_backend_epoch().unwrap(), 3);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
