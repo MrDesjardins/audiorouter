@@ -338,9 +338,15 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["recordingId"],
         ),
-        "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
-        | "session.stop" | "sessions.stop" => object_schema(
+        "sessions.get" | "sessions.delete" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1 } }),
+            &["sessionId"],
+        ),
+        "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
             &["sessionId"],
         ),
         "sessions.list" => object_schema(
@@ -3034,8 +3040,29 @@ impl ControlPlane {
     }
 
     fn dispatch_session_start(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let id = session_id_from_params(params)?;
-        self.session_start(&id)
+        let params = params.unwrap_or_else(|| json!({}));
+        let id = session_id_from_params(Some(params.clone()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "sessionId": id, "action": "start" });
+                (
+                    self.scoped_idempotency_key("sessions.start", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
+        let result = self.session_start(&id)?;
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "sessions.start", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_session_get(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -3112,8 +3139,29 @@ impl ControlPlane {
     }
 
     fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let id = session_id_from_params(params)?;
-        self.session_stop(&id)
+        let params = params.unwrap_or_else(|| json!({}));
+        let id = session_id_from_params(Some(params.clone()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "sessionId": id, "action": "stop" });
+                (
+                    self.scoped_idempotency_key("sessions.stop", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
+        let result = self.session_stop(&id)?;
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "sessions.stop", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_routes_inspect(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4322,8 +4370,10 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         ));
     };
     let allowed: &[&str] = match method {
-        "sessions.get" | "sessions.delete" | "session.start" | "sessions.start"
-        | "session.stop" | "sessions.stop" => &["sessionId"],
+        "sessions.get" | "sessions.delete" => &["sessionId"],
+        "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => {
+            &["sessionId", "idempotencyKey"]
+        }
         "sessions.list" => &["cursor", "limit"],
         "sessions.create" => &["session"],
         "sessions.duplicate" => &["sourceSessionId", "sessionId", "name"],
@@ -6491,6 +6541,47 @@ mod tests {
         let events = plane.events.since(0, 10).unwrap();
         assert_eq!(events.last().unwrap().resource_revision, original.revision);
         assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
+    }
+
+    #[test]
+    fn keyed_session_lifecycle_replays_and_conflicts_durably() {
+        let storage = Storage::open_memory().unwrap();
+        let mut plane = ControlPlane::with_storage("lifecycle-idempotency", storage);
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let start = || JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.start".into(),
+            params: Some(json!({ "sessionId": "session", "idempotencyKey": "start-1" })),
+        };
+        let first = plane.dispatch(start()).result.unwrap();
+        let replay = plane.dispatch(start()).result.unwrap();
+        assert_eq!(first, replay);
+        let mut other = session();
+        other.id = EntityId::new("other");
+        plane.insert_session(other).unwrap();
+        let same_key = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "sessions.start".into(),
+            params: Some(json!({ "sessionId": "other", "idempotencyKey": "start-1" })),
+        });
+        assert!(same_key.error.is_some());
+        let stop = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "sessions.stop".into(),
+            params: Some(json!({ "sessionId": "session", "idempotencyKey": "stop-1" })),
+        });
+        assert_eq!(stop.result.as_ref().unwrap()["state"], "stopped");
+        let stop_replay = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "sessions.stop".into(),
+            params: Some(json!({ "sessionId": "session", "idempotencyKey": "stop-1" })),
+        });
+        assert_eq!(stop.result.unwrap(), stop_replay.result.unwrap());
     }
 
     #[test]
