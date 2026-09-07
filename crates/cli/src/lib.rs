@@ -1712,6 +1712,9 @@ fn mcp_tools() -> Value {
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "export_session", "description": "Read the canonical session document without changing state.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "plan_session_import", "description": "Validate a stopped session import without persisting it.", "inputSchema": { "type": "object", "properties": { "session": { "type": "object" } }, "required": ["session"], "additionalProperties": false } },
+        { "name": "commit_session_import", "description": "Commit a previously validated stopped session import.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
         { "name": "cancel_operation", "description": "Request cancellation; completed operations are never undone.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1 } }, "required": ["operationId"], "additionalProperties": false } },
@@ -1766,6 +1769,9 @@ fn mcp_tool_call(
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
         "list_applications" => ("apps.list", None),
         "get_session" => ("sessions.get", Some(arguments)),
+        "export_session" => ("sessions.export", Some(arguments)),
+        "plan_session_import" => ("sessions.importPlan", Some(arguments)),
+        "commit_session_import" => ("sessions.importCommit", Some(arguments)),
         "inspect_routes" => ("routes.inspect", Some(arguments)),
         "get_operation" => ("operations.get", Some(arguments)),
         "cancel_operation" => ("operations.cancel", Some(arguments)),
@@ -2902,7 +2908,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 32);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 35);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()
