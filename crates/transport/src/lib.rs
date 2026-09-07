@@ -14,6 +14,11 @@ pub enum TransportError {
     UnexpectedEof,
 }
 
+/// Maximum number of requests handled on one persistent local control
+/// connection. This keeps subscription/session lifetimes bounded while still
+/// matching the control API's maximum page size.
+pub const MAX_SESSION_FRAMES: usize = 500;
+
 impl std::fmt::Display for TransportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
@@ -24,7 +29,7 @@ impl std::error::Error for TransportError {}
 
 #[cfg(windows)]
 mod windows_pipe {
-    use super::TransportError;
+    use super::{TransportError, MAX_SESSION_FRAMES};
     use audiorouter_protocol::{decode_frame, encode_frame, MAX_FRAME_BYTES};
     use std::ffi::OsStr;
     use std::iter::once;
@@ -345,9 +350,9 @@ mod windows_pipe {
     where
         F: FnMut(u32, &[u8]) -> Result<Option<Vec<u8>>, TransportError>,
     {
-        if frames == 0 {
+        if frames == 0 || frames > MAX_SESSION_FRAMES {
             return Err(TransportError::Protocol(
-                "session must serve at least one frame".into(),
+                "session frame count must be between 1 and 500".into(),
             ));
         }
         let (handle, client_process_id) = accept_client(name)?;
@@ -481,9 +486,9 @@ mod windows_pipe {
         request: &[u8],
         frames: usize,
     ) -> Result<Vec<Vec<u8>>, TransportError> {
-        if frames == 0 {
+        if frames == 0 || frames > MAX_SESSION_FRAMES {
             return Err(TransportError::Protocol(
-                "session must exchange at least one frame".into(),
+                "session frame count must be between 1 and 500".into(),
             ));
         }
         check_name(name)?;
@@ -799,6 +804,23 @@ mod tests {
     fn rejects_non_pipe_names_without_touching_the_system() {
         let result = round_trip("not-a-pipe", &[]);
         assert_eq!(result, Err(TransportError::InvalidPipeName));
+    }
+
+    #[test]
+    fn rejects_unbounded_persistent_sessions_before_platform_access() {
+        let request = [0, 0, 0, 0];
+        assert_eq!(
+            round_trip_session("not-a-pipe", &request, MAX_SESSION_FRAMES + 1),
+            Err(TransportError::Protocol(
+                "session frame count must be between 1 and 500".into()
+            ))
+        );
+        assert_eq!(
+            serve_session("not-a-pipe", MAX_SESSION_FRAMES + 1, |_, _| Ok(None)),
+            Err(TransportError::Protocol(
+                "session frame count must be between 1 and 500".into()
+            ))
+        );
     }
 
     #[cfg(windows)]
