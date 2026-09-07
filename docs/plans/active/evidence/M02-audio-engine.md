@@ -160,3 +160,11 @@ and render clients stopped/reset successfully and the media-device snapshot
 remained identical. This qualifies bounded adapter-to-engine ownership and
 block processing, not complete graph activation, audible routing, or physical
 latency.
+
+The packet adaptation was then tightened to carry partial WASAPI packets across
+boundaries in a fixed staging buffer. The latest guarded 300 ms run consumed 30
+packets (14,400 capture frames), processed 14,336 complete 128-frame scheduler
+frames, retained the final 64-frame remainder at bounded shutdown, and
+submitted 15,936 zero-valued render frames. Counts vary with scheduling during
+the bounded window; this validates packet-to-quantum carry rather than assuming
+packet/quantum alignment.

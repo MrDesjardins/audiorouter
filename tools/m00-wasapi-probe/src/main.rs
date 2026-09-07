@@ -105,6 +105,8 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
         let mut render_frames = 0u32;
         let mut destination = vec![0u8; 1_048_576];
         let render_source = vec![0u8; 1_048_576];
+        let mut staging = vec![0u8; 128 * capture_bytes_per_frame];
+        let mut pending_frames = 0usize;
         while std::time::Instant::now() < deadline {
             if capture.wait_for_data(10)? {
                 while let Some((packet, bytes)) =
@@ -113,8 +115,21 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
                     capture_packets = capture_packets.saturating_add(1);
                     capture_frames = capture_frames.saturating_add(packet.frames);
                     capture_bytes = capture_bytes.saturating_add(bytes);
-                    let complete_blocks = packet.frames as usize / 128;
-                    for block_index in 0..complete_blocks {
+                    let mut packet_frame_offset = 0usize;
+                    while packet_frame_offset < packet.frames as usize {
+                        let frames_to_copy = (128 - pending_frames)
+                            .min(packet.frames as usize - packet_frame_offset);
+                        let source_start = packet_frame_offset * capture_bytes_per_frame;
+                        let source_end = source_start + frames_to_copy * capture_bytes_per_frame;
+                        let staging_start = pending_frames * capture_bytes_per_frame;
+                        let staging_end = staging_start + frames_to_copy * capture_bytes_per_frame;
+                        staging[staging_start..staging_end]
+                            .copy_from_slice(&destination[source_start..source_end]);
+                        pending_frames += frames_to_copy;
+                        packet_frame_offset += frames_to_copy;
+                        if pending_frames != 128 {
+                            continue;
+                        }
                         let mut block =
                             scheduler
                                 .acquire_input()
@@ -124,10 +139,9 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
                                 })?;
                         for frame in 0..128 {
                             for channel in 0..usize::from(capture_info.channels) {
-                                let offset = (block_index * 128 + frame) * capture_bytes_per_frame
-                                    + channel * 4;
+                                let offset = frame * capture_bytes_per_frame + channel * 4;
                                 let sample = f32::from_le_bytes(
-                                    destination[offset..offset + 4]
+                                    staging[offset..offset + 4]
                                         .try_into()
                                         .map_err(|_| AudioError::InvalidFrameSize)?,
                                 );
@@ -151,6 +165,7 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
                                 .map_err(|_| AudioError::InvalidFrameSize)?;
                             scheduler_frames = scheduler_frames.saturating_add(128);
                         }
+                        pending_frames = 0;
                     }
                 }
             }
@@ -164,13 +179,14 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} scheduler_frames={} render_frames={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} scheduler_frames={} pending_frames={} render_frames={}",
             capture_info.id,
             render_info.id,
             capture_packets,
             capture_frames,
             capture_bytes,
             scheduler_frames,
+            pending_frames,
             render_frames
         );
         Ok(())
