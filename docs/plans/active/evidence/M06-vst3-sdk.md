@@ -10,6 +10,13 @@ passed the offline loader with 68 classes and finite processing. This remains a
 source checkout under `third_party/vst3sdk`; no system SDK/plugin registration,
 driver, audio stream, or machine audio configuration was changed.
 
+## Current-tip SDK qualification (2026-09-07)
+
+The pinned repository-local SDK was rebuilt with VS2026. All 51 SDK self-tests and 1,598
+official validator tests passed; the offline loader verified 68 classes, finite processing,
+five-parameter automation, and a 180-byte state round-trip. Generated outputs were cleaned;
+no system plugin registration, audio stream, driver, or machine configuration was changed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

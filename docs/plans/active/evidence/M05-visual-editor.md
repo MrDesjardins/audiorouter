@@ -541,6 +541,12 @@ The complete M05 acceptance was requalified at the current head. TypeScript
 typecheck, all 69 UI tests, and the disposable three-file Vite production build
 passed; temporary output was cleaned. Manual visual/accessibility acceptance,
 native shell injection, startup registration, and live audio remain open.
+
+## Current-tip UI qualification (2026-09-07)
+
+At the current head, TypeScript typechecking passed, all 69 Vitest tests passed, and a
+disposable Vite production build produced three files. The temporary output was removed;
+this did not access audio devices, drivers, startup registration, or machine configuration.
 No audio, driver, or machine configuration was changed.
 
 The editor also renders the managed virtual-device inventory and explicit

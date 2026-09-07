@@ -541,3 +541,10 @@ The M04 acceptance wrapper passed all 25 DSP tests and 30 recording tests,
 including the long-duration pitch boundary cases, with formatting and strict
 Clippy. This validates portable processing and file-boundary behavior only;
 native realtime integration remains open.
+
+## Current-tip portable qualification (2026-09-07)
+
+M04 was rerun at the current head: all 25 DSP tests and 30 recording tests passed,
+including 60-second pitch-duration and recovery coverage, with formatting and strict
+Clippy. This remains portable/file-boundary evidence; native realtime integration and
+hardware timing remain open.
