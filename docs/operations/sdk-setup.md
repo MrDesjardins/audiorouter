@@ -76,10 +76,11 @@ For a compile-only SysVAD feasibility check, run the repository helper:
 powershell -ExecutionPolicy Bypass -File .\tools\m00-sysvad\qualify.ps1
 ```
 
-It creates a disposable Microsoft driver-samples checkout, populates its WIL
-submodule, selects 64-bit Visual Studio MSBuild, runs normal x64 package/API
-validation, checks the driver and catalog outputs, and removes the exact
-checkout and generated `x64` output directories. Use `-KeepCheckout` only when
+It creates a disposable, pinned Microsoft driver-samples checkout, populates
+the revision-pinned WIL submodule, selects 64-bit Visual Studio MSBuild, runs
+normal x64 package/API validation, checks the driver and catalog outputs, and
+removes the exact checkout and generated `x64` output directories. Use
+`-KeepCheckout` only when
 inspecting a failed result. The helper never adapts, installs, loads, or
 production-signs a driver. The lower-level
 `tests/acceptance/m00-sysvad-build.ps1 -SourceRoot <checkout>` wrapper remains

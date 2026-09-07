@@ -4,6 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $samplesRepository = 'https://github.com/microsoft/Windows-driver-samples.git'
+$samplesCommit = '197ba2156a60e2b76fcd4820bae594223e91a1e9'
 $checkout = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-sysvad-' + [guid]::NewGuid().ToString('N'))
 $wrapper = Join-Path $PSScriptRoot '..\..\tests\acceptance\m00-sysvad-build.ps1'
 
@@ -11,6 +12,11 @@ try {
     Write-Output "Creating disposable SysVAD checkout at $checkout"
     & git clone --depth 1 $samplesRepository $checkout
     if ($LASTEXITCODE -ne 0) { throw "Windows driver samples clone failed with exit code $LASTEXITCODE" }
+    $actualCommit = (& git -C $checkout rev-parse HEAD).Trim()
+    if ($actualCommit -ne $samplesCommit) {
+        throw "Windows driver samples revision mismatch: expected $samplesCommit, found $actualCommit"
+    }
+    Write-Output "Using Windows driver samples revision $actualCommit"
 
     & git -C $checkout submodule update --init --depth 1 wil
     if ($LASTEXITCODE -ne 0) { throw "WIL submodule checkout failed with exit code $LASTEXITCODE" }
