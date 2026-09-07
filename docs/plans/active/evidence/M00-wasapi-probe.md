@@ -435,3 +435,20 @@ The run is reproducible with the opt-in
 resolves both virtual endpoints by friendly name instead of hard-coding their
 enumeration positions, validates the complete bounded lifecycle, requires
 nonzero captured payload, and compares the media identity/state snapshot.
+
+## USB speaker/microphone signal-path smoke (2026-09-07)
+
+The available `Speakers (PD200X Podcast Microphone)` render endpoint was
+checked read-only first and had no active application owner. An authorized
+bounded run then opened it together with `Microphone (PD200X Podcast
+Microphone)` capture. The render stream initialized and wrote a 700 ms tone,
+submitting 37,920 frames; the 1,000 ms mono capture stream initialized and
+observed 100 packets/48,000 frames with 73,521 nonzero payload bytes. All
+start/stop/reset calls returned success and the media-device identity/state
+snapshot was unchanged. No endpoint default, volume, mute, privacy, driver,
+signing, or startup setting was changed.
+
+This is only a physical signal-path smoke result: ambient/input content is not
+separated from the generated tone, and no impulse timestamps or acoustic
+round-trip distribution were measured. The required 1,000-impulse
+speaker-to-microphone latency gate therefore remains open.
