@@ -258,3 +258,12 @@ The M08 wrapper was requalified again at the current tip. Optimized locked
 CLI/plugin-worker artifacts, SBOM/notices, sanitized provenance, hashes, exact
 content verification, and unsigned publication-blocker assertions passed in a
 unique temporary directory, which was removed afterward.
+## 2026-09-06 — Current-tip unsigned release preparation
+
+The M08 release wrapper was rerun after the portable recovery-supervisor
+change. Optimized pinned workspace artifacts, the manifest, notices/SBOM,
+provenance, checksums, and byte-count verification passed in a disposable
+temporary directory. The manifest correctly remained unsigned and not
+publication-ready with the required blockers. The temporary output was
+removed; no installer, driver, signing operation, audio endpoint, or machine
+configuration was used.
