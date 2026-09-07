@@ -247,9 +247,17 @@ are rejected as stale, and the bridge remains active at the winning generation.
 The engine suite passes 47 tests with strict Clippy. This validates portable
 ownership contention only, not native driver synchronization.
 
+## Serialized replacement activation (2026-09-07)
+
+Bridge activation now serializes the control-plane generation transition and
+queue drain. This prevents concurrent replacement requests from allowing an
+older activation to drain blocks after a newer activation has started. The
+realtime bridge methods never acquire the guard; the engine suite passes 48
+tests with strict Clippy. Native driver synchronization remains open.
+
 ## Capture shape-mismatch safety (2026-09-07)
 
 The bridge regression now submits a valid block, reads it into an incompatible
 consumer shape, and verifies `ShapeMismatch` while the queued block is
 recycled. This prevents malformed consumers from retaining stale bridge data.
-The 46-test engine suite and strict Clippy pass; no live endpoint is opened.
+The 48-test engine suite and strict Clippy pass; no live endpoint is opened.

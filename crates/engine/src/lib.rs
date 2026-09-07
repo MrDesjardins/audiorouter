@@ -292,6 +292,7 @@ pub struct VirtualBusBridge {
     capture: AudioBlockRing,
     active: AtomicBool,
     generation: AtomicU64,
+    activation_lock: AtomicBool,
     dropped: AtomicU64,
 }
 
@@ -302,6 +303,7 @@ impl VirtualBusBridge {
             capture: AudioBlockRing::new(capacity, channels, frames)?,
             active: AtomicBool::new(false),
             generation: AtomicU64::new(0),
+            activation_lock: AtomicBool::new(false),
             dropped: AtomicU64::new(0),
         })
     }
@@ -320,28 +322,31 @@ impl VirtualBusBridge {
 
     /// Start a new ownership generation. Changing generations first discards
     /// all queued data so a replacement owner cannot receive stale frames.
+    /// Activation is a control-plane operation; its narrow guard prevents two
+    /// replacements from interleaving their drain/reactivate sequence. The
+    /// realtime bridge methods never acquire this guard.
     pub fn activate(&self, generation: u64) -> Result<(), VirtualBusBridgeError> {
         if generation == 0 {
             return Err(VirtualBusBridgeError::InvalidGeneration);
         }
-        let mut previous = self.generation.load(Ordering::Acquire);
-        loop {
-            if generation <= previous {
-                return Err(VirtualBusBridgeError::InvalidGeneration);
-            }
-            match self.generation.compare_exchange_weak(
-                previous,
-                generation,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            ) {
-                Ok(_) => break,
-                Err(observed) => previous = observed,
-            }
+        self.acquire_activation_lock();
+        let previous = self.generation.load(Ordering::Acquire);
+        if generation <= previous {
+            self.release_activation_lock();
+            return Err(VirtualBusBridgeError::InvalidGeneration);
+        }
+        if self
+            .generation
+            .compare_exchange(previous, generation, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            self.release_activation_lock();
+            return Err(VirtualBusBridgeError::InvalidGeneration);
         }
         self.active.store(false, Ordering::Release);
         self.drain();
         self.active.store(true, Ordering::Release);
+        self.release_activation_lock();
         Ok(())
     }
 
@@ -444,6 +449,20 @@ impl VirtualBusBridge {
 
     fn owns_generation(&self, generation: u64) -> bool {
         self.active.load(Ordering::Acquire) && self.generation.load(Ordering::Acquire) == generation
+    }
+
+    fn acquire_activation_lock(&self) {
+        while self
+            .activation_lock
+            .compare_exchange_weak(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            std::hint::spin_loop();
+        }
+    }
+
+    fn release_activation_lock(&self) {
+        self.activation_lock.store(false, Ordering::Release);
     }
 
     pub fn try_receive_capture(&self) -> Option<AudioBlock> {
@@ -2544,6 +2563,36 @@ mod tests {
             .count();
         assert_eq!(successes, 1);
         assert_eq!(bridge.generation(), 1);
+        assert!(bridge.is_active());
+    }
+
+    #[test]
+    fn virtual_bus_bridge_serializes_concurrent_replacement_drains() {
+        use std::sync::{Arc, Barrier};
+        let bridge = Arc::new(VirtualBusBridge::new(1, 1, 2).unwrap());
+        bridge.activate(1).unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let handles = [2_u64, 3]
+            .into_iter()
+            .map(|generation| {
+                let bridge = Arc::clone(&bridge);
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    (generation, bridge.activate(generation).is_ok())
+                })
+            })
+            .collect::<Vec<_>>();
+        let results = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect::<Vec<_>>();
+        let successful_generation = results
+            .iter()
+            .filter_map(|(generation, success)| success.then_some(*generation))
+            .max()
+            .unwrap();
+        assert_eq!(bridge.generation(), successful_generation);
         assert!(bridge.is_active());
     }
 
