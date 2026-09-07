@@ -15,7 +15,7 @@ release and must not be presented as an installable Windows audio product.
 
 ## Verified in this qualification snapshot
 
-- The locked Rust workspace passes 346 unit/integration tests, all doc-tests,
+- The locked Rust workspace passes 377 unit/integration tests, all doc-tests,
   formatting, and strict Clippy.
 - M07 headless acceptance passes control, CLI, MCP stdio, plugin-host, and
   worker-process checks.
@@ -27,11 +27,11 @@ release and must not be presented as an installable Windows audio product.
 
 ## Known limitations
 
-- Native Rust WASAPI stream initialization still has an unresolved
-  `E_INVALIDARG` COM/ABI interop discrepancy. Native reference probes can
-  initialize the same capture endpoints, and the failure is distinct from
-  `AUDCLNT_E_DEVICE_IN_USE`; this is still not evidence of working AudioRouter
-  routing.
+- Rust capture now retries the exact observed event-callback `E_INVALIDARG`
+  with a fresh native-compatible polling client; busy-device and permission
+  failures remain distinct and fail closed. The live Rust stream path is still
+  unqualified because no stream was opened in this acceptance, and this is not
+  evidence of working AudioRouter routing.
 - Realtime graph scheduling, process-tree attribution, measured latency/drift,
   and hardware/endurance qualification are incomplete.
 - The managed virtual-audio driver is not included, installed, signed, or

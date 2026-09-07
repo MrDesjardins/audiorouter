@@ -23,21 +23,23 @@ install a driver.
 At the current repository revision, the safe, repository-local qualification
 surface is green:
 
-- The locked Rust workspace passes 346 tests across all targets, formatting,
+- The locked Rust workspace passes 377 tests across all targets, formatting,
   and strict workspace Clippy.
 - M04 passes 25 DSP and 30 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 68 UI tests, and a disposable production
+- M05 passes TypeScript typecheck, 69 UI tests, and a disposable production
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
-- M07 passes 23 CLI tests, MCP stdio/named-pipe interoperability, 79 control
-  tests, 31 plugin-host tests, 8 worker-process tests, and strict Clippy.
+- M07 passes 25 CLI tests, MCP stdio/named-pipe interoperability, 82 control
+  tests, 33 plugin-host tests, 8 worker-process tests, and strict Clippy.
 - M08 unsigned artifact preparation, provenance/SBOM, checksums, exact-content
   verification, and cleanup pass in a disposable output directory.
 - M00 native validation is compile-only on this machine. Visual Studio
   Community 2026, MSVC 14.51.36231, Windows SDK 10.0.28000.0, and WDK
-  10.1.28000.2526 are available; no probe executable is run by this gate.
+  10.1.28000.2526 are available; the SysVAD sample also passes x64 package/API
+  validation through the 64-bit MSBuild host. No probe executable or driver is
+  run by this gate.
 
 The VST3 SDK is source-distributed and installed only at the ignored local
 path `third_party/vst3sdk`; it is not a system SDK or plugin registration.
