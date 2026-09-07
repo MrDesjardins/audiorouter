@@ -109,12 +109,14 @@ The current node catalog is available through `nodes.describe` and contains:
 | `compressor@1` | available | Stereo-capable dynamics stage; 48 kHz graph baseline |
 | `gate@1` | available | Downward gate/expander stage; 48 kHz graph baseline |
 | `limiter@1` | available | Sample-peak ceiling stage; -12 to 0 dBFS |
+| `delay@1` | available | Preallocated delay stage; 0 to 1,000 ms |
 
 The separately reported `processors` catalog in `system.describe` documents the
 implemented DSP primitives and their typed parameter ranges. `parametricEq` is
 available as the corresponding one-band graph node, and `compressor` is
-available as graph dynamics nodes. `graphicEq`, `delay`, and `pitch` remain
-explicitly unavailable until their graph/runtime integrations are completed.
+available as graph dynamics nodes, and `delay` is available as a preallocated
+graph time stage. `graphicEq` and `pitch` remain explicitly unavailable until
+their graph/runtime integrations are completed.
 The pitch entry reports its 1,024-sample algorithmic latency.
 The UI displays these parameter types and ranges as read-only metadata; it does
 not imply that an unavailable processor can be activated.

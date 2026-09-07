@@ -145,6 +145,13 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+## 2026-09-07 — Delay graph integration
+
+The portable graph now also integrates `delay@1`, using a preallocated bounded
+delay line per active channel. The configured range and finite processing
+behavior are validated before graph publication; native scheduler timing and
+hardware latency evidence remain open.
+
 The portable graph also now integrates the bounded `gate@1` expander stage.
 Its validated parameters are exposed through discovery and the UI library, and
 prepared state is retained across blocks with fail-closed processing behavior.
