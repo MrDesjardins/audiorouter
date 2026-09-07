@@ -173,6 +173,7 @@ fn method_description(name: &str) -> &'static str {
         "nodes.describe" => "Describe node types, availability, and realtime cost.",
         "presets.list" => "List explainable built-in processing presets.",
         "sessions.get" => "Return one session resource by opaque identifier.",
+        "sessions.export" => "Export one persisted canonical session document without changing state.",
         "sessions.list" => "List session resources with stable cursor pagination.",
         "sessions.create" => "Create a validated stopped session resource.",
         "sessions.duplicate" => "Clone a session into a new stopped resource.",
@@ -363,6 +364,10 @@ fn method_input_schema(name: &str) -> Value {
             &["recordingId"],
         ),
         "sessions.get" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1 } }),
+            &["sessionId"],
+        ),
+        "sessions.export" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1 } }),
             &["sessionId"],
         ),
@@ -653,7 +658,7 @@ fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             })
         }
-        "sessions.get" => session_item_schema(),
+        "sessions.get" | "sessions.export" => session_item_schema(),
         "sessions.create" | "sessions.duplicate" => json!({
             "type": "object",
             "properties": {
@@ -2849,6 +2854,7 @@ impl ControlPlane {
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
                     "presets.list" => Ok(self.describe()["presets"].clone()),
                     "sessions.get" => self.dispatch_session_get(request.params),
+                    "sessions.export" => self.dispatch_session_export(request.params),
                     "sessions.list" => self.dispatch_sessions_list(request.params),
                     "sessions.create" => self.dispatch_session_create(request.params),
                     "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
@@ -3216,6 +3222,13 @@ impl ControlPlane {
     }
 
     fn dispatch_session_get(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let id = session_id_from_params(params)?;
+        self.ensure_session_loaded(&id)?;
+        serde_json::to_value(self.get_session(&id)?)
+            .map_err(|error| ControlError::Json(error.to_string()))
+    }
+
+    fn dispatch_session_export(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let id = session_id_from_params(params)?;
         self.ensure_session_loaded(&id)?;
         serde_json::to_value(self.get_session(&id)?)
@@ -4736,7 +4749,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         ));
     };
     let allowed: &[&str] = match method {
-        "sessions.get" => &["sessionId"],
+        "sessions.get" | "sessions.export" => &["sessionId"],
         "sessions.delete" => &["sessionId", "idempotencyKey"],
         "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => {
             &["sessionId", "idempotencyKey"]

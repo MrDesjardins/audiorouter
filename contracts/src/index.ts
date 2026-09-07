@@ -596,6 +596,7 @@ export type ImplementedMethod =
   | "nodes.describe"
   | "presets.list"
   | "sessions.get"
+  | "sessions.export"
   | "sessions.list"
   | "sessions.create"
   | "sessions.duplicate"
@@ -661,6 +662,7 @@ export type MethodParams = {
   "nodes.describe": undefined;
   "presets.list": undefined;
   "sessions.get": { sessionId: EntityId };
+  "sessions.export": { sessionId: EntityId };
   "sessions.list": { cursor?: string; limit?: number } | undefined;
   "sessions.create": { session: Session; idempotencyKey?: string };
   "sessions.duplicate": {
@@ -732,6 +734,7 @@ export type MethodResult = {
   "nodes.describe": DiscoveryDocument["nodeTypes"];
   "presets.list": DiscoveryDocument["presets"];
   "sessions.get": Session;
+  "sessions.export": Session;
   "sessions.list": SessionListPage;
   "sessions.create": SessionCreateResult;
   "sessions.duplicate": SessionCreateResult;
