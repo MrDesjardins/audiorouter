@@ -26,6 +26,26 @@ if (duplicateDeclared.length > 0) {
   );
 }
 
+const declaredSet = new Set(declared);
+const mapMethods = (typeName, source) => {
+  const map = source.match(new RegExp(`export type ${typeName} =\\s*\\{([\\s\\S]*?)\\n\\};`));
+  if (!map) throw new Error(`${typeName} map is missing from contracts/src/index.ts`);
+  return [...map[1].matchAll(/^\s*"([^"]+)":/gm)].map((match) => match[1]);
+};
+for (const typeName of ["MethodParams", "MethodResult"]) {
+  const mapped = mapMethods(typeName, contracts);
+  const missing = declared.filter((method) => !mapped.includes(method));
+  const extra = mapped.filter((method) => !declaredSet.has(method));
+  if (missing.length > 0 || extra.length > 0) {
+    throw new Error(
+      `${typeName} drift detected: ${[
+        missing.length > 0 ? `missing ${missing.join(", ")}` : "",
+        extra.length > 0 ? `extra ${extra.join(", ")}` : "",
+      ].filter(Boolean).join("; ")}`,
+    );
+  }
+}
+
 let schemaText;
 try {
   schemaText = execFileSync(
@@ -44,7 +64,6 @@ try {
   throw new Error(`CLI schema was not valid JSON: ${error.message}`);
 }
 const discovered = (schema.methods ?? []).map((method) => method.name);
-const declaredSet = new Set(declared);
 const discoveredSet = new Set(discovered);
 const missing = discovered.filter((method) => !declaredSet.has(method));
 const extra = declared.filter((method) => !discoveredSet.has(method));
