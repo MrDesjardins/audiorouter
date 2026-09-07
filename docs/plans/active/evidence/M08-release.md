@@ -180,6 +180,14 @@ temporary directory was removed. The manifest remains explicitly unsigned
 and not publication-ready; driver/signing, installer, and clean-machine gates
 remain open.
 
+Requalified the unsigned release-preparation acceptance at the current
+revision. Optimized locked CLI and plugin-worker artifacts, the Cargo SBOM,
+third-party notices, manifest hashes, and byte counts were generated and
+verified in a disposable temporary directory. The manifest retained
+`signed: false`, `publicationReady: false`, and the required release blockers.
+The temporary directory was removed afterward; no installer, driver, signing,
+or machine audio configuration action occurred.
+
 ## 2026-09-06 - Qualification after UI test configuration
 
 The complete unsigned preparation flow was rerun from revision
