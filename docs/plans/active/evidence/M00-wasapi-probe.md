@@ -207,3 +207,9 @@ compile-only check with a unique temporary executable and `finally` cleanup. It
 refuses to overwrite a pre-existing generated object and reports the scope as
 compile-only; no audio stream, driver, signing mode, or machine configuration
 action is performed.
+
+The compile-only acceptance was rerun at clean revision `904c115` with the
+installed Visual Studio Community 2026/MSVC and Windows SDK/WDK toolchain.
+`main.cpp` compiled successfully, the temporary executable/object outputs were
+cleaned, and the probe was not executed. No audio stream, driver, signing mode,
+or machine configuration action occurred.
