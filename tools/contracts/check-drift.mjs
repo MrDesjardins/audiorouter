@@ -85,6 +85,20 @@ if (missingNodeKinds.length > 0 || extraNodeKinds.length > 0) {
   throw new Error(`contract node-kind drift detected (${details.join("; ")})`);
 }
 
+const library = readFileSync(join(repositoryRoot, "ui", "src", "library.ts"), "utf8");
+const libraryKinds = [...library.matchAll(/kind:\s*"([^"]+)"/g)].map(
+  (match) => match[1],
+);
+const discoveredProcessors = (schema.processors ?? []).map((processor) => processor.id);
+const missingProcessors = discoveredProcessors.filter(
+  (processor) => !libraryKinds.includes(processor),
+);
+if (missingProcessors.length > 0) {
+  throw new Error(
+    `processor catalog entries missing from the UI library: ${missingProcessors.join(", ")}`,
+  );
+}
+
 console.log(
-  `Contract drift check passed: ${declared.length} methods and ${declaredNodeKinds.length} node kinds match the CLI catalog.`,
+  `Contract drift check passed: ${declared.length} methods, ${declaredNodeKinds.length} node kinds, and ${discoveredProcessors.length} processors match the UI/CLI catalogs.`,
 );
