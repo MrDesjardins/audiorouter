@@ -230,3 +230,10 @@ and sanitizing, before publishing to capture or fan-out destinations. A block
 that observes deactivation or replacement is recycled and counted as dropped.
 The 46-test engine suite and strict Clippy pass. This closes a portable
 publication-safety boundary; native driver synchronization remains open.
+
+## Capture shape-mismatch safety (2026-09-07)
+
+The bridge regression now submits a valid block, reads it into an incompatible
+consumer shape, and verifies `ShapeMismatch` while the queued block is
+recycled. This prevents malformed consumers from retaining stale bridge data.
+The 46-test engine suite and strict Clippy pass; no live endpoint is opened.

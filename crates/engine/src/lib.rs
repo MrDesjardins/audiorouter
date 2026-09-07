@@ -2442,6 +2442,17 @@ mod tests {
         assert!(bridge.receive_capture_into(&mut output).unwrap());
         assert_eq!(output.channel(0).unwrap(), &[0.25, 0.5]);
 
+        bridge
+            .submit_render(1, AudioBlock::new(1, 2).unwrap())
+            .unwrap();
+        assert_eq!(bridge.process_once(), 1);
+        let mut wrong_shape = AudioBlock::new(2, 2).unwrap();
+        assert_eq!(
+            bridge.receive_capture_into(&mut wrong_shape),
+            Err(BlockError::ShapeMismatch)
+        );
+        assert!(bridge.try_receive_capture().is_none());
+
         let stale = AudioBlock::new(1, 2).unwrap();
         assert!(bridge.submit_render(0, stale).is_err());
         bridge.deactivate();
