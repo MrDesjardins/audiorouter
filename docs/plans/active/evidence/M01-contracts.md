@@ -210,6 +210,10 @@ before any operating-system registration because the native sign-in lifecycle
 is not implemented. Control and TypeScript contracts cover both methods, and no
 startup or machine configuration is changed.
 
+The M01 CLI acceptance was requalified after the startup plan/apply additions.
+Schema, status, discovery, and safe command behavior passed using temporary
+state; no audio device or machine configuration was accessed.
+
 Startup plan metadata is now persisted in SQLite and reloaded by a new control
 plane instance, closing the restart gap for durable backends. The restart
 regression passes; the standalone storage test executable is blocked before
