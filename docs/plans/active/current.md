@@ -988,3 +988,4 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Strengthened the M07 recovery regression to verify event ordering for crash notifications and eligible restart events. The focused control test, strict Clippy, formatting, and diff checks pass.
 - Corrected the M07 milestone and release checklist summaries to reflect that portable crash-recovery orchestration is implemented while sign-in background lifecycle and native process/audio restart remain open.
 - Added durable SQLite recovery-orchestration coverage: the portable supervisor restores an eligible fake session before the crash threshold and preserves a latched safe-mode stop after the third crash. The focused control test, strict Clippy, formatting, and diff checks pass.
+- Re-ran the complete control suite after the durable recovery regression: 79 tests and doc tests passed with strict Clippy, formatting, and diff checks; no native audio or machine configuration was touched.
