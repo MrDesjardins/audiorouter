@@ -674,3 +674,10 @@ forwarded through the named pipe and returns the backend JSON-RPC result. The
 focused MCP test, CLI strict Clippy, formatting, and full M07 headless wrapper
 passed. Only temporary SQLite and named-pipe state was used; no audio device,
 driver, or machine configuration was accessed.
+
+The locked workspace all-target regression was revalidated at clean revision
+`1fcbbfa` after adding bounded `poll_and_restart` recovery. All crate tests
+passed: 22 CLI, 68 control, 35 domain, 25 DSP, 40 engine, 31 plugin-host, 8
+worker-process, 5 protocol, 30 recording, 36 storage, 14 transport, and 12
+Windows-audio tests. Strict workspace Clippy with `-D warnings`, formatting,
+and diff checks passed. No audio stream or machine configuration was touched.
