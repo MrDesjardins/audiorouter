@@ -42,6 +42,18 @@ directory. Neither check opens an audio stream or installs a driver.
 The contracts checks verify TypeScript type safety and catalog parity; they use
 only the local CLI schema and do not access audio or machine configuration.
 
+For an explicitly authorized native adapter smoke on a Windows host, use:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\tests\\acceptance\\m02-rust-adapter-live.ps1 -AllowLiveAudio -DurationMilliseconds 200
+```
+
+This opens bounded capture and render streams, copies capture data into
+caller-owned memory, submits zero-valued render buffers, stops/resets both
+streams, and verifies the media-device identity/state snapshot is unchanged.
+It is intentionally opt-in and must not be treated as physical latency or
+graph-routing evidence.
+
 For the repository-local VST3 SDK build, validator, and offline fixture loader,
 run:
 
@@ -82,12 +94,12 @@ third-party virtual cable as if it were an AudioRouter-managed endpoint.
 
 ## Troubleshooting
 
-- `E_INVALIDARG` from the Rust WASAPI initialization path is a known COM/ABI
-  interop blocker. It is distinct from `AUDCLNT_E_DEVICE_IN_USE`; the native
-  C++ reference path initializes the same capture endpoints successfully, so
-  ordinary endpoint contention is not the current explanation. The Rust path
-  remains unavailable until this discrepancy is fixed; ordinary tests do not
-  work around it by changing device settings.
+- Earlier Rust WASAPI initialization runs returned `E_INVALIDARG` on the
+  event-driven request. The current adapter retries only that exact HRESULT
+  with its qualified bounded polling request; the live smoke now succeeds on
+  all tested capture endpoints. `E_INVALIDARG` remains distinct from
+  `AUDCLNT_E_DEVICE_IN_USE`, and ordinary tests do not work around either
+  error by changing device settings.
 - The backend may report audio as unavailable even though portable graph and
   DSP tests pass; the remaining unavailable capability is the native realtime
   scheduler and endpoint routing integration.

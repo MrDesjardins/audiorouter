@@ -18,23 +18,28 @@ release and must not be presented as an installable Windows audio product.
 - The locked Rust workspace passes 379 unit/integration tests, all doc-tests,
   formatting, and strict Clippy.
 - M07 headless acceptance passes 25 CLI tests, 2 MCP interoperability tests,
-  83 control tests, 33 plugin-host tests, 8 worker-process tests, and strict
+  84 control tests, 35 plugin-host tests, 8 worker-process tests, and strict
   Clippy.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI
   and plugin-worker artifacts, SBOM metadata, notices, checksums, and a
   manifest, then removes the temporary output.
 - VST3 SDK acceptance passes 51 SDK self-tests, 1,598 official validator tests
   with 0 failures, and the offline native mda fixture loader.
+- The native WASAPI probes qualify shared capture across 13 endpoints,
+  process-loopback include/exclude and controlled attribution, silent render
+  lifecycle, and endpoint timing baselines. The guarded production Rust adapter
+  smoke also passes bounded capture plus zero-valued `submit_bytes` render
+  submission while preserving the media-device snapshot.
 
 ## Known limitations
 
-- Rust capture now retries the exact observed event-callback `E_INVALIDARG`
-  with a fresh native-compatible polling client; busy-device and permission
-  failures remain distinct and fail closed. The live Rust stream path is still
-  unqualified because no stream was opened in this acceptance, and this is not
-  evidence of working AudioRouter routing.
-- Realtime graph scheduling, process-tree attribution, measured latency/drift,
-  and hardware/endurance qualification are incomplete.
+- Rust capture retries the exact observed event-callback `E_INVALIDARG` with a
+  fresh native-compatible polling client; busy-device and permission failures
+  remain distinct and fail closed. The guarded live adapter smoke qualifies
+  bounded adapter capture/render lifecycle, but is not evidence of complete
+  AudioRouter graph routing.
+- Realtime graph scheduling, physical acoustic latency, clock drift, and
+  hardware/endurance qualification are incomplete.
 - The managed virtual-audio driver is not included, installed, signed, or
   registered. Virtual-device lifecycle remains an honest unavailable
   capability.
