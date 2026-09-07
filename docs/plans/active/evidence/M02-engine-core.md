@@ -123,3 +123,9 @@ per-channel ring directly on `AudioBlock`, with reset and shape/bound checks.
 The engine suite has 38 passing tests with strict Clippy clean. This proves the
 portable delay stage; scheduler graph insertion and physical latency evidence
 remain open.
+
+The compiler now fails closed for a multi-node session with no enabled edges.
+Without this guard, disconnected processing nodes could be interpreted as one
+serial block pipeline. A regression covers the typed `UnsupportedTopology`
+result; the engine suite passes 41 tests. This is portable graph-safety
+evidence only, and native scheduling/routing remain open.

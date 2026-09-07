@@ -1193,6 +1193,9 @@ pub fn compile_session(
         .iter()
         .filter(|edge| edge.enabled)
         .collect::<Vec<_>>();
+    if enabled_edges.is_empty() && session.nodes.len() > 1 {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
     if !enabled_edges.is_empty() {
         let mut incoming =
             HashMap::<audiorouter_domain::EntityId, &audiorouter_domain::Edge>::new();
@@ -2403,6 +2406,44 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(graph.generation().value(), 3);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn compiler_rejects_multiple_disconnected_nodes() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "disconnected".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                Node {
+                    id: EntityId::new("first"),
+                    kind: NodeKind::Gain,
+                    name: "First".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![],
+                },
+                Node {
+                    id: EntityId::new("second"),
+                    kind: NodeKind::Mute,
+                    name: "Second".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![],
+                },
+            ],
+            edges: vec![],
+        };
+
+        assert!(matches!(
+            compile_session(&session, RuntimeGeneration::new(3)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
     }
 
     #[test]
