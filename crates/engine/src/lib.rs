@@ -2400,6 +2400,21 @@ pub struct RealtimeScheduler {
     output: AudioBlockRing,
 }
 
+/// A point-in-time, allocation-free scheduler health snapshot. The counters
+/// are monotonic for the scheduler lifetime; callers may diff snapshots when
+/// publishing diagnostics outside the realtime boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SchedulerTelemetry {
+    pub input_overruns: u64,
+    pub input_underruns: u64,
+    pub output_overruns: u64,
+    pub output_underruns: u64,
+    pub processed_quanta: u64,
+    pub repaired_samples: u64,
+    pub xruns: u64,
+    pub active_generation: Option<RuntimeGeneration>,
+}
+
 impl RealtimeScheduler {
     pub fn new(capacity: usize, channels: usize, frames: usize) -> Result<Self, QueueError> {
         Ok(Self {
@@ -2435,6 +2450,26 @@ impl RealtimeScheduler {
 
     pub fn output(&self) -> &AudioBlockRing {
         &self.output
+    }
+
+    /// Read scheduler and processor health without taking a lock or touching
+    /// an endpoint. This method is intended for a control/diagnostics thread;
+    /// realtime processing only updates the underlying atomics.
+    pub fn telemetry(&self) -> SchedulerTelemetry {
+        SchedulerTelemetry {
+            input_overruns: self.input.overruns(),
+            input_underruns: self.input.underruns(),
+            output_overruns: self.output.overruns(),
+            output_underruns: self.output.underruns(),
+            processed_quanta: self.processor.metrics().processed_quanta(),
+            repaired_samples: self.processor.metrics().repaired_samples(),
+            xruns: self.processor.metrics().xruns(),
+            active_generation: self
+                .processor
+                .publication
+                .load()
+                .map(|graph| graph.generation()),
+        }
     }
 
     /// Acquire an input block from the scheduler's bounded pool.
@@ -3233,6 +3268,19 @@ mod tests {
         assert_eq!(output.channel(0).unwrap(), &[0.5, -1.0]);
         assert_eq!(output.generation(), 21);
         scheduler.output().try_recycle(output).unwrap();
+        assert_eq!(
+            scheduler.telemetry(),
+            SchedulerTelemetry {
+                input_overruns: 0,
+                input_underruns: 0,
+                output_overruns: 0,
+                output_underruns: 0,
+                processed_quanta: 1,
+                repaired_samples: 0,
+                xruns: 0,
+                active_generation: Some(RuntimeGeneration::new(21)),
+            }
+        );
         assert_eq!(scheduler.input().ready(), 0);
         assert_eq!(scheduler.output().ready(), 0);
         scheduler.deactivate();
@@ -3243,6 +3291,7 @@ mod tests {
         let muted = scheduler.receive_output().unwrap();
         assert_eq!(muted.channel(0).unwrap(), &[0.0, 0.0]);
         scheduler.output().try_recycle(muted).unwrap();
+        assert_eq!(scheduler.telemetry().active_generation, None);
     }
 
     #[test]

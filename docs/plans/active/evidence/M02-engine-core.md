@@ -237,3 +237,10 @@ queued block as explicit silence, while invalid activation continues to retain
 the previous prepared generation. This keeps graph lifecycle ownership beside
 the bounded input/output rings without opening devices; native endpoint
 scheduling and stream recovery remain separate gates.
+
+`RealtimeScheduler::telemetry` now provides a point-in-time, allocation-free
+snapshot of input/output queue pressure, repaired samples, xruns, processed
+quanta, and the active graph generation. Counters remain atomic and monotonic;
+the diagnostics caller can diff snapshots without adding work to the realtime
+processing boundary. Control/API publication and native callback timing remain
+open.
