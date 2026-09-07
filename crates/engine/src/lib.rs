@@ -420,6 +420,23 @@ impl VirtualBusBridge {
         self.capture.try_receive()
     }
 
+    /// Fill a caller-owned output block from the capture side. On underrun or
+    /// inactive state the output is explicitly cleared to silence without an
+    /// allocation; the boolean reports whether a queued block was delivered.
+    pub fn receive_capture_into(&self, output: &mut AudioBlock) -> Result<bool, BlockError> {
+        let Some(input) = self.capture.try_receive() else {
+            output.clear();
+            return Ok(false);
+        };
+        let result = output.copy_from(&input);
+        let _ = self.capture.try_recycle(input);
+        if result.is_err() {
+            output.clear();
+            return result.map(|()| true);
+        }
+        Ok(true)
+    }
+
     pub fn try_recycle_capture(&self, block: AudioBlock) -> Result<(), AudioBlock> {
         self.capture.try_recycle(block)
     }
@@ -2394,21 +2411,26 @@ mod tests {
         inactive.channel_mut(0).unwrap().fill(1.0);
         assert!(bridge.submit_render(1, inactive).is_err());
         assert_eq!(bridge.process_once(), 0);
+        let mut silent = AudioBlock::new(1, 2).unwrap();
+        silent.channel_mut(0).unwrap().fill(1.0);
+        assert!(!bridge.receive_capture_into(&mut silent).unwrap());
+        assert_eq!(silent.channel(0).unwrap(), &[0.0, 0.0]);
 
         bridge.activate(1).unwrap();
         let mut input = AudioBlock::new(1, 2).unwrap();
         input.channel_mut(0).unwrap().copy_from_slice(&[0.25, 0.5]);
         bridge.submit_render(1, input).unwrap();
         assert_eq!(bridge.process_once(), 1);
-        let output = bridge.try_receive_capture().unwrap();
+        let mut output = AudioBlock::new(1, 2).unwrap();
+        assert!(bridge.receive_capture_into(&mut output).unwrap());
         assert_eq!(output.channel(0).unwrap(), &[0.25, 0.5]);
-        bridge.try_recycle_capture(output).unwrap();
 
         let stale = AudioBlock::new(1, 2).unwrap();
         assert!(bridge.submit_render(0, stale).is_err());
         bridge.deactivate();
         assert!(!bridge.is_active());
-        assert!(bridge.try_receive_capture().is_none());
+        assert!(!bridge.receive_capture_into(&mut output).unwrap());
+        assert_eq!(output.channel(0).unwrap(), &[0.0, 0.0]);
         assert_eq!(bridge.generation(), 1);
         assert_eq!(bridge.dropped(), 0);
         assert_eq!(

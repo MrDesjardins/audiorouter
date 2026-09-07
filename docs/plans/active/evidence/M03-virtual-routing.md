@@ -205,3 +205,12 @@ destination, and a full/slow destination cannot block or grow the others. The
 engine suite passes 46 tests with strict Clippy. This supports the portable
 one-to-many bridge contract only; native virtual endpoints and live routing
 remain unimplemented.
+
+## Allocation-free capture silence (2026-09-07)
+
+The bridge consumer API now fills a caller-owned block and clears it to
+initialized silence on inactive or underrun reads, returning a delivery flag.
+Shape mismatches are reported without retaining queued data. Existing bridge,
+fan-out, and backpressure regressions remain green at 46 engine tests with
+strict Clippy. This is portable bridge behavior only; no live endpoint is
+opened.
