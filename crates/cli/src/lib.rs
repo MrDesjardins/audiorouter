@@ -1966,6 +1966,8 @@ mod tests {
                 "recording-cli",
                 "--title",
                 "Updated title",
+                "--idempotency-key",
+                "metadata-1",
                 "--database",
                 &database,
                 "--json",
@@ -1974,6 +1976,23 @@ mod tests {
         )
         .unwrap();
         assert_eq!(updated["updated"], true);
+        let replay: Value = serde_json::from_str(
+            &run([
+                "recordings",
+                "set-metadata",
+                "recording-cli",
+                "--title",
+                "Updated title",
+                "--idempotency-key",
+                "metadata-1",
+                "--database",
+                &database,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(replay, updated);
         let fetched: Value = serde_json::from_str(
             &run([
                 "recordings",
