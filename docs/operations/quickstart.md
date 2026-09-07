@@ -76,10 +76,12 @@ third-party virtual cable as if it were an AudioRouter-managed endpoint.
 
 ## Troubleshooting
 
-- `E_INVALIDARG` from the Rust WASAPI initialization path is a known native
-  interop blocker. The native C++ reference path succeeds farther; ordinary
-  tests keep audio unavailable and do not work around this by changing device
-  settings.
+- `E_INVALIDARG` from the Rust WASAPI initialization path is a known COM/ABI
+  interop blocker. It is distinct from `AUDCLNT_E_DEVICE_IN_USE`; the native
+  C++ reference path initializes the same capture endpoints successfully, so
+  ordinary endpoint contention is not the current explanation. The Rust path
+  remains unavailable until this discrepancy is fixed; ordinary tests do not
+  work around it by changing device settings.
 - MSBuild FileTracker access errors are host/tool-process restrictions. Retry
   the same SDK acceptance command in an approved elevated build shell; do not
   disable Windows security features.

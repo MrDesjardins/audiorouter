@@ -28,8 +28,10 @@ release and must not be presented as an installable Windows audio product.
 ## Known limitations
 
 - Native Rust WASAPI stream initialization still has an unresolved
-  `E_INVALIDARG` interop discrepancy. Native reference probes have progressed
-  farther, but this is not evidence of working AudioRouter routing.
+  `E_INVALIDARG` COM/ABI interop discrepancy. Native reference probes can
+  initialize the same capture endpoints, and the failure is distinct from
+  `AUDCLNT_E_DEVICE_IN_USE`; this is still not evidence of working AudioRouter
+  routing.
 - Realtime graph scheduling, process-tree attribution, measured latency/drift,
   and hardware/endurance qualification are incomplete.
 - The managed virtual-audio driver is not included, installed, signed, or
