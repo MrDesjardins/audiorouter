@@ -121,3 +121,17 @@ validation and the `TabletAudioSample.sys`/`sysvad.cat` assertions under the
 afterward. This remains reference-sample build evidence only: no driver was
 installed or loaded, test-signing mode was changed, or machine audio
 configuration was touched.
+
+## 2026-09-07 — Current-head SysVAD requalification
+
+A fresh disposable `Windows-driver-samples` checkout with its WIL submodule
+was passed to `tests/acceptance/m00-sysvad-build.ps1`. The 64-bit VS2026 MSBuild
+host and WDK 10.0.28000.0 completed the full x64 Release solution with normal
+package/API validation and signability checks. `TabletAudioSample.sys`, the
+APO/INF outputs, and `sysvad.cat` were generated successfully; the checkout
+and generated `x64` outputs were removed afterward.
+
+The build's local automatic test signature is not production signing evidence.
+This remains reference-sample qualification only: no driver was installed or
+loaded, test-signing mode was changed, and no machine audio configuration was
+changed.
