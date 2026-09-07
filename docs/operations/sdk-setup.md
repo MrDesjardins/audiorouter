@@ -53,7 +53,14 @@ Read-only verification of the local VST3 checkout:
 ```powershell
 Test-Path third_party\vst3sdk\CMakeLists.txt
 git -C third_party\vst3sdk rev-parse HEAD
+git -C third_party\vst3sdk submodule status
 ```
+
+The last command should report seven checked-out SDK submodules (`base`,
+`cmake`, `doc`, `pluginterfaces`, `public.sdk`, `tutorials`, and `vstgui4`).
+On a clean machine, the setup script performs the clone and recursive
+initialization before it prints `VST3 SDK ready`; rerunning it repairs an
+incomplete local checkout without installing a system SDK.
 
 Native build scripts locate Visual Studio and the Windows SDK without requiring
 global PATH changes. The VST3 loader accepts optional `-SdkInclude` and
