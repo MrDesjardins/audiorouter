@@ -2075,10 +2075,13 @@ mod tests {
         let help = run(["help", "--json"]).unwrap();
         assert!(help.contains("devices list"));
         assert!(help.contains("virtual-devices list"));
+        assert!(help.contains("virtual-devices plan"));
+        assert!(help.contains("virtual-devices apply"));
         assert!(help.contains("plugins scan"));
         assert!(help.contains("operation get"));
         let schema: Value = serde_json::from_str(&run(["schema", "--json"]).unwrap()).unwrap();
         assert_eq!(schema["protocolVersion"]["major"], 1);
+        assert_eq!(schema["limits"]["maxVirtualBuses"], 8);
     }
 
     #[test]

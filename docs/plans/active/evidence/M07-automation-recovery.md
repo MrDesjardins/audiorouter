@@ -720,6 +720,14 @@ The run passed 22 CLI tests, MCP stdio and named-pipe interoperability tests,
 Clippy. M01 CLI acceptance also passed. All state was temporary; no audio
 device, driver, or machine configuration was accessed.
 
+## CLI help and discovery parity (2026-09-07)
+
+The CLI regression now verifies that help advertises virtual-device plan/apply
+commands and that `schema` exposes the authoritative
+`limits.maxVirtualBuses: 8`. The 25-test CLI suite and strict Clippy pass.
+This is contract/help validation only and does not access audio or machine
+configuration.
+
 The M07 wrapper was requalified again at the current tip. The same 22 CLI,
 MCP interoperability, 71 control, 31 plugin-host, and 8 worker-process tests
 passed with strict Clippy; temporary state only was used.
