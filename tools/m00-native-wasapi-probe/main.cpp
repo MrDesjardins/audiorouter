@@ -497,7 +497,8 @@ static bool render_impulses(BYTE* data, UINT32 frames, const WAVEFORMATEX* forma
     return impulse_count > 0;
 }
 
-static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone, bool impulses = false) {
+static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone,
+                             bool impulses = false, bool event_driven = false) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -520,14 +521,25 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone, bo
                           reinterpret_cast<void**>(&client));
     print_hr("render_activate", hr);
     WAVEFORMATEX* format = nullptr;
+    HANDLE ready_event = nullptr;
+    if (SUCCEEDED(hr) && event_driven) {
+        ready_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (!ready_event) hr = HRESULT_FROM_WIN32(GetLastError());
+    }
     if (SUCCEEDED(hr)) hr = client->GetMixFormat(&format);
     print_hr("render_get_mix_format", hr);
     if (SUCCEEDED(hr)) {
         print_format(format);
-        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED,
-                                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST,
+        DWORD stream_flags = AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM |
+                             AUDCLNT_STREAMFLAGS_NOPERSIST;
+        if (event_driven) stream_flags |= AUDCLNT_STREAMFLAGS_EVENTCALLBACK;
+        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, stream_flags,
                                 1000000, 0, format, nullptr);
         print_hr("render_initialize", hr);
+        if (SUCCEEDED(hr) && event_driven) {
+            hr = client->SetEventHandle(ready_event);
+            print_hr("render_set_event", hr);
+        }
         if (SUCCEEDED(hr)) {
             REFERENCE_TIME default_period = 0;
             REFERENCE_TIME minimum_period = 0;
@@ -565,6 +577,14 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone, bo
             }
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(duration_ms);
             while (std::chrono::steady_clock::now() < deadline) {
+                if (event_driven) {
+                    const DWORD wait = WaitForSingleObject(ready_event, 50);
+                    if (wait == WAIT_FAILED) {
+                        hr = HRESULT_FROM_WIN32(GetLastError());
+                        break;
+                    }
+                    if (wait == WAIT_TIMEOUT) continue;
+                }
                 UINT32 padding = 0;
                 hr = client->GetCurrentPadding(&padding);
                 if (FAILED(hr)) break;
@@ -591,6 +611,7 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone, bo
         }
     }
     if (render) render->Release();
+    if (ready_event) CloseHandle(ready_event);
     if (format) CoTaskMemFree(format);
     if (client) client->Release();
     device->Release(); devices->Release(); enumerator->Release();
@@ -798,6 +819,13 @@ int main(int argc, char** argv) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
         int result = render_data_probe(target_index, duration_ms, false);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "event-render") == 0) {
+        UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 500;
+        int result = render_data_probe(target_index, duration_ms, false, false, true);
         CoUninitialize();
         return result;
     }

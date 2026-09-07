@@ -526,6 +526,17 @@ start, 50 packets/24,000 frames, stop, and reset successfully. The selected
 endpoint returned zero nonzero payload bytes during this interval, so this
 qualifies event-driven lifecycle and packet draining only; it does not claim
 signal propagation, physical latency, or native realtime graph scheduling.
+
+## Event-driven render submission (2026-09-07)
+
+The native probe also exposes an opt-in `event-render` command. It initializes
+shared render with `AUDCLNT_STREAMFLAGS_EVENTCALLBACK`, registers the event,
+waits for render availability, submits only `AUDCLNT_BUFFERFLAGS_SILENT`
+buffers, and retains the event through stop/reset. An authorized 500 ms run on
+render endpoint 0 completed initialization, event registration, start, 28,320
+submitted silent frames, stop, and reset successfully. This qualifies the
+event-driven render lifecycle and bounded submission path only; it does not
+claim audible routing, physical latency, or driver integration.
 ## 2026-09-07 — Lifecycle regression after format-identity hardening
 
 The authorized `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`
