@@ -2089,7 +2089,12 @@ impl ControlPlane {
                     "runtime.activated",
                     "runtime.stopped",
                     "privacy.muteEnabled",
-                    "privacy.muteDisabled"
+                    "privacy.muteDisabled",
+                    "virtualDevice.changed",
+                    "recording.metadataChanged",
+                    "recording.renamed",
+                    "recording.entryRemoved",
+                    "recording.recycled"
                 ],
                 "meterReplay": false,
                 "retention": {
@@ -4877,10 +4882,8 @@ mod tests {
 
     #[test]
     fn describe_exposes_input_and_output_schemas_for_methods() {
-        let methods = ControlPlane::default().describe()["methods"]
-            .as_array()
-            .unwrap()
-            .clone();
+        let document = ControlPlane::default().describe();
+        let methods = document["methods"].as_array().unwrap().clone();
         let commit = methods
             .iter()
             .find(|method| method["name"] == "graph.commit")
@@ -4965,6 +4968,16 @@ mod tests {
             startup["outputSchema"]["properties"]["registration"]["const"],
             "unavailable"
         );
+        let event_categories = document["events"]["stateCategories"].as_array().unwrap();
+        for category in [
+            "virtualDevice.changed",
+            "recording.metadataChanged",
+            "recording.renamed",
+            "recording.entryRemoved",
+            "recording.recycled",
+        ] {
+            assert!(event_categories.iter().any(|value| value == category));
+        }
         let recovery_clear = methods
             .iter()
             .find(|method| method["name"] == "recovery.clearSafeMode")

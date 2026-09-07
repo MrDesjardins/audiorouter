@@ -272,3 +272,9 @@ Virtual-device desired-state applies now append a bounded global
 events while continuing to exclude events belonging to other sessions, allowing
 connected clients to refresh their managed-bus inventory. Control coverage and
 strict Clippy pass; native driver lifecycle remains open.
+
+The discovery document now includes the global virtual-device change category
+and the four session-scoped recording mutation categories emitted by control.
+This prevents clients from having to guess event names and keeps the advertised
+state-event catalog aligned with replay behavior. Control tests, formatting, and
+strict Clippy pass.
