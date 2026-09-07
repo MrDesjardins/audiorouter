@@ -701,6 +701,16 @@ fn history_command(args: &[&str]) -> Result<Value, CliError> {
 
 fn watch_command(args: &[&str]) -> Result<Value, CliError> {
     let session_id = positional(args, 1, "session id")?;
+    let categories = option_values(args, "--category")?;
+    if categories.len() > 32
+        || categories
+            .iter()
+            .any(|category| category.is_empty() || category.chars().count() > 128)
+    {
+        return Err(CliError::InvalidArguments(
+            "--category values must contain 1 to 128 characters, with at most 32 values".into(),
+        ));
+    }
     let after_sequence = args
         .iter()
         .position(|argument| *argument == "--after")
@@ -738,7 +748,8 @@ fn watch_command(args: &[&str]) -> Result<Value, CliError> {
             params: Some(json!({
                 "sessionId": session_id,
                 "afterSequence": after_sequence,
-                "limit": limit
+                "limit": limit,
+                "categories": (!categories.is_empty()).then_some(categories)
             })),
         },
     );
@@ -970,6 +981,27 @@ fn optional_option_value<'a>(args: &'a [&str], option: &str) -> Result<Option<&'
         .filter(|value| !value.is_empty() && !value.starts_with('-'))
         .map(Some)
         .ok_or_else(|| CliError::InvalidArguments(format!("{option} requires a value")))
+}
+
+fn option_values<'a>(args: &'a [&str], option: &str) -> Result<Vec<&'a str>, CliError> {
+    let mut values = Vec::new();
+    let mut index = 0;
+    while index < args.len() {
+        if args[index] == option {
+            let value = args
+                .get(index + 1)
+                .copied()
+                .filter(|value| !value.is_empty() && !value.starts_with('-'));
+            values.push(
+                value.ok_or_else(|| {
+                    CliError::InvalidArguments(format!("{option} requires a value"))
+                })?,
+            );
+            index += 1;
+        }
+        index += 1;
+    }
+    Ok(values)
 }
 
 fn positional_path(
@@ -1239,7 +1271,7 @@ fn help_value() -> Value {
         .insert(3, json!("startup get [--database <path>]"));
     value["commands"].as_array_mut().unwrap().insert(
         7,
-        json!("watch <session-id> --database <path> [--after N] [--limit N]"),
+        json!("watch <session-id> --database <path> [--after N] [--limit N] [--category NAME]..."),
     );
     value["commands"].as_array_mut().unwrap().insert(
         15,
@@ -2320,6 +2352,8 @@ mod tests {
                 "0",
                 "--limit",
                 "10",
+                "--category",
+                "graph.committed",
                 "--json",
             ])
             .unwrap(),
@@ -2335,6 +2369,18 @@ mod tests {
                 &database_arg,
                 "--limit",
                 "501",
+                "--json",
+            ]),
+            Err(CliError::InvalidArguments(_))
+        ));
+        assert!(matches!(
+            run([
+                "watch",
+                "session-fixture",
+                "--database",
+                &database_arg,
+                "--category",
+                "",
                 "--json",
             ]),
             Err(CliError::InvalidArguments(_))
