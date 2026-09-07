@@ -452,3 +452,10 @@ This is only a physical signal-path smoke result: ambient/input content is not
 separated from the generated tone, and no impulse timestamps or acoustic
 round-trip distribution were measured. The required 1,000-impulse
 speaker-to-microphone latency gate therefore remains open.
+
+The same wrapper can reproduce the USB smoke by selecting
+`-RenderFriendlyName 'Speakers (PD200X Podcast Microphone)'`
+and `-CaptureFriendlyName 'Microphone (PD200X Podcast Microphone)'`. It keeps
+the endpoint lookup name-based and preserves the same bounded duration,
+nonzero-payload, media-snapshot, and cleanup checks. This remains signal-path
+smoke evidence only; it does not replace the 1,000-impulse acoustic test.

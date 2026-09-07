@@ -1,13 +1,15 @@
 param(
     [switch]$AllowLiveAudio,
     [int]$CaptureDurationMilliseconds = 1000,
-    [int]$ToneDurationMilliseconds = 1500
+    [int]$ToneDurationMilliseconds = 1500,
+    [string]$RenderFriendlyName = 'CABLE Input (VB-Audio Virtual Cable)',
+    [string]$CaptureFriendlyName = 'CABLE Output (VB-Audio Virtual Cable)'
 )
 
 $ErrorActionPreference = 'Stop'
 
 if (-not $AllowLiveAudio) {
-    throw 'Refusing virtual loopback acceptance without explicit -AllowLiveAudio'
+    throw 'Refusing signal-path acceptance without explicit -AllowLiveAudio'
 }
 if ($CaptureDurationMilliseconds -lt 250 -or $CaptureDurationMilliseconds -gt 2000) {
     throw 'CaptureDurationMilliseconds must be between 250 and 2000'
@@ -47,7 +49,7 @@ $before = Get-MediaSnapshot
 try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Output $output
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output -PathType Leaf)) {
-        throw 'virtual loopback acceptance probe build failed'
+        throw 'signal-path acceptance probe build failed'
     }
 
     $inventory = Invoke-Probe @('inventory')
@@ -56,12 +58,12 @@ try {
 
     $renderMatch = [regex]::Match(
         $inventoryText,
-        'render\[(\d+)\] name=CABLE Input \(VB-Audio Virtual Cable\)')
+        ('render\[(\d+)\] name=' + [regex]::Escape($RenderFriendlyName)))
     $captureMatch = [regex]::Match(
         $inventoryText,
-        'capture\[(\d+)\] name=CABLE Output \(VB-Audio Virtual Cable\)')
+        ('capture\[(\d+)\] name=' + [regex]::Escape($CaptureFriendlyName)))
     if (-not $renderMatch.Success -or -not $captureMatch.Success) {
-        throw 'VB-Audio Virtual Cable render/capture endpoints were not both found'
+        throw "Requested render/capture endpoints were not both found: '$RenderFriendlyName' / '$CaptureFriendlyName'"
     }
     $renderIndex = [int]$renderMatch.Groups[1].Value
     $captureIndex = [int]$captureMatch.Groups[1].Value
@@ -83,27 +85,27 @@ try {
     if ($captureText -notmatch 'capture_start=0x0' -or
         $captureText -notmatch 'capture_stop=0x0' -or
         $captureText -notmatch 'capture_reset=0x0') {
-        throw "virtual cable capture lifecycle failed`n$captureText"
+        throw "signal-path capture lifecycle failed`n$captureText"
     }
     $nonzeroMatch = [regex]::Match($captureText, 'capture_nonzero_bytes=(\d+)')
     if (-not $nonzeroMatch.Success -or [int64]$nonzeroMatch.Groups[1].Value -le 0) {
-        throw "virtual cable capture contained no nonzero payload bytes`n$captureText"
+        throw "signal-path capture contained no nonzero payload bytes`n$captureText"
     }
     if ($toneText -notmatch 'render_start=0x0' -or
         $toneText -notmatch 'render_stop=0x0' -or
         $toneText -notmatch 'render_reset=0x0' -or
         $toneText -notmatch 'render_tone_written=1') {
-        throw "virtual cable tone lifecycle failed`n$toneText"
+        throw "signal-path tone lifecycle failed`n$toneText"
     }
 
     $after = Get-MediaSnapshot
     if (Compare-Object -ReferenceObject $before -DifferenceObject $after) {
-        throw 'media-device identity/state changed during virtual loopback acceptance'
+        throw 'media-device identity/state changed during signal-path acceptance'
     }
-    Write-Output ("M00 native virtual loopback passed: render_index={0} capture_index={1} capture_nonzero_bytes={2} capture_duration_ms={3} tone_duration_ms={4}" -f `
-        $renderIndex, $captureIndex, $nonzeroMatch.Groups[1].Value,
+    Write-Output ("M00 native signal path passed: render='{0}' capture='{1}' render_index={2} capture_index={3} capture_nonzero_bytes={4} capture_duration_ms={5} tone_duration_ms={6}" -f `
+        $RenderFriendlyName, $CaptureFriendlyName, $renderIndex, $captureIndex, $nonzeroMatch.Groups[1].Value,
         $CaptureDurationMilliseconds, $ToneDurationMilliseconds)
-    Write-Output 'Scope: existing VB-Audio Virtual Cable only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
+    Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {
     Remove-Item -LiteralPath $output, $captureLog, "$captureLog.err", $toneLog, "$toneLog.err", $object -Force -ErrorAction SilentlyContinue
