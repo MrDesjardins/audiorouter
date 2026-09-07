@@ -54,6 +54,9 @@ jobs:
       - name: Compile native WASAPI probe
         shell: pwsh
         run: ./tests/acceptance/m00-native-build.ps1
+      - name: Verify SDK installer provenance
+        shell: pwsh
+        run: ./tests/acceptance/m06-sdk-installer.ps1
       - name: Test release verifier and runbook
         shell: pwsh
         run: |

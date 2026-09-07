@@ -638,3 +638,10 @@ existing checkout's `origin` is the expected Steinberg VST3 SDK repository
 before accepting the pinned revision or applying `-Force`. This is a
 repository-local provenance check and does not alter the installed checkout or
 machine configuration.
+## Installer provenance regression (2026-09-06)
+
+`tests/acceptance/m06-sdk-installer.ps1` creates a disposable Git checkout
+with an unrelated origin and verifies that the installer fails with the
+explicit origin-mismatch diagnostic. Windows CI runs this check; the fixture
+is removed afterward and no SDK, plugin, driver, or audio configuration is
+changed.
