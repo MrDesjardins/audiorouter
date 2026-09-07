@@ -321,9 +321,13 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["recordingId", "newPath"],
         ),
-        "safety.setPrivacyMute" => {
-            object_schema(json!({ "muted": { "type": "boolean" } }), &["muted"])
-        }
+        "safety.setPrivacyMute" => object_schema(
+            json!({
+                "muted": { "type": "boolean" },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
+            &["muted"],
+        ),
         "recovery.clearSafeMode" => object_schema(json!({}), &[]),
         "startup.get" => object_schema(json!({}), &[]),
         "recordings.removeEntry" => object_schema(
@@ -1675,6 +1679,7 @@ impl ControlPlane {
                     format!("{client}\0sessions.delete\0{operation_id}"),
                     format!("{client}\0sessions.create\0{operation_id}"),
                     format!("{client}\0sessions.duplicate\0{operation_id}"),
+                    format!("{client}\0safety.setPrivacyMute\0{operation_id}"),
                 ]
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
@@ -3798,9 +3803,27 @@ impl ControlPlane {
     }
 
     fn dispatch_privacy_mute(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
         let muted = params
-            .and_then(|params| params.get("muted").and_then(Value::as_bool))
+            .get("muted")
+            .and_then(Value::as_bool)
             .ok_or_else(|| ControlError::InvalidRequest("muted is required".into()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "muted": muted });
+                (
+                    self.scoped_idempotency_key("safety.setPrivacyMute", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         if let Some(storage) = &self.storage {
             storage.save_privacy_mute(muted).map_err(storage_error)?;
         }
@@ -3815,11 +3838,15 @@ impl ControlPlane {
             },
             None,
         );
-        Ok(json!({
+        let result = json!({
             "muted": muted,
             "persistence": if self.storage.is_some() { "durable" } else { "memory" },
             "audioEffect": "process-local-when-realtime-backend-is-available"
-        }))
+        });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "safety.setPrivacyMute", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_recovery_clear(&mut self) -> Result<Value, ControlError> {
@@ -4491,7 +4518,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             "idempotencyKey",
         ],
         "recordings.rename" => &["recordingId", "newPath", "idempotencyKey"],
-        "safety.setPrivacyMute" => &["muted"],
+        "safety.setPrivacyMute" => &["muted", "idempotencyKey"],
         "recovery.clearSafeMode" => &[],
         "recordings.removeEntry" => &["recordingId", "idempotencyKey"],
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
@@ -5789,7 +5816,7 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(19)),
             method: "safety.setPrivacyMute".into(),
-            params: Some(json!({ "muted": true })),
+            params: Some(json!({ "muted": true, "idempotencyKey": "privacy-1" })),
         });
         assert_eq!(enabled.result.unwrap()["muted"], true);
         let denied = first.dispatch_authorized(
@@ -5814,6 +5841,13 @@ mod tests {
             .result
             .unwrap();
         assert_eq!(status["privacyMute"]["muted"], true);
+        let replay = second.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(22)),
+            method: "safety.setPrivacyMute".into(),
+            params: Some(json!({ "muted": true, "idempotencyKey": "privacy-1" })),
+        });
+        assert_eq!(replay.result.unwrap()["muted"], true);
         let _ = std::fs::remove_file(path);
     }
 
