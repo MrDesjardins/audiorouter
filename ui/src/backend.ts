@@ -21,6 +21,7 @@ import type {
   RecordingRecycleResult,
   RecordingRemoveResult,
   RecordingRow,
+  RecorderLifecycleResult,
   RouteInspection,
   Session,
   SessionCreateResult,
@@ -63,6 +64,12 @@ export interface UiBackend {
   clearRecoverySafeMode(idempotencyKey?: string): Promise<RecoveryClearResult>;
   removeRecordingEntry(recordingId: string, idempotencyKey?: string): Promise<RecordingRemoveResult>;
   recycleRecording(recordingId: string, confirm: boolean, idempotencyKey?: string): Promise<RecordingRecycleResult>;
+  armRecorder(sessionId: string, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
+  startRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
+  pauseRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
+  resumeRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
+  splitRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
+  stopRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
   createSession(session: Session, idempotencyKey?: string): Promise<SessionCreateResult>;
   duplicateSession(sourceSessionId: string, sessionId: string, name?: string, idempotencyKey?: string): Promise<SessionCreateResult>;
   deleteSession(sessionId: string, idempotencyKey?: string): Promise<SessionDeleteResult>;
@@ -188,6 +195,24 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async recycleRecording() {
       throw new Error("The backend is disconnected; recording recycle is unavailable.");
     },
+    async armRecorder() {
+      throw new Error("The backend is disconnected; recorder control is unavailable.");
+    },
+    async startRecorder() {
+      throw new Error("The backend is disconnected; recorder control is unavailable.");
+    },
+    async pauseRecorder() {
+      throw new Error("The backend is disconnected; recorder control is unavailable.");
+    },
+    async resumeRecorder() {
+      throw new Error("The backend is disconnected; recorder control is unavailable.");
+    },
+    async splitRecorder() {
+      throw new Error("The backend is disconnected; recorder control is unavailable.");
+    },
+    async stopRecorder() {
+      throw new Error("The backend is disconnected; recorder control is unavailable.");
+    },
     async createSession() {
       throw new Error("The backend is disconnected; session creation is unavailable.");
     },
@@ -292,6 +317,24 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async recycleRecording(recordingId, confirm, idempotencyKey) {
       return client.request("recordings.recycle", { recordingId, confirm, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async armRecorder(recorderSessionId, idempotencyKey) {
+      return client.request("recorders.arm", { sessionId: recorderSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async startRecorder(recorderSessionId, frame, idempotencyKey) {
+      return client.request("recorders.start", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async pauseRecorder(recorderSessionId, frame, idempotencyKey) {
+      return client.request("recorders.pause", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async resumeRecorder(recorderSessionId, frame, idempotencyKey) {
+      return client.request("recorders.resume", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async splitRecorder(recorderSessionId, frame, idempotencyKey) {
+      return client.request("recorders.split", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async stopRecorder(recorderSessionId, frame, idempotencyKey) {
+      return client.request("recorders.stop", { sessionId: recorderSessionId, frame, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
     },
     async createSession(session, idempotencyKey) {
       return client.request("sessions.create", { session, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });

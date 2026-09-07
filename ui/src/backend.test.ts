@@ -44,6 +44,12 @@ describe("snapshot cache", () => {
       clearRecoverySafeMode: async () => { throw new Error("not connected"); },
       removeRecordingEntry: async () => { throw new Error("not connected"); },
       recycleRecording: async () => { throw new Error("not connected"); },
+      armRecorder: async () => { throw new Error("not connected"); },
+      startRecorder: async () => { throw new Error("not connected"); },
+      pauseRecorder: async () => { throw new Error("not connected"); },
+      resumeRecorder: async () => { throw new Error("not connected"); },
+      splitRecorder: async () => { throw new Error("not connected"); },
+      stopRecorder: async () => { throw new Error("not connected"); },
       createSession: async () => { throw new Error("not connected"); },
       duplicateSession: async () => { throw new Error("not connected"); },
       deleteSession: async () => { throw new Error("not connected"); },
@@ -258,6 +264,23 @@ describe("live event cursor", () => {
     expect(received).toEqual([
       { method: "session.start", params: { sessionId: demoSession.id } },
       { method: "session.stop", params: { sessionId: demoSession.id } },
+    ]);
+  });
+
+  it("forwards frame-accurate recorder actions with retry keys", async () => {
+    const received: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received.push({ method, params });
+        return { sessionId: demoSession.id, state: method.endsWith("arm") ? "armed" : "recording", parts: [], pauses: [], lastFrame: 12 };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await backend.armRecorder(demoSession.id, "arm-key");
+    await backend.startRecorder(demoSession.id, 12, "start-key");
+    expect(received).toEqual([
+      { method: "recorders.arm", params: { sessionId: demoSession.id, idempotencyKey: "arm-key" } },
+      { method: "recorders.start", params: { sessionId: demoSession.id, frame: 12, idempotencyKey: "start-key" } },
     ]);
   });
 
