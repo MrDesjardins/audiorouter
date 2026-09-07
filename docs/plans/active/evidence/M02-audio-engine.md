@@ -131,3 +131,14 @@ silent render buffers, and stopped/reset both clients. A 500 ms run collected
 render frames. This qualifies the Rust adapter's bounded stream data path and
 cleanup, but not graph-to-device scheduling or audible end-to-end routing.
 The final media snapshot remained ten present devices, all `OK`.
+
+The live run is now reproducible through
+`tests/acceptance/m02-rust-adapter-live.ps1 -AllowLiveAudio`. The wrapper
+requires an explicit bounded duration, snapshots media-device identity/state
+before and after, requires positive capture and silent-render counts, and is
+not invoked by ordinary CI or non-live acceptance.
+
+The guarded wrapper was executed with `-AllowLiveAudio -DurationMilliseconds
+200` and passed: 21 capture packets/10,080 frames/80,640 bytes and 11,136
+silent render frames were observed, and the before/after media-device snapshot
+was identical.
