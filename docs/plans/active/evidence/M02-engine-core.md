@@ -144,3 +144,12 @@ planar `f32` blocks and interleaved `f32` buffers. Round-trip and mismatch
 regressions pass, providing the format bridge required before a future WASAPI
 adapter can feed the scheduler; endpoint sample-format negotiation and live
 stream integration remain open.
+
+## Scheduler output generation propagation (2026-09-07)
+
+Processed scheduler outputs now carry the generation of the immutable graph
+that produced them, rather than inheriting an unclaimed input tag. The
+scheduler also exposes a generation-filtered output receive operation that
+recycles older outputs at the boundary. A regression verifies the propagated
+generation; the engine suite and strict Clippy pass. Native endpoint
+scheduling and live routing remain open.

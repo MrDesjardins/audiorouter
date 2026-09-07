@@ -2014,6 +2014,9 @@ impl RuntimeProcessor {
             .try_recycle(block)
             .map_err(|_| BlockError::ShapeMismatch)?;
         let generation = self.process(&mut destination);
+        if let Some(generation) = generation {
+            destination.generation = generation.value();
+        }
         if let Err(destination) = output.try_submit(destination) {
             output
                 .try_recycle(destination)
@@ -2070,6 +2073,15 @@ impl RealtimeScheduler {
 
     pub fn receive_output(&self) -> Option<AudioBlock> {
         self.output.try_receive()
+    }
+
+    /// Receive only output produced by the requested prepared graph
+    /// generation. Older output is recycled at the scheduler boundary.
+    pub fn receive_output_for_generation(
+        &self,
+        generation: RuntimeGeneration,
+    ) -> Option<AudioBlock> {
+        self.output.try_receive_generation(generation.value())
     }
 
     /// Execute one nonblocking ownership-preserving scheduler step.
@@ -2695,6 +2707,7 @@ mod tests {
         );
         let output = scheduler.receive_output().unwrap();
         assert_eq!(output.channel(0).unwrap(), &[0.5, -1.0]);
+        assert_eq!(output.generation(), 21);
         scheduler.output().try_recycle(output).unwrap();
         assert_eq!(scheduler.input().ready(), 0);
         assert_eq!(scheduler.output().ready(), 0);
