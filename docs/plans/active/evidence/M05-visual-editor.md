@@ -126,6 +126,13 @@ only and no backend, audio endpoint, or machine configuration access. Manual
 visual/accessibility acceptance and host-provided live transport injection
 remain open.
 
+The entry point now auto-selects this transport when a WebView2 host exposes
+`chrome.webview` and injects a nonempty `window.__AUDIO_ROUTER_SESSION_ID__`.
+An explicit `window.__AUDIO_ROUTER_HOST__` bridge still takes precedence, and
+missing or malformed host inputs remain disconnected. Focused coverage verifies
+WebView2 selection and invalid-session fallback; the native host's origin and
+permission policy plus manual visual/accessibility acceptance remain open.
+
 `applyGraphDraft` now provides the two-phase UI workflow: it plans the complete
 candidate, verifies the returned base revision matches the draft, and commits
 using the caller's idempotency key. Revision mismatch is rejected before

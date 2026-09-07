@@ -49,4 +49,15 @@ describe("native host bridge", () => {
     await expect(first).rejects.toThrow("disposed");
     expect(listeners).toHaveLength(0);
   });
+
+  it("selects the WebView2 transport when the session ID is injected", () => {
+    const webview: WebView2Webview = {
+      postMessage: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+    const backend = createInitialBackend(null, webview, "session-2");
+    expect(backend.connected).toBe(true);
+    expect(createInitialBackend(null, webview, "").connected).toBe(false);
+  });
 });

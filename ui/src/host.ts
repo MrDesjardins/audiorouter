@@ -87,6 +87,8 @@ export class WebView2RpcTransport implements RpcTransport {
 declare global {
   interface Window {
     __AUDIO_ROUTER_HOST__?: unknown;
+    __AUDIO_ROUTER_SESSION_ID__?: unknown;
+    chrome?: { webview?: unknown };
   }
 }
 
@@ -100,8 +102,19 @@ function isHostBridge(value: unknown): value is AudioRouterHostBridge {
     typeof (candidate.transport as { send?: unknown }).send === "function";
 }
 
+function isWebView2Webview(value: unknown): value is WebView2Webview {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<WebView2Webview>;
+  return typeof candidate.postMessage === "function" &&
+    typeof candidate.addEventListener === "function" &&
+    typeof candidate.removeEventListener === "function";
+}
+
 /** Select the injected native backend, or remain safely disconnected. */
-export function createInitialBackend(host: unknown): UiBackend {
-  if (!isHostBridge(host)) return createDisconnectedBackend();
-  return createLiveBackendFromTransport(host.transport, host.sessionId);
+export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined): UiBackend {
+  if (isHostBridge(host)) return createLiveBackendFromTransport(host.transport, host.sessionId);
+  if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0) {
+    return createLiveBackendFromTransport(new WebView2RpcTransport(webview), sessionId);
+  }
+  return createDisconnectedBackend();
 }
