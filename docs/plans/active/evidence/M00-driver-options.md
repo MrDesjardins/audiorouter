@@ -78,3 +78,22 @@ Visual Studio Community 2026, MSVC 14.51, Windows SDK/WDK 10.0.28000.0, and
 the C++20 toolchain. The generated executable/object were removed immediately
 after compilation. This is toolchain evidence only; no driver was installed,
 loaded, signed, or changed, and no machine audio configuration was touched.
+
+## 2026-09-07 — Full SysVAD validation with 64-bit MSBuild
+
+The disposable Microsoft driver-samples checkout was rebuilt with the
+repository WIL dependency and the installed VS2026/WDK 10.0.28000.0 toolchain.
+The normal x64 Release `sysvad.sln` build passed with package and API
+validation when invoked through
+`MSBuild\\Current\\Bin\\amd64\\MSBuild.exe`; the x64 WDK validator components
+were selected successfully. The generated package contained
+`TabletAudioSample.sys` (243,928 bytes), four APO DLLs, INF files, and
+`sysvad.cat`; signability reported no errors or warnings. The build's local
+automatic test signature is not production signing evidence. The checkout and
+all outputs were removed after verification. No driver was installed, loaded,
+test-signing mode was enabled, or machine audio configuration changed.
+
+This resolves the earlier host-build limitation: 32-bit MSBuild selected the
+absent x86 validator path. It does not close AudioRouter-specific driver
+adaptation, isolated target-machine behavior, uninstall/recovery, or
+production-signing gates.
