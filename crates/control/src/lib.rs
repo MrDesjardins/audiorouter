@@ -858,9 +858,10 @@ fn method_output_schema(name: &str) -> Value {
                         "properties": {
                             "nodes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                             "edges": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-                            "channelMaps": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } }
+                            "channelMaps": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } },
+                            "latencySamples": { "type": "integer", "minimum": 0 }
                         },
-                        "required": ["nodes", "edges", "channelMaps"],
+                        "required": ["nodes", "edges", "channelMaps", "latencySamples"],
                         "additionalProperties": false
                     }
                 }
@@ -6438,7 +6439,7 @@ mod tests {
         );
         assert_eq!(
             routes["outputSchema"]["properties"]["paths"]["items"]["required"],
-            json!(["nodes", "edges", "channelMaps"])
+            json!(["nodes", "edges", "channelMaps", "latencySamples"])
         );
         let plan = methods
             .iter()
@@ -7049,6 +7050,7 @@ mod tests {
         assert_eq!(result["paths"][0]["nodes"], json!(["in", "out"]));
         assert_eq!(result["paths"][0]["edges"], json!(["edge"]));
         assert_eq!(result["paths"][0]["channelMaps"], json!([[1.0]]));
+        assert_eq!(result["paths"][0]["latencySamples"], 0);
     }
 
     #[test]
