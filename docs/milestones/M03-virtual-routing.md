@@ -1,6 +1,6 @@
 # M03 — Managed virtual buses and reference routing
 
-Status: not started. Prerequisites: M02 and accepted M00 driver strategy. Outcome: Discord and a game recorder can select independent AudioRouter inputs.
+Status: portable desired-state and lifecycle foundation implemented; managed virtual-driver provisioning, native endpoint identity, and live routing remain open. Prerequisites: M02 and accepted M00 driver strategy. Outcome: Discord and a game recorder can select independent AudioRouter inputs.
 
 ## Read first
 
