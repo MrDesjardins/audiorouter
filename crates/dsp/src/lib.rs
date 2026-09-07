@@ -38,6 +38,16 @@ pub struct StreamingPitchShifter {
     shifters: Vec<pitch_shift::Shifter<Box<[f32; pitch_shift::TOTAL_F32]>>>,
 }
 
+impl std::fmt::Debug for StreamingPitchShifter {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("StreamingPitchShifter")
+            .field("params", &self.params)
+            .field("channel_count", &self.shifters.len())
+            .finish()
+    }
+}
+
 impl StreamingPitchShifter {
     pub const BLOCK_FRAMES: usize = 128;
 
