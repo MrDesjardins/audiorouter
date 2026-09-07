@@ -657,3 +657,10 @@ The installer preserves its original ability to create missing ordinary
 destination parents. It walks upward to the nearest existing ancestor before
 checking the full parent chain for reparse points, so redirected ancestors are
 rejected without imposing a pre-existing-parent requirement.
+
+The M06 acceptance wrapper was requalified at the current head with the
+authorized VS2026 toolchain. The pinned SDK built successfully; 51 SDK
+self-tests and 1,598 official validator tests passed, and the offline loader
+verified 68 classes, finite processing, five-parameter automation, and a
+180-byte state round-trip. Generated outputs were cleaned; no system plugin
+registration, audio stream, driver, or machine configuration was changed.
