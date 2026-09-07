@@ -314,6 +314,14 @@ and after media inventory was unchanged and the temporary executable was
 removed. An available output route is required before the 1,000-impulse
 physical-loopback gate can run.
 
+The result is reproducible with the opt-in
+`tests/acceptance/m00-native-live.ps1 -AllowLiveAudio` wrapper. It discovers
+both directional endpoint counts, requires successful capture start/stop/reset
+for every capture endpoint, accepts only the specifically classified
+`AUDCLNT_E_DEVICE_IN_USE` render result, and compares the media snapshot before
+and after. It is excluded from ordinary CI because it opens bounded live
+streams.
+
 ## Silent shared-render lifecycle (2026-09-07)
 
 The native probe completed a bounded 200 ms shared-render lifecycle on an
