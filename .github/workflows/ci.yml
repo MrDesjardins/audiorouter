@@ -51,6 +51,9 @@ jobs:
         run: cargo test --workspace --locked --exclude audiorouter-windows-audio
       - name: Check Windows audio adapter
         run: cargo check -p audiorouter-windows-audio --locked
+      - name: Compile native WASAPI probe
+        shell: pwsh
+        run: ./tests/acceptance/m00-native-build.ps1
       - name: Test release verifier and runbook
         shell: pwsh
         run: |
