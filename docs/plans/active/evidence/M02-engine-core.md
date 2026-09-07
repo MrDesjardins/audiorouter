@@ -198,6 +198,14 @@ through the format bridge. Regression coverage verifies finite zero output;
 the engine suite passes 55 tests with strict Clippy. Native stream conversion
 remains open.
 
+## Endpoint packet-stride contract (2026-09-07)
+
+`EndpointInfo::bytes_per_frame` now derives the interleaved packet stride with
+checked arithmetic and rejects zero-channel, zero-bit, or non-byte-aligned
+metadata. This gives `SharedCapture::next_packet_into` and
+`SharedRender::submit_bytes` a single validated metadata boundary without
+opening a stream; the Windows endpoint/runtime gate remains open.
+
 The drift controller now exposes an explicit reset for stream/reconnect
 boundaries, clearing learned integral correction while preserving the nominal
 rate ratio and configured bounds. A regression verifies that a new stream does

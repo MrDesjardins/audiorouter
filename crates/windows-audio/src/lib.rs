@@ -26,6 +26,20 @@ pub struct EndpointInfo {
     pub format_tag: u16,
 }
 
+impl EndpointInfo {
+    /// Return the interleaved byte stride implied by the endpoint's mix
+    /// format. This is a checked metadata helper for packet-copy callers; it
+    /// does not open or initialize the endpoint.
+    pub fn bytes_per_frame(&self) -> Result<usize, AudioError> {
+        if self.channels == 0 || self.bits_per_sample == 0 || self.bits_per_sample % 8 != 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        (usize::from(self.channels))
+            .checked_mul(usize::from(self.bits_per_sample / 8))
+            .ok_or(AudioError::InvalidFrameSize)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EndpointChange {
     Added(EndpointInfo),
@@ -1158,6 +1172,33 @@ mod tests {
         };
         assert_eq!(info.direction, EndpointDirection::Capture);
         assert!(info.minimum_period_100ns <= info.default_period_100ns);
+        assert_eq!(info.bytes_per_frame().unwrap(), 8);
+    }
+
+    #[test]
+    fn endpoint_frame_stride_rejects_invalid_sample_shapes() {
+        let mut info = EndpointInfo {
+            id: "endpoint".into(),
+            direction: EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 24,
+            format_tag: 1,
+        };
+        assert_eq!(info.bytes_per_frame().unwrap(), 6);
+        info.bits_per_sample = 20;
+        assert!(matches!(
+            info.bytes_per_frame(),
+            Err(AudioError::InvalidFrameSize)
+        ));
+        info.bits_per_sample = 32;
+        info.channels = 0;
+        assert!(matches!(
+            info.bytes_per_frame(),
+            Err(AudioError::InvalidFrameSize)
+        ));
     }
 
     #[test]
