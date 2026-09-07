@@ -61,6 +61,8 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 | `events.subscribe` | `read` | read-only; replays by cursor with optional session and bounded category filters |
 | `sessions.get` | `read` | read-only |
 | `sessions.export` | `read` | read-only |
+| `sessions.importPlan` | `graphWrite` | plan-only |
+| `sessions.importCommit` | `graphWrite` | mutating |
 | `sessions.list` | `read` | read-only |
 | `sessions.create` | `graphWrite` | mutating |
 | `sessions.duplicate` | `graphWrite` | mutating |

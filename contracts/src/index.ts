@@ -597,6 +597,8 @@ export type ImplementedMethod =
   | "presets.list"
   | "sessions.get"
   | "sessions.export"
+  | "sessions.importPlan"
+  | "sessions.importCommit"
   | "sessions.list"
   | "sessions.create"
   | "sessions.duplicate"
@@ -663,6 +665,8 @@ export type MethodParams = {
   "presets.list": undefined;
   "sessions.get": { sessionId: EntityId };
   "sessions.export": { sessionId: EntityId };
+  "sessions.importPlan": { session: Session };
+  "sessions.importCommit": { planId: EntityId; idempotencyKey: string };
   "sessions.list": { cursor?: string; limit?: number } | undefined;
   "sessions.create": { session: Session; idempotencyKey?: string };
   "sessions.duplicate": {
@@ -735,6 +739,8 @@ export type MethodResult = {
   "presets.list": DiscoveryDocument["presets"];
   "sessions.get": Session;
   "sessions.export": Session;
+  "sessions.importPlan": { planId: EntityId; expiresInMs: number; session: Session };
+  "sessions.importCommit": { session: Session; state: "stopped"; imported: true };
   "sessions.list": SessionListPage;
   "sessions.create": SessionCreateResult;
   "sessions.duplicate": SessionCreateResult;

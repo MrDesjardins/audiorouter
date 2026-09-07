@@ -5,9 +5,9 @@
 //! authority and that unsupported audio capabilities are discoverable.
 
 use audiorouter_domain::{
-    inspect_routes, node_registry, ApiMethodSpec, CrashRecoveryTracker, EntityId, EventLog,
-    EventReplayError, FakeRuntime, GraphStore, PermissionScope, RecoveryDecision, RecoveryMode,
-    RuntimeError, RuntimeState, Session, VirtualBusRegistry, API_METHODS,
+    inspect_routes, node_registry, validate_session, ApiMethodSpec, CrashRecoveryTracker, EntityId,
+    EventLog, EventReplayError, FakeRuntime, GraphStore, PermissionScope, RecoveryDecision,
+    RecoveryMode, RuntimeError, RuntimeState, Session, VirtualBusRegistry, API_METHODS,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -174,6 +174,8 @@ fn method_description(name: &str) -> &'static str {
         "presets.list" => "List explainable built-in processing presets.",
         "sessions.get" => "Return one session resource by opaque identifier.",
         "sessions.export" => "Export one persisted canonical session document without changing state.",
+        "sessions.importPlan" => "Validate a stopped session import without persisting it.",
+        "sessions.importCommit" => "Commit a previously validated stopped session import.",
         "sessions.list" => "List session resources with stable cursor pagination.",
         "sessions.create" => "Create a validated stopped session resource.",
         "sessions.duplicate" => "Clone a session into a new stopped resource.",
@@ -370,6 +372,16 @@ fn method_input_schema(name: &str) -> Value {
         "sessions.export" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1 } }),
             &["sessionId"],
+        ),
+        "sessions.importPlan" => {
+            object_schema(json!({ "session": { "type": "object" } }), &["session"])
+        }
+        "sessions.importCommit" => object_schema(
+            json!({
+                "planId": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
+            &["planId", "idempotencyKey"],
         ),
         "sessions.delete" => object_schema(
             json!({
@@ -659,6 +671,26 @@ fn method_output_schema(name: &str) -> Value {
             })
         }
         "sessions.get" | "sessions.export" => session_item_schema(),
+        "sessions.importPlan" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string", "minLength": 1 },
+                "expiresInMs": { "type": "integer", "minimum": 1 },
+                "session": session_item_schema()
+            },
+            "required": ["planId", "expiresInMs", "session"],
+            "additionalProperties": false
+        }),
+        "sessions.importCommit" => json!({
+            "type": "object",
+            "properties": {
+                "session": session_item_schema(),
+                "state": { "const": "stopped" },
+                "imported": { "const": true }
+            },
+            "required": ["session", "state", "imported"],
+            "additionalProperties": false
+        }),
         "sessions.create" | "sessions.duplicate" => json!({
             "type": "object",
             "properties": {
@@ -1632,6 +1664,8 @@ pub struct ControlPlane {
     virtual_buses: VirtualBusRegistry,
     virtual_bus_plans: HashMap<EntityId, VirtualBusPlan>,
     next_virtual_bus_plan: u64,
+    session_import_plans: HashMap<EntityId, (Session, Instant)>,
+    next_session_import_plan: u64,
     active_idempotency_scope: Option<String>,
 }
 
@@ -1662,6 +1696,8 @@ impl ControlPlane {
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_plans: HashMap::new(),
             next_virtual_bus_plan: 1,
+            session_import_plans: HashMap::new(),
+            next_session_import_plan: 1,
             active_idempotency_scope: None,
         }
     }
@@ -1720,6 +1756,8 @@ impl ControlPlane {
             virtual_buses,
             virtual_bus_plans,
             next_virtual_bus_plan: 1,
+            session_import_plans: HashMap::new(),
+            next_session_import_plan: 1,
             active_idempotency_scope: None,
         }
     }
@@ -2855,6 +2893,8 @@ impl ControlPlane {
                     "presets.list" => Ok(self.describe()["presets"].clone()),
                     "sessions.get" => self.dispatch_session_get(request.params),
                     "sessions.export" => self.dispatch_session_export(request.params),
+                    "sessions.importPlan" => self.dispatch_session_import_plan(request.params),
+                    "sessions.importCommit" => self.dispatch_session_import_commit(request.params),
                     "sessions.list" => self.dispatch_sessions_list(request.params),
                     "sessions.create" => self.dispatch_session_create(request.params),
                     "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
@@ -3233,6 +3273,79 @@ impl ControlPlane {
         self.ensure_session_loaded(&id)?;
         serde_json::to_value(self.get_session(&id)?)
             .map_err(|error| ControlError::Json(error.to_string()))
+    }
+
+    fn dispatch_session_import_plan(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("session is required".into()))?;
+        let session: Session = serde_json::from_value(
+            params
+                .get("session")
+                .cloned()
+                .ok_or_else(|| ControlError::InvalidRequest("session is required".into()))?,
+        )
+        .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        validate_session(&session).map_err(|errors| {
+            ControlError::InvalidRequest(format!("invalid session import: {errors:?}"))
+        })?;
+        if self.store.session(&session.id).is_some() {
+            return Err(ControlError::InvalidRequest(
+                "session already exists".into(),
+            ));
+        }
+        let plan_id = EntityId::new(format!("session-import-{}", self.next_session_import_plan));
+        self.next_session_import_plan = self.next_session_import_plan.saturating_add(1);
+        self.session_import_plans.insert(
+            plan_id.clone(),
+            (session.clone(), Instant::now() + VIRTUAL_DEVICE_PLAN_TTL),
+        );
+        Ok(json!({ "planId": plan_id, "expiresInMs": 300000, "session": session }))
+    }
+
+    fn dispatch_session_import_commit(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("planId and idempotencyKey are required".into())
+        })?;
+        let plan_id = params
+            .get("planId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("planId is required".into()))?;
+        let key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|key| !key.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let plan_entity_id = EntityId::new(plan_id);
+        let scoped_key = self.scoped_idempotency_key("sessions.importCommit", key);
+        let hash = Self::request_hash(&json!({ "planId": plan_id }));
+        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &hash)? {
+            return Ok(result);
+        }
+        let Some((session, expires_at)) = self.session_import_plans.get(&plan_entity_id).cloned()
+        else {
+            return Err(ControlError::InvalidRequest("import plan not found".into()));
+        };
+        if expires_at <= Instant::now() {
+            self.session_import_plans.remove(&plan_entity_id);
+            return Err(ControlError::InvalidRequest("import plan expired".into()));
+        }
+        if self.store.session(&session.id).is_some() {
+            return Err(ControlError::InvalidRequest(
+                "session already exists".into(),
+            ));
+        }
+        self.insert_session(session.clone())?;
+        self.session_import_plans.remove(&plan_entity_id);
+        let result = json!({ "session": session, "state": "stopped", "imported": true });
+        self.journal_idempotent_result(&scoped_key, "sessions.importCommit", &hash, &result)?;
+        Ok(result)
     }
 
     fn dispatch_session_create(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4750,6 +4863,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
     };
     let allowed: &[&str] = match method {
         "sessions.get" | "sessions.export" => &["sessionId"],
+        "sessions.importPlan" => &["session"],
+        "sessions.importCommit" => &["planId", "idempotencyKey"],
         "sessions.delete" => &["sessionId", "idempotencyKey"],
         "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => {
             &["sessionId", "idempotencyKey"]
@@ -7575,5 +7690,41 @@ mod tests {
         });
         assert_eq!(response.result.unwrap()["state"], "paused");
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn session_import_plan_and_commit_are_validated_and_idempotent() {
+        let mut plane = ControlPlane::default();
+        let mut imported = session();
+        imported.id = EntityId::new("imported-session");
+        let duplicate_candidate = imported.clone();
+        let planned = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.importPlan".into(),
+            params: Some(json!({"session": imported})),
+        });
+        let plan = planned.result.unwrap();
+        assert_eq!(plan["session"]["id"], "imported-session");
+        let commit = |id| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(id)),
+            method: "sessions.importCommit".into(),
+            params: Some(json!({
+                "planId": plan["planId"],
+                "idempotencyKey": "import-once"
+            })),
+        };
+        let first = plane.dispatch(commit(2));
+        assert_eq!(first.result.as_ref().unwrap()["state"], "stopped");
+        let replay = plane.dispatch(commit(3));
+        assert_eq!(replay.result.unwrap(), first.result.unwrap());
+        let duplicate = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "sessions.importPlan".into(),
+            params: Some(json!({"session": duplicate_candidate})),
+        });
+        assert!(duplicate.error.is_some());
     }
 }
