@@ -218,3 +218,8 @@ The compile-only acceptance was requalified again at the current revision using
 the installed Visual Studio Community 2026/MSVC and Windows SDK/WDK toolchain.
 This remains build evidence only: the probe was not executed, and no audio
 stream, driver, signing mode, or machine configuration was touched.
+
+The same compile-only acceptance was rerun at the current tip with the
+installed VS2026/MSVC and Windows SDK/WDK toolchain. `main.cpp` compiled
+successfully and the temporary executable/object outputs were cleaned. The
+probe was not executed, so this does not claim live audio evidence.
