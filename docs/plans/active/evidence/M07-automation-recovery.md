@@ -819,3 +819,8 @@ The current M07 headless acceptance also passed at this revision: 25 CLI tests,
 worker-process tests, and strict Clippy. M01 CLI acceptance passed as part of
 the wrapper; all state was temporary and no audio, driver, or machine
 configuration was accessed.
+
+The full locked Rust workspace was also requalified at this head: 379
+unit/integration tests and all doc-tests passed, including the Windows-audio
+metadata-only suite. No live endpoint was opened and no driver or machine
+configuration was changed.
