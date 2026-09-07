@@ -220,3 +220,11 @@ The drift controller now exposes an explicit reset for stream/reconnect
 boundaries, clearing learned integral correction while preserving the nominal
 rate ratio and configured bounds. A regression verifies that a new stream does
 not inherit prior correction; native device recovery remains open.
+
+## 2026-09-07 — Full workspace qualification
+
+The current head passed the locked full Rust workspace qualification with 393
+unit/integration tests and all doc-tests, followed by strict all-target,
+all-feature Clippy with `-D warnings`. The result validates the portable engine
+and its cross-crate consumers; native endpoint scheduling, driver lifecycle,
+signing, and installer gates remain separate.
