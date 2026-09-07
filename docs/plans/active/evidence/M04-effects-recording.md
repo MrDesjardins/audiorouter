@@ -174,8 +174,9 @@ and hardware response measurements remain open.
 The pitch DSP now has a prepared 128-frame streaming boundary with state
 allocated at construction and caller-owned buffers, and the portable graph
 exposes it as `pitch@1` using one mono state per active channel. The graph fails
-closed when a block is not the declared quantum. Reset/reconnect semantics and
-measured realtime quality/latency evidence are still required.
+closed when a block is not the declared quantum. Control-plane reset rebuilds
+stream state for reconnects; measured realtime quality/latency evidence is still
+required.
 
 ## 2026-09-07 — Compressor graph integration
 

@@ -72,6 +72,21 @@ impl StreamingPitchShifter {
         self.params
     }
 
+    /// Resets stream history for a reconnect or graph replacement. This is a
+    /// control-plane operation: callers must invoke it outside the processing
+    /// callback because rebuilding the fixed algorithm state may allocate.
+    pub fn reset(&mut self) {
+        self.shifters = (0..self.params.channels)
+            .map(|_| {
+                let state: Box<[f32; pitch_shift::TOTAL_F32]> =
+                    vec![0.0_f32; pitch_shift::TOTAL_F32]
+                        .try_into()
+                        .expect("pitch shifter state has a fixed size");
+                pitch_shift::Shifter::new(state)
+            })
+            .collect();
+    }
+
     /// Processes one fixed-size interleaved block into caller-owned storage.
     /// Non-finite input is repaired to silence and output is always finite.
     pub fn process_block(
@@ -2153,6 +2168,20 @@ mod tests {
             }
         }
         assert!(nonzero_blocks > 0);
+        shifter.reset();
+        let mut reset_output = vec![0.0; input.len()];
+        shifter.process_block(&input, &mut reset_output).unwrap();
+        let mut fresh = StreamingPitchShifter::new(PitchShiftParams {
+            semitones: 7.0,
+            cents: 0.0,
+            sample_rate: 48_000.0,
+            channels: 1,
+            bypass: false,
+        })
+        .unwrap();
+        let mut fresh_output = vec![0.0; input.len()];
+        fresh.process_block(&input, &mut fresh_output).unwrap();
+        assert_eq!(reset_output, fresh_output);
     }
 
     #[test]
