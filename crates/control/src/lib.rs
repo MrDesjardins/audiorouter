@@ -2555,8 +2555,8 @@ impl ControlPlane {
                 "id": "parametricEq", "version": 1, "category": "equalizer",
                 "availability": available, "latencySamples": 0,
                 "parameters": [
-                    { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0 },
-                    { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0 },
+                    { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 1000.0 },
+                    { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 },
                     { "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }
                 ]
             },
@@ -6032,6 +6032,14 @@ mod tests {
             .unwrap();
         assert_eq!(pitch["latencySamples"], 1024);
         assert_eq!(pitch["availability"]["status"], "available");
+        let parametric_eq = description["processors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|processor| processor["id"] == "parametricEq")
+            .unwrap();
+        assert_eq!(parametric_eq["parameters"][0]["default"], 1000.0);
+        assert_eq!(parametric_eq["parameters"][1]["default"], 1.0);
         let gain = description["nodeTypes"]
             .as_array()
             .unwrap()
