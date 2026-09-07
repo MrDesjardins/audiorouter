@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 pub const MAX_NODES_PER_SESSION: usize = 64;
 pub const MAX_EDGES_PER_SESSION: usize = 128;
+pub const CURRENT_SESSION_SCHEMA_VERSION: u32 = 1;
 pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
 pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(300);
@@ -865,6 +866,11 @@ pub enum ValidationError {
     DuplicateVirtualBusRoute {
         path: String,
     },
+    UnsupportedSchemaVersion {
+        path: String,
+        version: u32,
+        supported: u32,
+    },
 }
 
 impl std::fmt::Display for ValidationError {
@@ -875,6 +881,13 @@ impl std::fmt::Display for ValidationError {
 
 pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
+    if session.schema_version != CURRENT_SESSION_SCHEMA_VERSION {
+        errors.push(ValidationError::UnsupportedSchemaVersion {
+            path: "schemaVersion".into(),
+            version: session.schema_version,
+            supported: CURRENT_SESSION_SCHEMA_VERSION,
+        });
+    }
     if session.nodes.len() > MAX_NODES_PER_SESSION {
         errors.push(ValidationError::LimitExceeded {
             path: "nodes".into(),
@@ -2745,6 +2758,28 @@ mod tests {
                 .unwrap();
         assert_eq!(fixture.id.as_str(), "session-fixture");
         assert!(validate_session(&fixture).is_ok());
+    }
+
+    #[test]
+    fn rejects_unknown_session_schema_versions_before_graph_validation() {
+        let mut session = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        session.schema_version = CURRENT_SESSION_SCHEMA_VERSION + 1;
+
+        let errors = validate_session(&session).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::UnsupportedSchemaVersion {
+                path,
+                version: 2,
+                supported: 1
+            } if path == "schemaVersion"
+        )));
     }
 
     #[test]

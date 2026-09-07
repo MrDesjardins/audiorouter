@@ -1626,7 +1626,7 @@ fn session_item_schema() -> Value {
         "properties": {
             "id": { "type": "string", "minLength": 1 },
             "name": { "type": "string", "minLength": 1 },
-            "schemaVersion": { "type": "integer", "minimum": 1 },
+            "schemaVersion": { "const": 1 },
             "revision": { "type": "integer", "minimum": 0 },
             "nodes": {
                 "type": "array",

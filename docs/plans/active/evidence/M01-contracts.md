@@ -308,3 +308,9 @@ the UI adapter remain in schema parity: control tests (82), Windows-audio
 adapter tests (14), contracts typecheck, and UI tests (69) pass. This is
 metadata-only evidence; native stream routing remains outside the verified
 boundary.
+
+Session validation now also rejects unknown schema versions instead of
+accepting a future version as if it were v1. The domain regression checks the
+field-path error before graph validation, and the control schema declares the
+same v1-only boundary. Migration of a future schema remains an explicit
+versioned task rather than an implicit compatibility claim.
