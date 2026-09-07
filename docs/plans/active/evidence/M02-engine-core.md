@@ -185,6 +185,11 @@ being replayed after a reconfiguration. A regression verifies the changed
 delay starts with silence; the engine suite passes 54 tests with strict
 Clippy. Native scheduler reconfiguration remains open.
 
+`FixedDelay` now rejects capacities above 48,000 frames, the declared maximum
+250 ms compensation window at 192 kHz, before arithmetic or allocation. This
+closes an oversized/overflowing preparation input; native latency measurement
+remains open.
+
 The drift controller now exposes an explicit reset for stream/reconnect
 boundaries, clearing learned integral correction while preserving the nominal
 rate ratio and configured bounds. A regression verifies that a new stream does

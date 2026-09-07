@@ -12,6 +12,7 @@ pub const MAX_CHANNELS: usize = 2;
 pub const MAX_MIXER_INPUTS: usize = 8;
 pub const MAX_FANOUT_BRANCHES: usize = 8;
 pub const MAX_EXTRA_COMPENSATION_MS: u32 = 250;
+pub const MAX_DELAY_FRAMES: usize = 48_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LatencyCompensationError {
@@ -46,7 +47,7 @@ impl FixedDelay {
         if !(1..=MAX_CHANNELS).contains(&channels) {
             return Err(FixedDelayError::InvalidChannels);
         }
-        if maximum_delay_frames == 0 {
+        if maximum_delay_frames == 0 || maximum_delay_frames > MAX_DELAY_FRAMES {
             return Err(FixedDelayError::InvalidCapacity);
         }
         let capacity_frames = maximum_delay_frames + 1;
@@ -3565,6 +3566,10 @@ mod tests {
             delay.set_delay_frames(3),
             Err(FixedDelayError::InvalidDelay)
         );
+        assert!(matches!(
+            FixedDelay::new(1, MAX_DELAY_FRAMES + 1),
+            Err(FixedDelayError::InvalidCapacity)
+        ));
     }
 
     #[test]
