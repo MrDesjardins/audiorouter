@@ -38,6 +38,16 @@ try {
     finally {
         $archive.Dispose()
     }
+    foreach ($provenance in @("sbom.npm.json", "sbom.npm.package-lock.json")) {
+        if (@($manifest.artifacts | Where-Object { $_.file -eq $provenance }).Count -ne 1) {
+            throw "release manifest must include exactly one $provenance artifact"
+        }
+    }
+    $npmSbom = Join-Path $output "sbom.npm.json"
+    & node.exe -e "const b=JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')); if (b.bomFormat !== 'CycloneDX' || b.specVersion !== '1.5' || !Array.isArray(b.components) || b.components.length === 0) process.exit(1)" -- $npmSbom
+    if ($LASTEXITCODE -ne 0) {
+        throw "generated npm SBOM failed structural validation"
+    }
 
     Write-Output "M08 release preparation acceptance passed"
     Write-Output "Scope: unsigned artifact preparation and verification only; no installer, driver, signing, or audio configuration changes."

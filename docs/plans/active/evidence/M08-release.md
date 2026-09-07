@@ -363,3 +363,7 @@ The subsequent clean-tree run also passed after npm lockfile validation was
 moved to Node: CLI/worker/UI artifacts, lockfile provenance, archive contents,
 hashes, exact-content verification, unsigned status, and cleanup all passed.
 No installer, driver, signing, or machine configuration action occurred.
+
+The acceptance wrapper now structurally validates `sbom.npm.json` as a
+nonempty CycloneDX 1.5 document and requires both npm provenance files in the
+manifest, in addition to their generic hash and exact-content checks.
