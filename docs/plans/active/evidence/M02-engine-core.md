@@ -206,6 +206,11 @@ metadata. This gives `SharedCapture::next_packet_into` and
 `SharedRender::submit_bytes` a single validated metadata boundary without
 opening a stream; the Windows endpoint/runtime gate remains open.
 
+The validated stride is now also included as `format.bytesPerFrame` in the
+read-only `devices.list` contract, and malformed metadata fails closed during
+discovery. The control and contract schemas are kept in parity; no endpoint
+stream is opened.
+
 The drift controller now exposes an explicit reset for stream/reconnect
 boundaries, clearing learned integral correction while preserving the nominal
 rate ratio and configured bounds. A regression verifies that a new stream does

@@ -176,6 +176,7 @@ export interface DeviceInfo {
     channels: number;
     bitsPerSample: number;
     formatTag: number;
+    bytesPerFrame: number;
   };
   periods: {
     default100ns: number;

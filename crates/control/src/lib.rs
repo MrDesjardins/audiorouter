@@ -1476,9 +1476,10 @@ fn device_item_schema() -> Value {
                     "sampleRateHz": { "type": "integer", "minimum": 1 },
                     "channels": { "type": "integer", "minimum": 1 },
                     "bitsPerSample": { "type": "integer", "minimum": 1 },
-                    "formatTag": { "type": "integer", "minimum": 0 }
+                    "formatTag": { "type": "integer", "minimum": 0 },
+                    "bytesPerFrame": { "type": "integer", "minimum": 1 }
                 },
-                "required": ["sampleRateHz", "channels", "bitsPerSample", "formatTag"],
+                "required": ["sampleRateHz", "channels", "bitsPerSample", "formatTag", "bytesPerFrame"],
                 "additionalProperties": false
             },
             "periods": {
@@ -4609,7 +4610,10 @@ impl ControlPlane {
         let mut devices = endpoints
             .into_iter()
             .map(|endpoint| {
-                json!({
+                let bytes_per_frame = endpoint
+                    .bytes_per_frame()
+                    .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+                Ok(json!({
                     "id": endpoint.id,
                     "direction": match endpoint.direction {
                         audiorouter_windows_audio::EndpointDirection::Capture => "capture",
@@ -4621,14 +4625,15 @@ impl ControlPlane {
                         "channels": endpoint.channels,
                         "bitsPerSample": endpoint.bits_per_sample,
                         "formatTag": endpoint.format_tag,
+                        "bytesPerFrame": bytes_per_frame,
                     },
                     "periods": {
                         "default100ns": endpoint.default_period_100ns,
                         "minimum100ns": endpoint.minimum_period_100ns,
                     },
-                })
+                }))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, ControlError>>()?;
         devices.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
         if let Some(cursor) = cursor {
             let Some(index) = devices.iter().position(|device| device["id"] == cursor) else {
@@ -6116,7 +6121,13 @@ mod tests {
         assert_eq!(
             devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
                 ["format"]["required"],
-            json!(["sampleRateHz", "channels", "bitsPerSample", "formatTag"])
+            json!([
+                "sampleRateHz",
+                "channels",
+                "bitsPerSample",
+                "formatTag",
+                "bytesPerFrame"
+            ])
         );
         let node_types = methods
             .iter()

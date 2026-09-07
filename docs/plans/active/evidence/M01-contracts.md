@@ -300,3 +300,11 @@ and the four session-scoped recording mutation categories emitted by control.
 This prevents clients from having to guess event names and keeps the advertised
 state-event catalog aligned with replay behavior. Control tests, formatting, and
 strict Clippy pass.
+# Current API parity verification (2026-09-07)
+
+The read-only `devices.list` contract now includes the adapter-validated
+`format.bytesPerFrame` field. Control discovery, the TypeScript contracts, and
+the UI adapter remain in schema parity: control tests (82), Windows-audio
+adapter tests (14), contracts typecheck, and UI tests (69) pass. This is
+metadata-only evidence; native stream routing remains outside the verified
+boundary.
