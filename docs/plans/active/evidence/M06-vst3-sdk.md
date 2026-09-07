@@ -664,3 +664,13 @@ self-tests and 1,598 official validator tests passed, and the offline loader
 verified 68 classes, finite processing, five-parameter automation, and a
 180-byte state round-trip. Generated outputs were cleaned; no system plugin
 registration, audio stream, driver, or machine configuration was changed.
+
+## Current-tip acceptance after global topology validation (2026-09-07)
+
+The acceptance was rerun at the current head using the installed VS2026
+MSVC/Windows SDK toolchain and the pinned repository-local checkout. The SDK
+build passed, all 51 SDK self-tests passed, the official validator reported
+1,598 passed and 0 failed tests, and the offline loader verified 68 classes,
+finite stereo processing, five-parameter automation, and a 180-byte state
+round-trip. Temporary loader outputs were removed. No system plugin
+registration, audio stream, driver, or machine configuration was changed.
