@@ -83,6 +83,7 @@ export interface PluginScanEntry {
     compatibility: "supportedVst3X64" | "unsupportedFormat";
   } | null;
   error: string | null;
+  errorCode: string | null;
 }
 
 export interface PluginScanResult {

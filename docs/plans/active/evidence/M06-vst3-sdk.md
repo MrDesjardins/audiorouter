@@ -17,6 +17,18 @@ official validator tests passed; the offline loader verified 68 classes, finite 
 five-parameter automation, and a 180-byte state round-trip. Generated outputs were cleaned;
 no system plugin registration, audio stream, driver, or machine configuration was changed.
 
+## Stable scan diagnostics (2026-09-07)
+
+Plugin scan and inspect responses now retain the existing human-readable error
+and also expose a stable `errorCode`. The codes distinguish
+`unsupportedExtension`, `notPe`, `unsupportedArchitecture`, `missing`,
+`cancelled`, `deadlineExceeded`, `outsideConfiguredRoot`, `tooLarge`, and
+`io`. This prevents clients from parsing Rust debug formatting to determine
+whether a candidate is unsupported or whether a scan should be retried.
+Control coverage (82), plugin-host coverage (33), strict Clippy, contracts
+typecheck, and documentation validation passed. No plugin code was loaded or
+executed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

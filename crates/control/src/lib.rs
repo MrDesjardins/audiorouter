@@ -992,9 +992,10 @@ fn method_output_schema(name: &str) -> Value {
                                 "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "compatibility"],
                                 "additionalProperties": false
                             },
-                            "error": { "type": ["string", "null"] }
+                            "error": { "type": ["string", "null"] },
+                            "errorCode": { "type": ["string", "null"] }
                         },
-                        "required": ["path", "identity", "error"],
+                        "required": ["path", "identity", "error", "errorCode"],
                         "additionalProperties": false
                     }
                 }
@@ -1020,9 +1021,10 @@ fn method_output_schema(name: &str) -> Value {
                     "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "compatibility"],
                     "additionalProperties": false
                 },
-                "error": { "type": ["string", "null"] }
+                "error": { "type": ["string", "null"] },
+                "errorCode": { "type": ["string", "null"] }
             },
-            "required": ["path", "identity", "error"],
+            "required": ["path", "identity", "error", "errorCode"],
             "additionalProperties": false
         }),
         "virtualDevices.list" => json!({
@@ -4703,7 +4705,8 @@ impl ControlPlane {
                 json!({
                     "path": entry.path,
                     "identity": identity,
-                    "error": entry.error.map(|error| format!("{error:?}"))
+                    "error": entry.error.as_ref().map(|error| format!("{error:?}")),
+                    "errorCode": entry.error.as_ref().map(|error| error.code())
                 })
             }).collect::<Vec<_>>()
         });
@@ -4797,7 +4800,8 @@ impl ControlPlane {
             Err(error) => json!({
                 "path": path,
                 "identity": null,
-                "error": format!("{error:?}")
+                "error": format!("{error:?}"),
+                "errorCode": error.code()
             }),
         };
         Ok(result)
@@ -6028,6 +6032,7 @@ mod tests {
         assert_eq!(result["entries"].as_array().unwrap().len(), 1);
         assert!(result["entries"][0]["identity"].is_null());
         assert!(result["entries"][0]["error"].is_string());
+        assert_eq!(result["entries"][0]["errorCode"], "notPe");
         let listed = plane.dispatch_authorized(
             JsonRpcRequest {
                 jsonrpc: "2.0".into(),
@@ -6070,7 +6075,9 @@ mod tests {
             &ClientGrant::with_scopes([PermissionScope::PluginScan]),
         );
         assert!(inspected.error.is_none());
-        assert!(inspected.result.unwrap()["identity"].is_null());
+        let inspected_result = inspected.result.unwrap();
+        assert!(inspected_result["identity"].is_null());
+        assert_eq!(inspected_result["errorCode"], "notPe");
         let _ = std::fs::remove_dir_all(root);
     }
 

@@ -79,6 +79,23 @@ pub enum InspectionError {
     Io(String),
 }
 
+impl InspectionError {
+    /// Stable machine-readable diagnostic for API/CLI consumers.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::OutsideConfiguredRoot => "outsideConfiguredRoot",
+            Self::UnsupportedExtension => "unsupportedExtension",
+            Self::Missing => "missing",
+            Self::TooLarge => "tooLarge",
+            Self::NotPe => "notPe",
+            Self::UnsupportedArchitecture => "unsupportedArchitecture",
+            Self::Cancelled => "cancelled",
+            Self::DeadlineExceeded => "deadlineExceeded",
+            Self::Io(_) => "io",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StateError {
     Empty,
