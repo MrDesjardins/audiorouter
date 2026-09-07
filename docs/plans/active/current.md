@@ -1,6 +1,6 @@
 # Active plan
 
-Updated: 2026-09-06.
+Updated: 2026-09-07.
 
 ## Current state
 
@@ -1101,7 +1101,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Requalified the current M07 headless acceptance: M01 CLI (25 tests), MCP stdio/named-pipe interoperability (2), control (82), plugin-host (33), worker-process (8), and strict Clippy passed. Temporary test state only; no audio device, driver, or machine configuration was accessed.
 - Requalified current portable acceptance at this head: M04 passed 25 DSP and 30 recording tests, including 60-second pitch-duration and recovery coverage; M05 passed TypeScript typecheck, 69 UI tests, and a disposable three-file Vite build; M06 passed the pinned local VST3 SDK self-tests (51), official validator (1,598), and offline loader checks (68 classes). Temporary outputs were cleaned; no audio device, driver, plugin registration, startup registration, or machine configuration was changed.
 - Revalidated documentation acceptance after the current evidence updates: 51 Markdown files and 150 local links passed the repository validator. This changed documentation only and did not access audio, drivers, plugin registration, startup registration, or machine configuration.
-- Added an explicit Rust `SharedCapture::open_polling` compatibility path using the native-qualified non-event shared-mode initialization and bounded packet polling. The event-driven path remains unchanged; Windows-audio tests (14), strict Clippy, formatting, and diff checks pass. No live stream or machine audio configuration was accessed, so native Rust runtime qualification remains open.
+- Added an explicit Rust `SharedCapture::open_polling` compatibility path using the native-qualified non-event shared-mode initialization and bounded packet polling. The event-driven request remains primary and retries only on the exact observed `E_INVALIDARG`; Windows-audio tests (14), strict Clippy, formatting, and diff checks pass. No live stream or machine audio configuration was accessed, so native Rust runtime qualification remains open.
 - Made the normal Rust capture open fail-closed except for the specifically observed `E_INVALIDARG`: that exact error now retries once with a fresh native-compatible polling client, while busy-device, permission, and endpoint-loss errors remain surfaced unchanged. Focused Windows-audio tests and strict Clippy pass; no live stream or machine audio configuration was accessed.
 - Re-ran the M00 compile-only native WASAPI acceptance after the capture compatibility change: `main.cpp` compiled with the installed VS2026/MSVC and Windows SDK/WDK, and temporary outputs were cleaned. The probe was not executed and no audio stream, driver, signing mode, or machine configuration was touched.
 - Rebuilt the full Microsoft SysVAD x64 solution with WIL and normal package/API validation using the 64-bit VS2026 MSBuild host. Validation passed and produced the sample driver/package in a disposable checkout; the earlier failure was the 32-bit host selecting absent x86 validator components. Outputs were removed, and no driver was installed/loaded, test-signing mode enabled, or machine audio configuration changed. AudioRouter-specific adaptation, target-machine, lifecycle, and production-signing gates remain open.
