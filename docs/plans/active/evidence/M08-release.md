@@ -180,6 +180,12 @@ temporary directory was removed. The manifest remains explicitly unsigned
 and not publication-ready; driver/signing, installer, and clean-machine gates
 remain open.
 
+The complete unsigned M08 preparation wrapper passed at the current head.
+Optimized locked artifacts, SBOM, third-party notices, sanitized provenance,
+checksums, manifest verification, and unsigned blocker assertions all passed in
+a disposable directory, which was removed afterward. Signing, driver,
+installer, clean-machine, and native audio gates remain open.
+
 Requalified the unsigned release-preparation acceptance at the current
 revision. Optimized locked CLI and plugin-worker artifacts, the Cargo SBOM,
 third-party notices, manifest hashes, and byte counts were generated and
