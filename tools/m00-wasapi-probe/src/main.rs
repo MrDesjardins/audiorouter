@@ -143,7 +143,13 @@ fn adapter_smoke(
         let mut graph_blocks = 0u32;
         let mut render_frames = 0u32;
         let mut destination = vec![0u8; 1_048_576];
-        let mut render_source = vec![0u8; 1_048_576];
+        let render_source = vec![0u8; 1_048_576];
+        // Keep a finite carry queue for a render period that is temporarily
+        // smaller than a processed block. At 64 graph blocks this is bounded
+        // to roughly 170 ms for stereo float32, and exhaustion fails closed.
+        let render_pending_capacity = 64 * 128 * render_bytes_per_frame;
+        let mut render_pending = vec![0u8; render_pending_capacity];
+        let mut render_pending_bytes = 0usize;
         let mut staging = vec![0u8; 128 * capture_bytes_per_frame];
         let mut pending_frames = 0usize;
         let mut routed_frames = 0u32;
@@ -222,10 +228,10 @@ fn adapter_smoke(
                             let route_result = if route {
                                 (|| {
                                     let required = 128 * render_bytes_per_frame;
-                                    if render_source.len() < required {
+                                    if render_pending_bytes + required > render_pending.len() {
                                         return Err(AudioError::BufferTooSmall {
-                                            required,
-                                            available: render_source.len(),
+                                            required: render_pending_bytes + required,
+                                            available: render_pending.len(),
                                         });
                                     }
                                     for frame in 0..128 {
@@ -235,18 +241,12 @@ fn adapter_smoke(
                                                 .ok_or(AudioError::InvalidFrameSize)?[frame];
                                             let offset =
                                                 frame * render_bytes_per_frame + channel * 4;
-                                            render_source[offset..offset + 4]
+                                            let pending_offset = render_pending_bytes + offset;
+                                            render_pending[pending_offset..pending_offset + 4]
                                                 .copy_from_slice(&sample.to_le_bytes());
                                         }
                                     }
-                                    let submitted = render.submit_bytes(
-                                        &render_source[..required],
-                                        render_bytes_per_frame,
-                                    )?;
-                                    routed_frames = routed_frames.saturating_add(submitted);
-                                    render_submitted_frames =
-                                        render_submitted_frames.saturating_add(submitted);
-                                    render_submitted = submitted > 0;
+                                    render_pending_bytes += required;
                                     Ok(())
                                 })()
                             } else {
@@ -260,7 +260,18 @@ fn adapter_smoke(
                     }
                 }
             }
-            if !render_submitted {
+            if route {
+                let submitted = drain_render_pending(
+                    &render,
+                    &mut render_pending,
+                    &mut render_pending_bytes,
+                    render_bytes_per_frame,
+                )?;
+                routed_frames = routed_frames.saturating_add(submitted);
+                render_submitted_frames = render_submitted_frames.saturating_add(submitted);
+                render_submitted |= submitted > 0;
+            }
+            if !render_submitted && (!route || render_pending_bytes == 0) {
                 render_frames = render_frames
                     .saturating_add(render.submit_bytes(&render_source, render_bytes_per_frame)?);
             } else {
@@ -297,6 +308,32 @@ fn adapter_smoke(
     let capture_stop = capture.stop();
     let render_stop = render.stop();
     result.and(capture_stop).and(render_stop)
+}
+
+fn drain_render_pending(
+    render: &SharedRender,
+    pending: &mut [u8],
+    pending_bytes: &mut usize,
+    bytes_per_frame: usize,
+) -> std::result::Result<u32, AudioError> {
+    let mut submitted_total = 0u32;
+    while *pending_bytes > 0 {
+        let submitted = render.submit_bytes(&pending[..*pending_bytes], bytes_per_frame)?;
+        if submitted == 0 {
+            break;
+        }
+        let submitted_bytes = usize::try_from(submitted)
+            .ok()
+            .and_then(|frames| frames.checked_mul(bytes_per_frame))
+            .ok_or(AudioError::InvalidFrameSize)?;
+        if submitted_bytes > *pending_bytes {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        pending.copy_within(submitted_bytes..*pending_bytes, 0);
+        *pending_bytes -= submitted_bytes;
+        submitted_total = submitted_total.saturating_add(submitted);
+    }
+    Ok(submitted_total)
 }
 
 #[implement(IActivateAudioInterfaceCompletionHandler)]

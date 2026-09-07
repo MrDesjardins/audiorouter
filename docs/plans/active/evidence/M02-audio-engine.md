@@ -207,6 +207,11 @@ drivers, signing, or startup configuration. This qualifies the digital
 adapter-to-render data path, not physical acoustic latency, arbitrary format
 conversion, or production graph lifecycle.
 
+The route carry queue is bounded to 64 fixed 128-frame blocks (approximately
+170 ms for stereo float32); if render capacity cannot catch up, the route
+fails closed rather than dropping a processed block or allocating without a
+limit.
+
 ## Route output ownership cleanup (2026-09-07)
 
 The adapter-route probe now separates render serialization/submission errors
