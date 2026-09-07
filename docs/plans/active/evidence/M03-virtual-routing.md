@@ -133,7 +133,8 @@ and native endpoint silence/recovery remain unimplemented.
 The M05 editor now renders a managed virtual-device panel backed by
 `virtualDevices.list`, `virtualDevices.plan`, and `virtualDevices.apply`. It
 shows the authoritative inventory and requires an explicit plan followed by an
-apply action for desired-state creation. The panel preserves the backend's
+apply action for desired-state creation, rename, enable/disable, and deletion.
+The panel preserves the backend's
 `deviceAdministration` requirement and unavailable-driver explanation; it does
 not synthesize endpoint IDs or activate a native bus. UI typecheck, all 61
 tests, and the disposable production build pass.
