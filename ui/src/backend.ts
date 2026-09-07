@@ -42,7 +42,7 @@ export type UiBackendSnapshot = {
 export interface UiBackend {
   readonly connected: boolean;
   snapshot(): Promise<UiBackendSnapshot>;
-  subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number): Promise<EventsSubscribeResult>;
+  subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number, categories?: string[]): Promise<EventsSubscribeResult>;
   inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
@@ -208,12 +208,13 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
       ]);
       return { status, discovery, session };
     },
-    async subscribe(afterSequence = 0, sessionId, backendEpoch) {
+    async subscribe(afterSequence = 0, sessionId, backendEpoch, categories) {
       return client.request("events.subscribe", {
         afterSequence,
         limit: 500,
         ...(backendEpoch === undefined ? {} : { backendEpoch }),
         ...(sessionId === undefined ? {} : { sessionId }),
+        ...(categories === undefined ? {} : { categories }),
       });
     },
     async inspectRoute(destinationNode) {

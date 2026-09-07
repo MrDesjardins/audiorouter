@@ -70,10 +70,10 @@ describe("live event cursor", () => {
       },
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
-    await backend.subscribe(7, demoSession.id, 8);
+    await backend.subscribe(7, demoSession.id, 8, ["graph.committed"]);
     expect(received).toEqual({
       method: "events.subscribe",
-      params: { afterSequence: 7, limit: 500, backendEpoch: 8, sessionId: demoSession.id },
+      params: { afterSequence: 7, limit: 500, backendEpoch: 8, sessionId: demoSession.id, categories: ["graph.committed"] },
     });
   });
 
