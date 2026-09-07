@@ -5,7 +5,7 @@ use audiorouter_domain::{
     RECOVERY_CRASH_WINDOW_SECONDS, RECOVERY_SAFE_MODE_CRASHES,
 };
 use audiorouter_recording::RecorderCheckpoint;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -573,7 +573,8 @@ impl Storage {
     /// the control state, so a client can distinguish a restarted backend
     /// from a delayed response or an exhausted event cursor.
     pub fn claim_backend_epoch(&self) -> Result<u64, StorageError> {
-        let transaction = self.connection.unchecked_transaction()?;
+        let transaction =
+            Transaction::new_unchecked(&self.connection, TransactionBehavior::Immediate)?;
         let current = transaction
             .query_row(
                 "SELECT value FROM control_settings WHERE key = 'backendEpoch'",
