@@ -1,9 +1,10 @@
 # Release qualification and recovery checklist
 
 AudioRouter is not a releasable Windows installer yet. The portable control
-plane, CLI, MCP adapter, DSP, recording, and plugin-worker foundations are
-implemented and tested, but native routing, the owned virtual-device driver,
-production signing, packaging, and clean-machine qualification remain open.
+plane, CLI, MCP adapter, DSP, recording, plugin-worker, and crash-recovery
+orchestration boundaries are implemented and tested, but native routing, the
+owned virtual-device driver, production signing, packaging, and clean-machine
+qualification remain open.
 
 ## Current verified artifacts
 

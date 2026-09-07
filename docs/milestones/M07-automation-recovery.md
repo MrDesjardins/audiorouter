@@ -1,6 +1,6 @@
 # M07 — MCP parity, persistence, and recovery hardening
 
-Status: MCP, persistence, and recovery foundation implemented; background lifecycle and native restart acceptance remain open. Prerequisite: M06. Outcome: external assistants and people can safely share configuration, and approved sessions survive ordinary lifecycle events.
+Status: MCP, persistence, and portable recovery orchestration implemented; sign-in background lifecycle and native restart acceptance remain open. Prerequisite: M06. Outcome: external assistants and people can safely share configuration, and approved sessions survive ordinary lifecycle events.
 
 ## Read first
 
