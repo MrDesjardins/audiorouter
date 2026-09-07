@@ -284,8 +284,8 @@ integration, and measured transfer vectors remain open.
 stateful processor. It constructs enabled `Biquad` state before processing,
 supports per-band replacement and reset, and processes interleaved audio with
 no allocation. Tests cover preset construction, active-band accounting, finite
-processing, replacement, reset, and invalid band indices. Graph/API wiring and
-the separate ten-band graphic EQ remain open.
+processing, replacement, reset, and invalid band indices. Graph/API wiring
+remains open; the separate ten-band graphic EQ is covered below.
 
 `GraphicEq` now provides the required ten fixed bands at 31.5, 63, 125, 250,
 500, 1k, 2k, 4k, 8k, and 16k Hz. It validates +/-18 dB gains and sample-rate
