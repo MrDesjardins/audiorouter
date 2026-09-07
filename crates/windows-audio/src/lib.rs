@@ -1464,6 +1464,75 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn restarted_process_cannot_inherit_a_stale_binding() {
+        use std::process::Command;
+        use std::time::Duration;
+
+        fn launch_helper() -> std::process::Child {
+            Command::new("cmd.exe")
+                .args(["/C", "ping -n 4 127.0.0.1 > nul"])
+                .spawn()
+                .expect("launch bounded process identity helper")
+        }
+
+        fn observe(child: &std::process::Child) -> ApplicationInfo {
+            for _ in 0..100 {
+                if let Some(application) = enumerate_applications()
+                    .expect("enumerate process identity helper")
+                    .into_iter()
+                    .find(|application| application.process_id == child.id())
+                {
+                    return application;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            panic!("process identity helper was not observable")
+        }
+
+        let mut first_child = launch_helper();
+        let first = observe(&first_child);
+        assert_eq!(first.executable.to_ascii_lowercase(), "cmd.exe");
+        let first_bound = bind_application(
+            first.process_id,
+            &first.executable,
+            first.creation_time_100ns,
+        )
+        .expect("fresh process identity should bind");
+        assert_eq!(first_bound, first);
+        first_child.kill().expect("stop first helper");
+        first_child.wait().expect("reap first helper");
+
+        let stale = bind_application(
+            first.process_id,
+            &first.executable,
+            first.creation_time_100ns,
+        );
+        assert!(matches!(
+            stale,
+            Err(AudioError::ApplicationNotFound { .. })
+                | Err(AudioError::ApplicationIdentityChanged { .. })
+        ));
+
+        let mut second_child = launch_helper();
+        let second = observe(&second_child);
+        assert!(second.creation_time_100ns.is_some());
+        if second.process_id == first.process_id {
+            assert_ne!(second.creation_time_100ns, first.creation_time_100ns);
+            assert!(matches!(
+                bind_application(
+                    first.process_id,
+                    &first.executable,
+                    first.creation_time_100ns,
+                ),
+                Err(AudioError::ApplicationIdentityChanged { .. })
+            ));
+        }
+        second_child.kill().expect("stop second helper");
+        second_child.wait().expect("reap second helper");
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn application_audio_inventory_is_read_only() {
         let inventory = enumerate_application_audio().unwrap();
         assert!(inventory.iter().all(|item| {

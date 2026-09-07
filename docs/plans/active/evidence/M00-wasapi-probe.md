@@ -338,6 +338,16 @@ This supersedes the earlier compile-only and “implementation-ready but
 unverified” entries in this evidence file. Those entries remain as historical
 test records; the current qualification is the bounded live result above.
 
+## Process restart identity regression (2026-09-07)
+
+The Windows-audio test suite now launches a bounded `cmd.exe` helper, observes
+its PID, executable, and Windows creation timestamp through the real process
+inventory, verifies the binding, terminates and reaps it, and confirms the old
+identity cannot bind afterward. A replacement helper is also observed with a
+creation identity. The regression passes as part of 16 Windows-audio tests.
+The host did not reuse the PID during this run, so this proves stale-binding
+rejection across restart but does not claim an actual PID-reuse event.
+
 ## Extensible format diagnostics (2026-09-07)
 
 The probe now reports the WAVEFORMATEXTENSIBLE capture channel mask and
