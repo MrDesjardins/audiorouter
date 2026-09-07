@@ -5393,9 +5393,24 @@ fn is_mutating_method(method: &str) -> bool {
 
 fn storage_error(error: StorageError) -> ControlError {
     match error {
-        StorageError::CorruptDatabase(message) => ControlError::CorruptDatabase(message),
+        StorageError::CorruptDatabase(_) => {
+            ControlError::CorruptDatabase("database integrity check failed".into())
+        }
         StorageError::IdempotencyConflict => ControlError::IdempotencyConflict,
-        error => ControlError::Storage(format!("{error:?}")),
+        StorageError::InvalidSession(message)
+        | StorageError::InvalidBundle(message)
+        | StorageError::InvalidRecording(message)
+        | StorageError::InvalidPluginState(message)
+        | StorageError::InvalidBackupPath(message) => ControlError::InvalidRequest(message),
+        StorageError::DocumentTooLarge { maximum, .. } => ControlError::InvalidRequest(
+            format!("document exceeds the maximum permitted size of {maximum} bytes"),
+        ),
+        StorageError::InvalidRecoveryTimestamp => {
+            ControlError::InvalidRequest("invalid recovery timestamp".into())
+        }
+        StorageError::Io(_) => ControlError::Storage("storage I/O operation failed".into()),
+        StorageError::Sql(_) => ControlError::Storage("database operation failed".into()),
+        StorageError::Json(_) => ControlError::Storage("stored document is invalid".into()),
     }
 }
 
@@ -8340,6 +8355,22 @@ mod tests {
         let data = error.data.unwrap();
         assert_eq!(data["code"], "corruptDatabase");
         assert_eq!(data["retryable"], false);
+    }
+
+    #[test]
+    fn storage_error_mapping_does_not_leak_os_paths() {
+        let mapped = storage_error(StorageError::Io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            r"C:\private\recordings\secret.wav",
+        )));
+        assert_eq!(
+            mapped,
+            ControlError::Storage("storage I/O operation failed".into())
+        );
+        let response = application_error_response(Some(json!(1)), mapped);
+        let message = response.error.unwrap().message;
+        assert!(!message.contains("secret.wav"));
+        assert!(!message.contains("C:\\private"));
     }
 
     #[test]

@@ -1165,4 +1165,5 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Hardened shared-memory transport reopening to reject distinct path spellings and filesystem-identity aliases, including hard links, preventing input/output slot aliasing. Portable plugin-host coverage remains non-audio.
 - Hardened recording rename validation to reject source or destination paths with reparse-point ancestors, closing a higher-level path-redirection gap while retaining same-directory and non-overwrite rules.
 - Applied the same regular non-reparse file validation to recording preview, reveal, and confirmed recycle actions, preserving missing-file responses while preventing redirected files from being inspected or acted on.
+- Removed raw storage/OS error debug serialization from the control boundary: filesystem/database failures now use safe categorized messages, while validation errors retain actionable text and corruption retains its stable non-retryable code. Added a regression proving private paths are not exposed.
 - Consolidated the UI graph-view imports after route-latency integration; UI typecheck, 77 UI tests, and diff validation remain green.
