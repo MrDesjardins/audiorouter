@@ -459,3 +459,7 @@ and `-CaptureFriendlyName 'Microphone (PD200X Podcast Microphone)'`. It keeps
 the endpoint lookup name-based and preserves the same bounded duration,
 nonzero-payload, media-snapshot, and cleanup checks. This remains signal-path
 smoke evidence only; it does not replace the 1,000-impulse acoustic test.
+
+The wrapper is generic over the explicitly selected friendly-name pair, with
+the VB-Audio cable retained as the default. A current run passed for both the
+cable and the PD200X USB pair.
