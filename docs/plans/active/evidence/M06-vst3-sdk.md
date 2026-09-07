@@ -126,6 +126,18 @@ quarantine ledger requiring deliberate retry. Three crate tests and strict
 Clippy pass. Loading, scanning code execution, worker IPC, and plugin state
 remain intentionally separate follow-up work.
 
+## 2026-09-07 — Current-head SDK requalification
+
+The complete M06 acceptance passed at the current head after retrying the
+native build with elevated build-tool access. The pinned repository-local SDK
+built successfully; its 51 self-tests passed, the official validator reported
+1,598 passed and 0 failed, and the offline loader enumerated 68 classes and
+processed a finite stereo block with five parameters and 180 bytes of state.
+The initial non-elevated attempt failed before validation in MSBuild's
+FileTracker with `E_ACCESSDENIED`; no source or machine configuration was
+changed by that failure or the successful retry. No system plugin registration
+or live audio stream was used.
+
 The same crate now defines a bounded `WorkerFrame` and `WorkerFrameGuard`:
 only mono/stereo finite frames up to 2048 frames are accepted, sample shape is
 checked, sequence regressions are rejected, and expired deadlines are
