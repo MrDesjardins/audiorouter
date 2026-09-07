@@ -358,3 +358,8 @@ The corrected clean-tree wrapper run passed this archive assertion together
 with locked CLI/worker builds, UI typecheck/build, manifest checksums, exact
 content verification, and cleanup. The artifact remains unsigned and the
 driver, signing, installer, and clean-machine blockers remain explicit.
+
+The subsequent clean-tree run also passed after npm lockfile validation was
+moved to Node: CLI/worker/UI artifacts, lockfile provenance, archive contents,
+hashes, exact-content verification, unsigned status, and cleanup all passed.
+No installer, driver, signing, or machine configuration action occurred.
