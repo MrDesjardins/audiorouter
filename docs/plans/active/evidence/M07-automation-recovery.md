@@ -681,3 +681,9 @@ passed: 22 CLI, 68 control, 35 domain, 25 DSP, 40 engine, 31 plugin-host, 8
 worker-process, 5 protocol, 30 recording, 36 storage, 14 transport, and 12
 Windows-audio tests. Strict workspace Clippy with `-D warnings`, formatting,
 and diff checks passed. No audio stream or machine configuration was touched.
+
+Added a healthy-worker regression for `poll_and_restart`: a running worker is
+returned without replacement and successfully processes a subsequent bounded
+frame. Plugin-host tests and strict Clippy pass, and the complete M07 headless
+acceptance also passes with the MCP/worker lanes. No audio or machine
+configuration was accessed.

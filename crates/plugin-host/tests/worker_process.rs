@@ -79,9 +79,23 @@ fn supervised_worker_refreshes_heartbeat_on_successful_processing() {
         worker.state(),
         audiorouter_plugin_host::WorkerState::Running
     );
+    let mut worker = worker
+        .poll_and_restart(start + audiorouter_plugin_host::WORKER_HEARTBEAT_TIMEOUT)
+        .expect("healthy worker must not be replaced");
     assert_eq!(
-        worker.poll(start + audiorouter_plugin_host::WORKER_HEARTBEAT_TIMEOUT),
+        worker.state(),
         audiorouter_plugin_host::WorkerState::Running
+    );
+    let next = WorkerFrame::new(
+        2,
+        worker_clock_tick().saturating_add(10_000),
+        1,
+        vec![-0.25],
+    )
+    .unwrap();
+    assert_eq!(
+        worker.process(next.clone(), Vec::new(), start).unwrap(),
+        next
     );
     assert!(worker.shutdown().unwrap().success());
 }
