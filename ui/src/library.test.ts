@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterLibraryEntries, libraryEntries } from "./library";
+import { filterLibraryEntries, libraryEntries, libraryEntryAccessibleLabel } from "./library";
 
 describe("node library search", () => {
   it("matches labels, categories, and unavailable reasons", () => {
@@ -37,5 +37,12 @@ describe("node library search", () => {
 
   it("returns all entries for blank queries", () => {
     expect(filterLibraryEntries(libraryEntries, "  ")).toEqual(libraryEntries);
+  });
+
+  it("includes unavailable reasons in accessible library labels", () => {
+    expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "physical-output")!)).toBe(
+      "Physical output, Destination, unavailable: Requires the M02 Windows audio adapter",
+    );
+    expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "gain")!)).toBe("Gain, Effect");
   });
 });

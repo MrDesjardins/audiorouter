@@ -27,3 +27,9 @@ export function filterLibraryEntries(entries: LibraryEntry[], query: string): Li
   if (!normalized) return entries;
   return entries.filter((entry) => `${entry.label} ${entry.category} ${entry.unavailableReason ?? ""}`.toLocaleLowerCase().includes(normalized));
 }
+
+export function libraryEntryAccessibleLabel(entry: LibraryEntry): string {
+  return entry.unavailableReason
+    ? `${entry.label}, ${entry.category}, unavailable: ${entry.unavailableReason}`
+    : `${entry.label}, ${entry.category}`;
+}
