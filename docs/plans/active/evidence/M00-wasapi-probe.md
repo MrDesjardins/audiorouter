@@ -413,3 +413,19 @@ Studio Community 2026/MSVC and Windows SDK/WDK toolchain. The acceptance
 script removed its temporary executable/object outputs; the probe was not
 executed, so no audio stream, driver, signing mode, or machine configuration
 was touched.
+
+## Virtual-cable render-to-capture loopback (2026-09-07)
+
+The probe now exposes friendly names in its read-only endpoint inventory and
+polls capture packets throughout the bounded interval. This avoids mistaking
+an already-drained shared-mode buffer for silence. An authorized 1,000 ms
+capture on `CABLE Output (VB-Audio Virtual Cable)` ran concurrently with a
+1,500 ms generated tone on `CABLE Input (VB-Audio Virtual Cable)`. The render
+stream wrote a tone and submitted 76,800 frames; capture observed 99 packets,
+47,520 frames, zero silent packets, and 200,532 nonzero payload bytes. Both
+streams returned successful start/stop/reset results. The media-device
+identity/state snapshot matched before and after, and no endpoint default,
+volume, mute, privacy, driver, signing, or startup setting was changed.
+
+This is a digital virtual-cable data-path qualification, not an acoustic
+speaker-to-microphone latency measurement. Physical latency remains open.

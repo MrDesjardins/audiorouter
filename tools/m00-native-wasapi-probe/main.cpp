@@ -23,6 +23,21 @@
 #include <wrl.h>
 #include <wrl/implements.h>
 
+static std::wstring endpoint_name(IMMDevice* device) {
+    if (!device) return L"<unknown>";
+    Microsoft::WRL::ComPtr<IPropertyStore> properties;
+    if (FAILED(device->OpenPropertyStore(STGM_READ, &properties))) return L"<unknown>";
+    PROPVARIANT value;
+    PropVariantInit(&value);
+    std::wstring name = L"<unknown>";
+    if (SUCCEEDED(properties->GetValue(PKEY_Device_FriendlyName, &value)) &&
+        value.vt == VT_LPWSTR && value.pwszVal) {
+        name = value.pwszVal;
+    }
+    PropVariantClear(&value);
+    return name;
+}
+
 static void print_format(const WAVEFORMATEX* format) {
     if (!format) return;
     std::cout << "rate=" << format->nSamplesPerSec
@@ -287,6 +302,8 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
     }
     UINT32 packet_count = 0;
     UINT32 frame_count = 0;
+    UINT64 nonzero_bytes = 0;
+    UINT32 silent_packet_count = 0;
     if (SUCCEEDED(hr)) {
         hr = client->Start();
         print_hr("capture_start", hr);
@@ -297,11 +314,16 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
             if (SUCCEEDED(latency_hr)) {
                 std::cout << "capture_stream_latency_100ns=" << stream_latency << '\n';
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(duration_ms));
-            while (true) {
+            const auto deadline = std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(duration_ms);
+            while (std::chrono::steady_clock::now() < deadline && SUCCEEDED(hr)) {
                 UINT32 frames = 0;
                 hr = capture->GetNextPacketSize(&frames);
-                if (FAILED(hr) || frames == 0) break;
+                if (FAILED(hr)) break;
+                if (frames == 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    continue;
+                }
                 BYTE* data = nullptr;
                 DWORD flags = 0;
                 UINT64 position = 0;
@@ -310,11 +332,20 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
                 if (FAILED(hr)) break;
                 ++packet_count;
                 frame_count += frames;
+                if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0) {
+                    ++silent_packet_count;
+                } else if (data && format) {
+                    const UINT64 payload_bytes = static_cast<UINT64>(frames) * format->nBlockAlign;
+                    for (UINT64 byte = 0; byte < payload_bytes; ++byte) {
+                        if (data[byte] != 0) ++nonzero_bytes;
+                    }
+                }
                 hr = capture->ReleaseBuffer(frames);
-                if (FAILED(hr)) break;
             }
             print_hr("capture_packet_read", hr);
-            std::cout << "capture_packets=" << packet_count << " capture_frames=" << frame_count << '\n';
+            std::cout << "capture_packets=" << packet_count << " capture_frames=" << frame_count
+                      << " capture_silent_packets=" << silent_packet_count
+                      << " capture_nonzero_bytes=" << nonzero_bytes << '\n';
             print_hr("capture_stop", client->Stop());
             print_hr("capture_reset", client->Reset());
         }
@@ -324,6 +355,32 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
     if (client) client->Release();
     device->Release(); devices->Release(); enumerator->Release();
     return SUCCEEDED(hr) && packet_count > 0 ? 0 : 1;
+}
+
+static int endpoint_inventory(EDataFlow flow) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("inventory_enumerator", hr); return 1; }
+    IMMDeviceCollection* devices = nullptr;
+    hr = enumerator->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, &devices);
+    if (FAILED(hr)) { print_hr("inventory_enum", hr); enumerator->Release(); return 1; }
+    UINT count = 0;
+    devices->GetCount(&count);
+    std::wcout << (flow == eRender ? L"render" : L"capture") << L"_endpoint_count=" << count << L'\n';
+    for (UINT index = 0; index < count; ++index) {
+        IMMDevice* device = nullptr;
+        if (FAILED(devices->Item(index, &device))) continue;
+        LPWSTR id = nullptr;
+        device->GetId(&id);
+        std::wcout << (flow == eRender ? L"render" : L"capture") << L"[" << index << L"] name="
+                   << endpoint_name(device) << L" id=" << (id ? id : L"<unknown>") << L'\n';
+        CoTaskMemFree(id);
+        device->Release();
+    }
+    devices->Release();
+    enumerator->Release();
+    return 0;
 }
 
 static bool render_tone(BYTE* data, UINT32 frames, const WAVEFORMATEX* format,
@@ -663,6 +720,12 @@ int main(int argc, char** argv) {
         int result = event_endpoint_initialize_probe(eRender, target_index, "event_render");
         CoUninitialize();
         return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "inventory") == 0) {
+        int render_result = endpoint_inventory(eRender);
+        int capture_result = endpoint_inventory(eCapture);
+        CoUninitialize();
+        return render_result != 0 ? render_result : capture_result;
     }
     if (argc > 1 && std::strcmp(argv[1], "tone") == 0) {
         DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1500;
