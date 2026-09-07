@@ -328,7 +328,10 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["muted"],
         ),
-        "recovery.clearSafeMode" => object_schema(json!({}), &[]),
+        "recovery.clearSafeMode" => object_schema(
+            json!({ "idempotencyKey": { "type": "string", "minLength": 1 } }),
+            &[],
+        ),
         "startup.get" => object_schema(json!({}), &[]),
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }),
@@ -1680,6 +1683,7 @@ impl ControlPlane {
                     format!("{client}\0sessions.create\0{operation_id}"),
                     format!("{client}\0sessions.duplicate\0{operation_id}"),
                     format!("{client}\0safety.setPrivacyMute\0{operation_id}"),
+                    format!("{client}\0recovery.clearSafeMode\0{operation_id}"),
                 ]
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
@@ -2702,7 +2706,7 @@ impl ControlPlane {
                     "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
                     "recordings.recycle" => self.dispatch_recording_recycle(request.params),
                     "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
-                    "recovery.clearSafeMode" => self.dispatch_recovery_clear(),
+                    "recovery.clearSafeMode" => self.dispatch_recovery_clear(request.params),
                     "startup.get" => Ok(json!({
                         "enabled": false,
                         "registration": "unavailable",
@@ -3849,18 +3853,38 @@ impl ControlPlane {
         Ok(result)
     }
 
-    fn dispatch_recovery_clear(&mut self) -> Result<Value, ControlError> {
+    fn dispatch_recovery_clear(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                (
+                    self.scoped_idempotency_key("recovery.clearSafeMode", key),
+                    Self::request_hash(&json!({ "action": "clear" })),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         if let Some(storage) = &self.storage {
             storage.clear_recovery_crashes().map_err(storage_error)?;
         }
         self.recovery_tracker.clear_after_stable_run();
         self.events
             .append(0, None, "recovery.safeModeCleared", None);
-        Ok(json!({
+        let result = json!({
             "safeMode": false,
             "recentCrashes": 0,
             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
-        }))
+        });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "recovery.clearSafeMode", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_events_subscribe(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4519,7 +4543,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         ],
         "recordings.rename" => &["recordingId", "newPath", "idempotencyKey"],
         "safety.setPrivacyMute" => &["muted", "idempotencyKey"],
-        "recovery.clearSafeMode" => &[],
+        "recovery.clearSafeMode" => &["idempotencyKey"],
         "recordings.removeEntry" => &["recordingId", "idempotencyKey"],
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
@@ -5728,9 +5752,16 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(88)),
             method: "recovery.clearSafeMode".into(),
-            params: None,
+            params: Some(json!({ "idempotencyKey": "recovery-clear-1" })),
         });
-        assert_eq!(cleared.result.unwrap()["safeMode"], false);
+        assert_eq!(cleared.result.as_ref().unwrap()["safeMode"], false);
+        let replay = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(89)),
+            method: "recovery.clearSafeMode".into(),
+            params: Some(json!({ "idempotencyKey": "recovery-clear-1" })),
+        });
+        assert_eq!(replay.result.unwrap(), cleared.result.unwrap());
         let decision = plane.record_runtime_crash(103).unwrap();
         assert_eq!(decision.mode, RecoveryMode::RestoreEligible);
     }
