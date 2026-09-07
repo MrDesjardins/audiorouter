@@ -342,6 +342,13 @@ The release acceptance passed with the unsigned status and driver/signing,
 installer, and clean-machine blockers preserved. No UI was installed, and no
 audio or machine configuration was changed.
 
+The release set now also carries the validated UI lockfile as
+`sbom.npm.package-lock.json`. This is explicitly lockfile provenance, not a
+claim that npm generated a complete SBOM; npm's SBOM command is currently
+blocked by the local file dependency's incomplete installed dev-dependency
+tree. The lockfile is included in the normal manifest hashing and exact-content
+verification.
+
 The M08 acceptance wrapper now explicitly requires exactly one
 `audiorouter-ui.zip` manifest entry and opens the archive to verify its
 `index.html` entry. This keeps the application artifact requirement regression-

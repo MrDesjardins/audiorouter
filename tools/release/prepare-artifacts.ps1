@@ -57,6 +57,11 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $uiBuild "index.html") -PathType Leaf)) {
         throw "UI release build did not produce index.html: $uiBuild"
     }
+    $uiLock = Join-Path $workspace "ui/package-lock.json"
+    if (-not (Test-Path -LiteralPath $uiLock -PathType Leaf)) {
+        throw "UI lockfile is missing: $uiLock"
+    }
+    $null = Get-Content -LiteralPath $uiLock -Raw | ConvertFrom-Json
 
     New-Item -ItemType Directory -Path $output | Out-Null
 
@@ -72,6 +77,7 @@ try {
         Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary)
     }
     Compress-Archive -Path (Join-Path $uiBuild "*") -DestinationPath (Join-Path $output "audiorouter-ui.zip") -CompressionLevel Optimal
+    Copy-Item -LiteralPath $uiLock -Destination (Join-Path $output "sbom.npm.package-lock.json")
 
     $metadata = & cargo metadata --locked --format-version 1
     if ($LASTEXITCODE -ne 0) {
