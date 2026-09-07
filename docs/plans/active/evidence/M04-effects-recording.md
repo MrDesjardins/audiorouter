@@ -530,3 +530,9 @@ tests, including the 60-second pitch-duration extremes, and all 30 recording
 tests passed, along with formatting and strict Clippy. The suite used only
 portable processing and temporary file-boundary state; it did not open an
 audio device or change machine configuration.
+## Current-tip portable qualification (2026-09-06)
+
+The M04 acceptance wrapper passed all 25 DSP tests and 30 recording tests,
+including the long-duration pitch boundary cases, with formatting and strict
+Clippy. This validates portable processing and file-boundary behavior only;
+native realtime integration remains open.

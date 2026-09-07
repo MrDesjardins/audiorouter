@@ -753,3 +753,9 @@ The same wrapper was rerun at commit `7a027ba` after the durable recovery
 test additions. CLI (23), MCP stdio/named-pipe interoperability (2), control
 (79), plugin-host (31), worker-process (8), and strict Clippy passed; no audio
 device, driver, or machine configuration was accessed.
+## Current-tip headless qualification (2026-09-06)
+
+The M07 acceptance wrapper passed CLI (23), MCP stdio/named-pipe
+interoperability (2), control (79), plugin-host (31), worker-process (8), and
+strict Clippy. Temporary state was isolated and removed; native process/audio
+restart and full plugin sandboxing remain open.

@@ -267,3 +267,8 @@ temporary directory. The manifest correctly remained unsigned and not
 publication-ready with the required blockers. The temporary output was
 removed; no installer, driver, signing operation, audio endpoint, or machine
 configuration was used.
+## Current-tip unsigned qualification (2026-09-06)
+
+The M08 wrapper prepared and verified optimized unsigned artifacts in a
+disposable directory, then cleaned the output. Signing, driver, installer, and
+clean-machine gates remain open; no audio configuration was changed.
