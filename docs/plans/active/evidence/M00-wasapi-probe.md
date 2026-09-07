@@ -249,6 +249,14 @@ script removed its temporary executable/object outputs; the probe was not
 executed, so no audio stream, driver, signing mode, or machine configuration
 was touched.
 
+## Extensible format diagnostics (2026-09-07)
+
+The probe now reports the WAVEFORMATEXTENSIBLE capture channel mask and
+subformat GUID alongside the existing format fields. The packed Windows
+structure is read with an explicit unaligned copy. The compile-only check
+passes; the probe remains unexecuted, so this adds diagnostic capability
+without claiming live audio evidence.
+
 ## Shared-mode buffer correction (2026-09-07)
 
 The probe previously requested a one-second shared-mode buffer for capture

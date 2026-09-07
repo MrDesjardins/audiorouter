@@ -178,6 +178,17 @@ unsafe fn enumerate() -> Result<()> {
         } else {
             None
         };
+        let channel_mask = stream_extensible
+            .as_ref()
+            .map(|format| format.dwChannelMask)
+            .unwrap_or(0);
+        let subformat = stream_extensible
+            .as_ref()
+            .map(|format| {
+                let guid = std::ptr::read_unaligned(std::ptr::addr_of!(format.SubFormat));
+                format!("{guid:?}")
+            })
+            .unwrap_or_else(|| "-".into());
         let initialize_format = stream_extensible.as_ref().map_or(stream_format, |format| {
             std::ptr::addr_of!(format.Format) as *mut WAVEFORMATEX
         });
@@ -288,7 +299,7 @@ unsafe fn enumerate() -> Result<()> {
             CoTaskMemFree(Some(closest_capture_format.cast()));
         }
         println!(
-            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} block_align={} avg_bytes={} cb_size={} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} capture_original_hresult=0x{capture_original_hresult:08x} capture_extensible_hresult=0x{capture_extensible_hresult:08x} capture_float_hresult=0x{capture_float_hresult:08x} buffer_frames={} stream_latency_100ns={}",
+            "endpoint index={index} state=0x{:08x} id={} format_tag={} channels={} rate_hz={} bits={} block_align={} avg_bytes={} cb_size={} channel_mask=0x{channel_mask:08x} subformat={subformat} default_period_100ns={} minimum_period_100ns={} is_supported_44100_mono=0x{support_44100_mono:08x} is_supported_44100_stereo=0x{support_44100_stereo:08x} is_supported_48000_mono=0x{support_48000_mono:08x} is_supported_48000_stereo=0x{support_48000_stereo:08x} initialize_hresult=0x{initialize_hresult:08x} start_hresult=0x{start_hresult:08x} loopback_hresult=0x{loopback_hresult:08x} capture_original_hresult=0x{capture_original_hresult:08x} capture_extensible_hresult=0x{capture_extensible_hresult:08x} capture_float_hresult=0x{capture_float_hresult:08x} buffer_frames={} stream_latency_100ns={}",
             state.0,
             id_string,
             format_tag,
