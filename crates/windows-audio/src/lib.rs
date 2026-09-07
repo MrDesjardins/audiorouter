@@ -504,12 +504,16 @@ impl SharedCapture {
                     // GetBuffer has transferred ownership of the packet
                     // until ReleaseBuffer, including when post-acquisition
                     // validation fails.
-                    let _ = self.capture.ReleaseBuffer(packet_frames);
+                    if let Err(error) = self.capture.ReleaseBuffer(packet_frames) {
+                        return Err(AudioError::from(error));
+                    }
                     return Err(AudioError::InvalidFrameSize);
                 }
             };
             if packet_bytes > destination.len() {
-                let _ = self.capture.ReleaseBuffer(packet_frames);
+                if let Err(error) = self.capture.ReleaseBuffer(packet_frames) {
+                    return Err(AudioError::from(error));
+                }
                 return Err(AudioError::BufferTooSmall {
                     required: packet_bytes,
                     available: destination.len(),
