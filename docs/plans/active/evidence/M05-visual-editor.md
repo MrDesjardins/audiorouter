@@ -567,6 +567,17 @@ disabled while disconnected. UI typecheck, all 61 tests, and the disposable
 three-file production build pass; no recording file or machine configuration
 was changed.
 
+## Native host transport injection boundary (2026-09-07)
+
+The UI entry point now consumes an optional preloaded
+`window.__AUDIO_ROUTER_HOST__` value containing a typed `RpcTransport` and
+non-empty session ID. Valid injection constructs the existing live UI backend;
+missing or malformed injection fails closed to the disconnected read-only
+preview. Unit coverage verifies both paths. This establishes the browser-side
+injection contract without executing native shell code or registering startup
+behavior. Production host ownership of the injected object and manual visual/
+accessibility acceptance remain open.
+
 ## Session inventory failure safety (2026-09-07)
 
 Connected session inventory failures now clear the listed-session set and show
