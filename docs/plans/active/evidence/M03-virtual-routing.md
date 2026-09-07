@@ -127,3 +127,13 @@ owner. Cleanup clears the active owner but preserves the monotonic generation;
 a delayed release from the old owner cannot release a replacement lease. This
 is portable ownership evidence only: bridge heartbeat detection, buffer reset,
 and native endpoint silence/recovery remain unimplemented.
+
+## UI inventory and desired-state controls (2026-09-06)
+
+The M05 editor now renders a managed virtual-device panel backed by
+`virtualDevices.list`, `virtualDevices.plan`, and `virtualDevices.apply`. It
+shows the authoritative inventory and requires an explicit plan followed by an
+apply action for desired-state creation. The panel preserves the backend's
+`deviceAdministration` requirement and unavailable-driver explanation; it does
+not synthesize endpoint IDs or activate a native bus. UI typecheck, all 61
+tests, and the disposable production build pass.
