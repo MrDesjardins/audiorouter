@@ -595,6 +595,7 @@ export type ImplementedMethod =
   | "devices.list"
   | "plugins.scan"
   | "plugins.list"
+  | "plugins.retry"
   | "plugins.inspect"
   | "virtualDevices.list"
   | "virtualDevices.plan"
@@ -662,6 +663,7 @@ export type MethodParams = {
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
+  "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
@@ -739,6 +741,7 @@ export type MethodResult = {
   "devices.list": DeviceInfo[] | DeviceListPage;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;
+  "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;

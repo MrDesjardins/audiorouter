@@ -149,26 +149,32 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
 
 fn plugins_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().unwrap_or_default();
-    if !matches!(action, "scan" | "list" | "inspect") {
+    if !matches!(action, "scan" | "list" | "retry" | "inspect") {
         return Err(CliError::InvalidArguments(
             "usage: plugins <scan|list> --directory <absolute-path> | plugins inspect --path <absolute-path>".into(),
         ));
     }
-    let (method, params) = if matches!(action, "scan" | "list") {
+    let (method, params) = if matches!(action, "scan" | "list" | "retry") {
         let directory = option_value(args, "--directory")?;
         if !std::path::Path::new(directory).is_absolute() {
             return Err(CliError::InvalidArguments(
                 "--directory path must be absolute".into(),
             ));
         }
-        (
-            if action == "scan" {
-                "plugins.scan"
-            } else {
-                "plugins.list"
-            },
-            json!({ "directory": directory }),
-        )
+        let method = match action {
+            "scan" => "plugins.scan",
+            "list" => "plugins.list",
+            "retry" => "plugins.retry",
+            _ => unreachable!(),
+        };
+        let mut params = json!({ "directory": directory });
+        if action == "retry" {
+            let key = optional_option_value(args, "--idempotency-key")?.ok_or_else(|| {
+                CliError::InvalidArguments("--idempotency-key is required for plugin retry".into())
+            })?;
+            params["idempotencyKey"] = json!(key);
+        }
+        (method, params)
     } else {
         let path = option_value(args, "--path")?;
         if !std::path::Path::new(path).is_absolute() {
@@ -1376,6 +1382,10 @@ fn help_value() -> Value {
         .as_array_mut()
         .unwrap()
         .insert(7, json!("plugins list --directory <absolute-path>"));
+    value["commands"].as_array_mut().unwrap().insert(
+        8,
+        json!("plugins retry --directory <absolute-path> --idempotency-key KEY"),
+    );
     value["commands"]
         .as_array_mut()
         .unwrap()
@@ -1719,6 +1729,7 @@ fn mcp_tools() -> Value {
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_devices", "description": "List authoritative audio endpoint descriptors. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "list_plugins", "description": "List the last bounded plugin scan inventory without scanning or loading plugin code; requires plugin-scan scope.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 } }, "required": ["directory"], "additionalProperties": false } },
+        { "name": "retry_plugins", "description": "Explicitly refresh a bounded plugin inventory after a prior scan failure; requires plugin-scan scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["directory", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_virtual_devices", "description": "List managed virtual bus desired state without activating endpoints. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "plan_virtual_device", "description": "Validate a managed virtual bus lifecycle operation without applying it.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
@@ -1777,6 +1788,7 @@ fn mcp_tool_call(
         "get_startup" => ("startup.get", None),
         "list_devices" => ("devices.list", Some(arguments)),
         "list_plugins" => ("plugins.list", Some(arguments)),
+        "retry_plugins" => ("plugins.retry", Some(arguments)),
         "list_virtual_devices" => ("virtualDevices.list", Some(arguments)),
         "plan_virtual_device" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
@@ -2921,7 +2933,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 36);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 37);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()

@@ -159,6 +159,7 @@ fn method_description(name: &str) -> &'static str {
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
+        "plugins.retry" => "Explicitly refresh a plugin inventory after a prior scan failure or quarantine decision.",
         "plugins.inspect" => "Inspect one explicitly selected plugin binary without loading plugin code.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
@@ -277,6 +278,13 @@ fn method_input_schema(name: &str) -> Value {
                 "directory": { "type": "string", "minLength": 1 }
             }),
             &["directory"],
+        ),
+        "plugins.retry" => object_schema(
+            json!({
+                "directory": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
+            &["directory", "idempotencyKey"],
         ),
         "plugins.inspect" => object_schema(
             json!({
@@ -922,7 +930,7 @@ fn method_output_schema(name: &str) -> Value {
                 ]
             })
         }
-        "plugins.scan" | "plugins.list" => json!({
+        "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
             "type": "object",
             "properties": {
                 "directory": { "type": "string", "minLength": 1 },
@@ -2894,6 +2902,7 @@ impl ControlPlane {
                     "devices.list" => self.dispatch_devices_list(request.params),
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
                     "plugins.list" => self.dispatch_plugins_list(request.params),
+                    "plugins.retry" => self.dispatch_plugins_retry(request.params),
                     "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
@@ -4491,6 +4500,28 @@ impl ControlPlane {
             .unwrap_or_else(|| json!({ "directory": directory, "entries": [] })))
     }
 
+    fn dispatch_plugins_retry(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.unwrap_or_else(|| json!({}));
+        let directory = params
+            .get("directory")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("directory is required".into()))?;
+        let key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let scoped_key = self.scoped_idempotency_key("plugins.retry", key);
+        let hash = Self::request_hash(&json!({ "directory": directory }));
+        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &hash)? {
+            return Ok(result);
+        }
+        let result = self.dispatch_plugins_scan(Some(json!({ "directory": directory })))?;
+        self.journal_idempotent_result(&scoped_key, "plugins.retry", &hash, &result)?;
+        Ok(result)
+    }
+
     fn dispatch_plugins_inspect(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let path = params
             .as_ref()
@@ -4949,6 +4980,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "devices.list" => &["cursor", "limit"],
         "plugins.scan" => &["directory"],
         "plugins.list" => &["directory"],
+        "plugins.retry" => &["directory", "idempotencyKey"],
         "plugins.inspect" => &["path"],
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
@@ -5596,6 +5628,28 @@ mod tests {
             &ClientGrant::with_scopes([PermissionScope::PluginScan]),
         );
         assert_eq!(listed.result.unwrap(), result);
+        let retry_request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "plugins.retry".into(),
+            params: Some(json!({
+                "directory": root.to_string_lossy(),
+                "idempotencyKey": "plugin-retry"
+            })),
+        };
+        let retried = plane.dispatch_authorized(
+            retry_request.clone(),
+            &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+        );
+        assert_eq!(
+            retried.result.as_ref().unwrap()["entries"],
+            result["entries"]
+        );
+        let replayed = plane.dispatch_authorized(
+            retry_request,
+            &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+        );
+        assert_eq!(replayed.result.unwrap(), retried.result.unwrap());
         let inspected = plane.dispatch_authorized(
             JsonRpcRequest {
                 jsonrpc: "2.0".into(),

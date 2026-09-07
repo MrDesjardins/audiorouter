@@ -438,7 +438,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 57] = [
+pub const API_METHODS: [ApiMethodSpec; 58] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -588,6 +588,11 @@ pub const API_METHODS: [ApiMethodSpec; 57] = [
         name: "plugins.list",
         permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "plugins.retry",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "plugins.inspect",
