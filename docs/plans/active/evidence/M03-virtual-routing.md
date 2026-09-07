@@ -138,3 +138,16 @@ The panel preserves the backend's
 `deviceAdministration` requirement and unavailable-driver explanation; it does
 not synthesize endpoint IDs or activate a native bus. UI typecheck, all 61
 tests, and the disposable production build pass.
+
+## Portable global feedback boundary (2026-09-07)
+
+The domain now exposes `VirtualBusRoute` and `validate_global_graph` for the
+known cross-session topology. It validates each session, requires referenced
+sessions to exist, rejects duplicate routes and conflicting writers for one
+managed bus, and rejects cycles formed by virtual-bus boundaries. One writer
+fan-out to multiple consumers is accepted. `GraphStore` exposes the same check
+over its current sessions. The 38-test domain suite and strict Clippy pass.
+
+This is a portable control-plane proof only. It does not identify native
+endpoint identities, inspect unknown external application selections, install a
+driver, or open a live audio stream; those M03 gates remain open.

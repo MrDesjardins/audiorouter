@@ -797,6 +797,18 @@ pub struct Session {
     pub edges: Vec<Edge>,
 }
 
+/// A known virtual-bus boundary between two sessions. The producer is the
+/// session rendering into the bus and the consumer is the session capturing
+/// from it. This is a control-plane description; it does not contain a driver
+/// handle or audio buffer.
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualBusRoute {
+    pub bus_id: EntityId,
+    pub producer_session_id: EntityId,
+    pub consumer_session_id: EntityId,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ValidationError {
     EmptyId {
@@ -840,6 +852,17 @@ pub enum ValidationError {
         path: String,
     },
     Cycle {
+        path: String,
+    },
+    MissingSession {
+        path: String,
+        id: String,
+    },
+    DuplicateVirtualBusWriter {
+        path: String,
+        bus_id: String,
+    },
+    DuplicateVirtualBusRoute {
         path: String,
     },
 }
@@ -990,6 +1013,77 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     if has_cycle(&adjacency) {
         errors.push(ValidationError::Cycle {
             path: "edges".into(),
+        });
+    }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
+    }
+}
+
+/// Validate the known topology spanning all sessions and managed virtual
+/// buses. External application selections and acoustic feedback are
+/// intentionally outside this proof boundary and must remain explicitly
+/// described as unknown risk by higher layers.
+pub fn validate_global_graph(
+    sessions: &[Session],
+    virtual_bus_routes: &[VirtualBusRoute],
+) -> Result<(), Vec<ValidationError>> {
+    let mut errors = Vec::new();
+    let mut session_ids = HashSet::new();
+    for (index, session) in sessions.iter().enumerate() {
+        if !session_ids.insert(session.id.clone()) {
+            errors.push(ValidationError::DuplicateId {
+                path: format!("sessions[{index}].id"),
+                id: session.id.as_str().into(),
+            });
+        }
+        if let Err(session_errors) = validate_session(session) {
+            errors.extend(session_errors);
+        }
+    }
+
+    let mut adjacency = HashMap::<EntityId, Vec<EntityId>>::new();
+    for session_id in &session_ids {
+        adjacency.entry(session_id.clone()).or_default();
+    }
+    let mut writers = HashMap::<EntityId, EntityId>::new();
+    let mut routes = HashSet::new();
+    for (index, route) in virtual_bus_routes.iter().enumerate() {
+        let path = format!("virtualBusRoutes[{index}]");
+        if !session_ids.contains(&route.producer_session_id) {
+            errors.push(ValidationError::MissingSession {
+                path: format!("{path}.producerSessionId"),
+                id: route.producer_session_id.as_str().into(),
+            });
+        }
+        if !session_ids.contains(&route.consumer_session_id) {
+            errors.push(ValidationError::MissingSession {
+                path: format!("{path}.consumerSessionId"),
+                id: route.consumer_session_id.as_str().into(),
+            });
+        }
+        if !routes.insert(route.clone()) {
+            errors.push(ValidationError::DuplicateVirtualBusRoute { path: path.clone() });
+        }
+        let previous = writers.insert(route.bus_id.clone(), route.producer_session_id.clone());
+        if let Some(previous) = previous {
+            if previous != route.producer_session_id {
+                errors.push(ValidationError::DuplicateVirtualBusWriter {
+                    path: format!("{path}.producerSessionId"),
+                    bus_id: route.bus_id.as_str().into(),
+                });
+            }
+        }
+        adjacency
+            .entry(route.producer_session_id.clone())
+            .or_default()
+            .push(route.consumer_session_id.clone());
+    }
+    if has_cycle(&adjacency) {
+        errors.push(ValidationError::Cycle {
+            path: "virtualBusRoutes".into(),
         });
     }
     if errors.is_empty() {
@@ -1490,6 +1584,16 @@ impl GraphStore {
         }
         sessions.truncate(limit.min(500));
         sessions
+    }
+
+    /// Validate the currently stored sessions together with known virtual-bus
+    /// boundaries before a cross-session route is activated.
+    pub fn validate_global_graph(
+        &self,
+        virtual_bus_routes: &[VirtualBusRoute],
+    ) -> Result<(), Vec<ValidationError>> {
+        let sessions = self.sessions.values().cloned().collect::<Vec<_>>();
+        validate_global_graph(&sessions, virtual_bus_routes)
     }
 
     pub fn history(&self, id: &EntityId, limit: usize) -> Vec<Session> {
@@ -2258,6 +2362,78 @@ mod tests {
             registry.create(EntityId::new("bus-overflow"), "Overflow"),
             Err(VirtualBusError::LimitReached)
         );
+    }
+
+    #[test]
+    fn global_graph_accepts_one_writer_with_multiple_consumers() {
+        let mut producer = session(vec![], vec![]);
+        producer.id = EntityId::new("producer");
+        let mut first_consumer = session(vec![], vec![]);
+        first_consumer.id = EntityId::new("consumer-1");
+        let mut second_consumer = session(vec![], vec![]);
+        second_consumer.id = EntityId::new("consumer-2");
+        let routes = vec![
+            VirtualBusRoute {
+                bus_id: EntityId::new("bus"),
+                producer_session_id: EntityId::new("producer"),
+                consumer_session_id: EntityId::new("consumer-1"),
+            },
+            VirtualBusRoute {
+                bus_id: EntityId::new("bus"),
+                producer_session_id: EntityId::new("producer"),
+                consumer_session_id: EntityId::new("consumer-2"),
+            },
+        ];
+        assert!(
+            validate_global_graph(&[producer, first_consumer, second_consumer], &routes).is_ok()
+        );
+    }
+
+    #[test]
+    fn global_graph_rejects_conflicting_writers_and_known_cycles() {
+        let mut first = session(vec![], vec![]);
+        first.id = EntityId::new("first");
+        let mut second = session(vec![], vec![]);
+        second.id = EntityId::new("second");
+        let routes = vec![
+            VirtualBusRoute {
+                bus_id: EntityId::new("bus"),
+                producer_session_id: EntityId::new("first"),
+                consumer_session_id: EntityId::new("second"),
+            },
+            VirtualBusRoute {
+                bus_id: EntityId::new("bus"),
+                producer_session_id: EntityId::new("second"),
+                consumer_session_id: EntityId::new("first"),
+            },
+        ];
+        let errors = validate_global_graph(&[first, second], &routes).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::DuplicateVirtualBusWriter { bus_id, .. } if bus_id == "bus"
+        )));
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::Cycle { path } if path == "virtualBusRoutes"
+        )));
+    }
+
+    #[test]
+    fn graph_store_global_validation_rejects_unknown_session() {
+        let mut store = GraphStore::default();
+        let mut known = session(vec![], vec![]);
+        known.id = EntityId::new("known");
+        store.insert_session(known).unwrap();
+        let routes = [VirtualBusRoute {
+            bus_id: EntityId::new("bus"),
+            producer_session_id: EntityId::new("known"),
+            consumer_session_id: EntityId::new("missing"),
+        }];
+        let errors = store.validate_global_graph(&routes).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::MissingSession { id, .. } if id == "missing"
+        )));
     }
 
     #[test]
