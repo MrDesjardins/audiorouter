@@ -538,6 +538,12 @@ three-file Vite production build passed; the temporary output was removed.
 Manual visual/accessibility acceptance and native shell injection remain open.
 No audio, driver, or machine configuration was changed.
 
+The editor also renders the managed virtual-device inventory and explicit
+desired-state plan/apply controls. These controls preserve the unavailable
+driver warning and `deviceAdministration` boundary and never synthesize or
+activate endpoints. The M05 typecheck, 61-test suite, and disposable
+production build remain green.
+
 ## Explicit recording file actions (2026-09-06)
 
 The rendered UI now includes a connected-only recording action panel for the
