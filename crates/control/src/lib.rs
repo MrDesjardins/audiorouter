@@ -158,6 +158,7 @@ fn method_description(name: &str) -> &'static str {
         }
         "devices.list" => "List authoritative audio endpoint descriptors.",
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
+        "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
         "plugins.inspect" => "Inspect one explicitly selected plugin binary without loading plugin code.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
@@ -266,6 +267,12 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "plugins.scan" => object_schema(
+            json!({
+                "directory": { "type": "string", "minLength": 1 }
+            }),
+            &["directory"],
+        ),
+        "plugins.list" => object_schema(
             json!({
                 "directory": { "type": "string", "minLength": 1 }
             }),
@@ -915,7 +922,7 @@ fn method_output_schema(name: &str) -> Value {
                 ]
             })
         }
-        "plugins.scan" => json!({
+        "plugins.scan" | "plugins.list" => json!({
             "type": "object",
             "properties": {
                 "directory": { "type": "string", "minLength": 1 },
@@ -1659,6 +1666,7 @@ pub struct ControlPlane {
     operation_order: VecDeque<String>,
     idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
+    plugin_inventories: HashMap<String, Value>,
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
     virtual_buses: VirtualBusRegistry,
@@ -1691,6 +1699,7 @@ impl ControlPlane {
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
+            plugin_inventories: HashMap::new(),
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses: VirtualBusRegistry::default(),
@@ -1751,6 +1760,7 @@ impl ControlPlane {
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
+            plugin_inventories: HashMap::new(),
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
@@ -2883,6 +2893,7 @@ impl ControlPlane {
                     })),
                     "devices.list" => self.dispatch_devices_list(request.params),
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
+                    "plugins.list" => self.dispatch_plugins_list(request.params),
                     "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
@@ -4409,7 +4420,7 @@ impl ControlPlane {
         Ok(json!({ "items": devices, "nextCursor": next_cursor }))
     }
 
-    fn dispatch_plugins_scan(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_plugins_scan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let directory = params
             .as_ref()
             .and_then(|value| value.get("directory"))
@@ -4425,7 +4436,7 @@ impl ControlPlane {
         let entries = audiorouter_plugin_host::scan_directory(root).map_err(|error| {
             ControlError::InvalidRequest(format!("plugin scan failed: {error:?}"))
         })?;
-        Ok(json!({
+        let result = json!({
             "directory": directory,
             "entries": entries.into_iter().map(|entry| {
                 let identity = entry.identity.map(|identity| json!({
@@ -4455,7 +4466,29 @@ impl ControlPlane {
                     "error": entry.error.map(|error| format!("{error:?}"))
                 })
             }).collect::<Vec<_>>()
-        }))
+        });
+        self.plugin_inventories
+            .insert(directory.to_owned(), result.clone());
+        Ok(result)
+    }
+
+    fn dispatch_plugins_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let directory = params
+            .as_ref()
+            .and_then(|value| value.get("directory"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("directory is required".into()))?;
+        if !std::path::Path::new(directory).is_absolute() {
+            return Err(ControlError::InvalidRequest(
+                "directory path must be absolute".into(),
+            ));
+        }
+        Ok(self
+            .plugin_inventories
+            .get(directory)
+            .cloned()
+            .unwrap_or_else(|| json!({ "directory": directory, "entries": [] })))
     }
 
     fn dispatch_plugins_inspect(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4915,6 +4948,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
         "plugins.scan" => &["directory"],
+        "plugins.list" => &["directory"],
         "plugins.inspect" => &["path"],
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
@@ -5552,6 +5586,16 @@ mod tests {
         assert_eq!(result["entries"].as_array().unwrap().len(), 1);
         assert!(result["entries"][0]["identity"].is_null());
         assert!(result["entries"][0]["error"].is_string());
+        let listed = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(3)),
+                method: "plugins.list".into(),
+                params: Some(json!({ "directory": root.to_string_lossy() })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+        );
+        assert_eq!(listed.result.unwrap(), result);
         let inspected = plane.dispatch_authorized(
             JsonRpcRequest {
                 jsonrpc: "2.0".into(),

@@ -594,6 +594,7 @@ export type ImplementedMethod =
   | "startup.get"
   | "devices.list"
   | "plugins.scan"
+  | "plugins.list"
   | "plugins.inspect"
   | "virtualDevices.list"
   | "virtualDevices.plan"
@@ -660,6 +661,7 @@ export type MethodParams = {
   "startup.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "plugins.scan": { directory: string };
+  "plugins.list": { directory: string };
   "plugins.inspect": { path: string };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
@@ -736,6 +738,7 @@ export type MethodResult = {
   "startup.get": StartupStatus;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "plugins.scan": PluginScanResult;
+  "plugins.list": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;

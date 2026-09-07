@@ -46,6 +46,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 | `startup.get` | `read` | read-only |
 | `devices.list` | `read` | read-only |
 | `plugins.scan` | `pluginScan` | read-only |
+| `plugins.list` | `pluginScan` | read-only |
 | `plugins.inspect` | `pluginScan` | read-only |
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |

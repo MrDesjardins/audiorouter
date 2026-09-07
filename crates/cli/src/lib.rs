@@ -149,19 +149,26 @@ fn diagnostics_command(args: &[&str]) -> Result<Value, CliError> {
 
 fn plugins_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().unwrap_or_default();
-    if !matches!(action, "scan" | "inspect") {
+    if !matches!(action, "scan" | "list" | "inspect") {
         return Err(CliError::InvalidArguments(
-            "usage: plugins scan --directory <absolute-path> | plugins inspect --path <absolute-path>".into(),
+            "usage: plugins <scan|list> --directory <absolute-path> | plugins inspect --path <absolute-path>".into(),
         ));
     }
-    let (method, params) = if action == "scan" {
+    let (method, params) = if matches!(action, "scan" | "list") {
         let directory = option_value(args, "--directory")?;
         if !std::path::Path::new(directory).is_absolute() {
             return Err(CliError::InvalidArguments(
                 "--directory path must be absolute".into(),
             ));
         }
-        ("plugins.scan", json!({ "directory": directory }))
+        (
+            if action == "scan" {
+                "plugins.scan"
+            } else {
+                "plugins.list"
+            },
+            json!({ "directory": directory }),
+        )
     } else {
         let path = option_value(args, "--path")?;
         if !std::path::Path::new(path).is_absolute() {
@@ -1368,6 +1375,10 @@ fn help_value() -> Value {
     value["commands"]
         .as_array_mut()
         .unwrap()
+        .insert(7, json!("plugins list --directory <absolute-path>"));
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
         .insert(7, json!("plugins inspect --path <absolute-path>"));
     value["commands"]
         .as_array_mut()
@@ -1707,6 +1718,7 @@ fn mcp_tools() -> Value {
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_devices", "description": "List authoritative audio endpoint descriptors. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
+        { "name": "list_plugins", "description": "List the last bounded plugin scan inventory without scanning or loading plugin code; requires plugin-scan scope.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 } }, "required": ["directory"], "additionalProperties": false } },
         { "name": "list_virtual_devices", "description": "List managed virtual bus desired state without activating endpoints. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "plan_virtual_device", "description": "Validate a managed virtual bus lifecycle operation without applying it.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
@@ -1764,6 +1776,7 @@ fn mcp_tool_call(
         "describe_capabilities" => ("system.describe", None),
         "get_startup" => ("startup.get", None),
         "list_devices" => ("devices.list", Some(arguments)),
+        "list_plugins" => ("plugins.list", Some(arguments)),
         "list_virtual_devices" => ("virtualDevices.list", Some(arguments)),
         "plan_virtual_device" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
@@ -2908,7 +2921,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 35);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 36);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()
