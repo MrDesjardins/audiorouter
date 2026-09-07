@@ -363,14 +363,19 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &[],
         ),
-        "sessions.create" => {
-            object_schema(json!({ "session": { "type": "object" } }), &["session"])
-        }
+        "sessions.create" => object_schema(
+            json!({
+                "session": { "type": "object" },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
+            &["session"],
+        ),
         "sessions.duplicate" => object_schema(
             json!({
                 "sourceSessionId": { "type": "string", "minLength": 1 },
                 "sessionId": { "type": "string", "minLength": 1 },
-                "name": { "type": ["string", "null"] }
+                "name": { "type": ["string", "null"] },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["sourceSessionId", "sessionId"],
         ),
@@ -1668,6 +1673,8 @@ impl ControlPlane {
                     format!("{client}\0recordings.removeEntry\0{operation_id}"),
                     format!("{client}\0recordings.recycle\0{operation_id}"),
                     format!("{client}\0sessions.delete\0{operation_id}"),
+                    format!("{client}\0sessions.create\0{operation_id}"),
+                    format!("{client}\0sessions.duplicate\0{operation_id}"),
                 ]
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
@@ -3090,7 +3097,27 @@ impl ControlPlane {
                 .ok_or_else(|| ControlError::InvalidRequest("session is required".into()))?,
         )
         .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
-        self.create_session(session)
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "session": session });
+                (
+                    self.scoped_idempotency_key("sessions.create", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
+        let result = self.create_session(session)?;
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "sessions.create", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_session_duplicate(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -3119,7 +3146,31 @@ impl ControlPlane {
                     .ok_or_else(|| ControlError::InvalidRequest("name must be a string".into()))
             })
             .transpose()?;
-        self.duplicate_session(&source_id, duplicate_id, name)
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({
+                    "sourceSessionId": source_id,
+                    "sessionId": duplicate_id,
+                    "name": name
+                });
+                (
+                    self.scoped_idempotency_key("sessions.duplicate", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
+        let result = self.duplicate_session(&source_id, duplicate_id, name)?;
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "sessions.duplicate", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_session_delete(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4405,8 +4456,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             &["sessionId", "idempotencyKey"]
         }
         "sessions.list" => &["cursor", "limit"],
-        "sessions.create" => &["session"],
-        "sessions.duplicate" => &["sourceSessionId", "sessionId", "name"],
+        "sessions.create" => &["session", "idempotencyKey"],
+        "sessions.duplicate" => &["sourceSessionId", "sessionId", "name", "idempotencyKey"],
         "routes.inspect" => &["sessionId", "destinationNode"],
         "graph.history" => &["sessionId", "cursor", "limit"],
         "graph.undoPlan" => &["sessionId", "baseRevision"],
