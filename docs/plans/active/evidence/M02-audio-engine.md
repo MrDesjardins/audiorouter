@@ -192,7 +192,7 @@ routing or physical latency.
 ## Rust adapter-to-render route smoke (2026-09-07)
 
 The standalone probe now has an explicit `adapter-route` mode that selects a
-capture and render endpoint by their discovered directional indexes, requires
+capture and render endpoint by their discovered opaque endpoint IDs, requires
 matching 32-bit channel/rate metadata, feeds capture packets through the
 generation-1 0.5x gain graph, and submits the processed caller-owned frames to
 the render client. The guarded VB-Audio cable run passed for 500 ms with

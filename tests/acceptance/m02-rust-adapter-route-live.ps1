@@ -40,12 +40,12 @@ try {
     $inventory = Invoke-External { & $output inventory }
     $inventoryText = $inventory.Output -join "`n"
     if ($inventory.ExitCode -ne 0) { throw "native endpoint inventory failed`n$inventoryText" }
-    $render = [regex]::Match($inventoryText, ('render\[(\d+)\] name=' + [regex]::Escape($RenderFriendlyName)))
-    $capture = [regex]::Match($inventoryText, ('capture\[(\d+)\] name=' + [regex]::Escape($CaptureFriendlyName)))
+    $render = [regex]::Match($inventoryText, ('render\[\d+\] name=' + [regex]::Escape($RenderFriendlyName) + ' id=(.+)$'), [Text.RegularExpressions.RegexOptions]::Multiline)
+    $capture = [regex]::Match($inventoryText, ('capture\[\d+\] name=' + [regex]::Escape($CaptureFriendlyName) + ' id=(.+)$'), [Text.RegularExpressions.RegexOptions]::Multiline)
     if (-not $render.Success -or -not $capture.Success) { throw "requested route endpoints were not both found: '$RenderFriendlyName' / '$CaptureFriendlyName'" }
 
     $route = Invoke-External {
-        & cargo run --manifest-path (Join-Path $workspace 'tools/m00-wasapi-probe/Cargo.toml') -- adapter-route $DurationMilliseconds $capture.Groups[1].Value $render.Groups[1].Value
+        & cargo run --manifest-path (Join-Path $workspace 'tools/m00-wasapi-probe/Cargo.toml') -- adapter-route $DurationMilliseconds $capture.Groups[1].Value.Trim() $render.Groups[1].Value.Trim()
     }
     $routeText = $route.Output -join "`n"
     if ($route.ExitCode -ne 0) { throw "Rust adapter route failed`n$routeText" }

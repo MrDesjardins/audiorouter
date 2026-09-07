@@ -51,17 +51,14 @@ fn main() -> Result<()> {
             .nth(2)
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(500);
-        let capture_index = std::env::args()
-            .nth(3)
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(0);
-        let render_index = std::env::args()
-            .nth(4)
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(0);
-        if let Err(error) =
-            adapter_smoke(duration_ms, Some(capture_index), Some(render_index), true)
-        {
+        let capture_id = std::env::args().nth(3);
+        let render_id = std::env::args().nth(4);
+        if let Err(error) = adapter_smoke(
+            duration_ms,
+            capture_id.as_deref(),
+            render_id.as_deref(),
+            true,
+        ) {
             eprintln!("adapter_route_error={error}");
             std::process::exit(1);
         }
@@ -77,15 +74,15 @@ fn main() -> Result<()> {
 
 fn adapter_smoke(
     duration_ms: u64,
-    capture_index: Option<usize>,
-    render_index: Option<usize>,
+    capture_id: Option<&str>,
+    render_id: Option<&str>,
     route: bool,
 ) -> std::result::Result<(), AudioError> {
     let endpoints = enumerate_active_endpoints()?;
     let capture_info = endpoints
         .iter()
         .filter(|endpoint| endpoint.direction == EndpointDirection::Capture)
-        .nth(capture_index.unwrap_or(0))
+        .find(|endpoint| capture_id.is_none_or(|id| endpoint.id == id))
         .ok_or_else(|| {
             AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80070490u32 as i32),
@@ -95,7 +92,7 @@ fn adapter_smoke(
     let render_info = endpoints
         .iter()
         .filter(|endpoint| endpoint.direction == EndpointDirection::Render)
-        .nth(render_index.unwrap_or(0))
+        .find(|endpoint| render_id.is_none_or(|id| endpoint.id == id))
         .ok_or_else(|| {
             AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80070490u32 as i32),
