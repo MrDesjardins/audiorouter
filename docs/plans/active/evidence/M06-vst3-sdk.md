@@ -789,3 +789,13 @@ and the offline loader's 68-class, finite-processing, automation, and
 180-byte state checks. The checkout is intentionally project-local under
 the ignored `third_party/vst3sdk` path; no global SDK/plugin registration,
 driver, audio stream, or machine audio configuration was changed.
+
+## Safe Bash path argument handling (2026-09-07)
+
+The installer previously interpolated the destination into the Bash command
+used for recursive submodule operations. It now passes the converted path as a
+positional argument, so valid Windows destinations containing apostrophes are
+not interpreted as shell syntax. The disposable origin/reparse-point
+provenance acceptance and the real SDK installer plus offline M06 acceptance
+pass after this change; no SDK, plugin, driver, audio stream, or machine
+configuration was changed.

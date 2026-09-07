@@ -51,7 +51,7 @@ function Update-Submodules {
         throw 'Git for Windows bash/cygpath is required to initialize the SDK submodules'
     }
     $posixDestination = (& $cygpath -u $destinationPath).Trim()
-    & $bash -lc "git -C '$posixDestination' submodule update --init --recursive --depth 1"
+    & $bash -lc 'git -C "$1" submodule update --init --recursive --depth 1' -- $posixDestination
     if ($LASTEXITCODE -ne 0) {
         throw 'SDK submodule initialization failed'
     }
@@ -65,7 +65,7 @@ function Assert-Submodules {
         throw 'Git for Windows bash/cygpath is required to inspect SDK submodules'
     }
     $posixDestination = (& $cygpath -u $destinationPath).Trim()
-    $status = @(& $bash -lc "git -C '$posixDestination' submodule status --recursive")
+    $status = @(& $bash -lc 'git -C "$1" submodule status --recursive' -- $posixDestination)
     if ($LASTEXITCODE -ne 0) {
         throw 'unable to inspect SDK submodule status'
     }
