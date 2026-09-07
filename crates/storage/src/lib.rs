@@ -59,6 +59,19 @@ fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
 fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
+
+fn path_has_reparse_ancestor(path: &std::path::Path) -> bool {
+    let mut current = Some(path);
+    while let Some(component) = current {
+        if let Ok(metadata) = std::fs::symlink_metadata(component) {
+            if is_reparse_point(&metadata) {
+                return true;
+            }
+        }
+        current = component.parent();
+    }
+    false
+}
 pub const GRAPH_PLAN_RETENTION_SECONDS: i64 = 5 * 60;
 pub const DAILY_RECOVERY_BACKUP_LIMIT: usize = 10;
 
@@ -1102,6 +1115,8 @@ impl Storage {
             || is_reparse_point(&source_parent_metadata)
             || !destination_parent_metadata.is_dir()
             || is_reparse_point(&destination_parent_metadata)
+            || path_has_reparse_ancestor(source)
+            || path_has_reparse_ancestor(destination)
         {
             return Err(StorageError::InvalidRecording(
                 "recording directories must be regular non-reparse directories".into(),
@@ -3165,6 +3180,25 @@ mod tests {
         );
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn recording_paths_reject_reparse_ancestors() {
+        let root = std::env::temp_dir().join(format!("audiorouter-recording-path-{}", std::process::id()));
+        let target = root.join("target");
+        let link = root.join("redirected");
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&target).unwrap();
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_dir(&target, &link);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&target, &link);
+        if link_result.is_ok() {
+            assert!(path_has_reparse_ancestor(&link.join("take.wav")));
+            std::fs::remove_dir(&link).unwrap();
+        }
+        assert!(!path_has_reparse_ancestor(&target.join("take.wav")));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
