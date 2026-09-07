@@ -120,6 +120,14 @@ fn sort_application_inventory(applications: &mut [ApplicationInfo]) {
     });
 }
 
+fn sort_application_audio_inventory(inventory: &mut [ApplicationAudioInfo]) {
+    inventory.sort_by_key(|item| item.process_id);
+    for item in inventory {
+        item.display_names.sort_unstable();
+        item.display_names.dedup();
+    }
+}
+
 #[derive(Debug)]
 pub enum AudioError {
     Windows(windows::core::Error),
@@ -1112,7 +1120,9 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                     }
                 }
             }
-            Ok(by_process.into_values().collect())
+            let mut inventory: Vec<_> = by_process.into_values().collect();
+            sort_application_audio_inventory(&mut inventory);
+            Ok(inventory)
         })();
         CoUninitialize();
         result
@@ -1585,6 +1595,35 @@ mod tests {
                 .collect::<Vec<_>>(),
             [("audio.exe", 3), ("Audio.exe", 4), ("zeta.exe", 20)]
         );
+    }
+
+    #[test]
+    fn application_audio_inventory_sort_is_deterministic_and_deduplicated() {
+        let mut inventory = vec![
+            ApplicationAudioInfo {
+                process_id: 20,
+                active_session_count: 1,
+                total_session_count: 1,
+                capture_session_count: 0,
+                display_names: vec!["zulu".into(), "alpha".into(), "alpha".into()],
+            },
+            ApplicationAudioInfo {
+                process_id: 4,
+                active_session_count: 1,
+                total_session_count: 2,
+                capture_session_count: 1,
+                display_names: vec!["voice".into()],
+            },
+        ];
+        sort_application_audio_inventory(&mut inventory);
+        assert_eq!(
+            inventory
+                .iter()
+                .map(|item| item.process_id)
+                .collect::<Vec<_>>(),
+            vec![4, 20]
+        );
+        assert_eq!(inventory[1].display_names, vec!["alpha", "zulu"]);
     }
 
     #[cfg(windows)]
