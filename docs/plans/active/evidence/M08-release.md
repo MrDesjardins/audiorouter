@@ -272,3 +272,10 @@ configuration was used.
 The M08 wrapper prepared and verified optimized unsigned artifacts in a
 disposable directory, then cleaned the output. Signing, driver, installer, and
 clean-machine gates remain open; no audio configuration was changed.
+## Artifact-root reparse protection (2026-09-06)
+
+The release verifier now requires the manifest's parent directory to be a
+regular non-reparse directory before validating the manifest, SBOM, notices,
+and artifacts. This closes redirected-root verification paths while retaining
+the existing per-file checks; no installer, signing, driver, audio, or machine
+configuration action is performed.

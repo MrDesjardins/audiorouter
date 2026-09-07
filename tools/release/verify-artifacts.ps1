@@ -8,6 +8,14 @@ $ErrorActionPreference = "Stop"
 $manifestFile = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction Stop).Path
 $root = Split-Path -Parent $manifestFile
 
+function Assert-RegularDirectoryNoReparse {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw "release root must be a regular non-reparse directory: $Path"
+    }
+}
+
 function Assert-RegularFileNoReparse {
     param([Parameter(Mandatory = $true)][string]$Path)
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
@@ -16,6 +24,7 @@ function Assert-RegularFileNoReparse {
     }
 }
 
+Assert-RegularDirectoryNoReparse $root
 Assert-RegularFileNoReparse $manifestFile
 $manifest = Get-Content -LiteralPath $manifestFile -Raw | ConvertFrom-Json
 
