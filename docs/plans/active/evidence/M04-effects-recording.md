@@ -523,3 +523,10 @@ writer/recorder and bounded Vorbis metadata path are also implemented and
 tested. Remaining M04 limitations are native realtime graph integration,
 hardware timing, and production-scale compression/performance evaluation;
 portable tests do not claim those gates.
+## 2026-09-06 — Current-tip portable acceptance
+
+The complete M04 acceptance was rerun after the recovery changes. All 25 DSP
+tests, including the 60-second pitch-duration extremes, and all 30 recording
+tests passed, along with formatting and strict Clippy. The suite used only
+portable processing and temporary file-boundary state; it did not open an
+audio device or change machine configuration.

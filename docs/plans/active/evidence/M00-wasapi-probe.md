@@ -223,3 +223,10 @@ The same compile-only acceptance was rerun at the current tip with the
 installed VS2026/MSVC and Windows SDK/WDK toolchain. `main.cpp` compiled
 successfully and the temporary executable/object outputs were cleaned. The
 probe was not executed, so this does not claim live audio evidence.
+## 2026-09-06 — Current-tip compile qualification
+
+The compile-only native probe acceptance was rerun at the current tip with
+Visual Studio Community 2026, MSVC 14.51.36231, and the installed Windows
+SDK/WDK toolchain. `main.cpp` compiled successfully and generated outputs were
+cleaned. The probe was not executed; no audio stream, driver, signing mode, or
+machine configuration was touched.
