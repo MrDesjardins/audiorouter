@@ -1123,7 +1123,7 @@ fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]".into(),
+            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID] [--idempotency-key KEY]".into(),
         )
     })?;
     if !matches!(
@@ -1131,7 +1131,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         "get" | "list" | "create" | "start" | "stop" | "delete" | "duplicate"
     ) {
         return Err(CliError::InvalidArguments(
-            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]".into(),
+            "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID] [--idempotency-key KEY]".into(),
         ));
     }
     let storage = database(args)?;
@@ -1197,8 +1197,16 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         let session: audiorouter_domain::Session = serde_json::from_str(&document)
             .map_err(|error| CliError::InvalidArguments(error.to_string()))?;
         let mut plane = ControlPlane::with_storage("cli", storage);
+        let idempotency_key = optional_option_value(args, "--idempotency-key")?;
         return plane
-            .create_session(session)
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "sessions.create".into(),
+                params: Some(json!({ "session": session, "idempotencyKey": idempotency_key })),
+            })
+            .result
+            .ok_or_else(|| CliError::InvalidArguments("session create failed".into()))
             .map_err(|error| CliError::Storage(format!("{error:?}")));
     }
     let id = args
@@ -1224,8 +1232,20 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
                 )
             })?;
         let mut plane = ControlPlane::with_storage("cli", storage);
+        let idempotency_key = optional_option_value(args, "--idempotency-key")?;
         return plane
-            .duplicate_session(&id, EntityId::new(duplicate_id), None)
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "sessions.duplicate".into(),
+                params: Some(json!({
+                    "sourceSessionId": id,
+                    "sessionId": duplicate_id,
+                    "idempotencyKey": idempotency_key
+                })),
+            })
+            .result
+            .ok_or_else(|| CliError::InvalidArguments("session duplicate failed".into()))
             .map_err(|error| CliError::Storage(format!("{error:?}")));
     }
     if action == "get" {
@@ -1237,13 +1257,23 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
             .map_err(|error| CliError::InvalidArguments(error.to_string()));
     }
     let mut plane = ControlPlane::with_storage("cli", storage);
-    match action {
-        "start" => plane.session_start(&id),
-        "stop" => plane.session_stop(&id),
-        "delete" => plane.delete_session(&id),
+    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    let method = match action {
+        "start" => "sessions.start",
+        "stop" => "sessions.stop",
+        "delete" => "sessions.delete",
         _ => unreachable!(),
-    }
-    .map_err(|error| CliError::Storage(format!("{error:?}")))
+    };
+    plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(json!({ "sessionId": id, "idempotencyKey": idempotency_key })),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("session mutation failed".into()))
+        .map_err(|error| CliError::Storage(format!("{error:?}")))
 }
 
 fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
