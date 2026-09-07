@@ -888,8 +888,76 @@ pub enum ValidationError {
 
 impl std::fmt::Display for ValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+        match self {
+            Self::EmptyId { path } => write!(f, "{path}: value must not be empty"),
+            Self::DuplicateId { path, id } => write!(f, "{path}: duplicate id '{id}'"),
+            Self::LimitExceeded {
+                path,
+                requested,
+                maximum,
+            } => {
+                write!(f, "{path}: {requested} exceeds maximum {maximum}")
+            }
+            Self::MissingNode { path, id } => write!(f, "{path}: node '{id}' was not found"),
+            Self::MissingPort { path, node, port } => {
+                write!(f, "{path}: port '{port}' was not found on node '{node}'")
+            }
+            Self::WrongDirection { path } => {
+                write!(
+                    f,
+                    "{path}: source must be output and destination must be input"
+                )
+            }
+            Self::InvalidChannels { path, channels } => {
+                write!(
+                    f,
+                    "{path}: channel count {channels} is outside the supported range"
+                )
+            }
+            Self::InvalidParameter { path } => write!(f, "{path}: parameter is invalid"),
+            Self::InvalidMatrix { path } => write!(f, "{path}: channel matrix is invalid"),
+            Self::DuplicateEdge { path } => write!(f, "{path}: duplicate edge"),
+            Self::MultipleInputEdges { path } => {
+                write!(f, "{path}: destination accepts only one input edge")
+            }
+            Self::Cycle { path } => write!(f, "{path}: graph contains a cycle"),
+            Self::MissingSession { path, id } => write!(f, "{path}: session '{id}' was not found"),
+            Self::DuplicateVirtualBusWriter { path, bus_id } => {
+                write!(f, "{path}: virtual bus '{bus_id}' has multiple writers")
+            }
+            Self::DuplicateVirtualBusRoute { path } => {
+                write!(f, "{path}: duplicate virtual-bus route")
+            }
+            Self::UnsupportedSchemaVersion {
+                path,
+                version,
+                supported,
+            } => write!(
+                f,
+                "{path}: schema version {version} is unsupported; expected {supported}"
+            ),
+            Self::UnsupportedNodeTypeVersion {
+                path,
+                kind,
+                version,
+                supported,
+            } => write!(
+                f,
+                "{path}: node type '{}' version {version} is unsupported; expected {supported}",
+                kind.type_name()
+            ),
+        }
     }
+}
+
+/// Format validation failures without exposing Rust debug syntax to API
+/// clients. The order is the validator's deterministic traversal order.
+pub fn format_validation_errors(errors: &[ValidationError]) -> String {
+    errors
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
@@ -2829,6 +2897,26 @@ mod tests {
                 supported: 1
             } if path == "nodes[0].typeVersion"
         )));
+    }
+
+    #[test]
+    fn validation_errors_are_readable_and_include_field_paths() {
+        let error = ValidationError::InvalidParameter {
+            path: "nodes[0].parameters.gainDb".into(),
+        };
+        assert_eq!(
+            error.to_string(),
+            "nodes[0].parameters.gainDb: parameter is invalid"
+        );
+        assert_eq!(
+            format_validation_errors(&[
+                error,
+                ValidationError::Cycle {
+                    path: "edges".into(),
+                },
+            ]),
+            "nodes[0].parameters.gainDb: parameter is invalid; edges: graph contains a cycle"
+        );
     }
 
     #[test]

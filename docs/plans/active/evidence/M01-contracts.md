@@ -324,6 +324,11 @@ versions fail with a path-specific error; deserialization defaults only legacy
 fixtures that predate this field to the current v1 contract.
 
 The protocol parser now has table-driven hostile-shape coverage for JSON
-primitives, missing or wrongly typed request fields, array-valued parameters,
-and mixed-validity batches. Each is rejected as an invalid request without a
+primitives, missing or wrongly typed request fields, and mixed-validity
+batches. Each is rejected as an invalid request without a
 partial request being accepted.
+
+Validation errors now use stable human-readable messages containing their
+field paths, and graph/session API errors join those messages instead of
+exposing Rust debug syntax. Domain regression coverage verifies deterministic
+multi-error formatting.

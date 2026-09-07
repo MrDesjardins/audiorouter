@@ -5,9 +5,10 @@
 //! authority and that unsupported audio capabilities are discoverable.
 
 use audiorouter_domain::{
-    inspect_routes, node_registry, validate_session, ApiMethodSpec, CrashRecoveryTracker, EntityId,
-    EventLog, EventReplayError, FakeRuntime, GraphStore, PermissionScope, RecoveryDecision,
-    RecoveryMode, RuntimeError, RuntimeState, Session, VirtualBusRegistry, API_METHODS,
+    format_validation_errors, inspect_routes, node_registry, validate_session, ApiMethodSpec,
+    CrashRecoveryTracker, EntityId, EventLog, EventReplayError, FakeRuntime, GraphStore,
+    PermissionScope, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState, Session,
+    VirtualBusRegistry, API_METHODS,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -2712,11 +2713,12 @@ impl ControlPlane {
         destination_node: &EntityId,
     ) -> Result<Value, ControlError> {
         let session = self.get_session(session_id)?;
-        serde_json::to_value(
-            inspect_routes(session, destination_node).map_err(|errors| {
-                ControlError::InvalidRequest(format!("invalid graph: {errors:?}"))
-            })?,
-        )
+        serde_json::to_value(inspect_routes(session, destination_node).map_err(|errors| {
+            ControlError::InvalidRequest(format!(
+                "invalid graph: {}",
+                format_validation_errors(&errors)
+            ))
+        })?)
         .map_err(|error| ControlError::Json(error.to_string()))
     }
 
@@ -2953,9 +2955,10 @@ impl ControlPlane {
                 })?;
             let runtime = self.runtimes.get_mut(&result.session_id).unwrap();
             runtime.prepare(&session).map_err(|error| match error {
-                RuntimeError::InvalidGraph(errors) => {
-                    ControlError::InvalidRequest(format!("invalid graph: {errors:?}"))
-                }
+                RuntimeError::InvalidGraph(errors) => ControlError::InvalidRequest(format!(
+                    "invalid graph: {}",
+                    format_validation_errors(&errors)
+                )),
                 RuntimeError::NotPrepared => {
                     ControlError::InvalidRequest("session was not prepared".into())
                 }
@@ -3001,9 +3004,10 @@ impl ControlPlane {
         }
         let runtime = self.runtimes.entry(id.clone()).or_default();
         runtime.prepare(&session).map_err(|error| match error {
-            RuntimeError::InvalidGraph(errors) => {
-                ControlError::InvalidRequest(format!("invalid graph: {errors:?}"))
-            }
+            RuntimeError::InvalidGraph(errors) => ControlError::InvalidRequest(format!(
+                "invalid graph: {}",
+                format_validation_errors(&errors)
+            )),
             RuntimeError::NotPrepared => {
                 ControlError::InvalidRequest("session was not prepared".into())
             }
@@ -3529,7 +3533,10 @@ impl ControlPlane {
         )
         .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
         validate_session(&session).map_err(|errors| {
-            ControlError::InvalidRequest(format!("invalid session import: {errors:?}"))
+            ControlError::InvalidRequest(format!(
+                "invalid session import: {}",
+                format_validation_errors(&errors)
+            ))
         })?;
         if self.store.session(&session.id).is_some() {
             return Err(ControlError::InvalidRequest(

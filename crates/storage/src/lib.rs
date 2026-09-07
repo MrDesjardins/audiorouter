@@ -1,8 +1,9 @@
 //! SQLite persistence boundary for M01.
 
 use audiorouter_domain::{
-    node_registry, validate_session, EntityId, Session, VirtualBusRegistry, VirtualBusSnapshot,
-    RECOVERY_CRASH_WINDOW_SECONDS, RECOVERY_SAFE_MODE_CRASHES,
+    format_validation_errors, node_registry, validate_session, EntityId, Session,
+    VirtualBusRegistry, VirtualBusSnapshot, RECOVERY_CRASH_WINDOW_SECONDS,
+    RECOVERY_SAFE_MODE_CRASHES,
 };
 use audiorouter_recording::RecorderCheckpoint;
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
@@ -1414,15 +1415,8 @@ impl Storage {
             });
         }
         let session: Session = serde_json::from_str(document)?;
-        validate_session(&session).map_err(|errors| {
-            StorageError::InvalidSession(
-                errors
-                    .into_iter()
-                    .map(|error| format!("{error:?}"))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-            )
-        })?;
+        validate_session(&session)
+            .map_err(|errors| StorageError::InvalidSession(format_validation_errors(&errors)))?;
         self.save_session(&session)?;
         Ok(session)
     }
