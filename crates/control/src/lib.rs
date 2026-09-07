@@ -4795,7 +4795,8 @@ impl ControlPlane {
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
                     }
                 },
-                "error": null
+                "error": null,
+                "errorCode": null
             }),
             Err(error) => json!({
                 "path": path,
@@ -6102,6 +6103,11 @@ mod tests {
                 .len(),
             7
         );
+        assert!(method["outputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "errorCode"));
     }
 
     #[test]
