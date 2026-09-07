@@ -162,3 +162,12 @@ suite passes with 25 CLI tests and two interoperability tests. Apply persists
 the desired bus state and reports `state: applied` with endpoint availability
 still `unavailable` until the managed driver exists. No endpoint, driver, or
 machine audio configuration is changed.
+
+## Capacity discovery parity (2026-09-07)
+
+`system.describe.limits` now includes the authoritative `maxVirtualBuses: 8`
+value alongside the graph/session limits. The JSON schema marks it as required,
+and the control discovery regression verifies the value comes from the domain
+constant. Control tests (81), strict Clippy, and documentation validation pass.
+This reports desired-state capacity only; it does not imply that native driver
+endpoints exist.

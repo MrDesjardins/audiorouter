@@ -609,9 +609,10 @@ fn method_output_schema(name: &str) -> Value {
                         "maxEdgesPerSession": { "type": "integer", "minimum": 1 },
                         "maxNodesGlobal": { "type": "integer", "minimum": 1 },
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
-                        "maxActiveSessions": { "type": "integer", "minimum": 1 }
+                        "maxActiveSessions": { "type": "integer", "minimum": 1 },
+                        "maxVirtualBuses": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -2447,7 +2448,8 @@ impl ControlPlane {
                 "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION,
                 "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL,
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
-                "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS
+                "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES
             },
             "events": {
                 "stateCategories": [
@@ -5813,6 +5815,7 @@ mod tests {
         assert_eq!(description["limits"]["maxNodesGlobal"], 128);
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
         assert_eq!(description["limits"]["maxActiveSessions"], 2);
+        assert_eq!(description["limits"]["maxVirtualBuses"], 8);
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
         assert_eq!(description["events"]["meterReplay"], false);
