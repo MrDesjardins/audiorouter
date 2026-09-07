@@ -171,7 +171,27 @@ configuration was changed.
 
 ## Next action
 
-Implement application-loopback data-path validation and controlled process attribution in the native Windows probe. Preserve the existing no-default-change policy and keep driver installation/signing out of scope until isolated target and signing evidence exists.
+The native probe now has application-loopback activation/data-path and
+controlled process-tree attribution evidence in the M00 reports. M01's
+remaining work is production daemon/subscriber lifetime and the cross-milestone
+native gates: calibrated physical latency, actual PID-reuse observation,
+owned-driver integration/signing, and production shell/UI acceptance. Preserve
+the no-default-change policy and do not claim those gates from portable tests.
+
+## 2026-09-07 — Current-head safe acceptance sweep
+
+The checked-in safe acceptance chain passed at the current pushed head:
+
+- M01 CLI acceptance;
+- M04 DSP/recording acceptance (27 DSP and 30 recording tests);
+- M05 UI acceptance (86 tests, TypeScript typecheck, and disposable production build);
+- M07 headless acceptance (25 CLI, 2 MCP, 84 control, 35 plugin-host, and 8 worker-process tests, plus strict Clippy);
+- M08 unsigned release preparation and verification; and
+- documentation validation (51 Markdown files and 151 local links).
+
+All temporary test/release state was cleaned. No driver, plugin registration,
+installer, signing operation, audio stream configuration, or machine audio
+setting was changed.
 ## 2026-09-06 — Current acceptance rerun
 
 The checked-in `tests/acceptance/m01-cli.ps1` completed successfully against
