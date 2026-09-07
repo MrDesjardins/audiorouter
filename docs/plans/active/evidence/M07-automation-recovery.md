@@ -537,6 +537,15 @@ The MCP stdio interoperability regression was updated to account for the
 published `clear_recovery_safe_mode` tool. The catalog now contains 23 tools,
 including the recovery maintenance operation, and the locked workspace test
 suite confirms the process-level catalog remains internally consistent.
+
+`SupervisedWorkerProcess::restart` now also supports workers using the shared
+audio transport. The failed worker's caller-owned mapped transport is retained
+through replacement, while the old process is dropped before a new process is
+spawned and the failure ledger remains attached. The regression advances the
+shared frame sequence after restart and verifies a successful round trip; the
+plugin-host suite, strict Clippy, and complete M07 headless acceptance pass.
+This is worker recovery evidence only and does not claim automatic route
+restart, production plugin execution, or full filesystem/network sandboxing.
 ## Operation metadata correction (2026-09-06)
 
 In-memory idempotent outcomes now retain their operation name alongside the

@@ -278,7 +278,25 @@ fn disposable_worker_process_round_trips_shared_audio_frames() {
             .unwrap(),
         frame
     );
-    assert!(worker.shutdown().unwrap().success());
+    assert_eq!(
+        worker.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let mut replacement = worker.restart(start).expect("restart shared worker");
+    let replacement_frame = WorkerFrame::new(
+        2,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        vec![0.5, -0.5, 0.2, -0.2],
+    )
+    .unwrap();
+    assert_eq!(
+        replacement
+            .process_shared(replacement_frame.clone(), Vec::new(), start)
+            .unwrap(),
+        replacement_frame
+    );
+    assert!(replacement.shutdown().unwrap().success());
     std::fs::remove_file(input_path).unwrap();
     std::fs::remove_file(output_path).unwrap();
 }

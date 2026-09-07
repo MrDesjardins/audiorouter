@@ -1294,12 +1294,38 @@ impl SupervisedWorkerProcess {
         transport: SharedAudioTransport,
         now: Instant,
     ) -> Result<Self, WorkerProcessError> {
-        let mut supervisor = WorkerSupervisor::new();
-        supervisor.start(identity, now).map_err(|error| {
-            WorkerProcessError::Protocol(format!("worker start rejected: {error:?}"))
-        })?;
-        let executable =
-            validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
+        Self::spawn_shared_with_supervisor(
+            executable,
+            identity,
+            channels,
+            transport,
+            WorkerSupervisor::new(),
+            now,
+        )
+        .map_err(|(error, _)| error)
+    }
+
+    fn spawn_shared_with_supervisor(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        transport: SharedAudioTransport,
+        mut supervisor: WorkerSupervisor,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let executable = match validate_worker_executable(executable.as_ref()) {
+            Ok(path) => path,
+            Err(error) => {
+                supervisor.record_failure(now);
+                return Err((WorkerProcessError::Spawn(error), supervisor));
+            }
+        };
+        if let Err(error) = supervisor.start(identity, now) {
+            return Err((
+                WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
+                supervisor,
+            ));
+        }
         match WorkerProcess::spawn_shared(&executable, &identity.sha256, channels, transport) {
             Ok(process) => Ok(Self {
                 process,
@@ -1311,7 +1337,7 @@ impl SupervisedWorkerProcess {
             }),
             Err(error) => {
                 supervisor.record_failure(now);
-                Err(error)
+                Err((error, supervisor))
             }
         }
     }
@@ -1422,11 +1448,12 @@ impl SupervisedWorkerProcess {
     }
 
     /// Deliberately replace a failed worker while retaining its failure ledger.
-    /// The current process is dropped before the replacement is attempted, so
-    /// this operation never leaves two workers for one supervised slot.
+    /// Shared-memory workers carry their caller-owned transport into the
+    /// replacement. The current process is dropped before the replacement is
+    /// attempted, so this operation never leaves two workers for one slot.
     pub fn restart(self, now: Instant) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
         let Self {
-            process,
+            mut process,
             supervisor,
             executable,
             identity,
@@ -1434,15 +1461,6 @@ impl SupervisedWorkerProcess {
             shared_transport,
         } = self;
         let state = supervisor.state();
-        drop(process);
-        if shared_transport {
-            return Err((
-                WorkerProcessError::Protocol(
-                    "shared worker restart requires transport reconstruction".into(),
-                ),
-                supervisor,
-            ));
-        }
         if state == WorkerState::Running {
             return Err((
                 WorkerProcessError::Protocol(
@@ -1451,7 +1469,23 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        Self::spawn_with_supervisor(executable, &identity, channels, supervisor, now)
+        let transport = process.take_shared_transport();
+        drop(process);
+        if shared_transport {
+            let Some(transport) = transport else {
+                return Err((
+                    WorkerProcessError::Protocol(
+                        "shared worker transport was unavailable for restart".into(),
+                    ),
+                    supervisor,
+                ));
+            };
+            Self::spawn_shared_with_supervisor(
+                executable, &identity, channels, transport, supervisor, now,
+            )
+        } else {
+            Self::spawn_with_supervisor(executable, &identity, channels, supervisor, now)
+        }
     }
 
     fn ensure_running(&self) -> Result<(), WorkerProcessError> {
@@ -1710,6 +1744,10 @@ impl WorkerProcess {
 
     fn read(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
         receive_worker_message(&self.reader, WORKER_RESPONSE_TIMEOUT)
+    }
+
+    fn take_shared_transport(&mut self) -> Option<SharedAudioTransport> {
+        self.shared.take()
     }
     fn write(&mut self, message: &WorkerMessage) -> Result<(), WorkerMessageError> {
         write_worker_message(&mut self.writer, message)
