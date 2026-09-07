@@ -721,3 +721,9 @@ After the third recent crash, the durable or in-memory safe-mode decision
 leaves all sessions stopped. Control coverage verifies both restoration and
 safe-mode behavior. This is a supervisor-facing portable boundary only: it
 does not spawn a process, open an audio stream, or claim native route restart.
+
+The complete M07 headless acceptance was then rerun at commit `5a58a13`.
+CLI (23), MCP stdio/named-pipe interoperability (2), control (78),
+plugin-host (31), worker-process (8), and strict Clippy checks passed. The
+acceptance used temporary test state only and did not access audio devices,
+drivers, or machine configuration.
