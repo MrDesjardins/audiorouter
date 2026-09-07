@@ -555,3 +555,11 @@ preview separately from the confirmation-required action. All controls are
 disabled while disconnected. UI typecheck, all 61 tests, and the disposable
 three-file production build pass; no recording file or machine configuration
 was changed.
+## 2026-09-06 — Current-tip UI acceptance
+
+The complete M05 acceptance was rerun at the current tip. TypeScript
+typechecking passed, all 63 Vitest tests passed, and the disposable Vite
+production build produced three files. The temporary output was removed; this
+was UI-only validation and did not access audio, drivers, or machine
+configuration. Manual visual/accessibility acceptance and native shell
+injection remain open.
