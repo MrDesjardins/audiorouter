@@ -322,3 +322,8 @@ Node instances now carry an explicit `typeVersion` (currently `1`) and the
 domain validates it against the authoritative node registry. Unknown node
 versions fail with a path-specific error; deserialization defaults only legacy
 fixtures that predate this field to the current v1 contract.
+
+The protocol parser now has table-driven hostile-shape coverage for JSON
+primitives, missing or wrongly typed request fields, array-valued parameters,
+and mixed-validity batches. Each is rejected as an invalid request without a
+partial request being accepted.

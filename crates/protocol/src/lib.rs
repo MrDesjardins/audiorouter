@@ -267,4 +267,26 @@ mod tests {
             Err(MessageError::InvalidRequest)
         );
     }
+
+    #[test]
+    fn rejects_hostile_json_rpc_shapes_without_accepting_partial_requests() {
+        for payload in [
+            b"null".as_slice(),
+            b"true".as_slice(),
+            b"\"request\"".as_slice(),
+            br#"{}"#.as_slice(),
+            br#"{"jsonrpc":"2.0"}"#.as_slice(),
+            br#"{"jsonrpc":2,"id":1,"method":"status.get"}"#.as_slice(),
+            br#"{"jsonrpc":"2.0","id":1,"method":42}"#.as_slice(),
+            br#"[null]"#.as_slice(),
+            br#"[{"jsonrpc":"2.0","id":1,"method":"status.get"},null]"#.as_slice(),
+        ] {
+            assert_eq!(
+                parse_rpc_message(payload),
+                Err(MessageError::InvalidRequest),
+                "payload should be rejected: {}",
+                String::from_utf8_lossy(payload)
+            );
+        }
+    }
 }
