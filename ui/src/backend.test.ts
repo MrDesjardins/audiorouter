@@ -207,8 +207,8 @@ describe("live event cursor", () => {
   it("forwards metadata-only recording entry removal", async () => {
     let received: unknown;
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", removed: true, fileAction: "none" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).removeRecordingEntry("take-1")).resolves.toEqual({ recordingId: "take-1", removed: true, fileAction: "none" });
-    expect(received).toEqual({ method: "recordings.removeEntry", params: { recordingId: "take-1" } });
+    await expect(createLiveBackend(client, demoSession.id).removeRecordingEntry("take-1", "remove-key")).resolves.toEqual({ recordingId: "take-1", removed: true, fileAction: "none" });
+    expect(received).toEqual({ method: "recordings.removeEntry", params: { recordingId: "take-1", idempotencyKey: "remove-key" } });
   });
 
   it("forwards recording recovery inspection without file actions", async () => {
@@ -312,22 +312,22 @@ describe("live event cursor", () => {
     let received: unknown;
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { session: { ...demoSession, id: "new-session", name: "New", revision: 0 }, state: "stopped" }; } } as never;
     const candidate = { ...demoSession, id: "new-session", name: "New", revision: 0 };
-    await expect(createLiveBackend(client, demoSession.id).createSession(candidate)).resolves.toMatchObject({ state: "stopped" });
-    expect(received).toEqual({ method: "sessions.create", params: { session: candidate } });
+    await expect(createLiveBackend(client, demoSession.id).createSession(candidate, "create-key")).resolves.toMatchObject({ state: "stopped" });
+    expect(received).toEqual({ method: "sessions.create", params: { session: candidate, idempotencyKey: "create-key" } });
   });
 
   it("duplicates a stopped session through the shared API", async () => {
     let received: unknown;
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { session: { ...demoSession, id: "copy", name: "Copy", revision: 0 }, state: "stopped" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).duplicateSession(demoSession.id, "copy", "Copy")).resolves.toMatchObject({ state: "stopped" });
-    expect(received).toEqual({ method: "sessions.duplicate", params: { sourceSessionId: demoSession.id, sessionId: "copy", name: "Copy" } });
+    await expect(createLiveBackend(client, demoSession.id).duplicateSession(demoSession.id, "copy", "Copy", "duplicate-key")).resolves.toMatchObject({ state: "stopped" });
+    expect(received).toEqual({ method: "sessions.duplicate", params: { sourceSessionId: demoSession.id, sessionId: "copy", name: "Copy", idempotencyKey: "duplicate-key" } });
   });
 
   it("deletes a session through the shared API", async () => {
     let received: unknown;
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { deleted: true, state: "stopped" }; } } as never;
-    await expect(createLiveBackend(client, demoSession.id).deleteSession("copy")).resolves.toEqual({ deleted: true, state: "stopped" });
-    expect(received).toEqual({ method: "sessions.delete", params: { sessionId: "copy" } });
+    await expect(createLiveBackend(client, demoSession.id).deleteSession("copy", "delete-key")).resolves.toEqual({ deleted: true, state: "stopped" });
+    expect(received).toEqual({ method: "sessions.delete", params: { sessionId: "copy", idempotencyKey: "delete-key" } });
   });
 });
 

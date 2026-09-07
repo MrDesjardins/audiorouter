@@ -575,3 +575,10 @@ session create, duplicate, and delete. Entity IDs remain separate from retry
 keys. UI typecheck, all 63 Vitest tests, and the disposable three-file Vite
 production build pass; no audio, driver, recording file, or machine
 configuration was accessed.
+## Idempotency forwarding regression (2026-09-06)
+
+The UI adapter test suite now explicitly asserts that retry keys reach the
+shared API for recording-entry removal and session create, duplicate, and
+delete operations. TypeScript typecheck, all 63 Vitest tests, and the
+disposable three-file production build pass; no audio, recording file, or
+machine configuration was accessed.
