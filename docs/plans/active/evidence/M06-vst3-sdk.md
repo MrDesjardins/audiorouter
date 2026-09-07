@@ -799,3 +799,16 @@ not interpreted as shell syntax. The disposable origin/reparse-point
 provenance acceptance and the real SDK installer plus offline M06 acceptance
 pass after this change; no SDK, plugin, driver, audio stream, or machine
 configuration was changed.
+## 2026-09-07 — Current-head SDK requalification
+
+The repository-local installer repaired/verified the pinned Steinberg VST3 SDK
+checkout at revision
+`3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`. The M06 acceptance wrapper then
+completed with the installed Visual Studio Community 2026 toolchain (MSVC
+14.51.36231, Windows SDK 10.0.28000.0): all 51 SDK self-tests and 1,598
+official validator tests passed, and the offline loader successfully opened
+the built x64 fixture and processed a finite block.
+
+The generated SDK build tree is repository-local and ignored. No system-wide
+SDK installation, plugin registration, driver action, audio stream, or machine
+audio configuration change occurred.
