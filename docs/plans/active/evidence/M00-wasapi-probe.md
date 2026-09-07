@@ -273,6 +273,18 @@ The Rust probe's separate render sweep had one endpoint classified as
 capture failure. A final read-only post-test query found ten present media
 devices and no device outside `OK`. No defaults, volume, mute, privacy,
 drivers, signing, or startup configuration were changed.
+
+## Process-loopback capture read (2026-09-07)
+
+The native probe also performed a bounded 500 ms process-loopback capture read
+for the current test process, without generating a tone. Asynchronous
+activation, audio-client query, 44.1 kHz PCM initialization, event registration,
+capture-service acquisition, start, packet reads, stop, and reset all returned
+success. The read collected 50 packets and 22,050 frames, with 15,217 nonzero
+bytes and nonzero sample energy; no silent packets were observed. The final
+media-device state remained ten present devices, all `OK`. This qualifies the
+loopback data path only; process attribution across a deliberately generated
+source and physical output latency remain separate gates.
 ## 2026-09-06 — Current-tip compile qualification
 
 The compile-only native probe acceptance was rerun at the current tip with
