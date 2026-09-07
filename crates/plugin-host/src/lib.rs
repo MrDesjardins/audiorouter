@@ -1858,6 +1858,87 @@ fn validate_worker_executable(path: &Path) -> Result<PathBuf, String> {
         .map_err(|error| format!("worker executable canonicalization failed: {error}"))
 }
 
+fn same_file_identity(left: &Path, right: &Path) -> Result<bool, SharedAudioError> {
+    #[cfg(windows)]
+    {
+        windows_file_identity(left, right)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let left = fs::metadata(left).map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        let right = fs::metadata(right).map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        Ok(left.dev() == right.dev() && left.ino() == right.ino())
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        Ok(false)
+    }
+}
+
+#[cfg(windows)]
+#[repr(C)]
+struct NativeFileInformation {
+    attributes: u32,
+    creation_time_low: u32,
+    creation_time_high: u32,
+    last_access_time_low: u32,
+    last_access_time_high: u32,
+    last_write_time_low: u32,
+    last_write_time_high: u32,
+    volume_serial_number: u32,
+    file_size_high: u32,
+    file_size_low: u32,
+    number_of_links: u32,
+    file_index_high: u32,
+    file_index_low: u32,
+}
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn GetFileInformationByHandle(
+        handle: *mut std::ffi::c_void,
+        information: *mut NativeFileInformation,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+fn windows_file_identity(left: &Path, right: &Path) -> Result<bool, SharedAudioError> {
+    use std::os::windows::io::AsRawHandle;
+
+    fn read(path: &Path) -> Result<(u32, u64), SharedAudioError> {
+        let file = fs::File::open(path).map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        let mut information = NativeFileInformation {
+            attributes: 0,
+            creation_time_low: 0,
+            creation_time_high: 0,
+            last_access_time_low: 0,
+            last_access_time_high: 0,
+            last_write_time_low: 0,
+            last_write_time_high: 0,
+            volume_serial_number: 0,
+            file_size_high: 0,
+            file_size_low: 0,
+            number_of_links: 0,
+            file_index_high: 0,
+            file_index_low: 0,
+        };
+        let succeeded = unsafe {
+            GetFileInformationByHandle(file.as_raw_handle(), &mut information)
+        };
+        if succeeded == 0 {
+            return Err(SharedAudioError::Io(std::io::Error::last_os_error().to_string()));
+        }
+        Ok((
+            information.volume_serial_number,
+            (u64::from(information.file_index_high) << 32)
+                | u64::from(information.file_index_low),
+        ))
+    }
+
+    Ok(read(left)? == read(right)?)
+}
+
 fn terminate_child(child: &mut Child) {
     if child.try_wait().ok().flatten().is_none() {
         let _ = child.kill();
@@ -2340,14 +2421,23 @@ impl SharedAudioTransport {
         output_path: impl AsRef<Path>,
         layout: SharedAudioLayout,
     ) -> Result<Self, SharedAudioError> {
-        if input_path.as_ref() == output_path.as_ref() {
+        let input_path = input_path.as_ref();
+        let output_path = output_path.as_ref();
+        if input_path == output_path {
+            return Err(SharedAudioError::AliasedPaths);
+        }
+        let input_canonical = fs::canonicalize(input_path)
+            .map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        let output_canonical = fs::canonicalize(output_path)
+            .map_err(|error| SharedAudioError::Io(error.to_string()))?;
+        if input_canonical == output_canonical || same_file_identity(input_path, output_path)? {
             return Err(SharedAudioError::AliasedPaths);
         }
         Ok(Self {
-            input: SharedAudioRegion::open(input_path.as_ref(), layout)?,
-            output: SharedAudioRegion::open(output_path.as_ref(), layout)?,
-            input_path: input_path.as_ref().to_path_buf(),
-            output_path: output_path.as_ref().to_path_buf(),
+            input: SharedAudioRegion::open(input_path, layout)?,
+            output: SharedAudioRegion::open(output_path, layout)?,
+            input_path: input_path.to_path_buf(),
+            output_path: output_path.to_path_buf(),
         })
     }
 
@@ -3381,6 +3471,15 @@ mod tests {
             SharedAudioTransport::create(&input_path, &input_path, layout),
             Err(SharedAudioError::AliasedPaths)
         ));
+        let hard_link = std::env::temp_dir().join(format!("{}-alias", stem));
+        let _ = fs::remove_file(&hard_link);
+        if fs::hard_link(&input_path, &hard_link).is_ok() {
+            assert!(matches!(
+                SharedAudioTransport::open(&input_path, &hard_link, layout),
+                Err(SharedAudioError::AliasedPaths)
+            ));
+            fs::remove_file(&hard_link).unwrap();
+        }
         drop(worker);
         drop(host);
         fs::remove_file(input_path).unwrap();
