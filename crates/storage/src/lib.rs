@@ -377,7 +377,10 @@ impl Storage {
             ));
         }
         let metadata = std::fs::symlink_metadata(directory)?;
-        if !metadata.is_dir() || is_reparse_point(&metadata) {
+        if !metadata.is_dir()
+            || is_reparse_point(&metadata)
+            || path_has_reparse_ancestor(directory)
+        {
             return Err(StorageError::InvalidBackupPath(
                 "backup retention directory must be a regular non-symlink directory".into(),
             ));
