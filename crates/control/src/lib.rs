@@ -6317,6 +6317,35 @@ mod tests {
     }
 
     #[test]
+    fn durable_runtime_crash_recovery_applies_policy_and_keeps_safe_mode_latched() {
+        let storage = Storage::open_memory().unwrap();
+        let mut plane = ControlPlane::with_storage("durable-recovery", storage);
+        let value = session();
+        let session_id = value.id.clone();
+        plane.insert_session(value).unwrap();
+        plane.session_start(&session_id).unwrap();
+
+        let first = plane.recover_after_runtime_crash(100).unwrap();
+        assert_eq!(first.mode, RecoveryMode::RestoreEligible);
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([session_id.as_str()])
+        );
+        plane.recover_after_runtime_crash(101).unwrap();
+        plane.session_start(&session_id).unwrap();
+        let third = plane.recover_after_runtime_crash(102).unwrap();
+        assert_eq!(third.mode, RecoveryMode::SafeMode);
+        assert_eq!(
+            plane.status_snapshot().unwrap()["recovery"]["safeMode"],
+            true
+        );
+        assert_eq!(
+            plane.status_snapshot().unwrap()["activeSessionIds"],
+            json!([])
+        );
+    }
+
+    #[test]
     fn runtime_crash_recovery_candidates_are_sorted() {
         let mut plane = ControlPlane::default();
         let mut first = session();
