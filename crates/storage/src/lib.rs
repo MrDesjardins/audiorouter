@@ -322,7 +322,10 @@ impl Storage {
             ));
         }
         let parent_metadata = std::fs::symlink_metadata(parent)?;
-        if !parent_metadata.is_dir() || is_reparse_point(&parent_metadata) {
+        if !parent_metadata.is_dir()
+            || is_reparse_point(&parent_metadata)
+            || path_has_reparse_ancestor(destination)
+        {
             return Err(StorageError::InvalidBackupPath(
                 "backup destination parent must be a regular non-reparse directory".into(),
             ));
@@ -422,6 +425,11 @@ impl Storage {
                 "backup paths must be absolute".into(),
             ));
         }
+        if path_has_reparse_ancestor(source) || path_has_reparse_ancestor(destination) {
+            return Err(StorageError::InvalidBackupPath(
+                "backup paths must not use reparse-point ancestors".into(),
+            ));
+        }
         if !source.is_file() || is_reparse_point(&std::fs::symlink_metadata(source)?) {
             return Err(StorageError::InvalidBackupPath(
                 "backup source must be a regular non-symlink file".into(),
@@ -443,7 +451,10 @@ impl Storage {
             ));
         }
         let parent_metadata = std::fs::symlink_metadata(parent)?;
-        if !parent_metadata.is_dir() || is_reparse_point(&parent_metadata) {
+        if !parent_metadata.is_dir()
+            || is_reparse_point(&parent_metadata)
+            || path_has_reparse_ancestor(destination)
+        {
             return Err(StorageError::InvalidBackupPath(
                 "restore destination parent must be a regular non-reparse directory".into(),
             ));
@@ -1378,7 +1389,10 @@ impl Storage {
             ));
         }
         let parent_metadata = std::fs::symlink_metadata(parent)?;
-        if !parent_metadata.is_dir() || is_reparse_point(&parent_metadata) {
+        if !parent_metadata.is_dir()
+            || is_reparse_point(&parent_metadata)
+            || path_has_reparse_ancestor(destination)
+        {
             return Err(StorageError::InvalidBackupPath(
                 "bundle destination parent must be a regular non-reparse directory".into(),
             ));
