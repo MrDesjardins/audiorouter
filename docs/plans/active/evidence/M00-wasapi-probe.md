@@ -241,3 +241,10 @@ Visual Studio Community 2026, MSVC 14.51.36231, and the installed Windows
 SDK/WDK toolchain. `main.cpp` compiled successfully and generated outputs were
 cleaned. The probe was not executed; no audio stream, driver, signing mode, or
 machine configuration was touched.
+## Current-tip compile-only qualification (2026-09-06)
+
+The checked-in native probe compiled successfully with the installed Visual
+Studio Community 2026/MSVC and Windows SDK/WDK toolchain. The acceptance
+script removed its temporary executable/object outputs; the probe was not
+executed, so no audio stream, driver, signing mode, or machine configuration
+was touched.
