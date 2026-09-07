@@ -24,6 +24,32 @@ try {
     if ($output -notmatch 'origin mismatch') {
         throw "installer rejected the fixture for an unexpected reason: $output"
     }
+
+    $safeParent = Join-Path ([System.IO.Path]::GetTempPath()) ("audiorouter-sdk-safe-" + [guid]::NewGuid().ToString('N'))
+    $linkedParent = Join-Path $fixture 'redirected-parent'
+    try {
+        New-Item -ItemType Directory -Path $safeParent | Out-Null
+        New-Item -ItemType SymbolicLink -Path $linkedParent -Target $safeParent -ErrorAction Stop | Out-Null
+        $redirectedDestination = Join-Path $linkedParent 'sdk'
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $redirectedOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -Destination $redirectedDestination 2>&1 | Out-String
+        } finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
+        if ($LASTEXITCODE -eq 0 -or $redirectedOutput -notmatch 'Destination parent must not be a reparse point') {
+            throw 'installer accepted a destination below a reparse-point parent'
+        }
+    } catch {
+        if ($_.Exception.Message -notmatch 'privilege|symbolic|not permitted|cannot create') {
+            throw
+        }
+    } finally {
+        if (Test-Path -LiteralPath $safeParent) {
+            Remove-Item -LiteralPath $safeParent -Recurse -Force
+        }
+    }
     Write-Output 'M06 SDK installer provenance acceptance passed'
 } finally {
     if (Test-Path -LiteralPath $fixture) {

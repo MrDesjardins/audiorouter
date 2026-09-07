@@ -16,6 +16,20 @@ $repository = 'https://github.com/steinbergmedia/vst3sdk.git'
 $revision = '3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96'
 $destinationPath = [System.IO.Path]::GetFullPath($Destination)
 
+function Assert-NoReparseParents {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $parentPath = Split-Path -Parent $Path
+    while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
+        $parentItem = Get-Item -LiteralPath $parentPath -Force -ErrorAction Stop
+        if (($parentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Destination parent must not be a reparse point: $parentPath"
+        }
+        $nextParent = Split-Path -Parent $parentPath
+        if ($nextParent -eq $parentPath) { break }
+        $parentPath = $nextParent
+    }
+}
+
 function Invoke-Git {
     param([string[]]$Arguments)
     & git @Arguments
@@ -37,6 +51,7 @@ function Update-Submodules {
     }
 }
 
+Assert-NoReparseParents $destinationPath
 if (Test-Path -LiteralPath $destinationPath) {
     $destinationItem = Get-Item -LiteralPath $destinationPath
     if (($destinationItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {

@@ -645,3 +645,9 @@ with an unrelated origin and verifies that the installer fails with the
 explicit origin-mismatch diagnostic. Windows CI runs this check; the fixture
 is removed afterward and no SDK, plugin, driver, or audio configuration is
 changed.
+## Installer parent-chain protection (2026-09-06)
+
+The installer now audits the complete existing destination-parent chain before
+clone or checkout operations. Its disposable regression rejects both an
+unrelated Git origin and a destination below a symbolic-link parent when the
+host permits link creation; fixtures are removed afterward.
