@@ -62,6 +62,7 @@ where
         "api" => api_subcommand(&command_args)?,
         "operation" => operation_command(&command_args)?,
         "recordings" => recordings_command(&command_args)?,
+        "recorder" => recorder_command(&command_args)?,
         "privacy" => privacy_command(&command_args)?,
         "recovery" => recovery_command(&command_args)?,
         "startup" => startup_command(&command_args)?,
@@ -1128,6 +1129,61 @@ fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     }
 }
 
+fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
+    let action = args.get(1).copied().ok_or_else(|| {
+        CliError::InvalidArguments(
+            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> [--idempotency-key KEY]".into(),
+        )
+    })?;
+    if !matches!(
+        action,
+        "arm" | "start" | "pause" | "resume" | "split" | "stop"
+    ) {
+        return Err(CliError::InvalidArguments(
+            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> [--idempotency-key KEY]".into(),
+        ));
+    }
+    let session_id = args
+        .get(2)
+        .copied()
+        .filter(|value| !value.starts_with('-'))
+        .ok_or_else(|| CliError::InvalidArguments("recorder session id is required".into()))?;
+    let frame = args.get(3).copied().filter(|value| !value.starts_with('-'));
+    let frame = frame
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|_| CliError::InvalidArguments("recorder frame must be an integer".into()))
+        })
+        .transpose()?;
+    if action != "arm" && frame.is_none() {
+        return Err(CliError::InvalidArguments(
+            "recorder frame is required for this action".into(),
+        ));
+    }
+    let storage = database(args)?;
+    let mut plane = ControlPlane::with_storage("cli", storage);
+    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    let method = format!("recorders.{action}");
+    let mut params = json!({ "sessionId": session_id });
+    if let Some(frame) = frame {
+        params["frame"] = json!(frame);
+    }
+    if let Some(key) = idempotency_key {
+        params["idempotencyKey"] = json!(key);
+    }
+    plane
+        .dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method,
+            params: Some(params),
+        })
+        .result
+        .ok_or_else(|| CliError::InvalidArguments("recorder operation failed".into()))
+        .map_err(|error| CliError::Storage(format!("{error:?}")))
+}
+
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
@@ -1336,6 +1392,10 @@ fn help_value() -> Value {
     value["commands"].as_array_mut().unwrap().insert(
         15,
         json!("recordings list|get|recovery|preview|reveal|set-metadata|rename|remove-entry|recycle [<recording-id>] --database <path> [--limit N] [--cursor ID]"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        15,
+        json!("recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> [--idempotency-key KEY]"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,

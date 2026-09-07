@@ -1670,7 +1670,12 @@ impl ControlPlane {
         let persisted_sessions = storage.list_sessions(128).unwrap_or_default();
         let mut store = GraphStore::default();
         for session in persisted_sessions {
-            let _ = store.insert_session(session);
+            let history = storage.load_history(&session.id, 100).unwrap_or_default();
+            if history.is_empty() {
+                let _ = store.insert_session(session);
+            } else {
+                let _ = store.restore_history(history);
+            }
         }
         let now = unix_epoch_seconds();
         let mut virtual_bus_plans = HashMap::new();
