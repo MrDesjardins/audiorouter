@@ -67,6 +67,10 @@ pub enum EndpointBindingResolution {
         expected: EndpointDirection,
         actual: EndpointDirection,
     },
+    FormatChanged {
+        expected: EndpointInfo,
+        actual: EndpointInfo,
+    },
 }
 
 /// Resolve one exact opaque endpoint ID without opening or initializing it.
@@ -90,6 +94,30 @@ pub fn resolve_endpoint_binding(
             id: id.to_owned(),
             direction,
         },
+    }
+}
+
+/// Resolve a persisted binding while requiring its previously negotiated mix
+/// format to remain unchanged. Format changes are surfaced for deliberate
+/// renegotiation; this helper never opens a stream or silently resamples.
+pub fn resolve_endpoint_binding_with_format(
+    snapshot: &[EndpointInfo],
+    expected: &EndpointInfo,
+) -> EndpointBindingResolution {
+    match resolve_endpoint_binding(snapshot, &expected.id, expected.direction) {
+        EndpointBindingResolution::Available(actual)
+            if actual.sample_rate_hz == expected.sample_rate_hz
+                && actual.channels == expected.channels
+                && actual.bits_per_sample == expected.bits_per_sample
+                && actual.format_tag == expected.format_tag =>
+        {
+            EndpointBindingResolution::Available(actual)
+        }
+        EndpointBindingResolution::Available(actual) => EndpointBindingResolution::FormatChanged {
+            expected: expected.clone(),
+            actual,
+        },
+        other => other,
     }
 }
 
@@ -1414,6 +1442,26 @@ mod tests {
                 id: "gone".into(),
                 direction: EndpointDirection::Capture,
             }
+        );
+    }
+
+    #[test]
+    fn endpoint_binding_rejects_a_changed_mix_format() {
+        let expected = EndpointInfo {
+            id: "stable-id".into(),
+            direction: EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+        };
+        let mut actual = expected.clone();
+        actual.sample_rate_hz = 44_100;
+        assert_eq!(
+            resolve_endpoint_binding_with_format(std::slice::from_ref(&actual), &expected),
+            EndpointBindingResolution::FormatChanged { expected, actual }
         );
     }
 

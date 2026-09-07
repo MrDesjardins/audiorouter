@@ -259,3 +259,13 @@ snapshot remained unchanged and temporary native outputs were removed. This
 extends the adapter data-path evidence under a longer bounded window; it does
 not qualify cross-device clock synchronization, physical latency, driver
 integration, or production graph lifecycle.
+
+## Format-aware endpoint binding resolution (2026-09-07)
+
+The fail-closed endpoint resolver now also compares the persisted mix format
+(sample rate, channels, bits per sample, and format tag). A changed format
+returns `FormatChanged` with the expected and observed metadata instead of
+silently accepting a stale graph binding. The regression passes in the
+19-test Windows-audio suite with strict Clippy and doc-tests. This remains a
+read-only decision boundary; deliberate native renegotiation and stream
+recovery are still open.
