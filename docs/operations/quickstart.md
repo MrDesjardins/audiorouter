@@ -30,11 +30,17 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m07-headless.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m08-release.ps1
+Push-Location contracts
+npm.cmd run typecheck
+npm.cmd run check:drift
+Pop-Location
 ```
 
 The M07 check exercises the portable control, CLI, MCP, and plugin-worker
 boundaries. The M08 check creates and removes a disposable unsigned artifact
 directory. Neither check opens an audio stream or installs a driver.
+The contracts checks verify TypeScript type safety and catalog parity; they use
+only the local CLI schema and do not access audio or machine configuration.
 
 For the repository-local VST3 SDK build, validator, and offline fixture loader,
 run:
