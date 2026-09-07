@@ -1786,6 +1786,8 @@ fn mcp_tools() -> Value {
     json!([
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "plan_startup", "description": "Preview a sign-in startup policy without applying OS registration; requires session-control scope.", "inputSchema": { "type": "object", "properties": { "enabled": { "type": "boolean" } }, "required": ["enabled"], "additionalProperties": false } },
+        { "name": "apply_startup", "description": "Apply a validated sign-in startup policy when native registration is available; requires session-control scope.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_devices", "description": "List authoritative audio endpoint descriptors. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "list_plugins", "description": "List the last bounded plugin scan inventory without scanning or loading plugin code; requires plugin-scan scope.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 } }, "required": ["directory"], "additionalProperties": false } },
         { "name": "retry_plugins", "description": "Explicitly refresh a bounded plugin inventory after a prior scan failure; requires plugin-scan scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["directory", "idempotencyKey"], "additionalProperties": false } },
@@ -1846,6 +1848,8 @@ fn mcp_tool_call(
     let (method, params) = match name {
         "describe_capabilities" => ("system.describe", None),
         "get_startup" => ("startup.get", None),
+        "plan_startup" => ("startup.plan", Some(arguments)),
+        "apply_startup" => ("startup.apply", Some(arguments)),
         "list_devices" => ("devices.list", Some(arguments)),
         "list_plugins" => ("plugins.list", Some(arguments)),
         "retry_plugins" => ("plugins.retry", Some(arguments)),
@@ -3002,6 +3006,43 @@ mod tests {
         let startup_content = startup["result"]["content"][0]["text"].as_str().unwrap();
         let startup_payload: Value = serde_json::from_str(startup_content).unwrap();
         assert_eq!(startup_payload["result"]["registration"], "unavailable");
+        let operator =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let startup_plan = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &operator,
+            None,
+            &json!({
+                "id": 13,
+                "params": { "name": "plan_startup", "arguments": { "enabled": true } }
+            }),
+        );
+        assert_eq!(startup_plan["result"]["isError"], false);
+        let startup_content = startup_plan["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let startup_plan_payload: Value = serde_json::from_str(startup_content).unwrap();
+        let startup_plan_id = startup_plan_payload["result"]["planId"].as_str().unwrap();
+        let startup_apply = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &operator,
+            None,
+            &json!({
+                "id": 14,
+                "params": {
+                    "name": "apply_startup",
+                    "arguments": { "planId": startup_plan_id, "idempotencyKey": "mcp-startup-1" }
+                }
+            }),
+        );
+        assert_eq!(startup_apply["result"]["isError"], false);
+        let startup_apply_content = startup_apply["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let startup_apply_payload: Value = serde_json::from_str(startup_apply_content).unwrap();
+        assert_eq!(startup_apply_payload["result"]["state"], "unavailable");
         let recovery = mcp_tool_call(
             &mut plane,
             "mcp-test",
@@ -3043,7 +3084,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 38);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 40);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()

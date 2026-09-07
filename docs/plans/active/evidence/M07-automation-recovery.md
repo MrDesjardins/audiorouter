@@ -327,6 +327,11 @@ unavailable until native registration exists; 24 CLI/MCP process tests,
 formatting, strict Clippy, and documentation validation pass without changing
 startup or machine configuration.
 
+Focused MCP tools `plan_startup` and `apply_startup` now expose the same
+session-control-scoped startup plan/apply workflow as the backend and CLI. The
+regression verifies the unavailable result and keeps the focused catalog at 40
+tools; no OS startup registration or machine configuration is changed.
+
 ## 2026-09-06 — Durable recording checkpoints
 
 SQLite now stores versioned `RecorderController` checkpoints separately from
