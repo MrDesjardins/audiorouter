@@ -180,7 +180,9 @@ impl AudioFailureKind {
         match self {
             Self::InvalidArgument => "correct the endpoint format or stream request",
             Self::AccessDenied => "grant the required Windows audio permission",
-            Self::DeviceInUse => "close the competing exclusive stream and retry",
+            Self::DeviceInUse => {
+                "identify the owning stream, select another endpoint, or close it and retry"
+            }
             Self::ExclusiveModeOnly => "use a compatible shared-mode endpoint or exclusive stream",
             Self::DeviceInvalidated => "refresh endpoint inventory and retry the verified endpoint",
             Self::UnsupportedFormat => "select an endpoint with a supported shared format",
@@ -1341,7 +1343,7 @@ mod tests {
         assert!(busy.is_retryable());
         assert_eq!(
             busy.remediation(),
-            "close the competing exclusive stream and retry"
+            "identify the owning stream, select another endpoint, or close it and retry"
         );
         assert_eq!(
             AudioError::InvalidFrameSize.kind(),
@@ -1388,7 +1390,7 @@ mod tests {
         assert!(!AudioFailureKind::UnsupportedFormat.is_retryable());
         assert_eq!(
             AudioFailureKind::DeviceInUse.remediation(),
-            "close the competing exclusive stream and retry"
+            "identify the owning stream, select another endpoint, or close it and retry"
         );
         assert_eq!(
             AudioError::InvalidFrameSize.remediation(),
