@@ -257,13 +257,14 @@ structure is read with an explicit unaligned copy. The compile-only check
 passes; the probe remains unexecuted, so this adds diagnostic capability
 without claiming live audio evidence.
 
-## Shared-mode buffer correction (2026-09-07)
+## Shared-mode buffer default (2026-09-07)
 
-The probe previously requested a one-second shared-mode buffer for capture
-endpoints. That caller-sized duration was removed: shared render and capture
-initialization now pass zero so the audio engine selects the buffer period.
-This is a source-level correction for a plausible `E_INVALIDARG` cause; the
-probe was compile-checked but not executed, so no new live-audio claim is made.
+The probe now passes zero for the shared-mode buffer duration so the engine
+selects the period rather than imposing a one-second capture request. This is
+the required value for shared event-driven streams and the minimum-latency
+choice for other shared streams, but a nonzero sufficiently large shared-mode
+buffer is also valid. The change removes one diagnostic variable; it does not
+confirm the cause of `E_INVALIDARG`. The probe remains compile-checked only.
 
 ## Current-tip compile-only qualification (2026-09-07)
 

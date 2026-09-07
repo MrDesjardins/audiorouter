@@ -221,11 +221,11 @@ unsafe fn enumerate() -> Result<()> {
         } else {
             0
         };
-        // Shared-mode streams use the engine-selected period. Supplying a
-        // caller-sized duration here is needlessly restrictive for capture
-        // endpoints and can be rejected as E_INVALIDARG before any stream is
-        // started. Keep both render and capture on the documented shared-mode
-        // default; the native client reports the negotiated buffer below.
+        // Use the engine-selected shared-mode period so this probe does not
+        // impose an additional buffer-size choice. A zero duration is the
+        // required value for shared event-driven streams and the minimum-
+        // latency choice for other shared streams; this does not by itself
+        // establish the cause of any E_INVALIDARG result.
         let buffer_duration = 0;
         let stream_result = stream_client.Initialize(
             AUDCLNT_SHAREMODE_SHARED,
