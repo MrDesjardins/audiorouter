@@ -571,6 +571,34 @@ impl AudioBlock {
         Ok(())
     }
 
+    /// Copy interleaved `f32` samples into this planar block without
+    /// allocating. The source must contain exactly one complete block.
+    pub fn copy_from_interleaved(&mut self, source: &[f32]) -> Result<(), BlockError> {
+        if source.len() != self.channels * self.frames {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for (frame, samples) in source.chunks_exact(self.channels).enumerate() {
+            for (channel, sample) in samples.iter().enumerate() {
+                self.channel_mut(channel).unwrap()[frame] = *sample;
+            }
+        }
+        Ok(())
+    }
+
+    /// Copy this planar block into an interleaved `f32` destination without
+    /// allocating. The destination must contain exactly one complete block.
+    pub fn copy_to_interleaved(&self, destination: &mut [f32]) -> Result<(), BlockError> {
+        if destination.len() != self.channels * self.frames {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for (frame, samples) in destination.chunks_exact_mut(self.channels).enumerate() {
+            for (channel, sample) in samples.iter_mut().enumerate() {
+                *sample = self.channel(channel).unwrap()[frame];
+            }
+        }
+        Ok(())
+    }
+
     /// Apply a constant gain without allocating. Non-finite gain is treated as
     /// zero so invalid control input cannot inject NaN/Inf into the graph.
     pub fn apply_gain(&mut self, gain: f32) {
@@ -1878,6 +1906,28 @@ mod tests {
         destination.apply_gain(0.5);
         assert_eq!(destination.channel(0).unwrap(), &[1.0; 4]);
         assert_eq!(destination.channel(1).unwrap(), &[-0.5; 4]);
+    }
+
+    #[test]
+    fn block_bridges_interleaved_f32_without_shape_guessing() {
+        let mut block = AudioBlock::new(2, 3).unwrap();
+        block
+            .copy_from_interleaved(&[1.0, 10.0, 2.0, 20.0, 3.0, 30.0])
+            .unwrap();
+        assert_eq!(block.channel(0).unwrap(), &[1.0, 2.0, 3.0]);
+        assert_eq!(block.channel(1).unwrap(), &[10.0, 20.0, 30.0]);
+
+        let mut interleaved = [0.0; 6];
+        block.copy_to_interleaved(&mut interleaved).unwrap();
+        assert_eq!(interleaved, [1.0, 10.0, 2.0, 20.0, 3.0, 30.0]);
+        assert_eq!(
+            block.copy_from_interleaved(&[1.0, 2.0]),
+            Err(BlockError::ShapeMismatch)
+        );
+        assert_eq!(
+            block.copy_to_interleaved(&mut [0.0; 2]),
+            Err(BlockError::ShapeMismatch)
+        );
     }
 
     #[test]

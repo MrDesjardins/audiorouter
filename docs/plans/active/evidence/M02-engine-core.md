@@ -138,3 +138,9 @@ verifies generation publication, processed samples, and pooled ownership; the
 engine suite passes 42 tests with strict Clippy clean. This is the portable
 ownership/scheduling boundary only: native WASAPI activation, endpoint routing,
 hardware timing, and driver behavior remain open.
+
+The engine also exposes exact-shape, allocation-free conversion between its
+planar `f32` blocks and interleaved `f32` buffers. Round-trip and mismatch
+regressions pass, providing the format bridge required before a future WASAPI
+adapter can feed the scheduler; endpoint sample-format negotiation and live
+stream integration remain open.
