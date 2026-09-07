@@ -129,3 +129,12 @@ Without this guard, disconnected processing nodes could be interpreted as one
 serial block pipeline. A regression covers the typed `UnsupportedTopology`
 result; the engine suite passes 41 tests. This is portable graph-safety
 evidence only, and native scheduling/routing remain open.
+
+`RealtimeScheduler` now owns fixed-shape input and output rings around the
+published `RuntimeProcessor`. Its acquire/submit and receive/recycle operations
+are nonblocking, and `process_once` delegates one bounded graph step without
+opening an audio endpoint or allocating at the processing boundary. A regression
+verifies generation publication, processed samples, and pooled ownership; the
+engine suite passes 42 tests with strict Clippy clean. This is the portable
+ownership/scheduling boundary only: native WASAPI activation, endpoint routing,
+hardware timing, and driver behavior remain open.
