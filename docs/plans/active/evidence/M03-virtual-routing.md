@@ -231,6 +231,14 @@ that observes deactivation or replacement is recycled and counted as dropped.
 The 46-test engine suite and strict Clippy pass. This closes a portable
 publication-safety boundary; native driver synchronization remains open.
 
+## Atomic ownership generation advancement (2026-09-07)
+
+Bridge activation now advances the ownership generation with an atomic
+compare-exchange. A stale activation request is rejected without clearing the
+current active generation, while accepted replacements still clear queued
+blocks before becoming active. The 46-test engine suite and strict Clippy
+pass. Native driver ownership synchronization remains open.
+
 ## Capture shape-mismatch safety (2026-09-07)
 
 The bridge regression now submits a valid block, reads it into an incompatible

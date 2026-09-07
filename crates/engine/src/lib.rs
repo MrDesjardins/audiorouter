@@ -321,13 +321,26 @@ impl VirtualBusBridge {
     /// Start a new ownership generation. Changing generations first discards
     /// all queued data so a replacement owner cannot receive stale frames.
     pub fn activate(&self, generation: u64) -> Result<(), VirtualBusBridgeError> {
-        let previous = self.generation.load(Ordering::Acquire);
-        if generation == 0 || generation <= previous {
+        if generation == 0 {
             return Err(VirtualBusBridgeError::InvalidGeneration);
+        }
+        let mut previous = self.generation.load(Ordering::Acquire);
+        loop {
+            if generation <= previous {
+                return Err(VirtualBusBridgeError::InvalidGeneration);
+            }
+            match self.generation.compare_exchange_weak(
+                previous,
+                generation,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => break,
+                Err(observed) => previous = observed,
+            }
         }
         self.active.store(false, Ordering::Release);
         self.drain();
-        self.generation.store(generation, Ordering::Release);
         self.active.store(true, Ordering::Release);
         Ok(())
     }
@@ -2452,6 +2465,11 @@ mod tests {
             Err(BlockError::ShapeMismatch)
         );
         assert!(bridge.try_receive_capture().is_none());
+        assert_eq!(
+            bridge.activate(1),
+            Err(VirtualBusBridgeError::InvalidGeneration)
+        );
+        assert!(bridge.is_active());
 
         let stale = AudioBlock::new(1, 2).unwrap();
         assert!(bridge.submit_render(0, stale).is_err());
