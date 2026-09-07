@@ -190,6 +190,14 @@ Clippy. Native scheduler reconfiguration remains open.
 closes an oversized/overflowing preparation input; native latency measurement
 remains open.
 
+## Resampler finite-source safety (2026-09-07)
+
+`AudioBlock::resample_linear_from` now treats non-finite source samples as
+silence before interpolation, preventing invalid values from propagating
+through the format bridge. Regression coverage verifies finite zero output;
+the engine suite passes 55 tests with strict Clippy. Native stream conversion
+remains open.
+
 The drift controller now exposes an explicit reset for stream/reconnect
 boundaries, clearing learned integral correction while preserving the nominal
 rate ratio and configured bounds. A regression verifies that a new stream does

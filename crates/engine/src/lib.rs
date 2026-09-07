@@ -988,7 +988,17 @@ impl AudioBlock {
                 let lower = lower.min(source.frames - 1);
                 let upper = (lower + 1).min(source.frames - 1);
                 let fraction = (position - lower as f64) as f32;
-                *sample = input[lower] + (input[upper] - input[lower]) * fraction;
+                let lower_sample = if input[lower].is_finite() {
+                    input[lower]
+                } else {
+                    0.0
+                };
+                let upper_sample = if input[upper].is_finite() {
+                    input[upper]
+                } else {
+                    0.0
+                };
+                *sample = lower_sample + (upper_sample - lower_sample) * fraction;
             }
         }
         Ok(())
@@ -2901,6 +2911,23 @@ mod tests {
             output.resample_linear_from(&source, 0, 48_000),
             Err(BlockError::InvalidSampleRate)
         ));
+    }
+
+    #[test]
+    fn linear_resampler_repairs_non_finite_source_samples() {
+        let mut source = AudioBlock::new(1, 2).unwrap();
+        source
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[f32::NAN, f32::INFINITY]);
+        let mut output = AudioBlock::new(1, 2).unwrap();
+
+        output
+            .resample_linear_from(&source, 48_000, 48_000)
+            .unwrap();
+
+        assert_eq!(output.channel(0).unwrap(), &[0.0, 0.0]);
+        assert!(output.all_finite());
     }
 
     #[test]
