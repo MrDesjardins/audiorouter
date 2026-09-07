@@ -314,6 +314,19 @@ pub enum ScanError {
     Io(String),
 }
 
+impl ScanError {
+    /// Stable machine-readable diagnostic for a directory scan failure.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidRoot => "invalidRoot",
+            Self::TooManyCandidates => "tooManyCandidates",
+            Self::Cancelled => "cancelled",
+            Self::DeadlineExceeded => "deadlineExceeded",
+            Self::Io(_) => "io",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ScanControl {
     deadline: Instant,

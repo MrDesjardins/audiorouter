@@ -1687,6 +1687,7 @@ fn session_item_schema() -> Value {
 #[derive(Debug, Eq, PartialEq)]
 pub enum ControlError {
     InvalidRequest(String),
+    PluginScan(audiorouter_plugin_host::ScanError),
     IdempotencyConflict,
     Store(audiorouter_domain::StoreError),
     Json(String),
@@ -4675,9 +4676,8 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
-        let entries = audiorouter_plugin_host::scan_directory(root).map_err(|error| {
-            ControlError::InvalidRequest(format!("plugin scan failed: {error:?}"))
-        })?;
+        let entries =
+            audiorouter_plugin_host::scan_directory(root).map_err(ControlError::PluginScan)?;
         let result = json!({
             "directory": directory,
             "entries": entries.into_iter().map(|entry| {
@@ -5389,6 +5389,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::Json(_) => "internalError",
         ControlError::IdempotencyConflict => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
+        ControlError::PluginScan(error) => error.code(),
     };
     let message = format!("{error:?}");
     let mut response = JsonRpcResponse::failure(id, -32000, message);
@@ -5420,6 +5421,14 @@ fn application_error_data(code: &str) -> Value {
         "permissionDenied" => (
             false,
             "request the required permission scope for the target operation",
+        ),
+        "invalidRoot" | "tooManyCandidates" | "cancelled" => (
+            false,
+            "choose a valid configured directory or explicitly retry the scan",
+        ),
+        "deadlineExceeded" | "io" => (
+            true,
+            "retry the bounded scan after checking directory availability",
         ),
         "invalidRequest" | "invalidGraph" => {
             (false, "correct the request using the discovered schema")
@@ -6080,6 +6089,25 @@ mod tests {
         assert!(inspected_result["identity"].is_null());
         assert_eq!(inspected_result["errorCode"], "notPe");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_scan_directory_failures_have_stable_application_codes() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-control-plugin-scan-missing-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let response = ControlPlane::default().dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "plugins.scan".into(),
+                params: Some(json!({ "directory": root.to_string_lossy() })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::PluginScan]),
+        );
+        assert_eq!(response.error.unwrap().data.unwrap()["code"], "invalidRoot");
     }
 
     #[test]

@@ -56,6 +56,12 @@ emitted by inspection plus `null` for a successful identity result. This keeps
 clients from accepting or inventing undocumented diagnostic strings; the Rust
 schema and TypeScript contract remain aligned.
 
+Directory-level scan failures now use typed application errors instead of the
+generic `invalidRequest`: `invalidRoot`, `tooManyCandidates`, `cancelled`,
+`deadlineExceeded`, and `io` are surfaced with stable remediation/retry
+metadata. The new control regression and existing plugin-host/worker suites
+pass with strict Clippy; no plugin code is loaded or executed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06
