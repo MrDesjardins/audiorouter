@@ -557,6 +557,7 @@ fn method_output_schema(name: &str) -> Value {
                     }
                 },
                 "nodeTypes": { "type": "array", "items": { "type": "object" } },
+                "processors": { "type": "array", "items": { "type": "object" } },
                 "presets": {
                     "type": "object",
                     "properties": {
@@ -621,7 +622,7 @@ fn method_output_schema(name: &str) -> Value {
                     "additionalProperties": false
                 }
             },
-            "required": ["protocolVersion", "schemaVersion", "build", "methods", "nodeTypes", "presets", "limits", "events"],
+            "required": ["protocolVersion", "schemaVersion", "build", "methods", "nodeTypes", "processors", "presets", "limits", "events"],
             "additionalProperties": false
         }),
         "system.handshake" => json!({
@@ -2340,6 +2341,7 @@ impl ControlPlane {
             "build": self.build,
             "methods": methods,
             "nodeTypes": nodes,
+            "processors": Self::processor_catalog(),
             "presets": { "voiceChains": voice_chains, "eq": eq },
             "limits": {
                 "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION,
@@ -2392,6 +2394,68 @@ impl ControlPlane {
             }]),
             _ => json!([]),
         }
+    }
+
+    fn processor_catalog() -> Value {
+        let unavailable = json!({
+            "status": "unavailable",
+            "reason": "requires M04 graph integration"
+        });
+        json!([
+            {
+                "id": "graphicEq", "version": 1, "category": "equalizer",
+                "availability": unavailable, "latencySamples": 0,
+                "parameters": [{ "name": "bandGainDb", "type": "number", "unit": "dB", "minimum": -18.0, "maximum": 18.0, "default": 0.0 }]
+            },
+            {
+                "id": "parametricEq", "version": 1, "category": "equalizer",
+                "availability": unavailable, "latencySamples": 0,
+                "parameters": [
+                    { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0 },
+                    { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0 },
+                    { "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }
+                ]
+            },
+            {
+                "id": "gate", "version": 1, "category": "dynamics",
+                "availability": unavailable, "latencySamples": 0,
+                "parameters": [
+                    { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -45.0 },
+                    { "name": "rangeDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 60.0 },
+                    { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 100.0, "default": 5.0 },
+                    { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 }
+                ]
+            },
+            {
+                "id": "compressor", "version": 1, "category": "dynamics",
+                "availability": unavailable, "latencySamples": 0,
+                "parameters": [
+                    { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -60.0, "maximum": 0.0, "default": -18.0 },
+                    { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 3.0 },
+                    { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 200.0, "default": 10.0 },
+                    { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 },
+                    { "name": "makeupDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 24.0, "default": 0.0 }
+                ]
+            },
+            {
+                "id": "limiter", "version": 1, "category": "dynamics",
+                "availability": unavailable, "latencySamples": 0,
+                "parameters": [{ "name": "ceilingDb", "type": "number", "unit": "dBFS", "minimum": -12.0, "maximum": 0.0, "default": -1.0 }]
+            },
+            {
+                "id": "delay", "version": 1, "category": "time",
+                "availability": unavailable, "latencySamples": 0,
+                "parameters": [{ "name": "delayMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 1000.0, "default": 0.0 }]
+            },
+            {
+                "id": "pitch", "version": 1, "category": "pitch",
+                "availability": unavailable, "latencySamples": 1024,
+                "parameters": [
+                    { "name": "semitones", "type": "number", "unit": "semitones", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
+                    { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
+                ]
+            }
+        ])
     }
 
     fn recovery_status(&self) -> Result<(usize, bool), ControlError> {
@@ -5604,6 +5668,15 @@ mod tests {
             .iter()
             .any(|node| node["type"] == "physical-input@1"
                 && node["availability"]["status"] == "unavailable"));
+        assert_eq!(description["processors"].as_array().unwrap().len(), 7);
+        let pitch = description["processors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|processor| processor["id"] == "pitch")
+            .unwrap();
+        assert_eq!(pitch["latencySamples"], 1024);
+        assert_eq!(pitch["availability"]["status"], "unavailable");
         let gain = description["nodeTypes"]
             .as_array()
             .unwrap()

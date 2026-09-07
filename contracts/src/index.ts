@@ -286,6 +286,21 @@ export interface DiscoveryDocument {
       default?: boolean | number | string;
     }>;
   }>;
+  processors: Array<{
+    id: string;
+    version: number;
+    category: string;
+    availability: { status: "available" | "unavailable"; reason?: string };
+    latencySamples: number;
+    parameters: Array<{
+      name: string;
+      type: string;
+      unit?: string;
+      minimum?: number;
+      maximum?: number;
+      default?: boolean | number | string;
+    }>;
+  }>;
   presets: {
     voiceChains: Array<{
       id: string;

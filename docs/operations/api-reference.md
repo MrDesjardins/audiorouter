@@ -103,6 +103,12 @@ The current node catalog is available through `nodes.describe` and contains:
 | `mute@1` | available | `muted`, boolean |
 | `meter@1` | available | Bounded per-node telemetry boundary |
 
+The separately reported `processors` catalog in `system.describe` documents the
+implemented DSP primitives and their typed parameter ranges. It currently lists
+`graphicEq`, `parametricEq`, `gate`, `compressor`, `limiter`, `delay`, and
+`pitch`; each remains explicitly unavailable until graph/runtime integration is
+completed. The pitch entry reports its 1,024-sample algorithmic latency.
+
 The built-in preset catalog is exposed by `presets.list`. It currently includes
 the voice-chain presets `voiceNeutral` and `voiceGateAndCompression`, plus EQ
 starting points `voiceNeutral`, `hum50Hz`, and `hum60Hz`. Preset discovery is
