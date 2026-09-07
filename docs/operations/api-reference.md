@@ -121,6 +121,9 @@ time stage, `graphicEq` is available as a fixed ten-band graph EQ, and `pitch`
 is available as a fixed-quantum streaming graph stage. Pitch reset/reconnect
 semantics and measured realtime quality remain qualification items.
 The pitch entry reports its 1,024-sample algorithmic latency.
+Route inspection paths also report accumulated `latencySamples`; this includes
+the declared 1,024-sample pitch warmup and configured built-in delay at the
+48 kHz portable graph baseline.
 The UI displays these parameter types and ranges as read-only metadata; it does
 not imply that an unavailable processor can be activated.
 

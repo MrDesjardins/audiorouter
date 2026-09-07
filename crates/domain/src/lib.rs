@@ -1323,6 +1323,7 @@ pub struct RoutePath {
     pub nodes: Vec<EntityId>,
     pub edges: Vec<EntityId>,
     pub channel_maps: Vec<Vec<f32>>,
+    pub latency_samples: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -1488,6 +1489,11 @@ pub fn inspect_routes(
         }]);
     }
     let mut incoming = HashMap::<EntityId, Vec<&Edge>>::new();
+    let nodes_by_id = session
+        .nodes
+        .iter()
+        .map(|node| (node.id.clone(), node))
+        .collect::<HashMap<_, _>>();
     for edge in session.edges.iter().filter(|edge| edge.enabled) {
         incoming
             .entry(edge.destination_node.clone())
@@ -1501,12 +1507,29 @@ pub fn inspect_routes(
         edges: &mut Vec<EntityId>,
         channel_maps: &mut Vec<Vec<f32>>,
         paths: &mut Vec<RoutePath>,
+        nodes_by_id: &HashMap<EntityId, &Node>,
     ) {
         let Some(parents) = incoming.get(node) else {
+            let path_nodes = nodes.iter().rev().cloned().collect::<Vec<_>>();
+            let latency_samples = path_nodes
+                .iter()
+                .filter_map(|node_id| nodes_by_id.get(node_id))
+                .map(|node| match node.kind {
+                    NodeKind::Pitch => 1_024,
+                    NodeKind::Delay => node
+                        .parameters
+                        .get("delayMs")
+                        .and_then(|value| value.as_f64())
+                        .filter(|delay| delay.is_finite() && *delay >= 0.0)
+                        .map_or(0, |delay| (delay * 48.0).round() as u32),
+                    _ => 0,
+                })
+                .sum();
             paths.push(RoutePath {
-                nodes: nodes.iter().rev().cloned().collect(),
+                nodes: path_nodes,
                 edges: edges.iter().rev().cloned().collect(),
                 channel_maps: channel_maps.iter().rev().cloned().collect(),
+                latency_samples,
             });
             return;
         };
@@ -1521,6 +1544,7 @@ pub fn inspect_routes(
                 edges,
                 channel_maps,
                 paths,
+                nodes_by_id,
             );
             nodes.pop();
             edges.pop();
@@ -1538,6 +1562,7 @@ pub fn inspect_routes(
         &mut edges,
         &mut channel_maps,
         &mut paths,
+        &nodes_by_id,
     );
     Ok(RouteInspection {
         destination_node: destination_node.clone(),
@@ -2201,6 +2226,74 @@ mod tests {
         );
         assert_eq!(inspection.paths[0].edges, vec![EntityId::new("in-out")]);
         assert_eq!(inspection.paths[0].channel_maps, vec![vec![1.0]]);
+        assert_eq!(inspection.paths[0].latency_samples, 0);
+    }
+
+    #[test]
+    fn route_inspection_accumulates_declared_pitch_and_delay_latency() {
+        let mut pitch = node("pitch", NodeKind::Pitch, PortDirection::Input);
+        pitch
+            .parameters
+            .insert("semitones".into(), serde_json::json!(7.0));
+        pitch
+            .parameters
+            .insert("cents".into(), serde_json::json!(0.0));
+        pitch.ports = vec![
+            Port {
+                name: "main".into(),
+                direction: PortDirection::Input,
+                channels: 1,
+            },
+            Port {
+                name: "main-out".into(),
+                direction: PortDirection::Output,
+                channels: 1,
+            },
+        ];
+        let mut delay = node("delay", NodeKind::Delay, PortDirection::Input);
+        delay
+            .parameters
+            .insert("delayMs".into(), serde_json::json!(10.0));
+        delay.ports = pitch.ports.clone();
+        let graph = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                pitch,
+                delay,
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![
+                Edge {
+                    id: EntityId::new("in-pitch"),
+                    source_node: EntityId::new("in"),
+                    source_port: "main".into(),
+                    destination_node: EntityId::new("pitch"),
+                    destination_port: "main".into(),
+                    enabled: true,
+                    matrix: vec![1.0],
+                },
+                Edge {
+                    id: EntityId::new("pitch-delay"),
+                    source_node: EntityId::new("pitch"),
+                    source_port: "main-out".into(),
+                    destination_node: EntityId::new("delay"),
+                    destination_port: "main".into(),
+                    enabled: true,
+                    matrix: vec![1.0],
+                },
+                Edge {
+                    id: EntityId::new("delay-out"),
+                    source_node: EntityId::new("delay"),
+                    source_port: "main-out".into(),
+                    destination_node: EntityId::new("out"),
+                    destination_port: "main".into(),
+                    enabled: true,
+                    matrix: vec![1.0],
+                },
+            ],
+        );
+        let inspection = inspect_routes(&graph, &EntityId::new("out")).unwrap();
+        assert_eq!(inspection.paths[0].latency_samples, 1_504);
     }
 
     #[test]

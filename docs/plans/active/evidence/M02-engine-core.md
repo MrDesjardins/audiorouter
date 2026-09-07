@@ -159,6 +159,11 @@ filters replaced-generation outputs before exposing them. Regression coverage
 verifies both behaviors; the engine suite passes 50 tests with strict Clippy.
 Native endpoint scheduling and live routing remain open.
 
+Portable route inspection now includes accumulated path latency. It sums the
+declared 1,024-sample pitch boundary and configured delay (using the 48 kHz
+graph baseline) into each returned path, while native device/plugin latency
+measurement remains unclaimed.
+
 ## Sustained dual-clock drift simulation (2026-09-07)
 
 The drift controller now includes bounded integral correction in addition to

@@ -70,6 +70,7 @@ export interface RoutePath {
   nodes: EntityId[];
   edges: EntityId[];
   channelMaps: number[][];
+  latencySamples: number;
 }
 
 export interface RouteInspection {
