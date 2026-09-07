@@ -255,6 +255,24 @@ mute, privacy, drivers, signing, or startup configuration.
 This qualifies the native reference path and rules out device ownership as a
 general explanation for the previous Rust `E_INVALIDARG`. It does not yet
 qualify the Rust adapter's live-open boundary or production realtime latency.
+
+## Rust adapter live qualification (2026-09-07)
+
+The repository Rust WASAPI probe was then run against the same host. It
+enumerated 34 active endpoints, including 13 capture endpoints. Every capture
+endpoint reported success for the original, extensible, and float capture
+initialization variants (`capture_original_hresult=0x0`,
+`capture_extensible_hresult=0x0`, and `capture_float_hresult=0x0`). The
+compatibility path therefore succeeds in the actual Rust process; the earlier
+`E_INVALIDARG` was resolved by the checked-in event-first, polling-fallback
+implementation. The fallback remains narrowly gated to the exact
+`E_INVALIDARG` result and does not mask device-in-use or unrelated failures.
+
+The Rust probe's separate render sweep had one endpoint classified as
+`AUDCLNT_E_EXCLUSIVE_MODE_ONLY`; this is a render capability result and not a
+capture failure. A final read-only post-test query found ten present media
+devices and no device outside `OK`. No defaults, volume, mute, privacy,
+drivers, signing, or startup configuration were changed.
 ## 2026-09-06 — Current-tip compile qualification
 
 The compile-only native probe acceptance was rerun at the current tip with
