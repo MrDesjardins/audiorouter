@@ -429,3 +429,9 @@ volume, mute, privacy, driver, signing, or startup setting was changed.
 
 This is a digital virtual-cable data-path qualification, not an acoustic
 speaker-to-microphone latency measurement. Physical latency remains open.
+
+The run is reproducible with the opt-in
+`tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio` wrapper. The wrapper
+resolves both virtual endpoints by friendly name instead of hard-coding their
+enumeration positions, validates the complete bounded lifecycle, requires
+nonzero captured payload, and compares the media identity/state snapshot.
