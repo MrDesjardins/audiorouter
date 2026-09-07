@@ -171,11 +171,11 @@ before publication and processed per channel through the existing allocation-fre
 DSP implementation. This is portable graph evidence only; native callback timing
 and hardware response measurements remain open.
 
-The pitch DSP also has a prepared 128-frame streaming boundary with state
-allocated at construction and caller-owned buffers. Its finite-safe bypass and
-shape checks are covered, but it is not yet exposed as a graph node: reset and
-reconnect semantics plus measured realtime quality/latency evidence are still
-required.
+The pitch DSP now has a prepared 128-frame streaming boundary with state
+allocated at construction and caller-owned buffers, and the portable graph
+exposes it as `pitch@1` using one mono state per active channel. The graph fails
+closed when a block is not the declared quantum. Reset/reconnect semantics and
+measured realtime quality/latency evidence are still required.
 
 ## 2026-09-07 — Compressor graph integration
 

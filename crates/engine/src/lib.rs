@@ -1259,6 +1259,10 @@ pub enum ProcessingStage {
         left: Box<std::sync::Mutex<audiorouter_dsp::GraphicEq>>,
         right: Option<Box<std::sync::Mutex<audiorouter_dsp::GraphicEq>>>,
     },
+    Pitch {
+        left: Box<std::sync::Mutex<audiorouter_dsp::StreamingPitchShifter>>,
+        right: Option<Box<std::sync::Mutex<audiorouter_dsp::StreamingPitchShifter>>>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1581,6 +1585,7 @@ pub fn compile_session(
                         | NodeKind::Limiter
                         | NodeKind::Delay
                         | NodeKind::GraphicEq
+                        | NodeKind::Pitch
                 ))
                 || (destination.bypass
                     && !matches!(
@@ -1594,6 +1599,7 @@ pub fn compile_session(
                             | NodeKind::Limiter
                             | NodeKind::Delay
                             | NodeKind::GraphicEq
+                            | NodeKind::Pitch
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -1948,6 +1954,45 @@ pub fn compile_session(
                     None
                 };
                 stages.push(ProcessingStage::GraphicEq {
+                    left: Box::new(std::sync::Mutex::new(left)),
+                    right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
+                });
+            }
+            NodeKind::Pitch => {
+                let semitones = node
+                    .parameters
+                    .get("semitones")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(0.0) as f32;
+                let cents = node
+                    .parameters
+                    .get("cents")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(0.0) as f32;
+                let input_channels = node
+                    .ports
+                    .iter()
+                    .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                    .map(|port| usize::from(port.channels))
+                    .unwrap_or(1);
+                let params = audiorouter_dsp::PitchShiftParams {
+                    semitones,
+                    cents,
+                    sample_rate: 48_000.0,
+                    channels: 1,
+                    bypass: false,
+                };
+                let left = audiorouter_dsp::StreamingPitchShifter::new(params)
+                    .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                let right = if input_channels == 2 {
+                    Some(
+                        audiorouter_dsp::StreamingPitchShifter::new(params)
+                            .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                    )
+                } else {
+                    None
+                };
+                stages.push(ProcessingStage::Pitch {
                     left: Box::new(std::sync::Mutex::new(left)),
                     right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
                 });
@@ -2570,6 +2615,43 @@ impl RuntimeGraph {
                             } else {
                                 block.clear();
                             }
+                        }
+                    }
+                }
+                ProcessingStage::Pitch { left, right } => {
+                    if block.frames() != audiorouter_dsp::StreamingPitchShifter::BLOCK_FRAMES {
+                        block.clear();
+                        continue;
+                    }
+                    let process_channel =
+                        |processor: &std::sync::Mutex<audiorouter_dsp::StreamingPitchShifter>,
+                         samples: &mut [f32]| {
+                            let mut output =
+                                [0.0_f32; audiorouter_dsp::StreamingPitchShifter::BLOCK_FRAMES];
+                            let Ok(mut processor) = processor.try_lock() else {
+                                return false;
+                            };
+                            if processor.process_block(samples, &mut output).is_err() {
+                                return false;
+                            }
+                            samples.copy_from_slice(&output);
+                            true
+                        };
+                    let left_ok = block
+                        .channel_mut(0)
+                        .is_some_and(|samples| process_channel(left, samples));
+                    if !left_ok {
+                        block.clear();
+                        continue;
+                    }
+                    if block.channels() == 2 {
+                        let right_ok = right.as_ref().is_some_and(|processor| {
+                            block
+                                .channel_mut(1)
+                                .is_some_and(|samples| process_channel(processor, samples))
+                        });
+                        if !right_ok {
+                            block.clear();
                         }
                     }
                 }
@@ -3563,6 +3645,33 @@ mod tests {
         graph.process(&mut block);
         assert!(block.all_finite());
         assert_ne!(block.channel(0).unwrap(), before.as_slice());
+    }
+
+    #[test]
+    fn prepared_pitch_stage_requires_the_declared_graph_quantum() {
+        let stage = ProcessingStage::Pitch {
+            left: Box::new(std::sync::Mutex::new(
+                audiorouter_dsp::StreamingPitchShifter::new(audiorouter_dsp::PitchShiftParams {
+                    semitones: 7.0,
+                    cents: 0.0,
+                    sample_rate: 48_000.0,
+                    channels: 1,
+                    bypass: false,
+                })
+                .unwrap(),
+            )),
+            right: None,
+        };
+        let graph = RuntimeGraph::prepare(RuntimeGeneration::new(13), vec![stage]);
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        graph.process(&mut block);
+        assert!(block.all_finite());
+
+        let mut wrong_shape = AudioBlock::new(1, 64).unwrap();
+        wrong_shape.channel_mut(0).unwrap().fill(0.25);
+        graph.process(&mut wrong_shape);
+        assert_eq!(wrong_shape.channel(0).unwrap(), &[0.0; 64]);
     }
 
     #[test]

@@ -20,7 +20,8 @@ export type NodeKind =
   | "gate"
   | "limiter"
   | "delay"
-  | "graphicEq";
+  | "graphicEq"
+  | "pitch";
 
 export type PortDirection = "input" | "output";
 

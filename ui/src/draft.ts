@@ -10,7 +10,7 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq">;
+export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
 
 const libraryNodeDefinitions: Record<LibraryNodeKind, {
   name: string;
@@ -89,6 +89,14 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   graphicEq: {
     name: "Graphic EQ",
     parameters: { band0Db: 0, band1Db: 0, band2Db: 0, band3Db: 0, band4Db: 0, band5Db: 0, band6Db: 0, band7Db: 0, band8Db: 0, band9Db: 0 },
+    ports: [
+      { name: "in", direction: "input", channels: 1 },
+      { name: "out", direction: "output", channels: 1 },
+    ],
+  },
+  pitch: {
+    name: "Pitch shift",
+    parameters: { semitones: 0, cents: 0 },
     ports: [
       { name: "in", direction: "input", channels: 1 },
       { name: "out", direction: "output", channels: 1 },

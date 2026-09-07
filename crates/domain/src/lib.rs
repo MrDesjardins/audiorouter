@@ -53,10 +53,11 @@ pub enum NodeKind {
     Limiter,
     Delay,
     GraphicEq,
+    Pitch,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 17] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -73,6 +74,7 @@ impl NodeKind {
         Self::Limiter,
         Self::Delay,
         Self::GraphicEq,
+        Self::Pitch,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -93,6 +95,7 @@ impl NodeKind {
             Self::Limiter => "limiter",
             Self::Delay => "delay",
             Self::GraphicEq => "graphic-eq",
+            Self::Pitch => "pitch",
         }
     }
 }
@@ -111,7 +114,7 @@ pub struct NodeTypeSpec {
     pub realtime_cost_class: &'static str,
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 16] {
+pub fn node_registry() -> [NodeTypeSpec; 17] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -126,6 +129,7 @@ pub fn node_registry() -> [NodeTypeSpec; 16] {
             NodeKind::Limiter => CapabilityAvailability::Available,
             NodeKind::Delay => CapabilityAvailability::Available,
             NodeKind::GraphicEq => CapabilityAvailability::Available,
+            NodeKind::Pitch => CapabilityAvailability::Available,
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -144,6 +148,7 @@ pub fn node_registry() -> [NodeTypeSpec; 16] {
             NodeKind::Limiter => "low",
             NodeKind::Delay => "medium",
             NodeKind::GraphicEq => "medium",
+            NodeKind::Pitch => "high",
             _ => "device-bound",
         },
     })
@@ -1109,6 +1114,12 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                         .as_f64()
                         .is_some_and(|gain| gain.is_finite() && (-18.0..=18.0).contains(&gain))
                 }
+                (NodeKind::Pitch, "semitones") => value
+                    .as_f64()
+                    .is_some_and(|shift| shift.is_finite() && (-12.0..=12.0).contains(&shift)),
+                (NodeKind::Pitch, "cents") => value
+                    .as_f64()
+                    .is_some_and(|cents| cents.is_finite() && (-100.0..=100.0).contains(&cents)),
                 _ => false,
             };
             if !valid {
@@ -2448,7 +2459,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 16);
+        assert_eq!(registry.len(), 17);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

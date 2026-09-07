@@ -111,13 +111,15 @@ The current node catalog is available through `nodes.describe` and contains:
 | `limiter@1` | available | Sample-peak ceiling stage; -12 to 0 dBFS |
 | `delay@1` | available | Preallocated delay stage; 0 to 1,000 ms |
 | `graphic-eq@1` | available | Fixed ten-band EQ; `band0Db`–`band9Db`, -18 to +18 dB |
+| `pitch@1` | available | Fixed 128-frame streaming pitch stage; semitones -12 to +12 and cents -100 to +100 |
 
 The separately reported `processors` catalog in `system.describe` documents the
 implemented DSP primitives and their typed parameter ranges. `parametricEq` is
 available as the corresponding one-band graph node, and `compressor` is
 available as graph dynamics nodes, `delay` is available as a preallocated graph
-time stage, and `graphicEq` is available as a fixed ten-band graph EQ. `pitch`
-remains explicitly unavailable until its graph/runtime integration is completed.
+time stage, `graphicEq` is available as a fixed ten-band graph EQ, and `pitch`
+is available as a fixed-quantum streaming graph stage. Pitch reset/reconnect
+semantics and measured realtime quality remain qualification items.
 The pitch entry reports its 1,024-sample algorithmic latency.
 The UI displays these parameter types and ranges as read-only metadata; it does
 not imply that an unavailable processor can be activated.

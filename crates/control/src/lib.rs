@@ -2529,12 +2529,16 @@ impl ControlPlane {
                     "minimum": -18.0, "maximum": 18.0, "default": 0.0
                 }))
                 .collect::<Vec<_>>()),
+            audiorouter_domain::NodeKind::Pitch => json!([
+                { "name": "semitones", "type": "number", "unit": "semitones", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
+                { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
+            ]),
             _ => json!([]),
         }
     }
 
     fn processor_catalog() -> Value {
-        let unavailable = json!({
+        let _unavailable = json!({
             "status": "unavailable",
             "reason": "requires M04 graph integration"
         });
@@ -2587,7 +2591,7 @@ impl ControlPlane {
             },
             {
                 "id": "pitch", "version": 1, "category": "pitch",
-                "availability": unavailable, "latencySamples": 1024,
+                "availability": available, "latencySamples": 1024,
                 "parameters": [
                     { "name": "semitones", "type": "number", "unit": "semitones", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
                     { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
@@ -5999,7 +6003,7 @@ mod tests {
             .find(|processor| processor["id"] == "pitch")
             .unwrap();
         assert_eq!(pitch["latencySamples"], 1024);
-        assert_eq!(pitch["availability"]["status"], "unavailable");
+        assert_eq!(pitch["availability"]["status"], "available");
         let gain = description["nodeTypes"]
             .as_array()
             .unwrap()
