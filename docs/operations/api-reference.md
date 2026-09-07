@@ -105,12 +105,14 @@ The current node catalog is available through `nodes.describe` and contains:
 | `gain@1` | available | `gainDb`, from -60 to +24 dB |
 | `mute@1` | available | `muted`, boolean |
 | `meter@1` | available | Bounded per-node telemetry boundary |
+| `parametric-eq@1` | available | One-band peaking EQ stage; 48 kHz graph baseline |
 
 The separately reported `processors` catalog in `system.describe` documents the
-implemented DSP primitives and their typed parameter ranges. It currently lists
-`graphicEq`, `parametricEq`, `gate`, `compressor`, `limiter`, `delay`, and
-`pitch`; each remains explicitly unavailable until graph/runtime integration is
-completed. The pitch entry reports its 1,024-sample algorithmic latency.
+implemented DSP primitives and their typed parameter ranges. `parametricEq` is
+available as the corresponding one-band graph node; `graphicEq`, `gate`,
+`compressor`, `limiter`, `delay`, and `pitch` remain explicitly unavailable
+until their graph/runtime integrations are completed. The pitch entry reports
+its 1,024-sample algorithmic latency.
 The UI displays these parameter types and ranges as read-only metadata; it does
 not imply that an unavailable processor can be activated.
 

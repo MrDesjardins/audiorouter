@@ -10,7 +10,9 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-const libraryNodeDefinitions: Record<Extract<NodeKind, "mixer" | "gain" | "mute" | "meter">, {
+export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq">;
+
+const libraryNodeDefinitions: Record<Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq">, {
   name: string;
   parameters: Record<string, boolean | number | string>;
   ports: Session["nodes"][number]["ports"];
@@ -44,12 +46,20 @@ const libraryNodeDefinitions: Record<Extract<NodeKind, "mixer" | "gain" | "mute"
     parameters: {},
     ports: [{ name: "in", direction: "input", channels: 1 }],
   },
+  parametricEq: {
+    name: "Parametric EQ",
+    parameters: { frequencyHz: 1000, q: 1, gainDb: 0 },
+    ports: [
+      { name: "in", direction: "input", channels: 1 },
+      { name: "out", direction: "output", channels: 1 },
+    ],
+  },
 };
 
 /** Adds one supported built-in processor to a draft without mutating its revision or edges. */
 export function appendLibraryNode(
   session: Session,
-  kind: keyof typeof libraryNodeDefinitions,
+  kind: LibraryNodeKind,
 ): Session {
   const definition = libraryNodeDefinitions[kind];
   let suffix = 1;
@@ -214,6 +224,7 @@ export function setNodeDraftParameter(
   if (node.kind === "gain" && parameter === "gainDb" && (typeof value !== "number" || !Number.isFinite(value) || value < GAIN_MIN_DB || value > GAIN_MAX_DB)) {
     throw new Error(`Gain must be between ${GAIN_MIN_DB} and ${GAIN_MAX_DB} dB`);
   }
+  if (node.kind === "parametricEq" && typeof value === "number" && !Number.isFinite(value)) throw new Error("Parametric EQ values must be finite");
   return {
     ...session,
     nodes: session.nodes.map((node, index) => index === nodeIndex

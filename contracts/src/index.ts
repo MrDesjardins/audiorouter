@@ -14,7 +14,8 @@ export type NodeKind =
   | "mixer"
   | "gain"
   | "mute"
-  | "meter";
+  | "meter"
+  | "parametricEq";
 
 export type PortDirection = "input" | "output";
 

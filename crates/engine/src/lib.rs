@@ -1222,12 +1222,24 @@ impl DriftController {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 pub enum ProcessingStage {
-    Gain { linear: f32 },
-    Mute { muted: bool },
-    ChannelMatrix { coefficients: Vec<f32> },
-    Meter { index: usize },
+    Gain {
+        linear: f32,
+    },
+    Mute {
+        muted: bool,
+    },
+    ChannelMatrix {
+        coefficients: Vec<f32>,
+    },
+    Meter {
+        index: usize,
+    },
+    ParametricEq {
+        left: Box<std::sync::Mutex<audiorouter_dsp::ParametricEq>>,
+        right: Option<Box<std::sync::Mutex<audiorouter_dsp::ParametricEq>>>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1541,12 +1553,12 @@ pub fn compile_session(
             if (source.bypass
                 && !matches!(
                     source.kind,
-                    NodeKind::Gain | NodeKind::Mute | NodeKind::Meter
+                    NodeKind::Gain | NodeKind::Mute | NodeKind::Meter | NodeKind::ParametricEq
                 ))
                 || (destination.bypass
                     && !matches!(
                         destination.kind,
-                        NodeKind::Gain | NodeKind::Mute | NodeKind::Meter
+                        NodeKind::Gain | NodeKind::Mute | NodeKind::Meter | NodeKind::ParametricEq
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -1671,6 +1683,56 @@ pub fn compile_session(
                     .and_then(|value| value.as_bool())
                     .unwrap_or(true);
                 stages.push(ProcessingStage::Mute { muted });
+            }
+            NodeKind::ParametricEq => {
+                let frequency_hz = node
+                    .parameters
+                    .get("frequencyHz")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(1_000.0) as f32;
+                let q = node
+                    .parameters
+                    .get("q")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(1.0) as f32;
+                let gain_db = node
+                    .parameters
+                    .get("gainDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(0.0) as f32;
+                let input_channels = node
+                    .ports
+                    .iter()
+                    .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                    .map(|port| usize::from(port.channels))
+                    .unwrap_or(1);
+                let params = audiorouter_dsp::BiquadParams {
+                    kind: audiorouter_dsp::FilterKind::Peaking,
+                    frequency_hz,
+                    q,
+                    gain_db,
+                    sample_rate: 48_000.0,
+                };
+                let left = audiorouter_dsp::ParametricEq::new(
+                    [Some(params), None, None, None, None, None, None, None],
+                    1,
+                )
+                .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                let right = if input_channels == 2 {
+                    Some(
+                        audiorouter_dsp::ParametricEq::new(
+                            [Some(params), None, None, None, None, None, None, None],
+                            1,
+                        )
+                        .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                    )
+                } else {
+                    None
+                };
+                stages.push(ProcessingStage::ParametricEq {
+                    left: Box::new(std::sync::Mutex::new(left)),
+                    right: right.map(|filter| Box::new(std::sync::Mutex::new(filter))),
+                });
             }
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
@@ -2181,6 +2243,30 @@ impl RuntimeGraph {
                 ProcessingStage::Meter { index } => {
                     if let Some(meter) = self.meters.get(*index) {
                         meter.observe(block);
+                    }
+                }
+                ProcessingStage::ParametricEq { left, right } => {
+                    let Ok(mut left) = left.try_lock() else {
+                        block.clear();
+                        continue;
+                    };
+                    if block.channels() == 1 {
+                        if let Some(samples) = block.channel_mut(0) {
+                            left.process_interleaved(samples);
+                        }
+                    } else if block.channels() == 2 {
+                        if let Some(samples) = block.channel_mut(0) {
+                            left.process_interleaved(samples);
+                        }
+                        if let (Some(filter), Some(samples)) =
+                            (right.as_ref(), block.channel_mut(1))
+                        {
+                            if let Ok(mut filter) = filter.try_lock() {
+                                filter.process_interleaved(samples);
+                            } else {
+                                block.clear();
+                            }
+                        }
                     }
                 }
             }
@@ -3003,6 +3089,34 @@ mod tests {
         );
         assert_eq!(mute.process(&mut block), 0);
         assert_eq!(block.channel(0).unwrap(), &[0.0, 0.0]);
+    }
+
+    #[test]
+    fn prepared_parametric_eq_processes_planar_channels_and_preserves_state() {
+        let params = audiorouter_dsp::BiquadParams {
+            kind: audiorouter_dsp::FilterKind::Peaking,
+            frequency_hz: 1_000.0,
+            q: 1.0,
+            gain_db: 6.0,
+            sample_rate: 48_000.0,
+        };
+        let stage = ProcessingStage::ParametricEq {
+            left: Box::new(std::sync::Mutex::new(
+                audiorouter_dsp::ParametricEq::new(
+                    [Some(params), None, None, None, None, None, None, None],
+                    1,
+                )
+                .unwrap(),
+            )),
+            right: None,
+        };
+        let graph = RuntimeGraph::prepare(RuntimeGeneration::new(10), vec![stage]);
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        let before = block.channel(0).unwrap().to_vec();
+        graph.process(&mut block);
+        assert!(block.all_finite());
+        assert_ne!(block.channel(0).unwrap(), before.as_slice());
     }
 
     #[test]

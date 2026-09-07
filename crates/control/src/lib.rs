@@ -2499,6 +2499,11 @@ impl ControlPlane {
                 "type": "boolean",
                 "default": false
             }]),
+            audiorouter_domain::NodeKind::ParametricEq => json!([
+                { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 1000.0 },
+                { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 },
+                { "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }
+            ]),
             _ => json!([]),
         }
     }
@@ -2508,6 +2513,7 @@ impl ControlPlane {
             "status": "unavailable",
             "reason": "requires M04 graph integration"
         });
+        let available = json!({ "status": "available" });
         json!([
             {
                 "id": "graphicEq", "version": 1, "category": "equalizer",
@@ -2516,7 +2522,7 @@ impl ControlPlane {
             },
             {
                 "id": "parametricEq", "version": 1, "category": "equalizer",
-                "availability": unavailable, "latencySamples": 0,
+                "availability": available, "latencySamples": 0,
                 "parameters": [
                     { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0 },
                     { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0 },

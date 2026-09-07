@@ -47,10 +47,11 @@ pub enum NodeKind {
     Gain,
     Mute,
     Meter,
+    ParametricEq,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -61,6 +62,7 @@ impl NodeKind {
         Self::Gain,
         Self::Mute,
         Self::Meter,
+        Self::ParametricEq,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -75,6 +77,7 @@ impl NodeKind {
             Self::Gain => "gain",
             Self::Mute => "mute",
             Self::Meter => "meter",
+            Self::ParametricEq => "parametric-eq",
         }
     }
 }
@@ -93,14 +96,16 @@ pub struct NodeTypeSpec {
     pub realtime_cost_class: &'static str,
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 10] {
+pub fn node_registry() -> [NodeTypeSpec; 11] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
         availability: match kind {
-            NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => {
-                CapabilityAvailability::Available
-            }
+            NodeKind::Mixer
+            | NodeKind::Gain
+            | NodeKind::Mute
+            | NodeKind::Meter
+            | NodeKind::ParametricEq => CapabilityAvailability::Available,
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -113,6 +118,7 @@ pub fn node_registry() -> [NodeTypeSpec; 10] {
         },
         realtime_cost_class: match kind {
             NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => "low",
+            NodeKind::ParametricEq => "medium",
             _ => "device-bound",
         },
     })
@@ -1023,6 +1029,17 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     .as_f64()
                     .is_some_and(|gain| gain.is_finite() && (-60.0..=24.0).contains(&gain)),
                 (NodeKind::Mute, "muted") => value.is_boolean(),
+                (NodeKind::ParametricEq, "frequencyHz") => {
+                    value.as_f64().is_some_and(|frequency| {
+                        frequency.is_finite() && (20.0..=20_000.0).contains(&frequency)
+                    })
+                }
+                (NodeKind::ParametricEq, "q") => value
+                    .as_f64()
+                    .is_some_and(|q| q.is_finite() && (0.1..=20.0).contains(&q)),
+                (NodeKind::ParametricEq, "gainDb") => value
+                    .as_f64()
+                    .is_some_and(|gain| gain.is_finite() && (-24.0..=24.0).contains(&gain)),
                 _ => false,
             };
             if !valid {
@@ -2360,9 +2377,9 @@ mod tests {
     }
 
     #[test]
-    fn registry_reports_unimplemented_audio_capabilities_explicitly() {
+    fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 10);
+        assert_eq!(registry.len(), 11);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

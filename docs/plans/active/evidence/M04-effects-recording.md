@@ -548,3 +548,15 @@ M04 was rerun at the current head: all 25 DSP tests and 30 recording tests passe
 including 60-second pitch-duration and recovery coverage, with formatting and strict
 Clippy. This remains portable/file-boundary evidence; native realtime integration and
 hardware timing remain open.
+
+## 2026-09-07 — Parametric EQ graph integration
+
+The portable graph now includes the validated `parametricEq@1` node. Domain
+validation enforces its frequency, Q, and gain bounds; discovery advertises the
+node and processor as available; the UI library can add it to a draft; and the
+engine prepares a stateful peaking-EQ stage for each active channel. Processing
+uses prebuilt state and a nonblocking state boundary, sanitizing or silencing on
+failure. Engine regression coverage verifies finite transformed output and
+stateful preparation. This is portable graph evidence only; native callback
+scheduling, device activation, hardware timing, and production performance
+remain open.
