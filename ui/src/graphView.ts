@@ -14,6 +14,11 @@ export function routeNodeLabels(session: Session, nodeIds: string[]): string[] {
   });
 }
 
+export function routeLatencyText(latencySamples: number): string {
+  if (!Number.isFinite(latencySamples) || latencySamples < 0) return "latency unavailable";
+  return `${Math.trunc(latencySamples).toLocaleString()} samples estimated latency`;
+}
+
 /** Returns the enabled upstream/downstream component for presentation highlighting. */
 export function relatedNodeIds(session: Session, selectedNodeId: string): Set<string> {
   const neighbors = new Map<string, Set<string>>();

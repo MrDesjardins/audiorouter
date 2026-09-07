@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { appendDraftConnection, setDraftConnectionEnabled } from "./draft";
 import { demoSession } from "./fixtures";
 import { relatedNodeIds } from "./graphView";
-import { nodePortLabels, routeNodeLabels } from "./graphView";
+import { nodePortLabels, routeLatencyText, routeNodeLabels } from "./graphView";
 
 describe("graph path highlighting", () => {
   it("describes each port with direction, role, and channels", () => {
@@ -12,6 +12,12 @@ describe("graph path highlighting", () => {
   it("includes authoritative node processing state in route labels", () => {
     const session = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "voice" ? { ...node, bypass: true } : node) };
     expect(routeNodeLabels(session, ["mic", "voice", "missing"])).toEqual(["Microphone [enabled]", "Voice gain [bypassed]", "missing"]);
+  });
+
+  it("formats authoritative route latency and fails closed for invalid values", () => {
+    expect(routeLatencyText(1024)).toBe("1,024 samples estimated latency");
+    expect(routeLatencyText(Number.NaN)).toBe("latency unavailable");
+    expect(routeLatencyText(-1)).toBe("latency unavailable");
   });
 
   it("finds all enabled upstream and downstream nodes", () => {
