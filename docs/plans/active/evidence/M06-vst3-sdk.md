@@ -36,6 +36,16 @@ Windows Bash because this host's PowerShell Git launcher does not reliably
 provide the POSIX helper commands to direct `git submodule` calls. The real
 installer and disposable origin/reparse provenance acceptance both passed.
 
+## UI discovery parity (2026-09-07)
+
+The UI now exposes the existing bounded discovery boundary through a
+connected-only plugin scan panel. It accepts an explicitly entered directory,
+forwards `plugins.scan` through the typed backend adapter, and renders either
+identity/compatibility metadata or the stable `errorCode`; disconnected mode
+cannot scan. UI typecheck, 70 UI tests, contracts typecheck, and the
+disposable M05 production build passed. The panel does not load plugin code or
+change files, audio, or machine configuration.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

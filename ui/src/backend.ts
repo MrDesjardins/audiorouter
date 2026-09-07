@@ -12,6 +12,8 @@ import type {
   GraphCommitResult,
   GraphPlanResult,
   PrivacyMuteResult,
+  PluginScanEntry,
+  PluginScanResult,
   RecoveryClearResult,
   RecordingMetadataResult,
   RecordingRenameResult,
@@ -54,6 +56,8 @@ export interface UiBackend {
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
+  scanPlugins(directory: string): Promise<PluginScanResult>;
+  inspectPlugin(path: string): Promise<PluginScanEntry>;
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
@@ -156,6 +160,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async listDevices() {
       return [];
+    },
+    async scanPlugins() {
+      throw new Error("The backend is disconnected; plugin scanning is unavailable.");
+    },
+    async inspectPlugin() {
+      throw new Error("The backend is disconnected; plugin inspection is unavailable.");
     },
     async listVirtualDevices() {
       return [];
@@ -294,6 +304,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     async listDevices() {
       const result = await client.request("devices.list", { limit: 500 });
       return Array.isArray(result) ? result : result.items;
+    },
+    async scanPlugins(directory) {
+      return client.request("plugins.scan", { directory });
+    },
+    async inspectPlugin(path) {
+      return client.request("plugins.inspect", { path });
     },
     async listVirtualDevices() {
       const result = await client.request("virtualDevices.list", { limit: 500 });

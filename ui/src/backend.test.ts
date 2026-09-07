@@ -36,6 +36,8 @@ describe("snapshot cache", () => {
       listRecordings: async () => [],
       listApplications: async () => [],
       listDevices: async () => [],
+      scanPlugins: async () => { throw new Error("not connected"); },
+      inspectPlugin: async () => { throw new Error("not connected"); },
       listVirtualDevices: async () => [],
       planVirtualDevice: async () => { throw new Error("not connected"); },
       applyVirtualDevice: async () => { throw new Error("not connected"); },
@@ -142,6 +144,23 @@ describe("live event cursor", () => {
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listDevices()).resolves.toEqual([device]);
     expect(received).toEqual({ method: "devices.list", params: { limit: 500 } });
+  });
+
+  it("forwards explicit plugin scan and inspection requests", async () => {
+    const requests: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        requests.push({ method, params });
+        return method === "plugins.scan" ? { directory: "C:\\Plugins", entries: [] } : { path: "C:\\Plugins\\demo.vst3", identity: null, error: "NotPe", errorCode: "notPe" };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await backend.scanPlugins("C:\\Plugins");
+    await backend.inspectPlugin("C:\\Plugins\\demo.vst3");
+    expect(requests).toEqual([
+      { method: "plugins.scan", params: { directory: "C:\\Plugins" } },
+      { method: "plugins.inspect", params: { path: "C:\\Plugins\\demo.vst3" } },
+    ]);
   });
 
   it("normalizes the managed virtual-device inventory through the shared API", async () => {
