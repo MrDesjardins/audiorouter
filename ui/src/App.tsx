@@ -156,6 +156,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [connectionSource, setConnectionSource] = useState("");
   const [connectionDestination, setConnectionDestination] = useState("");
   const [createdSessions, setCreatedSessions] = useState<import("@audiorouter/contracts").Session[]>([]);
+  const [listedSessions, setListedSessions] = useState<import("@audiorouter/contracts").Session[]>(demoSessions);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refreshApplications = () => {
@@ -166,6 +167,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
+    void backend.listSessions().then(setListedSessions).catch(() => { if (!backend.connected) setListedSessions(demoSessions); });
     void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(error instanceof Error ? error.message : "Recording library unavailable"); });
     refreshApplications();
     refreshDevices();
@@ -173,10 +175,15 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const snapshot = snapshotState.snapshot;
   useEffect(() => { writeTheme(typeof window === "undefined" ? null : window.localStorage, theme); }, [theme]);
   useEffect(() => { if (snapshot) setPrivacyMuted(snapshot.status.privacyMute.muted); }, [snapshot]);
-  const availableSessions = [...(snapshot ? [snapshot.session, ...demoSessions.filter((item) => item.id !== snapshot.session.id)] : demoSessions), ...createdSessions.filter((item) => !snapshot || item.id !== snapshot.session.id)];
+  const availableSessions = [...new Map([...(snapshot ? [snapshot.session] : []), ...listedSessions, ...createdSessions].map((item) => [item.id, item])).values()];
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   useEffect(() => { setDraft(session); setDraftHistory({ past: [], future: [] }); setSelectedNodeId(session.nodes[0]?.id ?? ""); setConnectionSource(""); setConnectionDestination(""); setActionMessage(null); setRouteInspection(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); }, [session]);
+  useEffect(() => {
+    let active = true;
+    void backend.listSessions().then((items) => { if (active) setListedSessions(items); }).catch(() => { if (active && !backend.connected) setListedSessions(demoSessions); });
+    return () => { active = false; };
+  }, [backend]);
   useEffect(() => {
     let active = true;
     void backend.listRecordings(session.id).then((items) => { if (active) { setRecordings(items); setRecordingsError(null); } }).catch((error) => { if (active) { setRecordings([]); setRecordingsError(error instanceof Error ? error.message : "Recording library unavailable"); } });
@@ -208,6 +215,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             setSnapshotState(nextState);
             refreshApplications();
             refreshDevices();
+            void backend.listSessions().then((items) => { if (active) setListedSessions(items); });
             if (!nextState.stale) eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
           }
         } else {

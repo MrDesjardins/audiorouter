@@ -35,7 +35,7 @@ import type {
   StatusSnapshot,
   RpcTransport,
 } from "@audiorouter/contracts";
-import { demoSession } from "./fixtures";
+import { demoSession, demoSessions } from "./fixtures";
 
 export type ApplicationRow = ApplicationInfo;
 
@@ -54,6 +54,7 @@ export interface UiBackend {
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
+  listSessions(): Promise<Session[]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
   scanPlugins(directory: string): Promise<PluginScanResult>;
@@ -156,6 +157,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async listRecordings() {
       return [];
+    },
+    async listSessions() {
+      return demoSessions;
     },
     async listApplications() {
       return [];
@@ -304,6 +308,10 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async listRecordings(recordingSessionId = sessionId) {
       const result = await client.request("recordings.list", { sessionId: recordingSessionId });
+      return Array.isArray(result) ? result : result.items;
+    },
+    async listSessions() {
+      const result = await client.request("sessions.list", { limit: 500 });
       return Array.isArray(result) ? result : result.items;
     },
     async listApplications() {

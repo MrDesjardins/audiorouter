@@ -11,6 +11,7 @@ describe("disconnected backend", () => {
     expect(snapshot.status.privacyMute.muted).toBe(true);
     expect(snapshot.session.id).toBe(demoSession.id);
     expect(await backend.listRecordings()).toEqual([]);
+    expect(await backend.listSessions()).toEqual(expect.arrayContaining([demoSession]));
     expect(await backend.listApplications()).toEqual([]);
     await expect(backend.previewRecording("recording")).rejects.toThrow("recording preview is unavailable");
     await expect(backend.clearRecoverySafeMode()).rejects.toThrow("recovery safe-mode clearing is unavailable");
@@ -34,6 +35,7 @@ describe("snapshot cache", () => {
       planGraph: async () => { throw new Error("not connected"); },
       commitGraph: async () => { throw new Error("not connected"); },
       listRecordings: async () => [],
+      listSessions: async () => [],
       listApplications: async () => [],
       listDevices: async () => [],
       scanPlugins: async () => { throw new Error("not connected"); },
@@ -123,6 +125,18 @@ describe("live event cursor", () => {
       request: async () => ({ items: [row], nextCursor: null }),
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listRecordings()).resolves.toEqual([row]);
+  });
+
+  it("normalizes the bounded session inventory through the shared API", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { items: [demoSession], nextCursor: null };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listSessions()).resolves.toEqual([demoSession]);
+    expect(received).toEqual({ method: "sessions.list", params: { limit: 500 } });
   });
 
   it("maps application inventory to the canonical read method", async () => {

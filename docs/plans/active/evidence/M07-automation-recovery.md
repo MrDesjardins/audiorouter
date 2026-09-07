@@ -804,3 +804,12 @@ At the current head, the wrapper passed M01 CLI (24 tests), MCP
 stdio/named-pipe interoperability (2), control (81), plugin-host (31),
 worker-process (8), and strict Clippy. Temporary test state only; no audio
 device, driver, or machine configuration was accessed.
+
+## UI session inventory parity (2026-09-07)
+
+The UI now consumes the bounded `sessions.list` inventory through its typed
+backend adapter. Connected session pickers use the authoritative page items,
+while the disconnected preview retains its local fixture sessions. Paged
+responses are normalized to the UI's session list contract and capped at 500
+items; no session is started or mutated by inventory refresh. UI typecheck, 71
+tests, the production build, and documentation validation passed.
