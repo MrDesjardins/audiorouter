@@ -269,3 +269,11 @@ copying. If activation drains immediately before an old-generation submit,
 the stale block is counted and the capture queue is drained before it can be
 read by the replacement owner. The 48-test engine suite and strict Clippy
 pass; native driver synchronization remains open.
+
+## Generation-tagged bridge buffers (2026-09-07)
+
+Bridge blocks now carry their runtime ownership generation through pooled
+copies. Capture consumers reject and recycle stale tagged blocks, and the
+bounded ring exposes the same filter for fan-out consumers. Regression coverage
+verifies tag propagation and stale-block recycling; the engine suite passes 49
+tests with strict Clippy. Native driver synchronization remains open.

@@ -265,6 +265,18 @@ impl AudioBlockRing {
         self.ready.try_pop()
     }
 
+    /// Receive only a block owned by the requested runtime generation.
+    /// Stale blocks are recycled and never exposed to the caller.
+    pub fn try_receive_generation(&self, generation: u64) -> Option<AudioBlock> {
+        while let Some(block) = self.ready.try_pop() {
+            if block.generation() == generation {
+                return Some(block);
+            }
+            let _ = self.try_recycle(block);
+        }
+        None
+    }
+
     pub fn try_recycle(&self, block: AudioBlock) -> Result<(), AudioBlock> {
         self.free.try_release(block)
     }
@@ -359,10 +371,11 @@ impl VirtualBusBridge {
         self.release_activation_lock();
     }
 
-    pub fn submit_render(&self, generation: u64, block: AudioBlock) -> Result<(), AudioBlock> {
+    pub fn submit_render(&self, generation: u64, mut block: AudioBlock) -> Result<(), AudioBlock> {
         if !self.is_active() || self.generation() != generation {
             return Err(block);
         }
+        block.generation = generation;
         self.render.try_submit(block)
     }
 
@@ -475,14 +488,14 @@ impl VirtualBusBridge {
     }
 
     pub fn try_receive_capture(&self) -> Option<AudioBlock> {
-        self.capture.try_receive()
+        self.capture.try_receive_generation(self.generation())
     }
 
     /// Fill a caller-owned output block from the capture side. On underrun or
     /// inactive state the output is explicitly cleared to silence without an
     /// allocation; the boolean reports whether a queued block was delivered.
     pub fn receive_capture_into(&self, output: &mut AudioBlock) -> Result<bool, BlockError> {
-        let Some(input) = self.capture.try_receive() else {
+        let Some(input) = self.try_receive_capture() else {
             output.clear();
             return Ok(false);
         };
@@ -553,6 +566,7 @@ impl AudioBlockPool {
         }
         let mut block = block;
         block.clear();
+        block.generation = 0;
         self.blocks.push(block)
     }
 }
@@ -670,6 +684,7 @@ pub struct AudioBlock {
     channels: usize,
     frames: usize,
     samples: Vec<f32>,
+    generation: u64,
 }
 
 /// Bounded per-frame gain transition for de-clicked parameter changes.
@@ -767,7 +782,14 @@ impl AudioBlock {
             channels,
             frames,
             samples: vec![0.0; channels * frames],
+            generation: 0,
         })
+    }
+
+    /// Runtime ownership tag copied with the block through prepared rings.
+    /// Zero means that no scheduler generation has claimed the block.
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     pub fn channels(&self) -> usize {
@@ -803,6 +825,7 @@ impl AudioBlock {
             return Err(BlockError::ShapeMismatch);
         }
         self.samples.copy_from_slice(&source.samples);
+        self.generation = source.generation;
         Ok(())
     }
 
@@ -2485,6 +2508,7 @@ mod tests {
         assert_eq!(bridge.process_once(), 1);
         let mut output = AudioBlock::new(1, 2).unwrap();
         assert!(bridge.receive_capture_into(&mut output).unwrap());
+        assert_eq!(output.generation(), 1);
         assert_eq!(output.channel(0).unwrap(), &[0.25, 0.5]);
 
         bridge
@@ -2607,6 +2631,15 @@ mod tests {
             .unwrap();
         assert_eq!(bridge.generation(), successful_generation);
         assert!(bridge.is_active());
+    }
+
+    #[test]
+    fn block_ring_generation_filter_recycles_stale_blocks() {
+        let ring = AudioBlockRing::new(1, 1, 2).unwrap();
+        ring.try_submit(AudioBlock::new(1, 2).unwrap()).unwrap();
+        assert!(ring.try_receive_generation(7).is_none());
+        assert_eq!(ring.available(), 1);
+        assert_eq!(ring.ready(), 0);
     }
 
     #[test]
