@@ -578,6 +578,19 @@ injection contract without executing native shell code or registering startup
 behavior. Production host ownership of the injected object and manual visual/
 accessibility acceptance remain open.
 
+## Bounded WebView2 JSON-RPC transport (2026-09-07)
+
+The UI now includes `WebView2RpcTransport`, which adapts the host's
+`chrome.webview` message surface to the existing typed `RpcTransport`
+contract. Requests are wrapped as `audiorouter.rpc.request` messages and only
+matching `audiorouter.rpc.response` IDs resolve them. Pending requests are
+bounded at 64 by default, each request has a bounded timeout, duplicate IDs
+are rejected, unrelated messages are ignored, and disposal rejects all
+pending work. Four focused tests cover correlation, malformed messages,
+duplicate IDs, and disposal. This is a browser-side boundary implementation;
+the native WebView2 host, origin policy, and manual visual/accessibility run
+remain open.
+
 ## Session inventory failure safety (2026-09-07)
 
 Connected session inventory failures now clear the listed-session set and show
