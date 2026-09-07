@@ -212,6 +212,13 @@ The route carry queue is bounded to 64 fixed 128-frame blocks (approximately
 fails closed rather than dropping a processed block or allocating without a
 limit.
 
+The route now supports explicit mono-to-stereo duplication and stereo-to-mono
+averaging for compatible 32-bit endpoints, while retaining a fail-closed
+sample-rate match requirement until resampling is connected at this boundary.
+Three pure mapping regressions and strict probe Clippy pass; the existing
+stereo VB-Audio route also passed again with 24,480 captured, 24,448 scheduled,
+and 23,968 routed frames.
+
 The endpoint selector has two additional pure regressions: an opaque ID must
 match the requested direction, and an omitted ID may select only within the
 requested direction. The standalone probe tests, strict Clippy, and locked

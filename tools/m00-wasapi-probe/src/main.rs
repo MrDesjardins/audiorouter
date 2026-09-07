@@ -107,7 +107,8 @@ fn adapter_smoke(
     }
     if route
         && (render_info.bits_per_sample != 32
-            || render_info.channels != capture_info.channels
+            || render_info.channels == 0
+            || render_info.channels > 2
             || render_info.sample_rate_hz != capture_info.sample_rate_hz)
     {
         return Err(AudioError::InvalidFrameSize);
@@ -227,9 +228,26 @@ fn adapter_smoke(
                                     }
                                     for frame in 0..128 {
                                         for channel in 0..usize::from(render_info.channels) {
-                                            let sample = output
-                                                .channel(channel)
+                                            let first = output
+                                                .channel(0)
                                                 .ok_or(AudioError::InvalidFrameSize)?[frame];
+                                            let second = if capture_info.channels > 1 {
+                                                Some(
+                                                    output
+                                                        .channel(1)
+                                                        .ok_or(AudioError::InvalidFrameSize)?
+                                                        [frame],
+                                                )
+                                            } else {
+                                                None
+                                            };
+                                            let sample = map_route_sample(
+                                                first,
+                                                second,
+                                                capture_info.channels,
+                                                render_info.channels,
+                                                channel,
+                                            );
                                             let offset =
                                                 frame * render_bytes_per_frame + channel * 4;
                                             let pending_offset = render_pending_bytes + offset;
@@ -309,6 +327,26 @@ fn select_endpoint<'a>(
     endpoints.iter().find(|endpoint| {
         endpoint.direction == direction && endpoint_id.is_none_or(|id| endpoint.id == id)
     })
+}
+
+fn map_route_sample(
+    first: f32,
+    second: Option<f32>,
+    source_channels: u16,
+    destination_channels: u16,
+    destination_channel: usize,
+) -> f32 {
+    match (source_channels, destination_channels, destination_channel) {
+        (2, 1, 0) => (first + second.unwrap_or(first)) * 0.5,
+        (1, 2, _) => first,
+        _ => {
+            if destination_channel == 0 {
+                first
+            } else {
+                second.unwrap_or(first)
+            }
+        }
+    }
 }
 
 fn drain_render_pending(
@@ -684,6 +722,7 @@ unsafe fn format_support(
 
 #[cfg(test)]
 mod tests {
+    use super::map_route_sample;
     use super::select_endpoint;
     use audiorouter_windows_audio::{EndpointDirection, EndpointInfo};
 
@@ -729,5 +768,13 @@ mod tests {
                 .map(|item| item.id.as_str()),
             Some("capture-a")
         );
+    }
+
+    #[test]
+    fn route_channel_mapping_handles_mono_and_stereo() {
+        assert_eq!(map_route_sample(0.25, Some(0.75), 2, 1, 0), 0.5);
+        assert_eq!(map_route_sample(0.25, None, 1, 2, 0), 0.25);
+        assert_eq!(map_route_sample(0.25, None, 1, 2, 1), 0.25);
+        assert_eq!(map_route_sample(0.25, Some(0.75), 2, 2, 1), 0.75);
     }
 }
