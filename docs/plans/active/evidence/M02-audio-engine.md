@@ -188,3 +188,21 @@ frames, no pending remainder, and 16,032 zero-valued render frames. The media
 device identity/state snapshot remained identical; this qualifies graph
 activation and finite-output handling at the adapter boundary, not audible
 routing or physical latency.
+
+## Rust adapter-to-render route smoke (2026-09-07)
+
+The standalone probe now has an explicit `adapter-route` mode that selects a
+capture and render endpoint by their discovered directional indexes, requires
+matching 32-bit channel/rate metadata, feeds capture packets through the
+generation-1 0.5x gain graph, and submits the processed caller-owned frames to
+the render client. The guarded VB-Audio cable run passed for 500 ms with
+24,480 capture frames, 24,448 scheduler frames, and 24,448 routed render
+frames. The media-device identity/state snapshot was unchanged.
+
+The reproducible wrapper is
+`tests/acceptance/m02-rust-adapter-route-live.ps1 -AllowLiveAudio`; it resolves
+friendly names through the native inventory probe, removes its temporary probe
+and generated object, and never changes defaults, volume, mute, privacy,
+drivers, signing, or startup configuration. This qualifies the digital
+adapter-to-render data path, not physical acoustic latency, arbitrary format
+conversion, or production graph lifecycle.

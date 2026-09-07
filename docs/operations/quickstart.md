@@ -54,6 +54,16 @@ streams, and verifies the media-device identity/state snapshot is unchanged.
 It is intentionally opt-in and must not be treated as physical latency or
 graph-routing evidence.
 
+For an explicitly selected compatible digital cable pair, the route smoke
+passes captured frames through the generation-1 graph into the render client:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\tests\\acceptance\\m02-rust-adapter-route-live.ps1 -AllowLiveAudio -DurationMilliseconds 500
+```
+
+This is opt-in live testing only; it does not change defaults, volume, mute,
+privacy, drivers, signing, or startup configuration.
+
 For the repository-local VST3 SDK build, validator, and offline fixture loader,
 run:
 

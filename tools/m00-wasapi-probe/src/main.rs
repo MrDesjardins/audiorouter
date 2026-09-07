@@ -4,7 +4,8 @@
 //! drivers, or write outside stdout. The explicit `adapter-smoke` mode opens
 //! bounded production Rust capture/render clients, reads caller-owned capture
 //! data, submits zero-valued caller-owned render buffers, then stops and resets
-//! both streams.
+//! both streams. The separately named `adapter-route` mode is an opt-in,
+//! endpoint-ID-selected digital route smoke for compatible 32-bit endpoints.
 
 use audiorouter_engine::{ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph};
 use audiorouter_windows_audio::{
@@ -39,8 +40,29 @@ fn main() -> Result<()> {
             .nth(2)
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(500);
-        if let Err(error) = adapter_smoke(duration_ms) {
+        if let Err(error) = adapter_smoke(duration_ms, None, None, false) {
             eprintln!("adapter_smoke_error={error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("adapter-route") {
+        let duration_ms = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(500);
+        let capture_index = std::env::args()
+            .nth(3)
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        let render_index = std::env::args()
+            .nth(4)
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        if let Err(error) =
+            adapter_smoke(duration_ms, Some(capture_index), Some(render_index), true)
+        {
+            eprintln!("adapter_route_error={error}");
             std::process::exit(1);
         }
         return Ok(());
@@ -53,11 +75,17 @@ fn main() -> Result<()> {
     }
 }
 
-fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
+fn adapter_smoke(
+    duration_ms: u64,
+    capture_index: Option<usize>,
+    render_index: Option<usize>,
+    route: bool,
+) -> std::result::Result<(), AudioError> {
     let endpoints = enumerate_active_endpoints()?;
     let capture_info = endpoints
         .iter()
-        .find(|endpoint| endpoint.direction == EndpointDirection::Capture)
+        .filter(|endpoint| endpoint.direction == EndpointDirection::Capture)
+        .nth(capture_index.unwrap_or(0))
         .ok_or_else(|| {
             AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80070490u32 as i32),
@@ -66,7 +94,8 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
         })?;
     let render_info = endpoints
         .iter()
-        .find(|endpoint| endpoint.direction == EndpointDirection::Render)
+        .filter(|endpoint| endpoint.direction == EndpointDirection::Render)
+        .nth(render_index.unwrap_or(0))
         .ok_or_else(|| {
             AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80070490u32 as i32),
@@ -83,6 +112,13 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
         return Err(AudioError::InvalidFrameSize);
     }
     if capture_info.bits_per_sample != 32 || capture_info.channels > 2 {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    if route
+        && (render_info.bits_per_sample != 32
+            || render_info.channels != capture_info.channels
+            || render_info.sample_rate_hz != capture_info.sample_rate_hz)
+    {
         return Err(AudioError::InvalidFrameSize);
     }
     let mut capture = SharedCapture::open(&capture_info.id, 1_000_000)?;
@@ -107,10 +143,13 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
         let mut graph_blocks = 0u32;
         let mut render_frames = 0u32;
         let mut destination = vec![0u8; 1_048_576];
-        let render_source = vec![0u8; 1_048_576];
+        let mut render_source = vec![0u8; 1_048_576];
         let mut staging = vec![0u8; 128 * capture_bytes_per_frame];
         let mut pending_frames = 0usize;
+        let mut routed_frames = 0u32;
         while std::time::Instant::now() < deadline {
+            let mut render_submitted = false;
+            let mut render_submitted_frames = 0u32;
             if capture.wait_for_data(10)? {
                 while let Some((packet, bytes)) =
                     capture.next_packet_into(&mut destination, capture_bytes_per_frame)?
@@ -178,28 +217,63 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
                                     "adapter smoke graph output was invalid",
                                 )));
                             }
+                            graph_blocks = graph_blocks.saturating_add(1);
+                            scheduler_frames = scheduler_frames.saturating_add(128);
+                            if route {
+                                let required = 128 * render_bytes_per_frame;
+                                if render_source.len() < required {
+                                    return Err(AudioError::BufferTooSmall {
+                                        required,
+                                        available: render_source.len(),
+                                    });
+                                }
+                                for frame in 0..128 {
+                                    for channel in 0..usize::from(render_info.channels) {
+                                        let sample = output
+                                            .channel(channel)
+                                            .ok_or(AudioError::InvalidFrameSize)?[frame];
+                                        let offset = frame * render_bytes_per_frame + channel * 4;
+                                        render_source[offset..offset + 4]
+                                            .copy_from_slice(&sample.to_le_bytes());
+                                    }
+                                }
+                                let submitted = render.submit_bytes(
+                                    &render_source[..required],
+                                    render_bytes_per_frame,
+                                )?;
+                                routed_frames = routed_frames.saturating_add(submitted);
+                                render_submitted_frames =
+                                    render_submitted_frames.saturating_add(submitted);
+                                render_submitted = submitted > 0;
+                            }
                             scheduler
                                 .output()
                                 .try_recycle(output)
                                 .map_err(|_| AudioError::InvalidFrameSize)?;
-                            graph_blocks = graph_blocks.saturating_add(1);
-                            scheduler_frames = scheduler_frames.saturating_add(128);
                         }
                         pending_frames = 0;
                     }
                 }
             }
-            render_frames = render_frames
-                .saturating_add(render.submit_bytes(&render_source, render_bytes_per_frame)?);
+            if !render_submitted {
+                render_frames = render_frames
+                    .saturating_add(render.submit_bytes(&render_source, render_bytes_per_frame)?);
+            } else {
+                render_frames = render_frames.saturating_add(render_submitted_frames);
+            }
         }
-        if capture_packets == 0 || scheduler_frames == 0 || render_frames == 0 {
+        if capture_packets == 0
+            || scheduler_frames == 0
+            || render_frames == 0
+            || (route && routed_frames == 0)
+        {
             return Err(AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80004005u32 as i32),
                 "adapter smoke test received no bounded stream data",
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={}",
             capture_info.id,
             render_info.id,
             capture_packets,
@@ -209,7 +283,9 @@ fn adapter_smoke(duration_ms: u64) -> std::result::Result<(), AudioError> {
             graph_blocks,
             scheduler_frames,
             pending_frames,
-            render_frames
+            render_frames,
+            routed_frames,
+            route
         );
         Ok(())
     })();
