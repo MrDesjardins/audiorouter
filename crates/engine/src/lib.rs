@@ -2523,6 +2523,31 @@ mod tests {
     }
 
     #[test]
+    fn virtual_bus_bridge_allows_only_one_concurrent_activation_generation() {
+        use std::sync::{Arc, Barrier};
+        let bridge = Arc::new(VirtualBusBridge::new(1, 1, 2).unwrap());
+        let barrier = Arc::new(Barrier::new(4));
+        let handles = (0..4)
+            .map(|_| {
+                let bridge = Arc::clone(&bridge);
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    bridge.activate(1).is_ok()
+                })
+            })
+            .collect::<Vec<_>>();
+        let successes = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .filter(|success| *success)
+            .count();
+        assert_eq!(successes, 1);
+        assert_eq!(bridge.generation(), 1);
+        assert!(bridge.is_active());
+    }
+
+    #[test]
     fn block_ring_returns_full_submission_to_caller() {
         let ring = AudioBlockRing::new(1, 1, 2).unwrap();
         let first = ring.try_acquire().unwrap();

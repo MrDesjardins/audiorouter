@@ -239,6 +239,14 @@ current active generation, while accepted replacements still clear queued
 blocks before becoming active. The 46-test engine suite and strict Clippy
 pass. Native driver ownership synchronization remains open.
 
+## Concurrent activation ownership (2026-09-07)
+
+Four concurrent activation attempts for the same bridge generation are now
+covered by a barrier-synchronized regression; exactly one succeeds, the others
+are rejected as stale, and the bridge remains active at the winning generation.
+The engine suite passes 47 tests with strict Clippy. This validates portable
+ownership contention only, not native driver synchronization.
+
 ## Capture shape-mismatch safety (2026-09-07)
 
 The bridge regression now submits a valid block, reads it into an incompatible
