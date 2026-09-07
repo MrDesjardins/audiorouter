@@ -341,3 +341,8 @@ temporary UI build directory is removed in the preparation `finally` path.
 The release acceptance passed with the unsigned status and driver/signing,
 installer, and clean-machine blockers preserved. No UI was installed, and no
 audio or machine configuration was changed.
+
+The M08 acceptance wrapper now explicitly requires exactly one
+`audiorouter-ui.zip` manifest entry and opens the archive to verify its
+`index.html` entry. This keeps the application artifact requirement regression-
+protected rather than relying only on generic checksum coverage.

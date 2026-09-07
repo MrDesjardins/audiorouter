@@ -23,6 +23,20 @@ try {
     if (@($manifest.blockers).Count -lt 3) {
         throw "unsigned preparation must retain all release blockers"
     }
+    $uiArtifact = @($manifest.artifacts | Where-Object { $_.file -eq "audiorouter-ui.zip" })
+    if ($uiArtifact.Count -ne 1) {
+        throw "release manifest must include exactly one audiorouter-ui.zip artifact"
+    }
+    $uiZip = Join-Path $output "audiorouter-ui.zip"
+    $archive = [IO.Compression.ZipFile]::OpenRead($uiZip)
+    try {
+        if ($null -eq $archive.GetEntry("index.html")) {
+            throw "UI release archive is missing index.html"
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
 
     Write-Output "M08 release preparation acceptance passed"
     Write-Output "Scope: unsigned artifact preparation and verification only; no installer, driver, signing, or audio configuration changes."
