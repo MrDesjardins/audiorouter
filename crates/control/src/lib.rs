@@ -338,8 +338,15 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &["recordingId"],
         ),
-        "sessions.get" | "sessions.delete" => object_schema(
+        "sessions.get" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1 } }),
+            &["sessionId"],
+        ),
+        "sessions.delete" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
+            }),
             &["sessionId"],
         ),
         "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => object_schema(
@@ -1660,6 +1667,7 @@ impl ControlPlane {
                     format!("{client}\0recordings.rename\0{operation_id}"),
                     format!("{client}\0recordings.removeEntry\0{operation_id}"),
                     format!("{client}\0recordings.recycle\0{operation_id}"),
+                    format!("{client}\0sessions.delete\0{operation_id}"),
                 ]
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
@@ -3115,8 +3123,29 @@ impl ControlPlane {
     }
 
     fn dispatch_session_delete(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let id = session_id_from_params(params)?;
-        self.delete_session(&id)
+        let params = params.unwrap_or_else(|| json!({}));
+        let id = session_id_from_params(Some(params.clone()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "sessionId": id });
+                (
+                    self.scoped_idempotency_key("sessions.delete", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
+        let result = self.delete_session(&id)?;
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "sessions.delete", &hash, &result)?;
+        }
+        Ok(result)
     }
 
     fn dispatch_sessions_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -4370,7 +4399,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         ));
     };
     let allowed: &[&str] = match method {
-        "sessions.get" | "sessions.delete" => &["sessionId"],
+        "sessions.get" => &["sessionId"],
+        "sessions.delete" => &["sessionId", "idempotencyKey"],
         "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => {
             &["sessionId", "idempotencyKey"]
         }
