@@ -6336,6 +6336,10 @@ mod tests {
         let result = status.result.unwrap();
         assert_eq!(result["sessionCount"], 1);
         assert_eq!(result["activeSessionCount"], 0);
+        assert_eq!(
+            result["reason"],
+            "native realtime scheduler and endpoint routing are not implemented"
+        );
         assert_eq!(result["eventCursor"]["latestSequence"], 1);
     }
 
