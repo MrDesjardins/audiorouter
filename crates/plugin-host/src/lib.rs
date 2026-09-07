@@ -2158,7 +2158,7 @@ impl SharedAudioRegion {
         layout: SharedAudioLayout,
     ) -> Result<Self, SharedAudioError> {
         let path = path.as_ref();
-        if !path.is_absolute() {
+        if !path.is_absolute() || path_has_reparse_ancestor(path) {
             return Err(SharedAudioError::InvalidPath);
         }
         let file = fs::OpenOptions::new()
@@ -2185,7 +2185,7 @@ impl SharedAudioRegion {
         layout: SharedAudioLayout,
     ) -> Result<Self, SharedAudioError> {
         let path = path.as_ref();
-        if !path.is_absolute() {
+        if !path.is_absolute() || path_has_reparse_ancestor(path) {
             return Err(SharedAudioError::InvalidPath);
         }
         let file = fs::OpenOptions::new()
@@ -3319,6 +3319,28 @@ mod tests {
         ));
         drop(reader);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn shared_audio_region_rejects_a_reparse_point_parent() {
+        let layout = SharedAudioLayout::new(1).unwrap();
+        let root = temp_root();
+        let target = root.join("target");
+        fs::create_dir(&target).unwrap();
+        let link = root.join("redirected");
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_dir(&target, &link);
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&target, &link);
+        if link_result.is_ok() {
+            let path = link.join("slot");
+            assert!(matches!(
+                SharedAudioRegion::create(&path, layout),
+                Err(SharedAudioError::InvalidPath)
+            ));
+            fs::remove_dir(&link).unwrap();
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
