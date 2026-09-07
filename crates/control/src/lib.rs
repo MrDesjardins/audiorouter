@@ -6013,6 +6013,16 @@ mod tests {
         });
         assert_eq!(preview.result.unwrap()["preview"], true);
         assert!(path.is_file());
+        let preview_events = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(13)),
+                method: "events.subscribe".into(),
+                params: Some(json!({ "afterSequence": 0, "sessionId": "session" })),
+            })
+            .result
+            .unwrap();
+        assert!(preview_events["events"].as_array().unwrap().is_empty());
         std::fs::remove_file(&path).unwrap();
         let missing = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
@@ -6097,6 +6107,16 @@ mod tests {
             .get_recording("recording-edit")
             .unwrap()
             .is_none());
+        let events = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(13)),
+                method: "events.subscribe".into(),
+                params: Some(json!({ "afterSequence": 1, "sessionId": "session" })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(events["events"][0]["category"], "recording.entryRemoved");
     }
 
     #[test]
