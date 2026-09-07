@@ -2135,7 +2135,11 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .all(|processor| processor["availability"]["status"] == "unavailable"));
+            .any(|processor| processor["availability"]["status"] == "available"));
+        assert!(processors.as_array().unwrap().iter().any(|processor| {
+            processor["id"] == "parametricEq"
+                && processor["availability"]["status"] == "available"
+        }));
     }
 
     #[test]
