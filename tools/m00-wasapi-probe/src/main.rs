@@ -315,8 +315,20 @@ fn adapter_smoke(
                 "adapter smoke test received no bounded stream data",
             )));
         }
+        let telemetry = scheduler.telemetry();
+        if telemetry.active_generation != Some(generation)
+            || telemetry.processed_quanta != u64::from(graph_blocks)
+            || telemetry.xruns != 0
+            || telemetry.input_overruns != 0
+            || telemetry.output_overruns != 0
+        {
+            return Err(AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80004005u32 as i32),
+                "adapter smoke scheduler telemetry was invalid",
+            )));
+        }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={}",
             capture_info.id,
             render_info.id,
             capture_packets,
@@ -328,7 +340,11 @@ fn adapter_smoke(
             pending_frames,
             render_frames,
             routed_frames,
-            route
+            route,
+            telemetry.processed_quanta,
+            telemetry.xruns,
+            telemetry.input_overruns,
+            telemetry.output_overruns
         );
         Ok(())
     })();

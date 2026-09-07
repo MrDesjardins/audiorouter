@@ -299,3 +299,8 @@ inventory and opens both streams through `SharedCapture::open_bound` and
 metadata helper, so the live route cannot bypass the binding or frame-shape
 checks. The monitor validation remains a control-plane precondition; topology
 races after validation are still surfaced by WASAPI errors.
+
+The one-second authorized route also asserted scheduler telemetry before
+stopping: processed quanta matched graph blocks, the active generation remained
+current, and input/output overruns plus XRuns were zero. This is bounded route
+health evidence, not proof of long-run native callback timing.
