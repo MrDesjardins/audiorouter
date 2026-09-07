@@ -688,6 +688,13 @@ frame. Plugin-host tests and strict Clippy pass, and the complete M07 headless
 acceptance also passes with the MCP/worker lanes. No audio or machine
 configuration was accessed.
 
+Added a file-backed enrollment restart regression. An operator enrollment is
+created, the first control instance is dropped, and a second instance reloads
+the enrollment from SQLite before authorizing a recovery-clear request. This
+proves persistence through the control authorization boundary rather than only
+through a storage-row test. Control coverage is 71 tests with strict Clippy
+and formatting; no audio or machine configuration was accessed.
+
 Persisted the control-plane `backendEpoch` in SQLite and atomically claimed the
 next epoch when a durable control plane opens. A restart regression now proves
 that two successive control instances expose distinct epochs, while the

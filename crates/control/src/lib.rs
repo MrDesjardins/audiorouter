@@ -6614,6 +6614,38 @@ mod tests {
     }
 
     #[test]
+    fn file_backed_enrollment_authorizes_after_control_restart() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-enrollment-restart-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let mut first =
+                ControlPlane::with_storage("enrollment-first", Storage::open(&path).unwrap());
+            first
+                .enroll_client("operator", ClientRole::Operator)
+                .unwrap();
+        }
+        let mut second =
+            ControlPlane::with_storage("enrollment-second", Storage::open(&path).unwrap());
+        let grant = second.grant_for_client("operator").unwrap().unwrap();
+        assert!(grant.allows(PermissionScope::SessionControl));
+        let response = second.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(22)),
+                method: "recovery.clearSafeMode".into(),
+                params: None,
+            },
+            "operator",
+            &grant,
+        );
+        assert_eq!(response.result.unwrap()["safeMode"], false);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn read_only_notifications_produce_no_response() {
         let mut plane = ControlPlane::default();
         let notification = JsonRpcRequest {
