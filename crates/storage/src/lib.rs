@@ -377,9 +377,7 @@ impl Storage {
             ));
         }
         let metadata = std::fs::symlink_metadata(directory)?;
-        if !metadata.is_dir()
-            || is_reparse_point(&metadata)
-            || path_has_reparse_ancestor(directory)
+        if !metadata.is_dir() || is_reparse_point(&metadata) || path_has_reparse_ancestor(directory)
         {
             return Err(StorageError::InvalidBackupPath(
                 "backup retention directory must be a regular non-symlink directory".into(),
@@ -3225,7 +3223,8 @@ mod tests {
 
     #[test]
     fn recording_paths_reject_reparse_ancestors() {
-        let root = std::env::temp_dir().join(format!("audiorouter-recording-path-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-recording-path-{}", std::process::id()));
         let target = root.join("target");
         let link = root.join("redirected");
         let _ = std::fs::remove_dir_all(&root);

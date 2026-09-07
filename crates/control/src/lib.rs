@@ -5402,9 +5402,9 @@ fn storage_error(error: StorageError) -> ControlError {
         | StorageError::InvalidRecording(message)
         | StorageError::InvalidPluginState(message)
         | StorageError::InvalidBackupPath(message) => ControlError::InvalidRequest(message),
-        StorageError::DocumentTooLarge { maximum, .. } => ControlError::InvalidRequest(
-            format!("document exceeds the maximum permitted size of {maximum} bytes"),
-        ),
+        StorageError::DocumentTooLarge { maximum, .. } => ControlError::InvalidRequest(format!(
+            "document exceeds the maximum permitted size of {maximum} bytes"
+        )),
         StorageError::InvalidRecoveryTimestamp => {
             ControlError::InvalidRequest("invalid recovery timestamp".into())
         }

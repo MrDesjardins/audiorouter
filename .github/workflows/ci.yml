@@ -54,9 +54,24 @@ jobs:
       - name: Compile native WASAPI probe
         shell: pwsh
         run: ./tests/acceptance/m00-native-build.ps1
+      - name: Validate documentation acceptance wrapper
+        shell: pwsh
+        run: ./tests/acceptance/docs.ps1
+      - name: Run M04 DSP and recording acceptance
+        shell: pwsh
+        run: ./tests/acceptance/m04-dsp-recording.ps1
+      - name: Run M05 UI acceptance
+        shell: pwsh
+        run: ./tests/acceptance/m05-ui.ps1
+      - name: Run M07 headless acceptance
+        shell: pwsh
+        run: ./tests/acceptance/m07-headless.ps1
       - name: Verify SDK installer provenance
         shell: pwsh
         run: ./tests/acceptance/m06-sdk-installer.ps1
+      - name: Run M08 unsigned release acceptance
+        shell: pwsh
+        run: ./tests/acceptance/m08-release.ps1
       - name: Test release verifier and runbook
         shell: pwsh
         run: |

@@ -1923,16 +1923,16 @@ fn windows_file_identity(left: &Path, right: &Path) -> Result<bool, SharedAudioE
             file_index_high: 0,
             file_index_low: 0,
         };
-        let succeeded = unsafe {
-            GetFileInformationByHandle(file.as_raw_handle(), &mut information)
-        };
+        let succeeded =
+            unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) };
         if succeeded == 0 {
-            return Err(SharedAudioError::Io(std::io::Error::last_os_error().to_string()));
+            return Err(SharedAudioError::Io(
+                std::io::Error::last_os_error().to_string(),
+            ));
         }
         Ok((
             information.volume_serial_number,
-            (u64::from(information.file_index_high) << 32)
-                | u64::from(information.file_index_low),
+            (u64::from(information.file_index_high) << 32) | u64::from(information.file_index_low),
         ))
     }
 
