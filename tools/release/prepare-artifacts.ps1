@@ -61,7 +61,10 @@ try {
     if (-not (Test-Path -LiteralPath $uiLock -PathType Leaf)) {
         throw "UI lockfile is missing: $uiLock"
     }
-    $null = Get-Content -LiteralPath $uiLock -Raw | ConvertFrom-Json
+    & node.exe -e "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))" -- $uiLock
+    if ($LASTEXITCODE -ne 0) {
+        throw "UI lockfile is not valid JSON: $uiLock"
+    }
 
     New-Item -ItemType Directory -Path $output | Out-Null
 
