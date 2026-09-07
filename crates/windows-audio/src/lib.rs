@@ -1020,6 +1020,13 @@ impl EndpointMonitor {
     pub fn snapshot(&self) -> &[EndpointInfo] {
         &self.snapshot
     }
+
+    /// Resolve a persisted binding against the monitor's latest snapshot.
+    /// This is observational only; callers must deliberately handle a
+    /// non-available result before opening a replacement stream.
+    pub fn resolve_binding(&self, expected: &EndpointInfo) -> EndpointBindingResolution {
+        resolve_endpoint_binding_with_format(&self.snapshot, expected)
+    }
 }
 
 /// Enumerate active capture and render endpoints without opening streams.

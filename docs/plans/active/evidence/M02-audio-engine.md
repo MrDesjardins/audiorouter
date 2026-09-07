@@ -269,3 +269,7 @@ silently accepting a stale graph binding. The regression passes in the
 19-test Windows-audio suite with strict Clippy and doc-tests. This remains a
 read-only decision boundary; deliberate native renegotiation and stream
 recovery are still open.
+
+The resolver is now exposed on `EndpointMonitor` as a snapshot-only method,
+making the fail-closed decision available immediately after notification-driven
+refresh without coupling recovery code to enumeration or stream activation.
