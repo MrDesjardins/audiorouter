@@ -108,5 +108,10 @@ try {
     Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {
-    Remove-Item -LiteralPath $output, $captureLog, "$captureLog.err", $toneLog, "$toneLog.err", $object -Force -ErrorAction SilentlyContinue
+    $cleanupPaths = @($output, $captureLog, "$captureLog.err", $toneLog, "$toneLog.err", $object)
+    for ($attempt = 0; $attempt -lt 5; $attempt++) {
+        Remove-Item -LiteralPath $cleanupPaths -Force -ErrorAction SilentlyContinue
+        if (-not (Test-Path -LiteralPath $object)) { break }
+        Start-Sleep -Milliseconds 100
+    }
 }

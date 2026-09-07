@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <ksmedia.h>
@@ -253,7 +254,7 @@ static int process_loopback_probe(DWORD target_process_id, bool read_data, bool 
     return SUCCEEDED(hr) && completed && SUCCEEDED(activation) && data_ok ? 0 : 1;
 }
 
-static int capture_data_probe(UINT target_index, DWORD duration_ms) {
+static int capture_data_probe(UINT target_index, DWORD duration_ms, const char* output_path = nullptr) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -304,10 +305,20 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
     UINT32 frame_count = 0;
     UINT64 nonzero_bytes = 0;
     UINT32 silent_packet_count = 0;
+    std::ofstream capture_file;
+    if (output_path) {
+        capture_file.open(output_path, std::ios::binary | std::ios::trunc);
+        if (!capture_file) {
+            std::cout << "capture_file_open_failed=1 path=" << output_path << '\n';
+            device->Release(); devices->Release(); enumerator->Release();
+            return 1;
+        }
+    }
     if (SUCCEEDED(hr)) {
         hr = client->Start();
         print_hr("capture_start", hr);
         if (SUCCEEDED(hr)) {
+            std::cout << "capture_start_tick_ms=" << GetTickCount64() << '\n';
             REFERENCE_TIME stream_latency = 0;
             const HRESULT latency_hr = client->GetStreamLatency(&stream_latency);
             print_hr("capture_get_stream_latency", latency_hr);
@@ -334,15 +345,25 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms) {
                 frame_count += frames;
                 if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0) {
                     ++silent_packet_count;
+                    if (capture_file) {
+                        std::vector<BYTE> silence(static_cast<size_t>(frames) * format->nBlockAlign, 0);
+                        capture_file.write(reinterpret_cast<const char*>(silence.data()),
+                                           static_cast<std::streamsize>(silence.size()));
+                    }
                 } else if (data && format) {
                     const UINT64 payload_bytes = static_cast<UINT64>(frames) * format->nBlockAlign;
                     for (UINT64 byte = 0; byte < payload_bytes; ++byte) {
                         if (data[byte] != 0) ++nonzero_bytes;
                     }
+                    if (capture_file) {
+                        capture_file.write(reinterpret_cast<const char*>(data),
+                                           static_cast<std::streamsize>(payload_bytes));
+                    }
                 }
                 hr = capture->ReleaseBuffer(frames);
             }
             print_hr("capture_packet_read", hr);
+            if (capture_file) capture_file.flush();
             std::cout << "capture_packets=" << packet_count << " capture_frames=" << frame_count
                       << " capture_silent_packets=" << silent_packet_count
                       << " capture_nonzero_bytes=" << nonzero_bytes << '\n';
@@ -419,7 +440,42 @@ static bool render_tone(BYTE* data, UINT32 frames, const WAVEFORMATEX* format,
     return false;
 }
 
-static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
+static bool render_impulses(BYTE* data, UINT32 frames, const WAVEFORMATEX* format,
+                            UINT64& sample_index) {
+    if (!data || !format || format->nChannels == 0 || format->nSamplesPerSec < 100) return false;
+    const bool is_float = format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+        (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+         format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+         reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat ==
+             KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+    const UINT32 interval = format->nSamplesPerSec / 100;
+    std::memset(data, 0, static_cast<size_t>(frames) * format->nBlockAlign);
+    UINT32 impulse_count = 0;
+    if (is_float && format->wBitsPerSample == 32) {
+        auto* samples = reinterpret_cast<float*>(data);
+        for (UINT32 frame = 0; frame < frames; ++frame, ++sample_index) {
+            if (sample_index % interval == 0) {
+                for (UINT channel = 0; channel < format->nChannels; ++channel)
+                    samples[static_cast<size_t>(frame) * format->nChannels + channel] = 0.5f;
+                ++impulse_count;
+            }
+        }
+    } else if (!is_float && format->wFormatTag == WAVE_FORMAT_PCM && format->wBitsPerSample == 16) {
+        auto* samples = reinterpret_cast<SHORT*>(data);
+        for (UINT32 frame = 0; frame < frames; ++frame, ++sample_index) {
+            if (sample_index % interval == 0) {
+                for (UINT channel = 0; channel < format->nChannels; ++channel)
+                    samples[static_cast<size_t>(frame) * format->nChannels + channel] = 16384;
+                ++impulse_count;
+            }
+        }
+    } else {
+        return false;
+    }
+    return impulse_count > 0;
+}
+
+static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone, bool impulses = false) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -471,11 +527,14 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
     }
     UINT32 submitted_frames = 0;
     double phase = 0.0;
+    UINT64 impulse_sample_index = 0;
     bool tone_written = !tone;
+    bool impulses_written = !impulses;
     if (SUCCEEDED(hr)) {
         hr = client->Start();
         print_hr("render_start", hr);
         if (SUCCEEDED(hr)) {
+            std::cout << "render_start_tick_ms=" << GetTickCount64() << '\n';
             REFERENCE_TIME stream_latency = 0;
             const HRESULT latency_hr = client->GetStreamLatency(&stream_latency);
             print_hr("render_get_stream_latency", latency_hr);
@@ -493,7 +552,8 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
                     hr = render->GetBuffer(available, &data);
                     if (FAILED(hr)) break;
                     if (tone) tone_written = render_tone(data, available, format, phase, 997.0) || tone_written;
-                    hr = render->ReleaseBuffer(available, tone ? 0 : AUDCLNT_BUFFERFLAGS_SILENT);
+                    if (impulses) impulses_written = render_impulses(data, available, format, impulse_sample_index) || impulses_written;
+                    hr = render->ReleaseBuffer(available, (tone || impulses) ? 0 : AUDCLNT_BUFFERFLAGS_SILENT);
                     if (FAILED(hr)) break;
                     submitted_frames += available;
                 }
@@ -502,7 +562,8 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
             print_hr("render_silent_submit", hr);
             std::cout << "render_buffer_size=" << buffer_size
                       << " render_submitted_frames=" << submitted_frames
-                      << " render_tone_written=" << (tone_written ? 1 : 0) << '\n';
+                      << " render_tone_written=" << (tone_written ? 1 : 0)
+                      << " render_impulse_written=" << (impulses_written ? 1 : 0) << '\n';
             print_hr("render_stop", client->Stop());
             print_hr("render_reset", client->Reset());
         }
@@ -511,7 +572,7 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
     if (format) CoTaskMemFree(format);
     if (client) client->Release();
     device->Release(); devices->Release(); enumerator->Release();
-    return SUCCEEDED(hr) && submitted_frames > 0 && tone_written ? 0 : 1;
+    return SUCCEEDED(hr) && submitted_frames > 0 && tone_written && impulses_written ? 0 : 1;
 }
 
 static int render_session_inventory(UINT target_index) {
@@ -696,6 +757,14 @@ int main(int argc, char** argv) {
         CoUninitialize();
         return result;
     }
+    if (argc > 1 && std::strcmp(argv[1], "capture-file") == 0) {
+        UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
+        const char* output_path = argc > 4 ? argv[4] : nullptr;
+        int result = output_path ? capture_data_probe(target_index, duration_ms, output_path) : 1;
+        CoUninitialize();
+        return result;
+    }
     if (argc > 1 && std::strcmp(argv[1], "render") == 0) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
@@ -731,6 +800,13 @@ int main(int argc, char** argv) {
         DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1500;
         UINT target_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
         int result = render_data_probe(target_index, duration_ms, true);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "impulse") == 0) {
+        DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
+        UINT target_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        int result = render_data_probe(target_index, duration_ms, false, true);
         CoUninitialize();
         return result;
     }

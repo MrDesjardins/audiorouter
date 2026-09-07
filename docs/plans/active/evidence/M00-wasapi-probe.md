@@ -463,3 +463,24 @@ smoke evidence only; it does not replace the 1,000-impulse acoustic test.
 The wrapper is generic over the explicitly selected friendly-name pair, with
 the VB-Audio cable retained as the default. A current run passed for both the
 cable and the PD200X USB pair.
+
+## Impulse-train correlation harness (2026-09-07)
+
+The native probe now supports `impulse` (a deterministic 10 ms impulse train)
+and `capture-file` (bounded raw packet capture). The opt-in
+`tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio` wrapper resolves
+friendly-name endpoint pairs, defaults to 1,000 impulses, validates lifecycle,
+correlates captured peaks, reports p95 inter-impulse spacing error and an onset
+estimate, compares the media snapshot, and removes temporary executable,
+object, log, and raw-capture files. The onset estimate is deliberately not
+treated as the required calibrated physical p95 latency gate.
+
+The virtual-cable run passed correlation with 996/1,000 detected groups, zero
+p95 spacing error, and a 76.92 ms estimated onset. Running the same analyzer on
+the PD200X pair detected zero groups. A bounded follow-up captured 95,520 mono
+frames and 146,220 nonzero bytes, but the maximum absolute float sample was
+only `2.15e-6`, with no samples above `0.001`. The render lifecycle succeeded,
+but no measurable impulse returned to the microphone, so the current physical
+setup cannot qualify the required acoustic latency distribution. The result
+is recorded as an explicit failed/unqualified gate; the threshold was not
+lowered to turn ambient/noise data into a latency pass.
