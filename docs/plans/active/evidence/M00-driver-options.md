@@ -136,6 +136,12 @@ This remains reference-sample qualification only: no driver was installed or
 loaded, test-signing mode was changed, and no machine audio configuration was
 changed.
 
+The pinned-helper rerun verified the source revisions directly: Microsoft
+`Windows-driver-samples` at
+`197ba2156a60e2b76fcd4820bae594223e91a1e9` and its WIL gitlink at
+`3c00e7f1d8cf9930bbb8e5be3ef0df65c84e8928`. The exact-commit checkout,
+full x64 package/API validation, signability checks, and cleanup all passed.
+
 The new top-level helper was then executed end-to-end. It cloned the Microsoft
 reference repository, initialized WIL, passed the existing x64 package/API and
 signability checks, and removed the exact temporary checkout with exit code 0.

@@ -10,13 +10,23 @@ $wrapper = Join-Path $PSScriptRoot '..\..\tests\acceptance\m00-sysvad-build.ps1'
 
 try {
     Write-Output "Creating disposable SysVAD checkout at $checkout"
-    & git clone --depth 1 $samplesRepository $checkout
+    & git clone --filter=blob:none --no-checkout --depth 1 $samplesRepository $checkout
     if ($LASTEXITCODE -ne 0) { throw "Windows driver samples clone failed with exit code $LASTEXITCODE" }
+    & git -C $checkout fetch --depth 1 origin $samplesCommit
+    if ($LASTEXITCODE -ne 0) { throw "Windows driver samples pinned fetch failed with exit code $LASTEXITCODE" }
+    & git -C $checkout checkout --detach $samplesCommit
+    if ($LASTEXITCODE -ne 0) { throw "Windows driver samples pinned checkout failed with exit code $LASTEXITCODE" }
     $actualCommit = (& git -C $checkout rev-parse HEAD).Trim()
     if ($actualCommit -ne $samplesCommit) {
         throw "Windows driver samples revision mismatch: expected $samplesCommit, found $actualCommit"
     }
     Write-Output "Using Windows driver samples revision $actualCommit"
+    $wilTree = (& git -C $checkout ls-tree HEAD wil).Trim()
+    $wilCommit = ($wilTree -split '\s+')[2]
+    if ($wilCommit -notmatch '^[0-9a-f]{40}$') {
+        throw "Windows driver samples checkout has no pinned WIL gitlink: $wilCommit"
+    }
+    Write-Output "Using WIL revision $wilCommit"
 
     & git -C $checkout submodule update --init --depth 1 wil
     if ($LASTEXITCODE -ne 0) { throw "WIL submodule checkout failed with exit code $LASTEXITCODE" }
