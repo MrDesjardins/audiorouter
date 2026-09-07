@@ -620,8 +620,8 @@ export type MethodParams = {
   "recordings.rename": { recordingId: EntityId; newPath: string; idempotencyKey?: string };
   "recordings.removeEntry": { recordingId: EntityId; idempotencyKey?: string };
   "recordings.recycle": { recordingId: EntityId; confirm?: boolean; idempotencyKey?: string };
-  "recovery.clearSafeMode": undefined;
-  "safety.setPrivacyMute": { muted: boolean };
+  "recovery.clearSafeMode": { idempotencyKey?: string } | undefined;
+  "safety.setPrivacyMute": { muted: boolean; idempotencyKey?: string };
   "startup.get": undefined;
   "devices.list": { cursor?: string; limit?: number } | undefined;
   "plugins.scan": { directory: string };
@@ -642,13 +642,14 @@ export type MethodParams = {
   "presets.list": undefined;
   "sessions.get": { sessionId: EntityId };
   "sessions.list": { cursor?: string; limit?: number } | undefined;
-  "sessions.create": { session: Session };
+  "sessions.create": { session: Session; idempotencyKey?: string };
   "sessions.duplicate": {
     sourceSessionId: EntityId;
     sessionId: EntityId;
     name?: string;
+    idempotencyKey?: string;
   };
-  "sessions.delete": { sessionId: EntityId };
+  "sessions.delete": { sessionId: EntityId; idempotencyKey?: string };
   "graph.plan": { sessionId: EntityId; baseRevision: number; candidate: Session };
   "graph.commit": {
     planId: EntityId;
@@ -656,10 +657,10 @@ export type MethodParams = {
     idempotencyKey: string;
     acknowledgments?: string[] | null;
   };
-  "session.start": { sessionId: EntityId };
-  "sessions.start": { sessionId: EntityId };
-  "session.stop": { sessionId: EntityId };
-  "sessions.stop": { sessionId: EntityId };
+  "session.start": { sessionId: EntityId; idempotencyKey?: string };
+  "sessions.start": { sessionId: EntityId; idempotencyKey?: string };
+  "session.stop": { sessionId: EntityId; idempotencyKey?: string };
+  "sessions.stop": { sessionId: EntityId; idempotencyKey?: string };
 };
 
 export type MethodResult = {
