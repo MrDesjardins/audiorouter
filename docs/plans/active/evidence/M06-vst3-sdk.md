@@ -51,6 +51,11 @@ paths selected by the user, displaying either bounded identity metadata or the
 stable diagnostic code. This remains read-only and disconnected-safe; it does
 not execute plugin code.
 
+The public contract now constrains `errorCode` to the nine diagnostic values
+emitted by inspection plus `null` for a successful identity result. This keeps
+clients from accepting or inventing undocumented diagnostic strings; the Rust
+schema and TypeScript contract remain aligned.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

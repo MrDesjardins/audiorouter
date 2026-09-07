@@ -83,7 +83,17 @@ export interface PluginScanEntry {
     compatibility: "supportedVst3X64" | "unsupportedFormat";
   } | null;
   error: string | null;
-  errorCode: string | null;
+  errorCode:
+    | "outsideConfiguredRoot"
+    | "unsupportedExtension"
+    | "missing"
+    | "tooLarge"
+    | "notPe"
+    | "unsupportedArchitecture"
+    | "cancelled"
+    | "deadlineExceeded"
+    | "io"
+    | null;
 }
 
 export interface PluginScanResult {

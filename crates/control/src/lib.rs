@@ -993,7 +993,7 @@ fn method_output_schema(name: &str) -> Value {
                                 "additionalProperties": false
                             },
                             "error": { "type": ["string", "null"] },
-                            "errorCode": { "type": ["string", "null"] }
+                            "errorCode": { "enum": ["outsideConfiguredRoot", "unsupportedExtension", "missing", "tooLarge", "notPe", "unsupportedArchitecture", "cancelled", "deadlineExceeded", "io", null] }
                         },
                         "required": ["path", "identity", "error", "errorCode"],
                         "additionalProperties": false
@@ -1022,7 +1022,7 @@ fn method_output_schema(name: &str) -> Value {
                     "additionalProperties": false
                 },
                 "error": { "type": ["string", "null"] },
-                "errorCode": { "type": ["string", "null"] }
+                "errorCode": { "enum": ["outsideConfiguredRoot", "unsupportedExtension", "missing", "tooLarge", "notPe", "unsupportedArchitecture", "cancelled", "deadlineExceeded", "io", null] }
             },
             "required": ["path", "identity", "error", "errorCode"],
             "additionalProperties": false
@@ -6108,6 +6108,13 @@ mod tests {
             .unwrap()
             .iter()
             .any(|field| field == "errorCode"));
+        assert_eq!(
+            method["outputSchema"]["properties"]["errorCode"]["enum"]
+                .as_array()
+                .unwrap()
+                .len(),
+            10
+        );
     }
 
     #[test]
