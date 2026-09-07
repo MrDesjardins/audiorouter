@@ -600,3 +600,12 @@ The retry-key helper is now an isolated UI module with a regression verifying
 operation scoping and distinct keys for repeated attempts. M05 typecheck, all
 64 Vitest tests, and the disposable three-file production build pass; no audio
 or machine configuration was accessed.
+
+## Current-tip acceptance after startup API expansion (2026-09-07)
+
+The complete M05 acceptance was rerun at the current tip. TypeScript
+typechecking passed, all 69 Vitest tests passed, and the disposable Vite
+production build produced three files. The temporary output was removed; this
+was UI-only validation and did not access audio devices, drivers, startup
+registration, or machine configuration. Manual visual/accessibility acceptance,
+native shell injection, startup registration, and live audio remain open.
