@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processorAvailabilityText, processorLatencyText, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
+import { processorAvailabilityText, processorLatencyText, processorParameterError, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
 
 const pitch: ProcessorDescriptor = {
   id: "pitch",
@@ -26,5 +26,13 @@ describe("processor catalog presentation", () => {
       parameters: [{ name: "semitones", type: "number", unit: "st", minimum: -12, maximum: 12, default: 0 }],
     })).toBe("semitones: number st, -12..12");
     expect(processorParametersText(pitch)).toBe("no parameters");
+  });
+
+  it("validates inspector values against the authoritative descriptor", () => {
+    const descriptor = { ...pitch, parameters: [{ name: "semitones", type: "number", minimum: -12, maximum: 12, default: 0 }] };
+    expect(processorParameterError([descriptor], "pitch", "semitones", 12.1)).toContain("at most 12");
+    expect(processorParameterError([descriptor], "pitch", "semitones", 12)).toBeNull();
+    expect(processorParameterError([descriptor], "pitch", "semitones", Number.NaN)).toContain("finite");
+    expect(processorParameterError([descriptor], "pitch", "unknown", 1)).toBeNull();
   });
 });
