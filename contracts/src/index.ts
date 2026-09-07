@@ -578,6 +578,7 @@ export interface ApplicationInfo {
   audioSessionCount: number;
   activeAudioSessionCount: number;
   captureSessionCount: number;
+  renderSessionCount: number;
   audioDisplayNames: string[];
 }
 

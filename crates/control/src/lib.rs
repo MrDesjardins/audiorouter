@@ -946,9 +946,10 @@ fn method_output_schema(name: &str) -> Value {
                     "audioSessionCount": { "type": "integer", "minimum": 0 },
                     "activeAudioSessionCount": { "type": "integer", "minimum": 0 },
                     "captureSessionCount": { "type": "integer", "minimum": 0 },
+                    "renderSessionCount": { "type": "integer", "minimum": 0 },
                     "audioDisplayNames": { "type": "array", "items": { "type": "string" } }
                 },
-                "required": ["processId", "executable", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "audioDisplayNames"],
+                "required": ["processId", "executable", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "renderSessionCount", "audioDisplayNames"],
                 "additionalProperties": false
             }
         }),
@@ -5161,6 +5162,7 @@ impl ControlPlane {
                     "audioSessionCount": session.map_or(0, |item| item.total_session_count),
                     "activeAudioSessionCount": session.map_or(0, |item| item.active_session_count),
                     "captureSessionCount": session.map_or(0, |item| item.capture_session_count),
+                    "renderSessionCount": session.map_or(0, |item| item.render_session_count),
                     "audioDisplayNames": session.map_or_else(Vec::new, |item| item.display_names.clone()),
                 })
             })
@@ -6523,6 +6525,10 @@ mod tests {
             applications["outputSchema"]["items"]["properties"]["captureSessionCount"]["type"],
             "integer"
         );
+        assert_eq!(
+            applications["outputSchema"]["items"]["properties"]["renderSessionCount"]["type"],
+            "integer"
+        );
         let recordings = methods
             .iter()
             .find(|method| method["name"] == "recordings.list")
@@ -6609,6 +6615,7 @@ mod tests {
                 && application.get("audioSessionCount").is_some()
                 && application.get("activeAudioSessionCount").is_some()
                 && application.get("captureSessionCount").is_some()
+                && application.get("renderSessionCount").is_some()
                 && application.get("audioDisplayNames").is_some()
         }));
     }

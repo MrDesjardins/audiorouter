@@ -2101,6 +2101,7 @@ mod tests {
                 && application.get("audioSessionCount").is_some()
                 && application.get("activeAudioSessionCount").is_some()
                 && application.get("captureSessionCount").is_some()
+                && application.get("renderSessionCount").is_some()
                 && application.get("audioDisplayNames").is_some()
         }));
         let applications: Value =

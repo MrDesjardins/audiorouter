@@ -108,6 +108,7 @@ pub struct ApplicationAudioInfo {
     pub active_session_count: u32,
     pub total_session_count: u32,
     pub capture_session_count: u32,
+    pub render_session_count: u32,
     pub display_names: Vec<String>,
 }
 
@@ -1097,6 +1098,7 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                                     active_session_count: 0,
                                     total_session_count: 0,
                                     capture_session_count: 0,
+                                    render_session_count: 0,
                                     display_names: Vec::new(),
                                 });
                         entry.total_session_count += 1;
@@ -1105,6 +1107,8 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                         }
                         if is_capture {
                             entry.capture_session_count += 1;
+                        } else {
+                            entry.render_session_count += 1;
                         }
                         let Ok(display_name) = session.GetDisplayName() else {
                             continue;
@@ -1551,6 +1555,7 @@ mod tests {
             item.process_id != 0
                 && item.active_session_count <= item.total_session_count
                 && item.capture_session_count <= item.total_session_count
+                && item.render_session_count <= item.total_session_count
         }));
     }
 
@@ -1605,6 +1610,7 @@ mod tests {
                 active_session_count: 1,
                 total_session_count: 1,
                 capture_session_count: 0,
+                render_session_count: 1,
                 display_names: vec!["zulu".into(), "alpha".into(), "alpha".into()],
             },
             ApplicationAudioInfo {
@@ -1612,6 +1618,7 @@ mod tests {
                 active_session_count: 1,
                 total_session_count: 2,
                 capture_session_count: 1,
+                render_session_count: 1,
                 display_names: vec!["voice".into()],
             },
         ];
