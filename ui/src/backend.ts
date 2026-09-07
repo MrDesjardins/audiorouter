@@ -60,6 +60,7 @@ export interface UiBackend {
   listSessions(): Promise<Session[]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
+  listProcessors(): Promise<DiscoveryDocument["processors"]>;
   scanPlugins(directory: string): Promise<PluginScanResult>;
   listPlugins(directory: string): Promise<PluginScanResult>;
   retryPlugins(directory: string, idempotencyKey: string): Promise<PluginScanResult>;
@@ -172,6 +173,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async listDevices() {
       return [];
+    },
+    async listProcessors() {
+      throw new Error("The backend is disconnected; processor catalog is unavailable.");
     },
     async scanPlugins() {
       throw new Error("The backend is disconnected; plugin scanning is unavailable.");
@@ -335,6 +339,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     async listDevices() {
       const result = await client.request("devices.list", { limit: 500 });
       return Array.isArray(result) ? result : result.items;
+    },
+    async listProcessors() {
+      return client.request("processors.list", undefined);
     },
     async scanPlugins(directory) {
       return client.request("plugins.scan", { directory });

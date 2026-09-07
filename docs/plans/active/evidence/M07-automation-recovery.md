@@ -832,6 +832,11 @@ CLI (25), MCP interoperability (2), control (83), plugin-host (33),
 worker-process (8), and strict Clippy passed. Temporary state only; no startup
 registration, audio device, driver, or machine configuration was accessed.
 
+The shared UI/API parity check now also covers the dedicated `processors.list`
+catalog path. Its result is read-only and failure-visible; no processor is
+activated by inventory refresh. Contracts typecheck, UI typecheck, 75 UI tests,
+and the M05 acceptance build passed.
+
 The current M07 headless acceptance also passed at this revision: 25 CLI tests,
 2 MCP interoperability tests, 83 control tests, 33 plugin-host tests, 8
 worker-process tests, and strict Clippy. M01 CLI acceptance passed as part of

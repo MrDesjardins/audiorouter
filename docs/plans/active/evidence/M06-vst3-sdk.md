@@ -79,6 +79,12 @@ the separate inspect action is still required, so discovery cannot implicitly
 load plugin code. M05 typecheck, 73 UI tests, and the disposable production
 build passed.
 
+The UI processor catalog now uses the dedicated read-only `processors.list`
+method rather than relying solely on the broader system snapshot. Connected
+catalog failures are shown as unavailable and disconnected mode does not
+invent processor data. Contracts typecheck, UI typecheck, 75 UI tests, and the
+disposable M05 production build passed; no processor or plugin was executed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06

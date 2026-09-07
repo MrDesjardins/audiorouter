@@ -38,6 +38,7 @@ describe("snapshot cache", () => {
       listSessions: async () => [],
       listApplications: async () => [],
       listDevices: async () => [],
+      listProcessors: async () => [],
       scanPlugins: async () => { throw new Error("not connected"); },
       listPlugins: async () => { throw new Error("not connected"); },
       retryPlugins: async () => { throw new Error("not connected"); },
@@ -140,6 +141,18 @@ describe("live event cursor", () => {
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listSessions()).resolves.toEqual([demoSession]);
     expect(received).toEqual({ method: "sessions.list", params: { limit: 500 } });
+  });
+
+  it("forwards the dedicated processor catalog method", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return [];
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listProcessors()).resolves.toEqual([]);
+    expect(received).toEqual({ method: "processors.list", params: undefined });
   });
 
   it("maps application inventory to the canonical read method", async () => {
