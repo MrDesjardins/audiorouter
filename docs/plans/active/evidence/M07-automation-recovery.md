@@ -771,3 +771,8 @@ The M07 acceptance wrapper passed CLI (23), MCP stdio/named-pipe
 interoperability (2), control (79), plugin-host (31), worker-process (8), and
 strict Clippy. Temporary state was isolated and removed; native process/audio
 restart and full plugin sandboxing remain open.
+
+At the current head, the wrapper passed M01 CLI (24 tests), MCP
+stdio/named-pipe interoperability (2), control (81), plugin-host (31),
+worker-process (8), and strict Clippy. Temporary test state only; no audio
+device, driver, or machine configuration was accessed.
