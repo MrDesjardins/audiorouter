@@ -2333,6 +2333,7 @@ mod tests {
         let node = |id: &str, kind, ports| Node {
             id: EntityId::new(id),
             kind,
+            type_version: 1,
             name: id.into(),
             enabled: true,
             bypass: false,
@@ -3041,6 +3042,7 @@ mod tests {
             nodes: vec![Node {
                 id: EntityId::new("mute"),
                 kind: NodeKind::Mute,
+                type_version: 1,
                 name: "Mute".into(),
                 enabled: true,
                 bypass: false,
@@ -3070,6 +3072,7 @@ mod tests {
                 Node {
                     id: EntityId::new("first"),
                     kind: NodeKind::Gain,
+                    type_version: 1,
                     name: "First".into(),
                     enabled: true,
                     bypass: false,
@@ -3079,6 +3082,7 @@ mod tests {
                 Node {
                     id: EntityId::new("second"),
                     kind: NodeKind::Mute,
+                    type_version: 1,
                     name: "Second".into(),
                     enabled: true,
                     bypass: false,
@@ -3108,6 +3112,7 @@ mod tests {
                 Node {
                     id: EntityId::new("source"),
                     kind: NodeKind::PhysicalInput,
+                    type_version: 1,
                     name: "Source".into(),
                     enabled: true,
                     bypass: false,
@@ -3121,6 +3126,7 @@ mod tests {
                 Node {
                     id: EntityId::new("sink"),
                     kind: NodeKind::PhysicalOutput,
+                    type_version: 1,
                     name: "Sink".into(),
                     enabled: true,
                     bypass: false,
@@ -3155,6 +3161,7 @@ mod tests {
         let source = Node {
             id: EntityId::new("source"),
             kind: NodeKind::PhysicalInput,
+            type_version: 1,
             name: "source".into(),
             enabled: true,
             bypass: false,
@@ -3168,6 +3175,7 @@ mod tests {
         let gain = Node {
             id: EntityId::new("gain"),
             kind: NodeKind::Gain,
+            type_version: 1,
             name: "gain".into(),
             enabled: true,
             bypass: true,
@@ -3188,6 +3196,7 @@ mod tests {
         let sink = Node {
             id: EntityId::new("sink"),
             kind: NodeKind::PhysicalOutput,
+            type_version: 1,
             name: "sink".into(),
             enabled: true,
             bypass: false,
@@ -3265,6 +3274,7 @@ mod tests {
         let output = |id: &str| Node {
             id: EntityId::new(id),
             kind: NodeKind::PhysicalOutput,
+            type_version: 1,
             name: id.into(),
             enabled: true,
             bypass: false,
@@ -3284,6 +3294,7 @@ mod tests {
                 Node {
                     id: EntityId::new("source"),
                     kind: NodeKind::PhysicalInput,
+                    type_version: 1,
                     name: "Source".into(),
                     enabled: true,
                     bypass: false,

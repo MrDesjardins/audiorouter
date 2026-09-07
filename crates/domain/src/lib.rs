@@ -767,12 +767,19 @@ pub struct Port {
 pub struct Node {
     pub id: EntityId,
     pub kind: NodeKind,
+    /// Version of the node-type contract used by this node instance.
+    #[serde(default = "current_node_type_version")]
+    pub type_version: u32,
     pub name: String,
     pub enabled: bool,
     pub bypass: bool,
     #[serde(default)]
     pub parameters: serde_json::Map<String, serde_json::Value>,
     pub ports: Vec<Port>,
+}
+
+fn current_node_type_version() -> u32 {
+    1
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -871,6 +878,12 @@ pub enum ValidationError {
         version: u32,
         supported: u32,
     },
+    UnsupportedNodeTypeVersion {
+        path: String,
+        kind: NodeKind,
+        version: u32,
+        supported: u32,
+    },
 }
 
 impl std::fmt::Display for ValidationError {
@@ -914,6 +927,18 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
             errors.push(ValidationError::DuplicateId {
                 path: format!("{path}.id"),
                 id: node.id.as_str().into(),
+            });
+        }
+        let supported_type_version = node_registry()
+            .into_iter()
+            .find(|spec| spec.kind == node.kind)
+            .map_or(CURRENT_SESSION_SCHEMA_VERSION, |spec| spec.version);
+        if node.type_version != supported_type_version {
+            errors.push(ValidationError::UnsupportedNodeTypeVersion {
+                path: format!("{path}.typeVersion"),
+                kind: node.kind,
+                version: node.type_version,
+                supported: supported_type_version,
             });
         }
         for port in &node.ports {
@@ -1906,6 +1931,7 @@ mod tests {
         Node {
             id: EntityId::new(id),
             kind,
+            type_version: 1,
             name: id.into(),
             enabled: true,
             bypass: false,
@@ -2779,6 +2805,29 @@ mod tests {
                 version: 2,
                 supported: 1
             } if path == "schemaVersion"
+        )));
+    }
+
+    #[test]
+    fn rejects_unknown_node_type_versions_against_registry() {
+        let mut session = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        session.nodes[0].type_version = 2;
+
+        let errors = validate_session(&session).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::UnsupportedNodeTypeVersion {
+                path,
+                kind: NodeKind::PhysicalInput,
+                version: 2,
+                supported: 1
+            } if path == "nodes[0].typeVersion"
         )));
     }
 

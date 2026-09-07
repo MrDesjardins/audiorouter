@@ -1635,6 +1635,7 @@ fn session_item_schema() -> Value {
                     "properties": {
                         "id": { "type": "string", "minLength": 1 },
                         "kind": { "type": "string", "minLength": 1 },
+                        "typeVersion": { "const": 1 },
                         "name": { "type": "string", "minLength": 1 },
                         "enabled": { "type": "boolean" },
                         "bypass": { "type": "boolean" },
@@ -1653,7 +1654,7 @@ fn session_item_schema() -> Value {
                             }
                         }
                     },
-                    "required": ["id", "kind", "name", "enabled", "bypass", "parameters", "ports"],
+                    "required": ["id", "kind", "typeVersion", "name", "enabled", "bypass", "parameters", "ports"],
                     "additionalProperties": false
                 }
             },
@@ -5832,6 +5833,7 @@ mod tests {
                 Node {
                     id: EntityId::new("in"),
                     kind: NodeKind::PhysicalInput,
+                    type_version: 1,
                     name: "Input".into(),
                     enabled: true,
                     bypass: false,
@@ -5845,6 +5847,7 @@ mod tests {
                 Node {
                     id: EntityId::new("out"),
                     kind: NodeKind::PhysicalOutput,
+                    type_version: 1,
                     name: "Output".into(),
                     enabled: true,
                     bypass: false,

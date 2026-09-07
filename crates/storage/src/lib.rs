@@ -2065,6 +2065,7 @@ mod tests {
                 Node {
                     id: EntityId::new("in"),
                     kind: NodeKind::PhysicalInput,
+                    type_version: 1,
                     name: "Input".into(),
                     enabled: true,
                     bypass: false,
@@ -2078,6 +2079,7 @@ mod tests {
                 Node {
                     id: EntityId::new("out"),
                     kind: NodeKind::PhysicalOutput,
+                    type_version: 1,
                     name: "Output".into(),
                     enabled: true,
                     bypass: false,

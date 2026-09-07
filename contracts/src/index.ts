@@ -27,6 +27,7 @@ export interface Port {
 export interface Node {
   id: EntityId;
   kind: NodeKind;
+  typeVersion: 1;
   name: string;
   enabled: boolean;
   bypass: boolean;

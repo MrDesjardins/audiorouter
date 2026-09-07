@@ -314,3 +314,8 @@ accepting a future version as if it were v1. The domain regression checks the
 field-path error before graph validation, and the control schema declares the
 same v1-only boundary. Migration of a future schema remains an explicit
 versioned task rather than an implicit compatibility claim.
+
+Node instances now carry an explicit `typeVersion` (currently `1`) and the
+domain validates it against the authoritative node registry. Unknown node
+versions fail with a path-specific error; deserialization defaults only legacy
+fixtures that predate this field to the current v1 contract.
