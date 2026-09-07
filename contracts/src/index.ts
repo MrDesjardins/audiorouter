@@ -375,6 +375,18 @@ export interface SessionDeleteResult {
   deleted: true;
 }
 
+export interface SessionImportPlanResult {
+  planId: EntityId;
+  expiresInMs: number;
+  session: Session;
+}
+
+export interface SessionImportCommitResult {
+  session: Session;
+  state: "stopped";
+  imported: true;
+}
+
 export interface SessionStartResult {
   sessionId: EntityId;
   state: "running";

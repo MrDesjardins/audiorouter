@@ -55,6 +55,9 @@ describe("snapshot cache", () => {
       deleteSession: async () => { throw new Error("not connected"); },
       startSession: async () => { throw new Error("not connected"); },
       stopSession: async () => { throw new Error("not connected"); },
+      exportSession: async () => { throw new Error("not connected"); },
+      planSessionImport: async () => { throw new Error("not connected"); },
+      commitSessionImport: async () => { throw new Error("not connected"); },
       getRecordingRecovery: async () => { throw new Error("not connected"); },
       revealRecording: async () => { throw new Error("not connected"); },
       setRecordingMetadata: async () => { throw new Error("not connected"); },
@@ -281,6 +284,27 @@ describe("live event cursor", () => {
     expect(received).toEqual([
       { method: "recorders.arm", params: { sessionId: demoSession.id, idempotencyKey: "arm-key" } },
       { method: "recorders.start", params: { sessionId: demoSession.id, frame: 12, idempotencyKey: "start-key" } },
+    ]);
+  });
+
+  it("forwards session export and stopped import planning through the shared API", async () => {
+    const received: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received.push({ method, params });
+        if (method === "sessions.export") return demoSession;
+        if (method === "sessions.importPlan") return { planId: "import-plan-1", expiresInMs: 300000, session: demoSession };
+        return { session: demoSession, state: "stopped", imported: true };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.exportSession(demoSession.id)).resolves.toEqual(demoSession);
+    await expect(backend.planSessionImport(demoSession)).resolves.toMatchObject({ planId: "import-plan-1" });
+    await expect(backend.commitSessionImport("import-plan-1", "import-key")).resolves.toMatchObject({ imported: true });
+    expect(received).toEqual([
+      { method: "sessions.export", params: { sessionId: demoSession.id } },
+      { method: "sessions.importPlan", params: { session: demoSession } },
+      { method: "sessions.importCommit", params: { planId: "import-plan-1", idempotencyKey: "import-key" } },
     ]);
   });
 

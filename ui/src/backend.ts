@@ -28,6 +28,8 @@ import type {
   SessionDeleteResult,
   SessionStartResult,
   SessionStopResult,
+  SessionImportPlanResult,
+  SessionImportCommitResult,
   StatusSnapshot,
   RpcTransport,
 } from "@audiorouter/contracts";
@@ -75,6 +77,9 @@ export interface UiBackend {
   deleteSession(sessionId: string, idempotencyKey?: string): Promise<SessionDeleteResult>;
   startSession(sessionId: string, idempotencyKey?: string): Promise<SessionStartResult>;
   stopSession(sessionId: string, idempotencyKey?: string): Promise<SessionStopResult>;
+  exportSession(sessionId: string): Promise<Session>;
+  planSessionImport(session: Session): Promise<SessionImportPlanResult>;
+  commitSessionImport(planId: string, idempotencyKey: string): Promise<SessionImportCommitResult>;
 }
 
 export type UiSnapshotState = {
@@ -228,6 +233,15 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async stopSession() {
       throw new Error("The backend is disconnected; session stop is unavailable.");
     },
+    async exportSession() {
+      throw new Error("The backend is disconnected; session export is unavailable.");
+    },
+    async planSessionImport() {
+      throw new Error("The backend is disconnected; session import is unavailable.");
+    },
+    async commitSessionImport() {
+      throw new Error("The backend is disconnected; session import is unavailable.");
+    },
   };
 }
 
@@ -350,6 +364,15 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async stopSession(stopSessionId, idempotencyKey) {
       return client.request("session.stop", { sessionId: stopSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async exportSession(exportSessionId) {
+      return client.request("sessions.export", { sessionId: exportSessionId });
+    },
+    async planSessionImport(session) {
+      return client.request("sessions.importPlan", { session });
+    },
+    async commitSessionImport(planId, idempotencyKey) {
+      return client.request("sessions.importCommit", { planId, idempotencyKey });
     },
   };
 }
