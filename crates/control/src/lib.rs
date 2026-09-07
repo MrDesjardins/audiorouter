@@ -2520,6 +2520,9 @@ impl ControlPlane {
             audiorouter_domain::NodeKind::Limiter => json!([
                 { "name": "ceilingDb", "type": "number", "unit": "dBFS", "minimum": -12.0, "maximum": 0.0, "default": -1.0 }
             ]),
+            audiorouter_domain::NodeKind::Delay => json!([
+                { "name": "delayMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 1000.0, "default": 0.0 }
+            ]),
             _ => json!([]),
         }
     }
@@ -2573,7 +2576,7 @@ impl ControlPlane {
             },
             {
                 "id": "delay", "version": 1, "category": "time",
-                "availability": unavailable, "latencySamples": 0,
+                "availability": available, "latencySamples": 0,
                 "parameters": [{ "name": "delayMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 1000.0, "default": 0.0 }]
             },
             {

@@ -3,7 +3,7 @@ import { filterLibraryEntries, libraryEntries, libraryEntryAccessibleLabel } fro
 
 describe("node library search", () => {
   it("matches labels, categories, and unavailable reasons", () => {
-    expect(filterLibraryEntries(libraryEntries, "effect").map((entry) => entry.id)).toEqual(["gain", "mute", "parametric-eq", "compressor", "gate", "limiter"]);
+    expect(filterLibraryEntries(libraryEntries, "effect").map((entry) => entry.id)).toEqual(["gain", "mute", "parametric-eq", "compressor", "gate", "limiter", "delay"]);
     expect(filterLibraryEntries(libraryEntries, "M02").map((entry) => entry.id)).toEqual([
       "physical-input",
       "application-capture",

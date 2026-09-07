@@ -1251,6 +1251,10 @@ pub enum ProcessingStage {
     Limiter {
         limiter: audiorouter_dsp::PeakLimiter,
     },
+    Delay {
+        left: Box<std::sync::Mutex<audiorouter_dsp::DelayLine>>,
+        right: Option<Box<std::sync::Mutex<audiorouter_dsp::DelayLine>>>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1571,6 +1575,7 @@ pub fn compile_session(
                         | NodeKind::Compressor
                         | NodeKind::Gate
                         | NodeKind::Limiter
+                        | NodeKind::Delay
                 ))
                 || (destination.bypass
                     && !matches!(
@@ -1582,6 +1587,7 @@ pub fn compile_session(
                             | NodeKind::Compressor
                             | NodeKind::Gate
                             | NodeKind::Limiter
+                            | NodeKind::Delay
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -1876,6 +1882,41 @@ pub fn compile_session(
                 })
                 .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 stages.push(ProcessingStage::Limiter { limiter });
+            }
+            NodeKind::Delay => {
+                let delay_ms = node
+                    .parameters
+                    .get("delayMs")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(0.0) as f32;
+                let input_channels = node
+                    .ports
+                    .iter()
+                    .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                    .map(|port| usize::from(port.channels))
+                    .unwrap_or(1);
+                let left = audiorouter_dsp::DelayLine::new(1_000.0, 48_000.0, 1)
+                    .and_then(|mut delay| {
+                        delay.set_delay_ms(delay_ms)?;
+                        Ok(delay)
+                    })
+                    .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                let right = if input_channels == 2 {
+                    Some(
+                        audiorouter_dsp::DelayLine::new(1_000.0, 48_000.0, 1)
+                            .and_then(|mut delay| {
+                                delay.set_delay_ms(delay_ms)?;
+                                Ok(delay)
+                            })
+                            .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                    )
+                } else {
+                    None
+                };
+                stages.push(ProcessingStage::Delay {
+                    left: Box::new(std::sync::Mutex::new(left)),
+                    right: right.map(|delay| Box::new(std::sync::Mutex::new(delay))),
+                });
             }
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
@@ -2456,6 +2497,25 @@ impl RuntimeGraph {
                     for channel in 0..block.channels() {
                         if let Some(samples) = block.channel_mut(channel) {
                             limiter.process_interleaved(samples);
+                        }
+                    }
+                }
+                ProcessingStage::Delay { left, right } => {
+                    let Ok(mut left) = left.try_lock() else {
+                        block.clear();
+                        continue;
+                    };
+                    if let Some(samples) = block.channel_mut(0) {
+                        left.process_interleaved(samples);
+                    }
+                    if block.channels() == 2 {
+                        if let (Some(delay), Some(samples)) = (right.as_ref(), block.channel_mut(1))
+                        {
+                            if let Ok(mut delay) = delay.try_lock() {
+                                delay.process_interleaved(samples);
+                            } else {
+                                block.clear();
+                            }
                         }
                     }
                 }
