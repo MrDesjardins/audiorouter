@@ -578,7 +578,8 @@ int main(int argc, char** argv) {
     }
     if (argc > 1 && std::strcmp(argv[1], "tone") == 0) {
         DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1500;
-        int result = render_data_probe(0, duration_ms, true);
+        UINT target_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        int result = render_data_probe(target_index, duration_ms, true);
         CoUninitialize();
         return result;
     }

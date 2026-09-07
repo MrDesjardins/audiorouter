@@ -300,6 +300,20 @@ script removed its temporary executable/object outputs; the probe was not
 executed, so no audio stream, driver, signing mode, or machine configuration
 was touched.
 
+## Physical-loopback prerequisite probe (2026-09-07)
+
+The native `tone` command now accepts an optional render endpoint index while
+retaining endpoint 0 as its default, allowing a physical output to be selected
+without changing the system default. The selected Focusrite analogue capture
+endpoint (local capture index 10) initialized, started, delivered 10 packets /
+4,800 frames over 500 ms, and stopped/reset successfully. The corresponding
+Focusrite render endpoint (local render index 5) returned
+`AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`) during initialization, so the probe
+emitted no tone and no physical latency measurement was attempted. The before
+and after media inventory was unchanged and the temporary executable was
+removed. An available output route is required before the 1,000-impulse
+physical-loopback gate can run.
+
 ## Silent shared-render lifecycle (2026-09-07)
 
 The native probe completed a bounded 200 ms shared-render lifecycle on an
