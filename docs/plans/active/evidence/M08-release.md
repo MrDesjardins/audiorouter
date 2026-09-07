@@ -313,3 +313,12 @@ The complete M08 wrapper passed after lexical and parent-chain reparse
 hardening. Optimized unsigned artifacts, manifest provenance, notices/SBOM,
 checksums, explicit blocker assertions, and verification succeeded in a
 disposable directory; the directory was removed afterward.
+
+## Current-head unsigned qualification (2026-09-07)
+
+The wrapper passed again at the current head. Optimized locked artifacts,
+manifest, third-party notices/SBOM, sanitized provenance, checksums, exact
+content verification, and unsigned publication-blocker assertions succeeded
+in a disposable temporary directory, which was removed afterward. Signing,
+driver, installer, clean-machine, and native-audio gates remain open; no
+machine configuration was changed.
