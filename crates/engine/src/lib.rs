@@ -1148,6 +1148,7 @@ impl RuntimeGeneration {
 pub struct DriftController {
     nominal_ratio: f64,
     correction_ppm: f64,
+    integral_ppm: f64,
     target_frames: f64,
     max_correction_ppm: f64,
 }
@@ -1170,17 +1171,22 @@ impl DriftController {
         Ok(Self {
             nominal_ratio: input_rate_hz as f64 / output_rate_hz as f64,
             correction_ppm: 0.0,
+            integral_ppm: 0.0,
             target_frames: target_frames as f64,
             max_correction_ppm,
         })
     }
 
-    /// Update correction from bounded FIFO occupancy. The proportional gain
-    /// is deliberately conservative; callers still need xrun/discontinuity
-    /// policy around the stream scheduler.
+    /// Update correction from bounded FIFO occupancy. The integral term holds
+    /// a steady clock offset at the target instead of requiring a permanent
+    /// FIFO error; both the integral state and resulting correction are
+    /// bounded. Callers still need xrun/discontinuity policy around the
+    /// stream scheduler.
     pub fn observe_queue(&mut self, queue_frames: usize) {
         let error = (queue_frames as f64 - self.target_frames) / self.target_frames;
-        let requested = error * self.max_correction_ppm;
+        self.integral_ppm = (self.integral_ppm + error * self.max_correction_ppm * 0.1)
+            .clamp(-self.max_correction_ppm, self.max_correction_ppm);
+        let requested = error * self.max_correction_ppm + self.integral_ppm;
         self.correction_ppm = requested.clamp(-self.max_correction_ppm, self.max_correction_ppm);
     }
 
@@ -2896,6 +2902,32 @@ mod tests {
             DriftController::new(0, 48_000, 128, 100.0),
             Err(BlockError::InvalidSampleRate)
         ));
+    }
+
+    #[test]
+    fn drift_controller_keeps_both_clock_mismatches_bounded_for_eight_hours() {
+        const BLOCKS_IN_EIGHT_HOURS: usize = 4_050_000;
+        for clock_error_ppm in [-100.0_f64, 100.0] {
+            let mut controller = DriftController::new(48_000, 48_000, 128, 100.0).unwrap();
+            let mut queue_frames = 128.0;
+            let mut minimum = queue_frames;
+            let mut maximum = queue_frames;
+            for _ in 0..BLOCKS_IN_EIGHT_HOURS {
+                let input_frames = 128.0 * (1.0 + clock_error_ppm / 1_000_000.0);
+                let output_frames = 128.0 * controller.adjusted_ratio();
+                queue_frames = (queue_frames + input_frames - output_frames).clamp(0.0, 512.0);
+                controller.observe_queue(queue_frames.round() as usize);
+                minimum = minimum.min(queue_frames);
+                maximum = maximum.max(queue_frames);
+                assert!(controller.correction_ppm().abs() <= 100.0);
+            }
+            assert!(
+                minimum > 100.0,
+                "FIFO underflowed for {clock_error_ppm} ppm"
+            );
+            assert!(maximum < 160.0, "FIFO drifted for {clock_error_ppm} ppm");
+            assert!((controller.correction_ppm() - clock_error_ppm).abs() < 5.0);
+        }
     }
 
     #[test]

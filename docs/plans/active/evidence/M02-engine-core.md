@@ -158,3 +158,13 @@ The scheduler now clears the ownership tag on silent no-graph outputs and
 filters replaced-generation outputs before exposing them. Regression coverage
 verifies both behaviors; the engine suite passes 50 tests with strict Clippy.
 Native endpoint scheduling and live routing remain open.
+
+## Sustained dual-clock drift simulation (2026-09-07)
+
+The drift controller now includes bounded integral correction in addition to
+FIFO-error feedback. A deterministic eight-hour-equivalent simulation at both
+`-100 ppm` and `+100 ppm` keeps occupancy away from underflow/overflow and
+keeps correction within the configured ±100 ppm bound. The regression exposed
+and corrected the proportional-only controller's long-run FIFO drift. This is
+simulation evidence only; hardware clock behavior and native scheduling remain
+open.
