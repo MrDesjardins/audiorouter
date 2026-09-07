@@ -153,3 +153,8 @@ scheduler also exposes a generation-filtered output receive operation that
 recycles older outputs at the boundary. A regression verifies the propagated
 generation; the engine suite and strict Clippy pass. Native endpoint
 scheduling and live routing remain open.
+
+The scheduler now clears the ownership tag on silent no-graph outputs and
+filters replaced-generation outputs before exposing them. Regression coverage
+verifies both behaviors; the engine suite passes 50 tests with strict Clippy.
+Native endpoint scheduling and live routing remain open.

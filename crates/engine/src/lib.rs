@@ -2014,9 +2014,7 @@ impl RuntimeProcessor {
             .try_recycle(block)
             .map_err(|_| BlockError::ShapeMismatch)?;
         let generation = self.process(&mut destination);
-        if let Some(generation) = generation {
-            destination.generation = generation.value();
-        }
+        destination.generation = generation.map_or(0, RuntimeGeneration::value);
         if let Err(destination) = output.try_submit(destination) {
             output
                 .try_recycle(destination)
@@ -2711,6 +2709,23 @@ mod tests {
         scheduler.output().try_recycle(output).unwrap();
         assert_eq!(scheduler.input().ready(), 0);
         assert_eq!(scheduler.output().ready(), 0);
+    }
+
+    #[test]
+    fn realtime_scheduler_filters_outputs_from_replaced_generations() {
+        let scheduler = RealtimeScheduler::new(1, 1, 2).unwrap();
+        scheduler.processor().publish(RuntimeGraph::prepare(
+            RuntimeGeneration::new(30),
+            vec![ProcessingStage::Gain { linear: 1.0 }],
+        ));
+        scheduler
+            .submit_input(scheduler.acquire_input().unwrap())
+            .unwrap();
+        scheduler.process_once().unwrap();
+        assert!(scheduler
+            .receive_output_for_generation(RuntimeGeneration::new(31))
+            .is_none());
+        assert_eq!(scheduler.output().available(), 1);
     }
 
     #[test]
