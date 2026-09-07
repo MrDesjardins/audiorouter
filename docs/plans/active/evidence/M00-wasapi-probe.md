@@ -495,6 +495,15 @@ the wrapper removed its temporary executable, object, logs, and raw capture.
 This confirms repeatable digital correlation only; it does not promote the
 estimate to calibrated speaker-to-microphone latency evidence.
 
+## Current-head physical impulse requalification (2026-09-07)
+
+The authorized 1,000-impulse analyzer was rerun on the available PD200X
+speaker/microphone pair. It detected 0/1,000 impulse groups, below the required
+900-group threshold, so the physical acoustic-latency gate remains
+unqualified. The wrapper performed its media identity/state comparison and
+temporary-output cleanup; the threshold was not lowered and no persistent
+audio configuration was changed.
+
 ## Current-head native lifecycle requalification (2026-09-07)
 
 The authorized bounded native live wrapper was rerun from the current head.
