@@ -249,11 +249,11 @@ ownership contention only, not native driver synchronization.
 
 ## Serialized replacement activation (2026-09-07)
 
-Bridge activation now serializes the control-plane generation transition and
-queue drain. This prevents concurrent replacement requests from allowing an
-older activation to drain blocks after a newer activation has started. The
-realtime bridge methods never acquire the guard; the engine suite passes 48
-tests with strict Clippy. Native driver synchronization remains open.
+Bridge activation and deactivation now serialize the control-plane generation
+transition and queue drain. This prevents concurrent replacement or shutdown
+requests from interleaving their drain/reactivate sequences. The realtime
+bridge methods never acquire the guard; the engine suite passes 48 tests with
+strict Clippy. Native driver synchronization remains open.
 
 ## Capture shape-mismatch safety (2026-09-07)
 

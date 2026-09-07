@@ -353,8 +353,10 @@ impl VirtualBusBridge {
     /// Stop processing and clear both bounded rings. Clearing is the safe
     /// silence/recovery behavior for backend or owner loss.
     pub fn deactivate(&self) {
+        self.acquire_activation_lock();
         self.active.store(false, Ordering::Release);
         self.drain();
+        self.release_activation_lock();
     }
 
     pub fn submit_render(&self, generation: u64, block: AudioBlock) -> Result<(), AudioBlock> {
