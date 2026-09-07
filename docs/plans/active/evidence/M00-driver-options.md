@@ -109,3 +109,15 @@ The checked-in wrapper was then executed against fresh disposable SysVAD and
 WIL checkouts. It passed the full x64 Release solution build, package/API
 validation, and output assertions, and removed generated output directories;
 the source checkout was removed separately afterward.
+
+## 2026-09-07 — Repeatable wrapper requalification
+
+The repository-local SDK provenance acceptance passed first, confirming the
+pinned checkout and all seven recursive submodules. A fresh disposable
+Microsoft Windows-driver-samples checkout was then created and passed to the
+checked-in wrapper. The x64 Release solution again passed normal package/API
+validation and the `TabletAudioSample.sys`/`sysvad.cat` assertions under the
+64-bit VS2026 MSBuild host. The checkout and generated outputs were removed
+afterward. This remains reference-sample build evidence only: no driver was
+installed or loaded, test-signing mode was changed, or machine audio
+configuration was touched.
