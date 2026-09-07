@@ -1111,6 +1111,119 @@ impl AudioBlock {
     }
 }
 
+/// Preallocated streaming linear resampler for mismatched device clocks.
+/// Samples are retained across calls so packet/quantum boundaries do not
+/// reset interpolation phase. The caller owns the xrun policy when the FIFO
+/// cannot accept a complete source block or produce a complete destination
+/// block.
+pub struct StreamingResampler {
+    channels: usize,
+    capacity_frames: usize,
+    fifo: Vec<f32>,
+    read_frames: usize,
+    queued_frames: usize,
+    phase: f64,
+}
+
+impl StreamingResampler {
+    pub fn new(channels: usize, capacity_frames: usize) -> Result<Self, BlockError> {
+        if !(1..=MAX_CHANNELS).contains(&channels) {
+            return Err(BlockError::InvalidChannels);
+        }
+        if !(1..=MAX_DELAY_FRAMES).contains(&capacity_frames) {
+            return Err(BlockError::InvalidFrameCount);
+        }
+        Ok(Self {
+            channels,
+            capacity_frames,
+            fifo: vec![0.0; channels * capacity_frames],
+            read_frames: 0,
+            queued_frames: 0,
+            phase: 0.0,
+        })
+    }
+
+    pub fn queued_frames(&self) -> usize {
+        self.queued_frames
+    }
+
+    pub fn reset(&mut self) {
+        self.read_frames = 0;
+        self.queued_frames = 0;
+        self.phase = 0.0;
+    }
+
+    /// Append a source block without allocating. Returns the number of frames
+    /// accepted; a short return is an explicit bounded-overflow signal.
+    pub fn push(&mut self, source: &AudioBlock) -> Result<usize, BlockError> {
+        if source.channels != self.channels {
+            return Err(BlockError::ShapeMismatch);
+        }
+        let accepted = source.frames.min(self.capacity_frames - self.queued_frames);
+        for channel in 0..self.channels {
+            let source_channel = source.channel(channel).unwrap();
+            let start = channel * self.capacity_frames + self.read_frames + self.queued_frames;
+            self.fifo[start..start + accepted].copy_from_slice(&source_channel[..accepted]);
+        }
+        self.queued_frames += accepted;
+        Ok(accepted)
+    }
+
+    /// Produce one destination block when enough source samples are queued.
+    /// The destination is cleared when a complete block is unavailable, and
+    /// the returned count makes the bounded underflow explicit.
+    pub fn process(
+        &mut self,
+        destination: &mut AudioBlock,
+        ratio: f64,
+    ) -> Result<usize, BlockError> {
+        if destination.channels != self.channels {
+            return Err(BlockError::ShapeMismatch);
+        }
+        if !ratio.is_finite() || ratio <= 0.0 {
+            return Err(BlockError::InvalidSampleRate);
+        }
+        destination.clear();
+        let mut produced = 0;
+        for frame in 0..destination.frames {
+            let position = self.phase + frame as f64 * ratio;
+            let lower = position.floor() as usize;
+            if lower + 1 >= self.queued_frames {
+                break;
+            }
+            let fraction = (position - lower as f64) as f32;
+            for channel in 0..self.channels {
+                let base = channel * self.capacity_frames + self.read_frames;
+                let first = self.fifo[base + lower];
+                let second = self.fifo[base + lower + 1];
+                let first = if first.is_finite() { first } else { 0.0 };
+                let second = if second.is_finite() { second } else { 0.0 };
+                destination.channel_mut(channel).unwrap()[frame] =
+                    first + (second - first) * fraction;
+            }
+            produced += 1;
+        }
+        if produced != 0 {
+            self.phase += produced as f64 * ratio;
+            let consumed = (self.phase.floor() as usize).min(self.queued_frames.saturating_sub(1));
+            if consumed != 0 {
+                for channel in 0..self.channels {
+                    let base = channel * self.capacity_frames;
+                    self.fifo.copy_within(
+                        base + self.read_frames + consumed
+                            ..base + self.read_frames + self.queued_frames,
+                        base + self.read_frames,
+                    );
+                }
+                self.read_frames = 0;
+                self.queued_frames -= consumed;
+                self.phase -= consumed as f64;
+            }
+        }
+        Ok(produced)
+    }
+}
+
 /// Fixed-quantum worker adapter for the prepared built-in DSP chain. Planar
 /// engine blocks are copied through construction-time interleaved scratch;
 /// `process` performs no allocation and rejects shape changes explicitly.
@@ -3504,6 +3617,46 @@ mod tests {
 
         assert_eq!(output.channel(0).unwrap(), &[0.0, 0.0]);
         assert!(output.all_finite());
+    }
+
+    #[test]
+    fn streaming_resampler_preserves_phase_across_source_blocks() {
+        let mut resampler = StreamingResampler::new(1, 16).unwrap();
+        let mut first = AudioBlock::new(1, 4).unwrap();
+        first
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.0, 1.0, 2.0, 3.0]);
+        let mut second = AudioBlock::new(1, 4).unwrap();
+        second
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[4.0, 5.0, 6.0, 7.0]);
+        let mut output = AudioBlock::new(1, 2).unwrap();
+        assert_eq!(resampler.push(&first).unwrap(), 4);
+        assert_eq!(resampler.process(&mut output, 0.5).unwrap(), 2);
+        assert_eq!(output.channel(0).unwrap(), &[0.0, 0.5]);
+        assert_eq!(resampler.push(&second).unwrap(), 4);
+        assert_eq!(resampler.process(&mut output, 0.5).unwrap(), 2);
+        assert_eq!(output.channel(0).unwrap(), &[1.0, 1.5]);
+        assert_eq!(resampler.queued_frames(), 6);
+    }
+
+    #[test]
+    fn streaming_resampler_reports_bounded_underflow_and_shape_errors() {
+        let mut resampler = StreamingResampler::new(1, 4).unwrap();
+        let source = AudioBlock::new(1, 2).unwrap();
+        let mut output = AudioBlock::new(1, 2).unwrap();
+        output.channel_mut(0).unwrap().fill(1.0);
+        assert_eq!(resampler.push(&source).unwrap(), 2);
+        assert_eq!(resampler.process(&mut output, 1.0).unwrap(), 1);
+        assert_eq!(output.channel(0).unwrap(), &[0.0, 0.0]);
+        assert!(matches!(
+            resampler.process(&mut output, f64::NAN),
+            Err(BlockError::InvalidSampleRate)
+        ));
+        let stereo = AudioBlock::new(2, 2).unwrap();
+        assert_eq!(resampler.push(&stereo), Err(BlockError::ShapeMismatch));
     }
 
     #[test]

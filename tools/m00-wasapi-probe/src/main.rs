@@ -9,7 +9,7 @@
 
 use audiorouter_engine::{
     AudioBlock, DriftController, ProcessingStage, RealtimeScheduler, RuntimeGeneration,
-    RuntimeGraph,
+    RuntimeGraph, StreamingResampler,
 };
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor, SharedCapture,
@@ -152,6 +152,10 @@ fn adapter_smoke(
             .then(|| DriftController::new(capture_info.sample_rate_hz, render_info.sample_rate_hz, 64 * 128, 100.0))
             .transpose()
             .map_err(|_| AudioError::InvalidFrameSize)?;
+        let mut streaming_resampler = (capture_info.sample_rate_hz != render_info.sample_rate_hz)
+            .then(|| StreamingResampler::new(usize::from(capture_info.channels), 1024))
+            .transpose()
+            .map_err(|_| AudioError::InvalidFrameSize)?;
         while std::time::Instant::now() < deadline {
             let mut render_submitted = false;
             let mut render_submitted_frames = 0u32;
@@ -204,18 +208,38 @@ fn adapter_smoke(
                                 );
                             }
                         } else {
-                            if let Some(controller) = drift.as_mut() {
-                                controller.observe_queue(render_pending_bytes / render_bytes_per_frame);
+                            let resampler = streaming_resampler
+                                .as_mut()
+                                .ok_or(AudioError::InvalidFrameSize)?;
+                            let accepted = resampler.push(&source_block).map_err(|_| {
+                                AudioError::InvalidFrameSize
+                            })?;
+                            if accepted != source_block.frames() {
+                                return Err(AudioError::BufferTooSmall {
+                                    required: source_block.frames(),
+                                    available: accepted,
+                                });
                             }
-                            block
-                                .resample_linear_with_ratio(
-                                    &source_block,
+                            if let Some(controller) = drift.as_mut() {
+                                controller.observe_queue(resampler.queued_frames());
+                            }
+                            let produced = resampler
+                                .process(
+                                    &mut block,
                                     drift.as_ref().map_or_else(
                                         || capture_info.sample_rate_hz as f64 / render_info.sample_rate_hz as f64,
                                         DriftController::adjusted_ratio,
                                     ),
                                 )
                                 .map_err(|_| AudioError::InvalidFrameSize)?;
+                            if produced != block.frames() {
+                                scheduler
+                                    .input()
+                                    .try_recycle(block)
+                                    .map_err(|_| AudioError::InvalidFrameSize)?;
+                                pending_frames = 0;
+                                continue;
+                            }
                         }
                         if let Err(block) = scheduler.submit_input(block) {
                             scheduler

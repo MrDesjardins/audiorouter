@@ -334,3 +334,10 @@ capture and render rates differ. This makes the correction loop explicit and
 bounded at the route boundary, while cross-block fractional phase, sufficient
 FIFO depth for arbitrary rate ratios, and hardware clock qualification remain
 native scheduler work.
+
+The route now uses the preallocated `StreamingResampler` FIFO for those
+different-rate streams. Fractional phase and source samples survive packet and
+quantum boundaries, while a short production result remains an explicit
+bounded underflow rather than repeating the last sample. Capacity exhaustion
+is surfaced as an error; arbitrary-rate stress, native callback timing, and
+hardware clock qualification remain open.

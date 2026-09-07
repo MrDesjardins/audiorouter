@@ -221,6 +221,15 @@ boundaries, clearing learned integral correction while preserving the nominal
 rate ratio and configured bounds. A regression verifies that a new stream does
 not inherit prior correction; native device recovery remains open.
 
+## Streaming resampler FIFO (2026-09-07)
+
+`StreamingResampler` now owns a fixed planar FIFO and fractional phase across
+source-block calls. It rejects shape and ratio errors before mutation, repairs
+non-finite source samples to silence, returns short production explicitly on
+underflow, and resets without allocation. Regression coverage verifies samples
+continue across source-block boundaries and bounded underflow/shape behavior;
+the adapter route is wired to this boundary for differing device rates.
+
 ## 2026-09-07 — Full workspace qualification
 
 The current head passed the locked full Rust workspace qualification with 393
