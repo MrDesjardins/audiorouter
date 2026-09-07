@@ -2121,6 +2121,31 @@ mod tests {
     }
 
     #[test]
+    fn streaming_pitch_shifter_retains_state_across_blocks() {
+        let mut shifter = StreamingPitchShifter::new(PitchShiftParams {
+            semitones: 7.0,
+            cents: 0.0,
+            sample_rate: 48_000.0,
+            channels: 1,
+            bypass: false,
+        })
+        .unwrap();
+        let input = (0..StreamingPitchShifter::BLOCK_FRAMES)
+            .map(|index| (2.0 * PI * 440.0 * index as f32 / 48_000.0).sin())
+            .collect::<Vec<_>>();
+        let mut output = vec![0.0; input.len()];
+        let mut nonzero_blocks = 0;
+        for _ in 0..8 {
+            shifter.process_block(&input, &mut output).unwrap();
+            assert!(output.iter().all(|sample| sample.is_finite()));
+            if output.iter().any(|sample| sample.abs() > 0.0001) {
+                nonzero_blocks += 1;
+            }
+        }
+        assert!(nonzero_blocks > 0);
+    }
+
+    #[test]
     fn pitch_shifter_preserves_sixty_second_duration_at_both_extremes() {
         let frames = 48_000 * 60;
         let input = (0..frames)
