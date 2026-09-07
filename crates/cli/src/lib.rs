@@ -2899,4 +2899,53 @@ mod tests {
         );
         assert_eq!(denied["result"]["isError"], true);
     }
+
+    #[test]
+    fn recorder_commands_use_database_backed_control_dispatch() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-recorder-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        Storage::open(&database)
+            .unwrap()
+            .save_session(&session)
+            .unwrap();
+        let database_arg = database.to_string_lossy().into_owned();
+        let armed: Value = serde_json::from_str(
+            &run([
+                "recorder",
+                "arm",
+                "session-fixture",
+                "--database",
+                &database_arg,
+                "--idempotency-key",
+                "arm-cli",
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(armed["state"], "armed");
+        let started: Value = serde_json::from_str(
+            &run([
+                "recorder",
+                "start",
+                "session-fixture",
+                "128",
+                "--database",
+                &database_arg,
+                "--idempotency-key",
+                "start-cli",
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(started["state"], "recording");
+        let _ = std::fs::remove_file(database);
+    }
 }
