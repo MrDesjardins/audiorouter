@@ -424,9 +424,9 @@ operations. The storage suite passes 30 tests with strict Clippy; deployment
 filesystem policy beyond these selected roots remains open.
 
 The plugin inspection boundary now also rejects a configured scan root when it
-is a non-directory or reparse point before canonical containment checks. A
-regression proves that a symlinked configured root cannot authorize inspection
-of its target; plugin execution remains unavailable.
+is a non-directory, reparse point, or descendant of a reparse-point ancestor
+before canonical containment checks. Regressions cover both redirected-root
+forms; plugin execution remains unavailable.
 
 ## 2026-09-06 — Portable crash-loop policy
 

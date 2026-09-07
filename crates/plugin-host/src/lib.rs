@@ -520,12 +520,25 @@ fn root_contains(root: &Path, candidate: &Path) -> bool {
     let Ok(metadata) = fs::symlink_metadata(root) else {
         return false;
     };
-    if !metadata.is_dir() || is_reparse_point(&metadata) {
+    if !metadata.is_dir() || path_has_reparse_ancestor(root) {
         return false;
     }
     fs::canonicalize(root)
         .map(|root| candidate.starts_with(root))
         .unwrap_or(false)
+}
+
+fn path_has_reparse_ancestor(path: &Path) -> bool {
+    let mut current = Some(path);
+    while let Some(component) = current {
+        if let Ok(metadata) = fs::symlink_metadata(component) {
+            if is_reparse_point(&metadata) {
+                return true;
+            }
+        }
+        current = component.parent();
+    }
+    false
 }
 
 fn parse_pe_architecture(bytes: &[u8]) -> Option<PeArchitecture> {
@@ -2737,6 +2750,31 @@ mod tests {
                 Err(InspectionError::OutsideConfiguredRoot)
             );
             fs::remove_dir(&link).unwrap();
+        }
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn inspection_rejects_a_root_under_a_reparse_parent() {
+        let root = temp_root();
+        let target = root.join("target");
+        let link = root.join("redirected-parent");
+        let configured = link.join("allowed");
+        fs::create_dir(&target).unwrap();
+        fs::create_dir(target.join("allowed")).unwrap();
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&target, &link);
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_dir(&target, &link);
+
+        if link_result.is_ok() {
+            let candidate = configured.join("effect.vst3");
+            fs::write(&candidate, pe_x64()).unwrap();
+            assert_eq!(
+                inspect_binary(&candidate, std::slice::from_ref(&configured)),
+                Err(InspectionError::OutsideConfiguredRoot)
+            );
         }
 
         fs::remove_dir_all(root).unwrap();
