@@ -536,6 +536,11 @@ The complete `tests/acceptance/m05-ui.ps1` wrapper was requalified at the
 current revision. TypeScript typecheck, all 61 Vitest tests, and a disposable
 three-file Vite production build passed; the temporary output was removed.
 Manual visual/accessibility acceptance and native shell injection remain open.
+
+The complete M05 acceptance was requalified at the current head. TypeScript
+typecheck, all 69 UI tests, and the disposable three-file Vite production build
+passed; temporary output was cleaned. Manual visual/accessibility acceptance,
+native shell injection, startup registration, and live audio remain open.
 No audio, driver, or machine configuration was changed.
 
 The editor also renders the managed virtual-device inventory and explicit
