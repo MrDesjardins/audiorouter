@@ -214,6 +214,11 @@ The M01 CLI acceptance was requalified after the startup plan/apply additions.
 Schema, status, discovery, and safe command behavior passed using temporary
 state; no audio device or machine configuration was accessed.
 
+The full locked workspace was requalified at the current head with 352 passing
+unit/integration targets, including the durable startup-plan coverage. Strict
+Clippy, formatting, and diff checks passed; no audio endpoint, driver, or
+machine configuration was accessed.
+
 Startup plan metadata is now persisted in SQLite and reloaded by a new control
 plane instance, closing the restart gap for durable backends. The restart
 regression passes; the standalone storage test executable is blocked before
