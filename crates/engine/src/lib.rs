@@ -367,6 +367,7 @@ impl VirtualBusBridge {
                 let _ = self.render.try_recycle(input);
                 continue;
             }
+            output.sanitize_non_finite();
             let _ = self.render.try_recycle(input);
             match self.capture.try_submit(output) {
                 Ok(()) => processed += 1,
@@ -398,6 +399,7 @@ impl VirtualBusBridge {
                     let _ = destination.try_recycle(output);
                     continue;
                 }
+                output.sanitize_non_finite();
                 match destination.try_submit(output) {
                     Ok(()) => {
                         delivered += 1;
@@ -2464,14 +2466,14 @@ mod tests {
         input
             .channel_mut(0)
             .unwrap()
-            .copy_from_slice(&[0.125, 0.875]);
+            .copy_from_slice(&[f32::NAN, f32::INFINITY]);
         bridge.submit_render(1, input).unwrap();
         assert_eq!(bridge.fanout_once(&[&first, &second]), 2);
 
         let first_block = first.try_receive().unwrap();
         let second_block = second.try_receive().unwrap();
-        assert_eq!(first_block.channel(0).unwrap(), &[0.125, 0.875]);
-        assert_eq!(second_block.channel(0).unwrap(), &[0.125, 0.875]);
+        assert_eq!(first_block.channel(0).unwrap(), &[0.0, 0.0]);
+        assert_eq!(second_block.channel(0).unwrap(), &[0.0, 0.0]);
         first.try_recycle(first_block).unwrap();
         second.try_recycle(second_block).unwrap();
     }

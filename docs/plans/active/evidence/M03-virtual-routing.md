@@ -214,3 +214,11 @@ Shape mismatches are reported without retaining queued data. Existing bridge,
 fan-out, and backpressure regressions remain green at 46 engine tests with
 strict Clippy. This is portable bridge behavior only; no live endpoint is
 opened.
+
+## Bridge sample-safety hardening (2026-09-07)
+
+Both bridge processing paths now sanitize NaN and infinite input samples to
+silence before publishing capture blocks or fan-out copies. The regression
+uses non-finite input and verifies finite zero output for every destination.
+The engine suite passes 46 tests with strict Clippy. This is portable safety
+evidence only and does not open a live endpoint.
