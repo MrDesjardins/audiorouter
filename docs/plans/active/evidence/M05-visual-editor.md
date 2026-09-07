@@ -615,3 +615,12 @@ production build produced three files. The temporary output was removed; this
 was UI-only validation and did not access audio devices, drivers, startup
 registration, or machine configuration. Manual visual/accessibility acceptance,
 native shell injection, startup registration, and live audio remain open.
+
+## Session inventory authority regression (2026-09-07)
+
+The UI session inventory merge now gives the point-in-time `sessions.get`
+snapshot precedence over a stale duplicate from `sessions.list`, while
+preserving other listed sessions and locally created sessions. The regression
+suite covers both cases. M05 typecheck, 73 UI tests, and the disposable
+production build passed; no session was started and no audio or machine state
+was changed.

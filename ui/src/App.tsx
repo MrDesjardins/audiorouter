@@ -14,6 +14,7 @@ import { readTheme, writeTheme, type ThemeMode } from "./preferences";
 import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
 import { processorAvailabilityText, processorLatencyText, processorParametersText, type ProcessorDescriptor } from "./processorCatalog";
+import { mergeSessionInventory } from "./sessionInventory";
 
 const defaultBackend = createDisconnectedBackend();
 
@@ -175,7 +176,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const snapshot = snapshotState.snapshot;
   useEffect(() => { writeTheme(typeof window === "undefined" ? null : window.localStorage, theme); }, [theme]);
   useEffect(() => { if (snapshot) setPrivacyMuted(snapshot.status.privacyMute.muted); }, [snapshot]);
-  const availableSessions = [...new Map([...(snapshot ? [snapshot.session] : []), ...listedSessions, ...createdSessions].map((item) => [item.id, item])).values()];
+  const availableSessions = mergeSessionInventory(listedSessions, snapshot?.session ?? null, createdSessions);
   const session = availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0];
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   useEffect(() => { setDraft(session); setDraftHistory({ past: [], future: [] }); setSelectedNodeId(session.nodes[0]?.id ?? ""); setConnectionSource(""); setConnectionDestination(""); setActionMessage(null); setRouteInspection(null); setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null); }, [session]);

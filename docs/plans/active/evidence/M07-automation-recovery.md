@@ -814,6 +814,10 @@ responses are normalized to the UI's session list contract and capped at 500
 items; no session is started or mutated by inventory refresh. UI typecheck, 71
 tests, the production build, and documentation validation passed.
 
+The subsequent authority-ordering regression increased the UI suite to 73
+tests and confirms that a fresher `sessions.get` snapshot cannot be replaced
+by stale inventory data.
+
 The current M07 headless acceptance also passed at this revision: 25 CLI tests,
 2 MCP interoperability tests, 83 control tests, 33 plugin-host tests, 8
 worker-process tests, and strict Clippy. M01 CLI acceptance passed as part of
