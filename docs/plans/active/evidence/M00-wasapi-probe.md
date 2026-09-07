@@ -335,6 +335,12 @@ for every capture endpoint, accepts only the specifically classified
 and after. It is excluded from ordinary CI because it opens bounded live
 streams.
 
+The wrapper was rerun at the current head for 100 ms and passed with 13 active
+capture endpoints and 21 active render endpoints; one render endpoint was
+classified as the known occupied case. The directional count is discovered at
+runtime (an earlier run had 18 render endpoints), and the media-device
+identity/state snapshot remained unchanged.
+
 ## Silent shared-render lifecycle (2026-09-07)
 
 The native probe completed a bounded 200 ms shared-render lifecycle on an
