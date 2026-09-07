@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <audioclient.h>
 #include <audioclientactivationparams.h>
+#include <audiopolicy.h>
 #include <mmdeviceapi.h>
 #include <functiondiscoverykeys_devpkey.h>
 #include <iostream>
@@ -443,6 +444,73 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone) {
     return SUCCEEDED(hr) && submitted_frames > 0 && tone_written ? 0 : 1;
 }
 
+static int render_session_inventory(UINT target_index) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("ownership_enumerator", hr); return 1; }
+    IMMDeviceCollection* devices = nullptr;
+    hr = enumerator->EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, &devices);
+    if (FAILED(hr)) { print_hr("ownership_enum", hr); enumerator->Release(); return 1; }
+    UINT count = 0;
+    devices->GetCount(&count);
+    if (target_index >= count) {
+        std::cout << "ownership_index_out_of_range=" << target_index << " count=" << count << '\n';
+        devices->Release(); enumerator->Release(); return 1;
+    }
+    IMMDevice* device = nullptr;
+    hr = devices->Item(target_index, &device);
+    print_hr("ownership_item", hr);
+    IAudioSessionManager2* manager = nullptr;
+    if (SUCCEEDED(hr)) {
+        hr = device->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr,
+                              reinterpret_cast<void**>(&manager));
+        print_hr("ownership_activate_session_manager", hr);
+    }
+    IAudioSessionEnumerator* sessions = nullptr;
+    int session_count = 0;
+    if (SUCCEEDED(hr)) {
+        hr = manager->GetSessionEnumerator(&sessions);
+        print_hr("ownership_get_session_enumerator", hr);
+    }
+    if (SUCCEEDED(hr)) {
+        hr = sessions->GetCount(&session_count);
+        print_hr("ownership_get_session_count", hr);
+    }
+    if (SUCCEEDED(hr)) {
+        std::cout << "ownership_session_count=" << session_count << '\n';
+        for (int index = 0; index < session_count; ++index) {
+            IAudioSessionControl* control = nullptr;
+            HRESULT item_hr = sessions->GetSession(index, &control);
+            if (FAILED(item_hr)) { print_hr("ownership_get_session", item_hr); continue; }
+            IAudioSessionControl2* control2 = nullptr;
+            HRESULT query_hr = control->QueryInterface(__uuidof(IAudioSessionControl2),
+                                                        reinterpret_cast<void**>(&control2));
+            DWORD process_id = 0;
+            AudioSessionState state = AudioSessionStateExpired;
+            LPWSTR display_name = nullptr;
+            if (SUCCEEDED(query_hr)) {
+                control2->GetProcessId(&process_id);
+                control2->GetState(&state);
+                control2->GetDisplayName(&display_name);
+            }
+            std::wcout << L"ownership_session index=" << index
+                       << L" process_id=" << process_id
+                       << L" state=" << static_cast<int>(state)
+                       << L" display_name=" << (display_name ? display_name : L"<none>") << L'\n';
+            CoTaskMemFree(display_name);
+            if (control2) control2->Release();
+            control->Release();
+        }
+    }
+    if (sessions) sessions->Release();
+    if (manager) manager->Release();
+    if (device) device->Release();
+    devices->Release();
+    enumerator->Release();
+    return SUCCEEDED(hr) ? 0 : 1;
+}
+
 static int controlled_process_attribution(DWORD duration_ms) {
     char executable[MAX_PATH]{};
     if (GetModuleFileNameA(nullptr, executable, MAX_PATH) == 0) {
@@ -561,6 +629,12 @@ int main(int argc, char** argv) {
         UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         DWORD duration_ms = argc > 3 ? static_cast<DWORD>(std::strtoul(argv[3], nullptr, 10)) : 200;
         int result = render_data_probe(target_index, duration_ms, false);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "render-ownership") == 0) {
+        UINT target_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
+        int result = render_session_inventory(target_index);
         CoUninitialize();
         return result;
     }

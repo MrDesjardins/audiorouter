@@ -314,6 +314,16 @@ and after media inventory was unchanged and the temporary executable was
 removed. An available output route is required before the 1,000-impulse
 physical-loopback gate can run.
 
+## Occupied Focusrite render attribution (2026-09-07)
+
+The read-only `render-ownership 5` diagnostic enumerated two sessions on the
+Focusrite render endpoint. One is the system audio service; the other is
+active process ID 35536, `voicemeeterpro.exe` at
+`C:\Program Files (x86)\VB\Voicemeeter\voicemeeterpro.exe`. This explains the
+matching `AUDCLNT_E_DEVICE_IN_USE` returned by the render initialization
+probe. The process was only inspected and was not terminated; no Voicemeeter
+routing, defaults, volume, mute, or other machine setting was changed.
+
 The result is reproducible with the opt-in
 `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio` wrapper. It discovers
 both directional endpoint counts, requires successful capture start/stop/reset
