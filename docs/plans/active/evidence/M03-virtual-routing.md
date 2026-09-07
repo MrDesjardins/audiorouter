@@ -179,3 +179,11 @@ declared global budgets and empty virtual-bus IDs before evaluating known
 cross-session routes. A regression covers 129 nodes across three sessions and
 an empty bus identifier. The domain suite passes 39 tests with strict Clippy.
 This remains portable validation and does not create endpoints or open audio.
+
+## Control-plane capacity acceptance (2026-09-07)
+
+The control dispatcher now has an acceptance regression that creates all eight
+declared virtual buses through the real plan/apply path, verifies the resulting
+inventory, and confirms that a ninth create plan is rejected at the lifecycle
+boundary. The control suite passes 82 tests with strict Clippy. Desired state is
+persisted and clearly remains unavailable until native driver provisioning.

@@ -5622,6 +5622,64 @@ mod tests {
     }
 
     #[test]
+    fn virtual_devices_dispatch_enforces_eight_bus_capacity() {
+        let mut plane = ControlPlane::default();
+        for index in 0..audiorouter_domain::MAX_VIRTUAL_BUSES {
+            let planned = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(index as u64)),
+                method: "virtualDevices.plan".into(),
+                params: Some(json!({
+                    "operation": {
+                        "action": "create",
+                        "id": format!("bus-{index}"),
+                        "name": format!("Bus {index}")
+                    }
+                })),
+            });
+            let plan_id = planned.result.unwrap()["planId"]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let applied = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(100 + index as u64)),
+                method: "virtualDevices.apply".into(),
+                params: Some(json!({
+                    "planId": plan_id,
+                    "idempotencyKey": format!("create-bus-{index}")
+                })),
+            });
+            assert_eq!(applied.result.unwrap()["state"], "applied");
+        }
+
+        let inventory = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(200)),
+                method: "virtualDevices.list".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert_eq!(
+            inventory.as_array().unwrap().len(),
+            audiorouter_domain::MAX_VIRTUAL_BUSES
+        );
+
+        let overflow = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(201)),
+            method: "virtualDevices.plan".into(),
+            params: Some(json!({
+                "operation": { "action": "create", "id": "bus-overflow", "name": "Overflow" }
+            })),
+        });
+        assert!(overflow.error.is_some());
+        assert!(overflow.error.unwrap().message.contains("LimitReached"));
+    }
+
+    #[test]
     fn storage_backed_virtual_device_plan_survives_control_restart() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-virtual-plan-{}.sqlite",
