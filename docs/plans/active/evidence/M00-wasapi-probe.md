@@ -40,7 +40,15 @@ It still does not establish shared-mode capture/render behavior, loopback latenc
 
 ## Process-loopback and driver follow-up
 
+The historical planning sentence immediately below predates the native
+implementation and is superseded by the native activation and data-path
+results later in this section. The checked-in probe covers both process-tree
+include and exclude modes; controlled attribution and physical latency remain
+unclaimed.
+
 The next capture probe cannot reuse endpoint activation. Microsoft’s application-loopback sample activates `IAudioClient` asynchronously through `ActivateAudioInterfaceAsync`, using `VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK` and a blob containing `AUDIOCLIENT_ACTIVATION_PARAMS`; the process-tree mode supports either include or exclude for one target process tree and requires Windows 10 build 20348 or later. The host build 26200 meets the documented OS minimum, but this probe has not yet been implemented or run. See the [official sample](https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/ApplicationLoopback) and [`ActivateAudioInterfaceAsync`](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nf-mmdeviceapi-activateaudiointerfaceasync).
+
+The process-loopback implementation and bounded include/exclude data-path results are documented below. The remaining evidence gap is controlled per-process tone attribution and physical latency; those are not implied by activation or nonzero packet reads. See the [official sample](https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/ApplicationLoopback) and [`ActivateAudioInterfaceAsync`](https://learn.microsoft.com/en-us/windows/win32/api/mmdeviceapi/nf-mmdeviceapi-activateaudiointerfaceasync).
 
 The driver gate remains unresolved. Microsoft describes SYSVAD as a source sample for a proprietary WDM audio device, not a finished AudioRouter bus driver or a production-signed redistributable. The host now has Visual Studio Community 18.9.2/MSVC 14.51.36231 and Windows SDK 10.0.26100 tools, but this repository does not yet contain a SYSVAD-derived driver project. No driver build, install, or signing claim is made. See [Microsoft sample audio drivers](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/sample-audio-drivers).
 
