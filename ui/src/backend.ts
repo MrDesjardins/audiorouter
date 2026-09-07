@@ -14,6 +14,7 @@ import type {
   PrivacyMuteResult,
   RecoveryClearResult,
   RecordingMetadataResult,
+  RecordingRenameResult,
   RecordingPreviewResult,
   RecordingRecoveryResult,
   RecordingRecycleResult,
@@ -55,6 +56,7 @@ export interface UiBackend {
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
   getRecordingRecovery(recordingId: string): Promise<RecordingRecoveryResult>;
   setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null }): Promise<RecordingMetadataResult>;
+  renameRecording(recordingId: string, newPath: string): Promise<RecordingRenameResult>;
   setPrivacyMute(muted: boolean): Promise<PrivacyMuteResult>;
   clearRecoverySafeMode(): Promise<RecoveryClearResult>;
   removeRecordingEntry(recordingId: string): Promise<RecordingRemoveResult>;
@@ -166,6 +168,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async setRecordingMetadata() {
       throw new Error("The backend is disconnected; recording metadata editing is unavailable.");
     },
+    async renameRecording() {
+      throw new Error("The backend is disconnected; recording rename is unavailable.");
+    },
     async setPrivacyMute() {
       throw new Error("The backend is disconnected; privacy mute is unavailable.");
     },
@@ -264,6 +269,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async setRecordingMetadata(recordingId, metadata) {
       return client.request("recordings.setMetadata", { recordingId, ...metadata });
+    },
+    async renameRecording(recordingId, newPath) {
+      return client.request("recordings.rename", { recordingId, newPath });
     },
     async setPrivacyMute(muted) {
       return client.request("safety.setPrivacyMute", { muted });

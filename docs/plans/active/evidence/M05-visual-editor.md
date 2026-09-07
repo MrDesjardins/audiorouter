@@ -521,3 +521,8 @@ The M05 acceptance wrapper was requalified at clean revision `e34438f`.
 TypeScript typecheck and all 59 Vitest tests passed, followed by a disposable
 three-file Vite production build. Temporary output was removed and no audio,
 driver, or machine configuration was changed.
+
+The typed UI backend now forwards the existing explicit `recordings.rename`
+operation with its recording ID and requested destination path. A regression
+verifies the method and payload, while the disconnected backend remains
+fail-closed. UI typecheck and all 60 tests pass; no recording file was changed.

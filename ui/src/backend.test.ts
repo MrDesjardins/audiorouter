@@ -51,6 +51,7 @@ describe("snapshot cache", () => {
       stopSession: async () => { throw new Error("not connected"); },
       getRecordingRecovery: async () => { throw new Error("not connected"); },
       setRecordingMetadata: async () => { throw new Error("not connected"); },
+      renameRecording: async () => { throw new Error("not connected"); },
     };
     const second = await cache.refresh(failing);
     expect(first.snapshot?.session.id).toBe(demoSession.id);
@@ -224,6 +225,13 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", path: "C:\\approved\\take.wav", title: "Edited" }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title: "Edited" })).resolves.toMatchObject({ title: "Edited" });
     expect(received).toEqual({ method: "recordings.setMetadata", params: { recordingId: "take-1", title: "Edited" } });
+  });
+
+  it("forwards recording renames as an explicit file operation", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", oldPath: "C:\\approved\\take.wav", newPath: "C:\\approved\\renamed.wav", renamed: true, fileAction: "renamed" }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).renameRecording("take-1", "C:\\approved\\renamed.wav")).resolves.toMatchObject({ renamed: true });
+    expect(received).toEqual({ method: "recordings.rename", params: { recordingId: "take-1", newPath: "C:\\approved\\renamed.wav" } });
   });
 
   it("forwards session lifecycle actions through the shared API", async () => {
