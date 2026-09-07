@@ -50,6 +50,8 @@ jobs:
         run: cargo test --workspace --locked --exclude audiorouter-windows-audio
       - name: Check Windows audio adapter
         run: cargo check -p audiorouter-windows-audio --locked
+      - name: Check native Rust WASAPI probe
+        run: cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml --locked
       - name: Compile native WASAPI probe
         shell: pwsh
         run: ./tests/acceptance/m00-native-build.ps1
