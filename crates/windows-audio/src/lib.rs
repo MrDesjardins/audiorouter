@@ -152,6 +152,33 @@ pub enum AudioFailureKind {
     Other,
 }
 
+impl AudioFailureKind {
+    /// Whether retrying after a transient system change is meaningful.
+    pub fn is_retryable(self) -> bool {
+        matches!(
+            self,
+            Self::DeviceInUse | Self::DeviceInvalidated | Self::ServiceUnavailable
+        )
+    }
+
+    /// Stable, user-facing guidance for control-plane error responses.
+    pub fn remediation(self) -> &'static str {
+        match self {
+            Self::InvalidArgument => "correct the endpoint format or stream request",
+            Self::AccessDenied => "grant the required Windows audio permission",
+            Self::DeviceInUse => "close the competing exclusive stream and retry",
+            Self::ExclusiveModeOnly => "use a compatible shared-mode endpoint or exclusive stream",
+            Self::DeviceInvalidated => "refresh endpoint inventory and retry the verified endpoint",
+            Self::UnsupportedFormat => "select an endpoint with a supported shared format",
+            Self::ServiceUnavailable => "wait for the Windows audio service and retry",
+            Self::BufferConstraint => {
+                "reduce the requested packet size or provide more buffer space"
+            }
+            Self::Other => "inspect the HRESULT and correct the reported Windows audio failure",
+        }
+    }
+}
+
 impl AudioError {
     /// Classify errors for stable control-plane behavior while retaining the
     /// original HRESULT for diagnostics.
@@ -182,6 +209,14 @@ impl AudioError {
             0x88890010 => AudioFailureKind::ServiceUnavailable,
             _ => AudioFailureKind::Other,
         }
+    }
+
+    pub fn is_retryable(&self) -> bool {
+        self.kind().is_retryable()
+    }
+
+    pub fn remediation(&self) -> &'static str {
+        self.kind().remediation()
     }
 }
 
@@ -1186,6 +1221,19 @@ mod tests {
         assert!(initialize_failure
             .to_string()
             .contains("IAudioClient::Initialize(capture)"));
+        assert!(AudioFailureKind::DeviceInUse.is_retryable());
+        assert!(AudioFailureKind::DeviceInvalidated.is_retryable());
+        assert!(AudioFailureKind::ServiceUnavailable.is_retryable());
+        assert!(!AudioFailureKind::AccessDenied.is_retryable());
+        assert!(!AudioFailureKind::UnsupportedFormat.is_retryable());
+        assert_eq!(
+            AudioFailureKind::DeviceInUse.remediation(),
+            "close the competing exclusive stream and retry"
+        );
+        assert_eq!(
+            AudioError::InvalidFrameSize.remediation(),
+            "correct the endpoint format or stream request"
+        );
     }
 
     #[test]
