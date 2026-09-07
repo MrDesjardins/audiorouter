@@ -1,5 +1,15 @@
 # M06 VST3 SDK boundary
 
+## Current installation verification (2026-09-07)
+
+The repository-local installer downloaded or verified the official Steinberg
+checkout at revision `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96` and initialized
+all seven recursive submodules. The VS2026 acceptance then rebuilt the SDK,
+passed 51/51 SDK self-tests and 1,598/1,598 official validator tests, and
+passed the offline loader with 68 classes and finite processing. This remains a
+source checkout under `third_party/vst3sdk`; no system SDK/plugin registration,
+driver, audio stream, or machine audio configuration was changed.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06
