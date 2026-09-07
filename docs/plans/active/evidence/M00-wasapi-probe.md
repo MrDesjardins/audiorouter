@@ -213,3 +213,8 @@ installed Visual Studio Community 2026/MSVC and Windows SDK/WDK toolchain.
 `main.cpp` compiled successfully, the temporary executable/object outputs were
 cleaned, and the probe was not executed. No audio stream, driver, signing mode,
 or machine configuration action occurred.
+
+The compile-only acceptance was requalified again at the current revision using
+the installed Visual Studio Community 2026/MSVC and Windows SDK/WDK toolchain.
+This remains build evidence only: the probe was not executed, and no audio
+stream, driver, signing mode, or machine configuration was touched.
