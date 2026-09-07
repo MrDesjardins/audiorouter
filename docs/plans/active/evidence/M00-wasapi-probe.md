@@ -234,6 +234,27 @@ The same compile-only acceptance was rerun at the current tip with the
 installed VS2026/MSVC and Windows SDK/WDK toolchain. `main.cpp` compiled
 successfully and the temporary executable/object outputs were cleaned. The
 probe was not executed, so this does not claim live audio evidence.
+
+## Live shared-capture qualification (2026-09-07)
+
+With explicit authorization for controlled live testing, the native probe was
+built with the installed VS2026/MSVC and Windows SDK/WDK toolchain and run
+against the host's 13 enumerated capture endpoints. Each endpoint accepted
+shared-mode initialization, started, delivered packets, stopped, and reset;
+the bounded 100 ms sweep returned no `E_INVALIDARG` and no
+`AUDCLNT_E_DEVICE_IN_USE`. The first endpoint exposed a 48 kHz, two-channel,
+32-bit IEEE-float extensible format (`mask=0x3`) and delivered 4,800 frames.
+
+The earlier 500 ms capture on that endpoint independently delivered 10 packets
+and 4,800 frames. The event-driven capture initialization and event-handle
+registration also returned `S_OK`. A post-test media-device snapshot matched
+the pre-test snapshot: all ten listed media devices remained present and `OK`.
+The probe stopped and reset every stream and did not alter defaults, volume,
+mute, privacy, drivers, signing, or startup configuration.
+
+This qualifies the native reference path and rules out device ownership as a
+general explanation for the previous Rust `E_INVALIDARG`. It does not yet
+qualify the Rust adapter's live-open boundary or production realtime latency.
 ## 2026-09-06 — Current-tip compile qualification
 
 The compile-only native probe acceptance was rerun at the current tip with
