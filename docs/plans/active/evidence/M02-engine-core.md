@@ -168,3 +168,8 @@ keeps correction within the configured ±100 ppm bound. The regression exposed
 and corrected the proportional-only controller's long-run FIFO drift. This is
 simulation evidence only; hardware clock behavior and native scheduling remain
 open.
+
+The drift controller now exposes an explicit reset for stream/reconnect
+boundaries, clearing learned integral correction while preserving the nominal
+rate ratio and configured bounds. A regression verifies that a new stream does
+not inherit prior correction; native device recovery remains open.

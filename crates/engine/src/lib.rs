@@ -1194,6 +1194,13 @@ impl DriftController {
         self.correction_ppm
     }
 
+    /// Clear learned clock correction at a stream/reconnect boundary while
+    /// retaining the prepared nominal ratio and configured bounds.
+    pub fn reset(&mut self) {
+        self.correction_ppm = 0.0;
+        self.integral_ppm = 0.0;
+    }
+
     pub fn adjusted_ratio(&self) -> f64 {
         self.nominal_ratio * (1.0 + self.correction_ppm / 1_000_000.0)
     }
@@ -2928,6 +2935,16 @@ mod tests {
             assert!(maximum < 160.0, "FIFO drifted for {clock_error_ppm} ppm");
             assert!((controller.correction_ppm() - clock_error_ppm).abs() < 5.0);
         }
+    }
+
+    #[test]
+    fn drift_controller_reset_discards_previous_stream_correction() {
+        let mut controller = DriftController::new(48_000, 44_100, 128, 100.0).unwrap();
+        controller.observe_queue(256);
+        assert_ne!(controller.correction_ppm(), 0.0);
+        controller.reset();
+        assert_eq!(controller.correction_ppm(), 0.0);
+        assert!((controller.adjusted_ratio() - (48_000.0 / 44_100.0)).abs() < f64::EPSILON);
     }
 
     #[test]
