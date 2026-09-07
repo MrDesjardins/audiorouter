@@ -1204,6 +1204,7 @@ impl Storage {
             || !is_sha256(&state.state_sha256)
             || state.size_bytes == 0
             || state.size_bytes > MAX_BUNDLE_ASSET_BYTES
+            || path_has_reparse_ancestor(std::path::Path::new(&state.path))
         {
             return Err(StorageError::InvalidPluginState(
                 "invalid plugin state fields".into(),
@@ -1482,12 +1483,18 @@ impl Storage {
                 "bundle and staging paths must be absolute".into(),
             ));
         }
-        if !bundle.is_file() || is_reparse_point(&std::fs::symlink_metadata(bundle)?) {
+        if !bundle.is_file()
+            || is_reparse_point(&std::fs::symlink_metadata(bundle)?)
+            || path_has_reparse_ancestor(bundle)
+        {
             return Err(StorageError::InvalidBundle(
                 "bundle must be a regular non-symlink file".into(),
             ));
         }
-        if !staging_root.is_dir() || is_reparse_point(&std::fs::symlink_metadata(staging_root)?) {
+        if !staging_root.is_dir()
+            || is_reparse_point(&std::fs::symlink_metadata(staging_root)?)
+            || path_has_reparse_ancestor(staging_root)
+        {
             return Err(StorageError::InvalidBundle(
                 "staging root must be an existing non-symlink directory".into(),
             ));
@@ -1602,7 +1609,7 @@ impl Storage {
                 });
             }
             let output = staging.join(path);
-            if !output.starts_with(staging) {
+            if !output.starts_with(staging) || path_has_reparse_ancestor(&output) {
                 return Err(StorageError::InvalidBundle("staging escape".into()));
             }
             if let Some(parent) = output.parent() {
