@@ -297,6 +297,17 @@ impl AudioFailureKind {
 }
 
 impl AudioError {
+    /// Return the structured endpoint-binding decision, when this error was
+    /// produced by a bound stream-open operation. Callers can use this to
+    /// distinguish disappearance, direction changes, and format renegotiation
+    /// without parsing diagnostic text.
+    pub fn binding_resolution(&self) -> Option<&EndpointBindingResolution> {
+        match self {
+            Self::EndpointBinding { resolution } => Some(resolution),
+            _ => None,
+        }
+    }
+
     /// Return the stable unsigned HRESULT represented by this error. Local
     /// validation failures use the corresponding Win32 HRESULT so callers can
     /// emit one machine-readable diagnostic without parsing display text.
@@ -1650,6 +1661,22 @@ mod tests {
             resolve_endpoint_binding_with_format(std::slice::from_ref(&actual), &expected),
             EndpointBindingResolution::FormatChanged { .. }
         ));
+    }
+
+    #[test]
+    fn endpoint_binding_error_keeps_structured_resolution() {
+        let error = AudioError::EndpointBinding {
+            resolution: Box::new(EndpointBindingResolution::Missing {
+                id: "gone".into(),
+                direction: EndpointDirection::Capture,
+            }),
+        };
+        assert!(matches!(
+            error.binding_resolution(),
+            Some(EndpointBindingResolution::Missing { id, direction })
+                if id == "gone" && *direction == EndpointDirection::Capture
+        ));
+        assert_eq!(error.kind(), AudioFailureKind::InvalidArgument);
     }
 
     #[test]

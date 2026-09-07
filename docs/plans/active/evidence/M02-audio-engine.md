@@ -315,3 +315,8 @@ The adapter route now requires `EndpointInfo::is_ieee_float32` for both selected
 streams. This accepts legacy IEEE-float tags and extensible float subformats,
 but rejects 32-bit integer PCM before any packet bytes are decoded as floats,
 closing a format-confusion data-path risk.
+
+`AudioError::binding_resolution` exposes the structured fail-closed decision to
+recovery callers without requiring string parsing. This preserves explicit
+handling for endpoint disappearance, direction changes, and deliberate format
+renegotiation while retaining the stable HRESULT/error-kind classification.
