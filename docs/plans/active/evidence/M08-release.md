@@ -346,3 +346,8 @@ The M08 acceptance wrapper now explicitly requires exactly one
 `audiorouter-ui.zip` manifest entry and opens the archive to verify its
 `index.html` entry. This keeps the application artifact requirement regression-
 protected rather than relying only on generic checksum coverage.
+
+The corrected clean-tree wrapper run passed this archive assertion together
+with locked CLI/worker builds, UI typecheck/build, manifest checksums, exact
+content verification, and cleanup. The artifact remains unsigned and the
+driver, signing, installer, and clean-machine blockers remain explicit.
