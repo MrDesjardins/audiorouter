@@ -20,6 +20,38 @@ function uiIdempotencyKey(operation: string): string {
   return `ui-${operation}-${nonce}`;
 }
 
+function RecorderActions({ backend, sessionId, connected }: { backend: UiBackend; sessionId: string; connected: boolean }) {
+  const [frameText, setFrameText] = useState("0");
+  const [state, setState] = useState("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const frame = Number.parseInt(frameText, 10);
+  const validFrame = Number.isSafeInteger(frame) && frame >= 0;
+  const run = async (action: string, operation: () => Promise<{ state: string }>) => {
+    setMessage(`${action}...`);
+    try {
+      const result = await operation();
+      setState(result.state);
+      setMessage(`Recorder ${result.state} at frame ${frame}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `Unable to ${action.toLowerCase()} recorder.`);
+    }
+  };
+  return <section className="panel recorder-actions" aria-labelledby="recorder-actions-heading">
+    <div className="section-heading"><div><p className="eyebrow">Frame boundary control</p><h2 id="recorder-actions-heading">Recorder</h2></div><span className="badge">{state}</span></div>
+    <label>Engine frame<input aria-label="Recorder engine frame" inputMode="numeric" value={frameText} onChange={(event) => setFrameText(event.target.value)} disabled={!connected} /></label>
+    <div className="actions">
+      <button type="button" className="secondary" onClick={() => void run("Arming", () => backend.armRecorder(sessionId, uiIdempotencyKey("recorder-arm")))} disabled={!connected}>Arm</button>
+      <button type="button" className="secondary" onClick={() => void run("Starting", () => backend.startRecorder(sessionId, frame, uiIdempotencyKey("recorder-start")))} disabled={!connected || !validFrame}>Start</button>
+      <button type="button" className="secondary" onClick={() => void run("Pausing", () => backend.pauseRecorder(sessionId, frame, uiIdempotencyKey("recorder-pause")))} disabled={!connected || !validFrame}>Pause</button>
+      <button type="button" className="secondary" onClick={() => void run("Resuming", () => backend.resumeRecorder(sessionId, frame, uiIdempotencyKey("recorder-resume")))} disabled={!connected || !validFrame}>Resume</button>
+      <button type="button" className="secondary" onClick={() => void run("Splitting", () => backend.splitRecorder(sessionId, frame, uiIdempotencyKey("recorder-split")))} disabled={!connected || !validFrame}>Split</button>
+      <button type="button" className="secondary" onClick={() => void run("Stopping", () => backend.stopRecorder(sessionId, frame, uiIdempotencyKey("recorder-stop")))} disabled={!connected || !validFrame}>Stop</button>
+    </div>
+    {message && <p className="muted" role="status">{message}</p>}
+    <p className="muted">Actions are sent only to a connected backend and use explicit engine frame boundaries. The preview backend never arms or starts recording.</p>
+  </section>;
+}
+
 function RecordingActions({ recordings, connected, onRename, onReveal, onRecycle }: { recordings: import("@audiorouter/contracts").RecordingRow[]; connected: boolean; onRename: (recordingId: string, newPath: string) => Promise<void>; onReveal: (recordingId: string) => Promise<void>; onRecycle: (recordingId: string, confirm: boolean) => Promise<void> }) {
   const [selectedId, setSelectedId] = useState("");
   const [newPath, setNewPath] = useState("");
@@ -244,7 +276,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const duplicateSelectedNode = () => { try { const next = duplicateDraftNode(draft, selectedNode.id); const copy = next.nodes[next.nodes.length - 1]; recordDraftChange(next); setSelectedNodeId(copy.id); setActionMessage(`${copy.name} added to the draft without connections. Review and plan the changes before committing.`); } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to duplicate node."); } };
   const applyTemplate = () => { const next = templateSession(selectedTemplate); recordDraftChange({ ...next, id: draft.id, revision: draft.revision }); setSelectedNodeId(next.nodes[0]?.id ?? ""); setActionMessage("Template loaded into the draft. Review device bindings and plan the changes before committing."); };
   const lifecycleActions = <section className="panel lifecycle-panel" aria-labelledby="lifecycle-heading"><h2 id="lifecycle-heading">Session lifecycle</h2><p className="muted">Starting a session uses the shared authorized backend lifecycle API.</p><button type="button" className="secondary" onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></section>;
-  return <div className={`app-shell theme-${theme}`}>{lifecycleActions}<RecordingActions recordings={recordings} connected={backend.connected} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><VirtualDeviceLifecyclePanel backend={backend} />
+  return <div className={`app-shell theme-${theme}`}>{lifecycleActions}<RecorderActions backend={backend} sessionId={session.id} connected={backend.connected} /><RecordingActions recordings={recordings} connected={backend.connected} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><VirtualDeviceLifecyclePanel backend={backend} />
     <header className="topbar"><div><p className="eyebrow">AudioRouter</p><h1>Routing workspace</h1></div><div className="status-cluster" aria-live="polite"><span className={`status-dot${backend.connected ? "" : " disconnected"}`} aria-hidden="true" /><span>{connectionLabel}</span><span className="status-detail">{statusSummary}</span><label className="theme-picker">Theme<select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}><option value="dark">Dark</option><option value="light">Light</option><option value="high-contrast">High contrast</option></select></label><button type="button" onClick={refresh}>Reconnect</button></div></header>
       <div className="workspace-grid"><aside className="sidebar" aria-label="Sessions"><div className="section-heading"><h2>Sessions</h2><button type="button" aria-label="Create session" onClick={() => void createSession()} disabled={!backend.connected} title="Session creation requires the connected backend">+</button></div><label className="session-picker">Preview session<select value={session.id} onChange={(event) => setSelectedSessionId(event.target.value)}>{availableSessions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{availableSessions.map((item) => { const running = snapshot?.status.activeSessionIds.includes(item.id) ?? false; return <button type="button" key={item.id} className={`session-item${item.id === session.id ? " selected" : ""}`} aria-current={item.id === session.id ? "true" : undefined} onClick={() => setSelectedSessionId(item.id)}><span>{item.name}</span><small>{running ? "Running" : "Stopped"} - rev {item.revision}</small></button>; })}<div className="sidebar-note"><strong>Safe startup</strong><p>Monitoring is muted and recording is unarmed until you explicitly start them.</p></div></aside>
       <main className="main-content"><section className="workspace-title"><div><p className="eyebrow">{sessionRunning ? "Running session" : "Stopped session"}</p><label className="session-name">Session name<input value={draft.name} maxLength={120} disabled={!backend.connected} onChange={(event) => changeSessionName(event.target.value)} /></label><p className="muted">Revision {session.revision} - {backend.connected ? "draft changes require plan and commit" : "changes are presentation-only in this preview"}</p></div><div className="actions"><button type="button" className="secondary" onClick={() => void duplicateSession()} disabled={!backend.connected}>Duplicate</button><button type="button" className="secondary" onClick={() => void deleteSession()} disabled={!backend.connected}>Delete</button><button type="button" className="secondary" onClick={undoDraft} disabled={!backend.connected || draftHistory.past.length === 0}>Undo draft</button><button type="button" className="secondary" onClick={redoDraft} disabled={!backend.connected || draftHistory.future.length === 0}>Redo draft</button><button type="button" className="secondary" onClick={() => { setDraft(session); setDraftHistory({ past: [], future: [] }); setActionMessage("Draft discarded."); }} disabled={!backend.connected}>Discard draft</button><button type="button" className="primary" onClick={() => void planChanges()} disabled={!backend.connected}>Plan changes</button></div></section>
