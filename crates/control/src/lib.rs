@@ -308,14 +308,16 @@ fn method_input_schema(name: &str) -> Value {
                 "recordingId": { "type": "string", "minLength": 1 },
                 "title": { "type": ["string", "null"], "maxLength": 256 },
                 "artist": { "type": ["string", "null"], "maxLength": 256 },
-                "comment": { "type": ["string", "null"], "maxLength": 256 }
+                "comment": { "type": ["string", "null"], "maxLength": 256 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["recordingId"],
         ),
         "recordings.rename" => object_schema(
             json!({
                 "recordingId": { "type": "string", "minLength": 1 },
-                "newPath": { "type": "string", "minLength": 1 }
+                "newPath": { "type": "string", "minLength": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["recordingId", "newPath"],
         ),
@@ -325,13 +327,14 @@ fn method_input_schema(name: &str) -> Value {
         "recovery.clearSafeMode" => object_schema(json!({}), &[]),
         "startup.get" => object_schema(json!({}), &[]),
         "recordings.removeEntry" => object_schema(
-            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            json!({ "recordingId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
         ),
         "recordings.recycle" => object_schema(
             json!({
                 "recordingId": { "type": "string", "minLength": 1 },
-                "confirm": { "type": "boolean" }
+                "confirm": { "type": "boolean" },
+                "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["recordingId"],
         ),
@@ -1546,7 +1549,7 @@ pub struct ControlPlane {
     operation_outcomes: HashMap<String, Value>,
     operation_names: HashMap<String, String>,
     operation_order: VecDeque<String>,
-    virtual_bus_idempotency_hashes: HashMap<String, String>,
+    idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
@@ -1575,7 +1578,7 @@ impl ControlPlane {
             operation_outcomes: HashMap::new(),
             operation_names: HashMap::new(),
             operation_order: VecDeque::new(),
-            virtual_bus_idempotency_hashes: HashMap::new(),
+            idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
@@ -1622,7 +1625,7 @@ impl ControlPlane {
             operation_outcomes: HashMap::new(),
             operation_names: HashMap::new(),
             operation_order: VecDeque::new(),
-            virtual_bus_idempotency_hashes: HashMap::new(),
+            idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
@@ -1647,6 +1650,10 @@ impl ControlPlane {
                 vec![
                     format!("{client}\0graph.commit\0{operation_id}"),
                     format!("{client}\0virtualDevices.apply\0{operation_id}"),
+                    format!("{client}\0recordings.setMetadata\0{operation_id}"),
+                    format!("{client}\0recordings.rename\0{operation_id}"),
+                    format!("{client}\0recordings.removeEntry\0{operation_id}"),
+                    format!("{client}\0recordings.recycle\0{operation_id}"),
                 ]
             })
             .unwrap_or_else(|| vec![operation_id.to_owned()])
@@ -1657,7 +1664,7 @@ impl ControlPlane {
         idempotency_key: &str,
         result: Value,
         operation: &str,
-        virtual_request_hash: Option<&str>,
+        request_hash: Option<&str>,
     ) {
         if !self.operation_outcomes.contains_key(idempotency_key) {
             while self.operation_outcomes.len() >= MAX_MEMORY_OPERATION_OUTCOMES {
@@ -1666,7 +1673,7 @@ impl ControlPlane {
                 };
                 if self.operation_outcomes.remove(&oldest).is_some() {
                     self.operation_names.remove(&oldest);
-                    self.virtual_bus_idempotency_hashes.remove(&oldest);
+                    self.idempotency_hashes.remove(&oldest);
                     break;
                 }
             }
@@ -1676,12 +1683,61 @@ impl ControlPlane {
             .insert(idempotency_key.to_owned(), result);
         self.operation_names
             .insert(idempotency_key.to_owned(), operation.to_owned());
-        if let Some(hash) = virtual_request_hash {
-            self.virtual_bus_idempotency_hashes
+        if let Some(hash) = request_hash {
+            self.idempotency_hashes
                 .insert(idempotency_key.to_owned(), hash.to_owned());
         } else {
-            self.virtual_bus_idempotency_hashes.remove(idempotency_key);
+            self.idempotency_hashes.remove(idempotency_key);
         }
+    }
+
+    fn request_hash(value: &Value) -> String {
+        let mut digest = Sha256::new();
+        digest.update(serde_json::to_vec(value).unwrap_or_default());
+        format!("{:x}", digest.finalize())
+    }
+
+    fn lookup_idempotent_result(
+        &self,
+        key: &str,
+        request_hash: &str,
+    ) -> Result<Option<Value>, ControlError> {
+        if let Some(result) = self.operation_outcomes.get(key) {
+            if self.idempotency_hashes.get(key).map(String::as_str) != Some(request_hash) {
+                return Err(ControlError::InvalidRequest(
+                    "idempotency key is already used for a different request".into(),
+                ));
+            }
+            return Ok(Some(result.clone()));
+        }
+        let Some(storage) = &self.storage else {
+            return Ok(None);
+        };
+        storage
+            .journal_result_checked(key, request_hash)
+            .map_err(storage_error)?
+            .map(|result| {
+                serde_json::from_str(&result).map_err(|error| ControlError::Json(error.to_string()))
+            })
+            .transpose()
+    }
+
+    fn journal_idempotent_result(
+        &mut self,
+        key: &str,
+        operation: &str,
+        request_hash: &str,
+        result: &Value,
+    ) -> Result<(), ControlError> {
+        if let Some(storage) = &self.storage {
+            let encoded = serde_json::to_string(result)
+                .map_err(|error| ControlError::Json(error.to_string()))?;
+            storage
+                .journal_commit_with_hash(key, operation, &encoded, 0, request_hash)
+                .map_err(storage_error)?;
+        }
+        self.remember_operation_outcome(key, result.clone(), operation, Some(request_hash));
+        Ok(())
     }
 
     pub fn create_virtual_bus(
@@ -3200,6 +3256,7 @@ impl ControlPlane {
 
     fn dispatch_recordings_get(&self, params: Option<Value>) -> Result<Value, ControlError> {
         let recording_id = params
+            .as_ref()
             .and_then(|params| {
                 params
                     .get("recordingId")
@@ -3358,6 +3415,27 @@ impl ControlPlane {
             .get("recordingId")
             .and_then(Value::as_str)
             .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({
+                    "recordingId": recording_id,
+                    "title": params.get("title").and_then(Value::as_str),
+                    "artist": params.get("artist").and_then(Value::as_str),
+                    "comment": params.get("comment").and_then(Value::as_str)
+                });
+                (
+                    self.scoped_idempotency_key("recordings.setMetadata", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         let storage = self
             .storage
             .as_ref()
@@ -3378,13 +3456,17 @@ impl ControlPlane {
         if !updated {
             return Err(ControlError::InvalidRequest("recording not found".into()));
         }
+        let result = json!({ "recordingId": recording_id, "updated": true });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "recordings.setMetadata", &hash, &result)?;
+        }
         self.events.append(
             0,
             None,
             "recording.metadataChanged",
             Some(EntityId::new(session_id)),
         );
-        Ok(json!({ "recordingId": recording_id, "updated": true }))
+        Ok(result)
     }
 
     fn dispatch_recording_rename(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -3401,6 +3483,22 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("newPath is required".into()))?;
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "recordingId": recording_id, "newPath": new_path });
+                (
+                    self.scoped_idempotency_key("recordings.rename", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         let storage = self
             .storage
             .as_ref()
@@ -3416,22 +3514,27 @@ impl ControlPlane {
         {
             return Err(ControlError::InvalidRequest("recording not found".into()));
         }
+        let result = json!({
+            "recordingId": recording_id,
+            "renamed": true,
+            "path": new_path,
+            "fileAction": "renamed"
+        });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "recordings.rename", &hash, &result)?;
+        }
         self.events.append(
             0,
             None,
             "recording.renamed",
             Some(EntityId::new(session_id)),
         );
-        Ok(json!({
-            "recordingId": recording_id,
-            "renamed": true,
-            "path": new_path,
-            "fileAction": "renamed"
-        }))
+        Ok(result)
     }
 
     fn dispatch_recording_remove(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let recording_id = params
+            .as_ref()
             .and_then(|params| {
                 params
                     .get("recordingId")
@@ -3439,6 +3542,23 @@ impl ControlPlane {
                     .map(str::to_owned)
             })
             .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        let operation = params
+            .as_ref()
+            .and_then(|params| params.get("idempotencyKey"))
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "recordingId": recording_id });
+                (
+                    self.scoped_idempotency_key("recordings.removeEntry", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         let storage = self
             .storage
             .as_ref()
@@ -3454,13 +3574,17 @@ impl ControlPlane {
         {
             return Err(ControlError::InvalidRequest("recording not found".into()));
         }
+        let result = json!({ "recordingId": recording_id, "removed": true, "fileAction": "none" });
+        if let Some((key, hash)) = operation {
+            self.journal_idempotent_result(&key, "recordings.removeEntry", &hash, &result)?;
+        }
         self.events.append(
             0,
             None,
             "recording.entryRemoved",
             Some(EntityId::new(session_id)),
         );
-        Ok(json!({ "recordingId": recording_id, "removed": true, "fileAction": "none" }))
+        Ok(result)
     }
 
     fn dispatch_recording_recycle(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -3500,6 +3624,22 @@ impl ControlPlane {
                 json!({ "recordingId": recording_id, "path": record.path, "fileAction": "recycle", "preview": true }),
             );
         }
+        let operation = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(|key| {
+                let request = json!({ "recordingId": recording_id, "confirm": true });
+                (
+                    self.scoped_idempotency_key("recordings.recycle", key),
+                    Self::request_hash(&request),
+                )
+            });
+        if let Some((key, hash)) = &operation {
+            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
+                return Ok(previous);
+            }
+        }
         #[cfg(windows)]
         {
             trash::delete(path).map_err(|error| {
@@ -3508,15 +3648,17 @@ impl ControlPlane {
             storage
                 .set_recording_missing(recording_id, true)
                 .map_err(storage_error)?;
+            let result = json!({ "recordingId": recording_id, "path": record.path, "fileAction": "recycled", "missing": true });
+            if let Some((key, hash)) = operation {
+                self.journal_idempotent_result(&key, "recordings.recycle", &hash, &result)?;
+            }
             self.events.append(
                 0,
                 None,
                 "recording.recycled",
                 Some(EntityId::new(record.session_id.clone())),
             );
-            Ok(
-                json!({ "recordingId": recording_id, "path": record.path, "fileAction": "recycled", "missing": true }),
-            )
+            Ok(result)
         }
         #[cfg(not(windows))]
         {
@@ -3896,7 +4038,7 @@ impl ControlPlane {
         let request_hash = virtual_device_request_hash(plan_id);
         if let Some(previous) = self.operation_outcomes.get(&storage_key) {
             if self
-                .virtual_bus_idempotency_hashes
+                .idempotency_hashes
                 .get(&storage_key)
                 .is_some_and(|hash| hash == &request_hash)
             {
@@ -4210,12 +4352,18 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.get" | "recordings.recovery" | "recordings.reveal" | "recordings.preview" => {
             &["recordingId"]
         }
-        "recordings.setMetadata" => &["recordingId", "title", "artist", "comment"],
-        "recordings.rename" => &["recordingId", "newPath"],
+        "recordings.setMetadata" => &[
+            "recordingId",
+            "title",
+            "artist",
+            "comment",
+            "idempotencyKey",
+        ],
+        "recordings.rename" => &["recordingId", "newPath", "idempotencyKey"],
         "safety.setPrivacyMute" => &["muted"],
         "recovery.clearSafeMode" => &[],
-        "recordings.removeEntry" => &["recordingId"],
-        "recordings.recycle" => &["recordingId", "confirm"],
+        "recordings.removeEntry" => &["recordingId", "idempotencyKey"],
+        "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
         "plugins.scan" => &["directory"],
         "plugins.inspect" => &["path"],
@@ -6084,6 +6232,34 @@ mod tests {
             &ClientGrant::with_scopes([PermissionScope::Record]),
         );
         assert_eq!(response.result.unwrap()["updated"], true);
+        let replay = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(14)),
+                method: "recordings.setMetadata".into(),
+                params: Some(json!({
+                    "recordingId": "recording-edit",
+                    "title": "Edited",
+                    "idempotencyKey": "metadata-edit-1"
+                })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::Record]),
+        );
+        assert_eq!(replay.result.unwrap()["updated"], true);
+        let conflict = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(15)),
+                method: "recordings.setMetadata".into(),
+                params: Some(json!({
+                    "recordingId": "recording-edit",
+                    "title": "Different",
+                    "idempotencyKey": "metadata-edit-1"
+                })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::Record]),
+        );
+        assert!(conflict.error.is_some());
         let record = plane
             .storage
             .as_ref()
@@ -6125,7 +6301,7 @@ mod tests {
                 jsonrpc: "2.0".into(),
                 id: Some(json!(13)),
                 method: "events.subscribe".into(),
-                params: Some(json!({ "afterSequence": 1, "sessionId": "session" })),
+                params: Some(json!({ "afterSequence": 2, "sessionId": "session" })),
             })
             .result
             .unwrap();
