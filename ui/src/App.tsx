@@ -14,9 +14,12 @@ import { readTheme, writeTheme, type ThemeMode } from "./preferences";
 import { setupChecklist } from "./setup";
 
 const defaultBackend = createDisconnectedBackend();
+let fallbackIdempotencyCounter = 0;
 
 function uiIdempotencyKey(operation: string): string {
-  const nonce = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+  const randomValues = globalThis.crypto?.getRandomValues?.(new Uint32Array(4));
+  const nonce = globalThis.crypto?.randomUUID?.()
+    ?? (randomValues ? Array.from(randomValues, value => value.toString(16).padStart(8, "0")).join("") : `${Date.now()}-${fallbackIdempotencyCounter++}`);
   return `ui-${operation}-${nonce}`;
 }
 

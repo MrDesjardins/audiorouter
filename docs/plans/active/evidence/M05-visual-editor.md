@@ -582,3 +582,10 @@ shared API for recording-entry removal and session create, duplicate, and
 delete operations. TypeScript typecheck, all 63 Vitest tests, and the
 disposable three-file production build pass; no audio, recording file, or
 machine configuration was accessed.
+## Idempotency-key entropy hardening (2026-09-06)
+
+The shared UI mutation-key helper now uses `crypto.randomUUID()` when
+available, `crypto.getRandomValues()` as the browser fallback, and a
+timestamp/monotonic counter only when cryptographic APIs are unavailable. The
+M05 typecheck, 63-test suite, and disposable production build pass; no audio or
+machine configuration was accessed.
