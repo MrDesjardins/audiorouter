@@ -46,6 +46,11 @@ cannot scan. UI typecheck, 70 UI tests, contracts typecheck, and the
 disposable M05 production build passed. The panel does not load plugin code or
 change files, audio, or machine configuration.
 
+The same panel also exposes explicit single-candidate `plugins.inspect` for
+paths selected by the user, displaying either bounded identity metadata or the
+stable diagnostic code. This remains read-only and disconnected-safe; it does
+not execute plugin code.
+
 ## Selected dependency
 
 AudioRouter uses the official Steinberg `vst3sdk` repository as the M06
