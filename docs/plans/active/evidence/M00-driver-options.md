@@ -135,3 +135,10 @@ The build's local automatic test signature is not production signing evidence.
 This remains reference-sample qualification only: no driver was installed or
 loaded, test-signing mode was changed, and no machine audio configuration was
 changed.
+
+The new top-level helper was then executed end-to-end. It cloned the Microsoft
+reference repository, initialized WIL, passed the existing x64 package/API and
+signability checks, and removed the exact temporary checkout with exit code 0.
+This validates the documented reproduction path; it remains reference-sample
+evidence only and performed no driver installation/loading, test-signing mode
+change, or machine audio configuration action.
