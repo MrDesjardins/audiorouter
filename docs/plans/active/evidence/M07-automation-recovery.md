@@ -748,3 +748,8 @@ CLI (23), MCP stdio/named-pipe interoperability (2), control (78),
 plugin-host (31), worker-process (8), and strict Clippy checks passed. The
 acceptance used temporary test state only and did not access audio devices,
 drivers, or machine configuration.
+
+The same wrapper was rerun at commit `7a027ba` after the durable recovery
+test additions. CLI (23), MCP stdio/named-pipe interoperability (2), control
+(79), plugin-host (31), worker-process (8), and strict Clippy passed; no audio
+device, driver, or machine configuration was accessed.
