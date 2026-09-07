@@ -631,3 +631,10 @@ validator tests with zero failures, and completed the offline VST3 fixture
 loader (68 classes, finite stereo block, parameter automation, and 180-byte
 state round trip). Build outputs were cleaned. This does not claim realtime
 plugin execution, full sandboxing, or system plugin installation.
+## Installer provenance hardening (2026-09-06)
+
+The SDK installer now rejects reparse-point destinations and verifies that an
+existing checkout's `origin` is the expected Steinberg VST3 SDK repository
+before accepting the pinned revision or applying `-Force`. This is a
+repository-local provenance check and does not alter the installed checkout or
+machine configuration.

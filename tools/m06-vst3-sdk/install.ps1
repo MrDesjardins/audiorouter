@@ -38,8 +38,16 @@ function Update-Submodules {
 }
 
 if (Test-Path -LiteralPath $destinationPath) {
-    if (-not (Test-Path -LiteralPath (Join-Path $destinationPath '.git'))) {
+    $destinationItem = Get-Item -LiteralPath $destinationPath
+    if (($destinationItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Destination must not be a reparse point: $destinationPath"
+    }
+    if (-not $destinationItem.PSIsContainer -or -not (Test-Path -LiteralPath (Join-Path $destinationPath '.git'))) {
         throw "Destination exists but is not a git checkout: $destinationPath"
+    }
+    $origin = (& git -C $destinationPath remote get-url origin 2>$null).Trim()
+    if ($origin -ne $repository) {
+        throw "SDK checkout origin mismatch: expected $repository, found $origin"
     }
     $current = (& git -C $destinationPath rev-parse HEAD).Trim()
     if ($current -ne $revision) {
