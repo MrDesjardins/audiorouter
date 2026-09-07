@@ -813,3 +813,9 @@ while the disconnected preview retains its local fixture sessions. Paged
 responses are normalized to the UI's session list contract and capped at 500
 items; no session is started or mutated by inventory refresh. UI typecheck, 71
 tests, the production build, and documentation validation passed.
+
+The current M07 headless acceptance also passed at this revision: 25 CLI tests,
+2 MCP interoperability tests, 83 control tests, 33 plugin-host tests, 8
+worker-process tests, and strict Clippy. M01 CLI acceptance passed as part of
+the wrapper; all state was temporary and no audio, driver, or machine
+configuration was accessed.
