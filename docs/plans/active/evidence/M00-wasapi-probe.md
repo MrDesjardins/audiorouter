@@ -300,6 +300,18 @@ script removed its temporary executable/object outputs; the probe was not
 executed, so no audio stream, driver, signing mode, or machine configuration
 was touched.
 
+## Controlled process-tree attribution (2026-09-07)
+
+The native probe launched its temporary child tone process and captured that
+child's process loopback for 500 ms. Asynchronous activation, capture
+initialization, event registration, capture start, packet reads, stop, and
+reset all succeeded. The read collected 50 packets and 22,050 frames with no
+silent packets, 76,661 nonzero bytes, and sample energy of `2.02077e+11`. The
+child exited with code 0 and the temporary probe process was gone after the
+run. The media-device snapshot remained ten present devices, all `OK`. This
+qualifies process-tree inclusion and non-silent attribution; physical output
+latency and restart/PID-reuse behavior remain open.
+
 ## Extensible format diagnostics (2026-09-07)
 
 The probe now reports the WAVEFORMATEXTENSIBLE capture channel mask and
