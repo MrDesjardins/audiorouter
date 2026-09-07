@@ -145,6 +145,11 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+The portable graph also now integrates the bounded `gate@1` expander stage.
+Its validated parameters are exposed through discovery and the UI library, and
+prepared state is retained across blocks with fail-closed processing behavior.
+This does not claim native realtime or hardware evidence.
+
 The dedicated engine regression also confirms that a prepared compressor stage
 reduces sustained level over successive blocks while retaining finite output.
 

@@ -16,7 +16,8 @@ export type NodeKind =
   | "mute"
   | "meter"
   | "parametricEq"
-  | "compressor";
+  | "compressor"
+  | "gate";
 
 export type PortDirection = "input" | "output";
 

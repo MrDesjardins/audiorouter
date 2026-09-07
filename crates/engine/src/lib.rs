@@ -1244,6 +1244,10 @@ pub enum ProcessingStage {
         left: Box<std::sync::Mutex<audiorouter_dsp::Compressor>>,
         right: Option<Box<std::sync::Mutex<audiorouter_dsp::Compressor>>>,
     },
+    Gate {
+        left: Box<std::sync::Mutex<audiorouter_dsp::Gate>>,
+        right: Option<Box<std::sync::Mutex<audiorouter_dsp::Gate>>>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -1562,6 +1566,7 @@ pub fn compile_session(
                         | NodeKind::Meter
                         | NodeKind::ParametricEq
                         | NodeKind::Compressor
+                        | NodeKind::Gate
                 ))
                 || (destination.bypass
                     && !matches!(
@@ -1571,6 +1576,7 @@ pub fn compile_session(
                             | NodeKind::Meter
                             | NodeKind::ParametricEq
                             | NodeKind::Compressor
+                            | NodeKind::Gate
                     ))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
@@ -1798,6 +1804,58 @@ pub fn compile_session(
                     None
                 };
                 stages.push(ProcessingStage::Compressor {
+                    left: Box::new(std::sync::Mutex::new(left)),
+                    right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
+                });
+            }
+            NodeKind::Gate => {
+                let threshold_db = node
+                    .parameters
+                    .get("thresholdDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(-45.0) as f32;
+                let range_db = node
+                    .parameters
+                    .get("rangeDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(60.0) as f32;
+                let attack_ms = node
+                    .parameters
+                    .get("attackMs")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(5.0) as f32;
+                let release_ms = node
+                    .parameters
+                    .get("releaseMs")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(150.0) as f32;
+                let input_channels = node
+                    .ports
+                    .iter()
+                    .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                    .map(|port| usize::from(port.channels))
+                    .unwrap_or(1);
+                let params = audiorouter_dsp::GateParams {
+                    threshold_db,
+                    hysteresis_db: 3.0,
+                    ratio: 2.0,
+                    range_db,
+                    attack_ms,
+                    hold_ms: 150.0,
+                    release_ms,
+                    sample_rate: 48_000.0,
+                };
+                let left = audiorouter_dsp::Gate::new(params, 1)
+                    .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                let right = if input_channels == 2 {
+                    Some(
+                        audiorouter_dsp::Gate::new(params, 1)
+                            .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                    )
+                } else {
+                    None
+                };
+                stages.push(ProcessingStage::Gate {
                     left: Box::new(std::sync::Mutex::new(left)),
                     right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
                 });
@@ -2338,6 +2396,26 @@ impl RuntimeGraph {
                     }
                 }
                 ProcessingStage::Compressor { left, right } => {
+                    let Ok(mut left) = left.try_lock() else {
+                        block.clear();
+                        continue;
+                    };
+                    if let Some(samples) = block.channel_mut(0) {
+                        left.process_interleaved(samples);
+                    }
+                    if block.channels() == 2 {
+                        if let (Some(processor), Some(samples)) =
+                            (right.as_ref(), block.channel_mut(1))
+                        {
+                            if let Ok(mut processor) = processor.try_lock() {
+                                processor.process_interleaved(samples);
+                            } else {
+                                block.clear();
+                            }
+                        }
+                    }
+                }
+                ProcessingStage::Gate { left, right } => {
                     let Ok(mut left) = left.try_lock() else {
                         block.clear();
                         continue;

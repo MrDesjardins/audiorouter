@@ -10,7 +10,7 @@ export type DraftChange = {
 export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
-export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor">;
+export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate">;
 
 const libraryNodeDefinitions: Record<LibraryNodeKind, {
   name: string;
@@ -57,6 +57,14 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   compressor: {
     name: "Compressor",
     parameters: { thresholdDb: -18, ratio: 3, attackMs: 10, releaseMs: 150, makeupDb: 0 },
+    ports: [
+      { name: "in", direction: "input", channels: 1 },
+      { name: "out", direction: "output", channels: 1 },
+    ],
+  },
+  gate: {
+    name: "Gate",
+    parameters: { thresholdDb: -45, rangeDb: 60, attackMs: 5, releaseMs: 150 },
     ports: [
       { name: "in", direction: "input", channels: 1 },
       { name: "out", direction: "output", channels: 1 },

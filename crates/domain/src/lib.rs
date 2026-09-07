@@ -49,10 +49,11 @@ pub enum NodeKind {
     Meter,
     ParametricEq,
     Compressor,
+    Gate,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -65,6 +66,7 @@ impl NodeKind {
         Self::Meter,
         Self::ParametricEq,
         Self::Compressor,
+        Self::Gate,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -81,6 +83,7 @@ impl NodeKind {
             Self::Meter => "meter",
             Self::ParametricEq => "parametric-eq",
             Self::Compressor => "compressor",
+            Self::Gate => "gate",
         }
     }
 }
@@ -99,7 +102,7 @@ pub struct NodeTypeSpec {
     pub realtime_cost_class: &'static str,
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 12] {
+pub fn node_registry() -> [NodeTypeSpec; 13] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -110,6 +113,7 @@ pub fn node_registry() -> [NodeTypeSpec; 12] {
             | NodeKind::Meter
             | NodeKind::ParametricEq => CapabilityAvailability::Available,
             NodeKind::Compressor => CapabilityAvailability::Available,
+            NodeKind::Gate => CapabilityAvailability::Available,
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -124,6 +128,7 @@ pub fn node_registry() -> [NodeTypeSpec; 12] {
             NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => "low",
             NodeKind::ParametricEq => "medium",
             NodeKind::Compressor => "medium",
+            NodeKind::Gate => "medium",
             _ => "device-bound",
         },
     })
@@ -1060,6 +1065,18 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Compressor, "makeupDb") => value
                     .as_f64()
                     .is_some_and(|makeup| makeup.is_finite() && (0.0..=24.0).contains(&makeup)),
+                (NodeKind::Gate, "thresholdDb") => value.as_f64().is_some_and(|threshold| {
+                    threshold.is_finite() && (-80.0..=0.0).contains(&threshold)
+                }),
+                (NodeKind::Gate, "rangeDb") => value
+                    .as_f64()
+                    .is_some_and(|range| range.is_finite() && (0.0..=80.0).contains(&range)),
+                (NodeKind::Gate, "attackMs") => value
+                    .as_f64()
+                    .is_some_and(|attack| attack.is_finite() && (0.1..=100.0).contains(&attack)),
+                (NodeKind::Gate, "releaseMs") => value.as_f64().is_some_and(|release| {
+                    release.is_finite() && (10.0..=2_000.0).contains(&release)
+                }),
                 _ => false,
             };
             if !valid {
@@ -2399,7 +2416,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 12);
+        assert_eq!(registry.len(), 13);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

@@ -2511,6 +2511,12 @@ impl ControlPlane {
                 { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 },
                 { "name": "makeupDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 24.0, "default": 0.0 }
             ]),
+            audiorouter_domain::NodeKind::Gate => json!([
+                { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -45.0 },
+                { "name": "rangeDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 60.0 },
+                { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 100.0, "default": 5.0 },
+                { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 }
+            ]),
             _ => json!([]),
         }
     }
@@ -2538,7 +2544,7 @@ impl ControlPlane {
             },
             {
                 "id": "gate", "version": 1, "category": "dynamics",
-                "availability": unavailable, "latencySamples": 0,
+                "availability": available, "latencySamples": 0,
                 "parameters": [
                     { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -45.0 },
                     { "name": "rangeDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 60.0 },
