@@ -312,6 +312,10 @@ struct ComApartment;
 
 struct EventHandle(windows::Win32::Foundation::HANDLE);
 
+fn should_retry_capture_initialization(error: &windows::core::Error) -> bool {
+    error.code() == windows::core::HRESULT(0x80070057u32 as i32)
+}
+
 impl Drop for EventHandle {
     fn drop(&mut self) {
         unsafe {
@@ -371,7 +375,7 @@ impl SharedCapture {
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         match Self::open_internal(endpoint_id, true, 0) {
             Err(AudioError::WindowsOperation { error, .. })
-                if error.code() == windows::core::HRESULT(0x80070057u32 as i32) =>
+                if should_retry_capture_initialization(&error) =>
             {
                 // The native M00 probe qualifies this exact fallback request.
                 // Retry only E_INVALIDARG: AUDCLNT_E_DEVICE_IN_USE,
@@ -1517,6 +1521,26 @@ mod tests {
     fn opening_an_unknown_capture_endpoint_fails_without_starting_audio() {
         let error = SharedCapture::open("audiorouter-missing-endpoint", 1_000_000);
         assert!(matches!(error, Err(AudioError::Windows(_))));
+    }
+
+    #[test]
+    fn capture_retry_is_limited_to_e_invalidarg() {
+        let invalid_argument = windows::core::Error::new(
+            windows::core::HRESULT(0x80070057u32 as i32),
+            "invalid argument",
+        );
+        let device_in_use = windows::core::Error::new(
+            windows::core::HRESULT(0x8889000Au32 as i32),
+            "device in use",
+        );
+        let other_failure = windows::core::Error::new(
+            windows::core::HRESULT(0x80004005u32 as i32),
+            "unspecified failure",
+        );
+
+        assert!(should_retry_capture_initialization(&invalid_argument));
+        assert!(!should_retry_capture_initialization(&device_in_use));
+        assert!(!should_retry_capture_initialization(&other_failure));
     }
 
     #[cfg(windows)]

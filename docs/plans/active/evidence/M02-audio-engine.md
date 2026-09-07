@@ -9,7 +9,7 @@ polls packet availability, while the event-driven request remains the primary
 `open` behavior. This addresses the observed distinction between successful native
 non-event initialization and the Rust event-callback `E_INVALIDARG` path
 without silently weakening the event-driven contract. The adapter package's
-14 tests and strict Clippy pass; no live stream was opened for this change.
+15 tests and strict Clippy pass; no live stream was opened for this change.
 
 The normal `SharedCapture::open` path now retries that polling request only
 when event-callback initialization returns exactly `E_INVALIDARG`. Busy-device,

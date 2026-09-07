@@ -23,7 +23,7 @@ install a driver.
 At the current repository revision, the safe, repository-local qualification
 surface is green:
 
-- The locked Rust workspace passes 377 tests across all targets, formatting,
+- The locked Rust workspace passes 378 tests across all targets, formatting,
   and strict workspace Clippy.
 - M04 passes 25 DSP and 30 recording tests, including the 60-second pitch
   boundary cases.
