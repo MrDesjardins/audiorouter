@@ -171,3 +171,11 @@ and the control discovery regression verifies the value comes from the domain
 constant. Control tests (81), strict Clippy, and documentation validation pass.
 This reports desired-state capacity only; it does not imply that native driver
 endpoints exist.
+
+## Global validation hardening (2026-09-07)
+
+The reusable global validator now rejects aggregate node/edge counts above the
+declared global budgets and empty virtual-bus IDs before evaluating known
+cross-session routes. A regression covers 129 nodes across three sessions and
+an empty bus identifier. The domain suite passes 39 tests with strict Clippy.
+This remains portable validation and does not create endpoints or open audio.

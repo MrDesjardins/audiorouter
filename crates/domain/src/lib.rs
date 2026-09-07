@@ -1032,6 +1032,22 @@ pub fn validate_global_graph(
 ) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
     let mut session_ids = HashSet::new();
+    let total_nodes = sessions.iter().map(|session| session.nodes.len()).sum();
+    let total_edges = sessions.iter().map(|session| session.edges.len()).sum();
+    if total_nodes > MAX_NODES_GLOBAL {
+        errors.push(ValidationError::LimitExceeded {
+            path: "global.nodes".into(),
+            requested: total_nodes,
+            maximum: MAX_NODES_GLOBAL,
+        });
+    }
+    if total_edges > MAX_EDGES_GLOBAL {
+        errors.push(ValidationError::LimitExceeded {
+            path: "global.edges".into(),
+            requested: total_edges,
+            maximum: MAX_EDGES_GLOBAL,
+        });
+    }
     for (index, session) in sessions.iter().enumerate() {
         if !session_ids.insert(session.id.clone()) {
             errors.push(ValidationError::DuplicateId {
@@ -1052,6 +1068,11 @@ pub fn validate_global_graph(
     let mut routes = HashSet::new();
     for (index, route) in virtual_bus_routes.iter().enumerate() {
         let path = format!("virtualBusRoutes[{index}]");
+        if route.bus_id.as_str().is_empty() {
+            errors.push(ValidationError::EmptyId {
+                path: format!("{path}.busId"),
+            });
+        }
         if !session_ids.contains(&route.producer_session_id) {
             errors.push(ValidationError::MissingSession {
                 path: format!("{path}.producerSessionId"),
@@ -2433,6 +2454,56 @@ mod tests {
         assert!(errors.iter().any(|error| matches!(
             error,
             ValidationError::MissingSession { id, .. } if id == "missing"
+        )));
+    }
+
+    #[test]
+    fn global_graph_rejects_empty_bus_ids_and_aggregate_budget_overflow() {
+        let mut first = session(
+            (0..MAX_NODES_PER_SESSION)
+                .map(|index| {
+                    node(
+                        &format!("first-{index}"),
+                        NodeKind::Gain,
+                        PortDirection::Input,
+                    )
+                })
+                .collect(),
+            vec![],
+        );
+        first.id = EntityId::new("first");
+        let mut second = session(
+            (0..MAX_NODES_PER_SESSION)
+                .map(|index| {
+                    node(
+                        &format!("second-{index}"),
+                        NodeKind::Gain,
+                        PortDirection::Input,
+                    )
+                })
+                .collect(),
+            vec![],
+        );
+        second.id = EntityId::new("second");
+        let mut third = session(
+            vec![node("third", NodeKind::Gain, PortDirection::Input)],
+            vec![],
+        );
+        third.id = EntityId::new("third");
+        let route = VirtualBusRoute {
+            bus_id: EntityId::new(""),
+            producer_session_id: EntityId::new("first"),
+            consumer_session_id: EntityId::new("second"),
+        };
+        let errors = validate_global_graph(&[first, second, third], &[route]).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested: 129, maximum: MAX_NODES_GLOBAL }
+                if path == "global.nodes"
+        )));
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::EmptyId { path } if path == "virtualBusRoutes[0].busId"
         )));
     }
 
