@@ -34,6 +34,26 @@ audiorouter graph apply C:\path\change.plan.json `
 
 Apply rereads the current revision and refuses a stale plan. If the caller loses the response, query `operations.get` through `api call` before retrying.
 
+## Watch bounded state events
+
+Replay state events for one session from an opaque cursor. Repeat `--category`
+to select only the event categories the client needs; the backend bounds the
+filter to 32 category names and the replay to 500 events:
+
+```powershell
+audiorouter watch session-id `
+  --after 0 `
+  --limit 100 `
+  --category graph.committed `
+  --category session.deleted `
+  --database C:\path\audiorouter.sqlite `
+  --json
+```
+
+An expired cursor requires the returned snapshot/resynchronization flow. This
+command only reads persisted control state; it does not open audio or change
+machine configuration.
+
 ## Backup and restore
 
 Backups require a new destination; the storage layer refuses to overwrite an existing recovery copy. Bundle imports are staged and validated before persistence:
