@@ -16,6 +16,15 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## Fan-out topology safety (2026-09-08)
+
+Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out
+compiler. A fan-out plan now rejects any unrelated enabled node instead of
+silently omitting it from the prepared runtime. The new regression and the
+77-test engine suite pass with strict Clippy, formatting, and diff checks.
+This remains portable graph evidence; native endpoint routing is unchanged and
+the managed-driver gate remains open.
+
 ## Native lifecycle and process-attribution acceptance (2026-09-08)
 
 With explicit live-audio authorization, the guarded `m00-native-live.ps1`

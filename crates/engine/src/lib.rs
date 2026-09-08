@@ -2665,6 +2665,15 @@ pub fn compile_fanout_session(
         }
         matrices.push(edge.matrix.clone());
     }
+    let mut participants = destinations;
+    participants.insert(source_id);
+    if session
+        .nodes
+        .iter()
+        .any(|node| node.enabled && !participants.contains(&node.id))
+    {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
     Ok(CompiledFanoutGraph {
         generation,
         matrices,
@@ -4969,6 +4978,13 @@ mod tests {
         graph.process(&source, &mut destinations).unwrap();
         assert_eq!(left.channel(0).unwrap(), &[0.75, 0.75]);
         assert_eq!(right.channel(0).unwrap(), &[0.75, 0.75]);
+
+        let mut unrelated = session.clone();
+        unrelated.nodes.push(output("unused"));
+        assert!(matches!(
+            compile_fanout_session(&unrelated, RuntimeGeneration::new(7)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
     }
 
     #[test]

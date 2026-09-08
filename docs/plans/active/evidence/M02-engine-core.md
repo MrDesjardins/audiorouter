@@ -1,5 +1,16 @@
 # M02 realtime engine core groundwork
 
+## 2026-09-08 - Fan-out compiler fail-closed topology guard
+
+`compile_fanout_session` now rejects a session containing any unrelated
+enabled node outside its one-source/multiple-physical-output topology. The
+previous edge checks validated each fan-out branch but could silently ignore a
+separate enabled node with no participating edge, allowing an incomplete
+runtime plan to compile. A regression adds such a node and verifies typed
+`UnsupportedTopology` rejection. Engine tests (77), formatting, strict
+Clippy, and diff checks pass; no audio endpoint or machine configuration is
+accessed.
+
 ## 2026-09-05 — Preallocated audio blocks
 
 Added `crates/engine` with the M02 internal representation constants: 48 kHz planar float32 audio, a maximum two channels, and a 128-frame processing quantum. `AudioBlock` allocates only during preparation and reuses its channel-major storage for clear, copy, gain, mix, explicit mono/stereo channel matrices, bounded linear sample-rate conversion, finite-value sanitization, and shape checks. `DriftController` applies bounded FIFO-occupancy correction in ppm. `RuntimeGraph` holds an immutable prepared gain/mute schedule and applies it without allocating; `RuntimeGeneration` provides an opaque generation identity for later publication/reclamation logic.
