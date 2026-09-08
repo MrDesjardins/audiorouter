@@ -23,6 +23,7 @@ $probeDirectory = Join-Path $workspace 'tools/m00-native-wasapi-probe'
 $buildScript = Join-Path $probeDirectory 'build.ps1'
 $object = Join-Path $probeDirectory 'main.obj'
 $output = Join-Path ([System.IO.Path]::GetTempPath()) ("audiorouter-m00-loopback-{0}.exe" -f ([guid]::NewGuid()))
+$temporaryObject = [System.IO.Path]::ChangeExtension($output, '.obj')
 $captureLog = "$output.capture.log"
 $toneLog = "$output.tone.log"
 
@@ -108,7 +109,7 @@ try {
     Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {
-    $cleanupPaths = @($output, $captureLog, "$captureLog.err", $toneLog, "$toneLog.err", $object)
+    $cleanupPaths = @($output, $temporaryObject, $captureLog, "$captureLog.err", $toneLog, "$toneLog.err", $object)
     for ($attempt = 0; $attempt -lt 5; $attempt++) {
         Remove-Item -LiteralPath $cleanupPaths -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path -LiteralPath $object)) { break }

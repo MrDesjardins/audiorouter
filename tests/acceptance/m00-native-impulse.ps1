@@ -16,6 +16,7 @@ $probeDirectory = Join-Path $workspace 'tools/m00-native-wasapi-probe'
 $buildScript = Join-Path $probeDirectory 'build.ps1'
 $object = Join-Path $probeDirectory 'main.obj'
 $output = Join-Path ([IO.Path]::GetTempPath()) ("audiorouter-m00-impulse-{0}.exe" -f ([guid]::NewGuid()))
+$temporaryObject = [IO.Path]::ChangeExtension($output, '.obj')
 $raw = "$output.raw"
 $captureLog = "$output.capture.log"
 $impulseLog = "$output.impulse.log"
@@ -91,7 +92,7 @@ try {
     Write-Output 'Scope: bounded signal correlation only; the estimated onset is not the required acoustic p95 latency gate without calibrated impulse timestamps and a validated physical setup.'
 }
 finally {
-    $cleanupPaths = @($output, $raw, $captureLog, "$captureLog.err", $impulseLog, "$impulseLog.err", $object)
+    $cleanupPaths = @($output, $temporaryObject, $raw, $captureLog, "$captureLog.err", $impulseLog, "$impulseLog.err", $object)
     for ($attempt = 0; $attempt -lt 5; $attempt++) {
         Remove-Item -LiteralPath $cleanupPaths -Force -ErrorAction SilentlyContinue
         if (-not (Test-Path -LiteralPath $object)) { break }

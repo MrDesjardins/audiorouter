@@ -14,6 +14,7 @@ $probeDirectory = Join-Path $workspace 'tools/m00-native-wasapi-probe'
 $buildScript = Join-Path $probeDirectory 'build.ps1'
 $object = Join-Path $probeDirectory 'main.obj'
 $output = Join-Path ([System.IO.Path]::GetTempPath()) ("audiorouter-m00-process-exclude-{0}.exe" -f ([guid]::NewGuid()))
+$temporaryObject = [System.IO.Path]::ChangeExtension($output, '.obj')
 
 function Get-MediaSnapshot {
     @(Get-PnpDevice -Class Media -PresentOnly | ForEach-Object {
@@ -57,5 +58,5 @@ try {
     Write-Output 'Scope: disposable child excluded from the selected process-loopback tree; this validates API mode/lifecycle, not a full cross-process isolation threshold.'
 }
 finally {
-    Remove-Item -LiteralPath $output, $object -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $output, $object, $temporaryObject -Force -ErrorAction SilentlyContinue
 }
