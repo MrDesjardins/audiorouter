@@ -347,3 +347,10 @@ transactionally: it silences the caller-owned output and leaves source FIFO
 ownership plus fractional phase untouched. This prevents an adapter route from
 dropping the consumed prefix of a partial block; the focused engine and probe
 checks pass, while arbitrary-rate stress and native timing remain open.
+
+The authorized one-second adapter-route acceptance was rerun after this fix.
+The selected VB-Audio pair delivered 48,960 capture frames, the scheduler
+processed 48,896 frames, and 47,968 frames were routed through the generation-
+1 graph. Endpoint/media identity and state remained unchanged and temporary
+outputs were removed. This requalifies the existing-rate live path; differing
+hardware-rate stress and native callback timing remain open.
