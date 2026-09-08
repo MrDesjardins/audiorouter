@@ -77,6 +77,12 @@ frames, 753 graph blocks, 32,768 ns processing p99.9, and zero deadline misses
 or lateness. Stream cleanup and all endpoint/configuration snapshots passed;
 this remains user-space adapter evidence, not managed-driver callback proof.
 
+The matching shared capture/render adapter run also passed for 2,000 ms:
+96,480 capture frames, 96,384 scheduler frames, 97,056 silent render frames,
+753 graph blocks, 65,536 ns processing p99.9, and zero xruns, overruns,
+deadline misses, or lateness. Stream teardown and media identity/state checks
+passed; this remains user-space evidence, not managed-driver callback proof.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/

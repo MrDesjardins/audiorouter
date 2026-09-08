@@ -656,6 +656,16 @@ volume, mute, privacy, driver, signing, and startup snapshots were unchanged.
 This is shared-mode user-space adapter evidence, not managed-driver callback or
 physical-latency qualification.
 
+## Shared adapter 2-second qualification (2026-09-08)
+
+The guarded shared capture/render adapter wrapper passed for 2,000 ms on the
+selected endpoints: 96,480 capture frames, 96,384 scheduler frames, 97,056
+silent render frames, and 753 graph blocks. Processing p99.9 was 65,536 ns
+(maximum 46,800 ns); scheduler xruns, input/output overruns, deadline misses,
+and deadline lateness were zero. Streams stopped/reset cleanly and the media
+identity/state snapshot was unchanged. This is shared-mode user-space evidence,
+not managed-driver callback or physical-latency qualification.
+
 ## Windows-audio identity and adapter regression suite (2026-09-08)
 
 The complete `audiorouter-windows-audio` test target passed 29 tests plus
