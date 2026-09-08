@@ -27,9 +27,20 @@ and a temporary elevated Vite production build passed. The original build
 attempt was blocked only by the host's locked `ui/dist`; no existing output
 was removed and no audio or machine configuration changed.
 
+## Safe acceptance requalification at UI-pagination tip (2026-09-08)
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at pushed tip
+`b120b87`: M00 toolchain/native compile/format inventory, disposable pinned
+SysVAD x64 qualification, M01 CLI, M04 DSP/recording, M05 UI (91 tests and
+temporary production build), M06 SDK/VST3, M07 headless, unsigned M08
+artifacts, 158-ID traceability, and documentation validation (51 Markdown
+files, 160 local links). Temporary outputs/checkouts were removed. Driver
+installation/loading, signing-mode changes, plugin/startup registration, and
+machine audio configuration were excluded and unchanged.
+
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `5106765`, with the latest
+The latest validated implementation head is `b120b87`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and

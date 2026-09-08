@@ -835,3 +835,12 @@ The locked workspace regression passed with 466 unit/integration tests, all
 workspace doc-tests, strict Clippy using `-D warnings`, and documentation
 validation. This was a portable/build verification only; no driver, signing
 mode, plugin/startup registration, or machine audio configuration changed.
+
+## Safe chain at UI-pagination tip (2026-09-08)
+
+At pushed tip `b120b87`, the complete safe chain passed: M00 toolchain/native
+compile/format inventory and disposable pinned SysVAD x64 qualification, M01,
+M04, M05 with 91 UI tests and a temporary production build, M06 SDK/VST3,
+M07, unsigned M08 artifacts, traceability, and documentation validation.
+Temporary outputs/checkouts were removed. Production driver, signing,
+installer, hardware, and manual UI gates remain open.
