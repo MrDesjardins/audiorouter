@@ -15,10 +15,10 @@ release and must not be presented as an installable Windows audio product.
 
 ## Verified in this qualification snapshot
 
-- The locked Rust workspace passes 430 unit/integration tests, all doc-tests,
+- The locked Rust workspace passes 466 unit/integration tests, all doc-tests,
   formatting, and strict Clippy.
 - M07 headless acceptance passes 25 CLI tests, 2 MCP interoperability tests,
-  86 control tests, 39 plugin-host tests, 8 worker-process tests, and strict
+  87 control tests, 39 plugin-host tests, 8 worker-process tests, and strict
   Clippy.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI
   and plugin-worker artifacts, SBOM metadata, notices, checksums, and a

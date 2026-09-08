@@ -768,3 +768,11 @@ provenance, required-artifact checks, and SHA-256/byte-count verification all
 passed. The temporary output directory was removed by the wrapper. The result
 is unsigned preparation evidence only: no installer, driver, signing action,
 plugin registration, or audio configuration change occurred.
+
+## Full workspace requalification (2026-09-08)
+
+At the current implementation head, the locked workspace passed 466
+unit/integration tests across all crates and process targets, all doc-tests,
+strict workspace Clippy with `-D warnings`, formatting, and diff checks. This
+run did not install or load a driver, change signing mode, register plugins or
+startup entries, or alter machine audio configuration.

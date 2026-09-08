@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `a19306a`, with the latest
+The latest validated implementation head is `34bc68d`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -198,6 +198,13 @@ Corrected M05/UI capability wording: the library's Recorder entry now points
 users to the implemented dedicated Recorder panel instead of claiming that M04
 runtime integration is unavailable. A focused UI regression covers this
 guidance; no backend, audio, or machine configuration changed.
+
+Revalidated the full locked workspace at the current head on 2026-09-08: 466
+unit/integration tests passed across CLI/MCP, control, domain, DSP, engine,
+plugin-host/worker, protocol, recording, storage, transport, and Windows-audio
+crates, with all doc-tests, strict workspace Clippy, formatting, and diff
+checks passing. No driver, signing mode, plugin/startup registration, or
+machine audio configuration changed.
 
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
