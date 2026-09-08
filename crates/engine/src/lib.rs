@@ -4875,6 +4875,27 @@ mod tests {
     }
 
     #[test]
+    fn processor_timing_includes_silence_before_activation() {
+        let processor = RuntimeProcessor::default();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(1.0);
+
+        assert_eq!(processor.process(&mut block), None);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+        assert_eq!(processor.metrics().processed_quanta(), 0);
+        assert!(processor.metrics().processing_time_ns_total() > 0);
+        assert!(processor.metrics().processing_time_ns_max() > 0);
+        assert_eq!(
+            processor
+                .metrics()
+                .processing_time_histogram()
+                .iter()
+                .sum::<u64>(),
+            1
+        );
+    }
+
+    #[test]
     fn session_activation_keeps_previous_generation_when_preparation_fails() {
         let session: audiorouter_domain::Session =
             serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
