@@ -42,6 +42,12 @@ bounded frames/deadlines, shared-memory guards, state integrity, and scanner
 limits remain covered. Actual third-party plugin execution and full OS
 filesystem/network sandboxing remain open.
 
+Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
+interoperability tests, 87 control tests, 39 plugin-host tests, and 8
+worker-process tests passed with doc-tests and strict Clippy. Durable plans,
+backup/restore, recovery, privacy, authorization, and worker boundaries were
+exercised without audio or machine-configuration access.
+
 Added a source-level engine regression for the quantile-tail case that exposed
 the adapter harness defect: p99.9 may be below a rare absolute maximum. The
 engine suite now passes 76 tests plus doc-tests and strict Clippy, with the

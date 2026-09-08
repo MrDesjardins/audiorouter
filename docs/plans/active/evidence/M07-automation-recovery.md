@@ -755,6 +755,15 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## M07 headless acceptance requalification (2026-09-08)
+
+`tests/acceptance/m07-headless.ps1` passed against the current tree: 25 CLI
+tests, 2 MCP interoperability tests, 87 control tests, 39 plugin-host tests,
+and 8 worker-process tests, plus doc-tests and strict Clippy. The acceptance
+exercised durable plans, backup/restore, recorder recovery, privacy state,
+MCP authorization, and worker containment without opening audio or changing
+machine configuration.
+
 ## Current headless acceptance (2026-09-08)
 
 The checked-in M07 acceptance passed at the current tree: M01 CLI acceptance,
