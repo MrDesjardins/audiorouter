@@ -1699,37 +1699,37 @@ fn session_item_schema() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "id": { "type": "string", "minLength": 1, "maxLength": 128, "description": "UTF-8 byte limit is advertised in limits.maxEntityIdBytes when applicable." },
-            "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "Maximum 256 UTF-8 bytes." },
+            "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "UTF-8 byte limit is advertised in limits.maxEntityIdBytes when applicable." },
+            "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_DISPLAY_NAME_BYTES, "description": "Maximum 256 UTF-8 bytes." },
             "schemaVersion": { "const": 1 },
             "revision": { "type": "integer", "minimum": 0 },
             "nodes": {
                 "type": "array",
-                "maxItems": 64,
+                "maxItems": audiorouter_domain::MAX_NODES_PER_SESSION,
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                         "kind": { "type": "string", "minLength": 1 },
                         "typeVersion": { "const": 1 },
-                        "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "Maximum 256 UTF-8 bytes." },
+                        "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_DISPLAY_NAME_BYTES, "description": "Maximum 256 UTF-8 bytes." },
                         "enabled": { "type": "boolean" },
                         "bypass": { "type": "boolean" },
                         "parameters": {
                             "type": "object",
-                            "maxProperties": 32,
+                            "maxProperties": audiorouter_domain::MAX_PARAMETERS_PER_NODE,
                             "propertyNames": {
-                                "maxLength": 128,
+                                "maxLength": audiorouter_domain::MAX_PARAMETER_NAME_BYTES,
                                 "description": "Maximum 128 UTF-8 bytes per parameter name."
                             }
                         },
                         "ports": {
                             "type": "array",
-                            "maxItems": 16,
+                                "maxItems": audiorouter_domain::MAX_PORTS_PER_NODE,
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "name": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Maximum 128 UTF-8 bytes." },
+                                    "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_PORT_NAME_BYTES, "description": "Maximum 128 UTF-8 bytes." },
                                     "direction": { "enum": ["input", "output"] },
                                     "channels": { "type": "integer", "minimum": 1, "maximum": 2 }
                                 },
@@ -1744,18 +1744,18 @@ fn session_item_schema() -> Value {
             },
             "edges": {
                 "type": "array",
-                "maxItems": 128,
+                "maxItems": audiorouter_domain::MAX_EDGES_PER_SESSION,
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
-                        "sourceNode": { "type": "string", "minLength": 1, "maxLength": 128 },
-                        "sourcePort": { "type": "string", "minLength": 1, "maxLength": 128 },
-                        "destinationNode": { "type": "string", "minLength": 1, "maxLength": 128 },
-                        "destinationPort": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                        "sourceNode": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                        "sourcePort": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_PORT_NAME_BYTES },
+                        "destinationNode": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                        "destinationPort": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_PORT_NAME_BYTES },
                         "matrix": {
                             "type": "array",
-                            "maxItems": 4,
+                            "maxItems": audiorouter_domain::MAX_CHANNEL_MATRIX_COEFFICIENTS,
                             "items": { "type": "number", "minimum": -2.0, "maximum": 2.0 }
                         },
                         "enabled": { "type": "boolean" }
