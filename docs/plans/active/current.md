@@ -325,6 +325,11 @@ Requalified M07 headless acceptance at the current tree: M01 CLI acceptance,
 tests, eight worker-process tests, strict Clippy, and formatting passed. No
 audio device, driver, plugin registration, or machine configuration changed.
 
+Requalified M01 CLI acceptance on 2026-09-08: offline discovery, graph/session
+lifecycle, recording operations, validated bundle import/export, backup/restore,
+and authorization checks passed with temporary cleanup. No user database,
+audio endpoint, driver, or machine configuration was accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

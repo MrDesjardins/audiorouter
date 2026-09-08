@@ -594,6 +594,15 @@ regression covers each direct storage path; storage coverage passes 51 tests
 with strict Clippy and formatting, with no audio or machine configuration
 accessed.
 
+## M01 CLI acceptance requalification (2026-09-08)
+
+`tests/acceptance/m01-cli.ps1` passed with offline status/schema/device/app/node
+discovery, graph planning, session lifecycle, recording operations, validated
+bundle import/export, backup/restore, and authorization boundaries. The
+acceptance uses temporary databases and files and removes them on completion;
+no user database, audio endpoint, driver, or machine configuration was
+accessed.
+
 Graph, startup, and virtual-device plan load/delete paths now enforce the same
 128-byte plan identity bound as their writes, and loaded durable IDs are
 revalidated before being returned. Storage coverage remains green at 51 tests
@@ -686,3 +695,11 @@ remain valid for legacy journal rows; oversized input fails before SQLite
 mutation or replay lookup. Storage/control tests, strict Clippy, formatting,
 and documentation validation passed. No audio or machine configuration was
 accessed.
+
+## M01 CLI acceptance requalification (2026-09-08)
+
+`tests/acceptance/m01-cli.ps1` passed with offline status/schema/device/app/node
+discovery, graph planning, session lifecycle, recording operations, validated
+bundle import/export, backup/restore, and authorization boundaries. The
+acceptance uses temporary databases and files and removes them on completion;
+no user database, audio endpoint, driver, or machine configuration was accessed.
