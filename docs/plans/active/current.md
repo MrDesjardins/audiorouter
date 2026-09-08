@@ -52,6 +52,14 @@ zero deadline misses. Both wrappers verified stream cleanup and unchanged
 media state. This remains user-mode adapter/digital-route evidence, not
 managed-driver callback or physical-latency evidence.
 
+The explicit differing-rate route then passed using the inventory-selected
+96 kHz mono capture endpoint and 48 kHz stereo render endpoint: 48,000
+capture frames were reduced to 187 fixed graph blocks and 23,936 routed
+frames, with a 16,384 ns processing p99.9 upper bound and zero deadline
+misses. Endpoint/media cleanup checks passed. This is bounded resampler and
+digital-route evidence; clock drift, physical latency, and production-driver
+ownership remain open.
+
 ## Durable graph-history retention bound (2026-09-08)
 
 Closed a persistence retention gap in M01/STATE foundations. The SQLite

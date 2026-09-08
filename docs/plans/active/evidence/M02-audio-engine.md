@@ -13,6 +13,17 @@ deadline misses. Both wrappers verified stream stop/reset, temporary cleanup,
 and unchanged media state. These are user-mode adapter and digital-route
 results, not managed-driver callback timing or physical acoustic latency.
 
+## 2026-09-08 - Differing-rate Rust route
+
+The guarded route was requalified with explicit endpoint IDs after the native
+format inventory identified a valid pair: 96 kHz mono capture into 48 kHz
+stereo render. The Rust adapter consumed 48,000 capture frames, produced 187
+fixed graph blocks and 23,936 routed frames, and reported a 16,384 ns
+processing-time p99.9 upper bound with zero deadline misses. Endpoint/media
+identity and cleanup checks passed. This closes the available differing-rate
+resampler smoke on the current machine, but not clock-drift qualification,
+physical acoustic latency, or managed-driver ownership.
+
 ## 2026-09-07 — Rust capture compatibility mode
 
 The Windows adapter now exposes an explicit `SharedCapture::open_polling`
