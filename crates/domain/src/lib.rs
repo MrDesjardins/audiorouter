@@ -1036,6 +1036,13 @@ fn validate_entity_id(id: &EntityId, path: String, errors: &mut Vec<ValidationEr
 pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
     validate_entity_id(&session.id, "id".into(), &mut errors);
+    if session.name.len() > MAX_DISPLAY_NAME_BYTES {
+        errors.push(ValidationError::LimitExceeded {
+            path: "name".into(),
+            requested: session.name.len(),
+            maximum: MAX_DISPLAY_NAME_BYTES,
+        });
+    }
     if session.schema_version != CURRENT_SESSION_SCHEMA_VERSION {
         errors.push(ValidationError::UnsupportedSchemaVersion {
             path: "schemaVersion".into(),
@@ -3040,6 +3047,20 @@ mod tests {
                 if path == "edges[0].matrix"
                     && *requested == MAX_CHANNEL_MATRIX_COEFFICIENTS + 1
                     && *maximum == MAX_CHANNEL_MATRIX_COEFFICIENTS
+        )));
+    }
+
+    #[test]
+    fn rejects_oversized_session_display_names() {
+        let mut imported = session(vec![], vec![]);
+        imported.name = "s".repeat(MAX_DISPLAY_NAME_BYTES + 1);
+        let errors = validate_session(&imported).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "name"
+                    && *requested == MAX_DISPLAY_NAME_BYTES + 1
+                    && *maximum == MAX_DISPLAY_NAME_BYTES
         )));
     }
 

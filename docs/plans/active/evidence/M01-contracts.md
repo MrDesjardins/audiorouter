@@ -428,6 +428,11 @@ reporting an oversized collection, preventing unbounded graph work and
 ambiguous name resolution. Domain regressions cover both conditions without
 audio or machine configuration access.
 
+Session display names use the same 256-byte UTF-8 bound as node display names.
+Direct validation rejects an oversized imported label with a bounded `name`
+path before graph processing. The regression is portable and does not access
+audio or machine configuration.
+
 Edge channel matrices are limited to four coefficients, covering every
 supported mono/stereo conversion. The bound is checked before node/port lookup,
 so dangling-edge imports cannot bypass it; the regression covers an oversized
