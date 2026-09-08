@@ -121,7 +121,7 @@ describe("live event cursor", () => {
     } as never;
     const backend = createLiveBackend(client, demoSession.id);
     await backend.listRecordings();
-    expect(received).toEqual({ method: "recordings.list", params: { sessionId: demoSession.id } });
+    expect(received).toEqual({ method: "recordings.list", params: { sessionId: demoSession.id, limit: 500 } });
   });
 
   it("normalizes a paged recording response for the existing UI row contract", async () => {
@@ -130,6 +130,35 @@ describe("live event cursor", () => {
       request: async () => ({ items: [row], nextCursor: null }),
     } as never;
     await expect(createLiveBackend(client, demoSession.id).listRecordings()).resolves.toEqual([row]);
+  });
+
+  it("follows inventory cursors instead of dropping later pages", async () => {
+    const requests: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        requests.push({ method, params });
+        return requests.length === 1
+          ? { items: [demoSession], nextCursor: "session-1" }
+          : { items: [{ ...demoSession, id: "session-2" }], nextCursor: null };
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listSessions()).resolves.toEqual([
+      demoSession,
+      { ...demoSession, id: "session-2" },
+    ]);
+    expect(requests).toEqual([
+      { method: "sessions.list", params: { limit: 500 } },
+      { method: "sessions.list", params: { limit: 500, cursor: "session-1" } },
+    ]);
+  });
+
+  it("rejects a non-advancing inventory cursor", async () => {
+    const client = {
+      request: async () => ({ items: [demoSession], nextCursor: "same" }),
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listDevices()).rejects.toThrow(
+      "non-advancing inventory cursor",
+    );
   });
 
   it("normalizes the bounded session inventory through the shared API", async () => {

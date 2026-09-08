@@ -290,6 +290,38 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
   };
 }
 
+const MAX_UI_PAGES = 10_000;
+
+type PagedRequest = (cursor: string | null) => Promise<unknown>;
+
+/** Collects bounded API pages while rejecting a broken/non-advancing cursor. */
+async function collectPagedRows<T>(request: PagedRequest): Promise<T[]> {
+  const rows: T[] = [];
+  let cursor: string | null = null;
+  const seenCursors = new Set<string>();
+
+  for (let pageNumber = 0; pageNumber < MAX_UI_PAGES; pageNumber += 1) {
+    const result = await request(cursor);
+    if (Array.isArray(result)) return rows.concat(result as T[]);
+    if (!result || typeof result !== "object") {
+      throw new Error("The backend returned an invalid paged inventory response.");
+    }
+    const page = result as { items?: unknown; nextCursor?: unknown };
+    if (!Array.isArray(page.items)) {
+      throw new Error("The backend returned an invalid paged inventory response.");
+    }
+    rows.push(...(page.items as T[]));
+    const nextCursor = page.nextCursor;
+    if (nextCursor === null || nextCursor === undefined) return rows;
+    if (typeof nextCursor !== "string" || nextCursor.length === 0 || seenCursors.has(nextCursor)) {
+      throw new Error("The backend returned a non-advancing inventory cursor.");
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  }
+  throw new Error("The backend returned too many inventory pages.");
+}
+
 /** Adapter for a future framed/local transport implementation. */
 export function createLiveBackend(client: AudioRouterClient, sessionId: string): UiBackend {
   return {
@@ -330,19 +362,24 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
       });
     },
     async listRecordings(recordingSessionId = sessionId) {
-      const result = await client.request("recordings.list", { sessionId: recordingSessionId });
-      return Array.isArray(result) ? result : result.items;
+      return collectPagedRows(
+        (cursor) => client.request("recordings.list", cursor === null
+          ? { sessionId: recordingSessionId, limit: 500 }
+          : { sessionId: recordingSessionId, limit: 500, cursor }),
+      );
     },
     async listSessions() {
-      const result = await client.request("sessions.list", { limit: 500 });
-      return Array.isArray(result) ? result : result.items;
+      return collectPagedRows((cursor) => client.request("sessions.list", cursor === null
+        ? { limit: 500 }
+        : { limit: 500, cursor }));
     },
     async listApplications() {
       return client.request("applications.list", undefined);
     },
     async listDevices() {
-      const result = await client.request("devices.list", { limit: 500 });
-      return Array.isArray(result) ? result : result.items;
+      return collectPagedRows((cursor) => client.request("devices.list", cursor === null
+        ? { limit: 500 }
+        : { limit: 500, cursor }));
     },
     async listProcessors() {
       return client.request("processors.list", undefined);
@@ -363,8 +400,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
       return client.request("plugins.inspect", { path });
     },
     async listVirtualDevices() {
-      const result = await client.request("virtualDevices.list", { limit: 500 });
-      return Array.isArray(result) ? result : result.items;
+      return collectPagedRows((cursor) => client.request("virtualDevices.list", cursor === null
+        ? { limit: 500 }
+        : { limit: 500, cursor }));
     },
     async planVirtualDevice(operation) {
       return client.request("virtualDevices.plan", { operation });

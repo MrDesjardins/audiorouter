@@ -736,7 +736,16 @@ native shell and manual visual/accessibility gates remain open.
 ## M05 UI acceptance requalification (2026-09-08)
 
 `tests/acceptance/m05-ui.ps1` passed: TypeScript typecheck, 14 Vitest files
-with 89 tests, and a temporary three-file production build. The build output
+with 91 tests, and a temporary three-file production build. The build output
 was disposable and removed by the wrapper. This validates the portable UI
 contract/presentation surface; native shell packaging and manual visual,
 keyboard, screen-reader, and accessibility acceptance remain open.
+
+## UI inventory cursor consumption (2026-09-08)
+
+The live UI adapter now consumes all bounded pages for recordings, sessions,
+devices, and managed virtual devices. It preserves the legacy array response,
+rejects malformed or non-advancing cursors, and stops after a 10,000-page
+safety ceiling. The UI suite passed 91 tests, TypeScript
+typecheck passed, and an elevated temporary Vite production build completed.
+No audio endpoint or machine configuration was accessed.

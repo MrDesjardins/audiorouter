@@ -16,9 +16,20 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## UI inventory cursor consumption (2026-09-08)
+
+Closed an M05/API parity gap in the live UI backend: recordings, sessions,
+devices, and managed virtual devices now follow every bounded `nextCursor`
+page instead of returning only the first page. The adapter accepts the legacy
+array response, rejects malformed pages and non-advancing cursors, and caps
+the number of pages at 10,000. UI tests (91), TypeScript typecheck,
+and a temporary elevated Vite production build passed. The original build
+attempt was blocked only by the host's locked `ui/dist`; no existing output
+was removed and no audio or machine configuration changed.
+
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `c1a8650`, with the latest
+The latest validated implementation head is `5106765`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -49,7 +60,7 @@ backup/restore, recovery, privacy, authorization, and worker boundaries were
 exercised without audio or machine-configuration access.
 
 Requalified M05 UI acceptance on 2026-09-08: TypeScript typecheck, 14 Vitest
-files with 89 tests, and a temporary three-file production build passed. The
+files with 91 tests, and a temporary three-file production build passed. The
 portable UI surface remains validated; native shell packaging and manual
 visual/accessibility acceptance remain open.
 
