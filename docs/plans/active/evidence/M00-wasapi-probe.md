@@ -830,3 +830,19 @@ completed, temporary artifacts were removed, and the media snapshot was
 unchanged. This validates controlled process-tree attribution only; it does
 not prove exclusion thresholds, reboot/PID-reuse behavior beyond the focused
 regression, or physical latency.
+
+## USB speaker/microphone signal-path requalification (2026-09-08)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
+-CaptureDurationMilliseconds 1000 -ToneDurationMilliseconds 1500
+-RenderFriendlyName "Speakers (PD200X Podcast Microphone)"
+-CaptureFriendlyName "Microphone (PD200X Podcast Microphone)"`.
+
+The current inventory-selected PD200X render/capture pair passed the bounded
+signal-path lifecycle and produced 129,225 nonzero capture payload bytes. The
+wrapper verified exact temporary cleanup and unchanged endpoint identity/state;
+defaults, volume, mute, privacy, drivers, signing, and startup configuration
+were unchanged. This is a physical-path signal smoke only: ambient input was
+not separated from the tone and no calibrated acoustic impulse distribution or
+physical p95 latency claim is made.

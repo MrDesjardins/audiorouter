@@ -1669,3 +1669,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/CAP-01/CAP-02/NFR-01 endpoint lifecycle requalification on 2026-09-08: the current native sweep passed 13 capture and 21 render endpoints for bounded start/stop/reset behavior, correctly recognizing one occupied render endpoint, with unchanged media/configuration state.
 - Next M00/M02/M03/ARCH-05 task: retain the lifecycle and digital-loopback evidence while pursuing physical acoustic latency only with suitable hardware and managed endpoint-owned callback evidence after a production driver exists.
+
+- Completed M00/CAP-03/CAP-04/QUAL-01 USB signal-path requalification on 2026-09-08: the current PD200X speaker/microphone pair produced 129,225 nonzero capture bytes through the bounded selected-endpoint path, with exact cleanup and unchanged media/configuration state. Ambient input was not separated, so calibrated acoustic latency remains open.
+- Next M00/M02/M03/ARCH-05 task: retain the USB signal-path smoke as physical-path evidence while pursuing calibrated acoustic latency and managed endpoint-owned callback evidence after a production driver exists.
