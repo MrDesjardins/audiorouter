@@ -156,6 +156,9 @@ Process-loopback packet telemetry is currently exposed by the Windows adapter
 that owns a live capture object, not by the control-plane diagnostics response.
 Its bounded snapshot reports wait calls/timeouts, successful packets and
 frames, minimum/maximum packet period, silent packets, and rejected packets.
+The adapter scheduler probe additionally reports bounded processing-time and
+deadline-lateness distributions for its processed engine quanta; these are
+probe evidence, not control-plane or production-driver callback telemetry.
 When no native adapter session is owned by the control plane,
 `system.diagnostics.nativeAdapter` remains `not activated`; it must not be
 interpreted as a zeroed live stream.

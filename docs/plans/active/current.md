@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `d0461a8`. Safe portable and
+The latest validated implementation head is `eca1526`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion, and
 scheduler telemetry accounting is implemented and regression-tested. The full
@@ -1634,6 +1634,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M02/M03/ARCH-05 task: connect the bounded lateness distribution to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
 
 - Completed M02/ARCH-05 deadline-boundary correction on 2026-09-08: an exactly-on-time scheduler completion is no longer classified as a miss; only strictly positive lateness enters the miss counters and histogram. Engine tests (72), strict Clippy, formatting, diff checks, and documentation validation pass.
+- Next M02/M03/ARCH-05 task: connect the corrected bounded lateness distribution to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
+
+- Completed M02/API-01/ARCH-05 telemetry documentation alignment on 2026-09-08: the API reference now distinguishes probe-only processing/deadline distributions from the control-plane `nativeAdapter: not activated` state. Documentation validation passed with 51 Markdown files and 158 local links; no runtime or machine configuration changed.
 - Next M02/M03/ARCH-05 task: connect the corrected bounded lateness distribution to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
 
 - Completed M02/ARCH-05 deterministic deadline-boundary regression on 2026-09-08: the zero-lateness path is tested directly, confirming no miss, lateness total/maximum, or histogram sample is recorded for an exactly-on-time completion. Engine tests (73), strict Clippy, formatting, diff checks, and documentation validation pass.
