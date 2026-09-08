@@ -616,3 +616,9 @@ identity/state, and removes both generated files. The authorized read-only run
 passed for all 34 active endpoints. The distinct formats were 48 kHz mono,
 48 kHz stereo, 96 kHz mono, and 96 kHz eight-channel float/PCM mix formats.
 No audio stream was opened and no machine configuration changed.
+
+The format printer now emits the complete `WAVEFORMATEXTENSIBLE` subtype GUID
+alongside the channel mask and valid-bit count. The current endpoint set
+reports `00000003-0000-0010-8000-00aa00389b71` for its float32 extensible
+formats; the 96 kHz mono endpoint remains legacy IEEE-float PCM and is printed
+without extensible-only fields.

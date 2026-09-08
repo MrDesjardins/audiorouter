@@ -53,7 +53,19 @@ static void print_format(const WAVEFORMATEX* format) {
         const auto* extensible = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format);
         std::cout << " mask=0x" << std::hex << extensible->dwChannelMask << std::dec
                   << " validBits=" << extensible->Samples.wValidBitsPerSample
-                  << " subformat=" << std::hex << extensible->SubFormat.Data1 << std::dec;
+                  << " subformat=" << std::hex << std::setfill('0')
+                  << std::setw(8) << extensible->SubFormat.Data1 << '-'
+                  << std::setw(4) << extensible->SubFormat.Data2 << '-'
+                  << std::setw(4) << extensible->SubFormat.Data3 << '-'
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[0])
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[1]) << '-'
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[2])
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[3])
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[4])
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[5])
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[6])
+                  << std::setw(2) << static_cast<unsigned>(extensible->SubFormat.Data4[7])
+                  << std::setfill(' ') << std::dec;
     }
     std::cout << '\n';
 }
