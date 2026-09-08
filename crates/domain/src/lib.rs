@@ -18,6 +18,8 @@ pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
+pub const MAX_DISPLAY_NAME_BYTES: usize = 256;
+pub const MAX_PORT_NAME_BYTES: usize = 128;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 pub const MAX_PARAMETERS_PER_NODE: usize = 32;
@@ -1075,10 +1077,25 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 supported: supported_type_version,
             });
         }
-        for port in &node.ports {
+        if node.name.len() > MAX_DISPLAY_NAME_BYTES {
+            errors.push(ValidationError::LimitExceeded {
+                path: format!("{path}.name"),
+                requested: node.name.len(),
+                maximum: MAX_DISPLAY_NAME_BYTES,
+            });
+        }
+        for (port_index, port) in node.ports.iter().enumerate() {
+            if port.name.len() > MAX_PORT_NAME_BYTES {
+                errors.push(ValidationError::LimitExceeded {
+                    path: format!("{path}.ports[{port_index}].name"),
+                    requested: port.name.len(),
+                    maximum: MAX_PORT_NAME_BYTES,
+                });
+                continue;
+            }
             if !(1..=2).contains(&port.channels) {
                 errors.push(ValidationError::InvalidChannels {
-                    path: format!("{path}.ports.{}", port.name),
+                    path: format!("{path}.ports[{port_index}].channels"),
                     channels: port.channels,
                 });
             }
@@ -1186,6 +1203,25 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
             format!("{path}.destinationNode"),
             &mut errors,
         );
+        let source_port_valid = edge.source_port.len() <= MAX_PORT_NAME_BYTES;
+        if !source_port_valid {
+            errors.push(ValidationError::LimitExceeded {
+                path: format!("{path}.sourcePort"),
+                requested: edge.source_port.len(),
+                maximum: MAX_PORT_NAME_BYTES,
+            });
+        }
+        let destination_port_valid = edge.destination_port.len() <= MAX_PORT_NAME_BYTES;
+        if !destination_port_valid {
+            errors.push(ValidationError::LimitExceeded {
+                path: format!("{path}.destinationPort"),
+                requested: edge.destination_port.len(),
+                maximum: MAX_PORT_NAME_BYTES,
+            });
+        }
+        if !source_port_valid || !destination_port_valid {
+            continue;
+        }
         let source = nodes.get(&edge.source_node);
         let destination = nodes.get(&edge.destination_node);
         let (Some(source), Some(destination)) = (source, destination) else {
@@ -2904,6 +2940,40 @@ mod tests {
                     && *maximum == MAX_PARAMETER_NAME_BYTES
         )));
         assert!(format_validation_errors(&errors).len() < 256);
+    }
+
+    #[test]
+    fn rejects_oversized_graph_labels_and_port_references_before_lookup() {
+        let mut source = node("source", NodeKind::Gain, PortDirection::Input);
+        source.name = "n".repeat(MAX_DISPLAY_NAME_BYTES + 1);
+        source.ports[0].name = "p".repeat(MAX_PORT_NAME_BYTES + 1);
+        let mut sink = node("sink", NodeKind::Mute, PortDirection::Output);
+        sink.ports[0].name = "main".into();
+        let mut edge = edge("edge", "source", "sink");
+        edge.source_port = "r".repeat(MAX_PORT_NAME_BYTES + 1);
+        let errors = validate_session(&session(vec![source, sink], vec![edge])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "nodes[0].name"
+                    && *requested == MAX_DISPLAY_NAME_BYTES + 1
+                    && *maximum == MAX_DISPLAY_NAME_BYTES
+        )));
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "nodes[0].ports[0].name"
+                    && *requested == MAX_PORT_NAME_BYTES + 1
+                    && *maximum == MAX_PORT_NAME_BYTES
+        )));
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "edges[0].sourcePort"
+                    && *requested == MAX_PORT_NAME_BYTES + 1
+                    && *maximum == MAX_PORT_NAME_BYTES
+        )));
+        assert!(format_validation_errors(&errors).len() < 512);
     }
 
     #[test]
