@@ -1,5 +1,16 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Digital impulse loopback correlation
+
+The guarded `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 1000` run
+emitted a bounded impulse train through the existing VB-Audio virtual cable
+and captured the return. It detected 996 of 1,000 impulse groups with a p95
+spacing error of 0 frames and an estimated onset of 75.33 ms. The wrapper
+verified capture/render lifecycle, unchanged media-device state, and removed
+the temporary executable, object, raw capture, and logs. This is digital
+propagation/cadence evidence only; the estimated onset is not calibrated
+physical acoustic latency and does not close the managed-driver gate.
+
 ## 2026-09-08 - Guarded native live acceptance
 
 Using the installed Visual Studio/Windows SDK/WDK toolchain, the explicit

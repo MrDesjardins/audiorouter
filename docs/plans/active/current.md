@@ -60,6 +60,13 @@ misses. Endpoint/media cleanup checks passed. This is bounded resampler and
 digital-route evidence; clock drift, physical latency, and production-driver
 ownership remain open.
 
+The guarded 1,000-impulse digital loopback acceptance also passed over the
+existing VB-Audio cable: 996 impulse groups were detected, p95 spacing error
+was 0 frames, and estimated onset was 75.33 ms. Temporary capture/log files
+were removed and the media state remained unchanged. This validates digital
+signal propagation and cadence only; calibrated physical acoustic latency and
+managed-driver ownership remain open.
+
 ## Durable graph-history retention bound (2026-09-08)
 
 Closed a persistence retention gap in M01/STATE foundations. The SQLite
