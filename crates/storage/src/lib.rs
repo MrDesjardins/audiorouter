@@ -1863,7 +1863,7 @@ impl Storage {
     }
 
     pub fn save_graph_plan(&self, plan: &GraphPlanRecord) -> Result<(), StorageError> {
-        let candidate = serde_json::to_string(&plan.candidate)?;
+        let candidate = Self::serialize_validated_session(&plan.candidate)?;
         self.connection.execute(
             "INSERT OR REPLACE INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -2258,6 +2258,26 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn direct_graph_plan_save_rejects_invalid_candidate_documents() {
+        let storage = Storage::open_memory().unwrap();
+        let mut invalid = session();
+        invalid.name = "x".repeat(257);
+        let plan = GraphPlanRecord {
+            id: "plan".into(),
+            session_id: invalid.id.as_str().into(),
+            base_revision: invalid.revision,
+            candidate: invalid,
+            expires_at: i64::MAX,
+        };
+
+        assert!(matches!(
+            storage.save_graph_plan(&plan),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(storage.load_graph_plan("plan").unwrap().is_none());
     }
 
     #[test]

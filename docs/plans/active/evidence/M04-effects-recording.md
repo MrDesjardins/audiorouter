@@ -708,6 +708,11 @@ session while bypassing the control layer. Storage coverage passes 44 tests
 with strict Clippy and formatting; no audio endpoint or machine configuration
 was accessed.
 
+Graph-plan candidate persistence uses the same validated session serializer,
+closing the equivalent direct-storage bypass for uncommitted candidates. The
+regression suite passes 45 storage tests; native driver and endpoint gates
+remain unaffected.
+
 Paged recording-list discovery now advertises its 500-item page bound, matching
 the control dispatcher and storage page request limit.
 
