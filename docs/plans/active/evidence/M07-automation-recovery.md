@@ -867,3 +867,19 @@ The full locked Rust workspace was also requalified at this head: 379
 unit/integration tests and all doc-tests passed, including the Windows-audio
 metadata-only suite. No live endpoint was opened and no driver or machine
 configuration was changed.
+
+## Control parameter value budgets (2026-09-07)
+
+The control dispatcher now applies shared limits to decoded JSON method
+parameters before method-specific validation: nesting is limited to 32 levels
+and individual object keys and strings are limited to 4,096 UTF-8 bytes. This
+complements the existing framed request byte bound and prevents hostile nested
+values from reaching method handlers. The control regression covers both
+over-deep objects and oversized strings; the focused control suite passes 85
+tests with strict Clippy and formatting. The limits are adapter-wide and do
+not change the backend graph or persistence contracts.
+
+The locked workspace was then requalified at this change: 412 unit/integration
+tests and all doc-tests passed, workspace strict Clippy passed, and the
+documentation acceptance passed (51 Markdown files and 157 local links). No
+audio endpoint was opened and no driver or machine configuration was changed.

@@ -23,6 +23,8 @@ use std::time::{Duration, Instant};
 
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
+const MAX_CONTROL_VALUE_DEPTH: usize = 32;
+const MAX_CONTROL_STRING_BYTES: usize = 4096;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
@@ -5286,6 +5288,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
     let Some(params) = params else {
         return Ok(());
     };
+    validate_control_value_budget(params, 0)?;
     let Some(object) = params.as_object() else {
         return Err(ControlError::InvalidRequest(
             "method params must be an object".into(),
@@ -5367,6 +5370,33 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         )));
     }
     Ok(())
+}
+
+fn validate_control_value_budget(value: &Value, depth: usize) -> Result<(), ControlError> {
+    if depth > MAX_CONTROL_VALUE_DEPTH {
+        return Err(ControlError::InvalidRequest(
+            "method parameters exceed the maximum JSON nesting depth".into(),
+        ));
+    }
+    match value {
+        Value::String(string) if string.len() > MAX_CONTROL_STRING_BYTES => {
+            Err(ControlError::InvalidRequest(
+                "method parameter string exceeds the maximum length".into(),
+            ))
+        }
+        Value::Array(values) => values
+            .iter()
+            .try_for_each(|value| validate_control_value_budget(value, depth + 1)),
+        Value::Object(values) => values.iter().try_for_each(|(key, value)| {
+            if key.len() > MAX_CONTROL_STRING_BYTES {
+                return Err(ControlError::InvalidRequest(
+                    "method parameter key exceeds the maximum length".into(),
+                ));
+            }
+            validate_control_value_budget(value, depth + 1)
+        }),
+        _ => Ok(()),
+    }
 }
 
 fn role_name(role: ClientRole) -> &'static str {
@@ -6568,6 +6598,30 @@ mod tests {
             id: Some(json!(2)),
             method: "devices.list".into(),
             params: Some(json!([])),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
+    }
+
+    #[test]
+    fn dispatch_rejects_overdeep_and_oversized_parameter_values() {
+        let mut nested = json!("leaf");
+        for _ in 0..=MAX_CONTROL_VALUE_DEPTH {
+            nested = json!({ "nested": nested });
+        }
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.list".into(),
+            params: Some(nested),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
+
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "sessions.list".into(),
+            params: Some(json!({ "cursor": "x".repeat(MAX_CONTROL_STRING_BYTES + 1) })),
         });
         assert_eq!(response.error.unwrap().code, -32602);
     }

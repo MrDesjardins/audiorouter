@@ -54,6 +54,8 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- 2026-09-07 - Bound decoded control values before dispatch. Evidence: [M07 automation and recovery evidence](docs/plans/active/evidence/M07-automation-recovery.md). Scope: JSON-RPC control adapters. Consequence: framed byte limits must be complemented by shared nesting and string/key budgets before method-specific handlers run.
+
 - 2026-09-07 — Bound constructor capacity before allocation. Evidence: [M06 plugin evidence](docs/plans/active/evidence/M06-vst3-sdk.md). Scope: worker-side queues. Consequence: public bounded-queue constructors must clamp caller capacity before reserving storage, including hostile or accidental `usize::MAX` requests.
 
 - **2026-09-07 — WebView2 origin must be wired at startup.** Evidence: [M05 visual editor](docs/plans/active/evidence/M05-visual-editor.md). Scope: UI/native response transport. Consequence: an exact-origin allowlist is useful only when the normal page startup path supplies `window.location.origin`; mismatched and originless responses must remain ignored, while native shell packaging still needs manual acceptance.
