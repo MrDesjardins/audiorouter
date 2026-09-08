@@ -31,6 +31,16 @@ is exactly 100. Domain history tests still pass after replacing hard-coded
 limits with the shared `MAX_GRAPH_HISTORY_ENTRIES` constant. No audio or
 machine configuration was accessed.
 
+## Expired pending-plan retention (2026-09-08)
+
+Closed an M01/M07/SEC-12 durable-retention gap. Expired virtual-device and
+startup plan rows are now removed during their save/load paths and during
+general recovery maintenance, so filtering expired rows cannot leave an
+unbounded SQLite tail. Active plans remain subject to the existing 100-item
+fail-closed inventory limit. Storage regression coverage verifies expired
+rows are physically deleted while live rows survive; this change does not
+touch audio or machine configuration.
+
 ## M06 independent VST3 fixture qualification (2026-09-08)
 
 Built the official ChowMatrix VST3 source fixture from Chowdhury DSP commit

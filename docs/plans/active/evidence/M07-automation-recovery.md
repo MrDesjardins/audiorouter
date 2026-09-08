@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-08 - Expired pending-plan retention
+
+Storage now deletes expired virtual-device and startup plan rows during save,
+load, and recovery maintenance. This prevents the durable tables from growing
+without bound while preserving the existing 100-live-plan admission and
+hydration checks. Regressions verify stale rows are physically removed and
+active rows remain available. Storage tests (79), strict Clippy, formatting,
+and diff checks pass; no audio or machine configuration was accessed.
+
 ## 2026-09-08 - Recovery-retention directory bound
 
 `Storage::prune_recovery_backups` now caps direct directory inspection at

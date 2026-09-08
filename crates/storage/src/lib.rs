@@ -1027,6 +1027,7 @@ impl Storage {
         expires_at: i64,
     ) -> Result<(), StorageError> {
         validate_plan_id(id.as_str())?;
+        self.prune_expired_pending_plans()?;
         let live_count: usize = self.connection.query_row(
             "SELECT COUNT(*) FROM virtual_device_plans
              WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
@@ -1048,6 +1049,7 @@ impl Storage {
     }
 
     pub fn load_virtual_device_plans(&self) -> Result<Vec<(EntityId, Value, i64)>, StorageError> {
+        self.prune_expired_pending_plans()?;
         let mut statement = self.connection.prepare(
             "SELECT id, operation, expires_at FROM virtual_device_plans
              WHERE expires_at > strftime('%s', 'now') ORDER BY id ASC LIMIT ?1",
@@ -1089,6 +1091,7 @@ impl Storage {
         expires_at: i64,
     ) -> Result<(), StorageError> {
         validate_plan_id(id.as_str())?;
+        self.prune_expired_pending_plans()?;
         let live_count: usize = self.connection.query_row(
             "SELECT COUNT(*) FROM startup_plans
              WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
@@ -1109,6 +1112,7 @@ impl Storage {
     }
 
     pub fn load_startup_plans(&self) -> Result<Vec<(EntityId, bool, i64)>, StorageError> {
+        self.prune_expired_pending_plans()?;
         let mut statement = self.connection.prepare(
             "SELECT id, enabled, expires_at FROM startup_plans
              WHERE expires_at > strftime('%s', 'now') ORDER BY id LIMIT ?1",
@@ -2568,12 +2572,25 @@ impl Storage {
         Ok(())
     }
 
+    fn prune_expired_pending_plans(&self) -> Result<(), StorageError> {
+        self.connection.execute(
+            "DELETE FROM virtual_device_plans WHERE expires_at <= unixepoch('now')",
+            [],
+        )?;
+        self.connection.execute(
+            "DELETE FROM startup_plans WHERE expires_at <= unixepoch('now')",
+            [],
+        )?;
+        Ok(())
+    }
+
     /// Remove bounded recovery records that have passed their retention
     /// windows. This is safe maintenance only; it never touches sessions,
     /// recordings, plugin assets, or files on disk.
     pub fn prune_expired_recovery(&self) -> Result<(), StorageError> {
         self.prune_expired_journal()?;
         self.prune_expired_graph_plans()?;
+        self.prune_expired_pending_plans()?;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|error| StorageError::Io(std::io::Error::other(error)))?
@@ -2777,6 +2794,15 @@ mod tests {
         assert_eq!(plans.len(), 1);
         assert_eq!(plans[0].0, live_id);
         assert_eq!(plans[0].1["action"], "create");
+        assert_eq!(
+            storage
+                .connection
+                .query_row("SELECT COUNT(*) FROM virtual_device_plans", [], |row| {
+                    row.get::<_, usize>(0)
+                })
+                .unwrap(),
+            1
+        );
         storage.delete_virtual_device_plan(&live_id).unwrap();
         assert!(storage.load_virtual_device_plans().unwrap().is_empty());
     }
@@ -2820,6 +2846,15 @@ mod tests {
         storage
             .save_startup_plan(&EntityId::new("startup-plan-expired"), true, 0)
             .unwrap();
+        assert_eq!(
+            storage
+                .connection
+                .query_row("SELECT COUNT(*) FROM startup_plans", [], |row| {
+                    row.get::<_, usize>(0)
+                })
+                .unwrap(),
+            1
+        );
         for index in 0..MAX_PENDING_PLAN_RECORDS {
             storage
                 .save_startup_plan(
