@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `f0d1b03`. Safe portable and
+The latest validated implementation head is `801bd50`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion, and
 scheduler telemetry accounting is implemented and regression-tested. The full
@@ -1625,4 +1625,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M02/M03/ARCH-05 task: implement and qualify the endpoint-owned native scheduler only after the managed virtual-driver boundary exists; until then, advance portable/control-plane work only where it does not weaken that gate.
 
 - Completed M02/ARCH-05/ENG-03 portable deadline telemetry slice on 2026-09-08: `RealtimeScheduler::process_once_with_deadline` now records missed completed quantum deadlines and saturating total/maximum lateness through allocation-free atomics. A regression confirms deadline accounting does not alter generation output or processing behavior; engine tests (72), strict Clippy, formatting, and diff checks pass. This is callback integration readiness, not native deadline evidence.
+- Next M02/M03/ARCH-05 task: connect the deadline API to an endpoint-owned native scheduler callback and measure its period/deadline distribution once the managed driver boundary exists.
+
+- Completed M00-M08/API-01/SEC-12 safe-chain requalification after `801bd50` on 2026-09-08: native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification, full workspace tests/Clippy, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation (51 Markdown files/158 local links) all passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the deadline API to an endpoint-owned native scheduler callback and measure its period/deadline distribution once the managed driver boundary exists.
