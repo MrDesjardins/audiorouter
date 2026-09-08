@@ -925,6 +925,9 @@ or machine configuration was accessed.
 ## Configuration backup budget alignment (2026-09-08)
 
 The enforced SQLite backup-size ceiling now matches STATE-12's documented
-100 MiB configuration-backup budget. Existing backup/restore integrity and
-non-overwrite regressions remain covered by the storage suite; no audio,
-driver, or machine configuration was accessed.
+100 MiB configuration-backup budget. `Storage::backup_to` now validates the
+newly created destination after SQLite finishes and removes it when the output
+is oversized, so the write path cannot produce an out-of-budget recovery copy.
+The focused regression verifies the rejection and cleanup; the 53-test storage
+suite and strict Clippy pass. No audio, driver, or machine configuration was
+accessed.

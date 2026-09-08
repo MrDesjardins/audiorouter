@@ -66,6 +66,18 @@ fn validate_recording_id(recording_id: &str) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn validate_backup_size(destination: &std::path::Path) -> Result<(), StorageError> {
+    let bytes = std::fs::metadata(destination)?.len();
+    if bytes > MAX_BACKUP_BYTES {
+        std::fs::remove_file(destination)?;
+        return Err(StorageError::DocumentTooLarge {
+            bytes: bytes as usize,
+            maximum: MAX_BACKUP_BYTES as usize,
+        });
+    }
+    Ok(())
+}
+
 fn validate_plan_id(id: &str) -> Result<(), StorageError> {
     if id.is_empty() || id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
         return Err(StorageError::InvalidPlan("invalid plan ID".into()));
@@ -425,7 +437,8 @@ impl Storage {
         }
         self.connection
             .backup(rusqlite::DatabaseName::Main, destination, None)
-            .map_err(StorageError::Sql)
+            .map_err(StorageError::Sql)?;
+        validate_backup_size(destination)
     }
 
     /// Retain the newest ten explicitly named daily recovery backups.
@@ -3123,6 +3136,26 @@ mod tests {
         drop(storage);
         let _ = std::fs::remove_file(source);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn backup_size_validation_removes_oversized_output() {
+        let destination = std::env::temp_dir().join(format!(
+            "audiorouter-storage-oversized-backup-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&destination);
+        let file = File::create(&destination).unwrap();
+        file.set_len(MAX_BACKUP_BYTES + 1).unwrap();
+        drop(file);
+
+        assert!(matches!(
+            validate_backup_size(&destination),
+            Err(StorageError::DocumentTooLarge { bytes, maximum })
+                if bytes == (MAX_BACKUP_BYTES + 1) as usize
+                    && maximum == MAX_BACKUP_BYTES as usize
+        ));
+        assert!(!destination.exists());
     }
 
     #[test]
