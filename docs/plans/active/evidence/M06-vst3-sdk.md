@@ -799,6 +799,16 @@ not interpreted as shell syntax. The disposable origin/reparse-point
 provenance acceptance and the real SDK installer plus offline M06 acceptance
 pass after this change; no SDK, plugin, driver, audio stream, or machine
 configuration was changed.
+
+## Outbound worker-message validation (2026-09-07)
+
+`encode_worker_message` now validates the complete message before producing a
+wire frame, preventing locally constructed invalid handshakes, failures,
+frames, parameter events, or latency values from crossing the worker boundary.
+Existing negative cases were moved to assert sender-side rejection, while
+valid round trips remain covered. The plugin-host suite passed 36 unit tests and
+8 worker-process tests with doc-tests, formatting, and strict Clippy. Native
+plugin execution and full OS sandboxing remain open.
 ## 2026-09-07 — Current-head SDK requalification
 
 The repository-local installer repaired/verified the pinned Steinberg VST3 SDK

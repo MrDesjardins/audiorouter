@@ -1026,6 +1026,7 @@ impl WorkerSession {
 }
 
 pub fn encode_worker_message(message: &WorkerMessage) -> Result<Vec<u8>, WorkerMessageError> {
+    validate_worker_message(message)?;
     let payload =
         serde_json::to_vec(message).map_err(|error| WorkerMessageError::Json(error.to_string()))?;
     if payload.len() > MAX_WORKER_MESSAGE_BYTES {
@@ -3307,13 +3308,12 @@ mod tests {
                 channels: 4,
             },
         ] {
-            let encoded = encode_worker_message(&message).unwrap();
-            assert!(decode_worker_message(&encoded).is_err());
+            assert!(encode_worker_message(&message).is_err());
         }
         let failure = WorkerMessage::Failure {
             code: String::new(),
         };
-        assert!(decode_worker_message(&encode_worker_message(&failure).unwrap()).is_err());
+        assert!(encode_worker_message(&failure).is_err());
     }
 
     #[test]
