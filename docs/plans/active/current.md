@@ -119,6 +119,10 @@ replay without replacement, preserving idempotency semantics. Storage/control
 tests (74/92) and strict Clippy pass; no audio or machine configuration was
 accessed.
 
+The same ceiling is advertised as
+`system.describe.limits.maxOperationJournalEntries`, with a self-consistency
+regression tied to the storage constant.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models

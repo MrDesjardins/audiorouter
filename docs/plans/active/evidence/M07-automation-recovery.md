@@ -838,6 +838,10 @@ instead of expanding the map. The regression covers saturation, bounded
 retention, and stale eviction. Control passes 91 tests with strict Clippy;
 this changes only control metadata and does not access audio configuration.
 
+The `system.describe` limits contract also advertises
+`maxOperationJournalEntries` from the storage constant, with discovery
+self-consistency coverage.
+
 ## Event replay page cursor (2026-09-08)
 
 `EventLog::since_page` now returns both the bounded event page and the cursor
