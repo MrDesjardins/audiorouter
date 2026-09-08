@@ -109,6 +109,14 @@ files—remains unchanged for valid directories. Storage tests (77), strict
 Clippy, documentation validation, and diff checks pass. No audio or machine
 configuration was accessed.
 
+## Workspace requalification after retention hardening (2026-09-08)
+
+`cargo test --workspace --all-features --quiet` passed from `67297d2f` across
+the complete workspace, including domain (57), storage (77), control (92),
+plugin-host (46 library/20 fixture-process), transport (18), and
+Windows-audio (29) coverage plus doc-tests. No audio endpoint, driver, or
+machine configuration was changed.
+
 ## Client-enrollment cardinality bound (2026-09-08)
 
 Durable and in-memory client enrollment paths now cap distinct identities at
