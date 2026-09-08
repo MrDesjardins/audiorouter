@@ -868,7 +868,7 @@ impl Storage {
         Ok(())
     }
 
-    pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
+    fn serialize_validated_session(session: &Session) -> Result<String, StorageError> {
         validate_session(session)
             .map_err(|errors| StorageError::InvalidSession(format_validation_errors(&errors)))?;
         let document = serde_json::to_string(session)?;
@@ -878,6 +878,11 @@ impl Storage {
                 maximum: MAX_SESSION_DOCUMENT_BYTES,
             });
         }
+        Ok(document)
+    }
+
+    pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
+        let document = Self::serialize_validated_session(session)?;
         let transaction = self.connection.unchecked_transaction()?;
         transaction.execute(
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
@@ -2086,7 +2091,7 @@ impl Storage {
         request_hash: &str,
         failure: Option<JournalFailureStage>,
     ) -> Result<(), StorageError> {
-        let document = serde_json::to_string(session)?;
+        let document = Self::serialize_validated_session(session)?;
         self.prune_expired_journal()?;
         let transaction = self.connection.unchecked_transaction()?;
         if failure == Some(JournalFailureStage::BeforeHistory) {
@@ -2263,6 +2268,25 @@ mod tests {
 
         assert!(matches!(
             storage.save_session(&invalid),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(storage.load_session(&invalid.id).unwrap().is_none());
+    }
+
+    #[test]
+    fn journaled_session_save_rejects_invalid_domain_documents_before_journaling() {
+        let storage = Storage::open_memory().unwrap();
+        let mut invalid = session();
+        invalid.name = "x".repeat(257);
+
+        assert!(matches!(
+            storage.save_session_with_journal(
+                &invalid,
+                "invalid-session",
+                "graph.commit",
+                "{}",
+                None,
+            ),
             Err(StorageError::InvalidSession(_))
         ));
         assert!(storage.load_session(&invalid.id).unwrap().is_none());
