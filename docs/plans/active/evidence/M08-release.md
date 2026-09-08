@@ -812,6 +812,13 @@ preparation, and documentation validation. Temporary outputs/checkouts were
 removed. No driver, signing-mode, plugin/startup registration, or machine
 audio configuration action occurred.
 
+## Requirement-map coverage acceptance (2026-09-08)
+
+The range-aware `tests/acceptance/m08-traceability.ps1` check passed for all 158
+normative requirement IDs extracted from the specification. Every ID is covered
+by the delivery traceability table. This verifies documentation coverage only;
+it does not claim that every requirement has implementation or release evidence.
+
 ## Locked workspace regression after SDK documentation (2026-09-08)
 
 The locked workspace regression passed with 466 unit/integration tests, all

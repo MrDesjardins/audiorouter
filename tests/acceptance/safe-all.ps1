@@ -15,6 +15,7 @@ $steps = @(
     @{ Name = 'M06 VST3 SDK'; Script = Join-Path $acceptanceRoot 'm06-vst3-sdk.ps1' },
     @{ Name = 'M07 headless'; Script = Join-Path $acceptanceRoot 'm07-headless.ps1' },
     @{ Name = 'M08 release'; Script = Join-Path $acceptanceRoot 'm08-release.ps1' },
+    @{ Name = 'M08 traceability'; Script = Join-Path $acceptanceRoot 'm08-traceability.ps1' },
     @{ Name = 'Documentation'; Script = Join-Path $acceptanceRoot 'docs.ps1' }
 )
 

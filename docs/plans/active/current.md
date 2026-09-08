@@ -357,6 +357,12 @@ M05/M06/M07 acceptance, unsigned M08 preparation, and documentation validation.
 Temporary outputs/checkouts were removed; no driver, signing mode, plugin or
 startup registration, or machine audio configuration changed.
 
+Added and validated `tests/acceptance/m08-traceability.ps1`: its range-aware
+parser extracts 158 normative requirement IDs from the specification and proves
+each is represented in the delivery traceability table. It reports coverage
+only; it does not promote unverified implementation, hardware, driver,
+signing, installer, or usability gates.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
