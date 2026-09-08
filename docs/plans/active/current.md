@@ -335,6 +335,13 @@ architecture, size, and SHA-256, rejecting replacement or outside-root content
 without rebinding. Two regressions cover changed bytes and a changed grant;
 this is launch authorization evidence, not plugin execution evidence.
 
+`SupervisedWorkerProcess::spawn_verified` now composes that identity check with
+supervised worker creation. A process regression copied a temporary executable
+as a VST3 fixture, scanned it, launched through the verified path, processed one
+frame, and cleaned the fixture; 10 worker-process tests and 44 library tests
+passed. This closes the stale-scan launch seam, while native third-party VST3
+execution and full OS sandboxing remain open.
+
 Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
 interoperability tests, 87 control tests, 39 plugin-host tests, and 8
 worker-process tests passed with doc-tests and strict Clippy. Durable plans,

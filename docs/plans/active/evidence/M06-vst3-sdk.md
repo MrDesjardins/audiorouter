@@ -855,6 +855,12 @@ architecture, byte count, and SHA-256. Changed bytes and a root-grant mismatch
 are rejected without substitution. This protects a future worker launch from
 stale scan results; it does not claim plugin execution or sandbox completion.
 
+`SupervisedWorkerProcess::spawn_verified` now composes revalidation with
+supervised creation. The process regression used a temporary copied executable
+as a VST3 fixture, revalidated it, processed one frame through the supervised
+worker, and removed the temporary directory. This is launch-boundary evidence;
+it is not third-party VST3 execution or full sandbox evidence.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and

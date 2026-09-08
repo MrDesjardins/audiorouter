@@ -1353,6 +1353,7 @@ pub enum WorkerProcessError {
     Spawn(String),
     Message(WorkerMessageError),
     Protocol(String),
+    PluginIdentity(IdentityVerificationError),
     /// The bounded failure policy has latched quarantine; replacement is not
     /// permitted until an explicit operator retry clears that policy.
     Quarantined,
@@ -1545,6 +1546,22 @@ impl SupervisedWorkerProcess {
         let supervisor = WorkerSupervisor::new();
         Self::spawn_with_supervisor(executable, identity, channels, supervisor, now)
             .map_err(|(error, _)| error)
+    }
+
+    /// Spawn only after revalidating the exact scanned plugin identity against
+    /// the caller's configured roots. This is the safe discovery-to-worker
+    /// launch path; it never substitutes a different plugin path.
+    pub fn spawn_verified(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        channels: u16,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        identity
+            .verify_current(configured_roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        Self::spawn(executable, identity, channels, now)
     }
 
     #[cfg(feature = "test-fixtures")]

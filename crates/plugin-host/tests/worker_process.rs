@@ -1,7 +1,7 @@
 use audiorouter_plugin_host::{
-    decode_worker_message, encode_worker_message, worker_clock_tick, PeArchitecture, PluginFormat,
-    PluginIdentity, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess, WorkerFrame,
-    WorkerLatency, WorkerMessage, WorkerProcess,
+    decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
+    PeArchitecture, PluginFormat, PluginIdentity, SharedAudioLayout, SharedAudioTransport,
+    SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
@@ -58,6 +58,48 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
         decode_worker_message(&encoded).unwrap(),
         WorkerMessage::Ready
     );
+}
+
+#[test]
+fn verified_supervised_launch_rechecks_the_scanned_plugin_identity() {
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let root = std::env::temp_dir().join(format!("audiorouter-identity-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let plugin_path = root.join("effect.vst3");
+    std::fs::copy(&worker_path, &plugin_path).unwrap();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).unwrap();
+    let now = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn_verified(
+        &worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        1,
+        now,
+    )
+    .expect("verified worker launch");
+    let frame =
+        WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 1, vec![0.25]).unwrap();
+    assert_eq!(
+        worker.process(frame.clone(), Vec::new(), now).unwrap(),
+        frame
+    );
+    assert!(worker.shutdown().unwrap().success());
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

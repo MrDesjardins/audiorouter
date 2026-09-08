@@ -74,6 +74,8 @@ Before a worker launch, callers can invoke `PluginIdentity::verify_current` with
 the approved configured roots. It rechecks the exact canonical path, binary
 fingerprint, format, architecture, and size, and fails closed if the file was
 replaced or moved outside the grant. It never selects a substitute path.
+`SupervisedWorkerProcess::spawn_verified` composes that check with supervised
+worker creation for callers that need one launch operation.
 
 Run the reproducible local qualification with:
 
