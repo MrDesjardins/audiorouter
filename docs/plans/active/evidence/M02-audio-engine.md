@@ -739,6 +739,20 @@ This is endpoint-specific shared-mode adapter evidence only. The correction
 bound and short duration do not establish long-term independent-clock lock,
 physical latency, managed virtual-driver lifecycle, or Discord/OBS behavior.
 
+## Maximum-duration differing-rate stability (2026-09-08)
+
+The guarded endpoint-ID-selected route wrapper passed its maximum 2,000 ms
+duration using the same 96 kHz mono capture and 48 kHz stereo render pair:
+191,040 capture frames, 95,488 scheduler frames, and 95,488 routed frames.
+The detailed run observed 192,000 capture frames and 96,000 scheduler quanta,
+20 queued resampler frames, -100 ppm bounded correction, and zero scheduler
+xruns/overruns. The wrapper confirmed stream cleanup and unchanged endpoint
+identity/default/volume/mute/privacy/driver/signing/startup state.
+
+This strengthens bounded stability evidence for the adapter's differing-rate
+path, but remains short-duration shared-mode testing and does not establish
+independent-clock lock, physical latency, or production-driver behavior.
+
 ## Scheduler telemetry drain accounting (2026-09-08)
 
 The scheduler output-ring control-boundary drain now uses a non-counting raw
