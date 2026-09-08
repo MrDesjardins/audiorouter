@@ -745,3 +745,19 @@ tests, protocol 6, recording 30, storage 40, transport 17, and Windows audio
 29, with all doc tests passing. This is portable/native API regression
 coverage; it does not close managed-driver, signing, installer, physical
 latency, or manual UI gates.
+
+## Native scheduler adapter and scoped route qualification (2026-09-08)
+
+The existing native `adapter_smoke` acceptance passed for 300 ms using the
+selected shared capture/render endpoints: 32 capture packets, 15,360 capture
+and scheduler frames, 120 generation-1 graph quanta, zero scheduler xruns or
+overruns, and zero queued resampler frames. Streams stopped/reset and the
+media-device identity/state snapshot was unchanged.
+
+The explicitly selected existing VB-Audio virtual-cable route acceptance also
+passed for 300 ms: 13,920 capture frames, 13,824 scheduler frames, and 13,824
+routed frames. Defaults, volume, mute, privacy, drivers, signing, startup
+configuration, and media-device identity were unchanged. This is bounded
+shared-mode adapter/route evidence only; it does not prove managed AudioRouter
+driver lifecycle, Discord/OBS compatibility, physical latency, or callback
+deadline compliance.
