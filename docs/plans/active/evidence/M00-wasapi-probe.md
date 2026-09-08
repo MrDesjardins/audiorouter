@@ -26,6 +26,14 @@ and found the media-device snapshot unchanged. Include and exclude modes are
 therefore both exercised natively; this does not establish physical acoustic
 latency or managed-driver routing.
 
+The read-only `m00-native-format-inventory.ps1` acceptance then passed across
+34 active endpoints. It verified activation, `GetMixFormat`, and complete
+format descriptors for every endpoint, including 48 kHz mono/stereo
+extensible float, 96 kHz mono PCM, and 96 kHz eight-channel extensible float
+variants. The media-device snapshot was unchanged and temporary native
+artifacts were removed. This supports format negotiation only, not universal
+format acceptance or latency.
+
 ## Status
 
 The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, start audio streams, install drivers, or write outside stdout.

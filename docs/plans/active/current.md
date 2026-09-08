@@ -36,6 +36,13 @@ The complementary guarded exclude-tree run also passed at 500 ms, capturing
 now both have native lifecycle/data-path evidence; the remaining M00 audio
 gates are calibrated physical latency and managed virtual-driver integration.
 
+The read-only native format inventory also passed across all 34 active
+endpoints. It captured complete mix-format descriptors, including 48 kHz
+mono/stereo extensible float, 96 kHz mono PCM, and 96 kHz eight-channel
+extensible float variants, with unchanged media-device identity and temporary
+artifact cleanup. This is negotiation evidence only; it does not imply every
+endpoint accepts every requested format.
+
 ## Durable graph-history retention bound (2026-09-08)
 
 Closed a persistence retention gap in M01/STATE foundations. The SQLite
