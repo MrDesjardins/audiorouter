@@ -788,3 +788,16 @@ checkouts were removed. No driver was installed or loaded, signing mode
 changed, plugin/startup entry registered, or machine audio configuration
 altered. Production driver ownership, signing, installer, clean-machine,
 physical-latency, native callback deadline, and manual UI gates remain open.
+
+## Complete safe-chain requalification after SDK check (2026-09-08)
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed after verifying the
+official Windows SDK prerequisite: native compile, read-only 34-endpoint format
+inventory, disposable pinned SysVAD x64 compile/package/API qualification, M01
+CLI, M04 DSP/recording, M05 UI, M06 SDK/VST3, M07 headless, unsigned M08
+preparation, and documentation validation. Temporary outputs and checkouts were
+removed. The installed matching `10.0.28000.0` SDK/WDK remained in place; no
+driver was installed or loaded, signing mode changed, plugin/startup entry
+registered, or machine audio configuration altered. Production driver ownership,
+signing, installer, clean-machine, physical-latency, native callback deadline,
+and manual UI gates remain open.

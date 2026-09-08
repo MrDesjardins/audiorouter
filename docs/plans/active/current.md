@@ -330,6 +330,13 @@ lifecycle, recording operations, validated bundle import/export, backup/restore,
 and authorization checks passed with temporary cleanup. No user database,
 audio endpoint, driver, or machine configuration was accessed.
 
+Requalified the complete safe acceptance chain after the SDK check on
+2026-09-08: native compile/inventory, disposable SysVAD x64 package/API
+qualification, M01/M04/M05/M06/M07 acceptance, unsigned M08 preparation, and
+documentation validation passed. Temporary outputs/checkouts were removed.
+Production driver, signing, installer, clean-machine, physical-latency,
+managed callback, and manual UI gates remain open.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
