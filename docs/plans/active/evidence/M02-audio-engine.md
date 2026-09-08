@@ -591,3 +591,14 @@ backpressure, exact 128-frame output, and shape regressions. Strict engine
 Clippy, formatting, and diff checks passed. Native packet-boundary integration,
 realtime scheduling, physical latency, and production-driver integration remain
 open.
+
+## Cross-crate verification after scheduler changes (2026-09-07)
+
+Command: `cargo test --workspace --locked` at pushed head `2ec7701`.
+
+All workspace unit tests and doc-tests passed, including engine (68),
+Windows-audio (27), control (86), CLI (25), plugin-host and worker, recording,
+storage, transport, domain, DSP, protocol, and their documented test targets.
+This is portable and Windows host test evidence; it does not close native
+realtime timing, physical latency, driver, signing, installer, or hardware
+acceptance gates.
