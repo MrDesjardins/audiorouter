@@ -495,3 +495,31 @@ fn controlled_worker_invalid_output_is_rejected_at_reader_boundary() {
     ));
     let _ = worker.shutdown();
 }
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn supervised_worker_contains_a_real_hang_fixture() {
+    let hash = "5".repeat(64);
+    let identity = audiorouter_plugin_host::PluginIdentity {
+        path: PathBuf::from("fixture.vst3"),
+        binary_path: PathBuf::from("fixture.vst3"),
+        format: audiorouter_plugin_host::PluginFormat::Vst3,
+        architecture: audiorouter_plugin_host::PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let now = Instant::now();
+    let worker =
+        SupervisedWorkerProcess::spawn_fixture(fixture_worker_path(), &identity, 1, "hang", now)
+            .expect("spawn supervised hang fixture");
+    let mut worker = worker;
+    assert_eq!(
+        worker.poll(
+            now + audiorouter_plugin_host::WORKER_HEARTBEAT_TIMEOUT + Duration::from_millis(1)
+        ),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let status = worker.shutdown().expect("reap supervised hang fixture");
+    assert!(!status.success());
+}

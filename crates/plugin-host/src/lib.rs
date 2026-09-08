@@ -1519,6 +1519,31 @@ impl SupervisedWorkerProcess {
             .map_err(|(error, _)| error)
     }
 
+    #[cfg(feature = "test-fixtures")]
+    pub fn spawn_fixture(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        mode: &str,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        let executable =
+            validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
+        let mut supervisor = WorkerSupervisor::new();
+        supervisor.start(identity, now).map_err(|error| {
+            WorkerProcessError::Protocol(format!("worker start rejected: {error:?}"))
+        })?;
+        let process = WorkerProcess::spawn_fixture(&executable, &identity.sha256, channels, mode)?;
+        Ok(Self {
+            process,
+            supervisor,
+            executable,
+            identity: identity.clone(),
+            channels,
+            shared_transport: false,
+        })
+    }
+
     /// Spawn a replacement while preserving the caller-owned failure ledger.
     /// The ledger is returned with an error so an outer supervisor cannot lose
     /// quarantine history when a replacement fails to launch.

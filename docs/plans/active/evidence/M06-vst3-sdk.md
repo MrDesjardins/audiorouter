@@ -841,10 +841,11 @@ larger worker message envelope.
 
 The opt-in `test-fixtures` feature adds deterministic worker modes for a
 post-handshake crash, a nonresponsive hang, and malformed processed output.
-The process suite passed 12 tests with the feature enabled: the crash was
-reaped, the hang was killed by bounded shutdown, and malformed output was
-rejected at the reader boundary. The normal build does not enable these modes;
-no third-party plugin code or audio device was involved.
+The process suite passed 13 tests with the feature enabled: the crash was
+reaped, the hang was killed by bounded shutdown and also contained by the
+supervisor heartbeat path, and malformed output was rejected at the reader
+boundary. The normal build does not enable these modes; no third-party plugin
+code or audio device was involved.
 
 ## Cross-vendor loader matrix (2026-09-08)
 
