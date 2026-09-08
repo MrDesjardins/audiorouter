@@ -22,6 +22,10 @@ bypass the bound. The focused storage regression covers overflow, replacement,
 and expiry for both tables; 72 storage tests and strict Clippy pass without
 audio, driver, or machine-configuration access.
 
+The startup-plan read query now excludes expired rows before applying the
+look-ahead bound, matching virtual-device hydration and preventing stale plans
+from causing a false oversized-inventory failure during restart.
+
 ## 2026-09-06 — CLI graph plan/apply files
 
 Implemented the portable AUTO-04 CLI slice in `crates/cli`:

@@ -47,8 +47,10 @@ strict Clippy; no audio, driver, or machine configuration was accessed.
 Closed the remaining M01/M03/SEC-12 persistence bypass: direct SQLite saves
 for startup and virtual-device plans now count live rows before insertion,
 allow replacement of an existing ID, ignore expired rows, and reject a live
-101st plan. Storage coverage is 72 tests with strict Clippy; no audio, driver,
-or machine configuration was accessed.
+101st plan. Startup-plan hydration now excludes expired rows, matching virtual
+device hydration and preventing stale records from consuming the look-ahead
+bound. Storage coverage is 72 tests with strict Clippy; no audio, driver, or
+machine configuration was accessed.
 
 ## Event replay page-cursor hardening (2026-09-08)
 

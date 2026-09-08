@@ -1071,9 +1071,10 @@ impl Storage {
     }
 
     pub fn load_startup_plans(&self) -> Result<Vec<(EntityId, bool, i64)>, StorageError> {
-        let mut statement = self
-            .connection
-            .prepare("SELECT id, enabled, expires_at FROM startup_plans ORDER BY id LIMIT ?1")?;
+        let mut statement = self.connection.prepare(
+            "SELECT id, enabled, expires_at FROM startup_plans
+             WHERE expires_at > strftime('%s', 'now') ORDER BY id LIMIT ?1",
+        )?;
         let rows = statement.query_map([MAX_PENDING_PLAN_RECORDS + 1], |row| {
             Ok((
                 EntityId::new(row.get::<_, String>(0)?),
@@ -2766,12 +2767,12 @@ mod tests {
             .save_startup_plan(&EntityId::new("startup-plan-expired"), false, 0)
             .unwrap();
         let plans = storage.load_startup_plans().unwrap();
-        assert_eq!(plans.len(), 2);
+        assert_eq!(plans.len(), 1);
         assert!(plans.iter().any(|(id, enabled, expires_at)| {
             id == &plan_id && *enabled && *expires_at == i64::MAX
         }));
         storage.delete_startup_plan(&plan_id).unwrap();
-        assert_eq!(storage.load_startup_plans().unwrap().len(), 1);
+        assert!(storage.load_startup_plans().unwrap().is_empty());
     }
 
     #[test]
