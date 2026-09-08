@@ -59,6 +59,12 @@ zero rejected packets, xruns, or buffer overruns/underruns, clean stream
 teardown, and unchanged persistent media configuration. This remains user-mode
 process-loopback evidence, not managed-driver callback or physical latency.
 
+The complete Windows-audio crate regression target also passed on 2026-09-08:
+29 tests plus doc-tests covering endpoint/format binding, snapshot diffs,
+bounded recovery, process-loopback limits and telemetry, read-only application
+inventory, and restart identity matching. No device configuration changed;
+managed-driver callback timing and physical latency remain open.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/

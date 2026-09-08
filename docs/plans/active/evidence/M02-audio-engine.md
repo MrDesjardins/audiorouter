@@ -645,6 +645,16 @@ zero silent packets. Media state and persistent audio configuration were
 unchanged. These are host observations, not callback deadline or physical
 latency evidence.
 
+## Windows-audio identity and adapter regression suite (2026-09-08)
+
+The complete `audiorouter-windows-audio` test target passed 29 tests plus
+doc-tests. Coverage includes exact endpoint binding and format validation,
+snapshot diffs, bounded transient recovery, process-loopback input bounds and
+telemetry, read-only application/session inventory, creation-time identity
+matching, and the restart helper regression. This is read-only adapter and
+portable identity evidence; managed-driver callback timing, physical latency,
+and production endpoint ownership remain open.
+
 ## Bounded process-loopback packet-period policy (2026-09-07)
 
 The process-loopback adapter now enforces the explicit
