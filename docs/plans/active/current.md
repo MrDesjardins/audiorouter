@@ -286,10 +286,10 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `2fd414f`, with the latest
+The latest validated implementation head is `d3f34e3`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent M06 plugin-host boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is `2fd414f`; its event-replay cursor,
+The latest pushed plan/evidence tip is `d3f34e3`; its event-replay cursor,
 Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
 bundles, so the loader matrix now covers six effects across two vendors. The
@@ -310,13 +310,12 @@ sample counts, and totals remain enforced; no persistent audio configuration
 changed.
 
 Requalified the plugin-host containment boundary on 2026-09-08: 42 unit tests
-plus doc-tests and 9 worker-process integration tests passed with strict
+plus doc-tests and 12 worker-process integration tests passed with strict
 Clippy. Worker lifetime termination, handshake identity, quarantine/heartbeat,
 bounded frames/deadlines, shared-memory guards, state integrity, scanner
 limits, editor lifecycle policy, dynamic latency retention, and structured
 latency-failure propagation remain covered. Actual third-party plugin
-execution, controlled crash/hang/invalid-sample fixtures, and full OS
-filesystem/network sandboxing remain open.
+execution and full OS filesystem/network sandboxing remain open.
 
 The worker protocol now also bounds failure-code payloads to 128 bytes at both
 encode and decode validation, preventing an untrusted worker from turning an
