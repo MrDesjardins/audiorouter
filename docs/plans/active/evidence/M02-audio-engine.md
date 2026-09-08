@@ -791,6 +791,15 @@ shared-mode adapter/route evidence only; it does not prove managed AudioRouter
 driver lifecycle, Discord/OBS compatibility, physical latency, or callback
 deadline compliance.
 
+## Histogram-content validation (2026-09-08)
+
+Both guarded adapter acceptance wrappers now validate the raw processing-time
+histogram structurally: exactly 32 entries, sequential labels from bucket 0
+through 31, numeric nonnegative counts, and a count sum equal to the reported
+sample total. The adapter and routed 300 ms checks passed; the routed run
+reported 108 complete samples and unchanged media state. This remains
+adapter/event-loop evidence, not native callback deadline compliance.
+
 ## Runtime processing-time instrumentation (2026-09-08)
 
 `CallbackMetrics` now records saturating total and maximum monotonic processing

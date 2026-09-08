@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `184300d`. Safe portable and
+The latest validated implementation head is `d24e448`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion, and
 scheduler telemetry accounting is implemented and regression-tested. The full
@@ -1544,6 +1544,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M02/M03/ARCH-05 task: retain native callback deadline, physical latency, production-driver, signing, installer, and manual UI/accessibility gates as explicit release blockers while advancing only independently testable adapter and control-plane work.
 
 - Completed M02/ARCH-05/ENG-03 raw timing-distribution propagation on 2026-09-08: adapter and routed acceptance output now preserves all 32 fixed histogram buckets, and both guarded 300 ms checks require exactly 32 entries. The routed run reported 116 samples, 1,134,000 ns total, 28,400 ns maximum, and unchanged media state. This remains adapter/event-loop evidence, not native callback deadline evidence.
+- Next M02/M03/ARCH-05 task: connect the bounded telemetry to a production-style native scheduler callback when that scheduler owns an endpoint stream, then measure callback period/deadline distributions without changing the user's configured defaults.
+
+- Completed M02/ARCH-05/ENG-03 histogram-content validation on 2026-09-08: both guarded adapter acceptance wrappers now verify sequential bucket labels, numeric counts, exactly 32 entries, and a count sum equal to reported samples. Both 300 ms checks passed; the routed run reported 108 complete samples and unchanged media state.
 - Next M02/M03/ARCH-05 task: connect the bounded telemetry to a production-style native scheduler callback when that scheduler owns an endpoint stream, then measure callback period/deadline distributions without changing the user's configured defaults.
 
 - Completed M02/ARCH-05/ENG-03 route evidence-summary propagation on 2026-09-08: the guarded routed-adapter wrapper now emits the validated graph-block, timing-total, timing-maximum, and histogram-sample values in its final acceptance line. The 300 ms run passed with 14,400 capture frames, 112 graph blocks, 14,336 scheduled frames, 13,920 routed frames, and unchanged media state.
