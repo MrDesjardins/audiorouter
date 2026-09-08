@@ -345,13 +345,14 @@ serialization remains a native-host gate.
 `SupervisedWorkerProcess::spawn_verified` now composes that identity check with
 supervised worker creation. A process regression copied a temporary executable
 as a VST3 fixture, scanned it, launched through the verified path, processed one
-frame, and cleaned the fixture; 10 worker-process tests and 44 library tests
+frame, and cleaned the fixture; 12 ordinary worker-process tests and 44 library tests
 passed. This closes the stale-scan launch seam, while native third-party VST3
 execution and full OS sandboxing remain open.
 
-The companion regression proves a missing identity is rejected before process
-creation. The ordinary process suite now has 11 passing tests, and the
-feature-enabled suite has 15; no child is spawned for the missing-plugin case.
+The companion regressions prove a missing identity is rejected before process
+creation and unavailable state fails closed. The ordinary process suite now has
+12 passing tests, and the feature-enabled suite has 16; no child is spawned for
+the missing-plugin case.
 
 Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
 interoperability tests, 87 control tests, 39 plugin-host tests, and 8
