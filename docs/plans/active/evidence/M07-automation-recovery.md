@@ -1,5 +1,13 @@
 # M07 automation and recovery evidence
 
+## 2026-09-08 - Graph-plan restart timestamp hardening
+
+`graph.commit` now uses checked, positive, five-minute-capped expiry
+conversion when hydrating a durable graph plan after an in-memory restart
+boundary. Malformed future timestamps therefore fail safely instead of
+overflowing `Instant`. Control tests (93), strict Clippy, and formatting pass;
+no audio endpoint or machine configuration was accessed.
+
 ## 2026-09-08 - Far-future restart timestamp cap
 
 The shared persisted-plan duration conversion caps future timestamps to the

@@ -1,5 +1,14 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-08 - Durable graph-plan expiry hardening
+
+The durable `graph.commit` rehydration path now rejects expired or
+non-representable graph-plan lifetimes and caps valid future timestamps at the
+five-minute plan contract before restoring an in-memory plan. This prevents a
+corrupt far-future SQLite value from causing an `Instant` overflow or bypassing
+bounded plan retention. Control tests (93), strict Clippy, and formatting pass;
+no audio or machine configuration was accessed.
+
 ## 2026-09-08 - Durable graph-plan admission bound
 
 `Storage::save_graph_plan` now removes expired graph plans before enforcing

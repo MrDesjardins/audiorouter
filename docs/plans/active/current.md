@@ -68,6 +68,11 @@ portable milestone checks, unsigned release preparation, traceability, and
 documentation passed. Temporary outputs/checkouts were removed; no driver or
 audio configuration changed.
 
+Durable graph-plan rehydration now uses the same checked, five-minute-capped
+expiry conversion as virtual-device and startup plans, preventing malformed
+far-future SQLite timestamps from overflowing `Instant` during `graph.commit`.
+The control suite remains 93/93 with strict Clippy and formatting.
+
 ## Capture retry classification regression (2026-09-08)
 
 Added a Windows-audio regression proving the capture fallback retries only

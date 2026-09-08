@@ -94,13 +94,17 @@ fn unix_epoch_millis() -> u128 {
         .as_millis()
 }
 
-fn remaining_persisted_plan_duration(expires_at: i64, now: i64) -> Option<Duration> {
+fn remaining_persisted_plan_duration(
+    expires_at: i64,
+    now: i64,
+    maximum: Duration,
+) -> Option<Duration> {
     expires_at
         .checked_sub(now)
         .filter(|remaining| *remaining > 0)
         .and_then(|remaining| u64::try_from(remaining).ok())
         .map(Duration::from_secs)
-        .map(|remaining| remaining.min(VIRTUAL_DEVICE_PLAN_TTL))
+        .map(|remaining| remaining.min(maximum))
 }
 
 #[derive(Debug)]
@@ -2005,7 +2009,9 @@ impl ControlPlane {
         let now = unix_epoch_seconds();
         let mut virtual_bus_plans = HashMap::new();
         for (id, operation, expires_at) in storage.load_virtual_device_plans()? {
-            let Some(remaining) = remaining_persisted_plan_duration(expires_at, now) else {
+            let Some(remaining) =
+                remaining_persisted_plan_duration(expires_at, now, VIRTUAL_DEVICE_PLAN_TTL)
+            else {
                 continue;
             };
             let operation = virtual_bus_operation_from_value(&operation).map_err(|_| {
@@ -2023,7 +2029,9 @@ impl ControlPlane {
         }
         let mut startup_plans = HashMap::new();
         for (id, enabled, expires_at) in storage.load_startup_plans()? {
-            let Some(remaining) = remaining_persisted_plan_duration(expires_at, now) else {
+            let Some(remaining) =
+                remaining_persisted_plan_duration(expires_at, now, VIRTUAL_DEVICE_PLAN_TTL)
+            else {
                 continue;
             };
             startup_plans.insert(id, (enabled, Instant::now() + remaining));
@@ -3123,15 +3131,18 @@ impl ControlPlane {
                     .ok_or(ControlError::from(
                         audiorouter_domain::StoreError::PlanNotFound,
                     ))?;
-                let remaining = durable.expires_at - unix_epoch_seconds();
-                if remaining <= 0 {
+                let Some(remaining) = remaining_persisted_plan_duration(
+                    durable.expires_at,
+                    unix_epoch_seconds(),
+                    Duration::from_secs(GRAPH_PLAN_RETENTION_SECONDS as u64),
+                ) else {
                     storage
                         .delete_graph_plan(plan_id.as_str())
                         .map_err(storage_error)?;
                     return Err(ControlError::from(
                         audiorouter_domain::StoreError::PlanExpired,
                     ));
-                }
+                };
                 let durable_session_id = EntityId::new(durable.session_id.clone());
                 self.ensure_session_loaded(&durable_session_id)?;
                 self.store
@@ -3140,7 +3151,7 @@ impl ControlPlane {
                         &durable_session_id,
                         durable.base_revision,
                         durable.candidate,
-                        std::time::Duration::from_secs(remaining as u64),
+                        remaining,
                     )
                     .map_err(ControlError::from)?;
                 self.store
@@ -5823,17 +5834,21 @@ mod tests {
 
     #[test]
     fn persisted_plan_duration_rejects_expired_and_caps_far_future_values() {
-        assert_eq!(remaining_persisted_plan_duration(99, 100), None);
-        assert_eq!(remaining_persisted_plan_duration(100, 100), None);
+        let maximum = Duration::from_secs(300);
+        assert_eq!(remaining_persisted_plan_duration(99, 100, maximum), None);
+        assert_eq!(remaining_persisted_plan_duration(100, 100, maximum), None);
         assert_eq!(
-            remaining_persisted_plan_duration(101, 100),
+            remaining_persisted_plan_duration(101, 100, maximum),
             Some(Duration::from_secs(1))
         );
         assert_eq!(
-            remaining_persisted_plan_duration(i64::MAX, 0),
-            Some(VIRTUAL_DEVICE_PLAN_TTL)
+            remaining_persisted_plan_duration(i64::MAX, 0, maximum),
+            Some(maximum)
         );
-        assert_eq!(remaining_persisted_plan_duration(i64::MIN, i64::MAX), None);
+        assert_eq!(
+            remaining_persisted_plan_duration(i64::MIN, i64::MAX, maximum),
+            None
+        );
     }
 
     #[test]
