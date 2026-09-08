@@ -167,6 +167,11 @@ maximum as its bounded runtime path. Responses with more records require the
 cursor form, preserving complete inventory semantics without unbounded
 allocation or silent truncation.
 
+Storage recording rows now enforce a shared 128-byte maximum for recording,
+session, and recorder identifiers. The public recording item schema advertises
+the same limit; path length remains unspecified because no owning validation
+policy exists yet.
+
 ## Bounded recording chunk admission (2026-09-07)
 
 `RecordingQueue::try_push` now rejects caller-owned chunks larger than 4,096

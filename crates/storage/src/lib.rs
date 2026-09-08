@@ -47,6 +47,7 @@ pub const MAX_BUNDLE_COMPRESSED_BYTES: u64 = 100 * 1024 * 1024;
 pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
+pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
 #[cfg(windows)]
@@ -889,6 +890,9 @@ impl Storage {
             || recording.state.is_empty()
             || !matches!(recording.channels, 1 | 2)
             || !matches!(recording.sample_rate, 44_100 | 48_000)
+            || recording.id.len() > MAX_RECORDING_ID_BYTES
+            || recording.session_id.len() > MAX_RECORDING_ID_BYTES
+            || recording.recorder_id.len() > MAX_RECORDING_ID_BYTES
         {
             return Err(StorageError::InvalidRecording(
                 "invalid recording fields".into(),
@@ -3175,6 +3179,32 @@ mod tests {
         assert!(!reopened.remove_recording_entry("rec-1").unwrap());
         assert_eq!(reopened.list_recordings(None).unwrap().len(), 1);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recording_rows_reject_oversized_identity_fields() {
+        let storage = Storage::open_memory().unwrap();
+        let recording = RecordingRecord {
+            id: "x".repeat(MAX_RECORDING_ID_BYTES + 1),
+            session_id: "session".into(),
+            recorder_id: "recorder".into(),
+            path: "C:\\recordings\\test.wav".into(),
+            format: "wav".into(),
+            channels: 1,
+            sample_rate: 48_000,
+            frames: 1,
+            file_bytes: 1,
+            start_time: "2026-09-07T00:00:00Z".into(),
+            state: "completed".into(),
+            missing: false,
+            title: None,
+            artist: None,
+            comment: None,
+        };
+        assert!(matches!(
+            storage.save_recording(&recording),
+            Err(StorageError::InvalidRecording(message)) if message.contains("invalid recording fields")
+        ));
     }
 
     #[test]

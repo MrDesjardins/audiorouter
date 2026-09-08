@@ -1510,9 +1510,9 @@ fn recording_item_schema() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "id": { "type": "string", "minLength": 1 },
-            "sessionId": { "type": "string", "minLength": 1 },
-            "recorderId": { "type": "string", "minLength": 1 },
+            "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
+            "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
+            "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
             "path": { "type": "string", "minLength": 1 },
             "format": { "enum": ["wav", "flac"] },
             "channels": { "enum": [1, 2] },
