@@ -450,3 +450,14 @@ routed frames. Temporary binaries were removed and media identity/state checks
 were unchanged. This is digital/adapter evidence only; calibrated physical
 latency, device-invalidation fault injection, managed driver, signing, and
 production shell gates remain open.
+
+## Current-tip adapter route requalification (2026-09-07)
+
+The guarded Rust adapter-route acceptance was rerun against the existing
+friendly-name VB-Audio endpoints. The bounded run captured 24,000 frames and
+processed 23,936 scheduler frames into 23,936 routed frames. It passed exact
+endpoint binding, cleanup, and before/after media-state checks. A separate
+read-only format inventory passed for all 34 active endpoints. This is
+adapter-path evidence only; native scheduler ownership, hardware clock drift,
+and physical acoustic latency remain open. No defaults, volume, mute, privacy,
+driver, signing, startup, or other machine audio configuration changed.
