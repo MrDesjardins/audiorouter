@@ -654,6 +654,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
                         "maxActiveSessions": { "type": "integer", "minimum": 1 },
                         "maxClientEnrollments": { "type": "integer", "minimum": 1 },
+                        "maxOperationJournalEntries": { "type": "integer", "minimum": 1 },
                         "maxVirtualBuses": { "type": "integer", "minimum": 1 },
                         "maxVirtualBusNameChars": { "type": "integer", "minimum": 1 },
                         "maxEntityIdBytes": { "type": "integer", "minimum": 1 },
@@ -668,7 +669,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxRequestIdBytes": { "type": "integer", "minimum": 1 },
                         "maxRevisionCursorBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxClientEnrollments", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxClientEnrollments", "maxOperationJournalEntries", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -2659,6 +2660,7 @@ impl ControlPlane {
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
                 "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
                 "maxClientEnrollments": audiorouter_storage::MAX_CLIENT_ENROLLMENTS,
+                "maxOperationJournalEntries": audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES,
                 "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES,
                 "maxVirtualBusNameChars": audiorouter_domain::MAX_VIRTUAL_BUS_NAME_CHARS,
                 "maxEntityIdBytes": audiorouter_domain::MAX_ENTITY_ID_BYTES,
@@ -5692,6 +5694,9 @@ fn storage_error(error: StorageError) -> ControlError {
         | StorageError::InvalidPlan(message)
         | StorageError::InvalidJournal(message)
         | StorageError::InvalidBackupPath(message) => ControlError::InvalidRequest(message),
+        StorageError::JournalLimitReached => {
+            ControlError::InvalidRequest("operation journal limit reached".into())
+        }
         StorageError::DocumentTooLarge { maximum, .. } => ControlError::InvalidRequest(format!(
             "document exceeds the maximum permitted size of {maximum} bytes"
         )),
@@ -6426,6 +6431,10 @@ mod tests {
         assert_eq!(
             description["limits"]["maxClientEnrollments"],
             audiorouter_storage::MAX_CLIENT_ENROLLMENTS
+        );
+        assert_eq!(
+            description["limits"]["maxOperationJournalEntries"],
+            audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES
         );
         assert_eq!(description["limits"]["maxVirtualBuses"], 8);
         assert_eq!(

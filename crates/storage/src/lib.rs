@@ -26,6 +26,8 @@ pub const MAX_PENDING_PLAN_RECORDS: usize = 100;
 /// Maximum number of enrolled local client identities retained by the control
 /// plane. The extra row used by list reads is a fail-closed overflow sentinel.
 pub const MAX_CLIENT_ENROLLMENTS: usize = 256;
+/// Maximum number of recent idempotency outcomes retained by SQLite.
+pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 4_096;
 
 #[derive(Debug)]
 pub enum StorageError {
@@ -39,6 +41,7 @@ pub enum StorageError {
     InvalidEnrollment(String),
     InvalidPlan(String),
     InvalidJournal(String),
+    JournalLimitReached,
     CorruptDatabase(String),
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
@@ -936,6 +939,7 @@ impl Storage {
         let result = serde_json::to_string(result)?;
         validate_journal_fields("virtualDevices.apply", &result, 0)?;
         self.prune_expired_journal()?;
+        self.ensure_journal_capacity(idempotency_key)?;
         let transaction = self.connection.unchecked_transaction()?;
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
@@ -2236,6 +2240,7 @@ impl Storage {
             .map_err(|_| StorageError::InvalidJournal("journal revision is too large".into()))?;
         validate_journal_fields(operation, result, revision)?;
         self.prune_expired_journal()?;
+        self.ensure_journal_capacity(key)?;
         let inserted = self.connection.execute(
             "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![key, operation, result, revision, request_hash],
@@ -2280,6 +2285,26 @@ impl Storage {
              WHERE created_at < datetime('now', ?1)",
             params![format!("-{} seconds", IDEMPOTENCY_RETENTION_SECONDS)],
         )?;
+        Ok(())
+    }
+
+    fn ensure_journal_capacity(&self, key: &str) -> Result<(), StorageError> {
+        let exists: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM operation_journal WHERE idempotency_key = ?1)",
+            params![key],
+            |row| row.get(0),
+        )?;
+        if exists {
+            return Ok(());
+        }
+        let count: usize =
+            self.connection
+                .query_row("SELECT COUNT(*) FROM operation_journal", [], |row| {
+                    row.get(0)
+                })?;
+        if count >= MAX_OPERATION_JOURNAL_ENTRIES {
+            return Err(StorageError::JournalLimitReached);
+        }
         Ok(())
     }
 
@@ -2545,6 +2570,7 @@ impl Storage {
         validate_journal_fields(operation, result, revision)?;
         let document = Self::serialize_validated_session(session)?;
         self.prune_expired_journal()?;
+        self.ensure_journal_capacity(key)?;
         let transaction = self.connection.unchecked_transaction()?;
         if failure == Some(JournalFailureStage::BeforeHistory) {
             return Err(StorageError::InvalidSession(
@@ -3471,6 +3497,23 @@ mod tests {
             storage.journal_result("op").unwrap().as_deref(),
             Some("{\"revision\":1}")
         );
+    }
+
+    #[test]
+    fn operation_journal_rejects_new_keys_at_capacity_but_replays_existing() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..MAX_OPERATION_JOURNAL_ENTRIES {
+            assert!(storage
+                .journal_commit(&format!("journal-{index}"), "graph.commit", "{}", 1)
+                .unwrap());
+        }
+        assert!(matches!(
+            storage.journal_commit("journal-overflow", "graph.commit", "{}", 1),
+            Err(StorageError::JournalLimitReached)
+        ));
+        assert!(!storage
+            .journal_commit("journal-0", "graph.commit", "different", 2)
+            .unwrap());
     }
 
     #[test]

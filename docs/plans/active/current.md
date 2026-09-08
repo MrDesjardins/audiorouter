@@ -111,6 +111,14 @@ Discovery also advertises the enrollment ceiling as
 `system.describe.limits.maxClientEnrollments`, with a self-consistency
 regression tied to the storage constant.
 
+## Operation-journal cardinality bound (2026-09-08)
+
+Durable idempotency outcomes now have a 4,096-entry ceiling after expiry
+pruning. New keys fail closed at capacity, while existing keys continue to
+replay without replacement, preserving idempotency semantics. Storage/control
+tests (74/92) and strict Clippy pass; no audio or machine configuration was
+accessed.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models

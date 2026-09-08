@@ -807,6 +807,14 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## Operation-journal cardinality bound (2026-09-08)
+
+SQLite idempotency outcomes now retain at most 4,096 recent entries. Journal
+writes fail closed when the table is full after expiry pruning, while a replay
+of an existing key remains available and cannot be replaced. The storage
+regression covers saturation and existing-key replay; storage/control tests
+pass 74/92 with strict Clippy. No audio or machine configuration was accessed.
+
 The `system.describe` limits contract now advertises `maxClientEnrollments`
 from the same storage constant, and the discovery regression checks the value
 against the returned payload. This keeps authorization-state bounds
