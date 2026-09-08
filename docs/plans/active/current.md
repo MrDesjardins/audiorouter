@@ -286,10 +286,10 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `bc5db34b`, with the latest
+The latest validated implementation head is `1916a768`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent M06 plugin-host boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is `bc5db34b`; its event-replay cursor,
+The latest pushed plan/evidence tip is `1916a768`; its event-replay cursor,
 Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
 bundles, so the loader matrix now covers six effects across two vendors. The
