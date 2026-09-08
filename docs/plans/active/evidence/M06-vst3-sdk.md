@@ -909,3 +909,10 @@ now advertises the enforced 256 MiB `MAX_PLUGIN_BYTES` ceiling. Control (86)
 and plugin-host (39 plus 8 worker-process) tests, strict Clippy, formatting,
 diff checks, and documentation validation passed. Plugin execution and OS
 sandbox gates remain open; no plugin was loaded by this change.
+
+Plugin-state storage now applies the same nonempty 128-byte plugin identifier
+bound on writes and filtered reads as on removal. The regression prevents a
+direct SQLite caller from bypassing the identity contract; storage (52),
+plugin-host (39), and worker-process (8) tests plus strict Clippy and
+documentation validation passed. Plugin execution and OS sandbox gates remain
+open.

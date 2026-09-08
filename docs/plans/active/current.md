@@ -53,6 +53,10 @@ Completed safe contract slice M06/M07/SEC-12 plugin-size discoverability:
 the enforced 256 MiB plugin binary ceiling is exposed consistently by
 the `plugins.scan`, `plugins.list`, and `plugins.inspect` output schemas.
 
+Completed safe storage slice M06/SEC-12 plugin-state identity symmetry:
+direct plugin-state writes and filtered reads enforce the same bounded plugin
+identifier contract already used by state metadata consumers.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

@@ -98,6 +98,13 @@ fn validate_client_id(client_id: &str) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn validate_plugin_id(plugin_id: &str) -> Result<(), StorageError> {
+    if plugin_id.is_empty() || plugin_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+        return Err(StorageError::InvalidPluginState("invalid plugin ID".into()));
+    }
+    Ok(())
+}
+
 fn valid_recording_metadata(value: Option<&str>) -> bool {
     match value {
         None => true,
@@ -1301,9 +1308,9 @@ impl Storage {
     }
 
     pub fn save_plugin_state(&self, state: &PluginStateRecord) -> Result<(), StorageError> {
+        validate_plugin_id(&state.plugin_id)?;
         if state.id.is_empty()
             || state.id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
-            || state.plugin_id.is_empty()
             || !is_sha256(&state.plugin_sha256)
             || state.version == 0
             || state.path.is_empty()
@@ -1342,6 +1349,9 @@ impl Storage {
         &self,
         plugin_id: Option<&str>,
     ) -> Result<Vec<PluginStateRecord>, StorageError> {
+        if let Some(plugin_id) = plugin_id {
+            validate_plugin_id(plugin_id)?;
+        }
         let mut statement = self.connection.prepare(
             "SELECT id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes
              FROM plugin_states
@@ -3754,6 +3764,17 @@ mod tests {
         ));
         assert!(matches!(
             storage.remove_plugin_state(&state.id),
+            Err(StorageError::InvalidPluginState(_))
+        ));
+        let mut invalid_plugin = state;
+        invalid_plugin.id = "state-valid".into();
+        invalid_plugin.plugin_id = "p".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1);
+        assert!(matches!(
+            storage.save_plugin_state(&invalid_plugin),
+            Err(StorageError::InvalidPluginState(_))
+        ));
+        assert!(matches!(
+            storage.list_plugin_states(Some(&invalid_plugin.plugin_id)),
             Err(StorageError::InvalidPluginState(_))
         ));
     }
