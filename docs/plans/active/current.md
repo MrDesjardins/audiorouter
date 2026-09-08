@@ -51,13 +51,13 @@ advances its generated graph-plan counter past retained durable `plan-N` IDs.
 This prevents a new plan after restart from replacing an older uncommitted
 candidate. The restart regression verifies `plan-1` and `plan-2` coexist, and
 a deterministic allocator regression covers both timestamped plan families;
-control tests (96), strict Clippy, and formatting pass without audio or
+control tests (97), strict Clippy, and formatting pass without audio or
 machine configuration access.
 
 Closed an M01/M03 persistence-safety gap in timestamped pending-plan
 allocation: startup and virtual-device plans now skip IDs already retained
 after restart before inserting a new plan, while preserving explicit same-ID
-replacement at the storage API boundary. Control tests (96), strict Clippy,
+replacement at the storage API boundary. Control tests (97), strict Clippy,
 and formatting pass; no audio or machine configuration was accessed.
 
 Closed an M01/SEC-12 persistence conversion gap: pending startup and
@@ -259,6 +259,12 @@ Storage regressions cover both write paths, verify newest-first boundaries
 (revisions 101 through 2 after 102 writes), and confirm the durable row count
 is exactly 100. Domain history tests still pass after replacing hard-coded
 limits with the shared `MAX_GRAPH_HISTORY_ENTRIES` constant. No audio or
+machine configuration was accessed.
+
+Closed an M01/M07/SEC-12 session-import boundary gap: import-plan IDs now use
+the bounded collision-aware allocator and fail closed when the counter is
+exhausted, preventing a saturated counter from replacing an existing pending
+candidate. Control tests (97), strict Clippy, and formatting pass; no audio or
 machine configuration was accessed.
 
 ## Expired pending-plan retention (2026-09-08)

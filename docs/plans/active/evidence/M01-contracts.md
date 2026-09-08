@@ -35,7 +35,16 @@ Startup and virtual-device plan allocation now checks the hydrated in-memory
 pending-plan maps before choosing a timestamp-plus-counter ID. If a restart
 has retained that ID, the bounded counter advances and a new ID is selected;
 the storage layer's intentional replacement behavior is unchanged. Control
-coverage (96), strict Clippy, formatting, and documentation validation pass.
+coverage (97), strict Clippy, formatting, and documentation validation pass.
+No audio or machine configuration was accessed.
+
+## 2026-09-08 - Session-import plan ID exhaustion
+
+Session-import plan allocation now uses the same bounded collision-aware
+counter helper as the other pending-plan families. It skips an occupied ID and
+returns a bounded error when the counter is exhausted, rather than allowing a
+saturated counter to replace an existing pending import candidate. Control
+coverage (97), strict Clippy, formatting, and documentation validation pass.
 No audio or machine configuration was accessed.
 
 ## 2026-09-08 - Checked pending-plan inventory counts

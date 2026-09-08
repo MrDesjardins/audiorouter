@@ -118,6 +118,29 @@ where
     }
 }
 
+fn allocate_counter_plan_id<F>(
+    prefix: &str,
+    counter: &mut u64,
+    is_occupied: F,
+    exhausted_message: &'static str,
+) -> Result<EntityId, ControlError>
+where
+    F: Fn(&EntityId) -> bool,
+{
+    loop {
+        let current = *counter;
+        let plan_id = EntityId::new(format!("{prefix}-{current}"));
+        if !is_occupied(&plan_id) {
+            *counter = current.saturating_add(1);
+            return Ok(plan_id);
+        }
+        if current == u64::MAX {
+            return Err(ControlError::InvalidRequest(exhausted_message.into()));
+        }
+        *counter += 1;
+    }
+}
+
 fn remaining_persisted_plan_duration(
     expires_at: i64,
     now: i64,
@@ -3840,8 +3863,12 @@ impl ControlPlane {
                 "too many pending session import plans".into(),
             ));
         }
-        let plan_id = EntityId::new(format!("session-import-{}", self.next_session_import_plan));
-        self.next_session_import_plan = self.next_session_import_plan.saturating_add(1);
+        let plan_id = allocate_counter_plan_id(
+            "session-import",
+            &mut self.next_session_import_plan,
+            |id| self.session_import_plans.contains_key(id),
+            "session import plan ID space is exhausted",
+        )?;
         self.session_import_plans.insert(
             plan_id.clone(),
             (session.clone(), Instant::now() + VIRTUAL_DEVICE_PLAN_TTL),
@@ -5899,6 +5926,33 @@ mod tests {
             ));
             assert_eq!(counter, u64::MAX);
         }
+    }
+
+    #[test]
+    fn counter_plan_id_allocator_skips_collisions_and_bounds_exhaustion() {
+        let occupied = EntityId::new("session-import-1");
+        let mut counter = 1;
+        let allocated = allocate_counter_plan_id(
+            "session-import",
+            &mut counter,
+            |id| id == &occupied,
+            "plan IDs exhausted",
+        )
+        .unwrap();
+        assert_eq!(allocated.as_str(), "session-import-2");
+        assert_eq!(counter, 3);
+
+        counter = u64::MAX;
+        assert!(matches!(
+            allocate_counter_plan_id(
+                "session-import",
+                &mut counter,
+                |_| true,
+                "plan IDs exhausted",
+            ),
+            Err(ControlError::InvalidRequest(message)) if message == "plan IDs exhausted"
+        ));
+        assert_eq!(counter, u64::MAX);
     }
 
     #[test]
