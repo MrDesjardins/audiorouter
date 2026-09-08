@@ -900,3 +900,13 @@ The impulse wrapper was requalified after the custom-output build change on
 The executable, adjacent object, raw capture, and logs were all absent after
 cleanup; no repository object or audio configuration remained changed. This
 is bounded digital correlation, not calibrated physical acoustic latency.
+
+## Native process attribution requalification (2026-09-08)
+
+`tests/acceptance/m00-native-process-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 750` completed against the current native probe. The
+disposable child/process-tree route captured 33,075 frames and 121,582
+nonzero payload bytes, then stopped and released its streams successfully.
+The wrapper reported unchanged persistent audio configuration. This strengthens
+controlled process-tree attribution evidence only; it is not PID-reuse,
+physical-latency, managed-driver callback, or production isolation evidence.

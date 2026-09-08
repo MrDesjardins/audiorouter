@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `24cbcc0`, with the latest
+The latest validated implementation head is `5f84347`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -34,6 +34,12 @@ The complete elevated safe acceptance chain was requalified at pushed tree
 compile/inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/
 M06/M07, unsigned M08 preparation, and documentation validation passed; all
 temporary outputs/checkouts were removed and machine audio state was unchanged.
+
+Requalified M00 controlled process-tree attribution on 2026-09-08 with the
+native live wrapper: a disposable child route captured 33,075 frames and
+121,582 nonzero payload bytes over 750 ms, then stopped and released cleanly
+with persistent audio configuration unchanged. PID reuse, physical latency,
+managed-driver callback timing, and production isolation remain open.
 
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
