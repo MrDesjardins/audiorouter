@@ -375,3 +375,8 @@ lookup, permission checks, and rate limiting. A malformed request for a known
 method therefore receives the standard Invalid Request response instead of a
 permission response that echoes unvalidated metadata. The authorized control
 regression and full workspace validation pass.
+
+Request-ID validation also rejects object, array, and boolean identifiers,
+retaining only the JSON-RPC scalar string/number/null forms. This is covered by
+the protocol hostile-shape regression and remains portable, with no audio or
+machine configuration access.

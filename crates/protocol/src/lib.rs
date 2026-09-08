@@ -103,7 +103,13 @@ impl JsonRpcRequest {
             .id
             .as_ref()
             .map(|id| {
-                serde_json::to_vec(id).is_ok_and(|encoded| encoded.len() <= MAX_REQUEST_ID_BYTES)
+                matches!(
+                    id,
+                    serde_json::Value::String(_)
+                        | serde_json::Value::Number(_)
+                        | serde_json::Value::Null
+                ) && serde_json::to_vec(id)
+                    .is_ok_and(|encoded| encoded.len() <= MAX_REQUEST_ID_BYTES)
             })
             .unwrap_or(true);
         if self.jsonrpc != "2.0"
@@ -290,6 +296,19 @@ mod tests {
             ),
             Err(MessageError::InvalidRequest)
         );
+        for id in [json!({ "nested": 1 }), json!([1]), json!(true)] {
+            assert_eq!(
+                parse_rpc_message(
+                    &serde_json::to_vec(&json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "method": "status.get"
+                    }))
+                    .unwrap()
+                ),
+                Err(MessageError::InvalidRequest)
+            );
+        }
         assert_eq!(
             parse_rpc_message(
                 &serde_json::to_vec(&json!({
