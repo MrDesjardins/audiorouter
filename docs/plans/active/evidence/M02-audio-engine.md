@@ -354,3 +354,10 @@ processed 48,896 frames, and 47,968 frames were routed through the generation-
 1 graph. Endpoint/media identity and state remained unchanged and temporary
 outputs were removed. This requalifies the existing-rate live path; differing
 hardware-rate stress and native callback timing remain open.
+
+The route now waits on the production render client's event before draining
+the bounded carry queue. This connects the native event-driven render boundary
+to route submission and avoids treating an unavailable render period as a
+successful write. Compile/tests and strict Clippy pass; the follow-up live run
+was blocked before execution by the host's Application Control policy (OS
+error 4551), so no new runtime route claim is made.

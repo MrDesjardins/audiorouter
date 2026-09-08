@@ -323,12 +323,16 @@ fn adapter_smoke(
                 }
             }
             if route {
-                let submitted = drain_render_pending(
-                    &render,
-                    &mut render_pending,
-                    &mut render_pending_bytes,
-                    render_bytes_per_frame,
-                )?;
+                let submitted = if render.wait_for_data(10)? {
+                    drain_render_pending(
+                        &render,
+                        &mut render_pending,
+                        &mut render_pending_bytes,
+                        render_bytes_per_frame,
+                    )?
+                } else {
+                    0
+                };
                 routed_frames = routed_frames.saturating_add(submitted);
                 render_submitted_frames = render_submitted_frames.saturating_add(submitted);
                 render_submitted |= submitted > 0;
