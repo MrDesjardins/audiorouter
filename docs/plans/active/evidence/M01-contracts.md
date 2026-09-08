@@ -259,6 +259,15 @@ same bound, with a regression covering an oversized cursor. Control/storage
 tests (86/52), strict Clippy, formatting, diff validation, and documentation
 validation pass; no audio or machine configuration was accessed.
 
+## Discovery self-consistency regression (2026-09-08)
+
+The control discovery regression now walks the required top-level, limits, and
+event fields declared by the `system.describe` output schema and asserts that
+each is present in the returned document. This protects future contract edits
+from producing schema-invalid discovery payloads. Control/storage tests
+(86/52), strict Clippy, formatting, diff validation, and documentation
+validation pass; no audio or machine configuration was accessed.
+
 The `system.describe` output schema was also updated to include the new
 `maxRevisionCursorBytes` limit as a required field, preventing the discovery
 document from contradicting its own returned payload. Focused control/storage

@@ -6143,6 +6143,45 @@ mod tests {
         let description = plane.describe();
         assert_eq!(description["build"], "test-build");
         assert_eq!(description["protocolVersion"]["major"], 1);
+        let describe_method = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "system.describe")
+            .unwrap();
+        for field in describe_method["outputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+        {
+            assert!(
+                description.get(field).is_some(),
+                "system.describe required field {field} missing from response"
+            );
+        }
+        for field in describe_method["outputSchema"]["properties"]["limits"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+        {
+            assert!(
+                description["limits"].get(field).is_some(),
+                "system.describe limits field {field} missing from response"
+            );
+        }
+        for field in describe_method["outputSchema"]["properties"]["events"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+        {
+            assert!(
+                description["events"].get(field).is_some(),
+                "system.describe events field {field} missing from response"
+            );
+        }
         assert_eq!(description["limits"]["maxNodesPerSession"], 64);
         assert_eq!(description["limits"]["maxNodesGlobal"], 128);
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
