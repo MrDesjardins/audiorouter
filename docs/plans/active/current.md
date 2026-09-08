@@ -1675,3 +1675,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/CAP-03/NFR-01 negative acoustic-correlation attempt on 2026-09-08: the explicitly selected PD200X pair detected 0/1,000 impulse groups, so the acceptance threshold correctly failed; cleanup and unchanged configuration checks passed. The threshold remains intact and calibrated physical latency is still unqualified.
 - Next M00/M02/M03/ARCH-05 task: retain the negative acoustic result and pursue calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.
+
+- Completed M00/SEC-12 disposable native-build isolation on 2026-09-08: custom-output probe builds now place implicit objects beside the temporary executable, and compile acceptance asserts repository isolation plus cleanup. Native compile, PowerShell parsing, documentation validation, and diff checks pass; no audio or machine state changed.
+- Next M00/M02/M03/ARCH-05 task: retain isolated disposable builds while pursuing calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.

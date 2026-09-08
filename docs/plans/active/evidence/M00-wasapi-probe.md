@@ -861,3 +861,14 @@ capture/log artifacts, and object; no endpoint identity/state or audio setting
 changed. This negative result confirms that the current physical return path
 is not measurable by this thresholded harness; the calibrated acoustic
 latency gate remains unqualified and the threshold was not weakened.
+
+## Disposable native build isolation (2026-09-08)
+
+`tools/m00-native-wasapi-probe/build.ps1` now derives an implicit object path
+beside a custom `-Output` executable, while preserving `main.obj` for the
+default source-directory output and honoring explicit `-Object` overrides.
+The compile acceptance asserts that custom-output builds do not leave an
+object in the repository tool directory and that the adjacent temporary
+object is cleaned. Native compile acceptance, PowerShell parsing, formatting,
+documentation validation, and diff checks pass. This changes only temporary
+build-artifact placement; it does not open audio or alter machine state.
