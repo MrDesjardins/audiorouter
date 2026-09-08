@@ -1,5 +1,17 @@
 # M08 release evidence
 
+## 2026-09-08 - Complete safe acceptance at `c4995aae`
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the current head:
+toolchain discovery, native compile, read-only 34-endpoint format inventory,
+disposable pinned SysVAD x64 compile/package/API qualification, M01 CLI, M04
+DSP/recording, M05 UI typecheck/tests/temporary production build, M06 SDK/VST3,
+M07 headless, unsigned M08 preparation, 158 normative requirement mappings,
+and documentation validation (51 Markdown files, 160 local links). Temporary
+artifacts and the reference checkout were removed. No driver was installed or
+loaded, no signing mode or registration changed, and no machine audio
+configuration was modified.
+
 ## 2026-09-08 - Full workspace requalification after `1b782fd3`
 
 `cargo test --workspace --all-features --quiet --locked` passed all workspace

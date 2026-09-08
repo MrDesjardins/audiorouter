@@ -62,6 +62,12 @@ contractual five-minute TTL, preventing malformed database values from
 overflowing `Instant` construction. The control suite remains 93/93 with
 strict Clippy and formatting; no audio or machine state is accessed.
 
+The complete elevated safe acceptance chain was requalified at `c4995aae`:
+native toolchain/format inventory, disposable SysVAD x64 qualification, all
+portable milestone checks, unsigned release preparation, traceability, and
+documentation passed. Temporary outputs/checkouts were removed; no driver or
+audio configuration changed.
+
 ## Capture retry classification regression (2026-09-08)
 
 Added a Windows-audio regression proving the capture fallback retries only
