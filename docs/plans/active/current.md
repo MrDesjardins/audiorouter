@@ -93,6 +93,11 @@ graph-plan writes and hydration now require the plan session ID to match the
 candidate session, reject negative persisted revisions, and validate the
 hydrated candidate and document budget before exposing a plan.
 
+Completed safe storage slice M01/SEC-12 session identity hydration validation:
+session lookup, history, and paged-list reads now verify the persisted SQLite
+row key matches the deserialized session ID, preventing identity substitution
+through a relocated or corrupted row.
+
 Completed safe control slice M01/STATE-02/SEC-12 durable-startup failure
 handling: storage-backed control initialization now has a fallible
 `try_with_storage` path and the compatibility constructor fails closed instead

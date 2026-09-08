@@ -976,6 +976,14 @@ Negative persisted revisions are rejected as corrupt plans. Regressions cover
 invalid candidates and mismatched IDs; storage passes 58 tests and control
 passes 86 tests with strict Clippy.
 
+## Session row-key integrity (2026-09-08)
+
+Session lookup, history, and paged-list hydration now verify that each
+persisted SQLite row key matches the session ID inside its validated document.
+This closes identity substitution through a relocated or corrupted row while
+preserving the existing write contract. Storage/control focused suites pass
+(58/87) with strict Clippy; no audio or machine configuration was accessed.
+
 ## Durable startup failure handling (2026-09-08)
 
 `ControlPlane::try_with_storage` now propagates persistence-read and

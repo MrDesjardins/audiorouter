@@ -979,6 +979,19 @@ impl Storage {
         Ok(session)
     }
 
+    fn validate_stored_session_identity(
+        stored_id: &str,
+        session: &Session,
+    ) -> Result<(), StorageError> {
+        validate_session_id(&EntityId::new(stored_id))?;
+        if session.id.as_str() != stored_id {
+            return Err(StorageError::InvalidSession(
+                "persisted session key does not match document ID".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
         let document = Self::serialize_validated_session(session)?;
         let transaction = self.connection.unchecked_transaction()?;
@@ -1444,48 +1457,55 @@ impl Storage {
         }
         let mut statement = if before_revision.is_some() {
             self.connection.prepare(
-                "SELECT document FROM session_history WHERE session_id = ?1 AND revision < ?2
+                "SELECT session_id, document FROM session_history WHERE session_id = ?1 AND revision < ?2
                  ORDER BY revision DESC LIMIT ?3",
             )?
         } else {
             self.connection.prepare(
-                "SELECT document FROM session_history WHERE session_id = ?1
+                "SELECT session_id, document FROM session_history WHERE session_id = ?1
                  ORDER BY revision DESC LIMIT ?2",
             )?
         };
-        let documents: Vec<String> = if let Some(before_revision) = before_revision {
+        let documents: Vec<(String, String)> = if let Some(before_revision) = before_revision {
             statement
                 .query_map(
                     params![id.as_str(), before_revision as i64, limit as i64],
-                    |row| row.get::<_, String>(0),
+                    |row| Ok((row.get(0)?, row.get(1)?)),
                 )?
                 .collect::<Result<_, _>>()?
         } else {
             statement
                 .query_map(params![id.as_str(), limit as i64], |row| {
-                    row.get::<_, String>(0)
+                    Ok((row.get(0)?, row.get(1)?))
                 })?
                 .collect::<Result<_, _>>()?
         };
         documents
             .into_iter()
-            .map(|document| Self::deserialize_validated_session(&document))
+            .map(|(stored_id, document)| {
+                let session = Self::deserialize_validated_session(&document)?;
+                Self::validate_stored_session_identity(&stored_id, &session)?;
+                Ok(session)
+            })
             .collect()
     }
 
     pub fn load_session(&self, id: &EntityId) -> Result<Option<Session>, StorageError> {
         validate_session_id(id)?;
-        let document: Option<String> = self
+        let row: Option<(String, String)> = self
             .connection
             .query_row(
-                "SELECT document FROM sessions WHERE id = ?1",
+                "SELECT id, document FROM sessions WHERE id = ?1",
                 params![id.as_str()],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .optional()?;
-        document
-            .map(|value| Self::deserialize_validated_session(&value))
-            .transpose()
+        row.map(|(stored_id, document)| {
+            let session = Self::deserialize_validated_session(&document)?;
+            Self::validate_stored_session_identity(&stored_id, &session)?;
+            Ok(session)
+        })
+        .transpose()
     }
 
     pub fn list_sessions(&self, limit: usize) -> Result<Vec<Session>, StorageError> {
@@ -1519,24 +1539,31 @@ impl Storage {
             }
         }
         let mut statement = if cursor.is_some() {
-            self.connection
-                .prepare("SELECT document FROM sessions WHERE id > ?1 ORDER BY id ASC LIMIT ?2")?
+            self.connection.prepare(
+                "SELECT id, document FROM sessions WHERE id > ?1 ORDER BY id ASC LIMIT ?2",
+            )?
         } else {
             self.connection
-                .prepare("SELECT document FROM sessions ORDER BY id ASC LIMIT ?1")?
+                .prepare("SELECT id, document FROM sessions ORDER BY id ASC LIMIT ?1")?
         };
-        let documents: Vec<String> = if let Some(cursor) = cursor {
+        let documents: Vec<(String, String)> = if let Some(cursor) = cursor {
             statement
-                .query_map(params![cursor, limit as i64], |row| row.get::<_, String>(0))?
+                .query_map(params![cursor, limit as i64], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })?
                 .collect::<Result<_, _>>()?
         } else {
             statement
-                .query_map(params![limit as i64], |row| row.get::<_, String>(0))?
+                .query_map(params![limit as i64], |row| Ok((row.get(0)?, row.get(1)?)))?
                 .collect::<Result<_, _>>()?
         };
         documents
             .into_iter()
-            .map(|document| Self::deserialize_validated_session(&document))
+            .map(|(stored_id, document)| {
+                let session = Self::deserialize_validated_session(&document)?;
+                Self::validate_stored_session_identity(&stored_id, &session)?;
+                Ok(session)
+            })
             .collect()
     }
 
