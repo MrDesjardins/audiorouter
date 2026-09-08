@@ -12,6 +12,16 @@ expired startup entry is reclaimed. `cargo test -p audiorouter-control --locked`
 passes 89 tests; no audio endpoint, driver, or machine configuration was
 accessed.
 
+## 2026-09-08 - Durable ephemeral-plan write bounds
+
+The SQLite write boundary now applies the same pending-plan policy as control
+and hydration: startup and virtual-device plan saves count only live rows,
+permit replacing an existing plan, and reject a live 101st record. Expired
+rows therefore do not consume capacity, while direct storage callers cannot
+bypass the bound. The focused storage regression covers overflow, replacement,
+and expiry for both tables; 72 storage tests and strict Clippy pass without
+audio, driver, or machine-configuration access.
+
 ## 2026-09-06 — CLI graph plan/apply files
 
 Implemented the portable AUTO-04 CLI slice in `crates/cli`:

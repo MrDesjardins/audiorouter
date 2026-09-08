@@ -42,6 +42,14 @@ regression fills each map, verifies deterministic rejection at capacity, and
 confirms an expired entry is reclaimed. Control coverage is 89 tests with
 strict Clippy; no audio, driver, or machine configuration was accessed.
 
+## Durable ephemeral-plan write bounds (2026-09-08)
+
+Closed the remaining M01/M03/SEC-12 persistence bypass: direct SQLite saves
+for startup and virtual-device plans now count live rows before insertion,
+allow replacement of an existing ID, ignore expired rows, and reject a live
+101st plan. Storage coverage is 72 tests with strict Clippy; no audio, driver,
+or machine configuration was accessed.
+
 ## Event replay page-cursor hardening (2026-09-08)
 
 Closed an M07/API-08 replay correctness gap: bounded `events.subscribe` pages

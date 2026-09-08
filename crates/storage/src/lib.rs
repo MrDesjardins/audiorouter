@@ -989,6 +989,17 @@ impl Storage {
         expires_at: i64,
     ) -> Result<(), StorageError> {
         validate_plan_id(id.as_str())?;
+        let live_count: usize = self.connection.query_row(
+            "SELECT COUNT(*) FROM virtual_device_plans
+             WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
+            [id.as_str()],
+            |row| row.get::<_, i64>(0),
+        )? as usize;
+        if live_count >= MAX_PENDING_PLAN_RECORDS {
+            return Err(StorageError::InvalidPlan(
+                "pending virtual-device plan inventory exceeds 100 items".into(),
+            ));
+        }
         let operation = serde_json::to_string(operation)?;
         self.connection.execute(
             "INSERT OR REPLACE INTO virtual_device_plans(id, operation, expires_at)
@@ -1040,6 +1051,17 @@ impl Storage {
         expires_at: i64,
     ) -> Result<(), StorageError> {
         validate_plan_id(id.as_str())?;
+        let live_count: usize = self.connection.query_row(
+            "SELECT COUNT(*) FROM startup_plans
+             WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
+            [id.as_str()],
+            |row| row.get::<_, i64>(0),
+        )? as usize;
+        if live_count >= MAX_PENDING_PLAN_RECORDS {
+            return Err(StorageError::InvalidPlan(
+                "startup plan inventory exceeds 100 items".into(),
+            ));
+        }
         self.connection.execute(
             "INSERT OR REPLACE INTO startup_plans(id, enabled, expires_at)
              VALUES (?1, ?2, ?3)",
@@ -2674,6 +2696,65 @@ mod tests {
             Err(StorageError::InvalidPlan(message))
                 if message == "startup plan inventory exceeds 100 items"
         ));
+    }
+
+    #[test]
+    fn pending_plan_writes_reject_live_overflow_but_allow_replace_and_expiry() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .save_startup_plan(&EntityId::new("startup-plan-expired"), true, 0)
+            .unwrap();
+        for index in 0..MAX_PENDING_PLAN_RECORDS {
+            storage
+                .save_startup_plan(
+                    &EntityId::new(format!("startup-plan-{index}")),
+                    true,
+                    i64::MAX,
+                )
+                .unwrap();
+        }
+        assert!(matches!(
+            storage.save_startup_plan(&EntityId::new("startup-plan-overflow"), true, i64::MAX),
+            Err(StorageError::InvalidPlan(message))
+                if message == "startup plan inventory exceeds 100 items"
+        ));
+        storage
+            .save_startup_plan(&EntityId::new("startup-plan-0"), false, i64::MAX)
+            .unwrap();
+
+        let virtual_storage = Storage::open_memory().unwrap();
+        virtual_storage
+            .save_virtual_device_plan(
+                &EntityId::new("virtual-plan-expired"),
+                &serde_json::json!({ "action": "delete" }),
+                0,
+            )
+            .unwrap();
+        for index in 0..MAX_PENDING_PLAN_RECORDS {
+            virtual_storage
+                .save_virtual_device_plan(
+                    &EntityId::new(format!("virtual-plan-{index}")),
+                    &serde_json::json!({ "action": "create" }),
+                    i64::MAX,
+                )
+                .unwrap();
+        }
+        assert!(matches!(
+            virtual_storage.save_virtual_device_plan(
+                &EntityId::new("virtual-plan-overflow"),
+                &serde_json::json!({ "action": "create" }),
+                i64::MAX,
+            ),
+            Err(StorageError::InvalidPlan(message))
+                if message == "pending virtual-device plan inventory exceeds 100 items"
+        ));
+        virtual_storage
+            .save_virtual_device_plan(
+                &EntityId::new("virtual-plan-0"),
+                &serde_json::json!({ "action": "rename" }),
+                i64::MAX,
+            )
+            .unwrap();
     }
 
     #[test]
