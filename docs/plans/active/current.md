@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `42310bb`, with the latest
+The latest validated implementation head is `80cfa46`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -59,7 +59,8 @@ identifier contract already used by state metadata consumers.
 
 Completed safe storage slice M07/STATE-12 backup-budget alignment: the
 configuration backup ceiling now matches the specification's documented
-100 MiB budget.
+100 MiB budget, and newly created backup outputs are size-checked and removed
+when oversized. The focused storage regression covers the write-path cleanup.
 
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
