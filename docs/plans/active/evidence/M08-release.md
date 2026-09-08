@@ -38,6 +38,16 @@ startup entry was registered, and no machine audio configuration changed.
 Production driver/signing, installer, hardware/manual UI, native callback
 deadline, and physical-latency gates remain open.
 
+## Workspace regression after plugin-state read validation (`03c58d9`, 2026-09-08)
+
+The locked workspace test suite and strict workspace Clippy passed after the
+M06 plugin-state read-boundary hardening. Formatting/diff checks and
+documentation acceptance also passed (51 Markdown files, 160 local links).
+No driver was installed or loaded, signing mode was unchanged, no plugin or
+startup entry was registered, and no machine audio configuration changed.
+Production driver/signing, installer, hardware/manual UI, native callback
+deadline, and physical-latency gates remain open.
+
 ## Safe-chain requalification after versioned preset metadata (`390262f`, 2026-09-08)
 
 The elevated non-mutating command `powershell.exe -NoProfile

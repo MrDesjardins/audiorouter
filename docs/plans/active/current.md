@@ -1877,3 +1877,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Corrected M01/API-01/SEC-12 discovery self-schema for the graph-history cursor boundary on 2026-09-08: `system.describe` now declares `maxRevisionCursorBytes` in both its limits properties and required list, matching the returned payload. Focused control/storage tests, strict Clippy, formatting, diff checks, and documentation validation pass; no audio or machine configuration was accessed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Completed M00-M08 workspace regression at `03c58d9` on 2026-09-08: locked workspace tests, strict workspace Clippy, formatting/diff checks, and documentation acceptance passed after plugin-state read-boundary hardening. No driver, signing mode, plugin/startup registration, or machine audio configuration changed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
