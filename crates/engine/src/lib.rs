@@ -3123,6 +3123,35 @@ mod tests {
     }
 
     #[test]
+    fn pcm16_quantum_adapter_handles_period_boundaries_without_growth() {
+        let mut adapter = Pcm16QuantumAdapter::new(1).unwrap();
+        let mut block = AudioBlock::new(1, PROCESSING_QUANTUM_FRAMES).unwrap();
+        assert_eq!(adapter.push_packet(&vec![1_i16; 127]).unwrap(), 127);
+        assert_eq!(adapter.push_packet(&[2_i16]).unwrap(), 1);
+        assert!(adapter.pop_into(&mut block).unwrap());
+        assert_eq!(block.channel(0).unwrap()[126], 1.0 / 32_768.0);
+        assert_eq!(block.channel(0).unwrap()[127], 2.0 / 32_768.0);
+
+        assert_eq!(adapter.push_packet(&vec![3_i16; 128]).unwrap(), 128);
+        assert!(adapter.pop_into(&mut block).unwrap());
+
+        let maximum_packet = vec![4_i16; MAX_PCM16_PACKET_FRAMES];
+        let mut offset = 0;
+        let mut blocks = 0;
+        while offset < maximum_packet.len() {
+            let consumed = adapter.push_packet(&maximum_packet[offset..]).unwrap();
+            assert!(consumed > 0);
+            offset += consumed;
+            if adapter.pending_frames() == PROCESSING_QUANTUM_FRAMES {
+                assert!(adapter.pop_into(&mut block).unwrap());
+                blocks += 1;
+            }
+        }
+        assert_eq!(blocks, MAX_PCM16_PACKET_FRAMES / PROCESSING_QUANTUM_FRAMES);
+        assert_eq!(adapter.pending_frames(), 0);
+    }
+
+    #[test]
     fn scheduler_pressure_is_bounded_nonblocking_and_fail_closed() {
         let scheduler = RealtimeScheduler::new(1, 2, PROCESSING_QUANTUM_FRAMES).unwrap();
         let generation = RuntimeGeneration::new(7);

@@ -660,6 +660,17 @@ quanta with unchanged media state and no persistent audio configuration
 changes. These observations do not establish realtime deadline or physical
 latency compliance.
 
+## Synthetic packet-period boundary matrix (2026-09-07)
+
+The engine regression suite now covers a 127-frame packet followed by one
+frame, an exact 128-frame packet, and a maximum 4,096-frame packet drained in
+128-frame steps. The adapter emits complete quanta while retaining at most one
+quantum of staging; no source growth or blocking is possible. The engine suite
+passed 70 tests with strict Clippy, formatting, and diff checks.
+
+This is deterministic portable period-policy evidence only. No hardware,
+native stream, or machine audio configuration was accessed or changed.
+
 ## Shared packet-admission policy (2026-09-07)
 
 The engine-side `Pcm16QuantumAdapter::push_packet` now enforces the same
