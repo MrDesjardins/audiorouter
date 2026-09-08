@@ -461,3 +461,13 @@ read-only format inventory passed for all 34 active endpoints. This is
 adapter-path evidence only; native scheduler ownership, hardware clock drift,
 and physical acoustic latency remain open. No defaults, volume, mute, privacy,
 driver, signing, startup, or other machine audio configuration changed.
+## Rust adapter route requalification (2026-09-07)
+
+The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` wrapper passed over the existing VB-Audio Virtual Cable endpoints. The
+route processed 24,480 capture frames and 24,448 scheduler/routed frames, then
+completed lifecycle cleanup and verified unchanged media-device identity/state.
+Defaults, volume, mute, privacy, drivers, signing, startup, and other machine
+audio configuration were not changed. This is digital adapter/engine evidence;
+physical acoustic latency, production-driver integration, and hardware clock
+qualification remain open.
