@@ -3066,21 +3066,23 @@ impl ControlPlane {
         base_revision: u64,
         candidate: Session,
     ) -> Result<EntityId, ControlError> {
+        let checkpoint = self.store.clone();
         let plan_id = self
             .store
             .plan_graph(session_id, base_revision, candidate.clone())
             .map_err(ControlError::from)?;
         if let Some(storage) = &self.storage {
             let expires_at = unix_epoch_seconds() + GRAPH_PLAN_RETENTION_SECONDS;
-            storage
-                .save_graph_plan(&GraphPlanRecord {
-                    id: plan_id.as_str().to_owned(),
-                    session_id: session_id.as_str().to_owned(),
-                    base_revision,
-                    candidate,
-                    expires_at,
-                })
-                .map_err(storage_error)?;
+            if let Err(error) = storage.save_graph_plan(&GraphPlanRecord {
+                id: plan_id.as_str().to_owned(),
+                session_id: session_id.as_str().to_owned(),
+                base_revision,
+                candidate,
+                expires_at,
+            }) {
+                self.store = checkpoint;
+                return Err(storage_error(error));
+            }
         }
         Ok(plan_id)
     }
@@ -8834,6 +8836,42 @@ mod tests {
         let result = plane.commit_graph(&plan, 0, "op-1").unwrap();
         assert_eq!(result["revision"], 1);
         assert_eq!(plane.get_session(&original.id).unwrap().name, "changed");
+    }
+
+    #[test]
+    fn graph_plan_persistence_failure_rolls_back_the_in_memory_plan() {
+        let storage = Storage::open_memory().unwrap();
+        let original = session();
+        let mut plane = ControlPlane::with_storage("plan-rollback", storage);
+        plane.insert_session(original.clone()).unwrap();
+        for index in 0..audiorouter_domain::MAX_PENDING_GRAPH_PLANS {
+            plane
+                .storage
+                .as_ref()
+                .unwrap()
+                .save_graph_plan(&GraphPlanRecord {
+                    id: format!("filled-plan-{index}"),
+                    session_id: original.id.as_str().into(),
+                    base_revision: 0,
+                    candidate: original.clone(),
+                    expires_at: i64::MAX,
+                })
+                .unwrap();
+        }
+        let mut candidate = original.clone();
+        candidate.name = "must-not-survive".into();
+
+        let result = plane.plan_graph(&original.id, 0, candidate);
+        assert!(
+            matches!(result, Err(ControlError::InvalidRequest(_))),
+            "{result:?}"
+        );
+        assert!(matches!(
+            plane.commit_graph(&EntityId::new("plan-2"), 0, "rollback-check"),
+            Err(ControlError::Store(
+                audiorouter_domain::StoreError::PlanNotFound
+            ))
+        ));
     }
 
     #[test]

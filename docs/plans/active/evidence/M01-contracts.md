@@ -1,5 +1,16 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-08 - Graph-plan persistence rollback
+
+`ControlPlane::plan_graph` now checkpoints the in-memory graph store before
+persisting a durable plan. If `Storage::save_graph_plan` fails, the checkpoint
+is restored before the existing bounded request error is returned. This keeps
+an unpersisted plan from being committed later. The regression fills the
+durable 100-plan inventory after controller hydration, forces the persistence
+failure, and verifies the generated in-memory plan is absent. Control tests
+(94), strict Clippy, and formatting pass; the test uses only an in-memory
+SQLite database and does not access audio or machine configuration.
+
 ## 2026-09-08 - Durable graph-plan expiry hardening
 
 The durable `graph.commit` rehydration path now rejects expired or

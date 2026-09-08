@@ -16,6 +16,16 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## Durable graph-plan persistence atomicity (2026-09-08)
+
+Closed an M01/GRAPH-03 persistence consistency gap: if durable graph-plan
+storage rejects a newly planned graph, `ControlPlane::plan_graph` now restores
+the in-memory store before returning the bounded request error. A regression
+fills the durable plan inventory, forces this failure, and verifies the
+in-memory plan cannot subsequently be committed. Control tests (94), strict
+Clippy, and formatting pass; no audio endpoint or machine configuration was
+accessed.
+
 ## Fan-out topology safety (2026-09-08)
 
 Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out
