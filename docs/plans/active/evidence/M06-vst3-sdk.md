@@ -951,3 +951,8 @@ decoding, matching the existing version boundary. Negative legacy or corrupt
 values fail before metadata reaches plugin consumers. Storage coverage increased
 to 67 tests; strict Clippy, formatting, and diff checks passed. No plugin was
 executed and no audio or machine configuration was accessed.
+
+The repository-local SDK installer was also rerun successfully on 2026-09-08
+at the pinned revision, confirming the source-distributed SDK checkout and all
+seven recursive submodules remain available. This setup action does not install
+a system SDK, register plugins, or change audio configuration.
