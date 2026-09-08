@@ -659,3 +659,12 @@ strict Clippy passed; native realtime recorder integration remains open.
 
 Paged recording-list discovery now advertises its 500-item page bound, matching
 the control dispatcher and storage page request limit.
+
+## Recorder transition schema bounds (2026-09-07)
+
+The `recorders.arm`, `recorders.start`, `recorders.pause`, `recorders.resume`,
+`recorders.split`, and `recorders.stop` response schemas now advertise the
+same 4,096-part and 4,096-pause bounds used by recorder checkpoint validation.
+Control discovery regression coverage and the 86 control plus 30 recording
+tests passed, with no audio stream or machine configuration changes. Native
+realtime recorder integration remains open.

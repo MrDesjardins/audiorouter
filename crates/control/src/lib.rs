@@ -543,8 +543,8 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1 },
                 "state": { "enum": ["idle", "armed", "recording", "paused", "stopping", "completed", "failed"] },
-                "parts": { "type": "array" },
-                "pauses": { "type": "array" },
+                "parts": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PARTS },
+                "pauses": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PAUSES },
                 "lastFrame": { "type": ["integer", "null"] }
             },
             "required": ["sessionId", "state", "parts", "pauses", "lastFrame"],
@@ -6247,6 +6247,20 @@ mod tests {
         assert_eq!(
             recovery["outputSchema"]["properties"]["checkpoint"]["properties"]["pauses"]
                 ["maxItems"],
+            audiorouter_recording::MAX_CHECKPOINT_PAUSES
+        );
+        let recorder_transition = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "recorders.start")
+            .unwrap();
+        assert_eq!(
+            recorder_transition["outputSchema"]["properties"]["parts"]["maxItems"],
+            audiorouter_recording::MAX_CHECKPOINT_PARTS
+        );
+        assert_eq!(
+            recorder_transition["outputSchema"]["properties"]["pauses"]["maxItems"],
             audiorouter_recording::MAX_CHECKPOINT_PAUSES
         );
         let virtual_devices = description["methods"]

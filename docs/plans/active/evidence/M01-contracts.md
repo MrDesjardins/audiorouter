@@ -507,3 +507,7 @@ regressions guarding the contract.
 The checked-in M01 CLI acceptance was rerun on Windows after this alignment;
 application discovery and the offline command contract passed without opening
 an audio stream or changing machine configuration.
+
+Recorder lifecycle transition responses now expose the same 4,096-part and
+4,096-pause maxima for `recorders.arm` through `recorders.stop`, keeping all
+public recorder metadata schemas aligned with the validated bounds.
