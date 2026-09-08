@@ -525,3 +525,9 @@ Discovery now also bounds the fixed node-type catalog, voice-chain and EQ
 preset catalogs, and node parameter arrays using their authoritative registry
 sizes and domain limit. Control discovery tests and the cross-contract checks
 passed without opening audio.
+
+The discovered processor catalog now advertises its seven-entry bound, while
+node and processor parameter arrays use the domain's 32-parameter maximum.
+Node-type and preset catalog maxima are also sourced from their authoritative
+registries, preventing discovery clients from treating fixed inventories as
+unbounded.

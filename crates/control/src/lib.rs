@@ -35,6 +35,7 @@ const MAX_GRAPH_AFFECTED_DESTINATIONS: usize = audiorouter_domain::MAX_NODES_PER
 const MAX_RECORDING_LIST_ITEMS: usize = 500;
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
+const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
@@ -1173,6 +1174,7 @@ fn method_output_schema(name: &str) -> Value {
         }),
         "processors.list" => json!({
             "type": "array",
+            "maxItems": MAX_PROCESSOR_CATALOG_ITEMS,
             "items": processor_item_schema()
         }),
         "clients.list" => json!({
@@ -1671,6 +1673,7 @@ fn processor_item_schema() -> Value {
             "latencySamples": { "type": "integer", "minimum": 0 },
             "parameters": {
                 "type": "array",
+                "maxItems": audiorouter_domain::MAX_PARAMETERS_PER_NODE,
                 "items": {
                     "type": "object",
                     "properties": {
@@ -6828,6 +6831,14 @@ mod tests {
         assert_eq!(
             node_types["outputSchema"]["maxItems"],
             audiorouter_domain::node_registry().len()
+        );
+        let processors = methods
+            .iter()
+            .find(|method| method["name"] == "processors.list")
+            .unwrap();
+        assert_eq!(
+            processors["outputSchema"]["maxItems"],
+            MAX_PROCESSOR_CATALOG_ITEMS
         );
         let presets = methods
             .iter()
