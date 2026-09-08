@@ -18,7 +18,8 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `8335d9a`. Safe portable and
+The latest validated implementation head is `ca4e8a4`, with the latest
+safe-chain evidence recorded at `6ed0522`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion,
 scheduler deadline telemetry, and conservative p99.9 histogram bounds is
