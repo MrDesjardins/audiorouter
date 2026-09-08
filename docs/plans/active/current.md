@@ -41,6 +41,16 @@ fail-closed inventory limit. Storage regression coverage verifies expired
 rows are physically deleted while live rows survive; this change does not
 touch audio or machine configuration.
 
+## Durable graph-plan admission bound (2026-09-08)
+
+Closed the remaining M01/SEC-12 lower-layer pending-plan bypass. Direct SQLite
+graph-plan writes now prune expired rows and enforce the shared 100-live-plan
+limit, while replacing an existing plan remains allowed. This matches domain
+and control admission behavior and prevents callers that bypass control from
+creating an unbounded durable plan table. Storage coverage verifies overflow
+rejection and replacement at capacity; no audio or machine configuration was
+accessed.
+
 ## M06 independent VST3 fixture qualification (2026-09-08)
 
 Built the official ChowMatrix VST3 source fixture from Chowdhury DSP commit

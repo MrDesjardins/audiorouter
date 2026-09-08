@@ -2362,6 +2362,19 @@ impl Storage {
     pub fn save_graph_plan(&self, plan: &GraphPlanRecord) -> Result<(), StorageError> {
         validate_plan_id(&plan.id)?;
         validate_plan_id(&plan.session_id)?;
+        self.prune_expired_graph_plans()?;
+        let live_count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM graph_plans WHERE id <> ?1",
+            params![plan.id.as_str()],
+            |row| row.get(0),
+        )?;
+        if checked_sqlite_count(live_count, "graph plans")?
+            >= audiorouter_domain::MAX_PENDING_GRAPH_PLANS
+        {
+            return Err(StorageError::InvalidPlan(
+                "graph plan inventory exceeds 100 items".into(),
+            ));
+        }
         let base_revision = i64::try_from(plan.base_revision)
             .map_err(|_| StorageError::InvalidPlan("graph plan revision is too large".into()))?;
         let candidate = Self::serialize_validated_session(&plan.candidate)?;
@@ -3186,6 +3199,47 @@ mod tests {
             }),
             Err(StorageError::InvalidPlan(_))
         ));
+    }
+
+    #[test]
+    fn direct_graph_plan_writes_bound_live_inventory() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..audiorouter_domain::MAX_PENDING_GRAPH_PLANS {
+            let candidate = session();
+            storage
+                .save_graph_plan(&GraphPlanRecord {
+                    id: format!("plan-{index}"),
+                    session_id: candidate.id.as_str().into(),
+                    base_revision: candidate.revision,
+                    candidate,
+                    expires_at: i64::MAX,
+                })
+                .unwrap();
+        }
+
+        let candidate = session();
+        assert!(matches!(
+            storage.save_graph_plan(&GraphPlanRecord {
+                id: "plan-overflow".into(),
+                session_id: candidate.id.as_str().into(),
+                base_revision: candidate.revision,
+                candidate,
+                expires_at: i64::MAX,
+            }),
+            Err(StorageError::InvalidPlan(message))
+                if message == "graph plan inventory exceeds 100 items"
+        ));
+
+        let replacement = session();
+        storage
+            .save_graph_plan(&GraphPlanRecord {
+                id: "plan-0".into(),
+                session_id: replacement.id.as_str().into(),
+                base_revision: replacement.revision,
+                candidate: replacement,
+                expires_at: i64::MAX,
+            })
+            .unwrap();
     }
 
     #[test]

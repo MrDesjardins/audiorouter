@@ -1,5 +1,15 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-08 - Durable graph-plan admission bound
+
+`Storage::save_graph_plan` now removes expired graph plans before enforcing
+the shared `MAX_PENDING_GRAPH_PLANS` limit of 100 live records. It rejects a
+new ID at capacity but permits replacement of an existing ID, matching the
+domain/control behavior. A direct-storage regression fills the inventory,
+verifies typed overflow rejection, and verifies replacement remains possible.
+Storage tests (80), strict Clippy, formatting, and diff checks pass; no audio
+or machine configuration was accessed.
+
 ## 2026-09-08 - Durable graph-history retention bound
 
 SQLite session history now retains only the newest 100 revisions per session,
