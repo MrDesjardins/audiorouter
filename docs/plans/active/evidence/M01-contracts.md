@@ -414,3 +414,10 @@ validation. Oversized names are rejected with an index-based path and are not
 echoed into the diagnostic, keeping hostile metadata from expanding validation
 responses. The regression is portable and does not access audio or machine
 configuration.
+
+Node display names are limited to 256 UTF-8 bytes, while port names and edge
+port references are limited to 128 bytes. Oversized values are rejected before
+port lookup or graph-index insertion, and diagnostics use bounded index/field
+paths rather than echoing hostile port text. The domain regression covers all
+three boundaries; this remains portable validation with no audio or machine
+configuration access.
