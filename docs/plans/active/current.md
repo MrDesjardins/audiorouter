@@ -77,6 +77,11 @@ focused storage regression covers both invalid-key forms and the oversized
 plan identifier. The same commit path now prunes expired journal outcomes
 before insertion, with runtime-retention coverage.
 
+Completed safe storage slice M01/SEC-12 enrollment read-boundary validation:
+client-enrollment lookup and list operations now revalidate persisted client
+IDs and roles, failing closed if a legacy or corrupted database row bypasses
+the write-side checks. Storage/control tests and strict Clippy pass.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

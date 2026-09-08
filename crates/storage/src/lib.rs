@@ -110,6 +110,15 @@ fn validate_client_id(client_id: &str) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn validate_client_role(role: &str) -> Result<(), StorageError> {
+    if !matches!(role, "observer" | "editor" | "operator") {
+        return Err(StorageError::InvalidEnrollment(
+            "invalid client enrollment role".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_plugin_id(plugin_id: &str) -> Result<(), StorageError> {
     if plugin_id.is_empty() || plugin_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
         return Err(StorageError::InvalidPluginState("invalid plugin ID".into()));
@@ -1886,11 +1895,7 @@ impl Storage {
 
     pub fn save_client_enrollment(&self, client_id: &str, role: &str) -> Result<(), StorageError> {
         validate_client_id(client_id)?;
-        if !matches!(role, "observer" | "editor" | "operator") {
-            return Err(StorageError::InvalidEnrollment(
-                "invalid client enrollment fields".into(),
-            ));
-        }
+        validate_client_role(role)?;
         self.connection.execute(
             "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)
              VALUES (?1, ?2, 0, NULL)
@@ -1914,27 +1919,37 @@ impl Storage {
         client_id: &str,
     ) -> Result<Option<(String, bool)>, StorageError> {
         validate_client_id(client_id)?;
-        self.connection
+        let enrollment = self
+            .connection
             .query_row(
                 "SELECT role, revoked FROM client_enrollments WHERE client_id = ?1",
                 params![client_id],
-                |row| Ok((row.get(0)?, row.get::<_, i64>(1)? != 0)),
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? != 0)),
             )
-            .optional()
-            .map_err(Into::into)
+            .optional()?;
+        if let Some((role, revoked)) = enrollment {
+            validate_client_role(&role)?;
+            Ok(Some((role, revoked)))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn list_client_enrollments(&self) -> Result<Vec<(String, String, bool)>, StorageError> {
         let mut statement = self.connection.prepare(
             "SELECT client_id, role, revoked FROM client_enrollments ORDER BY client_id ASC",
         )?;
-        let records = statement
+        let records: Vec<(String, String, bool)> = statement
             .query_map([], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get::<_, i64>(2)? != 0))
             })?
             .collect::<Result<_, _>>()
-            .map_err(Into::into);
-        records
+            .map_err(StorageError::Sql)?;
+        for (client_id, role, _) in &records {
+            validate_client_id(client_id.as_str())?;
+            validate_client_role(role.as_str())?;
+        }
+        Ok(records)
     }
 
     pub fn journal_commit(
@@ -3613,6 +3628,48 @@ mod tests {
         ));
         assert!(matches!(
             storage.load_client_enrollment(""),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
+    }
+
+    #[test]
+    fn client_enrollment_reads_reject_corrupt_rows() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute_batch("PRAGMA ignore_check_constraints = ON;")
+            .unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)
+                 VALUES ('corrupt-role', 'admin', 0, NULL)",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.load_client_enrollment("corrupt-role"),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
+        assert!(matches!(
+            storage.list_client_enrollments(),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
+
+        storage
+            .connection
+            .execute("DELETE FROM client_enrollments", [])
+            .unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)
+                 VALUES (?1, 'observer', 0, NULL)",
+                [&"c".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1)],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.list_client_enrollments(),
             Err(StorageError::InvalidEnrollment(_))
         ));
     }

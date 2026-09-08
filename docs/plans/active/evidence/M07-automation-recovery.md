@@ -944,3 +944,11 @@ The same virtual-device journal path also performs the normal expiry sweep
 before inserting a new outcome. A regression confirms stale rows are removed
 while the current outcome remains available; storage now passes 55 tests and
 strict Clippy.
+
+## Enrollment read-boundary validation (2026-09-08)
+
+Client-enrollment lookup and listing now validate persisted client IDs and
+roles before returning authorization data. A test-only SQLite fixture with
+check constraints disabled confirms malformed legacy/corrupt rows fail closed;
+normal schema constraints remain unchanged. Storage passes 56 tests and
+control passes 86 tests with strict Clippy.
