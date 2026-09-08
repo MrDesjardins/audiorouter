@@ -65,6 +65,14 @@ stopped/reset and temporary outputs removed. This is shared-mode adapter
 evidence, not managed-driver callback, physical-latency, or production-driver
 evidence.
 
+## Virtual-bus persistence read bound (2026-09-08)
+
+Closed an M03/SEC-12 storage gap: virtual-bus hydration now reads at most the
+eight-bus domain capacity plus one look-ahead row and rejects an oversized
+inventory explicitly. A corrupt database can no longer cause an unbounded
+virtual-bus read before domain validation. Storage coverage is 70 tests with
+strict Clippy; no driver, endpoint, or machine configuration was accessed.
+
 ## WASAPI teardown hardening (2026-09-08)
 
 Hardened `SharedCapture`, `SharedRender`, and process-loopback teardown so

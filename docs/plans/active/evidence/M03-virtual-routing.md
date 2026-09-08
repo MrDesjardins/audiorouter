@@ -291,6 +291,15 @@ Inactive capture now drains and rejects queued blocks before applying the
 generation filter, preserving the bridge's fail-silent shutdown contract even
 if a consumer races deactivation. The 49-test engine suite and strict Clippy
 remain green; no live endpoint is opened.
+## Virtual-bus persistence read bound (2026-09-08)
+
+`Storage::load_virtual_buses` now uses a SQL limit of
+`MAX_VIRTUAL_BUSES + 1` and fails with an explicit oversized-inventory error
+before constructing a larger snapshot vector. A nine-row SQLite regression
+verifies the boundary; storage passes 70 tests with strict Clippy and
+formatting. This is persistence-boundary evidence only; no driver or endpoint
+was activated.
+
 ## Virtual-device inventory page bound (2026-09-07)
 
 The read-only `virtualDevices.list` contract now shares a 500-item page bound

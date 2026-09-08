@@ -957,9 +957,9 @@ impl Storage {
     pub fn load_virtual_buses(&self) -> Result<VirtualBusRegistry, StorageError> {
         let mut statement = self
             .connection
-            .prepare("SELECT id, name, enabled FROM virtual_buses ORDER BY id ASC")?;
+            .prepare("SELECT id, name, enabled FROM virtual_buses ORDER BY id ASC LIMIT ?1")?;
         let snapshots = statement
-            .query_map([], |row| {
+            .query_map([audiorouter_domain::MAX_VIRTUAL_BUSES + 1], |row| {
                 Ok(VirtualBusSnapshot {
                     id: EntityId::new(row.get::<_, String>(0)?),
                     name: row.get(1)?,
@@ -967,6 +967,11 @@ impl Storage {
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
+        if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
+            return Err(StorageError::InvalidSession(
+                "too many virtual buses".into(),
+            ));
+        }
         VirtualBusRegistry::from_snapshots(snapshots).map_err(|error| {
             StorageError::InvalidSession(format!("invalid virtual bus: {error:?}"))
         })
@@ -3133,6 +3138,24 @@ mod tests {
             .list()
             .iter()
             .all(|bus| bus.lease().owner().is_none()));
+    }
+
+    #[test]
+    fn virtual_bus_load_rejects_an_oversized_inventory_before_unbounded_read() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..=audiorouter_domain::MAX_VIRTUAL_BUSES {
+            storage
+                .connection
+                .execute(
+                    "INSERT INTO virtual_buses(id, name, enabled) VALUES (?1, ?2, 1)",
+                    rusqlite::params![format!("bus-{index}"), format!("Bus {index}")],
+                )
+                .unwrap();
+        }
+        assert!(matches!(
+            storage.load_virtual_buses(),
+            Err(StorageError::InvalidSession(message)) if message == "too many virtual buses"
+        ));
     }
 
     #[test]
