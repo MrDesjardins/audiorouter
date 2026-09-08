@@ -867,3 +867,12 @@ allocation. Oversized files return `TooLarge` after the bounded read, and a
 regression covers the existing oversized-file path. The plugin-host library
 suite passed 38 tests with strict Clippy and formatting; no plugin was loaded
 or executed.
+
+## State verification enforces size invariants (2026-09-07)
+
+`PluginStateAsset::verify_for_restore` now rejects empty or oversized public
+asset values before version/hash checks. This closes the bypass where callers
+could construct the public fields directly without using the bounded
+constructor. A regression with a correctly hashed 16 MiB-plus-one-byte asset
+returns `TooLarge`; the plugin-host library suite passed 39 tests with strict
+Clippy and formatting.

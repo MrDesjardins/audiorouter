@@ -142,6 +142,12 @@ impl PluginStateAsset {
     }
 
     pub fn verify_for_restore(&self, expected_version: u32) -> Result<&[u8], StateError> {
+        if self.bytes.is_empty() {
+            return Err(StateError::Empty);
+        }
+        if self.bytes.len() > MAX_PLUGIN_STATE_BYTES {
+            return Err(StateError::TooLarge);
+        }
         if self.version != expected_version {
             return Err(StateError::VersionMismatch);
         }
@@ -2982,6 +2988,21 @@ mod tests {
             Err(StateFileError::TooLarge)
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn state_restore_verification_rejects_directly_constructed_oversized_assets() {
+        let bytes = vec![0u8; MAX_PLUGIN_STATE_BYTES + 1];
+        let sha256 = Sha256::digest(&bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let asset = PluginStateAsset {
+            version: 1,
+            bytes,
+            sha256,
+        };
+        assert_eq!(asset.verify_for_restore(1), Err(StateError::TooLarge));
     }
 
     #[test]
