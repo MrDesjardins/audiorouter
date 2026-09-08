@@ -380,3 +380,11 @@ Request-ID validation also rejects object, array, and boolean identifiers,
 retaining only the JSON-RPC scalar string/number/null forms. This is covered by
 the protocol hostile-shape regression and remains portable, with no audio or
 machine configuration access.
+
+## Graph entity-ID bound (2026-09-07)
+
+Domain validation now rejects session, node, edge, endpoint-reference, and
+virtual-route entity IDs over 128 UTF-8 bytes before graph indexing. The
+regression covers oversized node and session IDs and verifies path-specific
+bounded errors. Domain coverage passes 45 tests; this is portable validation and
+does not access audio or machine configuration.

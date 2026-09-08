@@ -17,6 +17,7 @@ pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(3
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
+pub const MAX_ENTITY_ID_BYTES: usize = 128;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
 pub const RECOVERY_SAFE_MODE_CRASHES: usize = 3;
@@ -1001,8 +1002,21 @@ pub fn format_validation_errors(errors: &[ValidationError]) -> String {
         .join("; ")
 }
 
+fn validate_entity_id(id: &EntityId, path: String, errors: &mut Vec<ValidationError>) {
+    if id.as_str().is_empty() {
+        errors.push(ValidationError::EmptyId { path });
+    } else if id.as_str().len() > MAX_ENTITY_ID_BYTES {
+        errors.push(ValidationError::LimitExceeded {
+            path,
+            requested: id.as_str().len(),
+            maximum: MAX_ENTITY_ID_BYTES,
+        });
+    }
+}
+
 pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     let mut errors = Vec::new();
+    validate_entity_id(&session.id, "id".into(), &mut errors);
     if session.schema_version != CURRENT_SESSION_SCHEMA_VERSION {
         errors.push(ValidationError::UnsupportedSchemaVersion {
             path: "schemaVersion".into(),
@@ -1027,11 +1041,7 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     let mut nodes = HashMap::new();
     for (index, node) in session.nodes.iter().enumerate() {
         let path = format!("nodes[{index}]");
-        if node.id.as_str().is_empty() {
-            errors.push(ValidationError::EmptyId {
-                path: format!("{path}.id"),
-            });
-        }
+        validate_entity_id(&node.id, format!("{path}.id"), &mut errors);
         if nodes.insert(node.id.clone(), node).is_some() {
             errors.push(ValidationError::DuplicateId {
                 path: format!("{path}.id"),
@@ -1139,11 +1149,13 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
     let mut adjacency = HashMap::<EntityId, Vec<EntityId>>::new();
     for (index, edge) in session.edges.iter().enumerate() {
         let path = format!("edges[{index}]");
-        if edge.id.as_str().is_empty() {
-            errors.push(ValidationError::EmptyId {
-                path: format!("{path}.id"),
-            });
-        }
+        validate_entity_id(&edge.id, format!("{path}.id"), &mut errors);
+        validate_entity_id(&edge.source_node, format!("{path}.sourceNode"), &mut errors);
+        validate_entity_id(
+            &edge.destination_node,
+            format!("{path}.destinationNode"),
+            &mut errors,
+        );
         let source = nodes.get(&edge.source_node);
         let destination = nodes.get(&edge.destination_node);
         let (Some(source), Some(destination)) = (source, destination) else {
@@ -1276,11 +1288,17 @@ pub fn validate_global_graph(
     let mut routes = HashSet::new();
     for (index, route) in virtual_bus_routes.iter().enumerate() {
         let path = format!("virtualBusRoutes[{index}]");
-        if route.bus_id.as_str().is_empty() {
-            errors.push(ValidationError::EmptyId {
-                path: format!("{path}.busId"),
-            });
-        }
+        validate_entity_id(&route.bus_id, format!("{path}.busId"), &mut errors);
+        validate_entity_id(
+            &route.producer_session_id,
+            format!("{path}.producerSessionId"),
+            &mut errors,
+        );
+        validate_entity_id(
+            &route.consumer_session_id,
+            format!("{path}.consumerSessionId"),
+            &mut errors,
+        );
         if !session_ids.contains(&route.producer_session_id) {
             errors.push(ValidationError::MissingSession {
                 path: format!("{path}.producerSessionId"),
@@ -2748,6 +2766,32 @@ mod tests {
         assert!(errors.iter().any(|error| matches!(
             error,
             ValidationError::Cycle { path } if path == "virtualBusRoutes"
+        )));
+    }
+
+    #[test]
+    fn rejects_oversized_entity_ids_before_graph_indexing() {
+        let mut oversized_node = node(
+            &"n".repeat(MAX_ENTITY_ID_BYTES + 1),
+            NodeKind::Gain,
+            PortDirection::Input,
+        );
+        oversized_node.id = EntityId::new("n".repeat(MAX_ENTITY_ID_BYTES + 1));
+        let errors = validate_session(&session(vec![oversized_node], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "nodes[0].id"
+                    && *requested == MAX_ENTITY_ID_BYTES + 1
+                    && *maximum == MAX_ENTITY_ID_BYTES
+        )));
+
+        let mut oversized_session = session(vec![], vec![]);
+        oversized_session.id = EntityId::new("s".repeat(MAX_ENTITY_ID_BYTES + 1));
+        let errors = validate_global_graph(&[oversized_session], &[]).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, .. } if path == "id"
         )));
     }
 
