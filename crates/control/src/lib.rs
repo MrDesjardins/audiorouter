@@ -1133,6 +1133,7 @@ fn method_output_schema(name: &str) -> Value {
         }),
         "nodes.types" | "nodes.describe" => json!({
             "type": "array",
+            "maxItems": audiorouter_domain::node_registry().len(),
             "items": node_type_item_schema()
         }),
         "presets.list" => json!({
@@ -1140,6 +1141,7 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "voiceChains": {
                     "type": "array",
+                    "maxItems": audiorouter_dsp::VoiceChainPresetId::ALL.len(),
                     "items": {
                         "type": "object",
                         "properties": {
@@ -1153,6 +1155,7 @@ fn method_output_schema(name: &str) -> Value {
                 },
                 "eq": {
                     "type": "array",
+                    "maxItems": audiorouter_dsp::EqPresetId::ALL.len(),
                     "items": {
                         "type": "object",
                         "properties": {
@@ -1628,6 +1631,7 @@ fn node_type_item_schema() -> Value {
             "latencySamples": { "type": "integer", "minimum": 0 },
             "parameters": {
                 "type": "array",
+                "maxItems": audiorouter_domain::MAX_PARAMETERS_PER_NODE,
                 "items": {
                     "type": "object",
                     "properties": {
@@ -6816,6 +6820,26 @@ mod tests {
         assert_eq!(
             plugins["outputSchema"]["properties"]["entries"]["maxItems"],
             audiorouter_plugin_host::MAX_SCAN_CANDIDATES
+        );
+        let node_types = methods
+            .iter()
+            .find(|method| method["name"] == "nodes.types")
+            .unwrap();
+        assert_eq!(
+            node_types["outputSchema"]["maxItems"],
+            audiorouter_domain::node_registry().len()
+        );
+        let presets = methods
+            .iter()
+            .find(|method| method["name"] == "presets.list")
+            .unwrap();
+        assert_eq!(
+            presets["outputSchema"]["properties"]["voiceChains"]["maxItems"],
+            audiorouter_dsp::VoiceChainPresetId::ALL.len()
+        );
+        assert_eq!(
+            presets["outputSchema"]["properties"]["eq"]["maxItems"],
+            audiorouter_dsp::EqPresetId::ALL.len()
         );
         assert_eq!(
             routes["outputSchema"]["properties"]["paths"]["items"]["properties"]["nodes"]

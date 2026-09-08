@@ -520,3 +520,8 @@ Session-scoped inputs for deletion, lifecycle control, duplication, route
 inspection, and graph history now advertise the domain's 128-byte session
 identity limit, preventing clients from submitting values the backend cannot
 accept.
+
+Discovery now also bounds the fixed node-type catalog, voice-chain and EQ
+preset catalogs, and node parameter arrays using their authoritative registry
+sizes and domain limit. Control discovery tests and the cross-contract checks
+passed without opening audio.
