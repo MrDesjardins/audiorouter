@@ -736,3 +736,12 @@ Engine tests (70), probe compilation, formatting, and the guarded 300 ms
 include/exclude live acceptance passed. Include emitted 107 and exclude 112
 generation-1 quanta; both modes reported zero scheduler xruns, input/output
 overruns, and input/output underruns. Media-device snapshots were unchanged.
+
+## Workspace regression after scheduler accounting (2026-09-08)
+
+The locked full workspace suite passed after the queue-drain correction:
+control 86, domain 53, DSP 27, engine 70, plugin-host 39 plus 8 worker-process
+tests, protocol 6, recording 30, storage 40, transport 17, and Windows audio
+29, with all doc tests passing. This is portable/native API regression
+coverage; it does not close managed-driver, signing, installer, physical
+latency, or manual UI gates.
