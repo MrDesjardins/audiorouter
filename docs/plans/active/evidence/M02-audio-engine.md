@@ -478,3 +478,8 @@ so the adapter correctly failed closed with `InvalidFrameSize` before stream
 activation; exact cleanup and media-state checks passed. No valid differing-rate
 mono/stereo pair is currently available, leaving hardware clock/resampler
 qualification open.
+
+The legacy array response of `devices.list` now advertises the 500-endpoint
+bound and returns a pagination-required error if more endpoints are present,
+instead of silently truncating a read-only native inventory. This check does
+not open an audio stream or change endpoint state.

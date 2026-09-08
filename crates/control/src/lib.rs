@@ -1010,7 +1010,7 @@ fn method_output_schema(name: &str) -> Value {
             let item = device_item_schema();
             json!({
                 "oneOf": [
-                    { "type": "array", "items": item.clone() },
+                    { "type": "array", "maxItems": MAX_DEVICE_LIST_ITEMS, "items": item.clone() },
                     {
                         "type": "object",
                         "properties": {
@@ -4803,6 +4803,11 @@ impl ControlPlane {
             })
             .collect::<Result<Vec<_>, ControlError>>()?;
         devices.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+        if !paged && devices.len() > MAX_DEVICE_LIST_ITEMS {
+            return Err(ControlError::InvalidRequest(
+                "devices.list requires cursor pagination when more than 500 endpoints exist".into(),
+            ));
+        }
         if let Some(cursor) = cursor {
             let Some(index) = devices.iter().position(|device| device["id"] == cursor) else {
                 return Err(ControlError::InvalidRequest("invalid device cursor".into()));
@@ -6576,6 +6581,10 @@ mod tests {
             devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
                 ["direction"]["enum"],
             json!(["capture", "render"])
+        );
+        assert_eq!(
+            devices["outputSchema"]["oneOf"][0]["maxItems"],
+            MAX_DEVICE_LIST_ITEMS
         );
         assert_eq!(
             devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
