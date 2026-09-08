@@ -131,6 +131,13 @@ a corrupt-row regression fails closed. Storage/control tests (61/87), strict
 Clippy, formatting, and diff checks pass; no audio or machine configuration
 was accessed.
 
+Completed safe storage slice M04/REC-04/SEC-12 recording counter-boundary
+validation: SQLite recording frame and file-byte counters now reject negative
+read values and values outside SQLite's signed range on writes, preventing
+unchecked signed-to-unsigned wrapping. Recording/storage/control tests
+(10/62/87), strict Clippy, formatting, and diff checks pass; no recording file
+or audio/machine configuration was accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

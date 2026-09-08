@@ -333,16 +333,39 @@ fn recording_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordingReco
         recorder_id: row.get(2)?,
         path: row.get(3)?,
         format: row.get(4)?,
-        channels: row.get::<_, i64>(5)? as u16,
-        sample_rate: row.get::<_, i64>(6)? as u32,
-        frames: row.get::<_, i64>(7)? as u64,
-        file_bytes: row.get::<_, i64>(8)? as u64,
+        channels: u16::try_from(row_u64(row, 5)?).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                5,
+                rusqlite::types::Type::Integer,
+                Box::new(error),
+            )
+        })?,
+        sample_rate: u32::try_from(row_u64(row, 6)?).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                6,
+                rusqlite::types::Type::Integer,
+                Box::new(error),
+            )
+        })?,
+        frames: row_u64(row, 7)?,
+        file_bytes: row_u64(row, 8)?,
         start_time: row.get(9)?,
         state: row.get(10)?,
         missing: row.get::<_, i64>(11)? != 0,
         title: row.get(12)?,
         artist: row.get(13)?,
         comment: row.get(14)?,
+    })
+}
+
+fn row_u64(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<u64> {
+    let value = row.get::<_, i64>(index)?;
+    u64::try_from(value).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            rusqlite::types::Type::Integer,
+            Box::new(error),
+        )
     })
 }
 
@@ -359,6 +382,8 @@ fn validate_recording_record(recording: &RecordingRecord) -> Result<(), StorageE
         || recording.id.len() > MAX_RECORDING_ID_BYTES
         || recording.session_id.len() > MAX_RECORDING_ID_BYTES
         || recording.recorder_id.len() > MAX_RECORDING_ID_BYTES
+        || recording.frames > i64::MAX as u64
+        || recording.file_bytes > i64::MAX as u64
         || !valid_recording_metadata(recording.title.as_deref())
         || !valid_recording_metadata(recording.artist.as_deref())
         || !valid_recording_metadata(recording.comment.as_deref())
@@ -3998,6 +4023,14 @@ mod tests {
             storage.save_recording(&recording),
             Err(StorageError::InvalidRecording(message)) if message.contains("invalid recording fields")
         ));
+
+        let mut oversized_frames = recording.clone();
+        oversized_frames.id = "oversized-frames".into();
+        oversized_frames.frames = i64::MAX as u64 + 1;
+        assert!(matches!(
+            storage.save_recording(&oversized_frames),
+            Err(StorageError::InvalidRecording(message)) if message.contains("invalid recording fields")
+        ));
     }
 
     #[test]
@@ -4026,6 +4059,29 @@ mod tests {
         assert!(matches!(
             storage.list_recordings_page(None, None, 1),
             Err(StorageError::InvalidRecording(_))
+        ));
+    }
+
+    #[test]
+    fn recording_reads_reject_negative_counters() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO recordings
+                 (id, session_id, recorder_id, path, format, channels, sample_rate,
+                  frames, file_bytes, start_time, state, missing, title, artist, comment)
+                 VALUES ('negative', 'session', 'recorder', 'C:\\recordings\\bad.wav',
+                         'wav', 1, 48000, -1, 1, '2026-09-08T00:00:00Z',
+                         'completed', 0, NULL, NULL, NULL)",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.list_recordings(None),
+            Err(StorageError::Sql(
+                rusqlite::Error::FromSqlConversionFailure(..)
+            ))
         ));
     }
 

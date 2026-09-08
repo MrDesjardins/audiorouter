@@ -750,3 +750,12 @@ same 4,096-part and 4,096-pause bounds used by recorder checkpoint validation.
 Control discovery regression coverage and the 86 control plus 30 recording
 tests passed, with no audio stream or machine configuration changes. Native
 realtime recorder integration remains open.
+## Recording counter-boundary validation (2026-09-08)
+
+SQLite recording hydration now converts signed integer counters to unsigned
+values only after rejecting negative values. Write validation also rejects
+frame and file-byte values above SQLite's signed integer range before any row
+mutation. Regressions cover a corrupt negative row and an oversized write;
+recording (10), storage (62), and control (87) tests plus strict Clippy,
+formatting, and diff checks passed. No recording file, audio endpoint, or
+machine configuration was accessed.
