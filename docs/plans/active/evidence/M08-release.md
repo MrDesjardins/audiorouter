@@ -478,3 +478,20 @@ The chain did not install or load a driver, change signing mode, register a
 plugin or startup entry, or modify machine audio configuration. Native driver
 installation/signing, installer, hardware/manual acceptance, and physical
 latency remain open release gates.
+
+## Current-head safe-chain requalification (2026-09-08)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/safe-all.ps1` at pushed head `419c368`.
+
+The complete non-mutating chain passed again: native compile and 34-endpoint
+read-only inventory; disposable pinned SysVAD x64 build/package/API
+qualification; M01 CLI; M04 DSP/recording; M05 UI with 88 tests and temporary
+production build; M06 SDK/VST3 validation; M07 headless checks; unsigned M08
+artifact preparation; and documentation validation (51 Markdown files, 157
+local links). Temporary outputs/checkouts were removed.
+
+No driver was installed or loaded, signing mode was unchanged, no plugin or
+startup entry was registered, and no machine audio configuration was changed.
+Production driver/signing, installer, hardware/manual UI, and physical latency
+gates remain open.
