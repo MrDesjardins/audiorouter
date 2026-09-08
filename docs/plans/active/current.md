@@ -194,6 +194,11 @@ provenance, required-artifact checks, and SHA-256/byte-count verification all
 passed in a disposable directory that was cleaned afterward. No installer,
 driver, signing action, plugin registration, or audio configuration changed.
 
+Corrected M05/UI capability wording: the library's Recorder entry now points
+users to the implemented dedicated Recorder panel instead of claiming that M04
+runtime integration is unavailable. A focused UI regression covers this
+guidance; no backend, audio, or machine configuration changed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

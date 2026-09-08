@@ -45,4 +45,10 @@ describe("node library search", () => {
     );
     expect(libraryEntryAccessibleLabel(libraryEntries.find((entry) => entry.id === "gain")!)).toBe("Gain, Effect");
   });
+
+  it("directs recorder actions to the dedicated recorder panel", () => {
+    const recorder = libraryEntries.find((entry) => entry.id === "recorder");
+    expect(recorder?.unavailableReason).toBe("Use the Recorder panel to control recording");
+    expect(recorder?.kind).toBeUndefined();
+  });
 });

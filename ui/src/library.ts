@@ -17,7 +17,7 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "virtual-capture-sink", label: "Virtual capture sink", category: "Virtual bus", unavailableReason: "Requires the M03 managed virtual driver" },
   { id: "gain", label: "Gain", category: "Effect", kind: "gain" },
   { id: "mixer", label: "Mixer", category: "Routing", kind: "mixer" },
-  { id: "recorder", label: "Recorder", category: "Output", unavailableReason: "Requires the M04 runtime integration" },
+  { id: "recorder", label: "Recorder", category: "Output", unavailableReason: "Use the Recorder panel to control recording" },
   { id: "mute", label: "Mute", category: "Effect", kind: "mute" },
   { id: "meter", label: "Meter", category: "Monitor", kind: "meter" },
   { id: "parametric-eq", label: "Parametric EQ", category: "Effect", kind: "parametricEq" },
