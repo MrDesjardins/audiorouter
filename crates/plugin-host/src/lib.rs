@@ -34,6 +34,7 @@ pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 pub const MAX_PARAMETER_EVENTS: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
 pub const MAX_WORKER_FAILURE_CODE_BYTES: usize = 128;
+pub const MAX_WORKER_STATE_BYTES: usize = 512 * 1024;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
 pub const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -123,7 +124,7 @@ pub enum StateFileError {
     InvalidState(StateError),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PluginStateAsset {
     pub version: u32,
     pub bytes: Vec<u8>,
@@ -815,6 +816,7 @@ pub enum WorkerMessageError {
     InvalidProtocolVersion,
     InvalidPluginHash,
     InvalidFailureCode,
+    InvalidState,
     InvalidLatency,
     Io(String),
 }
@@ -835,6 +837,7 @@ pub enum WorkerSessionError {
     IdentityMismatch,
     Frame(WorkerFrameError),
     InvalidLatency,
+    InvalidState,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1106,6 +1109,13 @@ pub enum WorkerMessage {
         frames: u32,
     },
     Latency(WorkerLatency),
+    StateSave,
+    StateRestore {
+        asset: PluginStateAsset,
+    },
+    State {
+        asset: PluginStateAsset,
+    },
     Shutdown,
     Failure {
         code: String,
@@ -1199,6 +1209,7 @@ impl WorkerSession {
         validate_worker_message(message).map_err(|error| match error {
             WorkerMessageError::InvalidFrame(error) => WorkerSessionError::Frame(error),
             WorkerMessageError::InvalidLatency => WorkerSessionError::InvalidLatency,
+            WorkerMessageError::InvalidState => WorkerSessionError::InvalidState,
             _ => WorkerSessionError::UnexpectedMessage,
         })?;
         match (&self.state, message) {
@@ -1257,7 +1268,12 @@ impl WorkerSession {
                 self.latency = Some((latency.samples, latency.sample_rate_hz));
                 Ok(None)
             }
-            (WorkerSessionState::Active, WorkerMessage::ProcessedShared { .. }) => Ok(None),
+            (
+                WorkerSessionState::Active,
+                WorkerMessage::ProcessedShared { .. }
+                | WorkerMessage::StateSave
+                | WorkerMessage::StateRestore { .. },
+            ) => Ok(None),
             (
                 WorkerSessionState::Active,
                 WorkerMessage::Shutdown | WorkerMessage::Failure { .. },
@@ -1793,6 +1809,40 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    pub fn restore_state(
+        &mut self,
+        asset: PluginStateAsset,
+        now: Instant,
+    ) -> Result<(), WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.restore_state(asset) {
+            Ok(()) => {
+                self.supervisor.heartbeat(now);
+                Ok(())
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn save_state(&mut self, now: Instant) -> Result<PluginStateAsset, WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.save_state() {
+            Ok(asset) => {
+                self.supervisor.heartbeat(now);
+                Ok(asset)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
     pub fn shutdown(self) -> Result<ExitStatus, WorkerProcessError> {
         self.process.shutdown()
     }
@@ -2058,6 +2108,32 @@ impl WorkerProcess {
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected shared process response".into(),
+            )),
+        }
+    }
+
+    pub fn restore_state(&mut self, asset: PluginStateAsset) -> Result<(), WorkerProcessError> {
+        self.write(&WorkerMessage::StateRestore {
+            asset: asset.clone(),
+        })
+        .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::State { asset: actual } if actual == asset => Ok(()),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected state restore response".into(),
+            )),
+        }
+    }
+
+    pub fn save_state(&mut self) -> Result<PluginStateAsset, WorkerProcessError> {
+        self.write(&WorkerMessage::StateSave)
+            .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::State { asset } => Ok(asset),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected state save response".into(),
             )),
         }
     }
@@ -2346,7 +2422,30 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         {
             return Err(WorkerMessageError::InvalidFailureCode);
         }
+        WorkerMessage::StateSave => {}
+        WorkerMessage::StateRestore { asset } | WorkerMessage::State { asset } => {
+            validate_worker_state(asset)?;
+        }
         _ => {}
+    }
+    Ok(())
+}
+
+fn validate_worker_state(asset: &PluginStateAsset) -> Result<(), WorkerMessageError> {
+    if asset.bytes.is_empty()
+        || asset.bytes.len() > MAX_WORKER_STATE_BYTES
+        || !is_sha256(&asset.sha256)
+    {
+        return Err(WorkerMessageError::InvalidState);
+    }
+    let digest = Sha256::digest(&asset.bytes);
+    if asset.sha256
+        != digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    {
+        return Err(WorkerMessageError::InvalidState);
     }
     Ok(())
 }
@@ -3715,6 +3814,33 @@ mod tests {
                 code: "x".repeat(MAX_WORKER_FAILURE_CODE_BYTES + 1),
             }),
             Err(WorkerMessageError::InvalidFailureCode)
+        );
+    }
+
+    #[test]
+    fn worker_state_messages_require_bounded_integrity_checked_assets() {
+        let asset = PluginStateAsset::new(4, vec![7, 8, 9]).unwrap();
+        let message = WorkerMessage::StateRestore {
+            asset: asset.clone(),
+        };
+        assert_eq!(
+            decode_worker_message(&encode_worker_message(&message).unwrap()).unwrap(),
+            message
+        );
+        let oversized = PluginStateAsset {
+            version: 4,
+            bytes: vec![0; MAX_WORKER_STATE_BYTES + 1],
+            sha256: "0".repeat(64),
+        };
+        assert_eq!(
+            encode_worker_message(&WorkerMessage::StateRestore { asset: oversized }),
+            Err(WorkerMessageError::InvalidState)
+        );
+        let mut corrupt = asset;
+        corrupt.sha256 = "0".repeat(64);
+        assert_eq!(
+            encode_worker_message(&WorkerMessage::State { asset: corrupt }),
+            Err(WorkerMessageError::InvalidState)
         );
     }
 

@@ -335,6 +335,13 @@ architecture, size, and SHA-256, rejecting replacement or outside-root content
 without rebinding. Two regressions cover changed bytes and a changed grant;
 this is launch authorization evidence, not plugin execution evidence.
 
+Added bounded opaque state messages (`StateRestore`, `StateSave`, and `State`)
+to the worker protocol. Assets are limited to 512 KiB and must pass SHA-256
+integrity validation; the disposable worker round-trips one asset through the
+process API. Plugin-host coverage is now 45 library tests, 11 ordinary worker
+tests, and 15 feature-enabled worker tests. Vendor-specific VST3 state
+serialization remains a native-host gate.
+
 `SupervisedWorkerProcess::spawn_verified` now composes that identity check with
 supervised worker creation. A process regression copied a temporary executable
 as a VST3 fixture, scanned it, launched through the verified path, processed one

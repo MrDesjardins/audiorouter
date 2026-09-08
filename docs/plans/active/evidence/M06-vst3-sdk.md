@@ -865,6 +865,14 @@ A second process regression verifies that a missing scanned identity fails
 before worker creation with a typed inspection error. The ordinary worker
 suite has 11 passing tests; the feature-enabled fixture suite has 15.
 
+## Opaque worker state transport (2026-09-08)
+
+Worker messages now support explicit state restore/save and an opaque state
+response. Every asset is non-empty, capped at 512 KiB, and SHA-256 checked at
+the encode/decode boundary. The process regression restores an asset and saves
+it back byte-for-byte; bounded and corrupt assets are rejected. This is worker
+transport evidence only and does not claim vendor-specific VST3 state support.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and

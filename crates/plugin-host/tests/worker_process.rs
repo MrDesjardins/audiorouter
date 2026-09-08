@@ -1,7 +1,8 @@
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
-    PeArchitecture, PluginFormat, PluginIdentity, SharedAudioLayout, SharedAudioTransport,
-    SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    PeArchitecture, PluginFormat, PluginIdentity, PluginStateAsset, SharedAudioLayout,
+    SharedAudioTransport, SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage,
+    WorkerProcess,
 };
 use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
@@ -50,6 +51,9 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
     assert_eq!(worker.process(frame.clone(), Vec::new()).unwrap(), frame);
     let latency = WorkerLatency::new(240, 48_000).unwrap();
     assert_eq!(worker.report_latency(latency).unwrap(), latency);
+    let asset = PluginStateAsset::new(3, vec![1, 2, 3, 4]).unwrap();
+    worker.restore_state(asset.clone()).unwrap();
+    assert_eq!(worker.save_state().unwrap(), asset);
     assert!(worker.shutdown().unwrap().success());
 
     // Keep the generic framing helpers exercised in this process-level test.

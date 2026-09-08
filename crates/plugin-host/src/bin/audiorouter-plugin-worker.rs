@@ -1,6 +1,6 @@
 use audiorouter_plugin_host::{
-    read_worker_message, worker_clock_tick, write_worker_message, SharedAudioLayout,
-    SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
+    read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
+    SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
 };
 #[cfg(feature = "test-fixtures")]
 use std::io::Write;
@@ -38,6 +38,7 @@ fn run() -> Result<(), String> {
             .map_err(|error| format!("shared transport open failed: {error:?}"))
         })
         .transpose()?;
+    let mut state: Option<PluginStateAsset> = None;
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut reader = BufReader::new(stdin.lock());
@@ -155,6 +156,25 @@ fn run() -> Result<(), String> {
             WorkerMessage::Latency(latency) => {
                 write_worker_message(&mut writer, &WorkerMessage::Latency(latency))
                     .map_err(|error| format!("latency write failed: {error:?}"))?;
+            }
+            WorkerMessage::StateRestore { asset } => {
+                state = Some(asset.clone());
+                write_worker_message(&mut writer, &WorkerMessage::State { asset })
+                    .map_err(|error| format!("state restore write failed: {error:?}"))?;
+            }
+            WorkerMessage::StateSave => {
+                let Some(asset) = state.clone() else {
+                    write_worker_message(
+                        &mut writer,
+                        &WorkerMessage::Failure {
+                            code: "stateUnavailable".into(),
+                        },
+                    )
+                    .map_err(|error| format!("state failure write failed: {error:?}"))?;
+                    return Err("no opaque state has been restored".into());
+                };
+                write_worker_message(&mut writer, &WorkerMessage::State { asset })
+                    .map_err(|error| format!("state save write failed: {error:?}"))?;
             }
             WorkerMessage::Shutdown => return Ok(()),
             _ => {
