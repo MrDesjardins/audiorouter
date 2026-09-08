@@ -1,5 +1,17 @@
 # M08 release evidence
 
+## Safe-chain requalification after `95fab8d` (2026-09-08)
+
+The repository-wide safe acceptance chain passed at the pushed percentile
+telemetry head. Native compile and read-only 34-endpoint inventory passed;
+disposable pinned SysVAD x64 qualification completed with the installed
+VS/WDK toolchain; workspace, M01, M04, M05, M06, M07, unsigned M08 artifact,
+and documentation checks passed. Temporary outputs/checkouts were removed.
+This is qualification evidence only: no driver was installed or loaded, no
+signing mode changed, and no plugin/startup registration or machine audio
+configuration changed. Production driver ownership, signing, installer,
+clean-machine, physical-latency, and manual UI/accessibility gates remain open.
+
 ## Current-tip unsigned qualification (2026-09-07)
 
 The complete release-preparation acceptance passed at the current head. It
@@ -590,3 +602,14 @@ No driver was installed or loaded, signing mode was unchanged, no plugin or
 startup entry was registered, and no machine audio configuration changed.
 Production driver/signing, installer, hardware/manual UI, native callback
 deadline, and physical-latency gates remain open.
+## Safe-chain requalification after `95fab8d` (2026-09-08)
+
+The repository-wide safe acceptance chain passed at the pushed percentile
+telemetry head. Native compile and read-only 34-endpoint inventory passed;
+disposable pinned SysVAD x64 qualification completed with the installed
+VS/WDK toolchain; workspace, M01, M04, M05, M06, M07, unsigned M08 artifact,
+and documentation checks passed. Temporary outputs/checkouts were removed.
+This is qualification evidence only: no driver was installed or loaded, no
+signing mode changed, and no plugin/startup registration or machine audio
+configuration changed. Production driver ownership, signing, installer,
+clean-machine, physical-latency, and manual UI/accessibility gates remain open.

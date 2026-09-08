@@ -18,12 +18,13 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `eca1526`. Safe portable and
+The latest validated implementation head is `95fab8d`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
-bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion, and
-scheduler telemetry accounting is implemented and regression-tested. The full
-locked workspace suite and guarded include/exclude process-loopback acceptance
-pass with unchanged media state.
+bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion,
+scheduler deadline telemetry, and conservative p99.9 histogram bounds is
+implemented and regression-tested. The full locked workspace suite, guarded
+include/exclude process-loopback acceptance, and safe acceptance chain pass
+with unchanged media state.
 
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
@@ -1650,6 +1651,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00-M08/API-01/SEC-12 safe-chain requalification after `801bd50` on 2026-09-08: native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification, full workspace tests/Clippy, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation (51 Markdown files/158 local links) all passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the deadline API to an endpoint-owned native scheduler callback and measure its period/deadline distribution once the managed driver boundary exists.
+
+- Completed M00-M08/API-01/SEC-12 safe-chain requalification after `95fab8d` on 2026-09-08: native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification with the installed VS/WDK toolchain, full workspace checks, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation (51 Markdown files/158 local links) all passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
+- Next M02/M03/ARCH-05 task: connect the bounded percentile telemetry to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
 
 - Completed M02/API-01/ARCH-05 bounded percentile extraction on 2026-09-08: fixed histogram telemetry now exposes conservative p99.9 upper bounds, the adapter reports them, and both guarded live acceptance paths validate them against maxima. Engine tests (74), strict Clippy, formatting, tool checking, PowerShell parsing, live adapter/route acceptance, diff checks, and documentation validation pass; media state remained unchanged.
 - Next M02/M03/ARCH-05 task: connect the bounded percentile telemetry to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
