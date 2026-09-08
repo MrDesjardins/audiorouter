@@ -95,6 +95,13 @@ exceeds the quantile bucket. Totals and histogram accounting remain enforced.
 PowerShell parsing, a five-second shared soak, and a two-second routed run
 passed with zero xruns/overruns/deadlines and unchanged audio configuration.
 
+Requalified the native tone/loopback signal path on 2026-09-08 using the
+explicit VB-Audio pair: 216,970 nonzero capture payload bytes over a 1,000 ms
+capture while the 1,500 ms render tone completed successfully. Streams were
+stopped/reset and all persistent audio snapshots were unchanged. This is
+digital propagation evidence only, not calibrated physical latency or
+production-driver callback evidence.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/

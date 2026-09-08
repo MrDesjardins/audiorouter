@@ -935,3 +935,14 @@ of 69.13 ms. Temporary executable/object/raw/log artifacts were cleaned up,
 and persistent audio configuration was unchanged. This is digital return-path
 correlation only; it is not calibrated acoustic latency or production-driver
 callback evidence.
+
+## Native tone/loopback signal-path requalification (2026-09-08)
+
+`tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
+-CaptureDurationMilliseconds 1000 -ToneDurationMilliseconds 1500` passed on
+the explicitly selected VB-Audio pair. The native capture lifecycle recorded
+216,970 nonzero payload bytes while the render tone lifecycle completed
+successfully. Both streams were stopped/reset and persistent defaults, volume,
+mute, privacy, driver, signing, and startup configuration were unchanged.
+This proves digital signal-path propagation only; calibrated physical latency,
+managed-driver ownership, and production callback timing remain open.
