@@ -108,6 +108,27 @@ fn validate_session_id(id: &EntityId) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn trim_session_history(
+    transaction: &Transaction<'_>,
+    session_id: &EntityId,
+) -> Result<(), StorageError> {
+    transaction.execute(
+        "DELETE FROM session_history
+         WHERE session_id = ?1
+           AND revision NOT IN (
+               SELECT revision FROM session_history
+               WHERE session_id = ?1
+               ORDER BY revision DESC
+               LIMIT ?2
+           )",
+        params![
+            session_id.as_str(),
+            audiorouter_domain::MAX_GRAPH_HISTORY_ENTRIES as i64
+        ],
+    )?;
+    Ok(())
+}
+
 fn validate_idempotency_key(key: &str) -> Result<(), StorageError> {
     if key.is_empty() || key.len() > MAX_IDEMPOTENCY_KEY_BYTES {
         return Err(StorageError::InvalidJournal(
@@ -1209,6 +1230,7 @@ impl Storage {
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
             params![session.id.as_str(), revision, &document],
         )?;
+        trim_session_history(&transaction, &session.id)?;
         transaction.execute(
             "INSERT INTO sessions(id, revision, document) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
@@ -2621,6 +2643,7 @@ impl Storage {
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
             params![session.id.as_str(), revision, &document],
         )?;
+        trim_session_history(&transaction, &session.id)?;
         if failure == Some(JournalFailureStage::AfterHistory) {
             return Err(StorageError::InvalidSession(
                 "injected journal failure".into(),
@@ -3769,6 +3792,59 @@ mod tests {
                 .unwrap(),
             vec![original]
         );
+    }
+
+    #[test]
+    fn ordinary_session_history_retains_only_newest_revisions() {
+        let storage = Storage::open_memory().unwrap();
+        for revision in 0..(audiorouter_domain::MAX_GRAPH_HISTORY_ENTRIES as u64 + 2) {
+            let mut value = session();
+            value.revision = revision;
+            storage.save_session(&value).unwrap();
+        }
+
+        let history = storage
+            .load_history(&session().id, MAX_SESSION_HISTORY_ITEMS)
+            .unwrap();
+        assert_eq!(history.len(), audiorouter_domain::MAX_GRAPH_HISTORY_ENTRIES);
+        assert_eq!(history.first().unwrap().revision, 101);
+        assert_eq!(history.last().unwrap().revision, 2);
+        assert_eq!(
+            storage
+                .connection
+                .query_row(
+                    "SELECT COUNT(*) FROM session_history WHERE session_id = ?1",
+                    params![session().id.as_str()],
+                    |row| row.get::<_, usize>(0),
+                )
+                .unwrap(),
+            audiorouter_domain::MAX_GRAPH_HISTORY_ENTRIES
+        );
+    }
+
+    #[test]
+    fn journaled_session_history_retains_only_newest_revisions() {
+        let storage = Storage::open_memory().unwrap();
+        for revision in 0..(audiorouter_domain::MAX_GRAPH_HISTORY_ENTRIES as u64 + 2) {
+            let mut value = session();
+            value.revision = revision;
+            storage
+                .save_session_with_journal(
+                    &value,
+                    &format!("history-key-{revision}"),
+                    "sessions.update",
+                    "{}",
+                    None,
+                )
+                .unwrap();
+        }
+
+        let history = storage
+            .load_history(&session().id, MAX_SESSION_HISTORY_ITEMS)
+            .unwrap();
+        assert_eq!(history.len(), audiorouter_domain::MAX_GRAPH_HISTORY_ENTRIES);
+        assert_eq!(history.first().unwrap().revision, 101);
+        assert_eq!(history.last().unwrap().revision, 2);
     }
 
     #[test]

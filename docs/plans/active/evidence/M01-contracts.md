@@ -1,5 +1,16 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-08 - Durable graph-history retention bound
+
+SQLite session history now retains only the newest 100 revisions per session,
+matching the domain store's undo/history budget. Both `save_session` and the
+atomic `save_session_with_journal_with_hash` path invoke the same session-
+scoped trim inside their transaction, so a trim failure cannot leave a
+partially committed current document or journal outcome. Storage regressions
+write 102 revisions through each path and verify that exactly 100 rows remain,
+with revision 101 newest and revision 2 oldest. Domain history tests (57),
+storage tests (79), strict Clippy, formatting, and diff checks pass.
+
 ## 2026-09-08 - CLI document-read bound
 
 The CLI now reads API parameter and saved JSON plan files through a bounded

@@ -21,6 +21,8 @@ pub const MAX_PENDING_GRAPH_PLANS: usize = 100;
 /// Maximum number of in-memory graph commit results retained for idempotent
 /// replay when the durable control-plane journal is not available.
 pub const MAX_GRAPH_IDEMPOTENCY_RESULTS: usize = 100;
+/// Maximum number of graph revisions retained for undo and recovery.
+pub const MAX_GRAPH_HISTORY_ENTRIES: usize = 100;
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
@@ -2009,7 +2011,7 @@ impl GraphStore {
             .or_default()
             .push(session.clone());
         if let Some(entries) = self.history.get_mut(&session.id) {
-            if entries.len() > 100 {
+            if entries.len() > MAX_GRAPH_HISTORY_ENTRIES {
                 entries.remove(0);
             }
         }
@@ -2065,7 +2067,7 @@ impl GraphStore {
                     .map(|revision| session.revision < revision)
                     .unwrap_or(true)
             })
-            .take(limit.min(100))
+            .take(limit.min(MAX_GRAPH_HISTORY_ENTRIES))
             .cloned()
             .collect()
     }
@@ -2080,7 +2082,7 @@ impl GraphStore {
                 .all(|existing| existing.revision != session.revision)
             {
                 history.push(session.clone());
-                if history.len() > 100 {
+                if history.len() > MAX_GRAPH_HISTORY_ENTRIES {
                     history.remove(0);
                 }
             }
@@ -2278,7 +2280,7 @@ impl GraphStore {
             .or_default()
             .push(committed.clone());
         if let Some(entries) = self.history.get_mut(&committed.id) {
-            if entries.len() > 100 {
+            if entries.len() > MAX_GRAPH_HISTORY_ENTRIES {
                 entries.remove(0);
             }
         }

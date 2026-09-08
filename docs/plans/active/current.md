@@ -16,6 +16,21 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## Durable graph-history retention bound (2026-09-08)
+
+Closed a persistence retention gap in M01/STATE foundations. The SQLite
+`session_history` table now trims transactionally after both ordinary session
+writes and journaled writes, retaining the newest 100 revisions per session,
+matching `GraphStore`'s existing undo/history budget. The trim is scoped to the
+session and occurs before transaction commit; a SQL failure therefore rolls
+back the current document, history, and journal outcome together.
+
+Storage regressions cover both write paths, verify newest-first boundaries
+(revisions 101 through 2 after 102 writes), and confirm the durable row count
+is exactly 100. Domain history tests still pass after replacing hard-coded
+limits with the shared `MAX_GRAPH_HISTORY_ENTRIES` constant. No audio or
+machine configuration was accessed.
+
 ## M06 independent VST3 fixture qualification (2026-09-08)
 
 Built the official ChowMatrix VST3 source fixture from Chowdhury DSP commit
