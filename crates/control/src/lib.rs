@@ -27,6 +27,8 @@ use std::time::{Duration, Instant};
 
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
+const MAX_MUTATION_BUCKETS: usize = 256;
+const MUTATION_BUCKET_RETENTION: Duration = Duration::from_secs(10 * 60);
 const MAX_CONTROL_VALUE_DEPTH: usize = 32;
 const MAX_CONTROL_STRING_BYTES: usize = 4096;
 const MAX_CONTROL_VALUE_COUNT: usize = 8192;
@@ -109,6 +111,14 @@ impl MutationRateLimiter {
     }
 
     fn allow_at(&mut self, client_id: &str, now: Instant) -> Result<(), u64> {
+        if !self.buckets.contains_key(client_id) && self.buckets.len() >= MAX_MUTATION_BUCKETS {
+            self.buckets.retain(|_, bucket| {
+                now.saturating_duration_since(bucket.last_refill) <= MUTATION_BUCKET_RETENTION
+            });
+            if self.buckets.len() >= MAX_MUTATION_BUCKETS {
+                return Err(1_000);
+            }
+        }
         let bucket = self
             .buckets
             .entry(client_id.to_owned())
@@ -5801,6 +5811,21 @@ mod tests {
         assert!(limiter
             .allow_at("client", start + std::time::Duration::from_millis(50))
             .is_ok());
+    }
+
+    #[test]
+    fn mutation_rate_limiter_bounds_distinct_client_retention() {
+        let mut limiter = MutationRateLimiter::default();
+        let start = Instant::now();
+        for index in 0..MAX_MUTATION_BUCKETS {
+            assert!(limiter.allow_at(&format!("client-{index}"), start).is_ok());
+        }
+        assert_eq!(limiter.buckets.len(), MAX_MUTATION_BUCKETS);
+        assert_eq!(limiter.allow_at("new-client", start), Err(1_000));
+
+        let after_retention = start + MUTATION_BUCKET_RETENTION + Duration::from_millis(1);
+        assert!(limiter.allow_at("new-client", after_retention).is_ok());
+        assert!(limiter.buckets.len() <= MAX_MUTATION_BUCKETS);
     }
 
     #[test]

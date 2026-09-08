@@ -90,6 +90,15 @@ latency response is accepted while the supervisor remains running, and the
 two-entry descriptor catalog is returned through the supervised adapter before
 clean shutdown.
 
+## Control mutation-bucket retention bound (2026-09-08)
+
+The in-memory mutation limiter now retains at most 256 distinct client buckets.
+It evicts buckets idle for more than ten minutes and returns a retryable
+one-second limit when all buckets are active, preventing client-ID churn from
+growing control memory without weakening per-client burst/refill behavior.
+Control tests (91), strict Clippy, formatting, diff checks, and documentation
+validation pass. No audio or machine configuration was accessed.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models

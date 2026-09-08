@@ -807,6 +807,15 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## Mutation bucket retention bound (2026-09-08)
+
+The in-memory mutation rate limiter now caps distinct client buckets at 256.
+When full, stale buckets older than ten minutes are evicted; if all buckets
+are active, a new client receives a retryable one-second rate-limit result
+instead of expanding the map. The regression covers saturation, bounded
+retention, and stale eviction. Control passes 91 tests with strict Clippy;
+this changes only control metadata and does not access audio configuration.
+
 ## Event replay page cursor (2026-09-08)
 
 `EventLog::since_page` now returns both the bounded event page and the cursor
