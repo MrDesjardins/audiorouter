@@ -182,6 +182,12 @@ now cap request-hash strings at 128 bytes while preserving legacy empty hashes.
 Oversized values fail before SQLite mutation or lookup; focused storage/control
 tests and strict Clippy pass with no audio or machine configuration accessed.
 
+Requalified M06/SEC-07 native SDK and offline loader acceptance on 2026-09-08:
+the pinned local SDK passed 51 self-tests and 1,598 official validator tests;
+the x64 loader discovered 68 classes and verified finite stereo processing,
+five-parameter automation, and a 180-byte state round trip. No plugin was
+registered and no audio or machine configuration changed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

@@ -956,3 +956,13 @@ The repository-local SDK installer was also rerun successfully on 2026-09-08
 at the pinned revision, confirming the source-distributed SDK checkout and all
 seven recursive submodules remain available. This setup action does not install
 a system SDK, register plugins, or change audio configuration.
+
+## Native M06 acceptance requalification (2026-09-08)
+
+The checked-in `tests/acceptance/m06-vst3-sdk.ps1` wrapper passed with Visual
+Studio Community 2026/MSVC 14.51.36231 and Windows SDK `10.0.28000.0`: 51 SDK
+self-tests and 1,598 official validator tests passed. The offline x64 loader
+found 68 classes and verified finite stereo processing, five parameters with
+automation, and a 180-byte state round trip. Outputs were repository-local and
+temporary. No plugin was globally registered, no driver was installed, and no
+audio or machine configuration changed.
