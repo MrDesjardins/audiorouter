@@ -73,6 +73,11 @@ initial report, dynamic update, rejection, and state preservation. This is
 control-plane evidence; actual plugin-added latency measurement and graph
 compensation remain open.
 
+The process adapter regression also fixed a failure-reporting hole: a worker's
+structured latency failure is now propagated as `WorkerProcessError::Protocol`
+instead of being mislabeled as an unexpected response. The nine-test process
+worker suite and strict Clippy requalification are the acceptance evidence.
+
 ## Graph-plan retention bound (2026-09-08)
 
 Closed an M01/SEC-12 memory-retention gap in `GraphStore`: expired plans are

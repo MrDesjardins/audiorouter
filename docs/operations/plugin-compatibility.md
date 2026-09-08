@@ -48,6 +48,10 @@ sample rate is rejected and cannot overwrite the prior value. This protects
 control-plane compensation state, but does not substitute for measured
 plugin-added latency or realtime graph evidence.
 
+When a worker rejects a latency update, the process adapter returns the
+worker's structured protocol failure so callers can quarantine or retry it
+according to the normal failure policy.
+
 ## Reporting a plugin result
 
 Record the plugin format, architecture, vendor, class identity, exact host

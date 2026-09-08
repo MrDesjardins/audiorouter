@@ -41,6 +41,40 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
 }
 
 #[test]
+fn disposable_worker_rejects_a_runtime_sample_rate_change() {
+    let hash = "1".repeat(64);
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let mut worker = WorkerProcess::spawn(worker_path, &hash, 1).expect("spawn worker client");
+    let initial = WorkerLatency::new(128, 48_000).unwrap();
+    assert_eq!(worker.report_latency(initial).unwrap(), initial);
+
+    let rejected = worker.report_latency(WorkerLatency::new(128, 44_100).unwrap());
+    assert!(
+        matches!(
+            &rejected,
+            Err(audiorouter_plugin_host::WorkerProcessError::Protocol(code))
+                if code.starts_with("session:InvalidLatency")
+        ),
+        "unexpected rejection: {rejected:?}"
+    );
+    assert!(!worker.shutdown().unwrap().success());
+}
+
+#[test]
 fn supervised_worker_refreshes_heartbeat_on_successful_processing() {
     let hash = "f".repeat(64);
     let worker_path =

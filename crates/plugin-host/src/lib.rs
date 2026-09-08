@@ -2008,6 +2008,7 @@ impl WorkerProcess {
             .map_err(WorkerProcessError::Message)?;
         match self.read().map_err(WorkerProcessError::Message)? {
             WorkerMessage::Latency(actual) => Ok(actual),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected latency response".into(),
             )),

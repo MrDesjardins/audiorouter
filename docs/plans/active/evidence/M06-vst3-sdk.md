@@ -827,6 +827,11 @@ intact. This protects downstream compensation from silently adopting an
 incompatible rate. The regression is protocol-state evidence, not a measured
 plugin latency or realtime graph-compensation result.
 
+The process-level worker regression then exercised an unsupported runtime
+sample-rate change. The worker rejected it, and `WorkerProcess::report_latency`
+now preserves the structured `session:InvalidLatency` failure for callers;
+the adapter no longer collapses that result into an unclassified response.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and
