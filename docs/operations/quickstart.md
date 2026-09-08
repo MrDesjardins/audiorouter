@@ -64,6 +64,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\\tests\\acceptance\\m02-ru
 This is opt-in live testing only; it does not change defaults, volume, mute,
 privacy, drivers, signing, or startup configuration.
 
+To inspect the active endpoint mix formats without opening an audio stream, run
+the read-only acceptance:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m00-native-format-inventory.ps1
+```
+
+The route wrapper also accepts `-CaptureEndpointId` and `-RenderEndpointId`
+together. Use the opaque IDs from the native inventory when testing a
+differing-rate pair; this bypasses friendly-name resolution while preserving
+the adapter's exact ID, direction, and format checks.
+
 For the repository-local VST3 SDK build, validator, and offline fixture loader,
 run:
 
