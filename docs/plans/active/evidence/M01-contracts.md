@@ -526,6 +526,12 @@ preset catalogs, and node parameter arrays using their authoritative registry
 sizes and domain limit. Control discovery tests and the cross-contract checks
 passed without opening audio.
 
+Client enrollment and revocation now reject identifiers exceeding the shared
+128-byte identity bound. The corresponding management input and output
+schemas advertise that limit, while valid IDs continue to persist and
+authorize normally; control and storage regressions passed without audio
+access.
+
 The discovered processor catalog now advertises its seven-entry bound, while
 node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative

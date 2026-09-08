@@ -242,7 +242,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "clients.authorize" => object_schema(
             json!({
-                "clientId": { "type": "string", "minLength": 1 },
+                "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "role": { "enum": ["observer", "editor", "operator"] },
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
@@ -250,7 +250,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "clients.revoke" => object_schema(
             json!({
-                "clientId": { "type": "string", "minLength": 1 },
+                "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["clientId"],
@@ -1182,7 +1182,7 @@ fn method_output_schema(name: &str) -> Value {
             "items": {
                 "type": "object",
                 "properties": {
-                    "clientId": { "type": "string", "minLength": 1 },
+                    "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                     "role": { "enum": ["observer", "editor", "operator"] },
                     "revoked": { "type": "boolean" }
                 },
@@ -1193,7 +1193,7 @@ fn method_output_schema(name: &str) -> Value {
         "clients.authorize" => json!({
             "type": "object",
             "properties": {
-                "clientId": { "type": "string", "minLength": 1 },
+                "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "role": { "enum": ["observer", "editor", "operator"] },
                 "revoked": { "const": false }
             },
@@ -1203,7 +1203,7 @@ fn method_output_schema(name: &str) -> Value {
         "clients.revoke" => json!({
             "type": "object",
             "properties": {
-                "clientId": { "type": "string", "minLength": 1 },
+                "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "revoked": { "const": true },
                 "changed": { "type": "boolean" }
             },
@@ -2161,6 +2161,9 @@ impl ControlPlane {
         if client_id.is_empty() {
             return Err(ControlError::InvalidRequest("client_id is required".into()));
         }
+        if client_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+            return Err(ControlError::InvalidRequest("client_id is too long".into()));
+        }
         if let Some(storage) = &self.storage {
             storage
                 .save_client_enrollment(&client_id, role_name(role))
@@ -2171,6 +2174,9 @@ impl ControlPlane {
     }
 
     pub fn revoke_client(&mut self, client_id: &str) -> Result<bool, ControlError> {
+        if client_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+            return Err(ControlError::InvalidRequest("client_id is too long".into()));
+        }
         let changed = if let Some(storage) = &self.storage {
             storage
                 .revoke_client_enrollment(client_id)
@@ -7496,6 +7502,11 @@ mod tests {
             &grant,
         );
         assert_eq!(revoked.result.unwrap()["changed"], true);
+        let oversized = "x".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1);
+        assert!(plane
+            .enroll_client(oversized.clone(), ClientRole::Observer)
+            .is_err());
+        assert!(plane.revoke_client(&oversized).is_err());
     }
 
     #[test]
