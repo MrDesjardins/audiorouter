@@ -1154,12 +1154,17 @@ impl StreamingResampler {
     }
 
     /// Append a source block without allocating. Returns the number of frames
-    /// accepted; a short return is an explicit bounded-overflow signal.
+    /// accepted; zero is an explicit bounded-overflow signal and leaves the
+    /// FIFO unchanged rather than partially admitting the source block.
     pub fn push(&mut self, source: &AudioBlock) -> Result<usize, BlockError> {
         if source.channels != self.channels {
             return Err(BlockError::ShapeMismatch);
         }
-        let accepted = source.frames.min(self.capacity_frames - self.queued_frames);
+        let available = self.capacity_frames - self.queued_frames;
+        if source.frames > available {
+            return Ok(0);
+        }
+        let accepted = source.frames;
         for channel in 0..self.channels {
             let source_channel = source.channel(channel).unwrap();
             let start = channel * self.capacity_frames + self.read_frames + self.queued_frames;
@@ -3655,6 +3660,9 @@ mod tests {
         assert_eq!(resampler.push(&source).unwrap(), 2);
         assert_eq!(resampler.process(&mut output, 1.0).unwrap(), 0);
         assert_eq!(output.channel(0).unwrap(), &[0.0, 0.0]);
+        assert_eq!(resampler.queued_frames(), 2);
+        let oversized = AudioBlock::new(1, 3).unwrap();
+        assert_eq!(resampler.push(&oversized).unwrap(), 0);
         assert_eq!(resampler.queued_frames(), 2);
         assert!(matches!(
             resampler.process(&mut output, f64::NAN),

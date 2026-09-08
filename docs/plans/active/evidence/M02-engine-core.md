@@ -236,6 +236,12 @@ the FIFO/phase remain unchanged for the next source push. This prevents the
 fixed-quantum adapter from consuming audio that it cannot publish; the engine
 suite passes 62 tests with strict Clippy.
 
+Source admission is transactional under overflow too: when the bounded FIFO
+cannot accept the whole source block, `push` returns zero and preserves queued
+frames rather than copying a partial block. This keeps caller retry/abort
+decisions from inheriting hidden source data; focused engine and probe checks
+remain green.
+
 ## 2026-09-07 — Full workspace qualification
 
 The current head passed the locked full Rust workspace qualification with 393
