@@ -790,3 +790,13 @@ selected process-loopback source. Child cleanup, stream stop/reset, and the
 media-state snapshot completed successfully. This validates the API mode and
 lifecycle only; it does not establish a full cross-process rejection
 threshold, production-driver behavior, or physical latency.
+
+## Native process attribution recheck (2026-09-08)
+
+The bounded native process-attribution acceptance passed for 500 ms using a
+disposable child and selected process tree: 21,609 capture frames and 77,823
+nonzero payload bytes were observed. The child exited, capture lifecycle
+completed, temporary artifacts were removed, and the media snapshot was
+unchanged. This validates controlled process-tree attribution only; it does
+not prove exclusion thresholds, reboot/PID-reuse behavior beyond the focused
+regression, or physical latency.
