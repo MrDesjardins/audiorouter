@@ -32,6 +32,7 @@ const MAX_SESSION_LIST_ITEMS: usize = 500;
 const MAX_GRAPH_HISTORY_ITEMS: usize = 100;
 const MAX_RECORDING_LIST_ITEMS: usize = 500;
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
+const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
@@ -308,7 +309,7 @@ fn method_input_schema(name: &str) -> Value {
         "virtualDevices.list" => object_schema(
             json!({
                 "cursor": { "type": ["string", "null"], "minLength": 1 },
-                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_VIRTUAL_DEVICE_LIST_ITEMS }
             }),
             &[],
         ),
@@ -1078,7 +1079,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "items": { "type": "array", "items": virtual_device_item_schema() },
+                        "items": { "type": "array", "maxItems": MAX_VIRTUAL_DEVICE_LIST_ITEMS, "items": virtual_device_item_schema() },
                         "nextCursor": { "type": ["string", "null"] }
                     },
                     "required": ["items", "nextCursor"],
@@ -5158,7 +5159,7 @@ impl ControlPlane {
             })
             .transpose()?;
         let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
-        if !(1..=500).contains(&limit) {
+        if !(1..=MAX_VIRTUAL_DEVICE_LIST_ITEMS as u64).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
             ));
@@ -6200,6 +6201,20 @@ mod tests {
             recovery["outputSchema"]["properties"]["checkpoint"]["properties"]["pauses"]
                 ["maxItems"],
             audiorouter_recording::MAX_CHECKPOINT_PAUSES
+        );
+        let virtual_devices = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "virtualDevices.list")
+            .unwrap();
+        assert_eq!(
+            virtual_devices["outputSchema"]["oneOf"][1]["properties"]["items"]["maxItems"],
+            MAX_VIRTUAL_DEVICE_LIST_ITEMS
+        );
+        assert_eq!(
+            virtual_devices["inputSchema"]["properties"]["limit"]["maximum"],
+            MAX_VIRTUAL_DEVICE_LIST_ITEMS
         );
         assert!(description["events"]["stateCategories"]
             .as_array()

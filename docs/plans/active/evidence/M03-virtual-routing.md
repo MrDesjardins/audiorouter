@@ -282,3 +282,9 @@ Inactive capture now drains and rejects queued blocks before applying the
 generation filter, preserving the bridge's fail-silent shutdown contract even
 if a consumer races deactivation. The 49-test engine suite and strict Clippy
 remain green; no live endpoint is opened.
+## Virtual-device inventory page bound (2026-09-07)
+
+The read-only `virtualDevices.list` contract now shares a 500-item page bound
+across input validation, runtime truncation, and discovery schema metadata.
+Control tests (86), strict Clippy, and documentation validation pass. This
+does not create endpoints or claim managed-driver lifecycle functionality.
