@@ -559,6 +559,16 @@ snapshot, and removes the executable and generated object. The authorized
 This is repeatable event-path evidence; it does not claim audible routing,
 physical latency, driver behavior, or persistent configuration changes.
 
+## Current-head process-tree exclusion (2026-09-07)
+
+The authorized `process-capture-exclude` probe was rerun against the current
+test process. Process-loopback activation, 44.1 kHz PCM initialization, event
+registration, capture start, and cleanup all returned success; the stream read
+50 packets/22,050 frames with 15,217 nonzero payload bytes and no silent
+packets. Temporary outputs were removed. This qualifies the documented single
+target-tree exclusion mode only; arbitrary multi-process exclusion, PID reuse,
+and production route supervision remain separate gates.
+
 ## Current-head controlled process attribution (2026-09-07)
 
 The authorized `process-attribution` probe was rerun with a disposable child
