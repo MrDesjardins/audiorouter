@@ -12,6 +12,18 @@ signing mode changed, and no plugin/startup registration or machine audio
 configuration changed. Production driver ownership, signing, installer,
 clean-machine, physical-latency, and manual UI/accessibility gates remain open.
 
+## Safe-chain requalification after durable journal hardening (2026-09-08)
+
+The guarded `tests/acceptance/safe-all.ps1` chain completed at the current
+`719f0a8` head after the durable plan, plugin-state, enrollment, and
+idempotency-boundary changes. Native compile/inventory and disposable SysVAD
+x64 package/API qualification completed, followed by the repository's
+portable M01–M08 checks and documentation validation; temporary outputs and
+checkouts were removed. No driver was installed or loaded, signing mode and
+startup/plugin registration were unchanged, and no machine audio
+configuration was changed. Production driver, signing, installer,
+clean-machine, physical-latency, and manual UI gates remain open.
+
 ## Release artifact completeness (2026-09-08)
 
 `verify-artifacts.ps1` now requires the complete unsigned preparation set:
