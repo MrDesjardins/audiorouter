@@ -772,3 +772,12 @@ lifecycle cleanup succeeded and defaults, volume, mute, privacy, drivers,
 signing, startup configuration, and media state were unchanged. This confirms
 digital signal transfer only; it is not calibrated physical latency or
 managed-driver/application compatibility evidence.
+
+## Native process-loopback exclusion recheck (2026-09-08)
+
+The bounded native exclusion-mode acceptance passed for 250 ms and captured
+11,025 frames while excluding a disposable child process tree from the
+selected process-loopback source. Child cleanup, stream stop/reset, and the
+media-state snapshot completed successfully. This validates the API mode and
+lifecycle only; it does not establish a full cross-process rejection
+threshold, production-driver behavior, or physical latency.
