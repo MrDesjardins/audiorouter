@@ -1028,12 +1028,15 @@ impl Storage {
     ) -> Result<(), StorageError> {
         validate_plan_id(id.as_str())?;
         self.prune_expired_pending_plans()?;
-        let live_count: usize = self.connection.query_row(
-            "SELECT COUNT(*) FROM virtual_device_plans
-             WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
-            [id.as_str()],
-            |row| row.get::<_, i64>(0),
-        )? as usize;
+        let live_count = checked_sqlite_count(
+            self.connection.query_row(
+                "SELECT COUNT(*) FROM virtual_device_plans
+                 WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
+                [id.as_str()],
+                |row| row.get::<_, i64>(0),
+            )?,
+            "virtual-device plans",
+        )?;
         if live_count >= MAX_PENDING_PLAN_RECORDS {
             return Err(StorageError::InvalidPlan(
                 "pending virtual-device plan inventory exceeds 100 items".into(),
@@ -1092,12 +1095,15 @@ impl Storage {
     ) -> Result<(), StorageError> {
         validate_plan_id(id.as_str())?;
         self.prune_expired_pending_plans()?;
-        let live_count: usize = self.connection.query_row(
-            "SELECT COUNT(*) FROM startup_plans
-             WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
-            [id.as_str()],
-            |row| row.get::<_, i64>(0),
-        )? as usize;
+        let live_count = checked_sqlite_count(
+            self.connection.query_row(
+                "SELECT COUNT(*) FROM startup_plans
+                 WHERE expires_at > strftime('%s', 'now') AND id <> ?1",
+                [id.as_str()],
+                |row| row.get::<_, i64>(0),
+            )?,
+            "startup plans",
+        )?;
         if live_count >= MAX_PENDING_PLAN_RECORDS {
             return Err(StorageError::InvalidPlan(
                 "startup plan inventory exceeds 100 items".into(),

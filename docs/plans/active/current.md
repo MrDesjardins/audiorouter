@@ -59,6 +59,13 @@ after restart before inserting a new plan, while preserving explicit same-ID
 replacement at the storage API boundary. Control tests (95), strict Clippy,
 and formatting pass; no audio or machine configuration was accessed.
 
+Closed an M01/SEC-12 persistence conversion gap: pending startup and
+virtual-device plan inventory counts now use checked SQLite-to-`usize`
+conversion instead of unchecked casts. This keeps malformed count values
+fail-closed at the same storage boundary as other bounded inventories. Storage
+tests (80), strict Clippy, and formatting pass; no audio or machine
+configuration was accessed.
+
 ## Fan-out topology safety (2026-09-08)
 
 Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out

@@ -38,6 +38,15 @@ the storage layer's intentional replacement behavior is unchanged. Control
 coverage (95), strict Clippy, formatting, and documentation validation pass.
 No audio or machine configuration was accessed.
 
+## 2026-09-08 - Checked pending-plan inventory counts
+
+Pending startup and virtual-device plan writes now convert SQLite `COUNT(*)`
+results through the shared checked count helper rather than an unchecked cast
+to `usize`. The bounded-inventory behavior is unchanged for valid databases,
+while malformed or unrepresentable counts fail closed. Storage coverage (80),
+strict Clippy, formatting, and documentation validation pass; no audio or
+machine configuration was accessed.
+
 ## 2026-09-08 - Durable graph-plan expiry hardening
 
 The durable `graph.commit` rehydration path now rejects expired or
