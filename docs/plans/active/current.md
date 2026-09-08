@@ -49,14 +49,15 @@ formatting pass; no audio or machine configuration was accessed.
 Closed an M01/GRAPH-03 restart collision: a storage-backed controller now
 advances its generated graph-plan counter past retained durable `plan-N` IDs.
 This prevents a new plan after restart from replacing an older uncommitted
-candidate. The restart regression verifies `plan-1` and `plan-2` coexist;
-control tests (95), strict Clippy, and formatting pass without audio or
+candidate. The restart regression verifies `plan-1` and `plan-2` coexist, and
+a deterministic allocator regression covers both timestamped plan families;
+control tests (96), strict Clippy, and formatting pass without audio or
 machine configuration access.
 
 Closed an M01/M03 persistence-safety gap in timestamped pending-plan
 allocation: startup and virtual-device plans now skip IDs already retained
 after restart before inserting a new plan, while preserving explicit same-ID
-replacement at the storage API boundary. Control tests (95), strict Clippy,
+replacement at the storage API boundary. Control tests (96), strict Clippy,
 and formatting pass; no audio or machine configuration was accessed.
 
 Closed an M01/SEC-12 persistence conversion gap: pending startup and

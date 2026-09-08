@@ -94,6 +94,30 @@ fn unix_epoch_millis() -> u128 {
         .as_millis()
 }
 
+fn allocate_timestamped_plan_id<F>(
+    prefix: &str,
+    timestamp_millis: u128,
+    counter: &mut u64,
+    is_occupied: F,
+    exhausted_message: &'static str,
+) -> Result<EntityId, ControlError>
+where
+    F: Fn(&EntityId) -> bool,
+{
+    loop {
+        let current = *counter;
+        let plan_id = EntityId::new(format!("{prefix}-{timestamp_millis}-{current}"));
+        if !is_occupied(&plan_id) {
+            *counter = current.saturating_add(1);
+            return Ok(plan_id);
+        }
+        if current == u64::MAX {
+            return Err(ControlError::InvalidRequest(exhausted_message.into()));
+        }
+        *counter += 1;
+    }
+}
+
 fn remaining_persisted_plan_duration(
     expires_at: i64,
     now: i64,
@@ -5127,20 +5151,14 @@ impl ControlPlane {
                 "too many pending startup plans".into(),
             ));
         }
-        let plan_id = loop {
-            let counter = self.next_startup_plan;
-            let plan_id = EntityId::new(format!("startup-plan-{}-{counter}", unix_epoch_millis()));
-            if !self.startup_plans.contains_key(&plan_id) {
-                self.next_startup_plan = counter.saturating_add(1);
-                break plan_id;
-            }
-            if counter == u64::MAX {
-                return Err(ControlError::InvalidRequest(
-                    "startup plan ID space is exhausted".into(),
-                ));
-            }
-            self.next_startup_plan += 1;
-        };
+        let timestamp_millis = unix_epoch_millis();
+        let plan_id = allocate_timestamped_plan_id(
+            "startup-plan",
+            timestamp_millis,
+            &mut self.next_startup_plan,
+            |id| self.startup_plans.contains_key(id),
+            "startup plan ID space is exhausted",
+        )?;
         self.startup_plans.insert(
             plan_id.clone(),
             (enabled, Instant::now() + VIRTUAL_DEVICE_PLAN_TTL),
@@ -5230,20 +5248,14 @@ impl ControlPlane {
                 "too many pending virtual-device plans".into(),
             ));
         }
-        let plan_id = loop {
-            let counter = self.next_virtual_bus_plan;
-            let plan_id = EntityId::new(format!("virtual-plan-{}-{counter}", unix_epoch_millis()));
-            if !self.virtual_bus_plans.contains_key(&plan_id) {
-                self.next_virtual_bus_plan = counter.saturating_add(1);
-                break plan_id;
-            }
-            if counter == u64::MAX {
-                return Err(ControlError::InvalidRequest(
-                    "virtual-device plan ID space is exhausted".into(),
-                ));
-            }
-            self.next_virtual_bus_plan += 1;
-        };
+        let timestamp_millis = unix_epoch_millis();
+        let plan_id = allocate_timestamped_plan_id(
+            "virtual-plan",
+            timestamp_millis,
+            &mut self.next_virtual_bus_plan,
+            |id| self.virtual_bus_plans.contains_key(id),
+            "virtual-device plan ID space is exhausted",
+        )?;
         let expires_at = unix_epoch_seconds() + VIRTUAL_DEVICE_PLAN_TTL.as_secs() as i64;
         self.virtual_bus_plans.insert(
             plan_id.clone(),
@@ -5857,6 +5869,37 @@ fn application_error_data(code: &str) -> Value {
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
+
+    #[test]
+    fn timestamped_plan_id_allocator_skips_collisions_and_bounds_exhaustion() {
+        for prefix in ["startup-plan", "virtual-plan"] {
+            let occupied = EntityId::new(format!("{prefix}-123-1"));
+            let mut counter = 1;
+            let allocated = allocate_timestamped_plan_id(
+                prefix,
+                123,
+                &mut counter,
+                |id| id == &occupied,
+                "plan IDs exhausted",
+            )
+            .unwrap();
+            assert_eq!(allocated.as_str(), format!("{prefix}-123-2"));
+            assert_eq!(counter, 3);
+
+            counter = u64::MAX;
+            assert!(matches!(
+                allocate_timestamped_plan_id(
+                    prefix,
+                    123,
+                    &mut counter,
+                    |_| true,
+                    "plan IDs exhausted",
+                ),
+                Err(ControlError::InvalidRequest(message)) if message == "plan IDs exhausted"
+            ));
+            assert_eq!(counter, u64::MAX);
+        }
+    }
 
     #[test]
     fn persisted_plan_duration_rejects_expired_and_caps_far_future_values() {

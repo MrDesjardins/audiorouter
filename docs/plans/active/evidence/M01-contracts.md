@@ -35,7 +35,7 @@ Startup and virtual-device plan allocation now checks the hydrated in-memory
 pending-plan maps before choosing a timestamp-plus-counter ID. If a restart
 has retained that ID, the bounded counter advances and a new ID is selected;
 the storage layer's intentional replacement behavior is unchanged. Control
-coverage (95), strict Clippy, formatting, and documentation validation pass.
+coverage (96), strict Clippy, formatting, and documentation validation pass.
 No audio or machine configuration was accessed.
 
 ## 2026-09-08 - Checked pending-plan inventory counts
