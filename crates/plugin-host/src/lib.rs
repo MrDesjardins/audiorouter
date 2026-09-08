@@ -23,6 +23,7 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const MAX_PLUGIN_BYTES: u64 = 256 * 1024 * 1024;
+pub const MAX_PLUGIN_METADATA_BYTES: u64 = 1024 * 1024;
 pub const MAX_FAILURES_BEFORE_QUARANTINE: u32 = 3;
 pub const FAILURE_WINDOW: Duration = Duration::from_secs(10 * 60);
 pub const MAX_WORKER_FRAMES: usize = 2048;
@@ -288,6 +289,13 @@ fn is_sha256(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PluginMetadata {
+    pub vendor: Option<String>,
+    pub version: Option<String>,
+    pub class_ids: Vec<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PluginIdentity {
     pub path: PathBuf,
@@ -296,6 +304,7 @@ pub struct PluginIdentity {
     pub architecture: PeArchitecture,
     pub file_bytes: u64,
     pub sha256: String,
+    pub metadata: PluginMetadata,
 }
 
 impl PluginIdentity {
@@ -462,6 +471,11 @@ fn inspect_binary_with_control(
         return Err(InspectionError::UnsupportedArchitecture);
     }
     let digest = Sha256::digest(&bytes);
+    let plugin_metadata = if format == PluginFormat::Vst3 && canonical.is_dir() {
+        read_plugin_metadata(&canonical)
+    } else {
+        PluginMetadata::default()
+    };
     Ok(PluginIdentity {
         path: canonical,
         binary_path,
@@ -469,7 +483,105 @@ fn inspect_binary_with_control(
         architecture,
         file_bytes: metadata.len(),
         sha256: digest.iter().map(|byte| format!("{byte:02x}")).collect(),
+        metadata: plugin_metadata,
     })
+}
+
+fn read_plugin_metadata(bundle: &Path) -> PluginMetadata {
+    let path = bundle
+        .join("Contents")
+        .join("Resources")
+        .join("moduleinfo.json");
+    let Ok(file) = fs::File::open(path) else {
+        return PluginMetadata::default();
+    };
+    let mut bytes = Vec::new();
+    if file
+        .take(MAX_PLUGIN_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .is_err()
+        || bytes.len() as u64 > MAX_PLUGIN_METADATA_BYTES
+    {
+        return PluginMetadata::default();
+    }
+    let normalized = strip_json_trailing_commas(&bytes);
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&normalized) else {
+        return PluginMetadata::default();
+    };
+    let vendor = value
+        .get("Factory Info")
+        .and_then(|info| info.get("Vendor"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 128)
+        .map(str::to_owned);
+    let version = value
+        .get("Version")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 128)
+        .map(str::to_owned);
+    let mut class_ids = Vec::new();
+    if let Some(entries) = value
+        .get("Compatibility")
+        .and_then(serde_json::Value::as_array)
+    {
+        for entry in entries {
+            let Some(id) = entry.get("New").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            if id.len() <= 32
+                && class_ids.len() < 256
+                && !class_ids.iter().any(|existing| existing == id)
+            {
+                class_ids.push(id.to_owned());
+            }
+        }
+    }
+    PluginMetadata {
+        vendor,
+        version,
+        class_ids,
+    }
+}
+
+fn strip_json_trailing_commas(bytes: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(bytes.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if in_string {
+            result.push(byte);
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if byte == b'"' {
+            in_string = true;
+            result.push(byte);
+            index += 1;
+            continue;
+        }
+        if byte == b',' {
+            let mut next = index + 1;
+            while next < bytes.len() && bytes[next].is_ascii_whitespace() {
+                next += 1;
+            }
+            if next < bytes.len() && matches!(bytes[next], b'}' | b']') {
+                index += 1;
+                continue;
+            }
+        }
+        result.push(byte);
+        index += 1;
+    }
+    result
 }
 
 fn resolve_binary_path(path: &Path) -> Result<PathBuf, InspectionError> {
@@ -2850,6 +2962,21 @@ mod tests {
         fs::create_dir_all(&binary_dir).unwrap();
         let binary = binary_dir.join("effect.vst3");
         fs::write(&binary, pe_x64()).unwrap();
+        let resources = bundle.join("Contents").join("Resources");
+        fs::create_dir_all(&resources).unwrap();
+        fs::write(
+            resources.join("moduleinfo.json"),
+            br#"{
+                "Name": "fixture",
+                "Version": "1.2.3",
+                "Factory Info": { "Vendor": "Example Vendor", },
+                "Compatibility": [
+                    { "New": "ABCDEF0123456789ABCDEF0123456789", },
+                    { "New": "ABCDEF0123456789ABCDEF0123456789", },
+                ],
+            }"#,
+        )
+        .unwrap();
         let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
         assert_eq!(identity.path, fs::canonicalize(bundle).unwrap());
         assert_eq!(identity.binary_path, fs::canonicalize(binary).unwrap());
@@ -2857,6 +2984,9 @@ mod tests {
             identity.compatibility(),
             PluginCompatibility::SupportedVst3X64
         );
+        assert_eq!(identity.metadata.vendor.as_deref(), Some("Example Vendor"));
+        assert_eq!(identity.metadata.version.as_deref(), Some("1.2.3"));
+        assert_eq!(identity.metadata.class_ids.len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -3043,6 +3173,7 @@ mod tests {
             architecture: PeArchitecture::X64,
             file_bytes: 1,
             sha256: "0".repeat(64),
+            metadata: Default::default(),
         };
         let now = Instant::now();
         let mut supervisor = WorkerSupervisor::new();
@@ -3069,6 +3200,7 @@ mod tests {
             architecture: PeArchitecture::X64,
             file_bytes: 1,
             sha256: "0".repeat(64),
+            metadata: Default::default(),
         };
         let start = Instant::now();
         let mut supervisor = WorkerSupervisor::new();
@@ -3207,6 +3339,7 @@ mod tests {
             architecture: PeArchitecture::X64,
             file_bytes: 1,
             sha256: "0".repeat(64),
+            metadata: Default::default(),
         };
         assert_eq!(
             identity.compatibility(),

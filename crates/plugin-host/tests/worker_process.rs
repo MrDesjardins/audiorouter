@@ -65,6 +65,7 @@ fn supervised_worker_refreshes_heartbeat_on_successful_processing() {
         architecture: PeArchitecture::X64,
         file_bytes: 1,
         sha256: hash,
+        metadata: Default::default(),
     };
     let start = Instant::now();
     let mut worker = SupervisedWorkerProcess::spawn(worker_path, &identity, 1, start)
@@ -125,6 +126,7 @@ fn supervised_worker_fails_closed_after_heartbeat_timeout() {
         architecture: PeArchitecture::X64,
         file_bytes: 1,
         sha256: hash,
+        metadata: Default::default(),
     };
     let start = Instant::now();
     let mut worker = SupervisedWorkerProcess::spawn(worker_path, &identity, 1, start)
@@ -186,6 +188,7 @@ fn supervised_worker_accepts_outer_process_failure_reports() {
         architecture: PeArchitecture::X64,
         file_bytes: 1,
         sha256: hash,
+        metadata: Default::default(),
     };
     let start = Instant::now();
     let mut worker = SupervisedWorkerProcess::spawn(worker_path, &identity, 1, start)
@@ -229,6 +232,7 @@ fn supervised_worker_replacement_preserves_quarantine_history() {
         architecture: PeArchitecture::X64,
         file_bytes: 1,
         sha256: hash,
+        metadata: Default::default(),
     };
     let start = Instant::now();
     let mut worker = SupervisedWorkerProcess::spawn(worker_path.clone(), &identity, 1, start)
@@ -304,6 +308,7 @@ fn disposable_worker_process_round_trips_shared_audio_frames() {
         architecture: PeArchitecture::X64,
         file_bytes: 1,
         sha256: hash,
+        metadata: Default::default(),
     };
     let start = Instant::now();
     let mut worker =

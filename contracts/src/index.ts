@@ -89,6 +89,9 @@ export interface PluginScanEntry {
     architecture: "x64" | "x86" | "arm64" | "unknown";
     fileBytes: number;
     sha256: string;
+    vendor: string | null;
+    version: string | null;
+    classIds: string[];
     compatibility: "supportedVst3X64" | "unsupportedFormat";
   } | null;
   error: string | null;

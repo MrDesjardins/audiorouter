@@ -1065,9 +1065,12 @@ fn method_output_schema(name: &str) -> Value {
                                     "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
                                     "fileBytes": { "type": "integer", "minimum": 1, "maximum": audiorouter_plugin_host::MAX_PLUGIN_BYTES },
                                     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                                    "vendor": { "type": ["string", "null"], "maxLength": 128 },
+                                    "version": { "type": ["string", "null"], "maxLength": 128 },
+                                    "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
                                     "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
                                 },
-                                "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "compatibility"],
+                                "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                                 "additionalProperties": false
                             },
                             "error": { "type": ["string", "null"] },
@@ -1094,9 +1097,12 @@ fn method_output_schema(name: &str) -> Value {
                         "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
                         "fileBytes": { "type": "integer", "minimum": 1, "maximum": audiorouter_plugin_host::MAX_PLUGIN_BYTES },
                         "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                        "vendor": { "type": ["string", "null"], "maxLength": 128 },
+                        "version": { "type": ["string", "null"], "maxLength": 128 },
+                        "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
                         "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
                     },
-                    "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "compatibility"],
+                    "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                     "additionalProperties": false
                 },
                 "error": { "type": ["string", "null"] },
@@ -4942,6 +4948,9 @@ impl ControlPlane {
                     },
                     "fileBytes": identity.file_bytes,
                     "sha256": identity.sha256,
+                    "vendor": identity.metadata.vendor,
+                    "version": identity.metadata.version,
+                    "classIds": identity.metadata.class_ids,
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
@@ -5034,6 +5043,9 @@ impl ControlPlane {
                     },
                     "fileBytes": identity.file_bytes,
                     "sha256": identity.sha256,
+                    "vendor": identity.metadata.vendor,
+                    "version": identity.metadata.version,
+                    "classIds": identity.metadata.class_ids,
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
@@ -6876,11 +6888,15 @@ mod tests {
                 .as_array()
                 .unwrap()
                 .len(),
-            7
+            10
         );
         assert_eq!(
             method["outputSchema"]["properties"]["identity"]["properties"]["fileBytes"]["maximum"],
             audiorouter_plugin_host::MAX_PLUGIN_BYTES
+        );
+        assert_eq!(
+            method["outputSchema"]["properties"]["identity"]["properties"]["classIds"]["maxItems"],
+            256
         );
         assert!(method["outputSchema"]["required"]
             .as_array()

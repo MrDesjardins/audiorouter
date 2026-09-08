@@ -26,10 +26,12 @@ plugin-specific incompatibility rather than converted into success.
 ## Inspection and execution boundary
 
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,
-return bounded identity/compatibility metadata, and do not load or execute
-plugin code. Directory scan roots and candidate binaries are checked against
-canonical/reparse-point boundaries. Invalid candidates remain visible as
-inspection errors.
+return bounded identity/compatibility metadata, including best-effort VST3
+vendor, version, and class IDs read from `moduleinfo.json`, and do not load or
+execute plugin code. Directory scan roots and candidate binaries are checked
+against canonical/reparse-point boundaries. Invalid candidates remain visible
+as inspection errors. Missing or malformed optional module metadata leaves
+those fields empty and does not turn a binary into a compatibility claim.
 
 The future worker path has bounded frames, deadlines, heartbeats, shared-memory
 layout checks, failure quarantine, and process cleanup. Full OS-level

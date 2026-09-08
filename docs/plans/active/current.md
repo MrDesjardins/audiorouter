@@ -47,6 +47,12 @@ standard SDK validator and loader checks. The `-SkipBuild` requalification
 passed on the installed VS/SDK toolchain; generated loader artifacts were
 removed by the wrapper's `finally` cleanup.
 
+Closed an M06/PLUG-02/PLUG-06 discovery gap: bounded VST3 bundle metadata now
+reports optional vendor, version, and deduplicated class IDs through the Rust,
+JSON-RPC, and TypeScript contracts without loading plugin code. A trailing-
+comma-tolerant fixture regression, plugin-host/control tests (39/90), strict
+Clippy, contracts typecheck/drift, and documentation validation pass.
+
 ## Graph-plan retention bound (2026-09-08)
 
 Closed an M01/SEC-12 memory-retention gap in `GraphStore`: expired plans are

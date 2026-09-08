@@ -1077,6 +1077,24 @@ loader passed, followed by successful loader runs for mda class indices 0, 4,
 6, 8, and 10. The wrapper removed the generated executable and object after
 the run; no system plugin registration or audio configuration was changed.
 
+## Bounded VST3 bundle metadata (2026-09-08)
+
+The scanner now reads at most `MAX_PLUGIN_METADATA_BYTES` (1 MiB) from an
+optional VST3 `Contents/Resources/moduleinfo.json` file. It tolerates the
+trailing commas emitted by the official SDK's module-info tool, extracts
+bounded vendor/version strings, and retains at most 256 deduplicated class
+IDs. Missing or malformed optional metadata is represented by empty fields;
+the scanner still relies on the PE and bundle checks for compatibility and
+never loads plugin code.
+
+The metadata is exposed as `vendor`, `version`, and `classIds` in both
+`plugins.scan` and `plugins.inspect`, with matching Rust output schemas and
+TypeScript contracts. The fixture regression verifies extraction, duplicate
+class-ID removal, and the supported x64 identity without creating a native
+plugin process. Plugin-host (39) and control (90) tests, strict Clippy,
+contracts typecheck/drift, formatting, diff checks, and documentation
+validation passed. No audio or machine configuration was accessed.
+
 ## SDK installer provenance acceptance (2026-09-08)
 
 `tests/acceptance/m06-sdk-installer.ps1` passed: a disposable checkout with
