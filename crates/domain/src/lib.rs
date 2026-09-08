@@ -1917,6 +1917,7 @@ pub enum StoreError {
     InvalidGraph(Vec<ValidationError>),
     RevisionConflict { expected: u64, actual: u64 },
     EmptyIdempotencyKey,
+    IdempotencyKeyTooLong,
     NoUndoAvailable,
     IdempotencyConflict,
 }
@@ -2222,6 +2223,9 @@ impl GraphStore {
     ) -> Result<CommitResult, StoreError> {
         if idempotency_key.is_empty() {
             return Err(StoreError::EmptyIdempotencyKey);
+        }
+        if idempotency_key.len() > MAX_ENTITY_ID_BYTES {
+            return Err(StoreError::IdempotencyKeyTooLong);
         }
         if let Some((result, committed_plan_id)) = self.committed_keys.get(idempotency_key) {
             if committed_plan_id.as_str() != plan_id.as_str() {
@@ -3302,6 +3306,10 @@ mod tests {
         let mut candidate = original.clone();
         candidate.name = "updated".into();
         let plan = store.plan_graph(&original.id, 0, candidate).unwrap();
+        assert_eq!(
+            store.commit_graph(&plan, 0, &"k".repeat(MAX_ENTITY_ID_BYTES + 1)),
+            Err(StoreError::IdempotencyKeyTooLong)
+        );
         let committed = store.commit_graph(&plan, 0, "operation-1").unwrap();
         assert_eq!(committed.revision, 1);
         assert!(!committed.idempotent_replay);

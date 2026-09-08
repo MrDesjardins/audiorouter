@@ -5686,6 +5686,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
             audiorouter_domain::StoreError::InvalidGraph(_) => "invalidGraph",
             audiorouter_domain::StoreError::RevisionConflict { .. } => "revisionConflict",
             audiorouter_domain::StoreError::EmptyIdempotencyKey => "invalidRequest",
+            audiorouter_domain::StoreError::IdempotencyKeyTooLong => "invalidRequest",
             audiorouter_domain::StoreError::NoUndoAvailable => "noUndoAvailable",
             audiorouter_domain::StoreError::IdempotencyConflict => "idempotencyConflict",
         },

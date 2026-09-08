@@ -9,6 +9,14 @@ successive revisions, verifies the oldest key is no longer retained, and
 confirms the newest key still replays. Domain coverage is 56 tests with strict
 Clippy; durable control-plane replay remains backed by SQLite.
 
+## 2026-09-08 - Graph idempotency-key boundary
+
+Direct `GraphStore::commit_graph` calls now reject idempotency keys over the
+shared 128-byte identity budget before consulting or mutating the replay map.
+This closes the lower-layer bypass left by control-schema validation. The
+domain regression covers rejection and confirms valid replay behavior remains
+unchanged; control and workspace checks remain green.
+
 ## Scope and boundary
 
 This report covers the portable M01 foundation implemented while M00 Windows capture, process-loopback, physical-latency, and managed-driver gates remain blocked. It does not claim a Windows named pipe, real audio activation, driver provisioning, or realtime behavior.

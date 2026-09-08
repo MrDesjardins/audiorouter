@@ -34,6 +34,14 @@ ledger entries; storage-backed control retains durable replay through SQLite.
 Domain coverage is 56 tests with strict Clippy; no audio or machine
 configuration was accessed.
 
+## Graph idempotency-key boundary (2026-09-08)
+
+Closed an M01/SEC-12 lower-layer validation gap: direct `GraphStore` commits
+now reject empty or over-128-byte idempotency keys before lookup or insertion,
+matching the control and SQLite boundaries. Domain and control regressions,
+workspace tests, and strict Clippy pass; no audio or machine configuration was
+accessed.
+
 ## Ephemeral-plan hydration bounds (2026-09-08)
 
 Closed an M03/M07/SEC-12 persistence gap: startup and pending virtual-device
