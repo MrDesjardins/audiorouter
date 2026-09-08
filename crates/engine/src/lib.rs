@@ -1720,7 +1720,13 @@ pub struct CallbackMetrics {
     xruns: AtomicU64,
     processing_time_ns_total: AtomicU64,
     processing_time_ns_max: AtomicU64,
+    processing_time_buckets: [AtomicU64; PROCESSING_TIME_BUCKET_COUNT],
 }
+
+/// Fixed logarithmic processing-time histogram size. Bucket zero represents a
+/// zero-nanosecond observation; later buckets cover successive powers of two
+/// nanoseconds, with the final bucket also containing larger values.
+pub const PROCESSING_TIME_BUCKET_COUNT: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BlockMeterSnapshot {
@@ -1812,6 +1818,12 @@ impl CallbackMetrics {
         self.processing_time_ns_max.load(Ordering::Relaxed)
     }
 
+    /// Return a bounded histogram snapshot for off-thread percentile
+    /// calculation. Each observation increments exactly one bucket.
+    pub fn processing_time_histogram(&self) -> [u64; PROCESSING_TIME_BUCKET_COUNT] {
+        std::array::from_fn(|index| self.processing_time_buckets[index].load(Ordering::Relaxed))
+    }
+
     pub fn record_clipping(&self, samples: usize) {
         self.clipped_samples
             .fetch_add(samples as u64, Ordering::Relaxed);
@@ -1827,6 +1839,16 @@ impl CallbackMetrics {
             Ordering::Relaxed,
             Ordering::Relaxed,
             |value| Some(value.saturating_add(nanos)),
+        );
+        let bucket = if nanos == 0 {
+            0
+        } else {
+            ((u64::BITS - nanos.leading_zeros()) as usize).min(PROCESSING_TIME_BUCKET_COUNT - 1)
+        };
+        let _ = self.processing_time_buckets[bucket].fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |value| Some(value.saturating_add(1)),
         );
         let mut current = self.processing_time_ns_max.load(Ordering::Relaxed);
         while nanos > current {
@@ -2736,6 +2758,7 @@ pub struct SchedulerTelemetry {
     pub xruns: u64,
     pub processing_time_ns_total: u64,
     pub processing_time_ns_max: u64,
+    pub processing_time_histogram: [u64; PROCESSING_TIME_BUCKET_COUNT],
     pub active_generation: Option<RuntimeGeneration>,
 }
 
@@ -2799,6 +2822,7 @@ impl RealtimeScheduler {
             xruns: self.processor.metrics().xruns(),
             processing_time_ns_total: self.processor.metrics().processing_time_ns_total(),
             processing_time_ns_max: self.processor.metrics().processing_time_ns_max(),
+            processing_time_histogram: self.processor.metrics().processing_time_histogram(),
             active_generation: self
                 .processor
                 .publication
@@ -3763,6 +3787,7 @@ mod tests {
         assert_eq!(telemetry.xruns, 0);
         assert!(telemetry.processing_time_ns_max > 0);
         assert!(telemetry.processing_time_ns_total >= telemetry.processing_time_ns_max);
+        assert_eq!(telemetry.processing_time_histogram.iter().sum::<u64>(), 1);
         assert_eq!(
             telemetry.active_generation,
             Some(RuntimeGeneration::new(21))
