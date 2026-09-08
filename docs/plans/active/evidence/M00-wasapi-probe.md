@@ -887,3 +887,9 @@ disposable child tree. Both completed child/stream cleanup, left no adjacent
 temporary object or repository `main.obj`, and changed no persistent audio
 configuration. This remains controlled process-loopback evidence, not a full
 cross-process isolation threshold or actual PID-reuse observation.
+
+The event-driven wrapper was also requalified on 2026-09-08: the selected
+VB-Audio endpoints completed the 250 ms lifecycle with 12,480 capture frames
+and 16,320 silent render frames. The adjacent object and repository `main.obj`
+were absent after cleanup, and the wrapper reported unchanged audio settings.
+This is shared-mode event lifecycle evidence only.

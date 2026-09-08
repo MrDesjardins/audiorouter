@@ -1684,3 +1684,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/CAP-06/CAP-07/SEC-12 process-wrapper requalification on 2026-09-08: guarded attribution and exclusion runs passed with 10,584/11,025 captured frames, full temporary-object cleanup, and unchanged persistent audio configuration. This remains controlled process-loopback evidence, not full isolation or PID-reuse evidence.
 - Next M00/M02/M03/ARCH-05 task: retain the process evidence while pursuing calibrated latency and managed endpoint-owned callback evidence after the production driver boundary exists.
+
+- Completed M00/CAP-01/CAP-02/ARCH-07 event-wrapper requalification on 2026-09-08: selected VB-Audio endpoints completed the bounded event lifecycle with 12,480 capture and 16,320 silent render frames; temporary and repository objects were absent afterward and settings were unchanged.
+- Next M00/M02/M03/ARCH-05 task: retain event lifecycle evidence while pursuing calibrated latency and managed endpoint-owned callback evidence after the production driver boundary exists.
