@@ -25,6 +25,7 @@ const MUTATION_RATE_PER_SECOND: f64 = 20.0;
 const MUTATION_BURST: f64 = 40.0;
 const MAX_CONTROL_VALUE_DEPTH: usize = 32;
 const MAX_CONTROL_STRING_BYTES: usize = 4096;
+const MAX_CONTROL_VALUE_COUNT: usize = 8192;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
@@ -5288,7 +5289,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
     let Some(params) = params else {
         return Ok(());
     };
-    validate_control_value_budget(params, 0)?;
+    let mut value_count = 0;
+    validate_control_value_budget(params, 0, &mut value_count)?;
     let Some(object) = params.as_object() else {
         return Err(ControlError::InvalidRequest(
             "method params must be an object".into(),
@@ -5372,7 +5374,19 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
     Ok(())
 }
 
-fn validate_control_value_budget(value: &Value, depth: usize) -> Result<(), ControlError> {
+fn validate_control_value_budget(
+    value: &Value,
+    depth: usize,
+    value_count: &mut usize,
+) -> Result<(), ControlError> {
+    *value_count = value_count.checked_add(1).ok_or_else(|| {
+        ControlError::InvalidRequest("method parameters exceed the value budget".into())
+    })?;
+    if *value_count > MAX_CONTROL_VALUE_COUNT {
+        return Err(ControlError::InvalidRequest(
+            "method parameters contain too many JSON values".into(),
+        ));
+    }
     if depth > MAX_CONTROL_VALUE_DEPTH {
         return Err(ControlError::InvalidRequest(
             "method parameters exceed the maximum JSON nesting depth".into(),
@@ -5386,14 +5400,14 @@ fn validate_control_value_budget(value: &Value, depth: usize) -> Result<(), Cont
         }
         Value::Array(values) => values
             .iter()
-            .try_for_each(|value| validate_control_value_budget(value, depth + 1)),
+            .try_for_each(|value| validate_control_value_budget(value, depth + 1, value_count)),
         Value::Object(values) => values.iter().try_for_each(|(key, value)| {
             if key.len() > MAX_CONTROL_STRING_BYTES {
                 return Err(ControlError::InvalidRequest(
                     "method parameter key exceeds the maximum length".into(),
                 ));
             }
-            validate_control_value_budget(value, depth + 1)
+            validate_control_value_budget(value, depth + 1, value_count)
         }),
         _ => Ok(()),
     }
@@ -6622,6 +6636,14 @@ mod tests {
             id: Some(json!(2)),
             method: "sessions.list".into(),
             params: Some(json!({ "cursor": "x".repeat(MAX_CONTROL_STRING_BYTES + 1) })),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
+
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "sessions.list".into(),
+            params: Some(json!({ "values": vec![json!(null); MAX_CONTROL_VALUE_COUNT] })),
         });
         assert_eq!(response.error.unwrap().code, -32602);
     }

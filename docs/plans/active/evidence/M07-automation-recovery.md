@@ -883,3 +883,11 @@ The locked workspace was then requalified at this change: 412 unit/integration
 tests and all doc-tests passed, workspace strict Clippy passed, and the
 documentation acceptance passed (51 Markdown files and 157 local links). No
 audio endpoint was opened and no driver or machine configuration was changed.
+
+The shared budget was subsequently extended with an 8,192-value ceiling for
+large shallow arrays and objects. The control regression covers this case and
+continues to pass with 85 tests, strict Clippy, formatting, and diff checks.
+The full locked workspace was requalified again: 412 unit/integration tests
+and all doc-tests passed, workspace strict Clippy passed, and documentation
+acceptance passed. These gates remain non-audio and do not modify machine
+configuration.
