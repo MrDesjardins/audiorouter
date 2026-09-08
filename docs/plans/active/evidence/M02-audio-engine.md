@@ -1051,3 +1051,15 @@ imposing that invalid ordering. Corrected validation passed PowerShell parsing,
 the five-second shared soak (1,878 graph blocks, zero xruns/overruns/deadlines),
 and the two-second routed run (96,384 routed frames, zero deadline misses and
 lateness). No persistent audio configuration changed.
+
+## Five-second soak regression and harness repair (2026-09-08)
+
+The initial five-second shared-adapter run exposed an acceptance-wrapper defect:
+the probe completed with 240,480 capture frames, 1,878 graph blocks, zero
+xruns/overruns/deadlines, but the wrapper rejected it because the absolute
+processing maximum (111,500 ns) exceeded the p99.9 upper bound (65,536 ns).
+That ordering is valid for a quantile with a rare tail. The shared and routed
+wrappers now validate histogram/sample accounting and totals without requiring
+the p99.9 bound to cover the maximum. PowerShell parsing, the corrected
+five-second shared run, and a corrected two-second routed run passed; no
+persistent audio configuration changed.

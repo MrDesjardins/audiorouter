@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `5f84347`, with the latest
+The latest validated implementation head is `3a4717d`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -28,6 +28,12 @@ scheduler deadline telemetry, and conservative p99.9 histogram bounds is
 implemented and regression-tested. The full locked workspace suite, guarded
 include/exclude process-loopback acceptance, and safe acceptance chain pass
 with unchanged media state.
+
+The latest acceptance-harness correction is now validated: a five-second
+shared soak that previously exposed the invalid p99.9-versus-maximum check
+passes after the fix, as does the routed wrapper. Histogram accounting,
+sample counts, and totals remain enforced; no persistent audio configuration
+changed.
 
 The complete elevated safe acceptance chain was requalified at pushed tree
 `9d6b267` on 2026-09-08 after M04 acceptance evidence was recorded. Native
