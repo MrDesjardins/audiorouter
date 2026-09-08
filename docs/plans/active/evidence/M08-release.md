@@ -367,3 +367,12 @@ No installer, driver, signing, or machine configuration action occurred.
 The acceptance wrapper now structurally validates `sbom.npm.json` as a
 nonempty CycloneDX 1.5 document and requires both npm provenance files in the
 manifest, in addition to their generic hash and exact-content checks.
+
+## Current-head unsigned release requalification (2026-09-07)
+
+The M08 acceptance wrapper passed at the current head. It built the locked
+optimized CLI, plugin worker, and UI bundle; generated and verified npm
+lockfile/CycloneDX provenance, manifest hashes, and UI archive contents;
+asserted unsigned driver/signing/installer blockers; and removed temporary
+output. No installer, driver, signing, plugin registration, or audio
+configuration action occurred.
