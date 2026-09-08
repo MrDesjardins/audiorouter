@@ -65,6 +65,15 @@ stopped/reset and temporary outputs removed. This is shared-mode adapter
 evidence, not managed-driver callback, physical-latency, or production-driver
 evidence.
 
+## WASAPI teardown hardening (2026-09-08)
+
+Hardened `SharedCapture`, `SharedRender`, and process-loopback teardown so
+`Reset` is attempted even when `Stop` reports an error, while local started
+state is cleared before the COM call. This preserves best-effort cleanup and
+prevents repeated stop attempts against a failed client. Windows-audio tests
+(29) and strict Clippy pass; guarded live adapter and routed runs also passed
+with unchanged media state. No persistent audio configuration was changed.
+
 ## Scheduler lifecycle queue invalidation (2026-09-08)
 
 Closed an M02/ARCH-04 generation-boundary gap in `RealtimeScheduler`: graph

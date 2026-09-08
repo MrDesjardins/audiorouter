@@ -1085,3 +1085,14 @@ zero deadline misses/lateness. Both wrappers stopped/reset streams, removed
 temporary outputs, and verified unchanged media/configuration state. This is
 shared-mode adapter evidence, not managed-driver callback or physical-latency
 evidence.
+
+## WASAPI teardown hardening (2026-09-08)
+
+All three WASAPI client types now attempt `Reset` after `Stop`, even if the
+stop call fails, and clear their local `started` flag before invoking COM.
+This closes a teardown/rollback hole without changing the endpoint selection
+or stream configuration. Windows-audio tests (29) and strict Clippy pass.
+The guarded shared adapter and explicitly selected VB-Audio routed smoke tests
+also passed after the change; each stopped/reset its streams and verified
+unchanged media/configuration state. This is lifecycle evidence, not managed
+driver or physical-latency evidence.

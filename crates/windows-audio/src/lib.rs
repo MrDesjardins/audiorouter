@@ -948,12 +948,17 @@ impl ProcessLoopbackCapture {
     }
 
     pub fn stop(&mut self) -> Result<(), AudioError> {
-        if self.started {
-            unsafe { self.client.Stop()? };
+        // Reset is a required cleanup attempt even when Stop reports a
+        // device/service failure. Clear local state first so Drop and a
+        // caller's retry cannot issue a second Stop against a lost client.
+        let stop_result = if self.started {
             self.started = false;
-        }
-        unsafe { self.client.Reset()? };
-        Ok(())
+            unsafe { self.client.Stop() }.map_err(AudioError::from)
+        } else {
+            Ok(())
+        };
+        let reset_result = unsafe { self.client.Reset() }.map_err(AudioError::from);
+        stop_result.and(reset_result)
     }
 }
 
@@ -1314,12 +1319,17 @@ impl SharedCapture {
     }
 
     pub fn stop(&mut self) -> Result<(), AudioError> {
-        if self.started {
-            unsafe { self.client.Stop()? };
+        // Reset is attempted after Stop regardless of Stop's result so a
+        // partial device failure cannot leave the client's queued state
+        // unreleased. The local flag is cleared before the COM call.
+        let stop_result = if self.started {
             self.started = false;
-        }
-        unsafe { self.client.Reset()? };
-        Ok(())
+            unsafe { self.client.Stop() }.map_err(AudioError::from)
+        } else {
+            Ok(())
+        };
+        let reset_result = unsafe { self.client.Reset() }.map_err(AudioError::from);
+        stop_result.and(reset_result)
     }
 }
 
@@ -1545,12 +1555,16 @@ impl SharedRender {
     }
 
     pub fn stop(&mut self) -> Result<(), AudioError> {
-        if self.started {
-            unsafe { self.client.Stop()? };
+        // Preserve best-effort reset semantics during teardown and avoid
+        // retaining a stale started flag after any Stop failure.
+        let stop_result = if self.started {
             self.started = false;
-        }
-        unsafe { self.client.Reset()? };
-        Ok(())
+            unsafe { self.client.Stop() }.map_err(AudioError::from)
+        } else {
+            Ok(())
+        };
+        let reset_result = unsafe { self.client.Reset() }.map_err(AudioError::from);
+        stop_result.and(reset_result)
     }
 }
 
