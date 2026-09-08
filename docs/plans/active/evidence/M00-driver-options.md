@@ -148,3 +148,16 @@ signability checks, and removed the exact temporary checkout with exit code 0.
 This validates the documented reproduction path; it remains reference-sample
 evidence only and performed no driver installation/loading, test-signing mode
 change, or machine audio configuration action.
+
+## 2026-09-07 — Current-head helper requalification
+
+The repository-local SDK installer provenance acceptance passed, followed by
+the pinned disposable SysVAD helper. Microsoft `Windows-driver-samples` at
+commit `197ba2156a60e2b76fcd4820bae594223e91a1e9` and WIL at
+`3c00e7f1d8cf9930bbb8e5be3ef0df65c84e8928` were checked out. The installed
+64-bit VS2026 MSBuild/WDK 10.0.28000.0 toolchain completed the full x64 Release
+solution, normal package/API validation, signability checks, and generated
+the driver, APO/INF, and `sysvad.cat` outputs. The exact temporary checkout
+and generated outputs were removed. The build's local automatic test signature
+is not production signing evidence; no driver was installed or loaded, test
+signing was not enabled, and no machine audio configuration changed.
