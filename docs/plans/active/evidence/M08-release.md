@@ -801,3 +801,10 @@ driver was installed or loaded, signing mode changed, plugin/startup entry
 registered, or machine audio configuration altered. Production driver ownership,
 signing, installer, clean-machine, physical-latency, native callback deadline,
 and manual UI gates remain open.
+
+## Locked workspace regression after SDK documentation (2026-09-08)
+
+The locked workspace regression passed with 466 unit/integration tests, all
+workspace doc-tests, strict Clippy using `-D warnings`, and documentation
+validation. This was a portable/build verification only; no driver, signing
+mode, plugin/startup registration, or machine audio configuration changed.

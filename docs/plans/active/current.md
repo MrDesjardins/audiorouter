@@ -337,6 +337,12 @@ documentation validation passed. Temporary outputs/checkouts were removed.
 Production driver, signing, installer, clean-machine, physical-latency,
 managed callback, and manual UI gates remain open.
 
+Revalidated the locked workspace after the SDK/setup documentation update:
+466 unit/integration tests, all workspace doc-tests, strict workspace Clippy
+with `-D warnings`, and the documentation acceptance passed. No driver,
+signing mode, plugin/startup registration, or machine audio configuration
+changed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
