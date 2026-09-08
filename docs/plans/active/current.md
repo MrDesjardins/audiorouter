@@ -46,6 +46,18 @@ including native read-only inventory and disposable SysVAD qualification. Its
 temporary outputs were removed and it did not install/load a driver or alter
 machine audio configuration.
 
+## Current handoff correction (2026-09-08)
+
+The older historical notes below that describe missing Visual Studio/WDK or
+deny live capture are superseded by the dated evidence above. The host now has
+the VS Community, Windows SDK, and WDK toolchain, and the user has explicitly
+authorized bounded live capture/render testing with rollback. Existing native
+lifecycle, process-loopback, event-driven, format, digital-loopback, and Rust
+adapter evidence has been requalified. Remaining safe evidence is calibrated
+physical latency and restart/PID-reuse behavior; the managed endpoint-owned
+driver, production callback, signing, installer, clean-machine, and manual UI
+gates remain open.
+
 ## Native lifecycle and process-attribution acceptance (2026-09-08)
 
 With explicit live-audio authorization, the guarded `m00-native-live.ps1`
@@ -1299,11 +1311,13 @@ Official Rogue Amoeba, Microsoft, Steinberg, Cockos, JSON-RPC, Tauri, and React 
 ## Next authorized implementation task
 
 Continue [M00](../../milestones/M00-feasibility.md) with the remaining
-non-destructive evidence: process-tree tone attribution, physical latency,
-restart/PID-reuse behavior, and the managed-driver prototype's production
-signing/integration review. Native activation, capture/render lifecycle, and
-process-loopback data-path probes are already recorded. No driver install,
-default change, or new capture stream is authorized by this plan.
+non-destructive evidence: calibrated physical latency and restart/PID-reuse
+behavior. Native activation, capture/render lifecycle, process-loopback
+include/exclude, event-driven, format, digital-loopback, and Rust adapter
+data-path probes are already recorded. Bounded live testing is authorized only
+with rollback and unchanged configuration; driver installation/loading,
+default changes, signing-mode changes, and production-driver claims remain
+outside this plan.
 
 ## M00 preparation checklist
 
