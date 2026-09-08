@@ -145,6 +145,20 @@ virtual-device plan maps are already expiry-pruned and capped, while the
 operation outcome and plugin inventory caches have independent bounds. No
 redundant retention change was made.
 
+## Global session cardinality bound (2026-09-08)
+
+Closed an M01/SEC-12 resource-retention gap: the domain store and both direct
+SQLite session-write paths now cap a backend at 128 session records. The
+bound applies to new IDs, while replacing an existing ID remains valid; this
+prevents empty sessions from bypassing the aggregate node/edge budgets.
+Startup hydration uses the same domain bound and therefore fails closed on an
+oversized persisted inventory. Discovery advertises
+`system.describe.limits.maxSessionsGlobal`. Domain, storage, and control
+regressions cover overflow, replacement, journal-atomic writes, and bounded
+startup restoration. Domain/storage/control tests (57/76/92), strict Clippy,
+full workspace all-features tests, formatting, diff checks, and documentation
+validation pass. No audio or machine configuration was accessed.
+
 ## Safe acceptance requalification after SDK/WDK verification (2026-09-08)
 
 The complete `tests/acceptance/safe-all.ps1` chain passed at `d9e20682` with

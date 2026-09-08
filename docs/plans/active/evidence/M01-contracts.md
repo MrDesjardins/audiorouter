@@ -1,5 +1,17 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-08 - Global session cardinality bound
+
+The domain `GraphStore` and both direct SQLite session-write paths now enforce
+the shared `MAX_SESSIONS_GLOBAL` budget of 128 records. New IDs are rejected
+at capacity while replacement of an existing ID remains allowed. The journal
+atomic path applies the same check before writing history or the outcome.
+Startup hydration therefore cannot admit more records than the domain store
+allows, and `system.describe` exposes `maxSessionsGlobal` for adapters.
+Domain, storage, and control regressions cover overflow, replacement,
+journaled writes, and startup restoration. No audio or machine configuration
+was accessed.
+
 ## 2026-09-08 - In-memory graph idempotency retention bound
 
 The non-durable `GraphStore` now retains at most 100 completed graph commit

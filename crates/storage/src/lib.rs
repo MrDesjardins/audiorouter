@@ -1180,6 +1180,23 @@ impl Storage {
         let revision = i64::try_from(session.revision)
             .map_err(|_| StorageError::InvalidSession("session revision is too large".into()))?;
         let transaction = self.connection.unchecked_transaction()?;
+        let existing: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)",
+            params![session.id.as_str()],
+            |row| row.get(0),
+        )?;
+        if !existing {
+            let count: i64 =
+                transaction.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
+            if checked_sqlite_count(count, "sessions")? >= audiorouter_domain::MAX_SESSIONS_GLOBAL {
+                return Err(StorageError::InvalidSession(
+                    format!(
+                        "global session limit reached ({})",
+                        audiorouter_domain::MAX_SESSIONS_GLOBAL
+                    ),
+                ));
+            }
+        }
         transaction.execute(
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
             params![session.id.as_str(), revision, &document],
@@ -2572,6 +2589,23 @@ impl Storage {
         self.prune_expired_journal()?;
         self.ensure_journal_capacity(key)?;
         let transaction = self.connection.unchecked_transaction()?;
+        let existing: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?1)",
+            params![session.id.as_str()],
+            |row| row.get(0),
+        )?;
+        if !existing {
+            let count: i64 =
+                transaction.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
+            if checked_sqlite_count(count, "sessions")? >= audiorouter_domain::MAX_SESSIONS_GLOBAL {
+                return Err(StorageError::InvalidSession(
+                    format!(
+                        "global session limit reached ({})",
+                        audiorouter_domain::MAX_SESSIONS_GLOBAL
+                    ),
+                ));
+            }
+        }
         if failure == Some(JournalFailureStage::BeforeHistory) {
             return Err(StorageError::InvalidSession(
                 "injected journal failure".into(),
@@ -2837,6 +2871,74 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn session_writes_bound_new_records_but_allow_replacement() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..audiorouter_domain::MAX_SESSIONS_GLOBAL {
+            let mut value = session();
+            value.id = EntityId::new(format!("session-{index}"));
+            value.revision = 0;
+            value.nodes.clear();
+            value.edges.clear();
+            storage.save_session(&value).unwrap();
+        }
+        let mut overflow = session();
+        overflow.id = EntityId::new("session-overflow");
+        overflow.revision = 0;
+        overflow.nodes.clear();
+        overflow.edges.clear();
+        assert!(matches!(
+            storage.save_session(&overflow),
+            Err(StorageError::InvalidSession(message))
+                if message == "global session limit reached (128)"
+        ));
+
+        let mut replacement = overflow;
+        replacement.id = EntityId::new("session-0");
+        storage.save_session(&replacement).unwrap();
+        assert_eq!(
+            storage.count_sessions().unwrap(),
+            audiorouter_domain::MAX_SESSIONS_GLOBAL
+        );
+    }
+
+    #[test]
+    fn journaled_session_writes_bound_new_records() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..audiorouter_domain::MAX_SESSIONS_GLOBAL {
+            let mut value = session();
+            value.id = EntityId::new(format!("journal-session-{index}"));
+            value.revision = 0;
+            value.nodes.clear();
+            value.edges.clear();
+            storage
+                .save_session_with_journal(
+                    &value,
+                    &format!("journal-key-{index}"),
+                    "sessions.create",
+                    "{}",
+                    None,
+                )
+                .unwrap();
+        }
+        let mut overflow = session();
+        overflow.id = EntityId::new("journal-session-overflow");
+        overflow.revision = 0;
+        overflow.nodes.clear();
+        overflow.edges.clear();
+        assert!(matches!(
+            storage.save_session_with_journal(
+                &overflow,
+                "journal-key-overflow",
+                "sessions.create",
+                "{}",
+                None,
+            ),
+            Err(StorageError::InvalidSession(message))
+                if message == "global session limit reached (128)"
+        ));
     }
 
     #[test]

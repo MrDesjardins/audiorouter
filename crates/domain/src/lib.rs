@@ -13,6 +13,9 @@ pub const MAX_EDGES_PER_SESSION: usize = 128;
 pub const CURRENT_SESSION_SCHEMA_VERSION: u32 = 1;
 pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
+/// Maximum number of persisted/in-memory session records in one backend.
+/// This prevents empty sessions from bypassing the aggregate node/edge budget.
+pub const MAX_SESSIONS_GLOBAL: usize = 128;
 pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 pub const MAX_PENDING_GRAPH_PLANS: usize = 100;
 /// Maximum number of in-memory graph commit results retained for idempotent
@@ -1967,6 +1970,15 @@ impl GraphStore {
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), StoreError> {
         validate_session(&session).map_err(StoreError::InvalidGraph)?;
+        if !self.sessions.contains_key(&session.id) && self.sessions.len() >= MAX_SESSIONS_GLOBAL {
+            return Err(StoreError::InvalidGraph(vec![
+                ValidationError::LimitExceeded {
+                    path: "global.sessions".into(),
+                    requested: self.sessions.len() + 1,
+                    maximum: MAX_SESSIONS_GLOBAL,
+                },
+            ]));
+        }
         let (nodes, edges) = self
             .sessions
             .values()
@@ -3402,6 +3414,31 @@ mod tests {
         ));
         store.insert_session(make_session("one", 1)).unwrap();
         assert_eq!(store.sessions(10).len(), 2);
+    }
+
+    #[test]
+    fn graph_store_bounds_total_sessions_and_allows_replacement() {
+        let mut store = GraphStore::default();
+        for index in 0..MAX_SESSIONS_GLOBAL {
+            let mut value = session(vec![], vec![]);
+            value.id = EntityId::new(format!("empty-{index}"));
+            store.insert_session(value).unwrap();
+        }
+        let mut overflow = session(vec![], vec![]);
+        overflow.id = EntityId::new("overflow");
+        assert!(matches!(
+            store.insert_session(overflow),
+            Err(StoreError::InvalidGraph(errors))
+                if matches!(errors.as_slice(), [ValidationError::LimitExceeded { path, requested, maximum }]
+                    if path == "global.sessions"
+                        && *requested == MAX_SESSIONS_GLOBAL + 1
+                        && *maximum == MAX_SESSIONS_GLOBAL)
+        ));
+
+        let mut replacement = session(vec![], vec![]);
+        replacement.id = EntityId::new("empty-0");
+        store.insert_session(replacement).unwrap();
+        assert_eq!(store.sessions(500).len(), MAX_SESSIONS_GLOBAL);
     }
 
     #[test]

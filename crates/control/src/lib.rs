@@ -652,6 +652,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxEdgesPerSession": { "type": "integer", "minimum": 1 },
                         "maxNodesGlobal": { "type": "integer", "minimum": 1 },
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
+                        "maxSessionsGlobal": { "type": "integer", "minimum": 1 },
                         "maxActiveSessions": { "type": "integer", "minimum": 1 },
                         "maxClientEnrollments": { "type": "integer", "minimum": 1 },
                         "maxOperationJournalEntries": { "type": "integer", "minimum": 1 },
@@ -669,7 +670,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxRequestIdBytes": { "type": "integer", "minimum": 1 },
                         "maxRevisionCursorBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxClientEnrollments", "maxOperationJournalEntries", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxSessionsGlobal", "maxActiveSessions", "maxClientEnrollments", "maxOperationJournalEntries", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -2658,6 +2659,7 @@ impl ControlPlane {
                 "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION,
                 "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL,
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
+                "maxSessionsGlobal": audiorouter_domain::MAX_SESSIONS_GLOBAL,
                 "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
                 "maxClientEnrollments": audiorouter_storage::MAX_CLIENT_ENROLLMENTS,
                 "maxOperationJournalEntries": audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES,
@@ -5906,9 +5908,9 @@ mod tests {
     }
 
     #[test]
-    fn storage_startup_restores_sessions_beyond_first_page() {
+    fn storage_startup_restores_all_bounded_sessions() {
         let storage = Storage::open_memory().unwrap();
-        for index in 0..129 {
+        for index in 0..audiorouter_domain::MAX_SESSIONS_GLOBAL {
             let mut value = session();
             value.id = EntityId::new(format!("session-{index:03}"));
             value.nodes.clear();
@@ -5918,7 +5920,10 @@ mod tests {
 
         let plane = ControlPlane::try_with_storage("paged-startup", storage).unwrap();
         let result = plane.sessions_list_page(None, 500).unwrap();
-        assert_eq!(result["items"].as_array().unwrap().len(), 129);
+        assert_eq!(
+            result["items"].as_array().unwrap().len(),
+            audiorouter_domain::MAX_SESSIONS_GLOBAL
+        );
         assert!(result["nextCursor"].is_null());
     }
 
@@ -6427,6 +6432,10 @@ mod tests {
         assert_eq!(description["limits"]["maxNodesPerSession"], 64);
         assert_eq!(description["limits"]["maxNodesGlobal"], 128);
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
+        assert_eq!(
+            description["limits"]["maxSessionsGlobal"],
+            audiorouter_domain::MAX_SESSIONS_GLOBAL
+        );
         assert_eq!(description["limits"]["maxActiveSessions"], 2);
         assert_eq!(
             description["limits"]["maxClientEnrollments"],
