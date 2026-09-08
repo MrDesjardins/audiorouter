@@ -3081,6 +3081,33 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_pressure_is_bounded_nonblocking_and_fail_closed() {
+        let scheduler = RealtimeScheduler::new(1, 2, PROCESSING_QUANTUM_FRAMES).unwrap();
+        let generation = RuntimeGeneration::new(7);
+        scheduler
+            .processor()
+            .publish(RuntimeGraph::prepare(generation, Vec::new()));
+
+        let first = scheduler.acquire_input().unwrap();
+        assert!(scheduler.submit_input(first).is_ok());
+        let second = AudioBlock::new(2, PROCESSING_QUANTUM_FRAMES).unwrap();
+        assert!(scheduler.submit_input(second).is_err());
+        assert_eq!(scheduler.telemetry().input_overruns, 1);
+
+        assert_eq!(scheduler.process_once().unwrap(), Some(generation));
+        let held_output = scheduler.receive_output_for_generation(generation).unwrap();
+
+        let third = scheduler.acquire_input().unwrap();
+        assert!(scheduler.submit_input(third).is_ok());
+        assert_eq!(scheduler.process_once().unwrap(), None);
+        assert_eq!(scheduler.telemetry().xruns, 1);
+        scheduler.output().try_recycle(held_output).unwrap();
+        assert!(scheduler
+            .receive_output_for_generation(generation)
+            .is_none());
+    }
+
+    #[test]
     fn prepared_mixer_converges_multiple_inputs_without_allocating_at_process_boundary() {
         let mixer = MixerStage::new(2, vec![vec![1.0, 0.0, 0.0, 1.0]; 2]).unwrap();
         let mut first = AudioBlock::new(2, 4).unwrap();

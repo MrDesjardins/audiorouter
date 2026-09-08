@@ -563,6 +563,19 @@ This proves process-loopback packet conversion and scheduler-ring ownership for
 the tested path. Deterministic overflow/underrun stress, native output routing,
 physical latency, and production-driver integration remain open.
 
+## Scheduler pressure regression (2026-09-07)
+
+The engine regression suite now exercises a one-block `RealtimeScheduler` under
+both input and output pressure. A second prepared input is rejected immediately
+and increments `input_overruns`; when the only output block is deliberately
+held, the next processing step fails closed, recycles the input, and increments
+the scheduler xrun counter without waiting.
+
+The focused engine suite passed 68 tests, with strict engine Clippy, formatting,
+and diff checks passing. This proves portable bounded ownership behavior;
+native scheduler timing, physical latency, and production-driver integration
+remain open.
+
 ## Fixed PCM16 quantum adapter (2026-09-07)
 
 `Pcm16QuantumAdapter` stages split interleaved PCM16 packets in a fixed
