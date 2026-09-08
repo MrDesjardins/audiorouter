@@ -51,6 +51,9 @@ registered, loaded, or executed; no compatibility claim was synthesized.
 The latest validated implementation head is `b120b87`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
+The latest pushed plan/evidence tip is `8aafaa2`; its read-only M06 fixture
+inventory found no additional system/user VST3 bundles, so the required
+three-effect/two-vendor compatibility gate remains explicitly open.
 Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion,
