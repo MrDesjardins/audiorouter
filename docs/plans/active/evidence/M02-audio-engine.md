@@ -805,3 +805,17 @@ The engine suite (70 tests), locked workspace tests/doc-tests, strict Clippy,
 formatting, and diff checks passed. This is instrumentation readiness and
 portable processing evidence; it is not native callback p99.9/deadline evidence
 until a production-style native scheduler owns the endpoint callback.
+
+## Bounded processing-time histogram (2026-09-08)
+
+The callback metrics now retain a fixed 32-bucket logarithmic nanosecond
+histogram alongside saturating total and maximum durations. Each processing
+observation updates one atomic bucket; no per-callback allocation or sample
+list is retained. This is sufficient for a later control-boundary percentile
+calculation while preserving the realtime boundary constraints.
+
+The engine suite (70 tests), workspace compilation, strict Clippy, formatting,
+diff checks, and documentation validation passed. The histogram is portable
+instrumentation readiness only; it does not establish native callback p99.9 or
+deadline compliance until a production-style native scheduler owns the endpoint
+callback.
