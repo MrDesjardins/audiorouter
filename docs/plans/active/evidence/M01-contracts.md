@@ -169,6 +169,14 @@ offline discovery, fixture import/export, persisted session inspection and
 fake lifecycle paths using temporary data; no audio endpoint or machine
 configuration was changed.
 
+## Discovery collection bounds (2026-09-07)
+
+The `system.describe` output schema now advertises maximum collection sizes
+for methods, node types, processors, voice-chain presets, and EQ presets.
+Each bound is sourced from the same static registry or catalog used to build
+the response, and control discovery regression coverage verifies the values.
+Control tests, strict Clippy, formatting, and documentation validation pass.
+
 ## Next action
 
 The native probe now has application-loopback activation/data-path and

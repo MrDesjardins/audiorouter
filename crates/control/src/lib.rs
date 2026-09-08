@@ -567,6 +567,7 @@ fn method_output_schema(name: &str) -> Value {
                 "build": { "type": "string", "minLength": 1 },
                 "methods": {
                     "type": "array",
+                    "maxItems": API_METHODS.len(),
                     "items": {
                         "type": "object",
                         "properties": {
@@ -581,13 +582,14 @@ fn method_output_schema(name: &str) -> Value {
                         "additionalProperties": false
                     }
                 },
-                "nodeTypes": { "type": "array", "items": { "type": "object" } },
-                "processors": { "type": "array", "items": processor_item_schema() },
+                "nodeTypes": { "type": "array", "maxItems": audiorouter_domain::node_registry().len(), "items": { "type": "object" } },
+                "processors": { "type": "array", "maxItems": MAX_PROCESSOR_CATALOG_ITEMS, "items": processor_item_schema() },
                 "presets": {
                     "type": "object",
                     "properties": {
                         "voiceChains": {
                             "type": "array",
+                            "maxItems": audiorouter_dsp::VoiceChainPresetId::ALL.len(),
                             "items": {
                                 "type": "object",
                                 "properties": {
@@ -601,6 +603,7 @@ fn method_output_schema(name: &str) -> Value {
                         },
                         "eq": {
                             "type": "array",
+                            "maxItems": audiorouter_dsp::EqPresetId::ALL.len(),
                             "items": {
                                 "type": "object",
                                 "properties": {
@@ -6738,6 +6741,27 @@ mod tests {
         assert_eq!(
             describe["outputSchema"]["properties"]["methods"]["type"],
             "array"
+        );
+        assert_eq!(
+            describe["outputSchema"]["properties"]["methods"]["maxItems"],
+            API_METHODS.len()
+        );
+        assert_eq!(
+            describe["outputSchema"]["properties"]["nodeTypes"]["maxItems"],
+            audiorouter_domain::node_registry().len()
+        );
+        assert_eq!(
+            describe["outputSchema"]["properties"]["processors"]["maxItems"],
+            MAX_PROCESSOR_CATALOG_ITEMS
+        );
+        assert_eq!(
+            describe["outputSchema"]["properties"]["presets"]["properties"]["voiceChains"]
+                ["maxItems"],
+            audiorouter_dsp::VoiceChainPresetId::ALL.len()
+        );
+        assert_eq!(
+            describe["outputSchema"]["properties"]["presets"]["properties"]["eq"]["maxItems"],
+            audiorouter_dsp::EqPresetId::ALL.len()
         );
         assert_eq!(
             describe["outputSchema"]["properties"]["events"]["properties"]["meterReplay"]["const"],
