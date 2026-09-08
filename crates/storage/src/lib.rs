@@ -1344,6 +1344,11 @@ impl Storage {
 
     /// Removes only state metadata; the asset file remains untouched.
     pub fn remove_plugin_state(&self, id: &str) -> Result<bool, StorageError> {
+        if id.is_empty() || id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+            return Err(StorageError::InvalidPluginState(
+                "invalid plugin state ID".into(),
+            ));
+        }
         Ok(self
             .connection
             .execute("DELETE FROM plugin_states WHERE id = ?1", params![id])?
@@ -3637,6 +3642,10 @@ mod tests {
         };
         assert!(matches!(
             storage.save_plugin_state(&state),
+            Err(StorageError::InvalidPluginState(_))
+        ));
+        assert!(matches!(
+            storage.remove_plugin_state(&state.id),
             Err(StorageError::InvalidPluginState(_))
         ));
     }

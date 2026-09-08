@@ -898,5 +898,6 @@ audio state is changed.
 
 The SQLite plugin-state write boundary now enforces the shared 128-byte record
 identity limit before persisting opaque state metadata. A direct-storage
-regression rejects oversized IDs; storage coverage passes 48 tests with strict
-Clippy and formatting. Plugin execution and OS sandbox gates remain open.
+regression rejects oversized IDs on both save and removal; storage coverage
+passes 50 tests with strict Clippy and formatting. Plugin execution and OS
+sandbox gates remain open.
