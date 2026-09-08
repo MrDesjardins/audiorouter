@@ -861,6 +861,10 @@ as a VST3 fixture, revalidated it, processed one frame through the supervised
 worker, and removed the temporary directory. This is launch-boundary evidence;
 it is not third-party VST3 execution or full sandbox evidence.
 
+A second process regression verifies that a missing scanned identity fails
+before worker creation with a typed inspection error. The ordinary worker
+suite has 11 passing tests; the feature-enabled fixture suite has 15.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and

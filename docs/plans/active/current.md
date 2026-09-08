@@ -342,6 +342,10 @@ frame, and cleaned the fixture; 10 worker-process tests and 44 library tests
 passed. This closes the stale-scan launch seam, while native third-party VST3
 execution and full OS sandboxing remain open.
 
+The companion regression proves a missing identity is rejected before process
+creation. The ordinary process suite now has 11 passing tests, and the
+feature-enabled suite has 15; no child is spawned for the missing-plugin case.
+
 Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
 interoperability tests, 87 control tests, 39 plugin-host tests, and 8
 worker-process tests passed with doc-tests and strict Clippy. Durable plans,

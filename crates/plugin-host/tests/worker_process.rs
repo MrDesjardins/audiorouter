@@ -103,6 +103,56 @@ fn verified_supervised_launch_rechecks_the_scanned_plugin_identity() {
 }
 
 #[test]
+fn verified_supervised_launch_rejects_missing_identity_before_spawning() {
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let root = std::env::temp_dir().join(format!(
+        "audiorouter-missing-identity-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let identity = PluginIdentity {
+        path: root.join("missing.vst3"),
+        binary_path: root.join("missing.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: "0".repeat(64),
+        metadata: Default::default(),
+    };
+    let result = SupervisedWorkerProcess::spawn_verified(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        1,
+        Instant::now(),
+    );
+    assert!(matches!(
+        result,
+        Err(audiorouter_plugin_host::WorkerProcessError::PluginIdentity(
+            audiorouter_plugin_host::IdentityVerificationError::Inspection(
+                audiorouter_plugin_host::InspectionError::Missing
+            )
+        ))
+    ));
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn disposable_worker_rejects_a_runtime_sample_rate_change() {
     let hash = "1".repeat(64);
     let worker_path =
