@@ -650,3 +650,9 @@ boundary while retaining existing checkpoint consistency checks. Recording
 coverage remains 30 tests plus doc-tests, formatting, and strict Clippy. This
 is portable recovery evidence; native realtime recorder integration remains
 open.
+## Recovery schema bounds (2026-09-07)
+
+The public `recordings.recovery` schema now advertises the recorder's existing
+4,096-part and 4,096-pause restore limits, sourced from the same constants
+used by validation. Recording tests (30), control discovery tests (86), and
+strict Clippy passed; native realtime recorder integration remains open.

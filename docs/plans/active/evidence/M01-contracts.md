@@ -482,6 +482,10 @@ The `events.subscribe` discovery contract now exposes its 500-event and
 500-session resync bounds plus the enforced event metadata lengths. Control
 discovery regression, strict Clippy, and documentation validation pass.
 
+The `recordings.recovery` output schema now exposes the existing 4,096-part and
+4,096-pause checkpoint bounds, sourced from the recording validator constants.
+This keeps recovery metadata bounded and discoverable without opening audio.
+
 The checked-in M01 CLI acceptance was rerun on Windows after this alignment;
 application discovery and the offline command contract passed without opening
 an audio stream or changing machine configuration.

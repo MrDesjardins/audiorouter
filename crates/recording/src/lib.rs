@@ -14,8 +14,8 @@ const MAX_CHANNELS: u16 = 2;
 pub const MAX_RECORDING_QUEUE_CHUNKS: usize = 2048;
 /// Maximum interleaved samples in one queued chunk (2,048 stereo frames).
 pub const MAX_RECORDING_CHUNK_SAMPLES: usize = 4096;
-const MAX_CHECKPOINT_PARTS: usize = 4096;
-const MAX_CHECKPOINT_PAUSES: usize = 4096;
+pub const MAX_CHECKPOINT_PARTS: usize = 4096;
+pub const MAX_CHECKPOINT_PAUSES: usize = 4096;
 const MAX_CHECKPOINT_JSON_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug)]

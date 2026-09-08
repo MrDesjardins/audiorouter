@@ -1204,8 +1204,8 @@ fn method_output_schema(name: &str) -> Value {
                     "properties": {
                         "version": { "const": 1 },
                         "state": { "enum": ["Idle", "Armed", "Recording", "Paused", "Stopping", "Completed", "Failed"] },
-                        "parts": { "type": "array", "items": { "type": "object" } },
-                        "pauses": { "type": "array", "items": { "type": "object" } },
+                        "parts": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PARTS, "items": { "type": "object" } },
+                        "pauses": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PAUSES, "items": { "type": "object" } },
                         "pauseStart": { "type": ["integer", "null"], "minimum": 0 },
                         "lastFrame": { "type": ["integer", "null"], "minimum": 0 }
                     },
@@ -6169,6 +6169,21 @@ mod tests {
         assert_eq!(
             events_method["inputSchema"]["properties"]["limit"]["maximum"],
             MAX_EVENT_SUBSCRIPTION_ITEMS
+        );
+        let recovery = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "recordings.recovery")
+            .unwrap();
+        assert_eq!(
+            recovery["outputSchema"]["properties"]["checkpoint"]["properties"]["parts"]["maxItems"],
+            audiorouter_recording::MAX_CHECKPOINT_PARTS
+        );
+        assert_eq!(
+            recovery["outputSchema"]["properties"]["checkpoint"]["properties"]["pauses"]
+                ["maxItems"],
+            audiorouter_recording::MAX_CHECKPOINT_PAUSES
         );
         assert!(description["events"]["stateCategories"]
             .as_array()
