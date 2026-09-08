@@ -54,6 +54,9 @@ prevents expired or malformed timestamps from becoming huge `u64` durations
 after restart. The 93-test control suite, strict Clippy, and formatting pass;
 no audio endpoint or machine configuration is accessed.
 
+The subsequent full locked workspace tests and strict workspace Clippy also
+passed at `1b782fd3`; the M08 evidence records the complete result.
+
 ## Capture retry classification regression (2026-09-08)
 
 Added a Windows-audio regression proving the capture fallback retries only

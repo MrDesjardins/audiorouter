@@ -1,5 +1,15 @@
 # M08 release evidence
 
+## 2026-09-08 - Full workspace requalification after `1b782fd3`
+
+`cargo test --workspace --all-features --quiet --locked` passed all workspace
+unit, integration, and doc-test suites after durable plan expiry hydration was
+hardened, including control (93), engine (78), Windows audio (30), storage
+(80), DSP (27), recording (30), plugin host/worker, transport, and CLI/MCP
+coverage. Strict workspace Clippy with `-D warnings`, formatting, and
+documentation validation also passed. No audio endpoint or machine
+configuration was accessed.
+
 ## Safe-chain requalification after backup write-boundary fix (2026-09-08)
 
 At pushed revision `cbf52f4`, the complete safe acceptance chain passed:
