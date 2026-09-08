@@ -333,6 +333,14 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "recordings.setMetadata", params: { recordingId: "take-1", title: "Edited" } });
   });
 
+  it("rejects oversized recording metadata before dispatch", async () => {
+    let dispatched = false;
+    const client = { request: async () => { dispatched = true; return { recordingId: "take-1", updated: true }; } } as never;
+    const title = "😀".repeat(257);
+    await expect(createLiveBackend(client, demoSession.id).setRecordingMetadata("take-1", { title })).rejects.toThrow("256 characters");
+    expect(dispatched).toBe(false);
+  });
+
   it("forwards recording renames as an explicit file operation", async () => {
     let received: unknown;
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", oldPath: "C:\\approved\\take.wav", newPath: "C:\\approved\\renamed.wav", renamed: true, fileAction: "renamed" }; } } as never;

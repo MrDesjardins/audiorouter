@@ -722,3 +722,13 @@ the 500-path safety ceiling, the editor labels the count as partial and does
 not present the bounded list as complete provenance. UI typecheck and the
 existing UI acceptance suite remain the required portable evidence; manual
 visual/accessibility acceptance and native shell packaging remain open.
+
+## Recording metadata boundary (2026-09-07)
+
+The live UI backend adapter rejects recording title, artist, and comment values
+longer than 256 Unicode characters before sending `recordings.setMetadata`.
+This mirrors the storage/recording validation boundary and prevents an invalid
+edit from reaching the transport. The regression uses supplementary Unicode
+characters to verify code-point counting rather than JavaScript UTF-16 units.
+UI tests, typecheck, build, and documentation validation are the evidence; the
+native shell and manual visual/accessibility gates remain open.

@@ -382,6 +382,11 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
       return client.request("recordings.reveal", { recordingId });
     },
     async setRecordingMetadata(recordingId, metadata) {
+      for (const value of [metadata.title, metadata.artist, metadata.comment]) {
+        if (value !== undefined && value !== null && [...value].length > 256) {
+          throw new Error("recording metadata fields are limited to 256 characters");
+        }
+      }
       return client.request("recordings.setMetadata", { recordingId, ...metadata });
     },
     async renameRecording(recordingId, newPath, idempotencyKey) {
