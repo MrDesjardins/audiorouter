@@ -579,3 +579,14 @@ silent packets, and 76,370 nonzero payload bytes. The temporary executable was
 removed. This confirms controlled include-tree data attribution only; PID reuse,
 physical latency, and production supervisor route restart remain separate
 gates.
+
+## Repeatable controlled-attribution acceptance (2026-09-07)
+
+`tests/acceptance/m00-native-process-live.ps1` now builds the native probe in
+an isolated temporary path, runs the disposable-child `process-attribution`
+scenario, requires successful asynchronous activation, capture lifecycle,
+child exit, and positive payload, compares the media snapshot, and removes
+generated outputs. The authorized 500 ms run captured 22,050 frames and 78,114
+nonzero bytes. This makes the include-tree evidence repeatable without claiming
+PID reuse, arbitrary exclusion sets, physical latency, or production restart
+supervision.
