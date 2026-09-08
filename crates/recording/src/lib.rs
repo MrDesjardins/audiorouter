@@ -16,6 +16,7 @@ pub const MAX_RECORDING_QUEUE_CHUNKS: usize = 2048;
 pub const MAX_RECORDING_CHUNK_SAMPLES: usize = 4096;
 const MAX_CHECKPOINT_PARTS: usize = 4096;
 const MAX_CHECKPOINT_PAUSES: usize = 4096;
+const MAX_CHECKPOINT_JSON_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug)]
 pub enum PathPolicyError {
@@ -296,6 +297,9 @@ impl RecorderController {
     }
 
     pub fn restore_json(document: &str) -> Result<Self, RecorderError> {
+        if document.len() > MAX_CHECKPOINT_JSON_BYTES {
+            return Err(RecorderError::InvalidCheckpoint);
+        }
         let checkpoint =
             serde_json::from_str(document).map_err(|_| RecorderError::InvalidCheckpoint)?;
         Self::restore(checkpoint)
@@ -2487,6 +2491,10 @@ mod tests {
         ));
         assert!(matches!(
             RecorderController::restore_json(r#"{"version":1,"state":"Paused"}"#),
+            Err(RecorderError::InvalidCheckpoint)
+        ));
+        assert!(matches!(
+            RecorderController::restore_json(&"x".repeat(MAX_CHECKPOINT_JSON_BYTES + 1)),
             Err(RecorderError::InvalidCheckpoint)
         ));
 

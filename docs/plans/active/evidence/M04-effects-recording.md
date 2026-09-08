@@ -640,3 +640,13 @@ collections while preserving the existing ordering and frame-consistency
 checks. The recording suite passes 30 tests, doc-tests, formatting, and strict
 Clippy. This is portable recovery evidence; native realtime recorder
 integration remains open.
+
+## Recorder checkpoint JSON input bound (2026-09-07)
+
+`RecorderController::restore_json` now rejects documents larger than 1 MiB
+before invoking JSON deserialization. Together with the 4,096-part and
+4,096-pause collection limits, this bounds the recovery input at the recorder
+boundary while retaining existing checkpoint consistency checks. Recording
+coverage remains 30 tests plus doc-tests, formatting, and strict Clippy. This
+is portable recovery evidence; native realtime recorder integration remains
+open.
