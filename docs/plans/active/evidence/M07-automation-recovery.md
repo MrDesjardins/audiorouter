@@ -657,6 +657,19 @@ rows. Documentation acceptance passes with 51 Markdown files and 150 local
 links; this is a documentation-integrity check and does not exercise audio or
 machine configuration.
 
+## Discoverable control JSON budgets (2026-09-07)
+
+The `system.describe` limits schema and response now expose the actual
+control-parameter bounds: maximum nesting depth 32, maximum string/object-key
+size 4,096 bytes, and maximum decoded JSON value count 8,192. A control
+discovery regression asserts all three values, preventing enforcement and
+client contract drift. The focused control suite passes 85 tests with strict
+Clippy and formatting; no audio or machine configuration is involved.
+
+The locked workspace was requalified after this contract change: all 412
+unit/integration tests and doc-tests passed, workspace strict Clippy passed,
+and documentation acceptance passed (51 Markdown files and 157 local links).
+
 The shared CLI `write_new_file` path now inspects its existing parent before
 opening an output: missing, non-directory, symbolic-link, and Windows
 reparse-point parents are rejected, while the destination remains exclusive.

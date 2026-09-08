@@ -614,9 +614,12 @@ fn method_output_schema(name: &str) -> Value {
                         "maxNodesGlobal": { "type": "integer", "minimum": 1 },
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
                         "maxActiveSessions": { "type": "integer", "minimum": 1 },
-                        "maxVirtualBuses": { "type": "integer", "minimum": 1 }
+                        "maxVirtualBuses": { "type": "integer", "minimum": 1 },
+                        "maxControlValueDepth": { "type": "integer", "minimum": 1 },
+                        "maxControlStringBytes": { "type": "integer", "minimum": 1 },
+                        "maxControlValueCount": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -2461,7 +2464,10 @@ impl ControlPlane {
                 "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL,
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
                 "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
-                "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES
+                "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES,
+                "maxControlValueDepth": MAX_CONTROL_VALUE_DEPTH,
+                "maxControlStringBytes": MAX_CONTROL_STRING_BYTES,
+                "maxControlValueCount": MAX_CONTROL_VALUE_COUNT
             },
             "events": {
                 "stateCategories": [
@@ -6012,6 +6018,18 @@ mod tests {
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
         assert_eq!(description["limits"]["maxActiveSessions"], 2);
         assert_eq!(description["limits"]["maxVirtualBuses"], 8);
+        assert_eq!(
+            description["limits"]["maxControlValueDepth"],
+            MAX_CONTROL_VALUE_DEPTH
+        );
+        assert_eq!(
+            description["limits"]["maxControlStringBytes"],
+            MAX_CONTROL_STRING_BYTES
+        );
+        assert_eq!(
+            description["limits"]["maxControlValueCount"],
+            MAX_CONTROL_VALUE_COUNT
+        );
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
         assert_eq!(description["events"]["meterReplay"], false);
