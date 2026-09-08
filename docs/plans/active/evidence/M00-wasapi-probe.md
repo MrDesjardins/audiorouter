@@ -680,3 +680,15 @@ identity/state before and after, and removed temporary probe files. It reported
 defaults, volume, mute, privacy, drivers, signing, and startup configuration
 unchanged. This is signal-path evidence, not calibrated physical-latency or
 production-driver evidence.
+## Bounded process-scoped loopback (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-process-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 250`.
+
+The disposable process-tree loopback check passed, capturing 10,584 frames and
+32,907 nonzero bytes. The harness verified process activation, child exit,
+capture stop/reset, media-device identity/state stability, and temporary-file
+cleanup. It reported no persistent audio configuration change. This is
+process-attribution evidence only; it does not close physical latency,
+cross-process exclusion, or production-driver gates.
