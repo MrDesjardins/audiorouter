@@ -94,6 +94,14 @@ fn unix_epoch_millis() -> u128 {
         .as_millis()
 }
 
+fn remaining_persisted_plan_duration(expires_at: i64, now: i64) -> Option<Duration> {
+    expires_at
+        .checked_sub(now)
+        .filter(|remaining| *remaining > 0)
+        .and_then(|remaining| u64::try_from(remaining).ok())
+        .map(Duration::from_secs)
+}
+
 #[derive(Debug)]
 struct MutationBucket {
     tokens: f64,
@@ -1996,7 +2004,7 @@ impl ControlPlane {
         let now = unix_epoch_seconds();
         let mut virtual_bus_plans = HashMap::new();
         for (id, operation, expires_at) in storage.load_virtual_device_plans()? {
-            let Some(remaining) = expires_at.checked_sub(now) else {
+            let Some(remaining) = remaining_persisted_plan_duration(expires_at, now) else {
                 continue;
             };
             let operation = virtual_bus_operation_from_value(&operation).map_err(|_| {
@@ -2008,22 +2016,16 @@ impl ControlPlane {
                 id,
                 VirtualBusPlan {
                     operation,
-                    expires_at: Instant::now() + Duration::from_secs(remaining as u64),
+                    expires_at: Instant::now() + remaining,
                 },
             );
         }
         let mut startup_plans = HashMap::new();
         for (id, enabled, expires_at) in storage.load_startup_plans()? {
-            let Some(remaining) = expires_at.checked_sub(now) else {
+            let Some(remaining) = remaining_persisted_plan_duration(expires_at, now) else {
                 continue;
             };
-            startup_plans.insert(
-                id,
-                (
-                    enabled,
-                    Instant::now() + Duration::from_secs(remaining as u64),
-                ),
-            );
+            startup_plans.insert(id, (enabled, Instant::now() + remaining));
         }
         // Claim a new epoch only after every persisted state surface has been
         // read and validated successfully; failed startup must not mutate the
@@ -5817,6 +5819,17 @@ fn application_error_data(code: &str) -> Value {
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
+
+    #[test]
+    fn persisted_plan_duration_rejects_expired_zero_and_overflowing_values() {
+        assert_eq!(remaining_persisted_plan_duration(99, 100), None);
+        assert_eq!(remaining_persisted_plan_duration(100, 100), None);
+        assert_eq!(
+            remaining_persisted_plan_duration(101, 100),
+            Some(Duration::from_secs(1))
+        );
+        assert_eq!(remaining_persisted_plan_duration(i64::MIN, i64::MAX), None);
+    }
 
     #[test]
     fn mutation_rate_limiter_enforces_burst_and_refill_rate() {

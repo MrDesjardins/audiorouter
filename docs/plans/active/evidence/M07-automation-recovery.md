@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-08 - Restart expiry conversion hardening
+
+Startup-plan hydration now rejects non-positive or non-representable
+remaining lifetimes before constructing an `Instant` duration. This complements
+storage pruning and prevents an expired persisted plan from being revived by a
+negative-to-`u64` conversion during backend restart. Control tests (93), strict
+Clippy, and formatting pass; no audio endpoint or machine configuration was
+accessed.
+
 ## 2026-09-08 - Expired pending-plan retention
 
 Storage now deletes expired virtual-device and startup plan rows during save,

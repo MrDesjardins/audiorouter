@@ -46,6 +46,14 @@ including native read-only inventory and disposable SysVAD qualification. Its
 temporary outputs were removed and it did not install/load a driver or alter
 machine audio configuration.
 
+## Durable plan expiry reload hardening (2026-09-08)
+
+Control restart now converts persisted plan expiry to an in-memory duration
+only when the remaining lifetime is strictly positive and representable. This
+prevents expired or malformed timestamps from becoming huge `u64` durations
+after restart. The 93-test control suite, strict Clippy, and formatting pass;
+no audio endpoint or machine configuration is accessed.
+
 ## Capture retry classification regression (2026-09-08)
 
 Added a Windows-audio regression proving the capture fallback retries only

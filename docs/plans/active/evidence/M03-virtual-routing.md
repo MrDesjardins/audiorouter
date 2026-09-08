@@ -1,5 +1,13 @@
 # M03 virtual-routing contract evidence
 
+## 2026-09-08 - Durable plan expiry reload hardening
+
+Control restart now uses a checked, strictly-positive remaining duration when
+reconstructing persisted virtual-device and startup plans. An expired or
+overflowing timestamp is ignored instead of being cast to `u64` and revived as
+an effectively unbounded in-memory plan. The focused control suite passes 93
+tests with strict Clippy and formatting; no endpoint or driver is activated.
+
 ## Virtual-device operation schema (2026-09-07)
 
 The `virtualDevices.plan` input and `virtualDevices.plan`/`virtualDevices.apply`
