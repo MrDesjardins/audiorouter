@@ -123,6 +123,14 @@ storage-backed initialization now restores all persisted sessions by walking
 bounded stable-cursor pages instead of truncating at the former 128-row
 bootstrap query. A 129-session regression covers the boundary.
 
+Completed safe storage slice M07/SEC-12 journal read/write-boundary
+validation: operation status and idempotency replay now revalidate operation
+names, result-size bounds, and nonnegative persisted revisions before exposing
+records. Direct journal writes enforce the same operation/result contract, and
+a corrupt-row regression fails closed. Storage/control tests (61/87), strict
+Clippy, formatting, and diff checks pass; no audio or machine configuration
+was accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

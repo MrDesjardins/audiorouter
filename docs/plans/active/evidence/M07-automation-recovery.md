@@ -755,6 +755,16 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## Journal read/write-boundary validation (2026-09-08)
+
+Operation-status and idempotency-replay reads now validate persisted operation
+names, result-size bounds, and nonnegative committed revisions before returning
+records. Direct journal writes apply the same operation/result limits before
+SQLite mutation. A corrupt negative-revision row and invalid write cases are
+covered by regression tests; storage (61) and control (87) tests, strict
+Clippy, formatting, and diff checks passed. No audio or machine configuration
+was accessed.
+
 Added a file-backed enrollment restart regression. An operator enrollment is
 created, the first control instance is dropped, and a second instance reloads
 the enrollment from SQLite before authorizing a recovery-clear request. This

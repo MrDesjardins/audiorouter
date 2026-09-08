@@ -101,6 +101,26 @@ fn validate_idempotency_key(key: &str) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn validate_journal_fields(
+    operation: &str,
+    result: &str,
+    committed_revision: i64,
+) -> Result<u64, StorageError> {
+    if operation.is_empty() || operation.len() > audiorouter_domain::MAX_EVENT_OPERATION_ID_BYTES {
+        return Err(StorageError::InvalidJournal(
+            "invalid journal operation".into(),
+        ));
+    }
+    if result.len() > MAX_SESSION_DOCUMENT_BYTES {
+        return Err(StorageError::DocumentTooLarge {
+            bytes: result.len(),
+            maximum: MAX_SESSION_DOCUMENT_BYTES,
+        });
+    }
+    u64::try_from(committed_revision)
+        .map_err(|_| StorageError::InvalidJournal("invalid journal revision".into()))
+}
+
 fn validate_client_id(client_id: &str) -> Result<(), StorageError> {
     if client_id.is_empty() || client_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
         return Err(StorageError::InvalidEnrollment(
@@ -853,6 +873,7 @@ impl Storage {
             ));
         }
         let result = serde_json::to_string(result)?;
+        validate_journal_fields("virtualDevices.apply", &result, 0)?;
         self.prune_expired_journal()?;
         let transaction = self.connection.unchecked_transaction()?;
         transaction.execute("DELETE FROM virtual_buses", [])?;
@@ -1918,14 +1939,19 @@ impl Storage {
 
     pub fn journal_result(&self, key: &str) -> Result<Option<String>, StorageError> {
         validate_idempotency_key(key)?;
-        self.connection
+        let row: Option<(String, String, i64)> = self
+            .connection
             .query_row(
-                "SELECT result FROM operation_journal WHERE idempotency_key = ?1",
+                "SELECT operation, result, committed_revision
+                 FROM operation_journal WHERE idempotency_key = ?1",
                 params![key],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
-            .optional()
-            .map_err(Into::into)
+            .optional()?;
+        row.map(|(operation, result, revision)| {
+            validate_journal_fields(&operation, &result, revision).map(|_| result)
+        })
+        .transpose()
     }
 
     pub fn operation_status(
@@ -1933,22 +1959,20 @@ impl Storage {
         operation_id: &str,
     ) -> Result<Option<(String, String, u64, String)>, StorageError> {
         validate_idempotency_key(operation_id)?;
-        self.connection
+        let row: Option<(String, String, i64, String)> = self
+            .connection
             .query_row(
                 "SELECT operation, result, committed_revision, created_at
                  FROM operation_journal WHERE idempotency_key = ?1",
                 params![operation_id],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get::<_, i64>(2)? as u64,
-                        row.get(3)?,
-                    ))
-                },
+                |row| Ok((row.get(0)?, row.get(1)?, row.get::<_, i64>(2)?, row.get(3)?)),
             )
-            .optional()
-            .map_err(Into::into)
+            .optional()?;
+        row.map(|(operation, result, revision, created_at)| {
+            let revision = validate_journal_fields(&operation, &result, revision)?;
+            Ok((operation, result, revision, created_at))
+        })
+        .transpose()
     }
 
     pub fn save_client_enrollment(&self, client_id: &str, role: &str) -> Result<(), StorageError> {
@@ -2029,6 +2053,7 @@ impl Storage {
         request_hash: &str,
     ) -> Result<bool, StorageError> {
         validate_idempotency_key(key)?;
+        validate_journal_fields(operation, result, revision as i64)?;
         self.prune_expired_journal()?;
         let inserted = self.connection.execute(
             "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -2044,17 +2069,24 @@ impl Storage {
     ) -> Result<Option<String>, StorageError> {
         validate_idempotency_key(key)?;
         self.prune_expired_journal()?;
-        let row: Option<(String, String)> = self
+        let row: Option<(String, String, i64, String)> = self
             .connection
             .query_row(
-                "SELECT result, request_hash FROM operation_journal WHERE idempotency_key = ?1",
+                "SELECT operation, result, committed_revision, request_hash
+                 FROM operation_journal WHERE idempotency_key = ?1",
                 params![key],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .optional()?;
         match row {
-            Some((result, stored_hash)) if stored_hash == request_hash => Ok(Some(result)),
-            Some(_) => Err(StorageError::IdempotencyConflict),
+            Some((operation, result, revision, stored_hash)) => {
+                validate_journal_fields(&operation, &result, revision)?;
+                if stored_hash == request_hash {
+                    Ok(Some(result))
+                } else {
+                    Err(StorageError::IdempotencyConflict)
+                }
+            }
             None => Ok(None),
         }
     }
@@ -2323,6 +2355,7 @@ impl Storage {
         failure: Option<JournalFailureStage>,
     ) -> Result<(), StorageError> {
         validate_idempotency_key(key)?;
+        validate_journal_fields(operation, result, session.revision as i64)?;
         let document = Self::serialize_validated_session(session)?;
         self.prune_expired_journal()?;
         let transaction = self.connection.unchecked_transaction()?;
@@ -2769,6 +2802,45 @@ mod tests {
                 Err(StorageError::InvalidJournal(_))
             ));
         }
+    }
+
+    #[test]
+    fn journal_reads_reject_corrupt_operation_fields_and_revision() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO operation_journal
+                 (idempotency_key, operation, result, committed_revision)
+                 VALUES ('corrupt', 'graph.commit', '{}', -1)",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.journal_result("corrupt"),
+            Err(StorageError::InvalidJournal(_))
+        ));
+        assert!(matches!(
+            storage.operation_status("corrupt"),
+            Err(StorageError::InvalidJournal(_))
+        ));
+        assert!(matches!(
+            storage.journal_result_checked("corrupt", ""),
+            Err(StorageError::InvalidJournal(_))
+        ));
+        assert!(matches!(
+            storage.journal_commit("write-invalid", "", "{}", 0),
+            Err(StorageError::InvalidJournal(_))
+        ));
+        assert!(matches!(
+            storage.journal_commit(
+                "write-large",
+                "graph.commit",
+                &"x".repeat(MAX_SESSION_DOCUMENT_BYTES + 1),
+                0,
+            ),
+            Err(StorageError::DocumentTooLarge { .. })
+        ));
     }
 
     #[test]
