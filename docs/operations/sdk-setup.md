@@ -42,6 +42,23 @@ through Visual Studio/Build Tools. The verified host installation provides
 Windows SDK `10.0.28000.0` and WDK `10.1.28000.2526`, including MSVC, kernel
 headers/libraries, and `signtool.exe`.
 
+The Microsoft SysVAD GitHub repository is a driver sample, not an SDK installer.
+For a clean Windows 11 development machine, install the current Windows SDK
+from Microsoft's [Windows SDK downloads](https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads)
+page, or use the official Windows Package Manager package:
+
+```powershell
+winget install Microsoft.WindowsSDK.10.0.28000
+```
+
+For Visual Studio 2026 driver work, Microsoft currently pairs the `28000`
+Windows SDK/WDK line. Add **Windows Driver Kit** under Visual Studio Installer's
+Individual Components, or install the matching WDK from Microsoft's
+[WDK download instructions](https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk).
+Do not mix SDK/WDK build lines unless the Microsoft kit-versioning guidance
+explicitly supports that pair. Installing Visual Studio alone does not
+necessarily install the latest Windows SDK.
+
 These tools are build dependencies only. Setup and validation do not install a
 driver, register a plugin, change default devices, or modify volume, mute,
 privacy, or other persistent audio settings.
