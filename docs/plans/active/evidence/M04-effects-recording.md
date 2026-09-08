@@ -145,6 +145,15 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+## Bounded recording queue construction (2026-09-07)
+
+`RecordingQueue::new` now rejects capacities above
+`MAX_RECORDING_QUEUE_CHUNKS` (2,048) before constructing lock-free storage.
+The existing overrun ownership behavior is unchanged for valid capacities;
+regressions cover zero, over-limit, and `usize::MAX` requests. The recording
+suite passed 30 tests, doc-tests, formatting, and strict Clippy. Native
+realtime recorder integration remains open.
+
 ## Stereo processor failure containment (2026-09-07)
 
 The portable runtime now fails closed for stereo Parametric EQ, compressor,

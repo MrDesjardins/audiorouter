@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const MAX_CHANNELS: u16 = 2;
+/// Maximum number of caller-owned chunks retained by one recording queue.
+/// This bounds construction-time memory at the recording boundary.
+pub const MAX_RECORDING_QUEUE_CHUNKS: usize = 2048;
 
 #[derive(Debug)]
 pub enum PathPolicyError {
@@ -436,7 +439,7 @@ impl Default for RecorderController {
 
 impl RecordingQueue {
     pub fn new(capacity: usize) -> Result<Self, RecordingError> {
-        if capacity == 0 {
+        if !(1..=MAX_RECORDING_QUEUE_CHUNKS).contains(&capacity) {
             return Err(RecordingError::InvalidQueueCapacity);
         }
         Ok(Self {
@@ -2381,6 +2384,14 @@ mod tests {
         assert!(queue.try_pop().is_none());
         assert!(matches!(
             RecordingQueue::new(0),
+            Err(RecordingError::InvalidQueueCapacity)
+        ));
+        assert!(matches!(
+            RecordingQueue::new(MAX_RECORDING_QUEUE_CHUNKS + 1),
+            Err(RecordingError::InvalidQueueCapacity)
+        ));
+        assert!(matches!(
+            RecordingQueue::new(usize::MAX),
             Err(RecordingError::InvalidQueueCapacity)
         ));
     }
