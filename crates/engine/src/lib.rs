@@ -2917,13 +2917,13 @@ impl RealtimeScheduler {
         &self.processor
     }
 
-    /// Publish a prepared graph from the control boundary and recycle any
-    /// already queued output from the prior generation. A callback that races
-    /// this operation can still submit an old block; generation-filtered
-    /// receive remains the final protection for that in-flight case.
+    /// Publish a prepared graph from the control boundary and recycle queued
+    /// input/output from the prior generation. Dropping pending input avoids
+    /// applying a replacement graph to audio captured for the old graph; the
+    /// bounded rings remain available for the next generation.
     pub fn publish(&self, graph: RuntimeGraph) -> usize {
         self.processor.publish(graph);
-        self.output.recycle_all()
+        self.input.recycle_all() + self.output.recycle_all()
     }
 
     /// Prepare and publish a graph through the scheduler's own lifecycle
@@ -2934,12 +2934,17 @@ impl RealtimeScheduler {
         session: &audiorouter_domain::Session,
         generation: RuntimeGeneration,
     ) -> Result<(), GraphCompileError> {
-        self.processor.activate_session(session, generation)
+        self.processor.activate_session(session, generation)?;
+        self.input.recycle_all();
+        self.output.recycle_all();
+        Ok(())
     }
 
     /// Remove the active graph and leave subsequent scheduler steps silent.
     pub fn deactivate(&self) {
         self.processor.deactivate();
+        self.input.recycle_all();
+        self.output.recycle_all();
     }
 
     pub fn input(&self) -> &AudioBlockRing {
@@ -4094,6 +4099,39 @@ mod tests {
             .unwrap();
         assert_eq!(output.generation(), second_generation.value());
         scheduler.output().try_recycle(output).unwrap();
+    }
+
+    #[test]
+    fn scheduler_lifecycle_discards_queued_input_across_generation_boundaries() {
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        let first_generation = RuntimeGeneration::new(50);
+        scheduler
+            .processor()
+            .publish(RuntimeGraph::prepare(first_generation, Vec::new()));
+
+        let queued = scheduler.acquire_input().unwrap();
+        scheduler.submit_input(queued).unwrap();
+        assert_eq!(scheduler.input().ready(), 1);
+        assert_eq!(scheduler.input().available(), 1);
+
+        let second_generation = RuntimeGeneration::new(51);
+        assert_eq!(
+            scheduler.publish(RuntimeGraph::prepare(second_generation, Vec::new())),
+            1
+        );
+        assert_eq!(scheduler.input().ready(), 0);
+        assert_eq!(scheduler.input().available(), scheduler.input().capacity());
+
+        let queued_again = scheduler.acquire_input().unwrap();
+        scheduler.submit_input(queued_again).unwrap();
+        scheduler.deactivate();
+        assert_eq!(scheduler.input().ready(), 0);
+        assert_eq!(scheduler.output().ready(), 0);
+        assert_eq!(scheduler.input().available(), scheduler.input().capacity());
+        assert_eq!(
+            scheduler.output().available(),
+            scheduler.output().capacity()
+        );
     }
 
     #[test]

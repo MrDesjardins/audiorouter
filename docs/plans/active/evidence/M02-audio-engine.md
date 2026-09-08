@@ -1063,3 +1063,13 @@ wrappers now validate histogram/sample accounting and totals without requiring
 the p99.9 bound to cover the maximum. PowerShell parsing, the corrected
 five-second shared run, and a corrected two-second routed run passed; no
 persistent audio configuration changed.
+
+## Scheduler lifecycle queue invalidation (2026-09-08)
+
+`RealtimeScheduler::publish`, successful `activate_session`, and `deactivate`
+now recycle both bounded input and output rings. This prevents pending audio
+captured for an old runtime generation from being processed after replacement
+or stop. The regression queues an input block, replaces the graph, and checks
+that the input pool is restored; it also verifies deactivation drains a queued
+block. Engine tests (77), strict Clippy, and formatting pass. No audio endpoint
+or machine configuration was accessed.

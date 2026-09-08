@@ -43,6 +43,15 @@ The M06 SDK installer provenance acceptance also passed using disposable Git
 metadata and a rejected reparse-point destination. It made no SDK, plugin,
 driver, or audio configuration changes.
 
+## Scheduler lifecycle queue invalidation (2026-09-08)
+
+Closed an M02/ARCH-04 generation-boundary gap in `RealtimeScheduler`: graph
+publication, successful session activation, and deactivation now recycle both
+queued input and output blocks. Pending input from a prior graph can no longer
+be processed by a replacement graph after a lifecycle transition. Engine
+coverage is 77 tests with strict Clippy; the full workspace gate remains the
+next verification. No audio endpoint or machine configuration was accessed.
+
 ## UI inventory cursor consumption (2026-09-08)
 
 Closed an M05/API parity gap in the live UI backend: recordings, sessions,
