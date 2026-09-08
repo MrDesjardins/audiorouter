@@ -361,3 +361,11 @@ before control dispatch. The limit is also advertised as
 the discoverable API contract aligned. Protocol coverage passes 6 tests and
 control coverage passes 85 tests with strict Clippy and formatting. This is a
 portable request-boundary check; no audio or machine configuration is involved.
+## JSON-RPC request-ID bound (2026-09-07)
+
+Request validation now rejects request IDs whose encoded JSON exceeds 128 bytes,
+limiting correlation metadata independently of the 4 MiB frame and parameter
+budgets. `system.describe` exposes the same value as `maxRequestIdBytes` so
+clients can discover the boundary. The regression uses a nested object with an
+oversized string and is portable; it opens no audio device and changes no
+machine configuration.

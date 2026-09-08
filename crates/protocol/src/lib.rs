@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_METHOD_NAME_BYTES: usize = 128;
+pub const MAX_REQUEST_ID_BYTES: usize = 128;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FrameError {
@@ -98,9 +99,17 @@ impl JsonRpcRequest {
     }
 
     pub fn validate(&self) -> Result<(), MessageError> {
+        let id_is_bounded = self
+            .id
+            .as_ref()
+            .map(|id| {
+                serde_json::to_vec(id).is_ok_and(|encoded| encoded.len() <= MAX_REQUEST_ID_BYTES)
+            })
+            .unwrap_or(true);
         if self.jsonrpc != "2.0"
             || self.method.is_empty()
             || self.method.len() > MAX_METHOD_NAME_BYTES
+            || !id_is_bounded
         {
             Err(MessageError::InvalidRequest)
         } else {
@@ -276,6 +285,17 @@ mod tests {
                     "jsonrpc": "2.0",
                     "id": 1,
                     "method": "x".repeat(MAX_METHOD_NAME_BYTES + 1)
+                }))
+                .unwrap()
+            ),
+            Err(MessageError::InvalidRequest)
+        );
+        assert_eq!(
+            parse_rpc_message(
+                &serde_json::to_vec(&json!({
+                    "jsonrpc": "2.0",
+                    "id": { "nested": "x".repeat(MAX_REQUEST_ID_BYTES) },
+                    "method": "status.get"
                 }))
                 .unwrap()
             ),

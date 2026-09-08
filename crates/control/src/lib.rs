@@ -12,7 +12,7 @@ use audiorouter_domain::{
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
-    MAX_METHOD_NAME_BYTES,
+    MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
 };
 use audiorouter_recording::{RecorderController, RecorderState};
 use audiorouter_storage::{GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS};
@@ -619,9 +619,10 @@ fn method_output_schema(name: &str) -> Value {
                         "maxControlValueDepth": { "type": "integer", "minimum": 1 },
                         "maxControlStringBytes": { "type": "integer", "minimum": 1 },
                         "maxControlValueCount": { "type": "integer", "minimum": 1 },
-                        "maxMethodNameBytes": { "type": "integer", "minimum": 1 }
+                        "maxMethodNameBytes": { "type": "integer", "minimum": 1 },
+                        "maxRequestIdBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -2470,7 +2471,8 @@ impl ControlPlane {
                 "maxControlValueDepth": MAX_CONTROL_VALUE_DEPTH,
                 "maxControlStringBytes": MAX_CONTROL_STRING_BYTES,
                 "maxControlValueCount": MAX_CONTROL_VALUE_COUNT,
-                "maxMethodNameBytes": MAX_METHOD_NAME_BYTES
+                "maxMethodNameBytes": MAX_METHOD_NAME_BYTES,
+                "maxRequestIdBytes": MAX_REQUEST_ID_BYTES
             },
             "events": {
                 "stateCategories": [
@@ -6036,6 +6038,10 @@ mod tests {
         assert_eq!(
             description["limits"]["maxMethodNameBytes"],
             MAX_METHOD_NAME_BYTES
+        );
+        assert_eq!(
+            description["limits"]["maxRequestIdBytes"],
+            MAX_REQUEST_ID_BYTES
         );
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
