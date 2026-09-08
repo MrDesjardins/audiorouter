@@ -83,6 +83,12 @@ The matching shared capture/render adapter run also passed for 2,000 ms:
 deadline misses, or lateness. Stream teardown and media identity/state checks
 passed; this remains user-space evidence, not managed-driver callback proof.
 
+Fixed a real M02 acceptance-harness defect: shared and routed wrappers no
+longer reject a valid p99.9 histogram merely because an absolute tail maximum
+exceeds the quantile bucket. Totals and histogram accounting remain enforced.
+PowerShell parsing, a five-second shared soak, and a two-second routed run
+passed with zero xruns/overruns/deadlines and unchanged audio configuration.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/

@@ -95,7 +95,10 @@ try {
         $processingTimeHistogramSum += [long]$parts[1]
     }
     if ($processingTimeHistogramSum -ne $processingTimeSamples) { throw "adapter route processing-time histogram sum did not match its sample count: $line" }
-    if ($captureFrames -le 0 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $routedFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeP999 -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessSamples -ne $deadlineMisses -or $deadlineLatenessTotal -lt $deadlineLatenessMax -or $deadlineLatenessP999 -lt $deadlineLatenessMax) { throw "adapter route reported invalid frame or timing counts: $line" }
+    # A p99.9 upper bound may be below the absolute maximum when the maximum
+    # is an allowed tail outlier; totals and histogram accounting are checked
+    # independently above.
+    if ($captureFrames -le 0 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $routedFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessSamples -ne $deadlineMisses -or $deadlineLatenessTotal -lt $deadlineLatenessMax) { throw "adapter route reported invalid frame or timing counts: $line" }
     $after = Get-MediaSnapshot
     if (Compare-Object -ReferenceObject $before -DifferenceObject $after) { throw 'media-device identity/state changed during adapter route acceptance' }
     Write-Output ("M02 Rust adapter route passed: render='{0}' capture='{1}' capture_frames={2} graph_blocks={3} scheduler_frames={4} routed_frames={5} processing_time_ns_total={6} processing_time_ns_max={7} processing_time_p999_upper_bound_ns={8} processing_time_histogram_samples={9} processing_time_histogram={10} deadline_misses={11} deadline_lateness_ns_total={12} deadline_lateness_ns_max={13} deadline_lateness_p999_upper_bound_ns={14} deadline_lateness_histogram={15}" -f $renderLabel, $captureLabel, $captureFrames, $graphBlocks, $schedulerFrames, $routedFrames, $processingTimeTotal, $processingTimeMax, $processingTimeP999, $processingTimeSamples, $processingTimeHistogram, $deadlineMisses, $deadlineLatenessTotal, $deadlineLatenessMax, $deadlineLatenessP999, $deadlineLatenessHistogram)

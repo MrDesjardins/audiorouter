@@ -1040,3 +1040,14 @@ rejected packets, scheduler xruns, and buffer overruns/underruns, then stopped
 cleanly with persistent media configuration unchanged. This is asynchronous
 user-mode process-loopback evidence, not managed-driver callback or physical
 latency evidence.
+
+## Adapter quantile validation correction (2026-09-08)
+
+The shared and routed PowerShell wrappers incorrectly required the p99.9 upper
+bound to be greater than or equal to the absolute maximum. That rejects valid
+histogram results when a rare tail sample exceeds the p99.9 bucket. Both
+wrappers now validate totals, sample counts, and histogram accounting without
+imposing that invalid ordering. Corrected validation passed PowerShell parsing,
+the five-second shared soak (1,878 graph blocks, zero xruns/overruns/deadlines),
+and the two-second routed run (96,384 routed frames, zero deadline misses and
+lateness). No persistent audio configuration changed.

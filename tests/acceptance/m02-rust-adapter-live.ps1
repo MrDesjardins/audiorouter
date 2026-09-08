@@ -73,7 +73,10 @@ for ($bucket = 0; $bucket -lt 32; $bucket++) {
 if ($processingTimeHistogramSum -ne $processingTimeSamples) {
     throw "adapter smoke processing-time histogram sum did not match its sample count: $line"
 }
-if ($captureFrames -le 0 -or $graphGeneration -ne 1 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $renderFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeP999 -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessSamples -ne $deadlineMisses -or $deadlineLatenessTotal -lt $deadlineLatenessMax -or $deadlineLatenessP999 -lt $deadlineLatenessMax) {
+# A p99.9 upper bound may be below the absolute maximum when the maximum is
+# an allowed tail outlier. Validate totals and histogram accounting separately;
+# requiring the quantile bound to cover the maximum would reject valid data.
+if ($captureFrames -le 0 -or $graphGeneration -ne 1 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $renderFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessSamples -ne $deadlineMisses -or $deadlineLatenessTotal -lt $deadlineLatenessMax) {
     throw "adapter smoke reported invalid frame counts: $line"
 }
 $after = Get-MediaSnapshot
