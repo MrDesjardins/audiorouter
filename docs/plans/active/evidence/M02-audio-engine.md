@@ -997,3 +997,15 @@ xruns, deadline misses, or deadline lateness. Streams stopped/reset and
 endpoint/default/volume/mute/privacy/driver/signing/startup snapshots were
 unchanged. This remains shared-mode diagnostic evidence, not managed-driver
 callback or physical-latency qualification.
+
+## Rust process-loopback requalification (2026-09-08)
+
+`tests/acceptance/m00-rust-process-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` passed for both include and exclude modes. Include
+processed 21,609 source frames into 23,296 engine frames and 182 scheduler
+quanta; exclude processed 22,050 source frames into 23,936 engine frames and
+187 quanta. Both used the explicit 44.1 kHz-to-48 kHz bridge, reported zero
+rejected packets, scheduler xruns, and buffer overruns/underruns, then stopped
+cleanly with persistent media configuration unchanged. This is asynchronous
+user-mode process-loopback evidence, not managed-driver callback or physical
+latency evidence.

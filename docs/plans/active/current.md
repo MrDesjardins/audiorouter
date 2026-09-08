@@ -52,6 +52,13 @@ VB-Audio pair: 24,480 capture frames and 28,320 silent render frames over
 driver, signing, and startup state. This remains shared-mode lifecycle
 evidence, not managed-driver callback or latency proof.
 
+Requalified the Rust asynchronous process-loopback bridge on 2026-09-08 in
+both include and exclude modes for 500 ms. The runs produced 182 and 187
+scheduler quanta respectively, with explicit 44.1 kHz-to-48 kHz conversion,
+zero rejected packets, xruns, or buffer overruns/underruns, clean stream
+teardown, and unchanged persistent media configuration. This remains user-mode
+process-loopback evidence, not managed-driver callback or physical latency.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/
