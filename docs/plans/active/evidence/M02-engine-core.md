@@ -293,3 +293,13 @@ modified.
 
 The shared control event-replay schema is bounded independently of native
 audio scheduling; this change does not open endpoints or alter realtime state.
+
+## Route inspection field bounds (2026-09-07)
+
+The `routes.inspect` response now advertises the graph-backed bounds for
+destination and path entity IDs, per-path nodes and edges, channel-map rows,
+and four-coefficient channel matrices with the validated coefficient range.
+Control discovery tests (86), strict Clippy, formatting, diff checks, and
+documentation validation pass. The path-list count remains intentionally
+unbounded until the complete-provenance versus truncation policy is specified;
+native route activation remains open.

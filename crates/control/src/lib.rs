@@ -884,16 +884,16 @@ fn method_output_schema(name: &str) -> Value {
         "routes.inspect" => json!({
             "type": "object",
             "properties": {
-                "destinationNode": { "type": "string", "minLength": 1 },
+                "destinationNode": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "reachable": { "type": "boolean" },
                 "paths": {
                     "type": "array",
                     "items": {
                         "type": "object",
                         "properties": {
-                            "nodes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-                            "edges": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-                            "channelMaps": { "type": "array", "items": { "type": "array", "items": { "type": "number" } } },
+                            "nodes": { "type": "array", "maxItems": audiorouter_domain::MAX_NODES_PER_SESSION, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
+                            "edges": { "type": "array", "maxItems": audiorouter_domain::MAX_EDGES_PER_SESSION, "items": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } },
+                            "channelMaps": { "type": "array", "maxItems": audiorouter_domain::MAX_EDGES_PER_SESSION, "items": { "type": "array", "maxItems": audiorouter_domain::MAX_CHANNEL_MATRIX_COEFFICIENTS, "items": { "type": "number", "minimum": -2, "maximum": 2 } } },
                             "latencySamples": { "type": "integer", "minimum": 0 }
                         },
                         "required": ["nodes", "edges", "channelMaps", "latencySamples"],
@@ -6802,6 +6802,21 @@ mod tests {
         assert_eq!(
             routes["outputSchema"]["properties"]["paths"]["items"]["required"],
             json!(["nodes", "edges", "channelMaps", "latencySamples"])
+        );
+        assert_eq!(
+            routes["outputSchema"]["properties"]["paths"]["items"]["properties"]["nodes"]
+                ["maxItems"],
+            audiorouter_domain::MAX_NODES_PER_SESSION
+        );
+        assert_eq!(
+            routes["outputSchema"]["properties"]["paths"]["items"]["properties"]["edges"]
+                ["maxItems"],
+            audiorouter_domain::MAX_EDGES_PER_SESSION
+        );
+        assert_eq!(
+            routes["outputSchema"]["properties"]["paths"]["items"]["properties"]["channelMaps"]
+                ["items"]["maxItems"],
+            audiorouter_domain::MAX_CHANNEL_MATRIX_COEFFICIENTS
         );
         let plan = methods
             .iter()
