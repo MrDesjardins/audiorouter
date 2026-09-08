@@ -1883,3 +1883,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00-M08 safe acceptance at `09494d7` on 2026-09-08: elevated native compile, read-only 34-endpoint format inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/M06/M07 acceptance, unsigned M08 preparation, and documentation validation passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Completed M02/ARCH-05/ENG-03 live adapter requalification at `acf1454` on 2026-09-08: the bounded shared-mode smoke processed 24,480 capture frames through 191 graph blocks and 24,448 scheduler frames, with zero xruns/overruns or deadline misses and a 65,536 ns processing p99.9 upper bound. Streams stopped/reset and the media snapshot was unchanged. This is shared-mode adapter evidence, not managed-driver callback qualification.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

@@ -977,3 +977,13 @@ VB-Audio render/capture pair: 14,400 captured frames, 13,824 routed frames,
 112 graph blocks, 32,768 ns processing p99.9 upper bound, and zero xruns or
 deadline misses/lateness. Streams stopped/reset and defaults, volume, mute,
 privacy, drivers, signing, and startup configuration were unchanged.
+## Live shared-mode adapter requalification (`acf1454`, 2026-09-08)
+
+The authorized bounded adapter smoke passed on the selected native endpoints:
+24,480 capture frames produced 191 generation-1 graph blocks and 24,448
+scheduler frames, with zero scheduler xruns, input/output overruns, or
+deadline misses. Processing p99.9 was 65,536 ns. The wrapper used zero-valued
+caller-owned render buffers, stopped/reset both streams, and verified an
+unchanged media-device snapshot. This is shared-mode user-space adapter
+evidence only; it does not satisfy managed-driver callback-deadline or
+physical-latency gates.
