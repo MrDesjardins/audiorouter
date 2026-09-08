@@ -773,6 +773,15 @@ signing, startup configuration, and media state were unchanged. This confirms
 digital signal transfer only; it is not calibrated physical latency or
 managed-driver/application compatibility evidence.
 
+## Maximum digital impulse correlation (2026-09-08)
+
+The maximum 2,000-impulse VB-Audio correlation acceptance passed with 1,997
+detected groups and zero p95 inter-group spacing error. Estimated onset was
+77.77 ms. Temporary capture/impulse artifacts were removed and the selected
+endpoint lifecycle completed cleanly. This remains digital timing evidence;
+the onset is not calibrated physical latency and does not satisfy the hardware
+latency gate.
+
 ## Native process-loopback exclusion recheck (2026-09-08)
 
 The bounded native exclusion-mode acceptance passed for 250 ms and captured
