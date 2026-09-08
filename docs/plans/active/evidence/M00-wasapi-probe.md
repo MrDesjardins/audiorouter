@@ -893,3 +893,10 @@ VB-Audio endpoints completed the 250 ms lifecycle with 12,480 capture frames
 and 16,320 silent render frames. The adjacent object and repository `main.obj`
 were absent after cleanup, and the wrapper reported unchanged audio settings.
 This is shared-mode event lifecycle evidence only.
+
+The impulse wrapper was requalified after the custom-output build change on
+2026-09-08 using 50 impulses over the existing VB-Audio cable. It detected
+45 groups with zero p95 spacing error and an estimated 82.54 ms digital onset.
+The executable, adjacent object, raw capture, and logs were all absent after
+cleanup; no repository object or audio configuration remained changed. This
+is bounded digital correlation, not calibrated physical acoustic latency.

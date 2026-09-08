@@ -1687,3 +1687,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/CAP-01/CAP-02/ARCH-07 event-wrapper requalification on 2026-09-08: selected VB-Audio endpoints completed the bounded event lifecycle with 12,480 capture and 16,320 silent render frames; temporary and repository objects were absent afterward and settings were unchanged.
 - Next M00/M02/M03/ARCH-05 task: retain event lifecycle evidence while pursuing calibrated latency and managed endpoint-owned callback evidence after the production driver boundary exists.
+
+- Completed M00/CAP-05/QUAL-01 impulse-wrapper requalification on 2026-09-08: the 50-impulse VB-Audio run detected 45 groups with zero p95 spacing error and an estimated 82.54 ms digital onset; raw/log/object cleanup and unchanged configuration checks passed. This remains digital correlation evidence, not calibrated acoustic latency.
+- Next M00/M02/M03/ARCH-05 task: retain digital timing evidence while pursuing calibrated latency and managed endpoint-owned callback evidence after the production driver boundary exists.
