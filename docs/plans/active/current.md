@@ -82,6 +82,18 @@ artifacts were removed, and the media snapshot was unchanged. This validates
 the event-driven lifecycle shape only; production driver ownership and
 physical latency remain open.
 
+## Portable liveness and recovery boundary audit (2026-09-08)
+
+The adapter recovery policy is now explicitly requalified against CAP-06,
+CAP-11, and CAP-12: exact endpoint identity and mix-format changes fail closed
+before activation; transient device/service failures retry only within a
+bounded policy; non-transient failures are not retried; and process restart
+rebinding requires one verified executable plus creation-time identity. The
+focused regressions pass without opening a stream or changing machine audio
+configuration. Sleep/resume, reboot, Windows Audio service restart,
+multi-user transitions, and an actual PID-reuse occurrence remain native
+lifecycle gates, so no production recovery claim is made.
+
 ## Safe acceptance requalification at current head (2026-09-08)
 
 After a sandbox-only `Get-PnpDevice` permission failure, the complete

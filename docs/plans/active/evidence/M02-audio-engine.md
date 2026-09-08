@@ -1,5 +1,24 @@
 # M02 audio adapter groundwork
 
+## 2026-09-08 - Portable liveness and recovery boundary audit
+
+The Windows adapter's recovery boundary was re-audited against CAP-06,
+CAP-11, and CAP-12. Exact endpoint recovery refreshes the notification-backed
+inventory and reopens only the persisted endpoint ID, direction, and mix
+format; missing, changed, or stale bindings fail closed before activation.
+Transient device-invalidation and audio-service failures use a bounded retry
+helper, while invalid-argument, access, and other non-transient failures are
+not retried. Process restart resolution requires exactly one
+case-insensitive executable match with a creation timestamp, and the binding
+check rejects a stale PID/name/time tuple.
+
+Portable regressions cover retry success, retry-attempt bounds, non-transient
+rejection, endpoint identity validation, and restarted-process stale-binding
+rejection. This confirms the safe recovery policy without substituting another
+endpoint or changing defaults. Full sleep/resume, Windows Audio service
+restart, reboot, user-session transition, and an actual PID-reuse occurrence
+remain native lifecycle gates and are not claimed by this audit.
+
 ## 2026-09-08 - Rust adapter and route requalification
 
 The guarded `m02-rust-adapter-live.ps1 -AllowLiveAudio -DurationMilliseconds
