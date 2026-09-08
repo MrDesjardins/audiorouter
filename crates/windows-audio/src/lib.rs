@@ -7,7 +7,7 @@
 //! caller must explicitly select an endpoint and invoke the stream methods.
 
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use windows_core::Interface;
 
@@ -185,6 +185,37 @@ pub struct CapturePacket {
     pub flags: u32,
     pub device_position: u64,
     pub qpc_position: u64,
+}
+
+/// Bounded process-loopback delivery counters. Values are snapshots of the
+/// adapter lifetime and are intended for control-plane diagnostics, not audio
+/// callback logging or timing claims.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ProcessLoopbackTelemetry {
+    pub wait_calls: u64,
+    pub wait_timeouts: u64,
+    pub packets: u64,
+    pub frames: u64,
+    pub minimum_packet_frames: u32,
+    pub maximum_packet_frames: u32,
+    pub silent_packets: u64,
+}
+
+#[derive(Debug, Default)]
+struct ProcessLoopbackTelemetryCounters {
+    wait_calls: AtomicU64,
+    wait_timeouts: AtomicU64,
+    packets: AtomicU64,
+    frames: AtomicU64,
+    minimum_packet_frames: AtomicU64,
+    maximum_packet_frames: AtomicU64,
+    silent_packets: AtomicU64,
+}
+
+fn saturating_increment(counter: &AtomicU64) {
+    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+        Some(value.saturating_add(1))
+    });
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -525,6 +556,7 @@ pub struct ProcessLoopbackCapture {
     bytes_per_frame: usize,
     started: bool,
     event: EventHandle,
+    telemetry: ProcessLoopbackTelemetryCounters,
     _com: ComApartment,
 }
 
@@ -763,6 +795,7 @@ impl ProcessLoopbackCapture {
             bytes_per_frame,
             started: false,
             event,
+            telemetry: ProcessLoopbackTelemetryCounters::default(),
             _com: com,
         })
     }
@@ -784,15 +817,36 @@ impl ProcessLoopbackCapture {
     /// The timeout is bounded by the caller; a timeout returns `false` and
     /// does not inspect or alter endpoint state.
     pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
+        saturating_increment(&self.telemetry.wait_calls);
         let result = unsafe {
             windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
         };
         if result == windows::Win32::Foundation::WAIT_OBJECT_0 {
             Ok(true)
         } else if result == windows::Win32::Foundation::WAIT_TIMEOUT {
+            saturating_increment(&self.telemetry.wait_timeouts);
             Ok(false)
         } else {
             Err(AudioError::Windows(windows::core::Error::from_thread()))
+        }
+    }
+
+    /// Read a point-in-time delivery snapshot without waiting or allocating.
+    pub fn telemetry(&self) -> ProcessLoopbackTelemetry {
+        let packets = self.telemetry.packets.load(Ordering::Relaxed);
+        ProcessLoopbackTelemetry {
+            wait_calls: self.telemetry.wait_calls.load(Ordering::Relaxed),
+            wait_timeouts: self.telemetry.wait_timeouts.load(Ordering::Relaxed),
+            packets,
+            frames: self.telemetry.frames.load(Ordering::Relaxed),
+            minimum_packet_frames: if packets == 0 {
+                0
+            } else {
+                self.telemetry.minimum_packet_frames.load(Ordering::Relaxed) as u32
+            },
+            maximum_packet_frames: self.telemetry.maximum_packet_frames.load(Ordering::Relaxed)
+                as u32,
+            silent_packets: self.telemetry.silent_packets.load(Ordering::Relaxed),
         }
     }
 
@@ -840,6 +894,32 @@ impl ProcessLoopbackCapture {
             }
         }
         unsafe { self.capture.ReleaseBuffer(packet_frames)? };
+        saturating_increment(&self.telemetry.packets);
+        let _ = self
+            .telemetry
+            .frames
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                Some(value.saturating_add(u64::from(packet_frames)))
+            });
+        let _ = self.telemetry.minimum_packet_frames.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |value| {
+                Some(if value == 0 {
+                    u64::from(packet_frames)
+                } else {
+                    value.min(u64::from(packet_frames))
+                })
+            },
+        );
+        let _ = self.telemetry.maximum_packet_frames.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |value| Some(value.max(u64::from(packet_frames))),
+        );
+        if flags & windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
+            saturating_increment(&self.telemetry.silent_packets);
+        }
         Ok(Some(CapturePacket {
             frames: packet_frames,
             flags,

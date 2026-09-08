@@ -629,3 +629,18 @@ passed, with no persistent audio configuration changed.
 This qualifies event delivery and bounded wakeup behavior on the tested host,
 not callback deadline, clock-drift, physical-latency, or production-driver
 compliance.
+
+## Process-loopback delivery telemetry (2026-09-07)
+
+The Windows adapter now exposes a nonblocking `ProcessLoopbackTelemetry`
+snapshot backed by saturating atomics. It records wait calls, wait timeouts,
+successful packets and frames, minimum/maximum packet-frame counts, and silent
+packets. Counters update only after successful buffer release or bounded event
+wait outcomes; no logging or allocation is introduced into packet delivery.
+
+The guarded live acceptance measured, for both include and exclude modes, 25
+packets and 11,025 frames, with 441 minimum and maximum packet frames. Include
+recorded 39 waits/14 timeouts; exclude recorded 40 waits/15 timeouts; both had
+zero silent packets. Media state and persistent audio configuration were
+unchanged. These are host observations, not callback deadline or physical
+latency evidence.
