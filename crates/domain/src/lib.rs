@@ -15,6 +15,9 @@ pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
 pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 pub const MAX_PENDING_GRAPH_PLANS: usize = 100;
+/// Maximum number of in-memory graph commit results retained for idempotent
+/// replay when the durable control-plane journal is not available.
+pub const MAX_GRAPH_IDEMPOTENCY_RESULTS: usize = 100;
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
@@ -1942,6 +1945,7 @@ pub struct GraphStore {
     history: HashMap<EntityId, Vec<Session>>,
     plans: HashMap<EntityId, GraphPlan>,
     committed_keys: HashMap<String, (CommitResult, EntityId)>,
+    committed_key_order: VecDeque<String>,
     next_plan: u64,
 }
 
@@ -1955,6 +1959,8 @@ impl GraphStore {
         self.plans.retain(|_, plan| plan.session_id != *id);
         self.committed_keys
             .retain(|_, (result, _)| result.session_id != *id);
+        self.committed_key_order
+            .retain(|key| self.committed_keys.contains_key(key));
         Ok(session)
     }
 
@@ -2263,6 +2269,12 @@ impl GraphStore {
         self.sessions.insert(committed.id.clone(), committed);
         self.committed_keys
             .insert(idempotency_key.into(), (result.clone(), plan_id.clone()));
+        self.committed_key_order.push_back(idempotency_key.into());
+        while self.committed_key_order.len() > MAX_GRAPH_IDEMPOTENCY_RESULTS {
+            if let Some(oldest) = self.committed_key_order.pop_front() {
+                self.committed_keys.remove(&oldest);
+            }
+        }
         Ok(result)
     }
 }
@@ -3311,6 +3323,46 @@ mod tests {
                 actual: 1
             })
         );
+    }
+
+    #[test]
+    fn graph_store_bounds_in_memory_idempotency_results_fifo() {
+        let mut store = GraphStore::default();
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        store.insert_session(original.clone()).unwrap();
+
+        let mut newest_plan = None;
+        for revision in 0..=MAX_GRAPH_IDEMPOTENCY_RESULTS {
+            let mut candidate = store.session(&original.id).unwrap().clone();
+            candidate.name = format!("revision-{revision}");
+            let plan = store
+                .plan_graph(&original.id, revision as u64, candidate)
+                .unwrap();
+            store
+                .commit_graph(&plan, revision as u64, &format!("operation-{revision}"))
+                .unwrap();
+            newest_plan = Some(plan);
+        }
+
+        assert_eq!(
+            store.commit_graph(&EntityId::new("missing-plan"), 0, "operation-0"),
+            Err(StoreError::PlanNotFound)
+        );
+
+        let replay = store
+            .commit_graph(
+                &newest_plan.unwrap(),
+                MAX_GRAPH_IDEMPOTENCY_RESULTS as u64,
+                &format!("operation-{}", MAX_GRAPH_IDEMPOTENCY_RESULTS),
+            )
+            .unwrap();
+        assert!(replay.idempotent_replay);
     }
 
     #[test]

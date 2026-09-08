@@ -25,6 +25,15 @@ when all slots are active; restoring persisted plans uses the same bound.
 Domain coverage is 55 tests with strict Clippy; no audio or machine
 configuration was accessed.
 
+## In-memory graph idempotency retention bound (2026-09-08)
+
+Closed an M01/SEC-12 retention gap in the non-durable `GraphStore`: completed
+graph commit results now use a FIFO ledger capped at 100 entries, matching the
+existing bounded graph-history policy. Removing a session also removes its
+ledger entries; storage-backed control retains durable replay through SQLite.
+Domain coverage is 56 tests with strict Clippy; no audio or machine
+configuration was accessed.
+
 ## Ephemeral-plan hydration bounds (2026-09-08)
 
 Closed an M03/M07/SEC-12 persistence gap: startup and pending virtual-device

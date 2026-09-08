@@ -1,5 +1,14 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-08 - In-memory graph idempotency retention bound
+
+The non-durable `GraphStore` now retains at most 100 completed graph commit
+results for idempotent replay, using FIFO eviction and a matching order ledger.
+Session removal cleans both the result map and ledger. A regression commits 101
+successive revisions, verifies the oldest key is no longer retained, and
+confirms the newest key still replays. Domain coverage is 56 tests with strict
+Clippy; durable control-plane replay remains backed by SQLite.
+
 ## Scope and boundary
 
 This report covers the portable M01 foundation implemented while M00 Windows capture, process-loopback, physical-latency, and managed-driver gates remain blocked. It does not claim a Windows named pipe, real audio activation, driver provisioning, or realtime behavior.
