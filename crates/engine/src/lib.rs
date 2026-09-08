@@ -9,6 +9,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
+/// Maximum number of preallocated audio blocks owned by one queue or pool.
+/// This bounds construction-time memory even when capacity originates at an
+/// external control boundary.
+pub const MAX_AUDIO_QUEUE_BLOCKS: usize = 2048;
 pub const MAX_MIXER_INPUTS: usize = 8;
 pub const MAX_FANOUT_BRANCHES: usize = 8;
 pub const MAX_EXTRA_COMPENSATION_MS: u32 = 250;
@@ -539,7 +543,7 @@ impl VirtualBusBridge {
 
 impl AudioBlockPool {
     pub fn new(capacity: usize, channels: usize, frames: usize) -> Result<Self, QueueError> {
-        if capacity == 0 {
+        if !(1..=MAX_AUDIO_QUEUE_BLOCKS).contains(&capacity) {
             return Err(QueueError::InvalidCapacity);
         }
         if !(1..=MAX_CHANNELS).contains(&channels)
@@ -584,7 +588,7 @@ impl AudioBlockPool {
 
 impl AudioBlockQueue {
     pub fn new(capacity: usize) -> Result<Self, QueueError> {
-        if capacity == 0 {
+        if !(1..=MAX_AUDIO_QUEUE_BLOCKS).contains(&capacity) {
             return Err(QueueError::InvalidCapacity);
         }
         Ok(Self {
@@ -601,7 +605,7 @@ impl AudioBlockQueue {
         channels: usize,
         frames: usize,
     ) -> Result<Self, QueueError> {
-        if capacity == 0 {
+        if !(1..=MAX_AUDIO_QUEUE_BLOCKS).contains(&capacity) {
             return Err(QueueError::InvalidCapacity);
         }
         if !(1..=MAX_CHANNELS).contains(&channels)
@@ -3173,6 +3177,26 @@ mod tests {
         let shaped = AudioBlockQueue::new_for_shape(1, 1, 2).unwrap();
         assert!(shaped.try_push(AudioBlock::new(2, 2).unwrap()).is_err());
         assert_eq!(shaped.invalid_blocks(), 1);
+    }
+
+    #[test]
+    fn audio_queue_constructors_reject_unbounded_capacity_before_allocation() {
+        assert!(matches!(
+            AudioBlockQueue::new(MAX_AUDIO_QUEUE_BLOCKS + 1),
+            Err(QueueError::InvalidCapacity)
+        ));
+        assert!(matches!(
+            AudioBlockQueue::new(usize::MAX),
+            Err(QueueError::InvalidCapacity)
+        ));
+        assert!(matches!(
+            AudioBlockQueue::new_for_shape(usize::MAX, 1, 128),
+            Err(QueueError::InvalidCapacity)
+        ));
+        assert!(matches!(
+            AudioBlockPool::new(usize::MAX, 1, 128),
+            Err(QueueError::InvalidCapacity)
+        ));
     }
 
     #[test]

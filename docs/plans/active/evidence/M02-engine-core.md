@@ -174,6 +174,15 @@ and corrected the proportional-only controller's long-run FIFO drift. This is
 simulation evidence only; hardware clock behavior and native scheduling remain
 open.
 
+## Bounded queue construction (2026-09-07)
+
+The realtime engine now rejects queue, ring, pool, and scheduler capacities
+above `MAX_AUDIO_QUEUE_BLOCKS` (2,048) before constructing lock-free storage.
+This closes the public constructor's unbounded-allocation path while retaining
+the existing nonblocking behavior for valid capacities. A regression covers
+zero, over-limit, and `usize::MAX` requests; the engine suite passed 65 tests,
+doc-tests, and strict Clippy. Native callback scheduling remains open.
+
 ## Concurrent graph publication (2026-09-07)
 
 The runtime processor now has a regression that publishes two complete graph
