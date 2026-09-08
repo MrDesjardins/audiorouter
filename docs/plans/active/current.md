@@ -188,6 +188,12 @@ the x64 loader discovered 68 classes and verified finite stereo processing,
 five-parameter automation, and a 180-byte state round trip. No plugin was
 registered and no audio or machine configuration changed.
 
+Requalified M08 unsigned release preparation on 2026-09-08: optimized locked
+CLI/plugin-worker builds, UI production archive, Cargo/npm SBOMs, notices,
+provenance, required-artifact checks, and SHA-256/byte-count verification all
+passed in a disposable directory that was cleaned afterward. No installer,
+driver, signing action, plugin registration, or audio configuration changed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

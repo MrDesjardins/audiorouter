@@ -759,3 +759,12 @@ This is qualification evidence only: no driver was installed or loaded, no
 signing mode changed, and no plugin/startup registration or machine audio
 configuration changed. Production driver ownership, signing, installer,
 clean-machine, physical-latency, and manual UI/accessibility gates remain open.
+## Current unsigned release requalification (2026-09-08)
+
+The disposable `tests/acceptance/m08-release.ps1` wrapper passed at the current
+implementation head. Locked optimized CLI and plugin-worker builds, the UI
+production archive, Cargo/npm SBOMs, npm lock snapshot, third-party notices,
+provenance, required-artifact checks, and SHA-256/byte-count verification all
+passed. The temporary output directory was removed by the wrapper. The result
+is unsigned preparation evidence only: no installer, driver, signing action,
+plugin registration, or audio configuration change occurred.
