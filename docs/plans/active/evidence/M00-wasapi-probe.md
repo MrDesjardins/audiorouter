@@ -642,6 +642,21 @@ wrapper verified unchanged media-device identity/state and exact temporary
 cleanup. It changed no defaults, volume, mute, privacy, driver, signing,
 startup, or other machine audio configuration. This qualifies digital signal
 propagation only; physical acoustic latency remains unqualified.
+
+## Digital loopback requalification (2026-09-08)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
+-CaptureDurationMilliseconds 1000 -ToneDurationMilliseconds 1500`.
+
+The explicitly selected existing VB-Audio endpoints passed the bounded render
+and capture lifecycle, producing 209,982 nonzero payload bytes during the
+1,000 ms capture window while the 1,500 ms tone window ran. The wrapper
+verified unchanged media-device identity/state and removed the exact temporary
+executable, logs, and object. Defaults, volume, mute, privacy, drivers,
+signing, startup, and other machine audio configuration were unchanged. This
+is digital cable propagation evidence only; it does not qualify physical
+acoustic latency, managed virtual-device ownership, or production signing.
 ## Bounded live endpoint lifecycle (2026-09-07)
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
