@@ -16,6 +16,21 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## Native lifecycle and process-attribution acceptance (2026-09-08)
+
+With explicit live-audio authorization, the guarded `m00-native-live.ps1`
+acceptance passed across all 13 active capture and 21 render endpoints at
+100 ms. Capture start/stop/reset and silent render lifecycle completed for all
+usable endpoints; one render endpoint was correctly classified as occupied.
+The media-device snapshot before and after the run was identical.
+
+The guarded `m00-native-process-live.ps1` acceptance also passed at 500 ms.
+Its disposable tone-producing child and selected process tree produced
+19,845 captured frames and 70,847 nonzero payload bytes, then exited cleanly.
+This closes the controlled process-attribution data-path evidence for M00;
+physical acoustic latency, managed-driver ownership, signing, and installer
+gates remain open. No persistent audio configuration changed.
+
 ## Durable graph-history retention bound (2026-09-08)
 
 Closed a persistence retention gap in M01/STATE foundations. The SQLite

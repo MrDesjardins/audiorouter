@@ -1,5 +1,24 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Guarded native live acceptance
+
+Using the installed Visual Studio/Windows SDK/WDK toolchain, the explicit
+`-AllowLiveAudio` acceptance wrapper built a disposable native probe and
+passed `m00-native-live.ps1 -DurationMilliseconds 100` across all 13 active
+capture and 21 render endpoints. Every capture completed bounded start/stop/
+reset; every usable render completed silent start/submission/stop/reset, and
+one endpoint was correctly reported as occupied. The wrapper compared the
+media-device snapshot before and after and removed the temporary executable
+and object file.
+
+The same guarded wrapper passed `m00-native-process-live.ps1
+-DurationMilliseconds 500`. A disposable child emitted a deterministic tone,
+the selected process tree was captured for 19,845 frames with 70,847 nonzero
+payload bytes, and the child exited cleanly. These results provide controlled
+process-attribution data-path evidence, not physical acoustic latency or
+managed-driver routing evidence. Defaults, volume, mute, privacy, driver,
+signing, startup, and other persistent audio configuration were unchanged.
+
 ## Status
 
 The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, start audio streams, install drivers, or write outside stdout.
