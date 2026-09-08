@@ -562,6 +562,12 @@ regression covers each direct storage path; storage coverage passes 51 tests
 with strict Clippy and formatting, with no audio or machine configuration
 accessed.
 
+Graph, startup, and virtual-device plan load/delete paths now enforce the same
+128-byte plan identity bound as their writes, and loaded durable IDs are
+revalidated before being returned. Storage coverage remains green at 51 tests
+with strict Clippy and formatting; no audio or machine configuration was
+accessed.
+
 The discovered processor catalog now advertises its seven-entry bound, while
 node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative

@@ -857,7 +857,11 @@ impl Storage {
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StorageError::Sql);
-        plans
+        let plans = plans?;
+        for (id, _, _) in &plans {
+            validate_plan_id(id.as_str())?;
+        }
+        Ok(plans)
     }
 
     pub fn save_startup_plan(
@@ -886,11 +890,17 @@ impl Storage {
                 row.get(2)?,
             ))
         })?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(StorageError::Sql)
+        let rows = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::Sql)?;
+        for (id, _, _) in &rows {
+            validate_plan_id(id.as_str())?;
+        }
+        Ok(rows)
     }
 
     pub fn delete_startup_plan(&self, id: &EntityId) -> Result<(), StorageError> {
+        validate_plan_id(id.as_str())?;
         self.connection.execute(
             "DELETE FROM startup_plans WHERE id = ?1",
             params![id.as_str()],
@@ -899,6 +909,7 @@ impl Storage {
     }
 
     pub fn delete_virtual_device_plan(&self, id: &EntityId) -> Result<(), StorageError> {
+        validate_plan_id(id.as_str())?;
         self.connection.execute(
             "DELETE FROM virtual_device_plans WHERE id = ?1",
             params![id.as_str()],
@@ -1963,6 +1974,7 @@ impl Storage {
     }
 
     pub fn load_graph_plan(&self, id: &str) -> Result<Option<GraphPlanRecord>, StorageError> {
+        validate_plan_id(id)?;
         self.prune_expired_graph_plans()?;
         self.connection
             .query_row(
@@ -1991,6 +2003,7 @@ impl Storage {
     }
 
     pub fn delete_graph_plan(&self, id: &str) -> Result<(), StorageError> {
+        validate_plan_id(id)?;
         self.connection
             .execute("DELETE FROM graph_plans WHERE id = ?1", params![id])?;
         Ok(())
@@ -2413,6 +2426,22 @@ mod tests {
                 candidate: valid,
                 expires_at: i64::MAX,
             }),
+            Err(StorageError::InvalidPlan(_))
+        ));
+        assert!(matches!(
+            storage.delete_startup_plan(&oversized),
+            Err(StorageError::InvalidPlan(_))
+        ));
+        assert!(matches!(
+            storage.delete_virtual_device_plan(&oversized),
+            Err(StorageError::InvalidPlan(_))
+        ));
+        assert!(matches!(
+            storage.load_graph_plan(oversized.as_str()),
+            Err(StorageError::InvalidPlan(_))
+        ));
+        assert!(matches!(
+            storage.delete_graph_plan(oversized.as_str()),
             Err(StorageError::InvalidPlan(_))
         ));
     }
