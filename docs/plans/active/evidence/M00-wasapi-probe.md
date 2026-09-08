@@ -654,3 +654,16 @@ already-occupied render endpoint was recognized and handled. The acceptance
 script reported that defaults, volume, mute, privacy, drivers, signing, and
 startup configuration were unchanged. This is lifecycle evidence, not physical
 latency, process attribution, or production-driver evidence.
+## Event-driven live lifecycle (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-event-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 250`.
+
+The event-mode check passed on the existing `CABLE Input (VB-Audio Virtual
+Cable)` render and `CABLE Output (VB-Audio Virtual Cable)` capture endpoints,
+reporting 16,800 submitted render frames and 12,480 capture frames. Render
+buffers were silent, clients were stopped/reset by the harness, and the script
+reported defaults, volume, mute, privacy, drivers, signing, and startup
+configuration unchanged. This is event lifecycle evidence, not physical
+latency or production-driver evidence.
