@@ -1660,3 +1660,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M02/API-01/ARCH-05 histogram counter-overflow hardening on 2026-09-08: percentile rank extraction now saturates histogram totals, with a regression for a saturated snapshot. Engine tests (75), strict Clippy, formatting, and diff checks pass; no machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the hardened bounded percentile telemetry to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
+
+- Completed M00-M08/API-01/SEC-12 safe-chain requalification after `0162438` on 2026-09-08: native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification, full workspace checks, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation (51 Markdown files/158 local links) all passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
+- Next M02/M03/ARCH-05 task: connect the hardened bounded percentile telemetry to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.

@@ -12,6 +12,17 @@ signing mode changed, and no plugin/startup registration or machine audio
 configuration changed. Production driver ownership, signing, installer,
 clean-machine, physical-latency, and manual UI/accessibility gates remain open.
 
+## Safe-chain requalification after `0162438` (2026-09-08)
+
+The canonical safe acceptance chain passed again after telemetry overflow
+hardening. Native compile and read-only 34-endpoint inventory, disposable
+pinned SysVAD x64 qualification, workspace, M01, M04, M05, M06, M07, unsigned
+M08 artifact, and documentation checks all passed. Temporary outputs/checkouts
+were removed. No driver was installed or loaded, signing mode was unchanged,
+and no plugin/startup registration or machine audio configuration changed.
+Production driver ownership, signing, installer, clean-machine,
+physical-latency, and manual UI/accessibility gates remain open.
+
 ## Current-tip unsigned qualification (2026-09-07)
 
 The complete release-preparation acceptance passed at the current head. It
