@@ -876,3 +876,14 @@ could construct the public fields directly without using the bounded
 constructor. A regression with a correctly hashed 16 MiB-plus-one-byte asset
 returns `TooLarge`; the plugin-host library suite passed 39 tests with strict
 Clippy and formatting.
+
+## Local SDK reinstall and acceptance (2026-09-07)
+
+The repository-local installer downloaded/repaired the pinned Steinberg VST3
+SDK at revision `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96` under the ignored
+`third_party/vst3sdk` directory. Dedicated M06 acceptance then passed the 51
+SDK self-tests, 1,598 official validator tests, and the offline loader checks
+(68 classes, finite stereo processing, five parameters/automation, and a
+180-byte state round-trip). The installed Visual Studio Community 2026 host
+resolved Windows SDK `10.0.28000.0`; no global SDK/plugin registration, driver,
+audio stream, or machine configuration was changed.
