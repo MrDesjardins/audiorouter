@@ -19,6 +19,13 @@ process-attribution data-path evidence, not physical acoustic latency or
 managed-driver routing evidence. Defaults, volume, mute, privacy, driver,
 signing, startup, and other persistent audio configuration were unchanged.
 
+The complementary `m00-native-process-exclude-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` run also passed. It selected the explicit exclude-
+target-process-tree mode, captured 22,050 frames, verified clean child exit,
+and found the media-device snapshot unchanged. Include and exclude modes are
+therefore both exercised natively; this does not establish physical acoustic
+latency or managed-driver routing.
+
 ## Status
 
 The read-only endpoint inventory probe has been added at [`tools/m00-wasapi-probe`](../../../../tools/m00-wasapi-probe). It uses Rust `windows` bindings and does not modify Windows defaults, start audio streams, install drivers, or write outside stdout.

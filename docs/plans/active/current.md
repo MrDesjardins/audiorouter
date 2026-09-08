@@ -31,6 +31,11 @@ This closes the controlled process-attribution data-path evidence for M00;
 physical acoustic latency, managed-driver ownership, signing, and installer
 gates remain open. No persistent audio configuration changed.
 
+The complementary guarded exclude-tree run also passed at 500 ms, capturing
+22,050 frames with the disposable child excluded. Include and exclude modes
+now both have native lifecycle/data-path evidence; the remaining M00 audio
+gates are calibrated physical latency and managed virtual-driver integration.
+
 ## Durable graph-history retention bound (2026-09-08)
 
 Closed a persistence retention gap in M01/STATE foundations. The SQLite
