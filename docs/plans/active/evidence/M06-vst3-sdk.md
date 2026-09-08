@@ -809,6 +809,30 @@ provenance acceptance and the real SDK installer plus offline M06 acceptance
 pass after this change; no SDK, plugin, driver, audio stream, or machine
 configuration was changed.
 
+## Cross-vendor loader matrix (2026-09-08)
+
+After the zero-parameter probe correction, the native loader was rebuilt and
+run against five distinct classes in the pinned mda bundle. These all passed
+the same bounded offline stereo processing, finite-output, parameter
+automation, and component-state checks:
+
+| Vendor | Effect | Class | Result |
+| --- | --- | ---: | --- |
+| mda | Ambience | 0 | pass; 5 parameters; 180-byte state |
+| mda | BeatBox | 4 | pass; 13 parameters; 180-byte state |
+| mda | Combo | 6 | pass; 8 parameters; 180-byte state |
+| mda | DeEsser | 8 | pass; 4 parameters; 180-byte state |
+| mda | Degrade | 10 | pass; 7 parameters; 180-byte state |
+
+Combined with the ChowMatrix result recorded below, this is six
+loader-compatible
+effects from two independently sourced vendors. It is not a blanket VST3
+compatibility claim: ChowMatrix's official SDK validator still reported 45
+passed and 2 failed (`Valid State Transition 32bits` and `Bus Activation`),
+and worker/editor containment has not yet been exercised with third-party
+code. The matrix run used only disposable/local fixtures and did not install,
+register, or alter audio configuration.
+
 ## Outbound worker-message validation (2026-09-07)
 
 `encode_worker_message` now validates the complete message before producing a

@@ -35,6 +35,13 @@ close the M06 three-effect/two-vendor gate. The temporary checkout was not
 installed or registered and was removed after evidence capture; no audio or
 machine configuration changed.
 
+The corrected loader also requalified distinct mda classes from the pinned
+Steinberg fixture: Ambience (class 0), BeatBox (4), Combo (6), DeEsser (8),
+and Degrade (10) each completed finite stereo processing, parameter
+round-trip, and state round-trip. Together with ChowMatrix this provides
+six loader-compatible effects from two independently sourced vendors, while
+the ChowMatrix SDK-validator failures remain an open qualification risk.
+
 ## Graph-plan retention bound (2026-09-08)
 
 Closed an M01/SEC-12 memory-retention gap in `GraphStore`: expired plans are
