@@ -971,3 +971,9 @@ graph blocks, zero xruns, zero deadline misses, and a 32,768 ns processing
 p99.9 upper bound. Streams stopped/reset cleanly and the media-device snapshot
 was unchanged. This is shared-mode endpoint evidence; managed-driver callback,
 physical-latency, signing, and installer gates remain open.
+
+The guarded 300 ms route acceptance also passed on the explicitly selected
+VB-Audio render/capture pair: 14,400 captured frames, 13,824 routed frames,
+112 graph blocks, 32,768 ns processing p99.9 upper bound, and zero xruns or
+deadline misses/lateness. Streams stopped/reset and defaults, volume, mute,
+privacy, drivers, signing, and startup configuration were unchanged.
