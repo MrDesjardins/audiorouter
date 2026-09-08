@@ -70,6 +70,8 @@ pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
 /// One extra row is permitted so callers can detect a full page.
 pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
+/// Maximum number of directory entries inspected by recovery retention.
+pub const MAX_RECOVERY_DIRECTORY_ENTRIES: usize = 1_024;
 
 fn validate_recording_id(recording_id: &str) -> Result<(), StorageError> {
     if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
@@ -601,7 +603,15 @@ impl Storage {
         }
 
         let mut daily = Vec::new();
+        let mut inspected = 0usize;
         for entry in std::fs::read_dir(directory)? {
+            inspected = inspected.saturating_add(1);
+            if inspected > MAX_RECOVERY_DIRECTORY_ENTRIES {
+                return Err(StorageError::InvalidBackupPath(format!(
+                    "backup retention directory exceeds {} entries",
+                    MAX_RECOVERY_DIRECTORY_ENTRIES
+                )));
+            }
             let entry = entry?;
             let path = entry.path();
             let metadata = std::fs::symlink_metadata(&path)?;
@@ -1189,12 +1199,10 @@ impl Storage {
             let count: i64 =
                 transaction.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
             if checked_sqlite_count(count, "sessions")? >= audiorouter_domain::MAX_SESSIONS_GLOBAL {
-                return Err(StorageError::InvalidSession(
-                    format!(
-                        "global session limit reached ({})",
-                        audiorouter_domain::MAX_SESSIONS_GLOBAL
-                    ),
-                ));
+                return Err(StorageError::InvalidSession(format!(
+                    "global session limit reached ({})",
+                    audiorouter_domain::MAX_SESSIONS_GLOBAL
+                )));
             }
         }
         transaction.execute(
@@ -2598,12 +2606,10 @@ impl Storage {
             let count: i64 =
                 transaction.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
             if checked_sqlite_count(count, "sessions")? >= audiorouter_domain::MAX_SESSIONS_GLOBAL {
-                return Err(StorageError::InvalidSession(
-                    format!(
-                        "global session limit reached ({})",
-                        audiorouter_domain::MAX_SESSIONS_GLOBAL
-                    ),
-                ));
+                return Err(StorageError::InvalidSession(format!(
+                    "global session limit reached ({})",
+                    audiorouter_domain::MAX_SESSIONS_GLOBAL
+                )));
             }
         }
         if failure == Some(JournalFailureStage::BeforeHistory) {
@@ -4159,6 +4165,29 @@ mod tests {
                 if message.contains("must be absolute")
         ));
 
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn recovery_retention_rejects_oversized_directories_before_deletion() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-storage-retention-limit-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir(&directory).unwrap();
+        for index in 0..=MAX_RECOVERY_DIRECTORY_ENTRIES {
+            std::fs::write(directory.join(format!("entry-{index}")), [0u8]).unwrap();
+        }
+        let candidate = directory.join("audiorouter-backup-20260901.sqlite");
+        std::fs::write(&candidate, [1u8]).unwrap();
+
+        assert!(matches!(
+            Storage::prune_recovery_backups(&directory),
+            Err(StorageError::InvalidBackupPath(message))
+                if message == "backup retention directory exceeds 1024 entries"
+        ));
+        assert!(candidate.exists());
         let _ = std::fs::remove_dir_all(directory);
     }
 

@@ -1,5 +1,15 @@
 # M07 automation and recovery evidence
 
+## 2026-09-08 - Recovery-retention directory bound
+
+`Storage::prune_recovery_backups` now caps direct directory inspection at
+1,024 entries. It returns a typed invalid-path error before deleting anything
+when the cap is exceeded, preventing an unbounded retention scan while
+preserving the existing ten-daily-backup and pre-migration retention policy.
+The regression verifies overflow leaves a candidate file untouched. Storage
+tests (77), strict Clippy, documentation validation, and diff checks pass;
+no audio or machine configuration was accessed.
+
 ## 2026-09-08 - In-memory ephemeral-plan admission bounds
 
 The control plane now removes expired entries before admitting new startup,

@@ -99,6 +99,16 @@ growing control memory without weakening per-client burst/refill behavior.
 Control tests (91), strict Clippy, formatting, diff checks, and documentation
 validation pass. No audio or machine configuration was accessed.
 
+## Recovery-retention directory bound (2026-09-08)
+
+Closed an M07/SEC-12 filesystem-retention gap: recovery-backup pruning now
+inspects at most 1,024 direct directory entries and fails closed before any
+deletion when the directory exceeds that bound. The existing policy—retain
+the ten newest daily backups, preserve pre-migration backups and unrelated
+files—remains unchanged for valid directories. Storage tests (77), strict
+Clippy, documentation validation, and diff checks pass. No audio or machine
+configuration was accessed.
+
 ## Client-enrollment cardinality bound (2026-09-08)
 
 Durable and in-memory client enrollment paths now cap distinct identities at
