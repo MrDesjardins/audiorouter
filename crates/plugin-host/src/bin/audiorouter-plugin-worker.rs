@@ -1,7 +1,8 @@
+#[cfg(feature = "test-fixtures")]
+use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
-    read_worker_message, worker_clock_tick, write_worker_message, ParameterDescriptor,
-    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession,
-    WORKER_PROTOCOL_VERSION,
+    read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
+    SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
 };
 #[cfg(feature = "test-fixtures")]
 use std::io::Write;
