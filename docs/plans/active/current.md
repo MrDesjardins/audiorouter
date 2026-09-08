@@ -1886,3 +1886,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M02/ARCH-05/ENG-03 live adapter requalification at `acf1454` on 2026-09-08: the bounded shared-mode smoke processed 24,480 capture frames through 191 graph blocks and 24,448 scheduler frames, with zero xruns/overruns or deadline misses and a 65,536 ns processing p99.9 upper bound. Streams stopped/reset and the media snapshot was unchanged. This is shared-mode adapter evidence, not managed-driver callback qualification.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Completed M02/CAP-01/CAP-02/ENG-03/ARCH-05 routed adapter requalification at `a4b72ec` on 2026-09-08: the bounded VB-Audio route processed 24,000 captured and 23,936 routed frames across 187 graph blocks, with zero xruns, deadline misses, and deadline lateness and a 32,768 ns processing p99.9 upper bound. Streams stopped/reset; endpoint and configuration snapshots were unchanged. This is shared-mode diagnostic evidence, not managed-driver callback qualification.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

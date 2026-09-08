@@ -987,3 +987,13 @@ caller-owned render buffers, stopped/reset both streams, and verified an
 unchanged media-device snapshot. This is shared-mode user-space adapter
 evidence only; it does not satisfy managed-driver callback-deadline or
 physical-latency gates.
+
+## Routed adapter requalification (`a4b72ec`, 2026-09-08)
+
+The authorized bounded route acceptance passed on the explicitly selected
+existing VB-Audio endpoints: 24,000 capture frames became 23,936 routed
+frames across 187 graph blocks. Processing p99.9 was 32,768 ns, with zero
+xruns, deadline misses, or deadline lateness. Streams stopped/reset and
+endpoint/default/volume/mute/privacy/driver/signing/startup snapshots were
+unchanged. This remains shared-mode diagnostic evidence, not managed-driver
+callback or physical-latency qualification.
