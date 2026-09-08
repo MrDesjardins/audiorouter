@@ -1704,6 +1704,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Completed M01/M04/SEC-12 direct session persistence hardening on 2026-09-08: `Storage::save_session`, its atomic journal variant, and graph-plan candidate persistence now validate domain sessions and enforce the existing 1 MiB serialized-document limit before opening a transaction. Storage tests (45), strict Clippy, formatting, and diff checks pass; no audio endpoint or machine configuration was accessed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+- Completed M01/SEC-12 direct enrollment persistence hardening on 2026-09-08: SQLite enrollment writes now enforce nonempty bounded client IDs and the supported role set, with stable control error mapping. Storage/control tests (46/86), strict Clippy, formatting, and diff checks pass; no audio endpoint or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 - Completed M00/SEC-12 acceptance-wrapper cleanup propagation on 2026-09-08: all six custom-output native live wrappers now remove adjacent implicit objects, and the 21-script parse check plus bounded VB-Audio loopback passed with no temporary or repository artifacts left behind. No audio configuration changed.
 - Next M00/M02/M03/ARCH-05 task: retain isolated wrapper cleanup while pursuing calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.
 

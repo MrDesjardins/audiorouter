@@ -28,6 +28,7 @@ pub enum StorageError {
     InvalidBundle(String),
     InvalidRecording(String),
     InvalidPluginState(String),
+    InvalidEnrollment(String),
     CorruptDatabase(String),
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
@@ -1762,6 +1763,14 @@ impl Storage {
     }
 
     pub fn save_client_enrollment(&self, client_id: &str, role: &str) -> Result<(), StorageError> {
+        if client_id.is_empty()
+            || client_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
+            || !matches!(role, "observer" | "editor" | "operator")
+        {
+            return Err(StorageError::InvalidEnrollment(
+                "invalid client enrollment fields".into(),
+            ));
+        }
         self.connection.execute(
             "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)
              VALUES (?1, ?2, 0, NULL)
@@ -3216,6 +3225,26 @@ mod tests {
             storage.load_client_enrollment("client").unwrap(),
             Some(("observer".into(), false))
         );
+    }
+
+    #[test]
+    fn direct_client_enrollment_save_rejects_invalid_fields() {
+        let storage = Storage::open_memory().unwrap();
+        assert!(matches!(
+            storage.save_client_enrollment("", "observer"),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
+        assert!(matches!(
+            storage.save_client_enrollment("client", "admin"),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
+        assert!(matches!(
+            storage.save_client_enrollment(
+                &"c".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1),
+                "editor"
+            ),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
     }
 
     #[test]

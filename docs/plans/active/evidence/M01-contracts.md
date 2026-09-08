@@ -540,6 +540,12 @@ schemas advertise that limit, while valid IDs continue to persist and
 authorize normally; control and storage regressions passed without audio
 access.
 
+The SQLite enrollment write boundary now independently rejects empty or
+oversized client IDs and roles outside `observer`, `editor`, and `operator`.
+This prevents direct storage callers from bypassing the authorization
+contract. Storage and control tests pass (46 and 86 respectively) with strict
+Clippy; no audio or machine configuration was accessed.
+
 The discovered processor catalog now advertises its seven-entry bound, while
 node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative
