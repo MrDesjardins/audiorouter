@@ -630,3 +630,13 @@ failure. Engine regression coverage verifies finite transformed output and
 stateful preparation. This is portable graph evidence only; native callback
 scheduling, device activation, hardware timing, and production performance
 remain open.
+
+## Recorder checkpoint collection bounds (2026-09-07)
+
+Recorder checkpoint restore now rejects more than 4,096 parts or 4,096 pause
+intervals before validating or adopting lifecycle metadata. This protects both
+the public restore API and JSON recovery path from oversized lifecycle
+collections while preserving the existing ordering and frame-consistency
+checks. The recording suite passes 30 tests, doc-tests, formatting, and strict
+Clippy. This is portable recovery evidence; native realtime recorder
+integration remains open.

@@ -14,6 +14,8 @@ const MAX_CHANNELS: u16 = 2;
 pub const MAX_RECORDING_QUEUE_CHUNKS: usize = 2048;
 /// Maximum interleaved samples in one queued chunk (2,048 stereo frames).
 pub const MAX_RECORDING_CHUNK_SAMPLES: usize = 4096;
+const MAX_CHECKPOINT_PARTS: usize = 4096;
+const MAX_CHECKPOINT_PAUSES: usize = 4096;
 
 #[derive(Debug)]
 pub enum PathPolicyError {
@@ -251,6 +253,8 @@ impl RecorderController {
 
     pub fn restore(checkpoint: RecorderCheckpoint) -> Result<Self, RecorderError> {
         if checkpoint.version != 1
+            || checkpoint.parts.len() > MAX_CHECKPOINT_PARTS
+            || checkpoint.pauses.len() > MAX_CHECKPOINT_PAUSES
             || checkpoint.parts.iter().enumerate().any(|(index, part)| {
                 part.index != index as u32
                     || part.end_frame.is_some_and(|end| end < part.start_frame)
@@ -2483,6 +2487,31 @@ mod tests {
         ));
         assert!(matches!(
             RecorderController::restore_json(r#"{"version":1,"state":"Paused"}"#),
+            Err(RecorderError::InvalidCheckpoint)
+        ));
+
+        let mut oversized = RecorderController::new().checkpoint();
+        oversized.parts = (0..=MAX_CHECKPOINT_PARTS)
+            .map(|index| RecordingPart {
+                index: index as u32,
+                start_frame: 0,
+                end_frame: Some(0),
+            })
+            .collect();
+        assert!(matches!(
+            RecorderController::restore(oversized),
+            Err(RecorderError::InvalidCheckpoint)
+        ));
+
+        let mut oversized = RecorderController::new().checkpoint();
+        oversized.pauses = (0..=MAX_CHECKPOINT_PAUSES)
+            .map(|_| FrameInterval {
+                start_frame: 0,
+                end_frame: 0,
+            })
+            .collect();
+        assert!(matches!(
+            RecorderController::restore(oversized),
             Err(RecorderError::InvalidCheckpoint)
         ));
     }
