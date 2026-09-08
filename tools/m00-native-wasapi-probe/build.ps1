@@ -1,5 +1,6 @@
 param(
-    [string]$Output = (Join-Path $PSScriptRoot 'main.exe')
+    [string]$Output = (Join-Path $PSScriptRoot 'main.exe'),
+    [string]$Object = (Join-Path $PSScriptRoot 'main.obj')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,7 +29,7 @@ $umLib = Join-Path $kits "Lib\$version\um\x64"
 $ucrtLib = Join-Path $kits "Lib\$version\ucrt\x64"
 $source = Join-Path $PSScriptRoot 'main.cpp'
 $output = [System.IO.Path]::GetFullPath($Output)
-$object = Join-Path $PSScriptRoot 'main.obj'
+$object = [System.IO.Path]::GetFullPath($Object)
 
 foreach ($path in @($cl, $vcInclude, $vcLib, "$include\um\Windows.h", "$include\um\audioclientactivationparams.h", "$umLib\Mmdevapi.lib")) {
     if (-not (Test-Path -LiteralPath $path)) {

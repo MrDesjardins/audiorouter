@@ -13,8 +13,8 @@ if ($DurationMilliseconds -lt 100 -or $DurationMilliseconds -gt 2000) { throw 'D
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $probeDirectory = Join-Path $workspace 'tools/m00-native-wasapi-probe'
 $buildScript = Join-Path $probeDirectory 'build.ps1'
-$object = Join-Path $probeDirectory 'main.obj'
 $output = Join-Path ([IO.Path]::GetTempPath()) ("audiorouter-m02-route-{0}.exe" -f ([guid]::NewGuid()))
+$temporaryObject = [IO.Path]::ChangeExtension($output, '.obj')
 
 function Get-MediaSnapshot {
     @(Get-PnpDevice -Class Media -PresentOnly | ForEach-Object {
@@ -32,10 +32,9 @@ function Invoke-External([scriptblock]$Command) {
     finally { $ErrorActionPreference = $saved }
 }
 
-if (Test-Path -LiteralPath $object) { throw "refusing route acceptance because generated object already exists: $object" }
 $before = Get-MediaSnapshot
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Output $output
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Output $output -Object $temporaryObject
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output -PathType Leaf)) { throw 'native endpoint inventory probe build failed' }
     $inventory = Invoke-External { & $output inventory }
     $inventoryText = $inventory.Output -join "`n"
@@ -61,10 +60,10 @@ try {
     Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {
-    Remove-Item -LiteralPath $output -Force -ErrorAction SilentlyContinue
-    for ($attempt = 0; $attempt -lt 5 -and (Test-Path -LiteralPath $object); $attempt++) {
-        Remove-Item -LiteralPath $object -Force -ErrorAction SilentlyContinue
-        if (Test-Path -LiteralPath $object) { Start-Sleep -Milliseconds 100 }
+    Remove-Item -LiteralPath $output, $temporaryObject -Force -ErrorAction SilentlyContinue
+    for ($attempt = 0; $attempt -lt 5 -and (Test-Path -LiteralPath $temporaryObject); $attempt++) {
+        Remove-Item -LiteralPath $temporaryObject -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $temporaryObject) { Start-Sleep -Milliseconds 100 }
     }
-    if (Test-Path -LiteralPath $object) { throw "native generated object cleanup failed: $object" }
+    if (Test-Path -LiteralPath $temporaryObject) { throw "native generated object cleanup failed: $temporaryObject" }
 }

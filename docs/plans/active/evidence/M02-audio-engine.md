@@ -374,6 +374,18 @@ correction exceeds the configured ±100 ppm bound. This makes the bounded
 feedback state observable to acceptance tooling; probe tests and strict Clippy
 pass, while live differing-rate execution remains blocked by host policy.
 
+## Differing-rate candidate and host launch boundary (2026-09-07)
+
+The read-only native format inventory found an available 48 kHz CABLE capture
+and 96 kHz SteelSeries Sonar Aux render pair, both using float32 mix formats.
+The guarded differing-rate route was then attempted with those exact friendly
+names. Its temporary native build completed, but Windows Application Control
+blocked launching the freshly generated executable before endpoint inventory;
+therefore no stream opened and no differing-rate runtime result is claimed.
+The route wrapper now uses a per-run temporary object path and cleans it with
+the executable, so this host-policy failure cannot strand `main.obj` in the
+repository.
+
 ## 2026-09-07 — Current-head Rust adapter route
 
 The authorized guarded route was replayed after the event-gated render and

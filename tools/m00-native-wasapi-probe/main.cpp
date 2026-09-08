@@ -400,7 +400,7 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms,
     return SUCCEEDED(hr) && packet_count > 0 ? 0 : 1;
 }
 
-static int endpoint_inventory(EDataFlow flow) {
+static int endpoint_inventory(EDataFlow flow, bool include_formats = false) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -418,6 +418,19 @@ static int endpoint_inventory(EDataFlow flow) {
         device->GetId(&id);
         std::wcout << (flow == eRender ? L"render" : L"capture") << L"[" << index << L"] name="
                    << endpoint_name(device) << L" id=" << (id ? id : L"<unknown>") << L'\n';
+        if (include_formats) {
+            IAudioClient* client = nullptr;
+            WAVEFORMATEX* format = nullptr;
+            HRESULT format_hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                                                 reinterpret_cast<void**>(&client));
+            if (SUCCEEDED(format_hr)) format_hr = client->GetMixFormat(&format);
+            std::cout << (flow == eRender ? "render" : "capture") << "[" << index
+                      << "] mix_format=";
+            print_hr("activate_or_format", format_hr);
+            if (SUCCEEDED(format_hr)) print_format(format);
+            if (format) CoTaskMemFree(format);
+            if (client) client->Release();
+        }
         CoTaskMemFree(id);
         device->Release();
     }
@@ -850,6 +863,12 @@ int main(int argc, char** argv) {
     if (argc > 1 && std::strcmp(argv[1], "inventory") == 0) {
         int render_result = endpoint_inventory(eRender);
         int capture_result = endpoint_inventory(eCapture);
+        CoUninitialize();
+        return render_result != 0 ? render_result : capture_result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "inventory-formats") == 0) {
+        int render_result = endpoint_inventory(eRender, true);
+        int capture_result = endpoint_inventory(eCapture, true);
         CoUninitialize();
         return render_result != 0 ? render_result : capture_result;
     }

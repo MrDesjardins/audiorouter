@@ -590,3 +590,19 @@ generated outputs. The authorized 500 ms run captured 22,050 frames and 78,114
 nonzero bytes. This makes the include-tree evidence repeatable without claiming
 PID reuse, arbitrary exclusion sets, physical latency, or production restart
 supervision.
+
+## Read-only endpoint format inventory (2026-09-07)
+
+The native probe now provides a separate `inventory-formats` command so the
+stable name/ID inventory remains script-compatible while each endpoint's
+`IAudioClient::GetMixFormat` result can be inspected. The authorized run
+successfully queried all 21 active render and 13 active capture endpoints. It
+found a genuine available rate difference: CABLE Output capture is 48 kHz
+float32 stereo, while SteelSeries Sonar Aux render is 96 kHz float32 eight
+channel. This identifies a candidate for differing-rate resampler testing;
+format inspection is read-only and did not open a stream or change device
+configuration.
+
+The first guarded route attempt with that pair was blocked before inventory by
+Windows Application Control when launching its newly generated temporary Rust
+executable. No stream opened; existing-rate route evidence remains valid.
