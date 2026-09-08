@@ -528,8 +528,14 @@ fn adapter_smoke(
         let drift_correction_ppm = drift
             .as_ref()
             .map_or(0.0, DriftController::correction_ppm);
+        let processing_time_histogram_samples = telemetry
+            .processing_time_histogram
+            .iter()
+            .copied()
+            .sum::<u64>();
         if telemetry.active_generation != Some(generation)
             || telemetry.processed_quanta != u64::from(graph_blocks)
+            || processing_time_histogram_samples != telemetry.processed_quanta
             || telemetry.xruns != 0
             || telemetry.input_overruns != 0
             || telemetry.output_overruns != 0
@@ -542,7 +548,7 @@ fn adapter_smoke(
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_histogram_samples={}",
             capture_info.id,
             render_info.id,
             capture_packets,
@@ -560,7 +566,10 @@ fn adapter_smoke(
             telemetry.processed_quanta,
             telemetry.xruns,
             telemetry.input_overruns,
-            telemetry.output_overruns
+            telemetry.output_overruns,
+            telemetry.processing_time_ns_total,
+            telemetry.processing_time_ns_max,
+            processing_time_histogram_samples
         );
         Ok(())
     })();

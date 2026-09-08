@@ -820,6 +820,22 @@ instrumentation readiness only; it does not establish native callback p99.9 or
 deadline compliance until a production-style native scheduler owns the endpoint
 callback.
 
+## Adapter timing telemetry propagation (2026-09-08)
+
+The Rust `adapter_smoke` probe now reports and validates scheduler processing
+time total, maximum, and histogram sample count. Its validation requires the
+histogram sample count to equal processed quanta, preventing a silently stale
+or partial timing report. The guarded route acceptance requires the same timing
+fields and bounded total/max relationship.
+
+The probe check and guarded 300 ms live adapter/route checks passed. The
+adapter run reported 116 histogram samples for 116 processed quanta,
+1,090,800 ns total, 21,600 ns maximum, zero scheduler xruns/overruns, and
+unchanged media state. The routed run passed with 14,400 capture frames,
+14,336 scheduler frames, and 13,856 routed frames. This remains adapter/event
+loop evidence and does not establish production native callback deadline
+compliance.
+
 ## Inactive-runtime timing regression (2026-09-08)
 
 The engine regression suite now covers the pre-activation silence path: it
