@@ -659,3 +659,16 @@ frames, and 441-frame minimum/maximum packets; both completed 86/82 scheduler
 quanta with unchanged media state and no persistent audio configuration
 changes. These observations do not establish realtime deadline or physical
 latency compliance.
+
+## Shared packet-admission policy (2026-09-07)
+
+The engine-side `Pcm16QuantumAdapter::push_packet` now enforces the same
+non-empty, 4,096-frame maximum period bound as the Windows process-loopback
+adapter before copying into fixed staging. The existing chunk method remains
+available only for already validated packet pieces. Regression coverage checks
+empty, malformed, and over-bound inputs while preserving pending ownership.
+
+Engine tests (69), Windows-audio tests (28), strict workspace Clippy, formatting,
+and tool compilation passed. Guarded live include/exclude runs each observed
+441-frame packets and emitted 82 generation-1 scheduler quanta; stop/reset and
+media-state checks passed with no persistent audio configuration change.

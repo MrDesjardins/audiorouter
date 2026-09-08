@@ -20,6 +20,7 @@ pub const MAX_DELAY_FRAMES: usize = 48_000;
 pub const MAX_DRIFT_CORRECTION_PPM: f64 = 999_999.0;
 
 const PCM16_QUANTUM_SAMPLES: usize = MAX_CHANNELS * PROCESSING_QUANTUM_FRAMES;
+pub const MAX_PCM16_PACKET_FRAMES: usize = 4_096;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LatencyCompensationError {
@@ -754,6 +755,20 @@ impl Pcm16QuantumAdapter {
             .copy_from_slice(&source[..sample_count]);
         self.pending_frames += frames;
         Ok(frames)
+    }
+
+    /// Admit one complete bounded device packet. Packets larger than the
+    /// supported period ceiling are rejected before any staging copy; callers
+    /// may use `push_interleaved` for already validated chunks.
+    pub fn push_packet(&mut self, source: &[i16]) -> Result<usize, BlockError> {
+        if source.len() % self.channels != 0 {
+            return Err(BlockError::ShapeMismatch);
+        }
+        let frames = source.len() / self.channels;
+        if frames == 0 || frames > MAX_PCM16_PACKET_FRAMES {
+            return Err(BlockError::InvalidFrameCount);
+        }
+        self.push_interleaved(source)
     }
 
     /// Decode one complete quantum into a preallocated planar engine block.
@@ -3098,6 +3113,11 @@ mod tests {
             adapter.push_interleaved(&[0_i16]),
             Err(BlockError::ShapeMismatch)
         );
+        assert_eq!(
+            adapter.push_packet(&vec![0_i16; (MAX_PCM16_PACKET_FRAMES + 1) * 2]),
+            Err(BlockError::InvalidFrameCount)
+        );
+        assert_eq!(adapter.push_packet(&[]), Err(BlockError::InvalidFrameCount));
         let mut wrong = AudioBlock::new(1, PROCESSING_QUANTUM_FRAMES).unwrap();
         assert_eq!(adapter.pop_into(&mut wrong), Err(BlockError::ShapeMismatch));
     }

@@ -133,8 +133,8 @@ fn process_loopback_smoke(
             }
             let mut offset = 0usize;
             while offset < packet.frames as usize {
-                let consumed = quantum
-                    .push_interleaved(&pcm16[offset * 2..sample_count])
+                    let consumed = quantum
+                        .push_packet(&pcm16[offset * 2..sample_count])
                     .map_err(|_| AudioError::InvalidFrameSize)?;
                 offset += consumed;
                 if consumed == 0 {
