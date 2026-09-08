@@ -907,6 +907,12 @@ samples becoming 192 and then 256 at 48 kHz before clean shutdown. This proves
 dynamic protocol transport only; plugin-reported latency and graph compensation
 remain native/runtime gates.
 
+The supervised wrapper regression now exercises the same fixture paths: it
+observes a dynamic latency response while the supervisor remains `Running`,
+then requests a two-entry descriptor catalog through the supervised process
+adapter before clean shutdown. This covers wrapper heartbeat/error handling in
+addition to raw IPC framing.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 ## Native controller descriptor discovery (2026-09-08)

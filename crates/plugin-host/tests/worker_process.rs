@@ -248,6 +248,50 @@ fn supervised_worker_round_trips_versioned_state_without_restarting() {
     assert!(worker.shutdown().unwrap().success());
 }
 
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn supervised_worker_fixture_preserves_dynamic_latency_and_descriptors() {
+    let hash = "8".repeat(64);
+    let worker_path = fixture_worker_path();
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let now = Instant::now();
+    let mut worker =
+        SupervisedWorkerProcess::spawn_fixture(worker_path, &identity, 1, "latency", now)
+            .expect("spawn supervised latency fixture");
+    let first = worker
+        .report_latency(WorkerLatency::new(128, 48_000).unwrap(), now)
+        .expect("supervised latency report");
+    assert_eq!(first.samples, 192);
+    assert_eq!(
+        worker.state(),
+        audiorouter_plugin_host::WorkerState::Running
+    );
+    assert!(worker.shutdown().unwrap().success());
+
+    let mut descriptor_worker = SupervisedWorkerProcess::spawn_fixture(
+        fixture_worker_path(),
+        &identity,
+        1,
+        "descriptors",
+        now,
+    )
+    .expect("spawn supervised descriptor fixture");
+    let descriptors = descriptor_worker
+        .describe_parameters(now)
+        .expect("supervised parameter description");
+    assert_eq!(descriptors.len(), 2);
+    assert_eq!(descriptors[1].parameter_id, 2);
+    assert!(descriptor_worker.shutdown().unwrap().success());
+}
+
 #[test]
 fn disposable_worker_rejects_a_runtime_sample_rate_change() {
     let hash = "1".repeat(64);

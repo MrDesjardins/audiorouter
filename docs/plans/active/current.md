@@ -77,6 +77,11 @@ process regression observes 128 -> 192 -> 256 samples at 48 kHz and shuts down
 cleanly. This strengthens dynamic-latency wire evidence without claiming a
 third-party plugin measurement or graph compensation.
 
+The supervised worker regression now covers both fixture paths: a dynamic
+latency response is accepted while the supervisor remains running, and the
+two-entry descriptor catalog is returned through the supervised adapter before
+clean shutdown.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models
