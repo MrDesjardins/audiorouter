@@ -916,3 +916,12 @@ captured frames. It excluded the disposable child process tree, released the
 native streams, and reported no persistent configuration change. This
 confirms the exclusion API/lifecycle path; it does not establish a quantitative
 cross-process isolation threshold or PID-reuse protection.
+
+## Native event lifecycle requalification (2026-09-08)
+
+`tests/acceptance/m00-native-event-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` passed on the explicitly selected VB-Audio pair:
+24,480 capture frames and 28,320 silent render frames were processed. Both
+streams completed their event-driven lifecycle and cleanup; defaults, volume,
+mute, privacy, driver, signing, and startup state were unchanged. This is
+shared-mode event lifecycle evidence, not production callback or latency proof.

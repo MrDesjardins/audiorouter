@@ -46,6 +46,12 @@ The paired process-tree exclusion wrapper also passed on 2026-09-08 with
 result validates exclusion-mode lifecycle only; quantitative isolation and
 PID-reuse evidence remain open.
 
+Requalified the native event-driven lifecycle on 2026-09-08 using the selected
+VB-Audio pair: 24,480 capture frames and 28,320 silent render frames over
+500 ms, with clean teardown and unchanged defaults, volume, mute, privacy,
+driver, signing, and startup state. This remains shared-mode lifecycle
+evidence, not managed-driver callback or latency proof.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/
