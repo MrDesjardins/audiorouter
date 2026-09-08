@@ -285,3 +285,8 @@ Windows-audio tests (26), control discovery tests (86), full workspace tests,
 strict Clippy, and documentation validation pass. Discovery remains read-only:
 it opens no audio stream, changes no endpoint, and does not claim process
 loopback activation or native realtime routing.
+
+The application inventory itself also advertises and uses a shared 4,096-entry
+ceiling. This keeps the read-only process discovery response bounded alongside
+the per-process audio-session metadata limits; no stream or endpoint state is
+modified.

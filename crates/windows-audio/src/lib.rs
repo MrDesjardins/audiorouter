@@ -14,6 +14,8 @@ use std::sync::Arc;
 pub const MAX_APPLICATION_AUDIO_DISPLAY_NAMES: usize = 64;
 /// Maximum UTF-8 byte length of one retained OS-provided session name.
 pub const MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES: usize = 256;
+/// Maximum number of process identities retained by application discovery.
+pub const MAX_APPLICATIONS: usize = 4096;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EndpointDirection {
@@ -1374,7 +1376,9 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                     executable,
                     creation_time_100ns,
                 });
-                if applications.len() >= 4096 || Process32NextW(snapshot, &mut entry).is_err() {
+                if applications.len() >= MAX_APPLICATIONS
+                    || Process32NextW(snapshot, &mut entry).is_err()
+                {
                     break;
                 }
             }

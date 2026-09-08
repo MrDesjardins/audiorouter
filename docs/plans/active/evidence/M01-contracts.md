@@ -475,3 +475,5 @@ metadata to 64 names per process and 256 UTF-8 bytes per name; its schema and
 Windows-audio admission helper share those constants. This prevents discovery
 metadata from expanding control responses without limit while retaining the
 explicit distinction between observed sessions and guaranteed process capture.
+The array also advertises the existing 4,096-entry process-discovery ceiling,
+keeping the response cardinality discoverable at the API boundary.

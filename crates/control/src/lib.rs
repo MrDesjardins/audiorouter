@@ -949,6 +949,7 @@ fn method_output_schema(name: &str) -> Value {
         }),
         "apps.list" | "applications.list" => json!({
             "type": "array",
+            "maxItems": audiorouter_windows_audio::MAX_APPLICATIONS,
             "items": {
                 "type": "object",
                 "properties": {
@@ -6709,6 +6710,10 @@ mod tests {
         assert_eq!(
             applications["outputSchema"]["items"]["properties"]["executable"]["maxLength"],
             260
+        );
+        assert_eq!(
+            applications["outputSchema"]["maxItems"],
+            audiorouter_windows_audio::MAX_APPLICATIONS
         );
         assert_eq!(
             applications["outputSchema"]["items"]["properties"]["audioDisplayNames"]["maxItems"],
