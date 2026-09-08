@@ -377,6 +377,15 @@ asserted unsigned driver/signing/installer blockers; and removed temporary
 output. No installer, driver, signing, plugin registration, or audio
 configuration action occurred.
 
+## Full safe-chain requalification (2026-09-07)
+
+At the origin-gated UI head (`e597840`), the sequential safe acceptance runner
+passed every stage, including native compile/format inventory, disposable
+SysVAD qualification, M01/M04/M05/M06/M07 checks, this clean-tree M08 release
+preparation, and documentation validation. The M08 artifacts were unsigned as
+required and were removed after verification; no installation, signing-mode,
+plugin-registration, startup, or audio-configuration action occurred.
+
 ## Aggregate safe-chain requalification (2026-09-07)
 
 The new sequential `tests/acceptance/safe-all.ps1` runner passed from a clean
