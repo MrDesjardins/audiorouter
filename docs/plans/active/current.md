@@ -26,6 +26,13 @@ in-memory plan cannot subsequently be committed. Control tests (94), strict
 Clippy, and formatting pass; no audio endpoint or machine configuration was
 accessed.
 
+The complete elevated safe acceptance chain was requalified at pushed head
+`2c8ab54d`: native toolchain/format inventory, disposable SysVAD x64
+qualification, all portable milestone suites, UI, SDK/VST3, headless,
+unsigned release preparation, traceability, and documentation all passed.
+Temporary outputs were cleaned; no driver was installed or loaded and no audio
+configuration changed.
+
 ## Fan-out topology safety (2026-09-08)
 
 Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out
