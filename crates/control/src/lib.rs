@@ -318,17 +318,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "virtualDevices.plan" => object_schema(
             json!({
-                "operation": {
-                    "type": "object",
-                    "properties": {
-                        "action": { "enum": ["create", "rename", "setEnabled", "delete"] },
-                        "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                        "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_VIRTUAL_BUS_NAME_CHARS },
-                        "enabled": { "type": "boolean" }
-                    },
-                    "required": ["action", "id"],
-                    "additionalProperties": false
-                }
+                "operation": virtual_device_operation_schema()
             }),
             &["operation"],
         ),
@@ -1111,7 +1101,7 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "planId": { "type": "string", "minLength": 1 },
                 "expiresInMs": { "type": "integer", "minimum": 1 },
-                "operation": { "type": "object" },
+                "operation": virtual_device_operation_schema(),
                 "availability": {
                     "type": "object",
                     "properties": {
@@ -1133,7 +1123,7 @@ fn method_output_schema(name: &str) -> Value {
                 "planId": { "type": "string", "minLength": 1 },
                 "state": { "const": "applied" },
                 "availability": { "type": "object" },
-                "operation": { "type": "object" }
+                "operation": virtual_device_operation_schema()
             },
             "required": ["planId", "state", "availability", "operation"],
             "additionalProperties": false
@@ -1570,6 +1560,20 @@ fn device_item_schema() -> Value {
             }
         },
         "required": ["id", "direction", "state", "format", "periods"],
+        "additionalProperties": false
+    })
+}
+
+fn virtual_device_operation_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "action": { "enum": ["create", "rename", "setEnabled", "delete"] },
+            "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+            "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_VIRTUAL_BUS_NAME_CHARS },
+            "enabled": { "type": "boolean" }
+        },
+        "required": ["action", "id"],
         "additionalProperties": false
     })
 }
@@ -6329,6 +6333,22 @@ mod tests {
             virtual_device_plan["inputSchema"]["properties"]["operation"]["properties"]["id"]
                 ["maxLength"],
             audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
+        assert_eq!(
+            virtual_device_plan["outputSchema"]["properties"]["operation"]["properties"]["id"]
+                ["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
+        let virtual_device_apply = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "virtualDevices.apply")
+            .unwrap();
+        assert_eq!(
+            virtual_device_apply["outputSchema"]["properties"]["operation"]["properties"]["name"]
+                ["maxLength"],
+            audiorouter_domain::MAX_VIRTUAL_BUS_NAME_CHARS
         );
         assert!(description["events"]["stateCategories"]
             .as_array()

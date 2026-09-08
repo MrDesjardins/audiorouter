@@ -1,5 +1,14 @@
 # M03 virtual-routing contract evidence
 
+## Virtual-device operation schema (2026-09-07)
+
+The `virtualDevices.plan` input and `virtualDevices.plan`/`virtualDevices.apply`
+outputs now reuse one fixed operation schema. It constrains the action enum,
+128-byte bus identity, 120-character bus name, and optional enabled flag,
+matching the domain lifecycle validator. Control discovery regression coverage,
+strict Clippy, formatting, and documentation validation pass. Driver
+installation and endpoint activation remain open.
+
 ## 2026-09-06 — capability-contract foundation
 
 The authoritative Rust and shared TypeScript node registries now include
