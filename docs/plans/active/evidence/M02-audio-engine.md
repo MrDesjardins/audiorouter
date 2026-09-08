@@ -931,6 +931,15 @@ histogram. Engine tests (73), strict Clippy, formatting, diff checks, and
 documentation validation pass. Native callback and hardware timing gates are
 unchanged.
 
+## Histogram counter-overflow hardening (2026-09-08)
+
+Percentile extraction now saturates the diagnostic histogram total before rank
+calculation, preventing malformed or adversarial counter snapshots from
+panicking in a diagnostics path. A regression covers a saturated zero bucket
+plus an additional sample. Engine tests (75), strict Clippy, formatting, and
+diff checks pass. This remains bounded portable telemetry and does not change
+native callback or hardware timing evidence.
+
 ## Bounded percentile extraction (2026-09-08)
 
 The engine now exposes conservative upper-bound extraction from fixed

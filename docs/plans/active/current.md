@@ -1657,3 +1657,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M02/API-01/ARCH-05 bounded percentile extraction on 2026-09-08: fixed histogram telemetry now exposes conservative p99.9 upper bounds, the adapter reports them, and both guarded live acceptance paths validate them against maxima. Engine tests (74), strict Clippy, formatting, tool checking, PowerShell parsing, live adapter/route acceptance, diff checks, and documentation validation pass; media state remained unchanged.
 - Next M02/M03/ARCH-05 task: connect the bounded percentile telemetry to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
+
+- Completed M02/API-01/ARCH-05 histogram counter-overflow hardening on 2026-09-08: percentile rank extraction now saturates histogram totals, with a regression for a saturated snapshot. Engine tests (75), strict Clippy, formatting, and diff checks pass; no machine audio configuration changed.
+- Next M02/M03/ARCH-05 task: connect the hardened bounded percentile telemetry to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.

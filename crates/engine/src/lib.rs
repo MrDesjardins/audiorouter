@@ -1750,7 +1750,7 @@ pub fn histogram_upper_bound_ns<const N: usize>(
     if !(1..=PERCENTILE_SCALE).contains(&percentile_million) {
         return None;
     }
-    let total = histogram.iter().copied().sum::<u64>();
+    let total = histogram.iter().copied().fold(0_u64, u64::saturating_add);
     if total == 0 {
         return None;
     }
@@ -4019,6 +4019,17 @@ mod tests {
         assert_eq!(
             histogram_upper_bound_ns(&[0; PROCESSING_TIME_BUCKET_COUNT], 999_000),
             None
+        );
+    }
+
+    #[test]
+    fn histogram_percentile_saturates_counter_overflow() {
+        let mut histogram = [0_u64; PROCESSING_TIME_BUCKET_COUNT];
+        histogram[0] = u64::MAX;
+        histogram[1] = 1;
+        assert_eq!(
+            histogram_upper_bound_ns(&histogram, PERCENTILE_SCALE),
+            Some(0)
         );
     }
 
