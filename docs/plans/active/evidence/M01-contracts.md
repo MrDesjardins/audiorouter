@@ -545,3 +545,10 @@ node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative
 registries, preventing discovery clients from treating fixed inventories as
 unbounded.
+## State-event category registry (2026-09-07)
+
+The 15 supported state-event categories are now centralized in one control
+registry. `system.describe` uses it to build the response and advertises its
+exact `maxItems` bound in the output schema; discovery regression coverage
+checks both the response count and schema value. Control tests, strict Clippy,
+formatting, and documentation validation pass.

@@ -37,6 +37,23 @@ const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
+const STATE_CATEGORIES: [&str; 15] = [
+    "session.created",
+    "session.deleted",
+    "graph.committed",
+    "runtime.crashed",
+    "runtime.started",
+    "runtime.activated",
+    "runtime.stopped",
+    "privacy.muteEnabled",
+    "privacy.muteDisabled",
+    "virtualDevice.changed",
+    "recorder.changed",
+    "recording.metadataChanged",
+    "recording.renamed",
+    "recording.entryRemoved",
+    "recording.recycled",
+];
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
@@ -636,7 +653,7 @@ fn method_output_schema(name: &str) -> Value {
                 "events": {
                     "type": "object",
                     "properties": {
-                        "stateCategories": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "stateCategories": { "type": "array", "maxItems": STATE_CATEGORIES.len(), "items": { "type": "string", "minLength": 1 } },
                         "meterReplay": { "const": false },
                         "retention": {
                             "type": "object",
@@ -2570,23 +2587,7 @@ impl ControlPlane {
                 "maxRequestIdBytes": MAX_REQUEST_ID_BYTES
             },
             "events": {
-                "stateCategories": [
-                    "session.created",
-                    "session.deleted",
-                    "graph.committed",
-                    "runtime.crashed",
-                    "runtime.started",
-                    "runtime.activated",
-                    "runtime.stopped",
-                    "privacy.muteEnabled",
-                    "privacy.muteDisabled",
-                    "virtualDevice.changed",
-                    "recorder.changed",
-                    "recording.metadataChanged",
-                    "recording.renamed",
-                    "recording.entryRemoved",
-                    "recording.recycled"
-                ],
+                "stateCategories": STATE_CATEGORIES,
                 "meterReplay": false,
                 "retention": {
                     "maxEvents": audiorouter_domain::MAX_RETAINED_EVENTS,
@@ -6355,6 +6356,18 @@ mod tests {
             .unwrap()
             .iter()
             .any(|category| category == "graph.committed"));
+        assert_eq!(
+            description["events"]["stateCategories"]
+                .as_array()
+                .unwrap()
+                .len(),
+            STATE_CATEGORIES.len()
+        );
+        let describe_schema = method_output_schema("system.describe");
+        assert_eq!(
+            describe_schema["properties"]["events"]["properties"]["stateCategories"]["maxItems"],
+            STATE_CATEGORIES.len()
+        );
         assert!(description["methods"]
             .as_array()
             .unwrap()
