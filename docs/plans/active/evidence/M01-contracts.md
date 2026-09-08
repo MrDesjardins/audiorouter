@@ -427,3 +427,9 @@ unique before edge lookup. Validation inspects at most the bounded prefix after
 reporting an oversized collection, preventing unbounded graph work and
 ambiguous name resolution. Domain regressions cover both conditions without
 audio or machine configuration access.
+
+Edge channel matrices are limited to four coefficients, covering every
+supported mono/stereo conversion. The bound is checked before node/port lookup,
+so dangling-edge imports cannot bypass it; the regression covers an oversized
+matrix referencing missing nodes. This remains portable validation with no
+audio or machine configuration access.

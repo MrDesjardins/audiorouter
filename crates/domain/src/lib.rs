@@ -21,6 +21,7 @@ pub const MAX_ENTITY_ID_BYTES: usize = 128;
 pub const MAX_DISPLAY_NAME_BYTES: usize = 256;
 pub const MAX_PORT_NAME_BYTES: usize = 128;
 pub const MAX_PORTS_PER_NODE: usize = 16;
+pub const MAX_CHANNEL_MATRIX_COEFFICIENTS: usize = 4;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 pub const MAX_PARAMETERS_PER_NODE: usize = 32;
@@ -1218,6 +1219,14 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
             format!("{path}.destinationNode"),
             &mut errors,
         );
+        if edge.matrix.len() > MAX_CHANNEL_MATRIX_COEFFICIENTS {
+            errors.push(ValidationError::LimitExceeded {
+                path: format!("{path}.matrix"),
+                requested: edge.matrix.len(),
+                maximum: MAX_CHANNEL_MATRIX_COEFFICIENTS,
+            });
+            continue;
+        }
         let source_port_valid = edge.source_port.len() <= MAX_PORT_NAME_BYTES;
         if !source_port_valid {
             errors.push(ValidationError::LimitExceeded {
@@ -3017,6 +3026,20 @@ mod tests {
             error,
             ValidationError::DuplicateId { path, id }
                 if path == "nodes[0].ports[1].name" && id == "duplicate"
+        )));
+    }
+
+    #[test]
+    fn rejects_oversized_edge_matrices_before_dangling_node_lookup() {
+        let mut oversized = edge("edge", "missing-source", "missing-destination");
+        oversized.matrix = vec![1.0; MAX_CHANNEL_MATRIX_COEFFICIENTS + 1];
+        let errors = validate_session(&session(vec![], vec![oversized])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "edges[0].matrix"
+                    && *requested == MAX_CHANNEL_MATRIX_COEFFICIENTS + 1
+                    && *maximum == MAX_CHANNEL_MATRIX_COEFFICIENTS
         )));
     }
 
