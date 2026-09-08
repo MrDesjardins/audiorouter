@@ -342,6 +342,7 @@ export interface DiscoveryDocument {
     maxEdgesGlobal: number;
     maxActiveSessions: number;
     maxVirtualBuses: number;
+    maxEntityIdBytes: number;
     maxDisplayNameBytes: number;
     maxPortNameBytes: number;
     maxPortsPerNode: number;

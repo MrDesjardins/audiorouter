@@ -616,6 +616,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
                         "maxActiveSessions": { "type": "integer", "minimum": 1 },
                         "maxVirtualBuses": { "type": "integer", "minimum": 1 },
+                        "maxEntityIdBytes": { "type": "integer", "minimum": 1 },
                         "maxDisplayNameBytes": { "type": "integer", "minimum": 1 },
                         "maxPortNameBytes": { "type": "integer", "minimum": 1 },
                         "maxPortsPerNode": { "type": "integer", "minimum": 1 },
@@ -626,7 +627,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxMethodNameBytes": { "type": "integer", "minimum": 1 },
                         "maxRequestIdBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -1643,28 +1644,30 @@ fn session_item_schema() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "id": { "type": "string", "minLength": 1 },
-            "name": { "type": "string", "minLength": 1 },
+            "id": { "type": "string", "minLength": 1, "maxLength": 128, "description": "UTF-8 byte limit is advertised in limits.maxEntityIdBytes when applicable." },
+            "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "Maximum 256 UTF-8 bytes." },
             "schemaVersion": { "const": 1 },
             "revision": { "type": "integer", "minimum": 0 },
             "nodes": {
                 "type": "array",
+                "maxItems": 64,
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": { "type": "string", "minLength": 1 },
+                        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
                         "kind": { "type": "string", "minLength": 1 },
                         "typeVersion": { "const": 1 },
-                        "name": { "type": "string", "minLength": 1 },
+                        "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "Maximum 256 UTF-8 bytes." },
                         "enabled": { "type": "boolean" },
                         "bypass": { "type": "boolean" },
-                        "parameters": { "type": "object" },
+                        "parameters": { "type": "object", "maxProperties": 32 },
                         "ports": {
                             "type": "array",
+                            "maxItems": 16,
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "name": { "type": "string", "minLength": 1 },
+                                    "name": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Maximum 128 UTF-8 bytes." },
                                     "direction": { "enum": ["input", "output"] },
                                     "channels": { "type": "integer", "minimum": 1, "maximum": 8 }
                                 },
@@ -1679,15 +1682,16 @@ fn session_item_schema() -> Value {
             },
             "edges": {
                 "type": "array",
+                "maxItems": 128,
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": { "type": "string", "minLength": 1 },
-                        "sourceNode": { "type": "string", "minLength": 1 },
-                        "sourcePort": { "type": "string", "minLength": 1 },
-                        "destinationNode": { "type": "string", "minLength": 1 },
-                        "destinationPort": { "type": "string", "minLength": 1 },
-                        "matrix": { "type": "array", "items": { "type": "number" } },
+                        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "sourceNode": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "sourcePort": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "destinationNode": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "destinationPort": { "type": "string", "minLength": 1, "maxLength": 128 },
+                        "matrix": { "type": "array", "maxItems": 4, "items": { "type": "number" } },
                         "enabled": { "type": "boolean" }
                     },
                     "required": ["id", "sourceNode", "sourcePort", "destinationNode", "destinationPort", "matrix", "enabled"],
@@ -2472,6 +2476,7 @@ impl ControlPlane {
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
                 "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
                 "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES,
+                "maxEntityIdBytes": audiorouter_domain::MAX_ENTITY_ID_BYTES,
                 "maxDisplayNameBytes": audiorouter_domain::MAX_DISPLAY_NAME_BYTES,
                 "maxPortNameBytes": audiorouter_domain::MAX_PORT_NAME_BYTES,
                 "maxPortsPerNode": audiorouter_domain::MAX_PORTS_PER_NODE,
@@ -6035,6 +6040,10 @@ mod tests {
         assert_eq!(description["limits"]["maxActiveSessions"], 2);
         assert_eq!(description["limits"]["maxVirtualBuses"], 8);
         assert_eq!(
+            description["limits"]["maxEntityIdBytes"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
+        assert_eq!(
             description["limits"]["maxDisplayNameBytes"],
             audiorouter_domain::MAX_DISPLAY_NAME_BYTES
         );
@@ -6070,6 +6079,21 @@ mod tests {
             description["limits"]["maxRequestIdBytes"],
             MAX_REQUEST_ID_BYTES
         );
+        let create = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "sessions.create")
+            .unwrap();
+        let session_schema = &create["outputSchema"]["properties"]["session"];
+        assert_eq!(session_schema["properties"]["name"]["maxLength"], 256);
+        assert_eq!(session_schema["properties"]["nodes"]["maxItems"], 64);
+        assert_eq!(session_schema["properties"]["edges"]["maxItems"], 128);
+        let node_schema = &session_schema["properties"]["nodes"]["items"];
+        assert_eq!(node_schema["properties"]["ports"]["maxItems"], 16);
+        assert_eq!(node_schema["properties"]["parameters"]["maxProperties"], 32);
+        let edge_schema = &session_schema["properties"]["edges"]["items"];
+        assert_eq!(edge_schema["properties"]["matrix"]["maxItems"], 4);
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
         assert_eq!(description["events"]["meterReplay"], false);

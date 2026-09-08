@@ -434,6 +434,12 @@ coefficients. The TypeScript discovery contract includes these fields and the
 control regression asserts the values match domain constants. This is portable
 API-contract evidence with no audio or machine configuration access.
 
+The discovered session JSON schema now declares field-level bounds matching
+runtime validation: 128-byte IDs/port references, 256-byte display names,
+64/128 node and edge counts, 16 ports per node, 32 parameter properties, and
+four matrix coefficients. A control discovery regression checks representative
+schema fields; contracts typecheck and drift checks remain green.
+
 Session display names use the same 256-byte UTF-8 bound as node display names.
 Direct validation rejects an oversized imported label with a bounded `name`
 path before graph processing. The regression is portable and does not access
