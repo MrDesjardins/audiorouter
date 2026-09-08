@@ -54,6 +54,16 @@ unbounded legacy read while preserving per-state validation. Storage (69) and
 control (87) tests, strict package Clippy, formatting, and diff checks passed.
 No plugin was executed and no audio or machine configuration was accessed.
 
+## M06 failed-worker cleanup hardening (2026-09-08)
+
+Supervised worker heartbeat, processing, latency, and externally reported
+failures now terminate the failed child immediately instead of retaining it
+until an incidental drop. Shutdown also handles an already-terminated child
+without writing to a closed pipe. Plugin-host (39) and worker-process (8)
+tests, strict Clippy, formatting, and diff checks passed. This is process
+containment evidence only; it does not claim third-party plugin execution or
+full OS filesystem/network sandboxing.
+
 ## Current actionable handoff (2026-09-08)
 
 The latest validated implementation head is `edb1d8b`, with the latest

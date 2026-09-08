@@ -1424,7 +1424,11 @@ impl SupervisedWorkerProcess {
                 Ok(None) => {}
             }
         }
-        self.supervisor.poll(now)
+        let state = self.supervisor.poll(now);
+        if matches!(state, WorkerState::Failed | WorkerState::Quarantined) {
+            terminate_child(&mut self.process.child);
+        }
+        state
     }
 
     /// Poll the worker once and perform at most one replacement when the
@@ -1445,7 +1449,11 @@ impl SupervisedWorkerProcess {
     /// adapter. The process is not restarted here; callers must discard this
     /// wrapper and deliberately construct a replacement after policy allows.
     pub fn record_failure(&mut self, now: Instant) -> WorkerState {
-        self.supervisor.record_failure(now)
+        let state = self.supervisor.record_failure(now);
+        if matches!(state, WorkerState::Failed | WorkerState::Quarantined) {
+            terminate_child(&mut self.process.child);
+        }
+        state
     }
 
     pub fn process(
@@ -1461,6 +1469,7 @@ impl SupervisedWorkerProcess {
                 Ok(frame)
             }
             Err(error) => {
+                terminate_child(&mut self.process.child);
                 self.supervisor.record_failure(now);
                 Err(error)
             }
@@ -1480,6 +1489,7 @@ impl SupervisedWorkerProcess {
                 Ok(frame)
             }
             Err(error) => {
+                terminate_child(&mut self.process.child);
                 self.supervisor.record_failure(now);
                 Err(error)
             }
@@ -1498,6 +1508,7 @@ impl SupervisedWorkerProcess {
                 Ok(latency)
             }
             Err(error) => {
+                terminate_child(&mut self.process.child);
                 self.supervisor.record_failure(now);
                 Err(error)
             }
@@ -1804,6 +1815,13 @@ impl WorkerProcess {
         mut self,
         timeout: Duration,
     ) -> Result<ExitStatus, WorkerProcessError> {
+        if let Some(status) = self
+            .child
+            .try_wait()
+            .map_err(|error| WorkerProcessError::Spawn(error.to_string()))?
+        {
+            return Ok(status);
+        }
         self.write(&WorkerMessage::Shutdown)
             .map_err(WorkerProcessError::Message)?;
         let started = Instant::now();

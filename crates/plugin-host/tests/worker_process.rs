@@ -200,7 +200,8 @@ fn supervised_worker_accepts_outer_process_failure_reports() {
     assert!(
         matches!(error, audiorouter_plugin_host::WorkerProcessError::Protocol(message) if message.contains("not running under supervision"))
     );
-    assert!(worker.shutdown().unwrap().success());
+    let status = worker.shutdown().unwrap();
+    assert!(!status.success());
 }
 
 #[test]
