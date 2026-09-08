@@ -921,3 +921,10 @@ keys before querying or mutating the database. All public control schemas
 advertise the same maximum, preventing an API/storage contract mismatch.
 Storage/control tests pass (49/86) with strict Clippy and formatting; no audio
 or machine configuration was accessed.
+
+## Configuration backup budget alignment (2026-09-08)
+
+The enforced SQLite backup-size ceiling now matches STATE-12's documented
+100 MiB configuration-backup budget. Existing backup/restore integrity and
+non-overwrite regressions remain covered by the storage suite; no audio,
+driver, or machine configuration was accessed.

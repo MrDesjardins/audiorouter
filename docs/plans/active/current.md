@@ -57,6 +57,10 @@ Completed safe storage slice M06/SEC-12 plugin-state identity symmetry:
 direct plugin-state writes and filtered reads enforce the same bounded plugin
 identifier contract already used by state metadata consumers.
 
+Completed safe storage slice M07/STATE-12 backup-budget alignment: the
+configuration backup ceiling now matches the specification's documented
+100 MiB budget.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
@@ -220,7 +224,7 @@ This establishes that Codex can continue documentation and portable implementati
 
 ### 2026-09-05 — Safe SQLite backup restore
 
-- Added `Storage::restore_backup`, which requires absolute paths, a regular non-symlink source, a destination parent that already exists, a new destination file, a 64 MiB bound, and SQLite `integrity_check` success before restoring.
+- Added `Storage::restore_backup`, which requires absolute paths, a regular non-symlink source, a destination parent that already exists, a new destination file, a 100 MiB bound, and SQLite `integrity_check` success before restoring.
 - The restore test verifies data round-trip and rejects a second restore over an existing destination. Storage coverage is now 9 tests; no live database or machine configuration is overwritten.
 
 ### 2026-09-05 — Persistent CLI import/export

@@ -45,7 +45,7 @@ pub struct RecoveryStatus {
 }
 
 pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
-pub const MAX_BACKUP_BYTES: u64 = 64 * 1024 * 1024;
+pub const MAX_BACKUP_BYTES: u64 = 100 * 1024 * 1024;
 pub const MAX_BUNDLE_COMPRESSED_BYTES: u64 = 100 * 1024 * 1024;
 pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
