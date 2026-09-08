@@ -39,6 +39,10 @@ probe compiled successfully and left no repository object. This validates the
 SDK/build prerequisite, not driver installation, signing, or production
 endpoint routing.
 
+The M06 SDK installer provenance acceptance also passed using disposable Git
+metadata and a rejected reparse-point destination. It made no SDK, plugin,
+driver, or audio configuration changes.
+
 ## UI inventory cursor consumption (2026-09-08)
 
 Closed an M05/API parity gap in the live UI backend: recordings, sessions,

@@ -1006,6 +1006,14 @@ is available for the current offline probe, so the required three-effect,
 two-vendor M06 matrix remains open. No plugin was downloaded, installed,
 registered, loaded, or executed during this inventory.
 
+## SDK installer provenance acceptance (2026-09-08)
+
+`tests/acceptance/m06-sdk-installer.ps1` passed: a disposable checkout with
+the wrong origin was rejected, and a destination below a reparse-point parent
+was rejected when link creation was available. Disposable Git fixtures were
+removed. This validates installer provenance checks only; no SDK, plugin,
+driver, or audio configuration was changed.
+
 ## Plugin-state inventory hardening (2026-09-08)
 
 SQLite plugin-state listing now reads at most 501 rows, validates every
