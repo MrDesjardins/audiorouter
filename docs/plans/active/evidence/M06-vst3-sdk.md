@@ -809,6 +809,15 @@ provenance acceptance and the real SDK installer plus offline M06 acceptance
 pass after this change; no SDK, plugin, driver, audio stream, or machine
 configuration was changed.
 
+## Editor lifecycle policy groundwork (2026-09-08)
+
+The plugin-host library now models the optional editor as a bounded control-plane
+state machine: `Closed`, `Open`, and `Failed`, with explicit close and retry
+transitions. Its processing-generation token is immutable, and regression tests
+prove that open, close, failure, and retry do not restart processing. This is
+policy evidence only: no native window was created, no plugin editor code was
+loaded, and native UI-thread ownership remains an open Windows acceptance gate.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and

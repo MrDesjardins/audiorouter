@@ -53,6 +53,16 @@ JSON-RPC, and TypeScript contracts without loading plugin code. A trailing-
 comma-tolerant fixture regression, plugin-host/control tests (39/90), strict
 Clippy, contracts typecheck/drift, and documentation validation pass.
 
+## Editor lifecycle policy groundwork (2026-09-08)
+
+Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models
+open/close/failure and deliberate retry for an optional plugin editor while
+holding the processing-generation token unchanged. Focused regressions cover
+duplicate operations, failure recovery, and cleanup. This does not create a
+native window, execute editor code, or close the Windows/UI-thread acceptance
+gate. The next M06 slice is controlled plugin-worker failure and dynamic
+latency evidence; native execution remains separately gated.
+
 ## Graph-plan retention bound (2026-09-08)
 
 Closed an M01/SEC-12 memory-retention gap in `GraphStore`: expired plans are

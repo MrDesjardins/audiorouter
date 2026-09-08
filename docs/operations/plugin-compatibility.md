@@ -35,8 +35,12 @@ those fields empty and does not turn a binary into a compatibility claim.
 
 The future worker path has bounded frames, deadlines, heartbeats, shared-memory
 layout checks, failure quarantine, and process cleanup. Full OS-level
-filesystem/network sandboxing, native plugin execution, editor windows, and a
-multi-vendor compatibility matrix remain open release work.
+filesystem/network sandboxing, native plugin execution, and a multi-vendor
+compatibility matrix remain open release work. The host library now also has a
+control-plane `EditorLifecycle` policy that separates editor open/close/failure
+and deliberate retry from the processing generation. It does not create native
+windows or claim editor compatibility; those remain a Windows/UI acceptance
+gate.
 
 ## Reporting a plugin result
 

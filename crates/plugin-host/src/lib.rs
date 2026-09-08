@@ -827,6 +827,82 @@ pub enum WorkerState {
     Quarantined,
 }
 
+/// Control-plane state for an optional worker-owned native editor. The editor
+/// lifecycle is deliberately separate from processing generation ownership:
+/// opening, closing, or failing an editor must not restart audio processing.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EditorState {
+    Closed,
+    Open,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EditorError {
+    AlreadyOpen,
+    AlreadyClosed,
+    NotOpen,
+    RetryRequired,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EditorLifecycle {
+    state: EditorState,
+    processing_generation: u64,
+}
+
+impl EditorLifecycle {
+    pub fn new(processing_generation: u64) -> Self {
+        Self {
+            state: EditorState::Closed,
+            processing_generation,
+        }
+    }
+
+    pub fn state(self) -> EditorState {
+        self.state
+    }
+
+    pub fn processing_generation(self) -> u64 {
+        self.processing_generation
+    }
+
+    pub fn open(&mut self) -> Result<(), EditorError> {
+        match self.state {
+            EditorState::Closed => {
+                self.state = EditorState::Open;
+                Ok(())
+            }
+            EditorState::Open => Err(EditorError::AlreadyOpen),
+            EditorState::Failed => Err(EditorError::RetryRequired),
+        }
+    }
+
+    pub fn close(&mut self) -> Result<(), EditorError> {
+        if self.state == EditorState::Closed {
+            return Err(EditorError::AlreadyClosed);
+        }
+        self.state = EditorState::Closed;
+        Ok(())
+    }
+
+    pub fn fail(&mut self) -> Result<(), EditorError> {
+        if self.state != EditorState::Open {
+            return Err(EditorError::NotOpen);
+        }
+        self.state = EditorState::Failed;
+        Ok(())
+    }
+
+    pub fn retry(&mut self) -> Result<(), EditorError> {
+        if self.state != EditorState::Failed {
+            return Err(EditorError::NotOpen);
+        }
+        self.state = EditorState::Closed;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerStartError {
     UnsupportedPlugin,
@@ -3189,6 +3265,38 @@ mod tests {
         assert!(!supervisor.heartbeat(now));
         supervisor.deliberate_retry();
         assert_eq!(supervisor.state(), WorkerState::Stopped);
+    }
+
+    #[test]
+    fn editor_lifecycle_is_independent_of_processing_generation() {
+        let mut editor = EditorLifecycle::new(42);
+        assert_eq!(editor.state(), EditorState::Closed);
+        assert_eq!(editor.processing_generation(), 42);
+        assert_eq!(editor.close(), Err(EditorError::AlreadyClosed));
+
+        editor.open().unwrap();
+        assert_eq!(editor.open(), Err(EditorError::AlreadyOpen));
+        editor.fail().unwrap();
+        assert_eq!(editor.state(), EditorState::Failed);
+        assert_eq!(editor.processing_generation(), 42);
+        assert_eq!(editor.open(), Err(EditorError::RetryRequired));
+
+        editor.retry().unwrap();
+        editor.open().unwrap();
+        editor.close().unwrap();
+        assert_eq!(editor.state(), EditorState::Closed);
+        assert_eq!(editor.processing_generation(), 42);
+    }
+
+    #[test]
+    fn editor_failure_and_retry_are_deliberate_transitions() {
+        let mut editor = EditorLifecycle::new(7);
+        assert_eq!(editor.fail(), Err(EditorError::NotOpen));
+        assert_eq!(editor.retry(), Err(EditorError::NotOpen));
+        editor.open().unwrap();
+        editor.fail().unwrap();
+        editor.close().unwrap();
+        assert_eq!(editor.retry(), Err(EditorError::NotOpen));
     }
 
     #[test]
