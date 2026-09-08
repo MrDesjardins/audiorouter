@@ -71,7 +71,8 @@ Native plugin parameter mapping remains separate and is not implied by the
 fixture.
 
 The opt-in `test-fixtures` Cargo feature adds deterministic worker modes for
-crash, hang, malformed output, and a non-empty parameter catalog. The process tests prove bounded reaping,
+crash, hang, malformed output, a non-empty parameter catalog, and bounded
+dynamic-latency updates. The process tests prove bounded reaping,
 timeout kill, supervisor containment, and reader-side rejection. These modes are test fixtures only;
 they are excluded from ordinary builds and do not represent third-party VST3
 execution or full OS filesystem/network sandboxing.

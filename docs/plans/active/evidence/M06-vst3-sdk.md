@@ -901,6 +901,12 @@ The supervised process regression also performs version-aware restore, verifies
 that a mismatched version does not restart or kill the worker, then restores and
 saves a compatible asset successfully.
 
+The opt-in `latency` fixture returns two bounded same-rate latency updates
+across the process boundary. The feature-gated process regression observes 128
+samples becoming 192 and then 256 at 48 kHz before clean shutdown. This proves
+dynamic protocol transport only; plugin-reported latency and graph compensation
+remain native/runtime gates.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 ## Native controller descriptor discovery (2026-09-08)

@@ -89,6 +89,25 @@ fn disposable_worker_process_round_trips_non_empty_parameter_descriptors() {
         .success());
 }
 
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn disposable_worker_process_exercises_dynamic_latency_updates() {
+    let mut worker =
+        WorkerProcess::spawn_fixture(fixture_worker_path(), &"f".repeat(64), 1, "latency")
+            .expect("spawn latency fixture");
+    let first = worker
+        .report_latency(WorkerLatency::new(128, 48_000).unwrap())
+        .expect("first latency report");
+    assert_eq!(first.samples, 192);
+    let second = worker.report_latency(first).expect("second latency report");
+    assert_eq!(second.samples, 256);
+    assert_eq!(second.sample_rate_hz, 48_000);
+    assert!(worker
+        .shutdown()
+        .expect("shutdown latency fixture")
+        .success());
+}
+
 #[test]
 fn verified_supervised_launch_rechecks_the_scanned_plugin_identity() {
     let worker_path =

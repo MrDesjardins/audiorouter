@@ -72,6 +72,11 @@ fixture remains an explicit empty catalog. Plugin-host process tests (18 with
 fixtures) and library tests (46) pass. This proves the typed wire transport,
 not native third-party parameter mapping or realtime plugin execution.
 
+The opt-in worker `latency` fixture now returns bounded same-rate updates; its
+process regression observes 128 -> 192 -> 256 samples at 48 kHz and shuts down
+cleanly. This strengthens dynamic-latency wire evidence without claiming a
+third-party plugin measurement or graph compensation.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models

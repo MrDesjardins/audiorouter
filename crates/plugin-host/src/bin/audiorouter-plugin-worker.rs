@@ -156,6 +156,16 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("processed write failed: {error:?}"))?;
             }
             WorkerMessage::Latency(latency) => {
+                #[cfg(feature = "test-fixtures")]
+                let latency = if _fixture_mode.as_deref() == Some("latency") {
+                    audiorouter_plugin_host::WorkerLatency::new(
+                        latency.samples.saturating_add(64),
+                        latency.sample_rate_hz,
+                    )
+                    .map_err(|error| format!("fixture latency invalid: {error:?}"))?
+                } else {
+                    latency
+                };
                 write_worker_message(&mut writer, &WorkerMessage::Latency(latency))
                     .map_err(|error| format!("latency write failed: {error:?}"))?;
             }
@@ -242,7 +252,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
                         .ok_or_else(|| "--fixture-mode requires a value".to_string())?;
                     if !matches!(
                         mode.as_str(),
-                        "crash" | "hang" | "invalid-output" | "descriptors"
+                        "crash" | "hang" | "invalid-output" | "descriptors" | "latency"
                     ) {
                         return Err("unsupported --fixture-mode".into());
                     }
