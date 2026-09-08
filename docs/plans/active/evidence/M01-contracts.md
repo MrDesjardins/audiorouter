@@ -661,3 +661,12 @@ Negative or mismatched values fail closed instead of allowing stale ordering
 metadata to escape storage. A regression covers all three read surfaces;
 storage (65) and control (87) tests plus strict Clippy, formatting, and diff
 checks passed. No audio or machine configuration was accessed.
+
+## SQLite count conversion boundary (2026-09-08)
+
+Session and recovery count reads now use checked signed-to-`usize` conversion.
+Although SQLite's `COUNT(*)` is nonnegative for a valid database, a malformed
+or incompatible result must not wrap into an attacker-sized count. The focused
+storage regression covers the conversion failure; storage (66) and control
+(87) tests plus strict Clippy, formatting, and diff checks passed. No audio or
+machine configuration was accessed.

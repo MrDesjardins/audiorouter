@@ -379,6 +379,11 @@ fn row_u32(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<u32> {
     })
 }
 
+fn checked_sqlite_count(count: i64, name: &str) -> Result<usize, StorageError> {
+    usize::try_from(count)
+        .map_err(|_| StorageError::CorruptDatabase(format!("SQLite {name} count is negative")))
+}
+
 fn validate_recording_record(recording: &RecordingRecord) -> Result<(), StorageError> {
     if recording.id.is_empty()
         || recording.session_id.is_empty()
@@ -1613,12 +1618,12 @@ impl Storage {
     }
 
     pub fn count_sessions(&self) -> Result<usize, StorageError> {
-        self.connection
+        let count = self
+            .connection
             .query_row("SELECT COUNT(*) FROM sessions", [], |row| {
                 row.get::<_, i64>(0)
-            })
-            .map(|count| count as usize)
-            .map_err(Into::into)
+            })?;
+        checked_sqlite_count(count, "sessions")
     }
 
     pub fn list_sessions_after(
@@ -2290,7 +2295,8 @@ impl Storage {
             params![cutoff],
             |row| row.get::<_, i64>(0),
         )?;
-        if count as usize >= RECOVERY_SAFE_MODE_CRASHES {
+        let count = checked_sqlite_count(count, "recovery crash")?;
+        if count >= RECOVERY_SAFE_MODE_CRASHES {
             transaction.execute(
                 "INSERT INTO control_settings(key, value) VALUES ('recoverySafeMode', 'true')
                  ON CONFLICT(key) DO UPDATE SET value='true'",
@@ -2298,21 +2304,19 @@ impl Storage {
             )?;
         }
         transaction.commit()?;
-        Ok(count as usize)
+        Ok(count)
     }
 
     pub fn recovery_crash_count(&self, timestamp_seconds: u64) -> Result<usize, StorageError> {
         let timestamp =
             i64::try_from(timestamp_seconds).map_err(|_| StorageError::InvalidRecoveryTimestamp)?;
         let cutoff = timestamp.saturating_sub(RECOVERY_CRASH_WINDOW_SECONDS as i64);
-        self.connection
-            .query_row(
-                "SELECT COUNT(*) FROM recovery_crashes WHERE occurred_at >= ?1",
-                params![cutoff],
-                |row| row.get::<_, i64>(0),
-            )
-            .map(|count| count as usize)
-            .map_err(StorageError::Sql)
+        let count = self.connection.query_row(
+            "SELECT COUNT(*) FROM recovery_crashes WHERE occurred_at >= ?1",
+            params![cutoff],
+            |row| row.get::<_, i64>(0),
+        )?;
+        checked_sqlite_count(count, "recovery crash")
     }
 
     /// Read the bounded crash count and durable safe-mode latch from one
@@ -2339,7 +2343,7 @@ impl Storage {
             == Some("true");
         transaction.commit()?;
         Ok(RecoveryStatus {
-            recent_crashes: recent_crashes as usize,
+            recent_crashes: checked_sqlite_count(recent_crashes, "recovery crash")?,
             safe_mode,
         })
     }
@@ -2472,6 +2476,15 @@ mod tests {
         RecordingChunk, RecordingError, RecordingQueue, WavFormat, WavRecorder, WavWriter,
     };
     use std::io::{Cursor, Write};
+
+    #[test]
+    fn sqlite_count_conversion_rejects_negative_values() {
+        assert_eq!(checked_sqlite_count(3, "example").unwrap(), 3);
+        assert!(matches!(
+            checked_sqlite_count(-1, "example"),
+            Err(StorageError::CorruptDatabase(message)) if message.contains("example")
+        ));
+    }
 
     fn session() -> Session {
         Session {

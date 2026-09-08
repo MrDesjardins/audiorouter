@@ -158,6 +158,12 @@ mismatches or negative values. Storage/control tests (65/87), strict Clippy,
 formatting, and diff checks pass; no audio or machine configuration was
 accessed.
 
+Completed safe storage slice M01/SEC-12 SQLite count conversion validation:
+session and recovery count reads now reject negative SQLite results before
+conversion to `usize`, preventing malformed persistence data from wrapping
+into an unbounded count. The focused storage regression and strict Clippy pass;
+no audio or machine configuration was accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
