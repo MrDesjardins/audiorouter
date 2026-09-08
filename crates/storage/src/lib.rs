@@ -2121,11 +2121,13 @@ impl Storage {
         request_hash: &str,
     ) -> Result<bool, StorageError> {
         validate_idempotency_key(key)?;
-        validate_journal_fields(operation, result, revision as i64)?;
+        let revision = i64::try_from(revision)
+            .map_err(|_| StorageError::InvalidJournal("journal revision is too large".into()))?;
+        validate_journal_fields(operation, result, revision)?;
         self.prune_expired_journal()?;
         let inserted = self.connection.execute(
             "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![key, operation, result, revision as i64, request_hash],
+            params![key, operation, result, revision, request_hash],
         )?;
         Ok(inserted == 1)
     }
@@ -2988,6 +2990,10 @@ mod tests {
                 0,
             ),
             Err(StorageError::DocumentTooLarge { .. })
+        ));
+        assert!(matches!(
+            storage.journal_commit("write-revision", "graph.commit", "{}", u64::MAX),
+            Err(StorageError::InvalidJournal(message)) if message.contains("too large")
         ));
     }
 

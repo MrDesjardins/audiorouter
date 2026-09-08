@@ -670,3 +670,10 @@ or incompatible result must not wrap into an attacker-sized count. The focused
 storage regression covers the conversion failure; storage (66) and control
 (87) tests plus strict Clippy, formatting, and diff checks passed. No audio or
 machine configuration was accessed.
+
+## Journal revision write boundary (2026-09-08)
+
+Durable journal writes now convert `u64` revisions to SQLite's signed integer
+type before validation and insertion. Values above `i64::MAX` are rejected
+explicitly rather than relying on a wrapping cast. The focused regression is
+covered by the storage suite; no audio or machine configuration was accessed.

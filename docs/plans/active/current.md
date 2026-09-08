@@ -170,6 +170,12 @@ decoding, so negative legacy values fail before metadata reaches plugin
 consumers. The focused storage regression and strict Clippy pass; no plugin was
 executed and no audio or machine configuration was accessed.
 
+Completed safe storage slice M07/SEC-12 journal revision write validation:
+durable journal writes now convert revisions to SQLite's signed integer type
+before validation and insertion, explicitly rejecting values above
+`i64::MAX`. The focused storage regression and strict Clippy pass; no audio or
+machine configuration was accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
