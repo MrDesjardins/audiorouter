@@ -917,6 +917,17 @@ plugin-host (39), and worker-process (8) tests plus strict Clippy and
 documentation validation passed. Plugin execution and OS sandbox gates remain
 open.
 
+## Offline SDK/loader requalification (`656fdb3`, 2026-09-08)
+
+The elevated repository-local M06 acceptance passed with the pinned SDK:
+51 SDK self-tests and 1,598 official validator tests passed. The x64 offline
+loader discovered 68 classes and verified finite stereo processing, five
+parameters with automation, and a 180-byte state round trip. The build used
+the installed Visual Studio Community 2026/MSVC and Windows SDK
+`10.0.28000.0`; no plugin was globally registered and no audio or machine
+configuration changed. This does not satisfy the required independent
+multi-vendor fixture, editor, or full OS-sandbox execution gates.
+
 ## Plugin-state read-boundary validation (2026-09-08)
 
 Plugin-state list hydration now revalidates persisted record IDs, plugin IDs,

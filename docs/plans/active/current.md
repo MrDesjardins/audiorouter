@@ -1889,3 +1889,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M02/CAP-01/CAP-02/ENG-03/ARCH-05 routed adapter requalification at `a4b72ec` on 2026-09-08: the bounded VB-Audio route processed 24,000 captured and 23,936 routed frames across 187 graph blocks, with zero xruns, deadline misses, and deadline lateness and a 32,768 ns processing p99.9 upper bound. Streams stopped/reset; endpoint and configuration snapshots were unchanged. This is shared-mode diagnostic evidence, not managed-driver callback qualification.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Requalified M06/SEC-07 offline VST3 SDK/loader acceptance at `656fdb3` on 2026-09-08: the local pinned SDK passed 51 self-tests and 1,598 validator tests; the x64 loader discovered 68 classes and verified finite stereo processing, five parameters/automation, and a 180-byte state round trip. No plugin was globally registered or external plugin executed; OS sandbox, multi-vendor compatibility, and native production execution remain open.
+- Next M06 task: obtain and qualify the required independent x64 VST3 fixture matrix and worker/editor containment evidence without weakening the plugin sandbox boundary.
