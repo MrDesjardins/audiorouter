@@ -966,6 +966,19 @@ impl Storage {
         Ok(document)
     }
 
+    fn deserialize_validated_session(document: &str) -> Result<Session, StorageError> {
+        if document.len() > MAX_SESSION_DOCUMENT_BYTES {
+            return Err(StorageError::DocumentTooLarge {
+                bytes: document.len(),
+                maximum: MAX_SESSION_DOCUMENT_BYTES,
+            });
+        }
+        let session: Session = serde_json::from_str(document)?;
+        validate_session(&session)
+            .map_err(|errors| StorageError::InvalidSession(format_validation_errors(&errors)))?;
+        Ok(session)
+    }
+
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
         let document = Self::serialize_validated_session(session)?;
         let transaction = self.connection.unchecked_transaction()?;
@@ -1456,7 +1469,7 @@ impl Storage {
         };
         documents
             .into_iter()
-            .map(|document| serde_json::from_str(&document).map_err(StorageError::Json))
+            .map(|document| Self::deserialize_validated_session(&document))
             .collect()
     }
 
@@ -1471,9 +1484,8 @@ impl Storage {
             )
             .optional()?;
         document
-            .map(|value| serde_json::from_str(&value))
+            .map(|value| Self::deserialize_validated_session(&value))
             .transpose()
-            .map_err(Into::into)
     }
 
     pub fn list_sessions(&self, limit: usize) -> Result<Vec<Session>, StorageError> {
@@ -1524,7 +1536,7 @@ impl Storage {
         };
         documents
             .into_iter()
-            .map(|document| serde_json::from_str(&document).map_err(StorageError::Json))
+            .map(|document| Self::deserialize_validated_session(&document))
             .collect()
     }
 
@@ -2435,6 +2447,42 @@ mod tests {
         ));
         assert!(matches!(
             storage.list_sessions_after(Some(invalid.as_str()), 1),
+            Err(StorageError::InvalidSession(_))
+        ));
+    }
+
+    #[test]
+    fn session_reads_reject_corrupt_domain_documents() {
+        let storage = Storage::open_memory().unwrap();
+        let mut invalid = session();
+        invalid.name = "x".repeat(257);
+        let document = serde_json::to_string(&invalid).unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO sessions(id, revision, document) VALUES (?1, ?2, ?3)",
+                rusqlite::params![invalid.id.as_str(), invalid.revision as i64, &document],
+            )
+            .unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO session_history(session_id, revision, document)
+                 VALUES (?1, ?2, ?3)",
+                rusqlite::params![invalid.id.as_str(), invalid.revision as i64, &document],
+            )
+            .unwrap();
+
+        assert!(matches!(
+            storage.load_session(&invalid.id),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.load_history(&invalid.id, 1),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.list_sessions_after(None, 1),
             Err(StorageError::InvalidSession(_))
         ));
     }

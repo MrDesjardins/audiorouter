@@ -952,3 +952,11 @@ roles before returning authorization data. A test-only SQLite fixture with
 check constraints disabled confirms malformed legacy/corrupt rows fail closed;
 normal schema constraints remain unchanged. Storage passes 56 tests and
 control passes 86 tests with strict Clippy.
+
+## Session read-boundary validation (2026-09-08)
+
+Session lookup, history, and paged-list reads now validate deserialized
+documents against the domain contract and the 1 MiB persisted-document limit.
+A regression inserts an invalid domain document directly into both current
+and history tables and confirms all three read surfaces fail closed. Storage
+passes 57 tests and control passes 86 tests with strict Clippy.

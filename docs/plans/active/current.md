@@ -82,6 +82,12 @@ client-enrollment lookup and list operations now revalidate persisted client
 IDs and roles, failing closed if a legacy or corrupted database row bypasses
 the write-side checks. Storage/control tests and strict Clippy pass.
 
+Completed safe storage slice M01/SEC-12 session read-boundary validation:
+session lookup, history, and paged-list reads now apply the same domain and
+1 MiB document validation used by writes, rejecting corrupted persisted
+documents instead of returning them as authoritative state. Storage/control
+tests and strict Clippy pass.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
