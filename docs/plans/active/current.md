@@ -1681,3 +1681,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/SEC-12 acceptance-wrapper cleanup propagation on 2026-09-08: all six custom-output native live wrappers now remove adjacent implicit objects, and the 21-script parse check plus bounded VB-Audio loopback passed with no temporary or repository artifacts left behind. No audio configuration changed.
 - Next M00/M02/M03/ARCH-05 task: retain isolated wrapper cleanup while pursuing calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.
+
+- Completed M00/CAP-06/CAP-07/SEC-12 process-wrapper requalification on 2026-09-08: guarded attribution and exclusion runs passed with 10,584/11,025 captured frames, full temporary-object cleanup, and unchanged persistent audio configuration. This remains controlled process-loopback evidence, not full isolation or PID-reuse evidence.
+- Next M00/M02/M03/ARCH-05 task: retain the process evidence while pursuing calibrated latency and managed endpoint-owned callback evidence after the production driver boundary exists.
