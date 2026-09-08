@@ -61,6 +61,7 @@ restore/save round trips. This validates transport and persistence boundaries;
 vendor-specific VST3 state serialization still requires the native plugin host.
 Callers with a known schema can use `restore_state_for_version` to reject a
 version mismatch before sending state to the worker.
+State version `0` is invalid at both the asset and worker-wire boundaries.
 
 The opt-in `test-fixtures` Cargo feature adds deterministic worker modes for
 crash, hang, and malformed output. The process tests prove bounded reaping,

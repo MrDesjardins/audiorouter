@@ -347,6 +347,11 @@ versioned asset locally before IPC and return a typed `StateError::VersionMismat
 without killing or mutating a running worker; the process regression proves the
 rejection path and subsequent worker usability.
 
+Aligned the plugin-host state contract with the storage boundary by rejecting
+version `0` during asset construction, restore verification, and worker-wire
+validation. The existing version/integrity regression now covers this invalid
+version at both layers.
+
 `SupervisedWorkerProcess::spawn_verified` now composes that identity check with
 supervised worker creation. A process regression copied a temporary executable
 as a VST3 fixture, scanned it, launched through the verified path, processed one

@@ -108,6 +108,7 @@ pub enum IdentityVerificationError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StateError {
     Empty,
+    InvalidVersion,
     TooLarge,
     VersionMismatch,
     IntegrityMismatch,
@@ -133,6 +134,9 @@ pub struct PluginStateAsset {
 
 impl PluginStateAsset {
     pub fn new(version: u32, bytes: Vec<u8>) -> Result<Self, StateError> {
+        if version == 0 {
+            return Err(StateError::InvalidVersion);
+        }
         if bytes.is_empty() {
             return Err(StateError::Empty);
         }
@@ -151,6 +155,9 @@ impl PluginStateAsset {
     }
 
     pub fn verify_for_restore(&self, expected_version: u32) -> Result<&[u8], StateError> {
+        if self.version == 0 || expected_version == 0 {
+            return Err(StateError::InvalidVersion);
+        }
         if self.bytes.is_empty() {
             return Err(StateError::Empty);
         }
@@ -2456,7 +2463,8 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
 }
 
 fn validate_worker_state(asset: &PluginStateAsset) -> Result<(), WorkerMessageError> {
-    if asset.bytes.is_empty()
+    if asset.version == 0
+        || asset.bytes.is_empty()
         || asset.bytes.len() > MAX_WORKER_STATE_BYTES
         || !is_sha256(&asset.sha256)
     {
@@ -3469,7 +3477,12 @@ mod tests {
             corrupt.verify_for_restore(2),
             Err(StateError::IntegrityMismatch)
         );
+        assert_eq!(asset.verify_for_restore(0), Err(StateError::InvalidVersion));
         assert_eq!(PluginStateAsset::new(1, Vec::new()), Err(StateError::Empty));
+        assert_eq!(
+            PluginStateAsset::new(0, vec![1]),
+            Err(StateError::InvalidVersion)
+        );
     }
 
     #[test]
@@ -3858,6 +3871,20 @@ mod tests {
         };
         assert_eq!(
             encode_worker_message(&WorkerMessage::StateRestore { asset: oversized }),
+            Err(WorkerMessageError::InvalidState)
+        );
+        let invalid_version = PluginStateAsset {
+            version: 0,
+            bytes: vec![1],
+            sha256: Sha256::digest([1u8])
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect(),
+        };
+        assert_eq!(
+            encode_worker_message(&WorkerMessage::StateRestore {
+                asset: invalid_version,
+            }),
             Err(WorkerMessageError::InvalidState)
         );
         let mut corrupt = asset;

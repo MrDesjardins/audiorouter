@@ -878,6 +878,11 @@ version is rejected before IPC with a typed state error, and the worker remains
 usable; this preserves the version contract independently of vendor-specific
 native serialization.
 
+State version `0` is now rejected consistently during asset construction,
+restore verification, and worker-wire validation, matching the existing
+storage contract. The protocol regression covers a correctly hashed but
+invalid-version asset.
+
 The negative process path also requests a save before restore. It returns the
 bounded `stateUnavailable` protocol failure and terminates the disposable
 worker, proving that missing state is not synthesized as an empty asset.
