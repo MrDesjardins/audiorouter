@@ -776,3 +776,15 @@ unit/integration tests across all crates and process targets, all doc-tests,
 strict workspace Clippy with `-D warnings`, formatting, and diff checks. This
 run did not install or load a driver, change signing mode, register plugins or
 startup entries, or alter machine audio configuration.
+
+## Complete safe-chain requalification at `9d6b267` (2026-09-08)
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed after the M04
+evidence update: native probe compile, read-only 34-endpoint format inventory,
+disposable pinned SysVAD x64 compile/package/API qualification, M01 CLI, M04
+DSP/recording, M05 UI, M06 SDK installer and VST3 SDK, M07 headless, unsigned
+M08 release preparation, and documentation validation. Temporary outputs and
+checkouts were removed. No driver was installed or loaded, signing mode
+changed, plugin/startup entry registered, or machine audio configuration
+altered. Production driver ownership, signing, installer, clean-machine,
+physical-latency, native callback deadline, and manual UI gates remain open.

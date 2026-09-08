@@ -29,6 +29,12 @@ implemented and regression-tested. The full locked workspace suite, guarded
 include/exclude process-loopback acceptance, and safe acceptance chain pass
 with unchanged media state.
 
+The complete elevated safe acceptance chain was requalified at pushed tree
+`9d6b267` on 2026-09-08 after M04 acceptance evidence was recorded. Native
+compile/inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/
+M06/M07, unsigned M08 preparation, and documentation validation passed; all
+temporary outputs/checkouts were removed and machine audio state was unchanged.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/
