@@ -42,6 +42,11 @@ round-trip, and state round-trip. Together with ChowMatrix this provides
 six loader-compatible effects from two independently sourced vendors, while
 the ChowMatrix SDK-validator failures remain an open qualification risk.
 
+The M06 acceptance wrapper now reproduces the five-class mda matrix after its
+standard SDK validator and loader checks. The `-SkipBuild` requalification
+passed on the installed VS/SDK toolchain; generated loader artifacts were
+removed by the wrapper's `finally` cleanup.
+
 ## Graph-plan retention bound (2026-09-08)
 
 Closed an M01/SEC-12 memory-retention gap in `GraphStore`: expired plans are
@@ -250,10 +255,10 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `d3a26924`, with the latest
+The latest validated implementation head is `f388798`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is `d3a26924`; its event-replay cursor,
+The latest pushed plan/evidence tip is `f388798`; its event-replay cursor,
 Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
 bundles, so the loader matrix now covers six effects across two vendors. The

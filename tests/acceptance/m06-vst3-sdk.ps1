@@ -56,7 +56,11 @@ try {
     Invoke-Native $validator @($bundle)
     Invoke-Native 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $loaderScript)
     Invoke-Native $loader @($bundle)
-    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, and offline loader.'
+    $matrixClasses = @(0, 4, 6, 8, 10)
+    foreach ($classIndex in $matrixClasses) {
+        Invoke-Native $loader @($bundle, '--class-index', "$classIndex")
+    }
+    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, offline loader, and five-class mda matrix.'
 } finally {
     foreach ($generated in @($loader, $loaderObject)) {
         if (Test-Path -LiteralPath $generated) {

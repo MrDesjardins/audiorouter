@@ -833,6 +833,13 @@ and worker/editor containment has not yet been exercised with third-party
 code. The matrix run used only disposable/local fixtures and did not install,
 register, or alter audio configuration.
 
+The reproducibility path is now part of `tests/acceptance/m06-vst3-sdk.ps1`:
+after the standard mda validator and loader checks, it invokes the loader for
+class indices 0, 4, 6, 8, and 10. The wrapper still removes its generated
+loader executable/object in `finally`; the ChowMatrix source fixture remains a
+separate disposable qualification because it is not redistributed by the
+repository.
+
 ## Outbound worker-message validation (2026-09-07)
 
 `encode_worker_message` now validates the complete message before producing a
@@ -1063,6 +1070,12 @@ two vendors remains open until the full fixture matrix and worker/editor
 containment checks pass. The disposable checkout and generated outputs were
 removed after capture; no driver, plugin registration, or machine audio
 configuration was changed.
+
+The updated `tests/acceptance/m06-vst3-sdk.ps1 -SkipBuild` wrapper was
+requalified after this addition. The existing pinned SDK validator and default
+loader passed, followed by successful loader runs for mda class indices 0, 4,
+6, 8, and 10. The wrapper removed the generated executable and object after
+the run; no system plugin registration or audio configuration was changed.
 
 ## SDK installer provenance acceptance (2026-09-08)
 
