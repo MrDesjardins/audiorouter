@@ -27,6 +27,7 @@ const MUTATION_BURST: f64 = 40.0;
 const MAX_CONTROL_VALUE_DEPTH: usize = 32;
 const MAX_CONTROL_STRING_BYTES: usize = 4096;
 const MAX_CONTROL_VALUE_COUNT: usize = 8192;
+const MAX_EVENT_SUBSCRIPTION_ITEMS: usize = 500;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
@@ -482,7 +483,7 @@ fn method_input_schema(name: &str) -> Value {
                     "items": { "type": "string", "minLength": 1, "maxLength": 128 },
                     "maxItems": 32
                 },
-                "limit": { "type": "integer", "minimum": 1, "maximum": 500 },
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_EVENT_SUBSCRIPTION_ITEMS },
                 "sessionId": { "type": ["string", "null"] }
             }),
             &[],
@@ -823,15 +824,16 @@ fn method_output_schema(name: &str) -> Value {
                 "backendEpoch": { "type": "integer", "minimum": 0 },
                 "events": {
                     "type": "array",
+                    "maxItems": MAX_EVENT_SUBSCRIPTION_ITEMS,
                     "items": {
                         "type": "object",
                         "properties": {
                             "sequence": { "type": "integer", "minimum": 1 },
                             "backendEpoch": { "type": "integer", "minimum": 0 },
                             "resourceRevision": { "type": "integer", "minimum": 0 },
-                            "operationId": { "type": ["string", "null"] },
-                            "category": { "type": "string", "minLength": 1 },
-                            "sessionId": { "type": ["string", "null"] }
+                            "operationId": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_EVENT_OPERATION_ID_BYTES },
+                            "category": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_EVENT_CATEGORY_BYTES },
+                            "sessionId": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
                         },
                         "required": ["sequence", "backendEpoch", "resourceRevision", "operationId", "category", "sessionId"],
                         "additionalProperties": false
@@ -846,7 +848,7 @@ fn method_output_schema(name: &str) -> Value {
                         "sessions": {
                             "type": "object",
                             "properties": {
-                                "items": { "type": "array", "items": session_item_schema() },
+                                "items": { "type": "array", "maxItems": MAX_EVENT_SUBSCRIPTION_ITEMS, "items": session_item_schema() },
                                 "nextCursor": { "type": ["string", "null"] }
                             },
                             "required": ["items", "nextCursor"],
@@ -4035,7 +4037,7 @@ impl ControlPlane {
             })
             .transpose()?;
         let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
-        if !(1..=500).contains(&limit) {
+        if !(1..=MAX_EVENT_SUBSCRIPTION_ITEMS as u64).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
             ));
@@ -6149,6 +6151,25 @@ mod tests {
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
         assert_eq!(description["events"]["meterReplay"], false);
+        let events_method = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "events.subscribe")
+            .unwrap();
+        assert_eq!(
+            events_method["outputSchema"]["properties"]["events"]["maxItems"],
+            MAX_EVENT_SUBSCRIPTION_ITEMS
+        );
+        assert_eq!(
+            events_method["outputSchema"]["properties"]["events"]["items"]["properties"]
+                ["category"]["maxLength"],
+            audiorouter_domain::MAX_EVENT_CATEGORY_BYTES
+        );
+        assert_eq!(
+            events_method["inputSchema"]["properties"]["limit"]["maximum"],
+            MAX_EVENT_SUBSCRIPTION_ITEMS
+        );
         assert!(description["events"]["stateCategories"]
             .as_array()
             .unwrap()

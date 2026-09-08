@@ -290,3 +290,6 @@ The application inventory itself also advertises and uses a shared 4,096-entry
 ceiling. This keeps the read-only process discovery response bounded alongside
 the per-process audio-session metadata limits; no stream or endpoint state is
 modified.
+
+The shared control event-replay schema is bounded independently of native
+audio scheduling; this change does not open endpoints or alter realtime state.
