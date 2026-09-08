@@ -483,3 +483,17 @@ The legacy array response of `devices.list` now advertises the 500-endpoint
 bound and returns a pagination-required error if more endpoints are present,
 instead of silently truncating a read-only native inventory. This check does
 not open an audio stream or change endpoint state.
+## Production Rust adapter live run (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m02-rust-adapter-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 250`.
+
+The selected existing endpoints completed a bounded production Rust adapter run
+with 26 capture packets, 12,480 capture frames, 97 generation-1 graph blocks,
+13,536 render frames, zero scheduler XRuns, and clean stream stop/reset. The
+run used zero-valued caller-owned render buffers, so `routed_frames=0` and
+`route=false` are expected; this proves adapter lifecycle and processing only.
+It does not close endpoint-specific initialization failures, routed signal, or
+calibrated physical-latency gates. Media-device state and persistent audio
+configuration were unchanged.
