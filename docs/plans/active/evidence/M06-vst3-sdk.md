@@ -916,3 +916,12 @@ direct SQLite caller from bypassing the identity contract; storage (52),
 plugin-host (39), and worker-process (8) tests plus strict Clippy and
 documentation validation passed. Plugin execution and OS sandbox gates remain
 open.
+
+## Plugin-state read-boundary validation (2026-09-08)
+
+Plugin-state list hydration now revalidates persisted record IDs, plugin IDs,
+SHA-256 identities, versions, absolute paths, bounded sizes, and reparse-point
+ancestry before returning opaque metadata. A corrupt-row regression fails
+closed. Storage (60) and control (87) tests, strict Clippy, formatting, and
+diff checks passed; no plugin was executed and no audio or machine
+configuration was accessed. Plugin execution and OS sandbox gates remain open.

@@ -370,6 +370,26 @@ pub struct PluginStateRecord {
     pub size_bytes: u64,
 }
 
+fn validate_plugin_state_record(state: &PluginStateRecord) -> Result<(), StorageError> {
+    validate_plugin_id(&state.plugin_id)?;
+    if state.id.is_empty()
+        || state.id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
+        || !is_sha256(&state.plugin_sha256)
+        || state.version == 0
+        || state.path.is_empty()
+        || !std::path::Path::new(&state.path).is_absolute()
+        || !is_sha256(&state.state_sha256)
+        || state.size_bytes == 0
+        || state.size_bytes > MAX_BUNDLE_ASSET_BYTES
+        || path_has_reparse_ancestor(std::path::Path::new(&state.path))
+    {
+        return Err(StorageError::InvalidPluginState(
+            "invalid plugin state fields".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum JournalFailureStage {
     BeforeHistory,
@@ -1371,22 +1391,7 @@ impl Storage {
     }
 
     pub fn save_plugin_state(&self, state: &PluginStateRecord) -> Result<(), StorageError> {
-        validate_plugin_id(&state.plugin_id)?;
-        if state.id.is_empty()
-            || state.id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
-            || !is_sha256(&state.plugin_sha256)
-            || state.version == 0
-            || state.path.is_empty()
-            || !std::path::Path::new(&state.path).is_absolute()
-            || !is_sha256(&state.state_sha256)
-            || state.size_bytes == 0
-            || state.size_bytes > MAX_BUNDLE_ASSET_BYTES
-            || path_has_reparse_ancestor(std::path::Path::new(&state.path))
-        {
-            return Err(StorageError::InvalidPluginState(
-                "invalid plugin state fields".into(),
-            ));
-        }
+        validate_plugin_state_record(state)?;
         self.connection.execute(
             "INSERT INTO plugin_states
              (id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes)
@@ -1434,6 +1439,9 @@ impl Storage {
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
+        for record in &records {
+            validate_plugin_state_record(record)?;
+        }
         Ok(records)
     }
 
@@ -4115,6 +4123,24 @@ mod tests {
         ));
         assert!(matches!(
             storage.list_plugin_states(Some(&invalid_plugin.plugin_id)),
+            Err(StorageError::InvalidPluginState(_))
+        ));
+    }
+
+    #[test]
+    fn plugin_state_reads_reject_corrupt_rows() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO plugin_states
+                 (id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes)
+                 VALUES (?1, 'plugin-1', ?2, 1, 'relative/state.bin', ?3, 1)",
+                rusqlite::params!["state-corrupt", "a".repeat(64), "b".repeat(64)],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.list_plugin_states(None),
             Err(StorageError::InvalidPluginState(_))
         ));
     }

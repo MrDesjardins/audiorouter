@@ -65,6 +65,14 @@ Completed safe storage slice M06/SEC-12 plugin-state identity symmetry:
 direct plugin-state writes and filtered reads enforce the same bounded plugin
 identifier contract already used by state metadata consumers.
 
+Completed safe storage slice M06/SEC-12 plugin-state read-boundary validation:
+plugin-state list hydration now revalidates stored IDs, plugin identity, state
+hashes, versions, absolute paths, size limits, and reparse-point ancestry
+before exposing opaque metadata to plugin consumers. A corrupt-row regression
+fails closed; storage/control tests (60/87), strict Clippy, formatting, and
+diff checks pass. No plugin was executed and no audio or machine configuration
+was accessed.
+
 Completed safe storage slice M07/STATE-12 backup-budget alignment: the
 configuration backup ceiling now matches the specification's documented
 100 MiB budget, and newly created backup outputs are size-checked and removed
