@@ -154,6 +154,15 @@ regressions cover zero, over-limit, and `usize::MAX` requests. The recording
 suite passed 30 tests, doc-tests, formatting, and strict Clippy. Native
 realtime recorder integration remains open.
 
+## Bounded recording chunk admission (2026-09-07)
+
+`RecordingQueue::try_push` now rejects caller-owned chunks larger than 4,096
+interleaved samples (2,048 stereo frames) before queue insertion. Oversized
+rejections have a separate counter and return the original chunk to the
+caller; queue-full overrun behavior remains distinct. Regression coverage is
+included in the 30-test recording suite, which passes with strict Clippy,
+formatting, and doc-tests. Native realtime recorder integration remains open.
+
 ## Stereo processor failure containment (2026-09-07)
 
 The portable runtime now fails closed for stereo Parametric EQ, compressor,

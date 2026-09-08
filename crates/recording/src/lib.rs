@@ -12,6 +12,8 @@ const MAX_CHANNELS: u16 = 2;
 /// Maximum number of caller-owned chunks retained by one recording queue.
 /// This bounds construction-time memory at the recording boundary.
 pub const MAX_RECORDING_QUEUE_CHUNKS: usize = 2048;
+/// Maximum interleaved samples in one queued chunk (2,048 stereo frames).
+pub const MAX_RECORDING_CHUNK_SAMPLES: usize = 4096;
 
 #[derive(Debug)]
 pub enum PathPolicyError {
@@ -153,6 +155,7 @@ pub struct RecordingChunk {
 pub struct RecordingQueue {
     chunks: crossbeam_queue::ArrayQueue<RecordingChunk>,
     overruns: AtomicU64,
+    oversized: AtomicU64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -445,6 +448,7 @@ impl RecordingQueue {
         Ok(Self {
             chunks: crossbeam_queue::ArrayQueue::new(capacity),
             overruns: AtomicU64::new(0),
+            oversized: AtomicU64::new(0),
         })
     }
 
@@ -464,7 +468,15 @@ impl RecordingQueue {
         self.overruns.load(Ordering::Relaxed)
     }
 
+    pub fn oversized(&self) -> u64 {
+        self.oversized.load(Ordering::Relaxed)
+    }
+
     pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        if chunk.samples.len() > MAX_RECORDING_CHUNK_SAMPLES {
+            self.oversized.fetch_add(1, Ordering::Relaxed);
+            return Err(chunk);
+        }
         match self.chunks.push(chunk) {
             Ok(()) => Ok(()),
             Err(chunk) => {
@@ -2380,6 +2392,14 @@ mod tests {
         let returned = queue.try_push(second).unwrap_err();
         assert_eq!(returned.start_frame, 5);
         assert_eq!(queue.overruns(), 1);
+        let oversized = RecordingChunk {
+            start_frame: 6,
+            samples: vec![0.0; MAX_RECORDING_CHUNK_SAMPLES + 1],
+        };
+        let returned = queue.try_push(oversized).unwrap_err();
+        assert_eq!(returned.samples.len(), MAX_RECORDING_CHUNK_SAMPLES + 1);
+        assert_eq!(queue.oversized(), 1);
+        assert_eq!(queue.len(), 1);
         assert_eq!(queue.try_pop().unwrap().start_frame, 4);
         assert!(queue.try_pop().is_none());
         assert!(matches!(
