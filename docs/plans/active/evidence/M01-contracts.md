@@ -589,6 +589,15 @@ recorder/session event inputs expose the same session limit. Discovery
 regression coverage checks representative fields across these method groups.
 Control/storage tests (86/52), strict Clippy, formatting, and documentation
 validation pass; no audio or machine configuration was accessed.
+
+## Public output identifier schema alignment (2026-09-08)
+
+Control output schemas now advertise authoritative bounds for returned plan IDs,
+operation IDs, and session-list cursors. Discovery regressions cover the plan
+and operation method groups so response contracts cannot silently drift from
+the persistence limits. Control/storage tests (86/52), strict Clippy,
+formatting, diff validation, and documentation validation pass; no audio or
+machine configuration was accessed.
 ## State-event category registry (2026-09-07)
 
 The 15 supported state-event categories are now centralized in one control

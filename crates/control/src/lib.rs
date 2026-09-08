@@ -739,7 +739,7 @@ fn method_output_schema(name: &str) -> Value {
         "startup.apply" => json!({
             "type": "object",
             "properties": {
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "unavailable" },
                 "registration": { "const": "unavailable" },
                 "reason": { "type": "string", "minLength": 1 }
@@ -753,7 +753,7 @@ fn method_output_schema(name: &str) -> Value {
                 "type": "object",
                 "properties": {
                     "items": { "type": "array", "maxItems": MAX_SESSION_LIST_ITEMS, "items": item },
-                    "nextCursor": { "type": ["string", "null"] }
+                    "nextCursor": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
                 },
                 "required": ["items", "nextCursor"],
                 "additionalProperties": false
@@ -775,7 +775,7 @@ fn method_output_schema(name: &str) -> Value {
         "sessions.importPlan" => json!({
             "type": "object",
             "properties": {
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "expiresInMs": { "type": "integer", "minimum": 1 },
                 "session": session_item_schema()
             },
@@ -834,7 +834,7 @@ fn method_output_schema(name: &str) -> Value {
         "graph.undoPlan" => json!({
             "type": "object",
             "properties": {
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "baseRevision": { "type": "integer", "minimum": 0 },
                 "expiresInMs": { "type": "integer", "minimum": 1 }
             },
@@ -882,7 +882,7 @@ fn method_output_schema(name: &str) -> Value {
                             "type": "object",
                             "properties": {
                                 "items": { "type": "array", "maxItems": MAX_EVENT_SUBSCRIPTION_ITEMS, "items": session_item_schema() },
-                                "nextCursor": { "type": ["string", "null"] }
+                "nextCursor": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
                             },
                             "required": ["items", "nextCursor"],
                             "additionalProperties": false
@@ -923,7 +923,7 @@ fn method_output_schema(name: &str) -> Value {
         "graph.plan" => json!({
             "type": "object",
             "properties": {
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "baseRevision": { "type": "integer", "minimum": 0 },
                 "expiresInMs": { "type": "integer", "minimum": 1 },
                 "diff": { "type": "array", "maxItems": MAX_GRAPH_DIFF_ITEMS },
@@ -958,7 +958,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "operationId": { "type": "string", "minLength": 1 },
+                        "operationId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                         "operation": { "type": "string", "minLength": 1 },
                         "status": { "const": "completed" },
                         "durable": { "type": "boolean" },
@@ -972,7 +972,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "operationId": { "type": "string", "minLength": 1 },
+                        "operationId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                         "status": { "const": "unknown" },
                         "durable": { "const": false }
                     },
@@ -984,7 +984,7 @@ fn method_output_schema(name: &str) -> Value {
         "operations.cancel" => json!({
             "type": "object",
             "properties": {
-                "operationId": { "type": "string", "minLength": 1 },
+                "operationId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                 "status": { "const": "completed" },
                 "cancelled": { "const": false },
                 "reason": { "const": "alreadyCompleted" }
@@ -6670,6 +6670,23 @@ mod tests {
                 method["inputSchema"]["properties"]["operationId"]["maxLength"],
                 audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES,
                 "{method_name} input operationId bound"
+            );
+        }
+        for method_name in [
+            "startup.plan",
+            "startup.apply",
+            "sessions.importPlan",
+            "graph.undoPlan",
+            "graph.plan",
+        ] {
+            let method = methods
+                .iter()
+                .find(|method| method["name"] == method_name)
+                .unwrap();
+            assert_eq!(
+                method["outputSchema"]["properties"]["planId"]["maxLength"],
+                audiorouter_domain::MAX_ENTITY_ID_BYTES,
+                "{method_name} output planId bound"
             );
         }
         assert_eq!(commit["outputSchema"]["type"], "object");
