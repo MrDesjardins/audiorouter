@@ -71,6 +71,24 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
     );
 }
 
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn disposable_worker_process_round_trips_non_empty_parameter_descriptors() {
+    let mut worker =
+        WorkerProcess::spawn_fixture(fixture_worker_path(), &"e".repeat(64), 1, "descriptors")
+            .expect("spawn descriptor fixture");
+    let descriptors = worker.describe_parameters().expect("describe parameters");
+    assert_eq!(descriptors.len(), 2);
+    assert_eq!(descriptors[0].title, "Mix");
+    assert_eq!(descriptors[0].parameter_id, 1);
+    assert_eq!(descriptors[1].title, "Output");
+    assert_eq!(descriptors[1].minimum, 0.0);
+    assert!(worker
+        .shutdown()
+        .expect("shutdown descriptor fixture")
+        .success());
+}
+
 #[test]
 fn verified_supervised_launch_rechecks_the_scanned_plugin_identity() {
     let worker_path =

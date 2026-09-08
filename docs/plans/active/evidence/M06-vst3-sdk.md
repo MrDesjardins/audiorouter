@@ -882,9 +882,11 @@ native serialization.
 
 The worker protocol now validates bounded typed parameter descriptors: no more
 than 256 unique IDs, 128-byte non-empty titles, finite normalized ranges, and
-defaults inside those ranges. A process regression requests the disposable
-worker's explicit empty catalog; native VST3 parameter discovery and mapping
-remain open.
+defaults inside those ranges. The ordinary disposable worker retains its
+explicit empty catalog, while the opt-in `descriptors` fixture returns two
+valid entries across the subprocess boundary. The process regression verifies
+their IDs, titles, and normalized bounds; native VST3-to-worker mapping
+remains open.
 
 State version `0` is now rejected consistently during asset construction,
 restore verification, and worker-wire validation, matching the existing

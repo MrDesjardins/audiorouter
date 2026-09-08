@@ -65,11 +65,13 @@ State version `0` is invalid at both the asset and worker-wire boundaries.
 
 Worker parameter descriptors are bounded to 256 entries and 128-byte titles;
 IDs must be unique and normalized defaults/ranges must be finite and within
-`0..=1`. The disposable worker currently reports an empty descriptor catalog
-until native plugin parameter discovery is connected.
+`0..=1`. The disposable worker reports an empty catalog in its ordinary mode
+and a two-entry `test-fixtures` catalog for process-level wire regression.
+Native plugin parameter mapping remains separate and is not implied by the
+fixture.
 
 The opt-in `test-fixtures` Cargo feature adds deterministic worker modes for
-crash, hang, and malformed output. The process tests prove bounded reaping,
+crash, hang, malformed output, and a non-empty parameter catalog. The process tests prove bounded reaping,
 timeout kill, supervisor containment, and reader-side rejection. These modes are test fixtures only;
 they are excluded from ordinary builds and do not represent third-party VST3
 execution or full OS filesystem/network sandboxing.

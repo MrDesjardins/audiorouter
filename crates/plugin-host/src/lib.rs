@@ -2042,7 +2042,7 @@ impl WorkerProcess {
         channels: u16,
         mode: &str,
     ) -> Result<Self, WorkerProcessError> {
-        if !matches!(mode, "crash" | "hang" | "invalid-output") {
+        if !matches!(mode, "crash" | "hang" | "invalid-output" | "descriptors") {
             return Err(WorkerProcessError::Protocol(
                 "invalid worker fixture mode".into(),
             ));

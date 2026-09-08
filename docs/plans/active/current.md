@@ -63,6 +63,15 @@ emitted 5/13/8/4/7 descriptors, while the zero-parameter ChowMatrix case
 remained valid. This is native offline discovery evidence only; mapping into
 the Rust worker catalog and third-party realtime execution remain open.
 
+## Worker descriptor wire regression (2026-09-08)
+
+The opt-in worker fixture now has a `descriptors` mode that returns two valid
+normalized parameter descriptors. The feature-gated subprocess regression
+round-trips both entries and checks their IDs, titles, and bounds; the ordinary
+fixture remains an explicit empty catalog. Plugin-host process tests (18 with
+fixtures) and library tests (46) pass. This proves the typed wire transport,
+not native third-party parameter mapping or realtime plugin execution.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models

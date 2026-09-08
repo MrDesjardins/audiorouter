@@ -1,6 +1,7 @@
 use audiorouter_plugin_host::{
-    read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
-    SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
+    read_worker_message, worker_clock_tick, write_worker_message, ParameterDescriptor,
+    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession,
+    WORKER_PROTOCOL_VERSION,
 };
 #[cfg(feature = "test-fixtures")]
 use std::io::Write;
@@ -158,13 +159,21 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("latency write failed: {error:?}"))?;
             }
             WorkerMessage::DescribeParameters => {
-                write_worker_message(
-                    &mut writer,
-                    &WorkerMessage::Parameters {
-                        descriptors: Vec::new(),
-                    },
-                )
-                .map_err(|error| format!("parameter description write failed: {error:?}"))?;
+                #[cfg(feature = "test-fixtures")]
+                let descriptors = if _fixture_mode.as_deref() == Some("descriptors") {
+                    vec![
+                        ParameterDescriptor::new(1, "Mix", 0.5, 0.0, 1.0)
+                            .map_err(|error| format!("fixture descriptor invalid: {error:?}"))?,
+                        ParameterDescriptor::new(2, "Output", 0.0, 0.0, 1.0)
+                            .map_err(|error| format!("fixture descriptor invalid: {error:?}"))?,
+                    ]
+                } else {
+                    Vec::new()
+                };
+                #[cfg(not(feature = "test-fixtures"))]
+                let descriptors = Vec::new();
+                write_worker_message(&mut writer, &WorkerMessage::Parameters { descriptors })
+                    .map_err(|error| format!("parameter description write failed: {error:?}"))?;
             }
             WorkerMessage::StateRestore { asset } => {
                 state = Some(asset.clone());
@@ -230,7 +239,10 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
                     let mode = arguments
                         .next()
                         .ok_or_else(|| "--fixture-mode requires a value".to_string())?;
-                    if !matches!(mode.as_str(), "crash" | "hang" | "invalid-output") {
+                    if !matches!(
+                        mode.as_str(),
+                        "crash" | "hang" | "invalid-output" | "descriptors"
+                    ) {
                         return Err("unsupported --fixture-mode".into());
                     }
                     fixture_mode = Some(mode);
