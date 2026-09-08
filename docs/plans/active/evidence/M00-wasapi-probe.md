@@ -692,3 +692,13 @@ capture stop/reset, media-device identity/state stability, and temporary-file
 cleanup. It reported no persistent audio configuration change. This is
 process-attribution evidence only; it does not close physical latency,
 cross-process exclusion, or production-driver gates.
+## Bounded impulse correlation (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 50`.
+
+The selected existing VB-Audio virtual cable produced 51 detected groups for
+50 expected impulses, with p95 spacing error of 471 frames and estimated onset
+of 26.27 ms. Temporary raw capture/log files were removed after the run. This
+is bounded software signal-correlation evidence only; it is not the calibrated
+acoustic p95 latency gate.
