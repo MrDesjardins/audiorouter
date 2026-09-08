@@ -440,6 +440,11 @@ runtime validation: 128-byte IDs/port references, 256-byte display names,
 four matrix coefficients. A control discovery regression checks representative
 schema fields; contracts typecheck and drift checks remain green.
 
+The `sessions.create` and `sessions.importPlan` input schemas now reuse that
+same bounded session schema rather than an unconstrained object placeholder.
+Discovery regression coverage verifies the node and edge collection limits on
+both submission surfaces.
+
 Session display names use the same 256-byte UTF-8 bound as node display names.
 Direct validation rejects an oversized imported label with a bounded `name`
 path before graph processing. The regression is portable and does not access

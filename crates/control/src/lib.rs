@@ -405,7 +405,7 @@ fn method_input_schema(name: &str) -> Value {
             &["sessionId"],
         ),
         "sessions.importPlan" => {
-            object_schema(json!({ "session": { "type": "object" } }), &["session"])
+            object_schema(json!({ "session": session_item_schema() }), &["session"])
         }
         "sessions.importCommit" => object_schema(
             json!({
@@ -437,7 +437,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "sessions.create" => object_schema(
             json!({
-                "session": { "type": "object" },
+                "session": session_item_schema(),
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["session"],
@@ -6094,6 +6094,26 @@ mod tests {
         assert_eq!(node_schema["properties"]["parameters"]["maxProperties"], 32);
         let edge_schema = &session_schema["properties"]["edges"]["items"];
         assert_eq!(edge_schema["properties"]["matrix"]["maxItems"], 4);
+        let create_input = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "sessions.create")
+            .unwrap();
+        assert_eq!(
+            create_input["inputSchema"]["properties"]["session"]["properties"]["nodes"]["maxItems"],
+            64
+        );
+        let import_input = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "sessions.importPlan")
+            .unwrap();
+        assert_eq!(
+            import_input["inputSchema"]["properties"]["session"]["properties"]["edges"]["maxItems"],
+            128
+        );
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
         assert_eq!(description["events"]["meterReplay"], false);
