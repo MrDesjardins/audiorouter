@@ -417,3 +417,9 @@ at five with a one-second maximum delay. They never select a substitute or
 sleep on the realtime path. The focused Windows-audio suite passes 22 tests
 with formatting and strict Clippy; native fault-injection evidence remains a
 separate host/device gate.
+
+The full locked workspace was then requalified at this checkpoint: 393
+unit/integration tests, all doc-tests, and strict all-target/all-feature
+Clippy with `-D warnings` passed. This validates dependent control and
+transport compilation against the recovery API; it does not replace native
+device-invalidation fault injection or production supervisor evidence.
