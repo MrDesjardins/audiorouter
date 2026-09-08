@@ -19,6 +19,11 @@ use std::os::windows::fs::MetadataExt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
+/// Maximum number of short-lived plan records hydrated during startup. Plans
+/// expire quickly and are never a durable unbounded collection; the extra row
+/// is a look-ahead sentinel for fail-closed validation.
+pub const MAX_PENDING_PLAN_RECORDS: usize = 100;
+
 #[derive(Debug)]
 pub enum StorageError {
     Sql(rusqlite::Error),
@@ -996,10 +1001,10 @@ impl Storage {
     pub fn load_virtual_device_plans(&self) -> Result<Vec<(EntityId, Value, i64)>, StorageError> {
         let mut statement = self.connection.prepare(
             "SELECT id, operation, expires_at FROM virtual_device_plans
-             WHERE expires_at > strftime('%s', 'now') ORDER BY id ASC",
+             WHERE expires_at > strftime('%s', 'now') ORDER BY id ASC LIMIT ?1",
         )?;
         let plans = statement
-            .query_map([], |row| {
+            .query_map([MAX_PENDING_PLAN_RECORDS + 1], |row| {
                 let operation: String = row.get(1)?;
                 let operation = serde_json::from_str(&operation).map_err(|error| {
                     rusqlite::Error::FromSqlConversionFailure(
@@ -1017,6 +1022,11 @@ impl Storage {
             .collect::<Result<Vec<_>, _>>()
             .map_err(StorageError::Sql);
         let plans = plans?;
+        if plans.len() > MAX_PENDING_PLAN_RECORDS {
+            return Err(StorageError::InvalidPlan(
+                "pending virtual-device plan inventory exceeds 100 items".into(),
+            ));
+        }
         for (id, _, _) in &plans {
             validate_plan_id(id.as_str())?;
         }
@@ -1041,8 +1051,8 @@ impl Storage {
     pub fn load_startup_plans(&self) -> Result<Vec<(EntityId, bool, i64)>, StorageError> {
         let mut statement = self
             .connection
-            .prepare("SELECT id, enabled, expires_at FROM startup_plans ORDER BY id")?;
-        let rows = statement.query_map([], |row| {
+            .prepare("SELECT id, enabled, expires_at FROM startup_plans ORDER BY id LIMIT ?1")?;
+        let rows = statement.query_map([MAX_PENDING_PLAN_RECORDS + 1], |row| {
             Ok((
                 EntityId::new(row.get::<_, String>(0)?),
                 row.get::<_, i64>(1)? != 0,
@@ -1052,6 +1062,11 @@ impl Storage {
         let rows = rows
             .collect::<Result<Vec<_>, _>>()
             .map_err(StorageError::Sql)?;
+        if rows.len() > MAX_PENDING_PLAN_RECORDS {
+            return Err(StorageError::InvalidPlan(
+                "startup plan inventory exceeds 100 items".into(),
+            ));
+        }
         for (id, _, _) in &rows {
             validate_plan_id(id.as_str())?;
         }
@@ -2626,6 +2641,39 @@ mod tests {
         assert_eq!(plans[0].1["action"], "create");
         storage.delete_virtual_device_plan(&live_id).unwrap();
         assert!(storage.load_virtual_device_plans().unwrap().is_empty());
+    }
+
+    #[test]
+    fn pending_plan_hydration_rejects_oversized_inventories() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..=MAX_PENDING_PLAN_RECORDS {
+            storage
+                .connection
+                .execute(
+                    "INSERT INTO virtual_device_plans(id, operation, expires_at)
+                     VALUES (?1, '{}', strftime('%s', 'now') + 300)",
+                    rusqlite::params![format!("virtual-plan-{index}")],
+                )
+                .unwrap();
+            storage
+                .connection
+                .execute(
+                    "INSERT INTO startup_plans(id, enabled, expires_at)
+                     VALUES (?1, 1, strftime('%s', 'now') + 300)",
+                    rusqlite::params![format!("startup-plan-{index}")],
+                )
+                .unwrap();
+        }
+        assert!(matches!(
+            storage.load_virtual_device_plans(),
+            Err(StorageError::InvalidPlan(message))
+                if message == "pending virtual-device plan inventory exceeds 100 items"
+        ));
+        assert!(matches!(
+            storage.load_startup_plans(),
+            Err(StorageError::InvalidPlan(message))
+                if message == "startup plan inventory exceeds 100 items"
+        ));
     }
 
     #[test]

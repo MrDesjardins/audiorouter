@@ -748,6 +748,15 @@ test-only corrupt row is rejected by both read surfaces; storage passes 59
 tests and control passes 87 tests with strict Clippy. No recording file or
 audio configuration was accessed.
 
+## Ephemeral-plan hydration bounds (2026-09-08)
+
+Storage now bounds active virtual-device and startup-plan hydration to 100
+records plus one look-ahead row, returning an explicit invalid-plan error for
+an oversized persisted inventory. A regression inserts 101 rows in each table
+and verifies both failures before larger vectors can be built. Storage passes
+71 tests with strict Clippy and formatting; no audio or machine configuration
+was accessed.
+
 ## Startup session-page completeness (2026-09-08)
 
 Storage-backed control startup now walks the full bounded session inventory in

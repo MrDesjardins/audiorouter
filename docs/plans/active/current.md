@@ -16,6 +16,14 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## Ephemeral-plan hydration bounds (2026-09-08)
+
+Closed an M03/M07/SEC-12 persistence gap: startup and pending virtual-device
+plan hydration now reads at most 101 rows and rejects an oversized inventory
+explicitly. This prevents a corrupted database from expanding startup memory
+before validation. Storage coverage is 71 tests with strict Clippy; no audio,
+driver, or machine configuration was accessed.
+
 ## Event replay page-cursor hardening (2026-09-08)
 
 Closed an M07/API-08 replay correctness gap: bounded `events.subscribe` pages
