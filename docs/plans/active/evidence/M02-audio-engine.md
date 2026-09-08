@@ -438,3 +438,15 @@ unit/integration tests, all doc-tests, and strict all-target/all-feature
 Clippy with `-D warnings` passed. This validates dependent control and
 transport compilation against the recovery API; it does not replace native
 device-invalidation fault injection or production supervisor evidence.
+
+## Current-head guarded live requalification (2026-09-07)
+
+The authorized guarded wrappers passed at the current head. The native bounded
+capture/silent-render lifecycle discovered 13 capture and 21 render endpoints
+and completed its 200 ms run with one occupied render endpoint classified. The
+VB-Audio digital loopback passed with nonzero capture payload, and the explicit
+Rust adapter route passed with 48,000 capture frames and 23,936 scheduler and
+routed frames. Temporary binaries were removed and media identity/state checks
+were unchanged. This is digital/adapter evidence only; calibrated physical
+latency, device-invalidation fault injection, managed driver, signing, and
+production shell gates remain open.
