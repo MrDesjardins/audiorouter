@@ -1774,3 +1774,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M01/API-01/SEC-12 nested event-snapshot cursor alignment on 2026-09-08: resynchronization snapshots now bound their nested session cursor consistently with the top-level session-list contract, with discovery regression coverage. Control/storage tests (86/52), strict Clippy, formatting, diff validation, and documentation validation pass; no audio or machine configuration was accessed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Completed M01/API-01/SEC-12 graph-history cursor boundary on 2026-09-08: decimal `u64` revision cursors now reject values above the exact 20-byte representation limit before parsing, and input/output discovery plus `system.describe` expose the same bound. Control/storage tests (86/52), strict Clippy, formatting, diff validation, and documentation validation pass; no audio or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

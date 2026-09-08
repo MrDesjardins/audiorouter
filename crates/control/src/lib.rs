@@ -30,6 +30,7 @@ const MAX_CONTROL_VALUE_COUNT: usize = 8192;
 const MAX_EVENT_SUBSCRIPTION_ITEMS: usize = 500;
 const MAX_SESSION_LIST_ITEMS: usize = 500;
 const MAX_GRAPH_HISTORY_ITEMS: usize = 100;
+const MAX_REVISION_CURSOR_BYTES: usize = 20;
 const MAX_GRAPH_DIFF_ITEMS: usize = 3;
 const MAX_GRAPH_AFFECTED_DESTINATIONS: usize = audiorouter_domain::MAX_NODES_PER_SESSION;
 const MAX_RECORDING_LIST_ITEMS: usize = 500;
@@ -479,7 +480,7 @@ fn method_input_schema(name: &str) -> Value {
         "graph.history" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "cursor": { "type": ["string", "null"] },
+                "cursor": { "type": ["string", "null"], "maxLength": MAX_REVISION_CURSOR_BYTES },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_GRAPH_HISTORY_ITEMS }
             }),
             &["sessionId"],
@@ -765,7 +766,7 @@ fn method_output_schema(name: &str) -> Value {
                 "type": "object",
                 "properties": {
                     "items": { "type": "array", "maxItems": MAX_GRAPH_HISTORY_ITEMS, "items": item },
-                    "nextCursor": { "type": ["string", "null"] }
+                    "nextCursor": { "type": ["string", "null"], "maxLength": MAX_REVISION_CURSOR_BYTES }
                 },
                 "required": ["items", "nextCursor"],
                 "additionalProperties": false
@@ -2586,7 +2587,8 @@ impl ControlPlane {
                 "maxControlStringBytes": MAX_CONTROL_STRING_BYTES,
                 "maxControlValueCount": MAX_CONTROL_VALUE_COUNT,
                 "maxMethodNameBytes": MAX_METHOD_NAME_BYTES,
-                "maxRequestIdBytes": MAX_REQUEST_ID_BYTES
+                "maxRequestIdBytes": MAX_REQUEST_ID_BYTES,
+                "maxRevisionCursorBytes": MAX_REVISION_CURSOR_BYTES
             },
             "events": {
                 "stateCategories": STATE_CATEGORIES,
@@ -3948,9 +3950,15 @@ impl ControlPlane {
             .get("cursor")
             .filter(|value| !value.is_null())
             .map(|value| {
-                value
-                    .as_str()
-                    .ok_or_else(|| ControlError::InvalidRequest("cursor must be a string".into()))?
+                let cursor = value.as_str().ok_or_else(|| {
+                    ControlError::InvalidRequest("cursor must be a string".into())
+                })?;
+                if cursor.len() > MAX_REVISION_CURSOR_BYTES {
+                    return Err(ControlError::InvalidRequest(
+                        "history cursor exceeds the maximum length".into(),
+                    ));
+                }
+                cursor
                     .parse::<u64>()
                     .map_err(|_| ControlError::InvalidRequest("invalid history cursor".into()))
             })
@@ -6183,6 +6191,10 @@ mod tests {
             description["limits"]["maxRequestIdBytes"],
             MAX_REQUEST_ID_BYTES
         );
+        assert_eq!(
+            description["limits"]["maxRevisionCursorBytes"],
+            MAX_REVISION_CURSOR_BYTES
+        );
         let create = description["methods"]
             .as_array()
             .unwrap()
@@ -6839,6 +6851,14 @@ mod tests {
         assert_eq!(
             history["outputSchema"]["properties"]["items"]["maxItems"],
             MAX_GRAPH_HISTORY_ITEMS
+        );
+        assert_eq!(
+            history["inputSchema"]["properties"]["cursor"]["maxLength"],
+            MAX_REVISION_CURSOR_BYTES
+        );
+        assert_eq!(
+            history["outputSchema"]["properties"]["nextCursor"]["maxLength"],
+            MAX_REVISION_CURSOR_BYTES
         );
         let session_get = methods
             .iter()
@@ -7812,6 +7832,16 @@ mod tests {
         assert_eq!(history["items"][0]["revision"], 1);
         assert_eq!(history["items"][0]["name"], "revision-one");
         assert_eq!(history["nextCursor"], "1");
+        let oversized = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "graph.history".into(),
+            params: Some(json!({
+                "sessionId": "session",
+                "cursor": "9".repeat(MAX_REVISION_CURSOR_BYTES + 1)
+            })),
+        });
+        assert_eq!(oversized.error.unwrap().code, -32602);
         let response = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(3)),

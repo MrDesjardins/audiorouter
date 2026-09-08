@@ -250,6 +250,15 @@ unit/integration targets, including the durable startup-plan coverage. Strict
 Clippy, formatting, and diff checks passed; no audio endpoint, driver, or
 machine configuration was accessed.
 
+## Graph-history cursor boundary (2026-09-08)
+
+Graph-history cursors are decimal `u64` revisions, so control validation now
+rejects values above the exact 20-byte decimal representation limit before
+parsing. Input/output discovery schemas and `system.describe` advertise the
+same bound, with a regression covering an oversized cursor. Control/storage
+tests (86/52), strict Clippy, formatting, diff validation, and documentation
+validation pass; no audio or machine configuration was accessed.
+
 ## Nested event-snapshot cursor alignment (2026-09-08)
 
 The `events.subscribe` resynchronization snapshot now bounds its nested
