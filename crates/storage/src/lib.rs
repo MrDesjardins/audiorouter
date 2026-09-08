@@ -48,6 +48,15 @@ pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_RECORDING_ID_BYTES: usize = 128;
+
+fn validate_recording_checkpoint_id(recording_id: &str) -> Result<(), StorageError> {
+    if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
+        return Err(StorageError::InvalidRecording(
+            "invalid recording checkpoint ID".into(),
+        ));
+    }
+    Ok(())
+}
 pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
 #[cfg(windows)]
@@ -938,11 +947,7 @@ impl Storage {
         recording_id: &str,
         checkpoint: &RecorderCheckpoint,
     ) -> Result<(), StorageError> {
-        if recording_id.is_empty() {
-            return Err(StorageError::InvalidRecording(
-                "recording checkpoint ID is empty".into(),
-            ));
-        }
+        validate_recording_checkpoint_id(recording_id)?;
         let checkpoint = audiorouter_recording::RecorderController::restore(checkpoint.clone())
             .map_err(|_| StorageError::InvalidRecording("invalid recording checkpoint".into()))?;
         let document = checkpoint
@@ -962,6 +967,7 @@ impl Storage {
         &self,
         recording_id: &str,
     ) -> Result<Option<RecorderCheckpoint>, StorageError> {
+        validate_recording_checkpoint_id(recording_id)?;
         let document = self
             .connection
             .query_row(
@@ -984,6 +990,7 @@ impl Storage {
     }
 
     pub fn clear_recording_checkpoint(&self, recording_id: &str) -> Result<bool, StorageError> {
+        validate_recording_checkpoint_id(recording_id)?;
         Ok(self.connection.execute(
             "DELETE FROM recording_checkpoints WHERE recording_id = ?1",
             params![recording_id],
@@ -3087,6 +3094,25 @@ mod tests {
             None
         );
         assert!(!storage.remove_recording_entry("recording").unwrap());
+    }
+
+    #[test]
+    fn recording_checkpoint_operations_reject_unbounded_ids() {
+        let storage = Storage::open_memory().unwrap();
+        let id = "r".repeat(MAX_RECORDING_ID_BYTES + 1);
+        let checkpoint = audiorouter_recording::RecorderController::new().checkpoint();
+        assert!(matches!(
+            storage.save_recording_checkpoint(&id, &checkpoint),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.load_recording_checkpoint(&id),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.clear_recording_checkpoint(&id),
+            Err(StorageError::InvalidRecording(_))
+        ));
     }
 
     #[test]

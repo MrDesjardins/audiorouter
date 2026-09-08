@@ -681,6 +681,15 @@ The public `recordings.recovery` schema now advertises the recorder's existing
 used by validation. Recording tests (30), control discovery tests (86), and
 strict Clippy passed; native realtime recorder integration remains open.
 
+## Recording checkpoint identity bound (2026-09-08)
+
+Storage checkpoint save, load, and clear now reject empty or over-128-byte
+recording IDs using the same identity ceiling applied to persisted recording
+rows and API schemas. This closes the direct-storage bypass without changing
+checkpoint contents or file behavior. Storage coverage passes 41 tests with
+strict Clippy, formatting, and diff checks; no audio endpoint or machine
+configuration was accessed.
+
 Paged recording-list discovery now advertises its 500-item page bound, matching
 the control dispatcher and storage page request limit.
 
