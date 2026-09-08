@@ -52,6 +52,7 @@ pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
+pub const MAX_RECORDING_LIST_ITEMS: usize = 500;
 pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
 pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
@@ -1262,13 +1263,22 @@ impl Storage {
                     frames, file_bytes, start_time, state, missing, title, artist, comment
              FROM recordings
              WHERE (?1 IS NULL OR session_id = ?1)
-             ORDER BY start_time ASC, id ASC",
+             ORDER BY start_time ASC, id ASC
+             LIMIT ?2",
         )?;
         let records = statement
-            .query_map(params![session_id], recording_from_row)?
+            .query_map(
+                params![session_id, (MAX_RECORDING_LIST_ITEMS + 1) as i64],
+                recording_from_row,
+            )?
             .collect::<Result<Vec<_>, _>>()?;
         for record in &records {
             validate_recording_record(record)?;
+        }
+        if records.len() > MAX_RECORDING_LIST_ITEMS {
+            return Err(StorageError::InvalidRecording(
+                "recording list exceeds 500 items; use cursor pagination".into(),
+            ));
         }
         Ok(records)
     }
@@ -1350,10 +1360,20 @@ impl Storage {
 
     pub fn get_recording(&self, id: &str) -> Result<Option<RecordingRecord>, StorageError> {
         validate_recording_id(id)?;
-        Ok(self
-            .list_recordings(None)?
-            .into_iter()
-            .find(|recording| recording.id == id))
+        self.connection
+            .query_row(
+                "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
+                        frames, file_bytes, start_time, state, missing, title, artist, comment
+                 FROM recordings WHERE id = ?1",
+                params![id],
+                recording_from_row,
+            )
+            .optional()?
+            .map(|record| {
+                validate_recording_record(&record)?;
+                Ok(record)
+            })
+            .transpose()
     }
 
     /// Removes only the durable library row; it never touches the recording path.
@@ -4150,6 +4170,44 @@ mod tests {
         assert!(!reopened.remove_recording_entry("rec-1").unwrap());
         assert_eq!(reopened.list_recordings(None).unwrap().len(), 1);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn unpaged_recording_list_rejects_an_unbounded_result() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..=MAX_RECORDING_LIST_ITEMS {
+            storage
+                .save_recording(&RecordingRecord {
+                    id: format!("recording-{index:03}"),
+                    session_id: "session".into(),
+                    recorder_id: "recorder".into(),
+                    path: format!("C:\\recordings\\{index:03}.wav"),
+                    format: "wav".into(),
+                    channels: 1,
+                    sample_rate: 48_000,
+                    frames: 1,
+                    file_bytes: 2,
+                    start_time: format!("2026-09-08T00:00:{index:02}Z"),
+                    state: "completed".into(),
+                    missing: true,
+                    title: None,
+                    artist: None,
+                    comment: None,
+                })
+                .unwrap();
+        }
+
+        assert!(matches!(
+            storage.list_recordings(Some("session")),
+            Err(StorageError::InvalidRecording(message))
+                if message.contains("use cursor pagination")
+        ));
+        assert!(storage.get_recording("recording-500").unwrap().is_some());
+        let (page, has_more) = storage
+            .list_recordings_page(Some("session"), None, MAX_RECORDING_LIST_ITEMS)
+            .unwrap();
+        assert_eq!(page.len(), MAX_RECORDING_LIST_ITEMS);
+        assert!(has_more);
     }
 
     #[test]

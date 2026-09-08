@@ -370,6 +370,14 @@ traceability, and documentation validation all passed. Temporary outputs and
 checkouts were removed; native driver lifecycle, signing, installer, hardware,
 physical latency, and manual UI gates remain open.
 
+Completed M04/M07/SEC-09/SEC-12 direct recording-list hardening: storage now
+uses the shared 500-item authority, probes one extra row, and fails explicitly
+with a cursor-pagination error instead of collecting an unbounded legacy list.
+Single-record lookup now queries by identity directly, so it remains usable for
+larger libraries. Storage (68) and control (87) tests, strict Clippy, formatting,
+and diff checks passed; rollback is isolated to the storage query boundary and
+its regression.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

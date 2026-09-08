@@ -779,3 +779,12 @@ become available. The UI presentation fixture now uses an explicitly synthetic
 unavailable reason, preventing stale milestone text from being mistaken for a
 runtime capability report. Control tests (87), strict Clippy, the focused UI
 processor-catalog suite (4), TypeScript typecheck, and diff checks passed.
+
+## Direct recording-list pagination hardening (2026-09-08)
+
+The storage boundary now shares the 500-record authority with control, probes
+one extra row, and rejects an oversized unpaged result with an explicit cursor
+pagination error. Single-record lookup uses a direct identity query and remains
+available for larger libraries. A 501-record regression passed alongside 68
+storage tests, 87 control tests, strict Clippy, formatting, and diff checks.
+No recording files, audio endpoints, or machine configuration were accessed.

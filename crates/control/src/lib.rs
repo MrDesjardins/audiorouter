@@ -15,7 +15,9 @@ use audiorouter_protocol::{
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
 };
 use audiorouter_recording::{RecorderController, RecorderState};
-use audiorouter_storage::{GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS};
+use audiorouter_storage::{
+    GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_RECORDING_LIST_ITEMS,
+};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -33,7 +35,6 @@ const MAX_GRAPH_HISTORY_ITEMS: usize = 100;
 const MAX_REVISION_CURSOR_BYTES: usize = 20;
 const MAX_GRAPH_DIFF_ITEMS: usize = 3;
 const MAX_GRAPH_AFFECTED_DESTINATIONS: usize = audiorouter_domain::MAX_NODES_PER_SESSION;
-const MAX_RECORDING_LIST_ITEMS: usize = 500;
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
