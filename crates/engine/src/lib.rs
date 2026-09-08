@@ -1171,7 +1171,8 @@ impl StreamingResampler {
 
     /// Produce one destination block when enough source samples are queued.
     /// The destination is cleared when a complete block is unavailable, and
-    /// the returned count makes the bounded underflow explicit.
+    /// the returned zero makes the bounded underflow explicit. An incomplete
+    /// block never advances FIFO ownership or interpolation phase.
     pub fn process(
         &mut self,
         destination: &mut AudioBlock,
@@ -1202,6 +1203,9 @@ impl StreamingResampler {
                     first + (second - first) * fraction;
             }
             produced += 1;
+        }
+        if produced != destination.frames {
+            return Ok(0);
         }
         if produced != 0 {
             self.phase += produced as f64 * ratio;
@@ -3649,8 +3653,9 @@ mod tests {
         let mut output = AudioBlock::new(1, 2).unwrap();
         output.channel_mut(0).unwrap().fill(1.0);
         assert_eq!(resampler.push(&source).unwrap(), 2);
-        assert_eq!(resampler.process(&mut output, 1.0).unwrap(), 1);
+        assert_eq!(resampler.process(&mut output, 1.0).unwrap(), 0);
         assert_eq!(output.channel(0).unwrap(), &[0.0, 0.0]);
+        assert_eq!(resampler.queued_frames(), 2);
         assert!(matches!(
             resampler.process(&mut output, f64::NAN),
             Err(BlockError::InvalidSampleRate)

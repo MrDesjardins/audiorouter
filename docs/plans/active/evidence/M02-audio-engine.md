@@ -341,3 +341,9 @@ quantum boundaries, while a short production result remains an explicit
 bounded underflow rather than repeating the last sample. Capacity exhaustion
 is surfaced as an error; arbitrary-rate stress, native callback timing, and
 hardware clock qualification remain open.
+
+The streaming boundary now treats an incomplete destination quantum
+transactionally: it silences the caller-owned output and leaves source FIFO
+ownership plus fractional phase untouched. This prevents an adapter route from
+dropping the consumed prefix of a partial block; the focused engine and probe
+checks pass, while arbitrary-rate stress and native timing remain open.

@@ -230,6 +230,12 @@ underflow, and resets without allocation. Regression coverage verifies samples
 continue across source-block boundaries and bounded underflow/shape behavior;
 the adapter route is wired to this boundary for differing device rates.
 
+Underflow handling was tightened after route integration review: a partial
+destination quantum is now returned as zero with the destination silenced, and
+the FIFO/phase remain unchanged for the next source push. This prevents the
+fixed-quantum adapter from consuming audio that it cannot publish; the engine
+suite passes 62 tests with strict Clippy.
+
 ## 2026-09-07 — Full workspace qualification
 
 The current head passed the locked full Rust workspace qualification with 393
