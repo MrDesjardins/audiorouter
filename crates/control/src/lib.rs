@@ -497,7 +497,7 @@ fn method_input_schema(name: &str) -> Value {
             json!({
                 "sessionId": { "type": "string", "minLength": 1 },
                 "baseRevision": { "type": "integer", "minimum": 0 },
-                "candidate": { "type": "object" }
+                "candidate": session_item_schema()
             }),
             &["sessionId", "baseRevision", "candidate"],
         ),
@@ -6172,6 +6172,17 @@ mod tests {
         assert_eq!(
             import_input["inputSchema"]["properties"]["session"]["properties"]["edges"]["maxItems"],
             128
+        );
+        let graph_plan_input = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "graph.plan")
+            .unwrap();
+        assert_eq!(
+            graph_plan_input["inputSchema"]["properties"]["candidate"]["properties"]["nodes"]
+                ["maxItems"],
+            64
         );
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
