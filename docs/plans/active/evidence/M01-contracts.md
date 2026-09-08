@@ -552,3 +552,10 @@ registry. `system.describe` uses it to build the response and advertises its
 exact `maxItems` bound in the output schema; discovery regression coverage
 checks both the response count and schema value. Control tests, strict Clippy,
 formatting, and documentation validation pass.
+## Plan metadata cardinality (2026-09-07)
+
+Startup, graph, and virtual-device plan output schemas now advertise the
+one-entry bounds for required scopes and warnings that their current response
+builders produce. Shared constants and control discovery assertions keep these
+contracts synchronized without imposing a limit on the intentionally unbounded
+client enrollment list.

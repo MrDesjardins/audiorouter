@@ -37,6 +37,8 @@ const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
+const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
+const MAX_PLAN_WARNINGS: usize = 1;
 const STATE_CATEGORIES: [&str; 15] = [
     "session.created",
     "session.deleted",
@@ -728,8 +730,8 @@ fn method_output_schema(name: &str) -> Value {
                 "enabled": { "type": "boolean" },
                 "registration": { "const": "unavailable" },
                 "reason": { "type": "string", "minLength": 1 },
-                "requiredScopes": { "type": "array", "items": { "type": "string" } },
-                "warnings": { "type": "array", "items": { "type": "string" } }
+                "requiredScopes": { "type": "array", "maxItems": MAX_PLAN_REQUIRED_SCOPES, "items": { "type": "string" } },
+                "warnings": { "type": "array", "maxItems": MAX_PLAN_WARNINGS, "items": { "type": "string" } }
             },
             "required": ["planId", "enabled", "registration", "reason", "requiredScopes", "warnings"],
             "additionalProperties": false
@@ -934,8 +936,8 @@ fn method_output_schema(name: &str) -> Value {
                         "maxLength": audiorouter_domain::MAX_DISPLAY_NAME_BYTES
                     }
                 },
-                "warnings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-                "requiredScopes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                "warnings": { "type": "array", "maxItems": MAX_PLAN_WARNINGS, "items": { "type": "string", "minLength": 1 } },
+                "requiredScopes": { "type": "array", "maxItems": MAX_PLAN_REQUIRED_SCOPES, "items": { "type": "string", "minLength": 1 } }
             },
             "required": ["planId", "baseRevision", "expiresInMs", "diff", "affectedDestinations", "warnings", "requiredScopes"],
             "additionalProperties": false
@@ -1128,8 +1130,8 @@ fn method_output_schema(name: &str) -> Value {
                     "required": ["status", "reason"],
                     "additionalProperties": false
                 },
-                "requiredScopes": { "type": "array", "items": { "type": "string" } },
-                "warnings": { "type": "array", "items": { "type": "string" } }
+                "requiredScopes": { "type": "array", "maxItems": MAX_PLAN_REQUIRED_SCOPES, "items": { "type": "string" } },
+                "warnings": { "type": "array", "maxItems": MAX_PLAN_WARNINGS, "items": { "type": "string" } }
             },
             "required": ["planId", "expiresInMs", "operation", "availability", "requiredScopes", "warnings"],
             "additionalProperties": false
@@ -6254,6 +6256,14 @@ mod tests {
         assert_eq!(
             graph_plan["outputSchema"]["properties"]["affectedDestinations"]["items"]["maxLength"],
             audiorouter_domain::MAX_DISPLAY_NAME_BYTES
+        );
+        assert_eq!(
+            graph_plan["outputSchema"]["properties"]["requiredScopes"]["maxItems"],
+            MAX_PLAN_REQUIRED_SCOPES
+        );
+        assert_eq!(
+            graph_plan["outputSchema"]["properties"]["warnings"]["maxItems"],
+            MAX_PLAN_WARNINGS
         );
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);
