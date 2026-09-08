@@ -713,3 +713,19 @@ binding inheritance after restart. No audio device or persistent machine
 configuration is accessed. This is deterministic process-identity evidence;
 full reboot, Windows Audio service restart, and multi-user transition evidence
 remain open.
+
+## Process-loopback exclusion mode (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-process-exclude-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 250`.
+
+The controlled native harness now launches a disposable child tone process and
+captures with `PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE`. Activation,
+capture start/stop/reset, child exit, and media-device identity/state checks are
+required. This validates the supported exclusion mode and lifecycle, but does
+not claim a cross-process rejection threshold because unrelated system audio is
+not controlled by this fixture. The run passed with 11,025 captured frames.
+Temporary binaries are removed and no persistent audio configuration is changed.
+The include-tree regression was also rerun after the harness change: it passed
+with 10,584 frames and 34,368 nonzero bytes.

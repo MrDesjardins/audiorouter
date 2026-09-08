@@ -711,7 +711,7 @@ static int render_session_inventory(UINT target_index) {
     return SUCCEEDED(hr) ? 0 : 1;
 }
 
-static int controlled_process_attribution(DWORD duration_ms) {
+static int controlled_process_attribution(DWORD duration_ms, bool include_target_tree) {
     char executable[MAX_PATH]{};
     if (GetModuleFileNameA(nullptr, executable, MAX_PATH) == 0) {
         print_hr("attribution_get_executable", HRESULT_FROM_WIN32(GetLastError()));
@@ -729,7 +729,8 @@ static int controlled_process_attribution(DWORD duration_ms) {
         return 1;
     }
     CloseHandle(process.hThread);
-    const int result = process_loopback_probe(process.dwProcessId, true, true, duration_ms, true);
+    const int result = process_loopback_probe(process.dwProcessId, true, include_target_tree,
+                                              duration_ms, true);
     WaitForSingleObject(process.hProcess, duration_ms + 3000);
     DWORD exit_code = STILL_ACTIVE;
     GetExitCodeProcess(process.hProcess, &exit_code);
@@ -738,6 +739,7 @@ static int controlled_process_attribution(DWORD duration_ms) {
         WaitForSingleObject(process.hProcess, 1000);
     }
     CloseHandle(process.hProcess);
+    std::cout << "attribution_mode=" << (include_target_tree ? "include" : "exclude") << '\n';
     std::cout << "attribution_child_exit=" << exit_code << '\n';
     return result == 0 && exit_code == 0 ? 0 : 1;
 }
@@ -900,7 +902,13 @@ int main(int argc, char** argv) {
     }
     if (argc > 1 && std::strcmp(argv[1], "process-attribution") == 0) {
         DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
-        int result = controlled_process_attribution(duration_ms);
+        int result = controlled_process_attribution(duration_ms, true);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "process-attribution-exclude") == 0) {
+        DWORD duration_ms = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
+        int result = controlled_process_attribution(duration_ms, false);
         CoUninitialize();
         return result;
     }
