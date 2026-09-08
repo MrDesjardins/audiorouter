@@ -1392,7 +1392,15 @@ fn status_output_schema() -> Value {
             "storage": { "enum": ["memory", "sqlite"] },
             "sessionCount": { "type": "integer", "minimum": 0 },
             "activeSessionCount": { "type": "integer", "minimum": 0 },
-            "activeSessionIds": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "activeSessionIds": {
+                "type": "array",
+                "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES
+                }
+            },
             "privacyMute": {
                 "type": "object",
                 "properties": {
@@ -6532,6 +6540,14 @@ mod tests {
         assert_eq!(
             status["outputSchema"]["properties"]["audio"]["const"],
             "unavailable"
+        );
+        assert_eq!(
+            status["outputSchema"]["properties"]["activeSessionIds"]["maxItems"],
+            audiorouter_domain::MAX_ACTIVE_SESSIONS
+        );
+        assert_eq!(
+            status["outputSchema"]["properties"]["activeSessionIds"]["items"]["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
         );
         assert_eq!(
             status["outputSchema"]["properties"]["eventCursor"]["required"],

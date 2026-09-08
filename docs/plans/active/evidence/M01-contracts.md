@@ -478,6 +478,10 @@ explicit distinction between observed sessions and guaranteed process capture.
 The array also advertises the existing 4,096-entry process-discovery ceiling,
 keeping the response cardinality discoverable at the API boundary.
 
+The read-only `status.get.activeSessionIds` schema now advertises the enforced
+two-session maximum and 128-byte entity-ID bound, matching runtime/domain
+limits and discovery regression coverage.
+
 The `events.subscribe` discovery contract now exposes its 500-event and
 500-session resync bounds plus the enforced event metadata lengths. Control
 discovery regression, strict Clippy, and documentation validation pass.
