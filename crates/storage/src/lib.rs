@@ -29,6 +29,7 @@ pub enum StorageError {
     InvalidRecording(String),
     InvalidPluginState(String),
     InvalidEnrollment(String),
+    InvalidPlan(String),
     CorruptDatabase(String),
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
@@ -56,6 +57,13 @@ fn validate_recording_checkpoint_id(recording_id: &str) -> Result<(), StorageErr
         return Err(StorageError::InvalidRecording(
             "invalid recording checkpoint ID".into(),
         ));
+    }
+    Ok(())
+}
+
+fn validate_plan_id(id: &str) -> Result<(), StorageError> {
+    if id.is_empty() || id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+        return Err(StorageError::InvalidPlan("invalid plan ID".into()));
     }
     Ok(())
 }
@@ -789,6 +797,7 @@ impl Storage {
         operation: &Value,
         expires_at: i64,
     ) -> Result<(), StorageError> {
+        validate_plan_id(id.as_str())?;
         let operation = serde_json::to_string(operation)?;
         self.connection.execute(
             "INSERT OR REPLACE INTO virtual_device_plans(id, operation, expires_at)
@@ -830,6 +839,7 @@ impl Storage {
         enabled: bool,
         expires_at: i64,
     ) -> Result<(), StorageError> {
+        validate_plan_id(id.as_str())?;
         self.connection.execute(
             "INSERT OR REPLACE INTO startup_plans(id, enabled, expires_at)
              VALUES (?1, ?2, ?3)",
@@ -1872,6 +1882,8 @@ impl Storage {
     }
 
     pub fn save_graph_plan(&self, plan: &GraphPlanRecord) -> Result<(), StorageError> {
+        validate_plan_id(&plan.id)?;
+        validate_plan_id(&plan.session_id)?;
         let candidate = Self::serialize_validated_session(&plan.candidate)?;
         self.connection.execute(
             "INSERT OR REPLACE INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
@@ -2287,6 +2299,32 @@ mod tests {
             Err(StorageError::InvalidSession(_))
         ));
         assert!(storage.load_graph_plan("plan").unwrap().is_none());
+    }
+
+    #[test]
+    fn direct_plan_saves_reject_unbounded_identifiers() {
+        let storage = Storage::open_memory().unwrap();
+        let oversized = EntityId::new("p".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1));
+
+        assert!(matches!(
+            storage.save_startup_plan(&oversized, true, i64::MAX),
+            Err(StorageError::InvalidPlan(_))
+        ));
+        assert!(matches!(
+            storage.save_virtual_device_plan(&oversized, &serde_json::json!({}), i64::MAX),
+            Err(StorageError::InvalidPlan(_))
+        ));
+        let valid = session();
+        assert!(matches!(
+            storage.save_graph_plan(&GraphPlanRecord {
+                id: "plan".into(),
+                session_id: oversized.as_str().into(),
+                base_revision: valid.revision,
+                candidate: valid,
+                expires_at: i64::MAX,
+            }),
+            Err(StorageError::InvalidPlan(_))
+        ));
     }
 
     #[test]

@@ -546,6 +546,11 @@ This prevents direct storage callers from bypassing the authorization
 contract. Storage and control tests pass (46 and 86 respectively) with strict
 Clippy; no audio or machine configuration was accessed.
 
+Durable graph, startup, and virtual-device plan writes now enforce the shared
+128-byte plan-identity ceiling before touching SQLite. Direct-storage
+regression coverage passes 47 storage tests; control behavior and error
+mapping remain compatible, and no audio or machine configuration was accessed.
+
 The discovered processor catalog now advertises its seven-entry bound, while
 node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative

@@ -5572,6 +5572,7 @@ fn storage_error(error: StorageError) -> ControlError {
         | StorageError::InvalidRecording(message)
         | StorageError::InvalidPluginState(message)
         | StorageError::InvalidEnrollment(message)
+        | StorageError::InvalidPlan(message)
         | StorageError::InvalidBackupPath(message) => ControlError::InvalidRequest(message),
         StorageError::DocumentTooLarge { maximum, .. } => ControlError::InvalidRequest(format!(
             "document exceeds the maximum permitted size of {maximum} bytes"
