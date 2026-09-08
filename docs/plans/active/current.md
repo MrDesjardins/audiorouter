@@ -1,6 +1,6 @@
 # Active plan
 
-Updated: 2026-09-07.
+Updated: 2026-09-08.
 
 ## Current state
 
@@ -15,6 +15,24 @@ installer, clean-machine, and manual UI gates remain open. Read the
 M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
+
+## Current actionable handoff (2026-09-08)
+
+The latest validated implementation head is `29f48de`. Safe portable and
+adapter work through the PCM16 quantum bridge, event-driven process-loopback,
+bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion, and
+scheduler telemetry accounting is implemented and regression-tested. The full
+locked workspace suite and guarded include/exclude process-loopback acceptance
+pass with unchanged media state.
+
+The next actionable item is native callback deadline/period evidence only when
+the production-style native scheduler owns an endpoint stream. That gate is
+not satisfied by the current process-loopback diagnostic or portable rings.
+Managed virtual-driver provisioning, production signing/Secure Boot/HVCI,
+installer/uninstaller, physical latency, clean-machine/reboot identity, and
+manual Discord/OBS/UI accessibility acceptance remain open. No driver,
+signing mode, endpoint default, volume, mute, privacy, plugin registration, or
+startup registration may be changed as part of the current safe work.
 
 The checked-in native probe build script was revalidated on 2026-09-06 with
 the installed Visual Studio Community 2026 MSVC and Windows SDK/WDK toolchain.
