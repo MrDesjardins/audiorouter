@@ -35,6 +35,29 @@ describe("native host bridge", () => {
     transport.dispose();
   });
 
+  it("requires the configured WebView2 response origin", async () => {
+    const listeners = new Set<(event: { data: unknown; origin?: string }) => void>();
+    const webview: WebView2Webview = {
+      postMessage: () => undefined,
+      addEventListener: (_type, listener) => { listeners.add(listener); },
+      removeEventListener: (_type, listener) => { listeners.delete(listener); },
+    };
+    const transport = new WebView2RpcTransport(webview, 1000, 2, "https://app.audiorouter.local");
+    const pending = transport.send({ jsonrpc: "2.0", id: 9, method: "status.get" });
+    const emit = (origin: string | undefined) => {
+      for (const listener of listeners) listener({ origin, data: { type: "audiorouter.rpc.response", response: { ...response, id: 9 } } });
+    };
+    emit("https://untrusted.example");
+    emit(undefined);
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+    emit("https://app.audiorouter.local");
+    await expect(pending).resolves.toEqual({ ...response, id: 9 });
+    transport.dispose();
+  });
+
   it("does not resolve requests from malformed or ambiguous responses", async () => {
     const listeners = new Set<(event: { data: unknown }) => void>();
     const webview: WebView2Webview = {

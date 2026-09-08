@@ -689,3 +689,12 @@ The direct injected bridge and WebView2 session path now reject session
 identities longer than 128 characters, matching the boundary's bounded-input
 policy. TypeScript typechecking and all 86 Vitest tests passed. No native host,
 audio stream, driver, or machine configuration was accessed.
+
+## WebView2 origin gate (2026-09-07)
+
+`WebView2RpcTransport` now supports an explicit bounded allowed-origin
+configuration. When configured, response messages with a different or missing
+origin are ignored before request correlation; the default remains compatible
+with the existing injected test seam until a native shell supplies its exact
+trusted origin. M05 typecheck and all 87 Vitest tests passed. Native shell
+packaging and manual acceptance remain open.

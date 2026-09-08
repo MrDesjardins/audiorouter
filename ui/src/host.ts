@@ -9,8 +9,8 @@ export type AudioRouterHostBridge = {
 
 export interface WebView2Webview {
   postMessage(message: unknown): void;
-  addEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
-  removeEventListener(type: "message", listener: (event: { data: unknown }) => void): void;
+  addEventListener(type: "message", listener: (event: { data: unknown; origin?: string }) => void): void;
+  removeEventListener(type: "message", listener: (event: { data: unknown; origin?: string }) => void): void;
 }
 
 type PendingRequest = {
@@ -26,13 +26,19 @@ function requestKey(id: JsonRpcRequest["id"]): string {
 /** Bounded JSON-RPC transport for a WebView2 `chrome.webview` bridge. */
 export class WebView2RpcTransport implements RpcTransport {
   private readonly pending = new Map<string, PendingRequest>();
-  private readonly listener: (event: { data: unknown }) => void;
+  private readonly listener: (event: { data: unknown; origin?: string }) => void;
   private closed = false;
 
-  constructor(private readonly webview: WebView2Webview, private readonly timeoutMs = 5000, private readonly maxPending = 64) {
+  constructor(
+    private readonly webview: WebView2Webview,
+    private readonly timeoutMs = 5000,
+    private readonly maxPending = 64,
+    private readonly allowedOrigin?: string,
+  ) {
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw new Error("WebView2 transport timeout is out of bounds");
     if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 256) throw new Error("WebView2 transport pending limit is out of bounds");
-    this.listener = (event) => this.receive(event.data);
+    if (allowedOrigin !== undefined && (allowedOrigin.length < 1 || allowedOrigin.length > 256)) throw new Error("WebView2 allowed origin is out of bounds");
+    this.listener = (event) => this.receive(event.data, event.origin);
     webview.addEventListener("message", this.listener);
   }
 
@@ -69,7 +75,8 @@ export class WebView2RpcTransport implements RpcTransport {
     }
   }
 
-  private receive(value: unknown): void {
+  private receive(value: unknown, origin: string | undefined): void {
+    if (this.allowedOrigin !== undefined && origin !== this.allowedOrigin) return;
     if (typeof value !== "object" || value === null || (value as { type?: unknown }).type !== "audiorouter.rpc.response") return;
     const response = (value as { response?: unknown }).response;
     if (typeof response !== "object" || response === null || (response as { jsonrpc?: unknown }).jsonrpc !== "2.0") return;
