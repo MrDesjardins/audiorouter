@@ -588,11 +588,11 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head before this documentation update is
-`4d9ce1f4`, with the latest
+The latest validated implementation head is `4d9ce1f4` (the source-tested
+parent of this documentation-only update), with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent M06 plugin-host boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is `4d9ce1f4`; its adapter liveness/recovery
+The latest pushed plan/evidence tip is `ec8d478d`; its adapter liveness/recovery
 and safe-chain evidence are recorded above. Its event-replay cursor,
 Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
