@@ -94,3 +94,14 @@ endpoint `{0.0.1.00000000}.{2b694137-729a-4e08-b290-e891a6bc2487}` and active
 `{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}`. The inventory
 performed metadata/capability queries only; it did not change endpoint state
 or defaults.
+
+## Native endpoint lifecycle sweep (2026-09-08)
+
+The authorized bounded native lifecycle acceptance exercised all 13 active
+capture endpoints and 21 active render endpoints for 100 ms each. One render
+endpoint was already occupied and was handled as the expected ownership case;
+the remaining lifecycle checks completed successfully. The sweep used silent
+render buffers, stopped/reset clients, and verified unchanged defaults,
+volume, mute, privacy, driver/signing, startup configuration, and media state.
+This is endpoint lifecycle evidence only, not production-driver or physical
+latency evidence.
