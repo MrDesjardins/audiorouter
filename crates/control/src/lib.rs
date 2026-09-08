@@ -1087,6 +1087,7 @@ fn method_output_schema(name: &str) -> Value {
             "oneOf": [
                 {
                     "type": "array",
+                    "maxItems": audiorouter_domain::MAX_VIRTUAL_BUSES,
                     "items": virtual_device_item_schema()
                 },
                 {
@@ -6585,6 +6586,14 @@ mod tests {
         assert_eq!(
             devices["outputSchema"]["oneOf"][0]["maxItems"],
             MAX_DEVICE_LIST_ITEMS
+        );
+        let virtual_devices = methods
+            .iter()
+            .find(|method| method["name"] == "virtualDevices.list")
+            .unwrap();
+        assert_eq!(
+            virtual_devices["outputSchema"]["oneOf"][0]["maxItems"],
+            audiorouter_domain::MAX_VIRTUAL_BUSES
         );
         assert_eq!(
             devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]

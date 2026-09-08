@@ -288,3 +288,8 @@ The read-only `virtualDevices.list` contract now shares a 500-item page bound
 across input validation, runtime truncation, and discovery schema metadata.
 Control tests (86), strict Clippy, and documentation validation pass. This
 does not create endpoints or claim managed-driver lifecycle functionality.
+
+The legacy unpaged `virtualDevices.list` array response now advertises the
+authoritative eight-bus domain ceiling. The in-memory registry already rejects
+the ninth bus, so complete unpaged results remain safe without arbitrary
+truncation or managed-driver activation.
