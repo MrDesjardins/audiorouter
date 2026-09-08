@@ -70,6 +70,12 @@ MSVC toolset and Windows SDK containing the required headers. See
 `docs/plans/active/evidence/M06-vst3-sdk.md` for measured SDK validation
 evidence.
 
+When `-Output` points to a custom temporary executable, the native probe build
+script places its implicit object beside that executable; an explicit `-Object`
+path remains supported. The default output continues to use `main.obj` beside
+the source, so disposable builds do not leave generated objects in the tool
+directory.
+
 For a compile-only SysVAD feasibility check, run the repository helper:
 
 ```powershell

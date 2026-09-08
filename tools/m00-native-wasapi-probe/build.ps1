@@ -1,6 +1,6 @@
 param(
     [string]$Output = (Join-Path $PSScriptRoot 'main.exe'),
-    [string]$Object = (Join-Path $PSScriptRoot 'main.obj')
+    [string]$Object = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,6 +29,16 @@ $umLib = Join-Path $kits "Lib\$version\um\x64"
 $ucrtLib = Join-Path $kits "Lib\$version\ucrt\x64"
 $source = Join-Path $PSScriptRoot 'main.cpp'
 $output = [System.IO.Path]::GetFullPath($Output)
+$defaultOutput = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'main.exe'))
+if ([string]::IsNullOrWhiteSpace($Object)) {
+    # Preserve the default artifact name, but keep custom temporary builds
+    # from leaving an implicit object in the repository.
+    $Object = if ($output -ieq $defaultOutput) {
+        Join-Path $PSScriptRoot 'main.obj'
+    } else {
+        [System.IO.Path]::ChangeExtension($output, '.obj')
+    }
+}
 $object = [System.IO.Path]::GetFullPath($Object)
 
 foreach ($path in @($cl, $vcInclude, $vcLib, "$include\um\Windows.h", "$include\um\audioclientactivationparams.h", "$umLib\Mmdevapi.lib")) {

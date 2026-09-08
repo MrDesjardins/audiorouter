@@ -4,6 +4,7 @@ $probeDirectory = Join-Path $workspace 'tools/m00-native-wasapi-probe'
 $buildScript = Join-Path $probeDirectory 'build.ps1'
 $object = Join-Path $probeDirectory 'main.obj'
 $output = Join-Path ([System.IO.Path]::GetTempPath()) ("audiorouter-m00-probe-{0}.exe" -f ([guid]::NewGuid()))
+$temporaryObject = [System.IO.Path]::ChangeExtension($output, '.obj')
 
 if (Test-Path -LiteralPath $object) {
     throw "refusing native acceptance build because generated object already exists: $object"
@@ -17,9 +18,15 @@ try {
     if (-not (Test-Path -LiteralPath $output -PathType Leaf)) {
         throw "native WASAPI probe build did not produce the expected executable: $output"
     }
+    if (Test-Path -LiteralPath $object) {
+        throw "custom-output native build left repository object: $object"
+    }
+    if (-not (Test-Path -LiteralPath $temporaryObject -PathType Leaf)) {
+        throw "custom-output native build did not create adjacent object: $temporaryObject"
+    }
     Write-Output 'M00 native probe compile acceptance passed'
     Write-Output 'Scope: compile-only validation; no audio stream, driver, signing mode, or machine configuration action.'
 }
 finally {
-    Remove-Item -LiteralPath $output, $object -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $output, $object, $temporaryObject -Force -ErrorAction SilentlyContinue
 }
