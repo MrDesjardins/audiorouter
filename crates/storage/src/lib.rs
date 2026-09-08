@@ -53,6 +53,9 @@ pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
 pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
+pub const MAX_SESSION_LIST_ITEMS: usize = 500;
+/// One extra row is permitted so callers can detect a full page.
+pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
 
 fn validate_recording_id(recording_id: &str) -> Result<(), StorageError> {
     if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
@@ -1385,6 +1388,11 @@ impl Storage {
         limit: usize,
     ) -> Result<Vec<Session>, StorageError> {
         validate_session_id(id)?;
+        if !(1..=MAX_SESSION_HISTORY_ITEMS).contains(&limit) {
+            return Err(StorageError::InvalidSession(
+                "session history limit must be between 1 and 101".into(),
+            ));
+        }
         let mut statement = if before_revision.is_some() {
             self.connection.prepare(
                 "SELECT document FROM session_history WHERE session_id = ?1 AND revision < ?2
@@ -1450,6 +1458,11 @@ impl Storage {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<Vec<Session>, StorageError> {
+        if !(1..=MAX_SESSION_LIST_ITEMS).contains(&limit) {
+            return Err(StorageError::InvalidSession(
+                "session list limit must be between 1 and 500".into(),
+            ));
+        }
         if let Some(cursor) = cursor {
             if cursor.is_empty() || cursor.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
                 return Err(StorageError::InvalidSession(
@@ -2380,6 +2393,27 @@ mod tests {
         ));
         assert!(matches!(
             storage.list_sessions_after(Some(invalid.as_str()), 1),
+            Err(StorageError::InvalidSession(_))
+        ));
+    }
+
+    #[test]
+    fn session_pagination_rejects_unbounded_limits() {
+        let storage = Storage::open_memory().unwrap();
+        assert!(matches!(
+            storage.list_sessions(0),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.list_sessions(MAX_SESSION_LIST_ITEMS + 1),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.load_history(&session().id, 0),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.load_history(&session().id, MAX_SESSION_HISTORY_ITEMS + 1),
             Err(StorageError::InvalidSession(_))
         ));
     }

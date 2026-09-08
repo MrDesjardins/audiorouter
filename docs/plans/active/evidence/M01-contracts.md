@@ -568,6 +568,12 @@ revalidated before being returned. Storage coverage remains green at 51 tests
 with strict Clippy and formatting; no audio or machine configuration was
 accessed.
 
+Session history and session-list pagination now enforce the authoritative
+bounded limits at the SQLite boundary: 101 rows for history (including the
+look-ahead row) and 500 rows for session pages. Storage/control tests pass
+(52/86) with strict Clippy and formatting; no audio or machine configuration
+was accessed.
+
 The discovered processor catalog now advertises its seven-entry bound, while
 node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative
