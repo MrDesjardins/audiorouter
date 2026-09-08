@@ -1900,3 +1900,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Requalified M06/SEC-07 offline VST3 SDK/loader acceptance at `656fdb3` on 2026-09-08: the local pinned SDK passed 51 self-tests and 1,598 validator tests; the x64 loader discovered 68 classes and verified finite stereo processing, five parameters/automation, and a 180-byte state round trip. No plugin was globally registered or external plugin executed; OS sandbox, multi-vendor compatibility, and native production execution remain open.
 - Next M06 task: obtain and qualify the required independent x64 VST3 fixture matrix and worker/editor containment evidence without weakening the plugin sandbox boundary.
+
+- Requalified the locked workspace at `b571e24` on 2026-09-08 after journal hardening: all workspace unit/integration tests and doc-tests passed, and strict workspace Clippy passed with `-D warnings`. No driver, signing mode, plugin/startup registration, or machine audio configuration changed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

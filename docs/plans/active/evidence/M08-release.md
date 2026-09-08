@@ -24,6 +24,15 @@ signing mode changed, and no plugin/startup registration or machine audio
 configuration changed. Production driver ownership, signing, installer,
 clean-machine, physical-latency, and manual UI/accessibility gates remain open.
 
+## Workspace regression after journal hardening (`b571e24`, 2026-09-08)
+
+The locked workspace unit/integration tests and doc-tests passed at the
+current head, and strict workspace Clippy passed with `-D warnings`. This
+requalifies the shared storage change through the control, transport, CLI,
+MCP, engine, plugin, recording, and Windows-audio crate boundaries. No driver
+was installed or loaded, signing mode was unchanged, no plugin or startup
+entry was registered, and no machine audio configuration changed.
+
 ## Safe-chain requalification after discovery self-consistency (`3d01a6e`, 2026-09-08)
 
 The elevated non-mutating command `powershell.exe -NoProfile
