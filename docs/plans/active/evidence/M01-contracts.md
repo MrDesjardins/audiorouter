@@ -403,3 +403,8 @@ The retained state-event log now drops oversized category, operation-ID, and
 session-ID metadata before sequence allocation, keeping event retention bounded
 in bytes as well as count/age. A regression covers each metadata field and
 confirms the next valid event still receives sequence 1.
+
+Domain session validation now limits each node to 32 parameter entries before
+iterating and validating values. A direct-session regression exceeds that bound
+and verifies a path-specific limit error; normal control requests retain their
+separate decoded JSON budgets.

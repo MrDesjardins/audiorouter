@@ -20,6 +20,7 @@ pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
+pub const MAX_PARAMETERS_PER_NODE: usize = 32;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
 pub const RECOVERY_SAFE_MODE_CRASHES: usize = 3;
@@ -1080,6 +1081,13 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     channels: port.channels,
                 });
             }
+        }
+        if node.parameters.len() > MAX_PARAMETERS_PER_NODE {
+            errors.push(ValidationError::LimitExceeded {
+                path: format!("{path}.parameters"),
+                requested: node.parameters.len(),
+                maximum: MAX_PARAMETERS_PER_NODE,
+            });
         }
         for (name, value) in &node.parameters {
             let valid = match (node.kind, name.as_str()) {
@@ -2851,6 +2859,23 @@ mod tests {
         assert!(errors.iter().any(|error| matches!(
             error,
             ValidationError::LimitExceeded { path, .. } if path == "id"
+        )));
+    }
+
+    #[test]
+    fn rejects_oversized_node_parameter_maps() {
+        let mut gain = node("gain", NodeKind::Gain, PortDirection::Input);
+        for index in 0..=MAX_PARAMETERS_PER_NODE {
+            gain.parameters
+                .insert(format!("parameter-{index}"), serde_json::json!(0));
+        }
+        let errors = validate_session(&session(vec![gain], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "nodes[0].parameters"
+                    && *requested == MAX_PARAMETERS_PER_NODE + 1
+                    && *maximum == MAX_PARAMETERS_PER_NODE
         )));
     }
 
