@@ -41,6 +41,11 @@ The post-change workspace requalification also passed with all workspace
 features and the locked dependency set; the result is recorded in the M08
 release evidence. No live endpoint was opened for this source-only check.
 
+The elevated complete safe acceptance chain also passed at the current head,
+including native read-only inventory and disposable SysVAD qualification. Its
+temporary outputs were removed and it did not install/load a driver or alter
+machine audio configuration.
+
 ## Native lifecycle and process-attribution acceptance (2026-09-08)
 
 With explicit live-audio authorization, the guarded `m00-native-live.ps1`

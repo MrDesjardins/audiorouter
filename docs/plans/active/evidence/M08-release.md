@@ -856,6 +856,20 @@ loading, signing-mode changes, plugin/startup registration, and machine audio
 configuration were excluded and unchanged.
 # M08 release evidence
 
+## 2026-09-08 - Complete safe acceptance at `125676ee`
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the current head:
+toolchain discovery, native compile, read-only 34-endpoint format inventory,
+disposable pinned SysVAD x64 compile/package/API qualification, M01 CLI, M04
+DSP/recording, M05 UI (typecheck, 91 tests, temporary production build), M06
+SDK/VST3, M07 headless, unsigned M08 preparation, 158 normative requirement
+mappings, and documentation validation (51 Markdown files, 160 local links).
+The initial non-elevated attempt stopped at the expected PnP access-denied
+boundary; the elevated retry completed successfully. Temporary artifacts and
+the reference checkout were removed. No driver was installed or loaded, and
+no signing mode, plugin/startup registration, or machine audio configuration
+changed.
+
 ## 2026-09-08 - Workspace requalification after linear topology guard (`a8a9fc14`)
 
 `cargo test --workspace --all-features --quiet --locked` passed all workspace
