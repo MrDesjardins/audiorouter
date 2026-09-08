@@ -1,5 +1,14 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Current process restart identity requalification
+
+`cargo test -p audiorouter-windows-audio --locked -- --nocapture` passed all
+30 tests, including the Windows-only bounded-helper restart regression. The
+test observed PID, executable, and creation timestamp, rejected the terminated
+process as stale, and observed a replacement helper. This run did not produce
+an actual PID reuse event, so actual reuse remains unclaimed. The test is
+read-only with respect to audio endpoints and machine configuration.
+
 ## 2026-09-08 - Capture fallback HRESULT regression
 
 The Windows-audio unit suite now directly verifies that capture initialization
