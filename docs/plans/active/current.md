@@ -45,6 +45,10 @@ retain the same version after DSP lookup/instantiation, with engine and DSP
 struct-construction regressions. This remains portable metadata and does not
 activate or mutate an audio graph.
 
+Unsupported preset payload versions now fail closed in `ParametricEq` and
+`VoiceChain` constructors before processor state is created, with focused
+regressions for both paths.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

@@ -161,6 +161,10 @@ The instantiated DSP payloads now retain `version: 1` on `EqPreset` and
 and processor construction. DSP (27) and engine (75) tests, strict Clippy,
 formatting, and diff checks passed; no audio or machine configuration changed.
 
+Both constructors reject an unsupported preset version before allocating or
+publishing processor state. The rejection regressions are covered by the DSP
+suite and preserve the fail-closed processing boundary.
+
 ## Versioned built-in preset catalog (2026-09-08)
 
 The built-in voice-chain and EQ preset descriptors now expose a required

@@ -336,6 +336,7 @@ pub enum BiquadError {
     InvalidChannels,
     InvalidBand,
     NonFiniteParameter,
+    InvalidPresetVersion,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -560,6 +561,9 @@ impl ParametricEq {
     }
 
     pub fn from_preset(preset: EqPreset, channels: usize) -> Result<Self, BiquadError> {
+        if preset.version != preset.id.version() {
+            return Err(BiquadError::InvalidPresetVersion);
+        }
         Self::new(preset.bands, channels)
     }
 
@@ -1228,6 +1232,7 @@ pub fn voice_chain_preset(id: VoiceChainPresetId, sample_rate: f32) -> VoiceChai
 pub enum VoiceChainError {
     Biquad(BiquadError),
     Delay(DelayError),
+    InvalidPresetVersion,
 }
 
 impl From<BiquadError> for VoiceChainError {
@@ -1257,6 +1262,9 @@ pub struct VoiceChain {
 
 impl VoiceChain {
     pub fn new(config: VoiceChainConfig, channels: usize) -> Result<Self, VoiceChainError> {
+        if config.version != 1 {
+            return Err(VoiceChainError::InvalidPresetVersion);
+        }
         let eq = config
             .eq
             .map(|id| eq_preset(id, config.sample_rate))
@@ -1768,6 +1776,12 @@ mod tests {
         let neutral = eq_preset(EqPresetId::VoiceNeutral, 48_000.0).unwrap();
         assert_eq!(neutral.id, EqPresetId::VoiceNeutral);
         assert_eq!(neutral.version, 1);
+        let mut invalid = neutral;
+        invalid.version = 2;
+        assert!(matches!(
+            ParametricEq::from_preset(invalid, 1),
+            Err(BiquadError::InvalidPresetVersion)
+        ));
         assert!(neutral.bands.iter().all(Option::is_none));
 
         for (id, frequency) in [(EqPresetId::Hum50Hz, 50.0), (EqPresetId::Hum60Hz, 60.0)] {
@@ -2056,6 +2070,7 @@ mod tests {
         assert!(neutral.gate.is_none());
         assert!(neutral.compressor.is_none());
         assert_eq!(neutral.limiter.ceiling_db, -1.0);
+        let mut invalid = neutral.clone();
         assert!(VoiceChain::new(neutral, 1).is_ok());
 
         let processed = voice_chain_preset(VoiceChainPresetId::VoiceGateAndCompression, 48_000.0);
@@ -2065,6 +2080,11 @@ mod tests {
         assert_eq!(processed.compressor.as_ref().unwrap().threshold_db, -18.0);
         assert_eq!(processed.compressor.as_ref().unwrap().ratio, 3.0);
         assert!(VoiceChain::new(processed, 2).is_ok());
+        invalid.version = 2;
+        assert!(matches!(
+            VoiceChain::new(invalid, 1),
+            Err(VoiceChainError::InvalidPresetVersion)
+        ));
     }
 
     #[test]
