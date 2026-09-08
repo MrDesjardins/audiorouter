@@ -477,3 +477,7 @@ metadata from expanding control responses without limit while retaining the
 explicit distinction between observed sessions and guaranteed process capture.
 The array also advertises the existing 4,096-entry process-discovery ceiling,
 keeping the response cardinality discoverable at the API boundary.
+
+The checked-in M01 CLI acceptance was rerun on Windows after this alignment;
+application discovery and the offline command contract passed without opening
+an audio stream or changing machine configuration.
