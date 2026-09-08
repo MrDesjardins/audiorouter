@@ -388,3 +388,8 @@ virtual-route entity IDs over 128 UTF-8 bytes before graph indexing. The
 regression covers oversized node and session IDs and verifies path-specific
 bounded errors. Domain coverage passes 45 tests; this is portable validation and
 does not access audio or machine configuration.
+
+The managed virtual-bus registry applies the same bound at insertion time and
+returns `IdTooLong` before storing an oversized desired-state bus ID. The
+registry regression covers the limit and remains portable with no audio or
+machine configuration access.

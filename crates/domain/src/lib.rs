@@ -222,6 +222,7 @@ impl VirtualBusLease {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VirtualBusError {
     EmptyId,
+    IdTooLong,
     EmptyName,
     NameTooLong,
     DuplicateId,
@@ -315,6 +316,9 @@ impl VirtualBusRegistry {
         let name = validate_virtual_bus_name(name.into())?;
         if id.as_str().is_empty() {
             return Err(VirtualBusError::EmptyId);
+        }
+        if id.as_str().len() > MAX_ENTITY_ID_BYTES {
+            return Err(VirtualBusError::IdTooLong);
         }
         if self.buses.iter().any(|bus| bus.id == id) {
             return Err(VirtualBusError::DuplicateId);
@@ -2692,6 +2696,10 @@ mod tests {
         assert_eq!(
             registry.create(EntityId::new(""), "bus"),
             Err(VirtualBusError::EmptyId)
+        );
+        assert_eq!(
+            registry.create(EntityId::new("b".repeat(MAX_ENTITY_ID_BYTES + 1)), "bus"),
+            Err(VirtualBusError::IdTooLong)
         );
         assert_eq!(
             registry.create(EntityId::new("bus"), "  "),
