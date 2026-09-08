@@ -426,6 +426,13 @@ be selected. The focused Windows-audio suite remains green at 22 tests with
 doc-tests, formatting, and strict Clippy; actual device-invalidation fault
 injection is still unqualified.
 
+The shared bounded retry policy is now directly regression-tested: transient
+device invalidation retries until success, invalid argument fails immediately
+without retry, and an always-transient failure stops at five attempts. This
+tests policy behavior without pretending to be native fault injection; the
+focused Windows-audio suite passes 25 tests with doc-tests, formatting, and
+strict Clippy.
+
 The full locked workspace was then requalified at this checkpoint: 393
 unit/integration tests, all doc-tests, and strict all-target/all-feature
 Clippy with `-D warnings` passed. This validates dependent control and

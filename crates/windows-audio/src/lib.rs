@@ -524,20 +524,9 @@ impl SharedCapture {
         max_attempts: u32,
         retry_delay_ms: u64,
     ) -> Result<Self, AudioError> {
-        let attempts = max_attempts.clamp(1, 5);
-        let delay = retry_delay_ms.min(1_000);
-        for attempt in 0..attempts {
-            match Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns) {
-                Ok(client) => return Ok(client),
-                Err(error) if attempt + 1 < attempts && error.is_retryable() => {
-                    if delay != 0 {
-                        std::thread::sleep(std::time::Duration::from_millis(delay));
-                    }
-                }
-                Err(error) => return Err(error),
-            }
-        }
-        unreachable!("bounded capture reopen loop always returns")
+        retry_transient_audio_operation(max_attempts, retry_delay_ms, || {
+            Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns)
+        })
     }
 
     /// Stop and release this capture client, refresh endpoint metadata, and
@@ -901,20 +890,9 @@ impl SharedRender {
         max_attempts: u32,
         retry_delay_ms: u64,
     ) -> Result<Self, AudioError> {
-        let attempts = max_attempts.clamp(1, 5);
-        let delay = retry_delay_ms.min(1_000);
-        for attempt in 0..attempts {
-            match Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns) {
-                Ok(client) => return Ok(client),
-                Err(error) if attempt + 1 < attempts && error.is_retryable() => {
-                    if delay != 0 {
-                        std::thread::sleep(std::time::Duration::from_millis(delay));
-                    }
-                }
-                Err(error) => return Err(error),
-            }
-        }
-        unreachable!("bounded render reopen loop always returns")
+        retry_transient_audio_operation(max_attempts, retry_delay_ms, || {
+            Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns)
+        })
     }
 
     /// Stop and release this render client, refresh endpoint metadata, and
@@ -1105,6 +1083,30 @@ impl Drop for SharedRender {
     fn drop(&mut self) {
         let _ = self.stop();
     }
+}
+
+fn retry_transient_audio_operation<T, F>(
+    max_attempts: u32,
+    retry_delay_ms: u64,
+    mut operation: F,
+) -> Result<T, AudioError>
+where
+    F: FnMut() -> Result<T, AudioError>,
+{
+    let attempts = max_attempts.clamp(1, 5);
+    let delay = retry_delay_ms.min(1_000);
+    for attempt in 0..attempts {
+        match operation() {
+            Ok(value) => return Ok(value),
+            Err(error) if attempt + 1 < attempts && error.is_retryable() => {
+                if delay != 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(delay));
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    unreachable!("bounded audio retry loop always returns")
 }
 
 fn bound_endpoint_id(
@@ -2110,6 +2112,53 @@ mod tests {
             vec![4, 20]
         );
         assert_eq!(inventory[1].display_names, vec!["alpha", "zulu"]);
+    }
+
+    #[test]
+    fn bounded_recovery_retries_transient_failures_then_succeeds() {
+        let mut calls = 0;
+        let value = retry_transient_audio_operation(5, 0, || {
+            calls += 1;
+            if calls < 3 {
+                Err(AudioError::Windows(windows::core::Error::new(
+                    windows::core::HRESULT(0x88890004_u32 as i32),
+                    "device invalidated",
+                )))
+            } else {
+                Ok(42_u32)
+            }
+        })
+        .unwrap();
+        assert_eq!(value, 42);
+        assert_eq!(calls, 3);
+    }
+
+    #[test]
+    fn bounded_recovery_does_not_retry_non_transient_failures() {
+        let mut calls = 0;
+        let result = retry_transient_audio_operation(5, 0, || {
+            calls += 1;
+            Err::<(), _>(AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80070057_u32 as i32),
+                "invalid argument",
+            )))
+        });
+        assert!(result.is_err());
+        assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn bounded_recovery_caps_transient_attempts() {
+        let mut calls = 0;
+        let result = retry_transient_audio_operation(99, 0, || {
+            calls += 1;
+            Err::<(), _>(AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x88890010_u32 as i32),
+                "service unavailable",
+            )))
+        });
+        assert!(result.is_err());
+        assert_eq!(calls, 5);
     }
 
     #[cfg(windows)]
