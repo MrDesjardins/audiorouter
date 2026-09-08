@@ -886,6 +886,7 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "destinationNode": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "reachable": { "type": "boolean" },
+                "complete": { "type": "boolean" },
                 "paths": {
                     "type": "array",
                     "items": {
@@ -901,7 +902,7 @@ fn method_output_schema(name: &str) -> Value {
                     }
                 }
             },
-            "required": ["destinationNode", "reachable", "paths"],
+            "required": ["destinationNode", "reachable", "complete", "paths"],
             "additionalProperties": false
         }),
         "graph.plan" => json!({
@@ -6802,6 +6803,10 @@ mod tests {
         assert_eq!(
             routes["outputSchema"]["properties"]["paths"]["items"]["required"],
             json!(["nodes", "edges", "channelMaps", "latencySamples"])
+        );
+        assert_eq!(
+            routes["outputSchema"]["properties"]["complete"]["type"],
+            "boolean"
         );
         assert_eq!(
             routes["outputSchema"]["properties"]["paths"]["items"]["properties"]["nodes"]

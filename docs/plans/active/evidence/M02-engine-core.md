@@ -294,6 +294,15 @@ modified.
 The shared control event-replay schema is bounded independently of native
 audio scheduling; this change does not open endpoints or alter realtime state.
 
+## Route provenance completeness policy (2026-09-07)
+
+Route inspection now enumerates at most 500 paths. It probes one additional
+path to distinguish an exact-limit result from truncation, then returns
+`complete: false` when more provenance exists. The UI exposes that result as
+partial, so consumers do not mistake a bounded response for complete
+provenance. Domain/control tests, contracts/UI typechecks, strict Clippy, and
+documentation validation pass; native route activation remains open.
+
 ## Route inspection field bounds (2026-09-07)
 
 The `routes.inspect` response now advertises the graph-backed bounds for

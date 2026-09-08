@@ -714,3 +714,11 @@ fails closed to the disconnected preview if a trusted page origin cannot be
 established, rather than treating an opaque origin as an allowlist. UI
 typecheck, 87 tests, M05 acceptance, and documentation validation passed.
 Native shell packaging and manual visual/accessibility acceptance remain open.
+
+## Partial route provenance display (2026-09-07)
+
+The route explanation contract now includes `complete`. When the backend hits
+the 500-path safety ceiling, the editor labels the count as partial and does
+not present the bounded list as complete provenance. UI typecheck and the
+existing UI acceptance suite remain the required portable evidence; manual
+visual/accessibility acceptance and native shell packaging remain open.

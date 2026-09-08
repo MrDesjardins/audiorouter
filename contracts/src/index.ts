@@ -76,6 +76,7 @@ export interface RoutePath {
 export interface RouteInspection {
   destinationNode: EntityId;
   reachable: boolean;
+  complete: boolean;
   paths: RoutePath[];
 }
 

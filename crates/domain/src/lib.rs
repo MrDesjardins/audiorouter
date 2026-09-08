@@ -15,6 +15,7 @@ pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
 pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
+pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
@@ -1452,6 +1453,7 @@ pub struct RouteInspection {
     pub destination_node: EntityId,
     pub reachable: bool,
     pub paths: Vec<RoutePath>,
+    pub complete: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -1633,6 +1635,10 @@ pub fn inspect_routes(
             .or_default()
             .push(edge);
     }
+    // The recursive traversal keeps graph indexes and mutable path state
+    // explicit; the truncation flag is deliberately separate so reaching the
+    // response ceiling cannot be mistaken for a complete traversal.
+    #[allow(clippy::too_many_arguments)]
     fn walk(
         node: &EntityId,
         incoming: &HashMap<EntityId, Vec<&Edge>>,
@@ -1640,8 +1646,12 @@ pub fn inspect_routes(
         edges: &mut Vec<EntityId>,
         channel_maps: &mut Vec<Vec<f32>>,
         paths: &mut Vec<RoutePath>,
+        truncated: &mut bool,
         nodes_by_id: &HashMap<EntityId, &Node>,
     ) {
+        if *truncated {
+            return;
+        }
         let Some(parents) = incoming.get(node) else {
             let path_nodes = nodes.iter().rev().cloned().collect::<Vec<_>>();
             let latency_samples = path_nodes
@@ -1664,6 +1674,9 @@ pub fn inspect_routes(
                 channel_maps: channel_maps.iter().rev().cloned().collect(),
                 latency_samples,
             });
+            if paths.len() > MAX_ROUTE_PATHS {
+                *truncated = true;
+            }
             return;
         };
         for edge in parents {
@@ -1677,6 +1690,7 @@ pub fn inspect_routes(
                 edges,
                 channel_maps,
                 paths,
+                truncated,
                 nodes_by_id,
             );
             nodes.pop();
@@ -1688,6 +1702,7 @@ pub fn inspect_routes(
     let mut edges = Vec::new();
     let mut channel_maps = Vec::new();
     let mut paths = Vec::new();
+    let mut truncated = false;
     walk(
         destination_node,
         &incoming,
@@ -1695,12 +1710,17 @@ pub fn inspect_routes(
         &mut edges,
         &mut channel_maps,
         &mut paths,
+        &mut truncated,
         &nodes_by_id,
     );
+    if truncated {
+        paths.truncate(MAX_ROUTE_PATHS);
+    }
     Ok(RouteInspection {
         destination_node: destination_node.clone(),
         reachable: paths.iter().any(|path| path.nodes.len() > 1),
         paths,
+        complete: !truncated,
     })
 }
 
@@ -2352,6 +2372,7 @@ mod tests {
         );
         let inspection = inspect_routes(&graph, &EntityId::new("out")).unwrap();
         assert!(inspection.reachable);
+        assert!(inspection.complete);
         assert_eq!(inspection.paths.len(), 1);
         assert_eq!(
             inspection.paths[0].nodes,
@@ -2430,6 +2451,48 @@ mod tests {
     }
 
     #[test]
+    fn route_inspection_reports_incomplete_when_path_limit_is_reached() {
+        let mut nodes = vec![node("in", NodeKind::PhysicalInput, PortDirection::Output)];
+        let mut edges = Vec::new();
+        let mut previous = vec!["in".to_owned()];
+        for level in 0..9 {
+            let current = (0..2)
+                .map(|branch| format!("l{level}-{branch}"))
+                .collect::<Vec<_>>();
+            for id in &current {
+                let mut branch = node(id, NodeKind::Gain, PortDirection::Input);
+                branch.ports.push(Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 1,
+                });
+                branch
+                    .parameters
+                    .insert("gainDb".into(), serde_json::json!(0.0));
+                nodes.push(branch);
+            }
+            for source in &previous {
+                for destination in &current {
+                    let mut route_edge =
+                        edge(&format!("{source}-{destination}"), source, destination);
+                    route_edge.source_port = if source == "in" { "main" } else { "out" }.into();
+                    edges.push(route_edge);
+                }
+            }
+            previous = current;
+        }
+        nodes.push(node("out", NodeKind::PhysicalOutput, PortDirection::Input));
+        for source in previous {
+            let mut route_edge = edge(&format!("{source}-out"), &source, "out");
+            route_edge.source_port = "out".into();
+            edges.push(route_edge);
+        }
+        let inspection = inspect_routes(&session(nodes, edges), &EntityId::new("out")).unwrap();
+        assert_eq!(inspection.paths.len(), MAX_ROUTE_PATHS);
+        assert!(!inspection.complete);
+    }
+
+    #[test]
     fn route_inspection_excludes_disabled_edges_and_rejects_unknown_destinations() {
         let mut disabled = edge("e", "in", "out");
         disabled.enabled = false;
@@ -2442,6 +2505,7 @@ mod tests {
         );
         let inspection = inspect_routes(&graph, &EntityId::new("out")).unwrap();
         assert!(!inspection.reachable);
+        assert!(inspection.complete);
         assert_eq!(inspection.paths[0].nodes, vec![EntityId::new("out")]);
         assert!(matches!(
             inspect_routes(&graph, &EntityId::new("missing")),
