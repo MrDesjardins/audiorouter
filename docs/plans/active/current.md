@@ -53,6 +53,12 @@ files with 89 tests, and a temporary three-file production build passed. The
 portable UI surface remains validated; native shell packaging and manual
 visual/accessibility acceptance remain open.
 
+Requalified M06 SDK acceptance elevated after diagnosing an unprivileged
+MSBuild FileTracker `E_ACCESSDENIED` in the existing build tree. The elevated
+run passed 51 SDK self-tests, 1,598 validator tests, 68 classes, finite stereo
+processing, five-parameter automation, and a 180-byte state round trip. It
+made no global plugin or audio-configuration changes.
+
 Added a source-level engine regression for the quantile-tail case that exposed
 the adapter harness defect: p99.9 may be below a rare absolute maximum. The
 engine suite now passes 76 tests plus doc-tests and strict Clippy, with the

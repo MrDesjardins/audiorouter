@@ -977,3 +977,14 @@ guards, state-file integrity/reparse protection, and bounded scanner behavior.
 Strict Clippy passed. This is portable/process-boundary evidence; actual
 third-party plugin execution and full OS filesystem/network sandboxing remain
 open.
+
+## Elevated SDK acceptance after FileTracker access failure (2026-09-08)
+
+An initial non-elevated requalification failed in MSBuild FileTracker with
+`E_ACCESSDENIED` while evaluating the existing `ZERO_CHECK.vcxproj`; disabling
+tracking did not remove the access failure. Rerunning the same repository-local
+acceptance elevated passed: 51 SDK self-tests, 1,598 validator tests, 68
+classes, finite stereo processing, five-parameter automation, and a 180-byte
+state round trip. No global plugin registration or audio configuration change
+occurred. The elevation requirement is an environment prerequisite, not an
+SDK or plugin compatibility result.
