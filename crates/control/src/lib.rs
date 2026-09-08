@@ -1698,7 +1698,11 @@ fn session_item_schema() -> Value {
                         "sourcePort": { "type": "string", "minLength": 1, "maxLength": 128 },
                         "destinationNode": { "type": "string", "minLength": 1, "maxLength": 128 },
                         "destinationPort": { "type": "string", "minLength": 1, "maxLength": 128 },
-                        "matrix": { "type": "array", "maxItems": 4, "items": { "type": "number" } },
+                        "matrix": {
+                            "type": "array",
+                            "maxItems": 4,
+                            "items": { "type": "number", "minimum": -2.0, "maximum": 2.0 }
+                        },
                         "enabled": { "type": "boolean" }
                     },
                     "required": ["id", "sourceNode", "sourcePort", "destinationNode", "destinationPort", "matrix", "enabled"],
@@ -6109,6 +6113,11 @@ mod tests {
         );
         let edge_schema = &session_schema["properties"]["edges"]["items"];
         assert_eq!(edge_schema["properties"]["matrix"]["maxItems"], 4);
+        assert_eq!(
+            edge_schema["properties"]["matrix"]["items"]["minimum"],
+            -2.0
+        );
+        assert_eq!(edge_schema["properties"]["matrix"]["items"]["maximum"], 2.0);
         let create_input = description["methods"]
             .as_array()
             .unwrap()

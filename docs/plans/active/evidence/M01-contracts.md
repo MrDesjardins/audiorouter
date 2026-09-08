@@ -454,6 +454,11 @@ a 128-character/UTF-8-byte documented `propertyNames` bound corresponding to
 the direct domain validator. Discovery regression coverage asserts the
 parameter-name metadata.
 
+The discovered edge matrix schema now advertises numeric coefficient bounds of
+`-2.0` through `2.0`, matching GRAPH-03 runtime validation, together with the
+four-coefficient maximum. Discovery regression coverage asserts both numeric
+limits; finite-value validation remains enforced by the backend.
+
 Session display names use the same 256-byte UTF-8 bound as node display names.
 Direct validation rejects an oversized imported label with a bounded `name`
 path before graph processing. The regression is portable and does not access
