@@ -116,5 +116,6 @@ describe("native host bridge", () => {
     expect(createInitialBackend(null, webview, "").connected).toBe(false);
     expect(createInitialBackend(null, webview, "x".repeat(129)).connected).toBe(false);
     expect(createInitialBackend(null, webview, "session-2").connected).toBe(false);
+    expect(createInitialBackend(null, webview, "session-2", "null").connected).toBe(false);
   });
 });

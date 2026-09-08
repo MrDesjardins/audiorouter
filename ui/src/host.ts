@@ -37,7 +37,7 @@ export class WebView2RpcTransport implements RpcTransport {
   ) {
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw new Error("WebView2 transport timeout is out of bounds");
     if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 256) throw new Error("WebView2 transport pending limit is out of bounds");
-    if (allowedOrigin !== undefined && (allowedOrigin.length < 1 || allowedOrigin.length > 256)) throw new Error("WebView2 allowed origin is out of bounds");
+    if (allowedOrigin !== undefined && !isTrustedWebView2Origin(allowedOrigin)) throw new Error("WebView2 allowed origin is invalid");
     this.listener = (event) => this.receive(event.data, event.origin);
     webview.addEventListener("message", this.listener);
   }
@@ -113,6 +113,10 @@ function isWebView2Request(value: unknown): value is JsonRpcRequest {
       (typeof request.id === "number" && Number.isFinite(request.id) && Number.isSafeInteger(request.id)));
 }
 
+function isTrustedWebView2Origin(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 1 && value.length <= 256 && value !== "null";
+}
+
 declare global {
   interface Window {
     __AUDIO_ROUTER_HOST__?: unknown;
@@ -144,7 +148,7 @@ function isWebView2Webview(value: unknown): value is WebView2Webview {
 export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined, webviewOrigin: unknown = undefined): UiBackend {
   if (isHostBridge(host)) return createLiveBackendFromTransport(host.transport, host.sessionId);
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
-    if (typeof webviewOrigin !== "string" || webviewOrigin.length < 1 || webviewOrigin.length > 256) return createDisconnectedBackend();
+    if (!isTrustedWebView2Origin(webviewOrigin)) return createDisconnectedBackend();
     return createLiveBackendFromTransport(new WebView2RpcTransport(webview, 5000, 64, webviewOrigin), sessionId);
   }
   return createDisconnectedBackend();

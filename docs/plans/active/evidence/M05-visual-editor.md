@@ -705,3 +705,12 @@ the live UI rather than only for callers that manually configure the class.
 Malformed or originless host responses therefore remain disconnected from
 pending requests. The 87-test UI suite and typecheck pass; native packaging and
 manual acceptance remain open.
+
+## Opaque-origin rejection (2026-09-07)
+
+The WebView2 transport configuration now rejects the browser's opaque `null`
+origin and invalid/empty origin bounds. The normal startup path therefore
+fails closed to the disconnected preview if a trusted page origin cannot be
+established, rather than treating an opaque origin as an allowlist. UI
+typecheck, 87 tests, M05 acceptance, and documentation validation passed.
+Native shell packaging and manual visual/accessibility acceptance remain open.
