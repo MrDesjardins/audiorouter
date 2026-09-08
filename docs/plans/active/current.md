@@ -33,6 +33,13 @@ unsigned release preparation, traceability, and documentation all passed.
 Temporary outputs were cleaned; no driver was installed or loaded and no audio
 configuration changed.
 
+The opt-in M06 worker-fixture qualification also passed with
+`--features test-fixtures`: plugin-host unit coverage (47) and worker-process
+coverage (20) exercised controlled crash, hang, invalid output, state failure,
+dynamic latency, and quarantine/replacement behavior under bounded cleanup.
+This is deterministic containment evidence only; third-party plugin/editor
+and OS sandbox gates remain open.
+
 ## Fan-out topology safety (2026-09-08)
 
 Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out

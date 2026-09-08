@@ -1,5 +1,17 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-08 - Feature-enabled worker containment qualification
+
+The opt-in `test-fixtures` worker suite passed with
+`cargo test -p audiorouter-plugin-host --features test-fixtures --locked`:
+47 plugin-host unit tests and 20 worker-process tests passed. The process
+fixtures exercised bounded crash reaping, hang termination, invalid-output and
+state-failure rejection, dynamic latency updates, descriptor transport, and
+quarantine history across replacement generations. Feature-enabled strict
+Clippy also passed. These are deterministic AudioRouter containment fixtures,
+not third-party plugin/editor or OS-sandbox evidence; no plugin was registered
+or executed and no audio or machine configuration was accessed.
+
 ## Bundle binary enumeration bound (2026-09-08)
 
 VST3 bundle resolution now retains only the information needed to decide
