@@ -29,6 +29,11 @@ implemented and regression-tested. The full locked workspace suite, guarded
 include/exclude process-loopback acceptance, and safe acceptance chain pass
 with unchanged media state.
 
+The safe chain was requalified again at the pushed tree `3d01a6e` on
+2026-09-08 after the discovery self-consistency regression. Evidence is in
+[M08 release evidence](evidence/M08-release.md); temporary outputs and
+checkouts were removed and machine audio state was unchanged.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

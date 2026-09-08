@@ -12,6 +12,20 @@ signing mode changed, and no plugin/startup registration or machine audio
 configuration changed. Production driver ownership, signing, installer,
 clean-machine, physical-latency, and manual UI/accessibility gates remain open.
 
+## Safe-chain requalification after discovery self-consistency (`3d01a6e`, 2026-09-08)
+
+The elevated non-mutating command `powershell.exe -NoProfile
+-ExecutionPolicy Bypass -File tests/acceptance/safe-all.ps1` passed at the
+latest pushed tree. Native compile and 34-endpoint read-only inventory passed;
+disposable pinned SysVAD x64 package/API qualification completed with the
+installed VS/WDK toolchain; M01/M04/M05/M06/M07, unsigned M08 preparation, and
+documentation validation passed. Temporary outputs/checkouts were removed.
+
+No driver was installed or loaded, signing mode was unchanged, no plugin or
+startup entry was registered, and no machine audio configuration changed.
+Production driver/signing, installer, hardware/manual UI, native callback
+deadline, and physical-latency gates remain open.
+
 ## Safe-chain requalification after control schema alignment (`e22a89f`, 2026-09-08)
 
 The elevated non-mutating command `powershell.exe -NoProfile
