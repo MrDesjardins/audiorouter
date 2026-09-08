@@ -2109,6 +2109,17 @@ pub fn compile_session(
         {
             return Err(GraphCompileError::UnsupportedTopology);
         }
+        let participants = enabled_edges
+            .iter()
+            .flat_map(|edge| [edge.source_node.clone(), edge.destination_node.clone()])
+            .collect::<std::collections::HashSet<_>>();
+        if session
+            .nodes
+            .iter()
+            .any(|node| node.enabled && !participants.contains(&node.id))
+        {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
     }
     let mut indegree = session
         .nodes
@@ -4809,6 +4820,59 @@ mod tests {
         block.channel_mut(0).unwrap().fill(1.0);
         graph.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.5, 0.5]);
+    }
+
+    #[test]
+    fn compiler_rejects_an_isolated_enabled_node_alongside_a_linear_route() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 1,
+        };
+        let node = |id: &str, kind, ports| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports,
+        };
+        let session = Session {
+            id: EntityId::new("linear-with-isolated"),
+            name: "linear-with-isolated".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                node(
+                    "source",
+                    NodeKind::PhysicalInput,
+                    vec![port("main", PortDirection::Output)],
+                ),
+                node(
+                    "sink",
+                    NodeKind::PhysicalOutput,
+                    vec![port("main", PortDirection::Input)],
+                ),
+                node("isolated", NodeKind::Mute, vec![]),
+            ],
+            edges: vec![Edge {
+                id: EntityId::new("route"),
+                source_node: EntityId::new("source"),
+                source_port: "main".into(),
+                destination_node: EntityId::new("sink"),
+                destination_port: "main".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            }],
+        };
+
+        assert!(matches!(
+            compile_session(&session, RuntimeGeneration::new(5)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
     }
 
     #[test]

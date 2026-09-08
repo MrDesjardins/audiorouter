@@ -31,6 +31,12 @@ source-to-mixer-to-output graph. The regression passes with the 77-test engine
 suite and strict Clippy. This remains portable topology evidence and does not
 change native routing behavior.
 
+The linear compiler now applies the same participant closure: a valid route
+cannot compile while an unrelated enabled node is silently omitted. The new
+regression passes with the 78-test engine suite and strict Clippy. This is
+portable graph validation only; native routing and machine audio configuration
+are unchanged.
+
 ## Native lifecycle and process-attribution acceptance (2026-09-08)
 
 With explicit live-audio authorization, the guarded `m00-native-live.ps1`

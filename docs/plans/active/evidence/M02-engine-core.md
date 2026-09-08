@@ -1,5 +1,14 @@
 # M02 realtime engine core groundwork
 
+## 2026-09-08 - Linear compiler fail-closed topology guard
+
+`compile_session` now rejects an enabled node outside the participating
+source-to-sink linear route. Previously, a session with a valid edge and an
+isolated enabled node could compile depending on node order, silently omitting
+that node from the prepared runtime. A regression covers the case. Engine
+tests (78), formatting, strict Clippy, and diff checks pass; no audio endpoint
+or machine configuration is accessed.
+
 ## 2026-09-08 - Mixer compiler fail-closed topology guard
 
 `compile_mixer_session` now rejects an isolated enabled node outside the
