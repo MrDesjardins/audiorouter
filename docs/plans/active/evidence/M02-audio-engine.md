@@ -844,3 +844,11 @@ observation while leaving processed-quanta telemetry at zero and clearing the
 block. Engine tests (71), strict Clippy, formatting, diff checks, and workspace
 compilation passed. This remains portable instrumentation evidence and does not
 establish native callback deadline compliance.
+
+## Routed telemetry completeness regression (2026-09-08)
+
+The guarded routed-adapter acceptance now parses `graph_blocks` and requires
+the processing-time histogram sample count to match it exactly. This prevents
+a route from passing with only a partial timing report. The 300 ms acceptance
+passed with 13,920 capture frames, 13,824 scheduler frames, and 13,824 routed
+frames; endpoint/media state remained unchanged.
