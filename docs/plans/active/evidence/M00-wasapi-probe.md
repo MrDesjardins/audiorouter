@@ -846,3 +846,18 @@ defaults, volume, mute, privacy, drivers, signing, and startup configuration
 were unchanged. This is a physical-path signal smoke only: ambient input was
 not separated from the tone and no calibrated acoustic impulse distribution or
 physical p95 latency claim is made.
+
+## USB acoustic impulse attempt (2026-09-08)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 1000
+-RenderFriendlyName "Speakers (PD200X Podcast Microphone)"
+-CaptureFriendlyName "Microphone (PD200X Podcast Microphone)"`.
+
+The explicitly selected PD200X pair completed the bounded attempt but the
+analyzer detected 0 of 1,000 impulse groups and therefore rejected the run
+against its 90% threshold. The wrapper removed the generated executable,
+capture/log artifacts, and object; no endpoint identity/state or audio setting
+changed. This negative result confirms that the current physical return path
+is not measurable by this thresholded harness; the calibrated acoustic
+latency gate remains unqualified and the threshold was not weakened.

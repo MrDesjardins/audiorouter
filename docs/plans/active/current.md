@@ -1672,3 +1672,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/CAP-03/CAP-04/QUAL-01 USB signal-path requalification on 2026-09-08: the current PD200X speaker/microphone pair produced 129,225 nonzero capture bytes through the bounded selected-endpoint path, with exact cleanup and unchanged media/configuration state. Ambient input was not separated, so calibrated acoustic latency remains open.
 - Next M00/M02/M03/ARCH-05 task: retain the USB signal-path smoke as physical-path evidence while pursuing calibrated acoustic latency and managed endpoint-owned callback evidence after a production driver exists.
+
+- Completed M00/CAP-03/NFR-01 negative acoustic-correlation attempt on 2026-09-08: the explicitly selected PD200X pair detected 0/1,000 impulse groups, so the acceptance threshold correctly failed; cleanup and unchanged configuration checks passed. The threshold remains intact and calibrated physical latency is still unqualified.
+- Next M00/M02/M03/ARCH-05 task: retain the negative acoustic result and pursue calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.
