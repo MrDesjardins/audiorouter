@@ -495,3 +495,18 @@ No driver was installed or loaded, signing mode was unchanged, no plugin or
 startup entry was registered, and no machine audio configuration was changed.
 Production driver/signing, installer, hardware/manual UI, and physical latency
 gates remain open.
+
+## Safe-chain requalification after rate-domain bridge (2026-09-08)
+
+The full non-mutating safe chain passed after commit `1264fa4`: native compile,
+34-endpoint read-only inventory, disposable pinned SysVAD x64 build/package/API
+qualification, locked workspace checks, M01/M04/M05/M06/M07 validation,
+unsigned M08 preparation, and documentation validation (51 Markdown files,
+157 local links). Temporary outputs/checkouts were removed.
+
+The guarded live process-loopback acceptance also passed separately for both
+include and exclude modes with media-device snapshot equality. No driver was
+installed or loaded, signing mode and plugin/startup registration were
+unchanged, and no machine audio configuration changed. Production driver,
+signing, installer, hardware/manual UI, and physical-latency gates remain
+open.
