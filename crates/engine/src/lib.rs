@@ -4518,6 +4518,7 @@ mod tests {
     fn voice_chain_block_processor_bridges_planar_and_interleaved_storage() {
         let config = audiorouter_dsp::VoiceChainConfig {
             sample_rate: 48_000.0,
+            version: 1,
             eq: None,
             gate: None,
             compressor: None,

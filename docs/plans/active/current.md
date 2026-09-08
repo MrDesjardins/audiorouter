@@ -40,6 +40,11 @@ registry, control schemas/responses, TypeScript contract, CLI assertion, and
 API reference. Verification and rollback are limited to portable catalog
 metadata; no graph, audio, or machine state is touched.
 
+The preset payload slice is also complete: `EqPreset` and `VoiceChainConfig`
+retain the same version after DSP lookup/instantiation, with engine and DSP
+struct-construction regressions. This remains portable metadata and does not
+activate or mutate an audio graph.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

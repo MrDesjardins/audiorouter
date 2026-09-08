@@ -154,6 +154,13 @@ regressions cover zero, over-limit, and `usize::MAX` requests. The recording
 suite passed 30 tests, doc-tests, formatting, and strict Clippy. Native
 realtime recorder integration remains open.
 
+## Version retention in instantiated DSP presets (2026-09-08)
+
+The instantiated DSP payloads now retain `version: 1` on `EqPreset` and
+`VoiceChainConfig`, so version information is not lost between catalog lookup
+and processor construction. DSP (27) and engine (75) tests, strict Clippy,
+formatting, and diff checks passed; no audio or machine configuration changed.
+
 ## Versioned built-in preset catalog (2026-09-08)
 
 The built-in voice-chain and EQ preset descriptors now expose a required

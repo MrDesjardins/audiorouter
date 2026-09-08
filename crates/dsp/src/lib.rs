@@ -271,6 +271,7 @@ impl EqPresetId {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EqPreset {
     pub id: EqPresetId,
+    pub version: u32,
     pub bands: [Option<BiquadParams>; 8],
 }
 
@@ -311,7 +312,11 @@ pub fn eq_preset(id: EqPresetId, sample_rate: f32) -> Result<EqPreset, BiquadErr
     {
         return Err(BiquadError::InvalidFrequency);
     }
-    Ok(EqPreset { id, bands })
+    Ok(EqPreset {
+        id,
+        version: id.version(),
+        bands,
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1135,6 +1140,7 @@ pub struct DelayLine {
 #[derive(Clone, Debug)]
 pub struct VoiceChainConfig {
     pub sample_rate: f32,
+    pub version: u32,
     pub eq: Option<EqPresetId>,
     pub gate: Option<GateParams>,
     pub compressor: Option<CompressorParams>,
@@ -1208,6 +1214,7 @@ pub fn voice_chain_preset(id: VoiceChainPresetId, sample_rate: f32) -> VoiceChai
         });
     VoiceChainConfig {
         sample_rate,
+        version: id.version(),
         eq: Some(EqPresetId::VoiceNeutral),
         gate,
         compressor,
@@ -1760,6 +1767,7 @@ mod tests {
     fn eq_presets_are_bounded_and_explainable() {
         let neutral = eq_preset(EqPresetId::VoiceNeutral, 48_000.0).unwrap();
         assert_eq!(neutral.id, EqPresetId::VoiceNeutral);
+        assert_eq!(neutral.version, 1);
         assert!(neutral.bands.iter().all(Option::is_none));
 
         for (id, frequency) in [(EqPresetId::Hum50Hz, 50.0), (EqPresetId::Hum60Hz, 60.0)] {
@@ -1999,6 +2007,7 @@ mod tests {
         let mut chain = VoiceChain::new(
             VoiceChainConfig {
                 sample_rate: 48_000.0,
+                version: VoiceChainPresetId::VoiceGateAndCompression.version(),
                 eq: Some(EqPresetId::Hum50Hz),
                 gate: Some(GateParams {
                     threshold_db: -45.0,
@@ -2042,6 +2051,7 @@ mod tests {
             .description()
             .is_empty());
         let neutral = voice_chain_preset(VoiceChainPresetId::VoiceNeutral, 48_000.0);
+        assert_eq!(neutral.version, 1);
         assert_eq!(neutral.eq, Some(EqPresetId::VoiceNeutral));
         assert!(neutral.gate.is_none());
         assert!(neutral.compressor.is_none());
@@ -2049,6 +2059,7 @@ mod tests {
         assert!(VoiceChain::new(neutral, 1).is_ok());
 
         let processed = voice_chain_preset(VoiceChainPresetId::VoiceGateAndCompression, 48_000.0);
+        assert_eq!(processed.version, 1);
         assert_eq!(processed.gate.as_ref().unwrap().threshold_db, -45.0);
         assert_eq!(processed.gate.as_ref().unwrap().range_db, 60.0);
         assert_eq!(processed.compressor.as_ref().unwrap().threshold_db, -18.0);
