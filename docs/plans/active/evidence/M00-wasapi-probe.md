@@ -702,3 +702,14 @@ The selected existing VB-Audio virtual cable produced 51 detected groups for
 of 26.27 ms. Temporary raw capture/log files were removed after the run. This
 is bounded software signal-correlation evidence only; it is not the calibrated
 acoustic p95 latency gate.
+## Process restart and PID-reuse binding regression (2026-09-07)
+
+Command: `cargo test -p audiorouter-windows-audio
+restarted_process_cannot_inherit_a_stale_binding --locked -- --nocapture`.
+
+The focused Windows test passed. It launches bounded disposable helper
+processes, compares executable and creation-time identity, and rejects stale
+binding inheritance after restart. No audio device or persistent machine
+configuration is accessed. This is deterministic process-identity evidence;
+full reboot, Windows Audio service restart, and multi-user transition evidence
+remain open.
