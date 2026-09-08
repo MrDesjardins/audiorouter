@@ -40,6 +40,8 @@ const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
+/// Maximum number of distinct plugin scan roots retained for `plugins.list`.
+const MAX_PLUGIN_INVENTORY_ROOTS: usize = 64;
 const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
 const STATE_CATEGORIES: [&str; 15] = [
@@ -1883,6 +1885,7 @@ pub struct ControlPlane {
     idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
     plugin_inventories: HashMap<String, Value>,
+    plugin_inventory_order: VecDeque<String>,
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
     virtual_buses: VirtualBusRegistry,
@@ -1918,6 +1921,7 @@ impl ControlPlane {
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             plugin_inventories: HashMap::new(),
+            plugin_inventory_order: VecDeque::new(),
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses: VirtualBusRegistry::default(),
@@ -2020,6 +2024,7 @@ impl ControlPlane {
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
             plugin_inventories: HashMap::new(),
+            plugin_inventory_order: VecDeque::new(),
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
@@ -2044,6 +2049,18 @@ impl ControlPlane {
             .as_ref()
             .map(|client| format!("{client}\0{method}\0{key}"))
             .unwrap_or_else(|| key.to_owned())
+    }
+
+    fn remember_plugin_inventory(&mut self, directory: String, result: Value) {
+        if !self.plugin_inventories.contains_key(&directory) {
+            self.plugin_inventory_order.push_back(directory.clone());
+        }
+        self.plugin_inventories.insert(directory, result);
+        while self.plugin_inventory_order.len() > MAX_PLUGIN_INVENTORY_ROOTS {
+            if let Some(oldest) = self.plugin_inventory_order.pop_front() {
+                self.plugin_inventories.remove(&oldest);
+            }
+        }
     }
 
     fn operation_lookup_keys(&self, operation_id: &str) -> Vec<String> {
@@ -4938,8 +4955,7 @@ impl ControlPlane {
                 })
             }).collect::<Vec<_>>()
         });
-        self.plugin_inventories
-            .insert(directory.to_owned(), result.clone());
+        self.remember_plugin_inventory(directory.to_owned(), result.clone());
         Ok(result)
     }
 
@@ -6799,6 +6815,27 @@ mod tests {
         assert!(inspected_result["identity"].is_null());
         assert_eq!(inspected_result["errorCode"], "notPe");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_inventory_cache_evicts_oldest_scan_roots() {
+        let mut plane = ControlPlane::default();
+        for index in 0..=MAX_PLUGIN_INVENTORY_ROOTS {
+            plane.remember_plugin_inventory(
+                format!("C:\\plugin-root-{index}"),
+                json!({ "directory": format!("C:\\plugin-root-{index}"), "entries": [] }),
+            );
+        }
+
+        assert_eq!(plane.plugin_inventories.len(), MAX_PLUGIN_INVENTORY_ROOTS);
+        assert!(!plane.plugin_inventories.contains_key("C:\\plugin-root-0"));
+        assert!(plane
+            .plugin_inventories
+            .contains_key(&format!("C:\\plugin-root-{MAX_PLUGIN_INVENTORY_ROOTS}")));
+        assert_eq!(
+            plane.plugin_inventory_order.len(),
+            MAX_PLUGIN_INVENTORY_ROOTS
+        );
     }
 
     #[test]

@@ -483,6 +483,15 @@ mismatches or negative values. Storage/control tests (65/87), strict Clippy,
 formatting, and diff checks pass; no audio or machine configuration was
 accessed.
 
+## Plugin inventory cache bound (2026-09-08)
+
+Closed an M06/M07/SEC-12 control-memory gap: the in-memory `plugins.scan`
+inventory cache now retains at most 64 distinct scan roots in FIFO order,
+while rescanning an existing root preserves its entry. The newest inventory
+remains available through `plugins.list`, and eviction is isolated to the
+non-durable cache; plugin files are still never loaded or executed by this
+path. Control coverage is 90 tests with strict Clippy.
+
 Completed safe storage slice M01/SEC-12 SQLite count conversion validation:
 session and recovery count reads now reject negative SQLite results before
 conversion to `usize`, preventing malformed persistence data from wrapping

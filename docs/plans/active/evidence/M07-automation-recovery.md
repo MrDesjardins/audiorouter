@@ -26,6 +26,14 @@ The startup-plan read query now excludes expired rows before applying the
 look-ahead bound, matching virtual-device hydration and preventing stale plans
 from causing a false oversized-inventory failure during restart.
 
+## 2026-09-08 - Plugin inventory cache bound
+
+The control plane now keeps a FIFO cache of at most 64 distinct plugin scan
+roots. Repeated scans of the same root replace its result without growing the
+order ledger; a new root evicts the oldest cached inventory. The focused
+control regression verifies the cap and newest-entry retention. This bounds
+metadata memory without loading or executing plugin code.
+
 ## 2026-09-08 - Safe acceptance requalification
 
 The complete `tests/acceptance/safe-all.ps1` chain passed at `c438a21`, covering
