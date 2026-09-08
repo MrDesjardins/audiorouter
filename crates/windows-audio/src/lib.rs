@@ -187,6 +187,17 @@ pub struct CapturePacket {
     pub qpc_position: u64,
 }
 
+/// Maximum packet period accepted by the process-loopback adapter before a
+/// packet can be split into the fixed 128-frame engine quantum. Larger device
+/// periods are rejected rather than creating an unbounded staging request.
+pub const MAX_PROCESS_LOOPBACK_PACKET_FRAMES: u32 = 4_096;
+
+fn validate_process_loopback_packet_frames(frames: u32) -> Result<(), AudioError> {
+    (frames > 0 && frames <= MAX_PROCESS_LOOPBACK_PACKET_FRAMES)
+        .then_some(())
+        .ok_or(AudioError::InvalidFrameSize)
+}
+
 /// Bounded process-loopback delivery counters. Values are snapshots of the
 /// adapter lifetime and are intended for control-plane diagnostics, not audio
 /// callback logging or timing claims.
@@ -871,6 +882,10 @@ impl ProcessLoopbackCapture {
                 Some(&mut device_position),
                 Some(&mut qpc_position),
             )?;
+        }
+        if validate_process_loopback_packet_frames(packet_frames).is_err() {
+            unsafe { self.capture.ReleaseBuffer(packet_frames)? };
+            return Err(AudioError::InvalidFrameSize);
         }
         let required = (packet_frames as usize)
             .checked_mul(self.bytes_per_frame)
@@ -2363,6 +2378,22 @@ mod tests {
                 Err(AudioError::ApplicationNotFound { process_id: 0 })
             ));
         }
+    }
+
+    #[test]
+    fn process_loopback_packet_period_policy_is_bounded() {
+        assert!(validate_process_loopback_packet_frames(1).is_ok());
+        assert!(
+            validate_process_loopback_packet_frames(MAX_PROCESS_LOOPBACK_PACKET_FRAMES).is_ok()
+        );
+        assert!(matches!(
+            validate_process_loopback_packet_frames(0),
+            Err(AudioError::InvalidFrameSize)
+        ));
+        assert!(matches!(
+            validate_process_loopback_packet_frames(MAX_PROCESS_LOOPBACK_PACKET_FRAMES + 1),
+            Err(AudioError::InvalidFrameSize)
+        ));
     }
 
     #[test]

@@ -644,3 +644,18 @@ recorded 39 waits/14 timeouts; exclude recorded 40 waits/15 timeouts; both had
 zero silent packets. Media state and persistent audio configuration were
 unchanged. These are host observations, not callback deadline or physical
 latency evidence.
+
+## Bounded process-loopback packet-period policy (2026-09-07)
+
+The process-loopback adapter now enforces the explicit
+`MAX_PROCESS_LOOPBACK_PACKET_FRAMES = 4,096` bound after `GetBuffer` and before
+copying. A zero or oversized packet is released and rejected, so an endpoint
+period cannot expand staging beyond the fixed quantum contract. The policy
+regression covers the lower and upper accepted bounds and both rejection cases.
+
+Windows-audio tests (28), strict Clippy, formatting, and tool compilation
+passed. Guarded live include/exclude runs observed 25/24 packets, 11,025/10,584
+frames, and 441-frame minimum/maximum packets; both completed 86/82 scheduler
+quanta with unchanged media state and no persistent audio configuration
+changes. These observations do not establish realtime deadline or physical
+latency compliance.
