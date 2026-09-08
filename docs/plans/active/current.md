@@ -94,6 +94,18 @@ configuration. Sleep/resume, reboot, Windows Audio service restart,
 multi-user transitions, and an actual PID-reuse occurrence remain native
 lifecycle gates, so no production recovery claim is made.
 
+## Safe acceptance requalification at `4d9ce1f4` (2026-09-08)
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at the current
+pushed implementation head. It covered the installed VS/SDK/WDK toolchain,
+native compile and 34-endpoint format inventory, disposable pinned SysVAD
+x64 build/package/API validation, M01/M04/M05/M06/M07 acceptance, unsigned
+M08 artifact preparation, 158 normative requirement IDs, and documentation
+validation (51 Markdown files and 160 local links). Temporary outputs and
+checkouts were removed. Driver installation/loading, signing-mode changes,
+plugin/startup registration, and machine audio configuration were excluded
+and unchanged.
+
 ## Safe acceptance requalification at current head (2026-09-08)
 
 After a sandbox-only `Get-PnpDevice` permission failure, the complete
@@ -576,10 +588,12 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `f17acc49`, with the latest
+The latest validated implementation head before this documentation update is
+`4d9ce1f4`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent M06 plugin-host boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is `f17acc49`; its event-replay cursor,
+The latest pushed plan/evidence tip is `4d9ce1f4`; its adapter liveness/recovery
+and safe-chain evidence are recorded above. Its event-replay cursor,
 Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
 bundles, so the loader matrix now covers six effects across two vendors. The

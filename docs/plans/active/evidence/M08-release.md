@@ -854,3 +854,17 @@ M08 preparation, 158 normative requirement-map checks, and documentation
 validation. Temporary outputs/checkouts were removed. Driver installation or
 loading, signing-mode changes, plugin/startup registration, and machine audio
 configuration were excluded and unchanged.
+# M08 release evidence
+
+## 2026-09-08 - Safe acceptance requalification at `4d9ce1f4`
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at the current
+pushed head. Native toolchain/compile and 34-endpoint format inventory,
+disposable pinned SysVAD x64 build/package/API validation, M01/M04/M05/M06/
+M07 acceptance, unsigned M08 artifact preparation, 158-ID traceability, and
+documentation validation (51 Markdown files and 160 local links) all passed.
+Temporary outputs and checkouts were removed. No driver was installed or
+loaded, signing mode or startup/plugin registration was changed, and machine
+audio configuration remained unchanged. This is not signed release evidence;
+production driver, signing, installer, clean-machine, physical-latency, and
+manual UI gates remain open.
