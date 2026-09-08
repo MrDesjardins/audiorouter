@@ -84,3 +84,13 @@ This machine is a usable Windows inventory/reference candidate, and it has both 
 ## Follow-up toolchain check
 
 `vswhere.exe -all -format json` returned an empty instance list. Windows SDK include/bin directories include `10.0.26100.0` plus older SDK versions, but no WDK-specific installation was identified. This blocks the native C++/driver portions of M00; it does not invalidate the portable Rust toolchain inventory.
+
+## Revalidated differing-rate pair (2026-09-08)
+
+The read-only endpoint inventory was rerun with the installed VS/WDK native
+probe and showed a usable differing-rate pair: active 96 kHz mono capture
+endpoint `{0.0.1.00000000}.{2b694137-729a-4e08-b290-e891a6bc2487}` and active
+48 kHz stereo render endpoint
+`{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}`. The inventory
+performed metadata/capability queries only; it did not change endpoint state
+or defaults.
