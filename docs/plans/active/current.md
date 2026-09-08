@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `b77face`. Safe portable and
+The latest validated implementation head is `f557878`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion, and
 scheduler telemetry accounting is implemented and regression-tested. The full
@@ -1542,6 +1542,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M00/M02/M03/M08 task: maintain the explicit native qualification backlog and investigate only safe, non-mutating evidence improvements until production driver/signing/installer authority and hardware/manual acceptance are available.
 - Completed M00-M08/API-01/SEC-12 safe-chain requalification at pushed head `419c368` on 2026-09-08: native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification, workspace checks, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation all passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: retain native callback deadline, physical latency, production-driver, signing, installer, and manual UI/accessibility gates as explicit release blockers while advancing only independently testable adapter and control-plane work.
+
+- Completed M02/ARCH-05/ENG-03 callback instrumentation on 2026-09-08: the runtime processor now records saturating total and maximum monotonic processing duration in nanoseconds through allocation-free atomic counters, and scheduler telemetry exposes the values for off-thread diagnostics. Engine tests (70), locked workspace tests/doc-tests, strict Clippy, formatting, and documentation validation passed. This is instrumentation readiness, not native callback deadline evidence.
+- Next M02/M03/ARCH-05 task: connect this instrumentation to a production-style native scheduler callback when that scheduler owns an endpoint stream, then measure callback period/deadline distributions without changing the user's configured defaults.
 
 - Completed M00-M08/API-01/SEC-12 safe-chain requalification after `b181406` on 2026-09-08: elevated native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation (51 Markdown files/158 local links) all passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: retain native callback deadline, physical latency, production-driver, signing, installer, and manual UI/accessibility gates as explicit release blockers while advancing only independently testable adapter and control-plane work.
