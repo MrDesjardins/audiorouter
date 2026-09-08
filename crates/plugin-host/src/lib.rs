@@ -1984,14 +1984,7 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                     ParameterEventError::OffsetOutOfRange,
                 ));
             }
-            for parameter in parameters {
-                ParameterEvent::new(
-                    parameter.parameter_id,
-                    parameter.normalized_value,
-                    parameter.sample_offset,
-                )
-                .map_err(WorkerMessageError::InvalidParameter)?;
-            }
+            validate_parameters_for_frame(parameters, frame.frame_count())?;
         }
         WorkerMessage::ProcessShared {
             sequence,
@@ -2001,7 +1994,7 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
             parameters,
         } => {
             validate_shared_frame_shape(*sequence, *deadline_tick, *channels, *frames)?;
-            validate_parameters(parameters)?;
+            validate_parameters_for_frame(parameters, *frames as usize)?;
         }
         WorkerMessage::Processed { frame } => {
             WorkerFrame::new(
@@ -2042,6 +2035,22 @@ fn validate_parameters(parameters: &[ParameterEvent]) -> Result<(), WorkerMessag
             parameter.sample_offset,
         )
         .map_err(WorkerMessageError::InvalidParameter)?;
+    }
+    Ok(())
+}
+
+fn validate_parameters_for_frame(
+    parameters: &[ParameterEvent],
+    frame_count: usize,
+) -> Result<(), WorkerMessageError> {
+    validate_parameters(parameters)?;
+    if parameters
+        .iter()
+        .any(|parameter| parameter.sample_offset >= frame_count)
+    {
+        return Err(WorkerMessageError::InvalidParameter(
+            ParameterEventError::OffsetOutOfRange,
+        ));
     }
     Ok(())
 }
@@ -3178,7 +3187,7 @@ mod tests {
     fn worker_messages_round_trip_and_revalidate_audio_payloads() {
         let message = WorkerMessage::Process {
             frame: WorkerFrame::new(7, 100, 2, vec![0.25, -0.25, 0.0, 0.1]).unwrap(),
-            parameters: vec![ParameterEvent::new(3, 0.75, 2).unwrap()],
+            parameters: vec![ParameterEvent::new(3, 0.75, 1).unwrap()],
         };
         let encoded = encode_worker_message(&message).unwrap();
         assert_eq!(decode_worker_message(&encoded).unwrap(), message);
@@ -3200,6 +3209,33 @@ mod tests {
             decode_worker_message(&invalid),
             Err(WorkerMessageError::InvalidFrame(
                 WorkerFrameError::InvalidChannels
+            ))
+        ));
+    }
+
+    #[test]
+    fn worker_parameter_offsets_cannot_escape_the_current_frame() {
+        let inline = WorkerMessage::Process {
+            frame: WorkerFrame::new(1, 100, 1, vec![0.0; 4]).unwrap(),
+            parameters: vec![ParameterEvent::new(1, 0.5, 4).unwrap()],
+        };
+        assert!(matches!(
+            validate_worker_message(&inline),
+            Err(WorkerMessageError::InvalidParameter(
+                ParameterEventError::OffsetOutOfRange
+            ))
+        ));
+        let shared = WorkerMessage::ProcessShared {
+            sequence: 1,
+            deadline_tick: 100,
+            channels: 1,
+            frames: 4,
+            parameters: vec![ParameterEvent::new(1, 0.5, 4).unwrap()],
+        };
+        assert!(matches!(
+            validate_worker_message(&shared),
+            Err(WorkerMessageError::InvalidParameter(
+                ParameterEventError::OffsetOutOfRange
             ))
         ));
     }

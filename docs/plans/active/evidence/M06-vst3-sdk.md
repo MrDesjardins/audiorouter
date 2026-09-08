@@ -830,3 +830,12 @@ plugin-link creation outside the repository. A clean rerun passed 51 SDK
 self-tests, 1,598 official validator tests with zero failures, and the offline
 loader. The generated repository build tree was removed; no user plugin
 directory, system registration, or audio configuration was changed.
+
+## Per-frame parameter offset validation (2026-09-07)
+
+Worker protocol validation now checks automation offsets against the actual
+audio frame count for both inline and shared-memory process messages. A focused
+regression rejects an offset equal to the frame count in both forms while the
+existing valid in-frame round trip remains accepted. The plugin-host suite
+passed 36 unit tests and 8 worker-process tests with strict Clippy, formatting,
+and doc-tests. Native plugin execution and full OS sandboxing remain open.

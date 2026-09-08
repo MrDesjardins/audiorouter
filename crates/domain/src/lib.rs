@@ -2349,14 +2349,9 @@ mod tests {
     #[test]
     fn event_log_expires_entries_after_fifteen_minutes() {
         let mut log = EventLog::new(1);
-        let now = Instant::now();
-        log.append_at(
-            1,
-            None,
-            "old",
-            None,
-            now - EVENT_RETENTION - Duration::from_secs(1),
-        );
+        let old = Instant::now();
+        let now = old + EVENT_RETENTION + Duration::from_secs(1);
+        log.append_at(1, None, "old", None, old);
         log.append_at(2, None, "current", None, now);
         assert_eq!(log.len(), 1);
         assert_eq!(log.since(0, 10), Err(EventReplayError::ResyncRequired));
