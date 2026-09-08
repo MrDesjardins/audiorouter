@@ -1723,6 +1723,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Completed M01/SEC-12 enrollment read-boundary hardening on 2026-09-08: SQLite client-enrollment lookup and revoke now enforce the same nonempty 128-byte identity contract as writes. Storage/control tests (49/86), strict Clippy, formatting, and diff checks pass; no audio or machine configuration was accessed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+- Completed M04/SEC-12 recording-library identity hardening on 2026-09-08: lookup, paging, metadata, rename, missing-state, and removal storage APIs now enforce the shared 128-byte recording-ID bound. Storage tests (50), strict Clippy, formatting, and diff checks pass; no recording file, audio endpoint, or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 - Requalified M02/ARCH-05 shared-mode Rust adapter behavior on 2026-09-08: the guarded 300 ms live smoke processed 15,360 capture/scheduler frames and 15,456 silent render frames with zero xruns/deadline misses and a 32,768 ns processing p99.9 upper bound; streams stopped/reset and media-device state was unchanged. This is not managed-driver callback or physical-latency evidence.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 

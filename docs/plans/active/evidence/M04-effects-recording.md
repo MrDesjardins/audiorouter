@@ -713,6 +713,12 @@ closing the equivalent direct-storage bypass for uncommitted candidates. The
 regression suite passes 45 storage tests; native driver and endpoint gates
 remain unaffected.
 
+Recording-library lookup, paging, metadata, rename, missing-state, and removal
+operations now enforce the same 128-byte recording identity bound as checkpoint
+and row writes. Direct-storage regression coverage passes 50 tests with strict
+Clippy, formatting, and diff checks; no recording file or audio endpoint was
+accessed.
+
 Paged recording-list discovery now advertises its 500-item page bound, matching
 the control dispatcher and storage page request limit.
 

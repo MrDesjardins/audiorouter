@@ -54,7 +54,7 @@ pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
 pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
 
-fn validate_recording_checkpoint_id(recording_id: &str) -> Result<(), StorageError> {
+fn validate_recording_id(recording_id: &str) -> Result<(), StorageError> {
     if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
         return Err(StorageError::InvalidRecording(
             "invalid recording checkpoint ID".into(),
@@ -1005,7 +1005,7 @@ impl Storage {
         recording_id: &str,
         checkpoint: &RecorderCheckpoint,
     ) -> Result<(), StorageError> {
-        validate_recording_checkpoint_id(recording_id)?;
+        validate_recording_id(recording_id)?;
         let checkpoint = audiorouter_recording::RecorderController::restore(checkpoint.clone())
             .map_err(|_| StorageError::InvalidRecording("invalid recording checkpoint".into()))?;
         let document = checkpoint
@@ -1025,7 +1025,7 @@ impl Storage {
         &self,
         recording_id: &str,
     ) -> Result<Option<RecorderCheckpoint>, StorageError> {
-        validate_recording_checkpoint_id(recording_id)?;
+        validate_recording_id(recording_id)?;
         let document = self
             .connection
             .query_row(
@@ -1048,7 +1048,7 @@ impl Storage {
     }
 
     pub fn clear_recording_checkpoint(&self, recording_id: &str) -> Result<bool, StorageError> {
-        validate_recording_checkpoint_id(recording_id)?;
+        validate_recording_id(recording_id)?;
         Ok(self.connection.execute(
             "DELETE FROM recording_checkpoints WHERE recording_id = ?1",
             params![recording_id],
@@ -1059,6 +1059,9 @@ impl Storage {
         &self,
         session_id: Option<&str>,
     ) -> Result<Vec<RecordingRecord>, StorageError> {
+        if let Some(session_id) = session_id {
+            validate_recording_id(session_id)?;
+        }
         let mut statement = self.connection.prepare(
             "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
                     frames, file_bytes, start_time, state, missing, title, artist, comment
@@ -1080,6 +1083,12 @@ impl Storage {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<(Vec<RecordingRecord>, bool), StorageError> {
+        if let Some(session_id) = session_id {
+            validate_recording_id(session_id)?;
+        }
+        if let Some(cursor) = cursor {
+            validate_recording_id(cursor)?;
+        }
         if !(1..=500).contains(&limit) {
             return Err(StorageError::InvalidRecording(
                 "recording page limit must be between 1 and 500".into(),
@@ -1139,6 +1148,7 @@ impl Storage {
     }
 
     pub fn get_recording(&self, id: &str) -> Result<Option<RecordingRecord>, StorageError> {
+        validate_recording_id(id)?;
         Ok(self
             .list_recordings(None)?
             .into_iter()
@@ -1147,6 +1157,7 @@ impl Storage {
 
     /// Removes only the durable library row; it never touches the recording path.
     pub fn remove_recording_entry(&self, id: &str) -> Result<bool, StorageError> {
+        validate_recording_id(id)?;
         let transaction = self.connection.unchecked_transaction()?;
         let removed =
             transaction.execute("DELETE FROM recordings WHERE id = ?1", params![id])? == 1;
@@ -1161,6 +1172,7 @@ impl Storage {
     }
 
     pub fn set_recording_missing(&self, id: &str, missing: bool) -> Result<bool, StorageError> {
+        validate_recording_id(id)?;
         let changed = self.connection.execute(
             "UPDATE recordings SET missing = ?2 WHERE id = ?1",
             params![id, missing as i64],
@@ -1171,6 +1183,7 @@ impl Storage {
     /// Rename a recording within its existing canonical directory and update
     /// only the durable library path. The destination must not already exist.
     pub fn rename_recording(&self, id: &str, new_path: &str) -> Result<bool, StorageError> {
+        validate_recording_id(id)?;
         let Some(recording) = self.get_recording(id)? else {
             return Ok(false);
         };
@@ -1252,6 +1265,7 @@ impl Storage {
         artist: Option<&str>,
         comment: Option<&str>,
     ) -> Result<bool, StorageError> {
+        validate_recording_id(id)?;
         for value in [title, artist, comment].into_iter().flatten() {
             if value.chars().count() > 256 || value.chars().any(|character| character.is_control())
             {
@@ -3287,6 +3301,40 @@ mod tests {
         ));
         assert!(matches!(
             storage.clear_recording_checkpoint(&id),
+            Err(StorageError::InvalidRecording(_))
+        ));
+    }
+
+    #[test]
+    fn recording_library_operations_reject_unbounded_ids() {
+        let storage = Storage::open_memory().unwrap();
+        let id = "r".repeat(MAX_RECORDING_ID_BYTES + 1);
+        assert!(matches!(
+            storage.list_recordings(Some(&id)),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.list_recordings_page(None, Some(&id), 1),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.get_recording(&id),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.remove_recording_entry(&id),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.set_recording_missing(&id, true),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.rename_recording(&id, "C:\\recordings\\take.wav"),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.update_recording_metadata(&id, None, None, None),
             Err(StorageError::InvalidRecording(_))
         ));
     }
