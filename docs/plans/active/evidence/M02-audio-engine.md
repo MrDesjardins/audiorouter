@@ -616,3 +616,16 @@ passed, and the guarded process-loopback acceptance re-ran successfully in both
 include and exclude modes (10,584 frames, 82 generation-1 quanta each). No
 persistent audio configuration changed. Native callback timing and physical
 latency remain unqualified.
+
+## Event-driven process-loopback wakeup (2026-09-07)
+
+`ProcessLoopbackCapture::wait_for_data` now waits on the WASAPI event handle
+with a caller-bounded timeout and structured failure result. The guarded live
+probe uses this wait before draining packets rather than a polling sleep.
+Include and exclude modes each delivered 11,025 frames across 25 packets and
+processed 86 generation-1 quanta; stop/reset and media-device snapshot checks
+passed, with no persistent audio configuration changed.
+
+This qualifies event delivery and bounded wakeup behavior on the tested host,
+not callback deadline, clock-drift, physical-latency, or production-driver
+compliance.

@@ -524,7 +524,7 @@ pub struct ProcessLoopbackCapture {
     capture: windows::Win32::Media::Audio::IAudioCaptureClient,
     bytes_per_frame: usize,
     started: bool,
-    _event: EventHandle,
+    event: EventHandle,
     _com: ComApartment,
 }
 
@@ -762,7 +762,7 @@ impl ProcessLoopbackCapture {
             capture,
             bytes_per_frame,
             started: false,
-            _event: event,
+            event,
             _com: com,
         })
     }
@@ -778,6 +778,22 @@ impl ProcessLoopbackCapture {
     /// and is safe to use when sizing caller-owned packet storage.
     pub fn bytes_per_frame(&self) -> usize {
         self.bytes_per_frame
+    }
+
+    /// Wait for the process-loopback event callback to signal available data.
+    /// The timeout is bounded by the caller; a timeout returns `false` and
+    /// does not inspect or alter endpoint state.
+    pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
+        let result = unsafe {
+            windows::Win32::System::Threading::WaitForSingleObject(self.event.0, timeout_ms)
+        };
+        if result == windows::Win32::Foundation::WAIT_OBJECT_0 {
+            Ok(true)
+        } else if result == windows::Win32::Foundation::WAIT_TIMEOUT {
+            Ok(false)
+        } else {
+            Err(AudioError::Windows(windows::core::Error::from_thread()))
+        }
     }
 
     /// Copy one available packet into a caller-owned byte buffer. No borrowed

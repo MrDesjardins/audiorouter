@@ -120,7 +120,8 @@ fn process_loopback_smoke(
     let mut frames = 0u32;
     let mut quantum_blocks = 0u32;
     while started.elapsed() < std::time::Duration::from_millis(duration_ms) {
-        while let Some(packet) = capture.read_packet(&mut buffer)? {
+        if capture.wait_for_data(10)? {
+            while let Some(packet) = capture.read_packet(&mut buffer)? {
             packets = packets.saturating_add(1);
             frames = frames.saturating_add(packet.frames);
             let sample_count = packet.frames as usize * capture.bytes_per_frame() / 2;
@@ -168,8 +169,8 @@ fn process_loopback_smoke(
                         .map_err(|_| AudioError::InvalidFrameSize)?;
                 }
             }
+            }
         }
-        std::thread::sleep(std::time::Duration::from_millis(5));
     }
     capture.stop()?;
     println!(
