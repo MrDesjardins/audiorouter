@@ -17,6 +17,7 @@ pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(3
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
+pub const MAX_VIRTUAL_BUS_NAME_CHARS: usize = 120;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
 pub const MAX_DISPLAY_NAME_BYTES: usize = 256;
@@ -466,7 +467,7 @@ fn validate_virtual_bus_name(name: String) -> Result<String, VirtualBusError> {
     if name.is_empty() {
         return Err(VirtualBusError::EmptyName);
     }
-    if name.chars().count() > 120 {
+    if name.chars().count() > MAX_VIRTUAL_BUS_NAME_CHARS {
         return Err(VirtualBusError::NameTooLong);
     }
     Ok(name)
@@ -2902,7 +2903,10 @@ mod tests {
             Err(VirtualBusError::EmptyName)
         );
         assert_eq!(
-            registry.create(EntityId::new("bus"), "x".repeat(121)),
+            registry.create(
+                EntityId::new("bus"),
+                "x".repeat(MAX_VIRTUAL_BUS_NAME_CHARS + 1),
+            ),
             Err(VirtualBusError::NameTooLong)
         );
         for index in 0..MAX_VIRTUAL_BUSES {

@@ -293,3 +293,11 @@ The legacy unpaged `virtualDevices.list` array response now advertises the
 authoritative eight-bus domain ceiling. The in-memory registry already rejects
 the ninth bus, so complete unpaged results remain safe without arbitrary
 truncation or managed-driver activation.
+## Virtual-bus name limit (2026-09-07)
+
+The managed virtual-bus name ceiling is now the public domain constant
+`MAX_VIRTUAL_BUS_NAME_CHARS` (120 Unicode characters). Domain validation,
+virtual-device plan/item schemas, and `system.describe` discovery all reuse
+the same value; the domain boundary regression covers an over-limit name.
+Domain/control tests, strict Clippy, formatting, and documentation validation
+pass. Driver installation and endpoint activation remain open.
