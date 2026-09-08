@@ -55,3 +55,4 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 ## Validated lessons
 
 - **2026-09-07 — WebView2 origin must be wired at startup.** Evidence: [M05 visual editor](docs/plans/active/evidence/M05-visual-editor.md). Scope: UI/native response transport. Consequence: an exact-origin allowlist is useful only when the normal page startup path supplies `window.location.origin`; mismatched and originless responses must remain ignored, while native shell packaging still needs manual acceptance.
+- **2026-09-07 — Synthetic `Instant` tests must avoid lower-bound subtraction.** Evidence: [active plan](docs/plans/active/current.md). Scope: portable time-retention tests on Windows. Consequence: construct an older test timestamp first and move the current timestamp forward, rather than subtracting a retention interval from `Instant::now()`, which can underflow on a short monotonic-clock origin.
