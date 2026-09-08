@@ -56,7 +56,7 @@ No plugin was executed and no audio or machine configuration was accessed.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `b120b87`, with the latest
+The latest validated implementation head is `edb1d8b`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 The latest pushed plan/evidence tip is `8aafaa2`; its read-only M06 fixture
