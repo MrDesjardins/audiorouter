@@ -622,3 +622,13 @@ alongside the channel mask and valid-bit count. The current endpoint set
 reports `00000003-0000-0010-8000-00aa00389b71` for its float32 extensible
 formats; the 96 kHz mono endpoint remains legacy IEEE-float PCM and is printed
 without extensible-only fields.
+## Controlled process attribution requalification (2026-09-07)
+
+The guarded `m00-native-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` wrapper passed at the current head. It created only a disposable child,
+verified child exit, process-loopback lifecycle, and 21,609 captured frames with
+76,370 nonzero payload bytes, then confirmed the media-device identity/state
+snapshot was unchanged and removed the exact generated executable/object. This
+is controlled process-tree evidence; PID reuse and physical acoustic latency
+remain unqualified. No existing process was terminated and no audio setting was
+changed.
