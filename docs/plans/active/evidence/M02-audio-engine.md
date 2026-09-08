@@ -471,3 +471,10 @@ Defaults, volume, mute, privacy, drivers, signing, startup, and other machine
 audio configuration were not changed. This is digital adapter/engine evidence;
 physical acoustic latency, production-driver integration, and hardware clock
 qualification remain open.
+
+An authorized differing-rate attempt used the read-only inventory's 96 kHz
+render endpoint and 48 kHz capture endpoint. The render endpoint is 8-channel,
+so the adapter correctly failed closed with `InvalidFrameSize` before stream
+activation; exact cleanup and media-state checks passed. No valid differing-rate
+mono/stereo pair is currently available, leaving hardware clock/resampler
+qualification open.
