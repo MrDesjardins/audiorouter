@@ -31,6 +31,7 @@ const MAX_EVENT_SUBSCRIPTION_ITEMS: usize = 500;
 const MAX_SESSION_LIST_ITEMS: usize = 500;
 const MAX_GRAPH_HISTORY_ITEMS: usize = 100;
 const MAX_GRAPH_DIFF_ITEMS: usize = 3;
+const MAX_GRAPH_AFFECTED_DESTINATIONS: usize = audiorouter_domain::MAX_NODES_PER_SESSION;
 const MAX_RECORDING_LIST_ITEMS: usize = 500;
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
@@ -910,7 +911,15 @@ fn method_output_schema(name: &str) -> Value {
                 "baseRevision": { "type": "integer", "minimum": 0 },
                 "expiresInMs": { "type": "integer", "minimum": 1 },
                 "diff": { "type": "array", "maxItems": MAX_GRAPH_DIFF_ITEMS },
-                "affectedDestinations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "affectedDestinations": {
+                    "type": "array",
+                    "maxItems": MAX_GRAPH_AFFECTED_DESTINATIONS,
+                    "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": audiorouter_domain::MAX_DISPLAY_NAME_BYTES
+                    }
+                },
                 "warnings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                 "requiredScopes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
             },
@@ -6194,6 +6203,14 @@ mod tests {
         assert_eq!(
             graph_plan["outputSchema"]["properties"]["diff"]["maxItems"],
             MAX_GRAPH_DIFF_ITEMS
+        );
+        assert_eq!(
+            graph_plan["outputSchema"]["properties"]["affectedDestinations"]["maxItems"],
+            MAX_GRAPH_AFFECTED_DESTINATIONS
+        );
+        assert_eq!(
+            graph_plan["outputSchema"]["properties"]["affectedDestinations"]["items"]["maxLength"],
+            audiorouter_domain::MAX_DISPLAY_NAME_BYTES
         );
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);

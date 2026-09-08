@@ -489,6 +489,9 @@ preflight with candidate validation; live graph activation remains an M02 gate.
 The `graph.plan` result schema also advertises the fixed three-entry diff
 maximum produced by the name/nodes/edges planner comparison.
 
+Its `affectedDestinations` result now advertises a 64-entry maximum and the
+256-byte display-name bound inherited from session node validation.
+
 The `events.subscribe` discovery contract now exposes its 500-event and
 500-session resync bounds plus the enforced event metadata lengths. Control
 discovery regression, strict Clippy, and documentation validation pass.
