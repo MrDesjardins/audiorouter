@@ -2026,6 +2026,11 @@ impl Storage {
         validate_plan_id(&plan.id)?;
         validate_plan_id(&plan.session_id)?;
         let candidate = Self::serialize_validated_session(&plan.candidate)?;
+        if plan.candidate.id.as_str() != plan.session_id {
+            return Err(StorageError::InvalidPlan(
+                "graph plan session ID does not match candidate".into(),
+            ));
+        }
         self.connection.execute(
             "INSERT OR REPLACE INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -2043,30 +2048,46 @@ impl Storage {
     pub fn load_graph_plan(&self, id: &str) -> Result<Option<GraphPlanRecord>, StorageError> {
         validate_plan_id(id)?;
         self.prune_expired_graph_plans()?;
-        self.connection
+        let row: Option<(String, String, i64, String, i64)> = self
+            .connection
             .query_row(
                 "SELECT id, session_id, base_revision, candidate, expires_at
                  FROM graph_plans WHERE id = ?1",
                 params![id],
                 |row| {
-                    let candidate: String = row.get(3)?;
-                    Ok(GraphPlanRecord {
-                        id: row.get(0)?,
-                        session_id: row.get(1)?,
-                        base_revision: row.get::<_, i64>(2)? as u64,
-                        candidate: serde_json::from_str(&candidate).map_err(|error| {
-                            rusqlite::Error::FromSqlConversionFailure(
-                                3,
-                                rusqlite::types::Type::Text,
-                                Box::new(error),
-                            )
-                        })?,
-                        expires_at: row.get(4)?,
-                    })
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
                 },
             )
-            .optional()
-            .map_err(StorageError::Sql)
+            .optional()?;
+        let Some((plan_id, session_id, base_revision, candidate, expires_at)) = row else {
+            return Ok(None);
+        };
+        validate_plan_id(&plan_id)?;
+        validate_plan_id(&session_id)?;
+        if base_revision < 0 {
+            return Err(StorageError::InvalidPlan(
+                "graph plan revision must not be negative".into(),
+            ));
+        }
+        let candidate = Self::deserialize_validated_session(&candidate)?;
+        if candidate.id.as_str() != session_id {
+            return Err(StorageError::InvalidPlan(
+                "graph plan session ID does not match candidate".into(),
+            ));
+        }
+        Ok(Some(GraphPlanRecord {
+            id: plan_id,
+            session_id,
+            base_revision: base_revision as u64,
+            candidate,
+            expires_at,
+        }))
     }
 
     pub fn delete_graph_plan(&self, id: &str) -> Result<(), StorageError> {
@@ -2526,6 +2547,51 @@ mod tests {
             Err(StorageError::InvalidSession(_))
         ));
         assert!(storage.load_graph_plan("plan").unwrap().is_none());
+
+        let valid = session();
+        assert!(matches!(
+            storage.save_graph_plan(&GraphPlanRecord {
+                id: "mismatch".into(),
+                session_id: "another-session".into(),
+                base_revision: valid.revision,
+                candidate: valid,
+                expires_at: i64::MAX,
+            }),
+            Err(StorageError::InvalidPlan(_))
+        ));
+    }
+
+    #[test]
+    fn graph_plan_reads_reject_corrupt_candidates() {
+        let storage = Storage::open_memory().unwrap();
+        let mut invalid = session();
+        invalid.name = "x".repeat(257);
+        let document = serde_json::to_string(&invalid).unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
+                 VALUES ('corrupt-plan', 'session', 3, ?1, ?2)",
+                rusqlite::params![document, i64::MAX],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.load_graph_plan("corrupt-plan"),
+            Err(StorageError::InvalidSession(_))
+        ));
+
+        storage
+            .connection
+            .execute(
+                "INSERT INTO graph_plans(id, session_id, base_revision, candidate, expires_at)
+                 VALUES ('mismatch-plan', 'other-session', 3, ?1, ?2)",
+                rusqlite::params![serde_json::to_string(&session()).unwrap(), i64::MAX],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.load_graph_plan("mismatch-plan"),
+            Err(StorageError::InvalidPlan(_))
+        ));
     }
 
     #[test]

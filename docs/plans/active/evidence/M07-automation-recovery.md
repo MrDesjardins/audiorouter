@@ -960,3 +960,11 @@ documents against the domain contract and the 1 MiB persisted-document limit.
 A regression inserts an invalid domain document directly into both current
 and history tables and confirms all three read surfaces fail closed. Storage
 passes 57 tests and control passes 86 tests with strict Clippy.
+
+## Graph-plan read/write integrity (2026-09-08)
+
+Graph-plan persistence now validates candidate sessions on hydration and
+requires the plan's session ID to match the candidate on both write and read.
+Negative persisted revisions are rejected as corrupt plans. Regressions cover
+invalid candidates and mismatched IDs; storage passes 58 tests and control
+passes 86 tests with strict Clippy.
