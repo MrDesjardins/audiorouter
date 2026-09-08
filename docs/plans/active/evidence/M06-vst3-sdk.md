@@ -913,6 +913,11 @@ then requests a two-entry descriptor catalog through the supervised process
 adapter before clean shutdown. This covers wrapper heartbeat/error handling in
 addition to raw IPC framing.
 
+The all-features workspace requalification passed after this change. The
+plugin-host package contributed 46 library tests, 20 feature-enabled process
+tests, and the complete workspace suites passed; this remains fixture and
+control-plane evidence rather than native third-party realtime execution.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 ## Native controller descriptor discovery (2026-09-08)

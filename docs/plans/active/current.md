@@ -77,6 +77,14 @@ process regression observes 128 -> 192 -> 256 samples at 48 kHz and shuts down
 cleanly. This strengthens dynamic-latency wire evidence without claiming a
 third-party plugin measurement or graph compensation.
 
+## All-features workspace requalification (2026-09-08)
+
+The complete workspace regression passed with `cargo test --workspace
+--all-features --quiet`, including 20 feature-enabled plugin-worker process
+tests and the existing domain, control, engine, DSP, storage, transport, and
+Windows-audio suites. This is portable/fixture evidence; native production
+driver, signing, and realtime routing gates remain open.
+
 The supervised worker regression now covers both fixture paths: a dynamic
 latency response is accepted while the supervisor remains running, and the
 two-entry descriptor catalog is returned through the supervised adapter before
