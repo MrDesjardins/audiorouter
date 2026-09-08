@@ -858,3 +858,12 @@ regression using `usize::MAX` confirms frame queues remain capped at 2,048
 entries and parameter queues at 128 entries. The plugin-host library tests and
 strict Clippy pass. Worker subprocess tests remain blocked by the host's
 Application Control policy (OS error 4551), not by the queue change.
+
+## Bounded state restore reads (2026-09-07)
+
+Plugin-state restore now caps the post-open read at 16 MiB plus one byte, so a
+file-growth or replacement race cannot turn `read_to_end` into an unbounded
+allocation. Oversized files return `TooLarge` after the bounded read, and a
+regression covers the existing oversized-file path. The plugin-host library
+suite passed 38 tests with strict Clippy and formatting; no plugin was loaded
+or executed.

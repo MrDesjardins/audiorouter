@@ -225,11 +225,15 @@ pub fn read_state_asset(
     if metadata.len() > MAX_PLUGIN_STATE_BYTES as u64 {
         return Err(StateFileError::TooLarge);
     }
-    let mut bytes = Vec::with_capacity(metadata.len() as usize);
-    fs::File::open(canonical_path)
-        .map_err(|error| StateFileError::Io(error.to_string()))?
+    let file =
+        fs::File::open(canonical_path).map_err(|error| StateFileError::Io(error.to_string()))?;
+    let mut bytes = Vec::with_capacity(metadata.len().min(MAX_PLUGIN_STATE_BYTES as u64) as usize);
+    file.take(MAX_PLUGIN_STATE_BYTES as u64 + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| StateFileError::Io(error.to_string()))?;
+    if bytes.len() > MAX_PLUGIN_STATE_BYTES {
+        return Err(StateFileError::TooLarge);
+    }
     let asset = PluginStateAsset::new(version, bytes).map_err(StateFileError::InvalidState)?;
     if !is_sha256(expected_sha256) || asset.sha256 != expected_sha256 {
         return Err(StateFileError::InvalidState(StateError::IntegrityMismatch));
@@ -2966,6 +2970,18 @@ mod tests {
             Err(StateError::IntegrityMismatch)
         );
         assert_eq!(PluginStateAsset::new(1, Vec::new()), Err(StateError::Empty));
+    }
+
+    #[test]
+    fn state_restore_rejects_oversized_files() {
+        let root = temp_root();
+        let path = root.join("oversized.bin");
+        fs::write(&path, vec![0u8; MAX_PLUGIN_STATE_BYTES + 1]).unwrap();
+        assert_eq!(
+            read_state_asset(&root, &path, 1, &"0".repeat(64)),
+            Err(StateFileError::TooLarge)
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
