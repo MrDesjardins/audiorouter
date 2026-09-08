@@ -807,6 +807,11 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+The `system.describe` limits contract now advertises `maxClientEnrollments`
+from the same storage constant, and the discovery regression checks the value
+against the returned payload. This keeps authorization-state bounds
+discoverable to clients.
+
 ## Client-enrollment cardinality bound (2026-09-08)
 
 Durable client enrollment writes now cap distinct identities at 256, and

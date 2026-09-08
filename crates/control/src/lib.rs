@@ -653,6 +653,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxNodesGlobal": { "type": "integer", "minimum": 1 },
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
                         "maxActiveSessions": { "type": "integer", "minimum": 1 },
+                        "maxClientEnrollments": { "type": "integer", "minimum": 1 },
                         "maxVirtualBuses": { "type": "integer", "minimum": 1 },
                         "maxVirtualBusNameChars": { "type": "integer", "minimum": 1 },
                         "maxEntityIdBytes": { "type": "integer", "minimum": 1 },
@@ -667,7 +668,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxRequestIdBytes": { "type": "integer", "minimum": 1 },
                         "maxRevisionCursorBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxClientEnrollments", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -2657,6 +2658,7 @@ impl ControlPlane {
                 "maxNodesGlobal": audiorouter_domain::MAX_NODES_GLOBAL,
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
                 "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                "maxClientEnrollments": audiorouter_storage::MAX_CLIENT_ENROLLMENTS,
                 "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES,
                 "maxVirtualBusNameChars": audiorouter_domain::MAX_VIRTUAL_BUS_NAME_CHARS,
                 "maxEntityIdBytes": audiorouter_domain::MAX_ENTITY_ID_BYTES,
@@ -6421,6 +6423,10 @@ mod tests {
         assert_eq!(description["limits"]["maxNodesGlobal"], 128);
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
         assert_eq!(description["limits"]["maxActiveSessions"], 2);
+        assert_eq!(
+            description["limits"]["maxClientEnrollments"],
+            audiorouter_storage::MAX_CLIENT_ENROLLMENTS
+        );
         assert_eq!(description["limits"]["maxVirtualBuses"], 8);
         assert_eq!(
             description["limits"]["maxVirtualBusNameChars"],

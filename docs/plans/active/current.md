@@ -107,6 +107,10 @@ fail closed while updates to existing identities remain valid. Storage/control
 tests (73/92), strict Clippy, formatting, diff checks, and documentation
 validation pass. No audio or machine configuration was accessed.
 
+Discovery also advertises the enrollment ceiling as
+`system.describe.limits.maxClientEnrollments`, with a self-consistency
+regression tied to the storage constant.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models
