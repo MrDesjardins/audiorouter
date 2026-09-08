@@ -520,3 +520,18 @@ verified stream stop/reset plus unchanged media-device identity/state. The
 implementation uses caller-owned packet storage and the supported 44.1 kHz
 stereo PCM/event-callback initialization shape; physical latency and full
 cross-process isolation thresholds remain separate gates.
+
+## PCM16 planar boundary (2026-09-07)
+
+`AudioBlock` now exposes allocation-free bridges for one complete interleaved
+PCM16 block. Decode maps signed 16-bit samples to planar float32 using
+`-32768 -> -1.0` and `32767 -> 32767/32768`; encode silences non-finite values,
+clamps finite values to `[-1, 1]`, and emits the bounded PCM16 range. Both
+methods reject any source or destination whose shape is not exactly the
+preallocated block shape.
+
+The focused engine suite passed 66 tests, including round-trip boundary,
+non-finite, clamp, and shape regressions. Strict engine Clippy, formatting, and
+diff checks passed. This is a portable adapter-boundary result; packet
+accumulation/splitting, native realtime scheduling, physical latency, and
+production-driver integration remain open.

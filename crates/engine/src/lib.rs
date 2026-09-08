@@ -859,6 +859,22 @@ impl AudioBlock {
         Ok(())
     }
 
+    /// Decode one complete interleaved signed-16-bit PCM block into planar
+    /// float32 samples without allocating. PCM16 uses the conventional
+    /// symmetric engine scale: -32768 maps to -1.0 and 32767 maps just below
+    /// 1.0. The source must contain exactly one complete block.
+    pub fn copy_from_interleaved_pcm16(&mut self, source: &[i16]) -> Result<(), BlockError> {
+        if source.len() != self.channels * self.frames {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for (frame, samples) in source.chunks_exact(self.channels).enumerate() {
+            for (channel, sample) in samples.iter().enumerate() {
+                self.channel_mut(channel).unwrap()[frame] = f32::from(*sample) / 32_768.0;
+            }
+        }
+        Ok(())
+    }
+
     /// Copy this planar block into an interleaved `f32` destination without
     /// allocating. The destination must contain exactly one complete block.
     pub fn copy_to_interleaved(&self, destination: &mut [f32]) -> Result<(), BlockError> {
@@ -868,6 +884,27 @@ impl AudioBlock {
         for (frame, samples) in destination.chunks_exact_mut(self.channels).enumerate() {
             for (channel, sample) in samples.iter_mut().enumerate() {
                 *sample = self.channel(channel).unwrap()[frame];
+            }
+        }
+        Ok(())
+    }
+
+    /// Encode one complete planar float32 block as interleaved signed-16-bit
+    /// PCM without allocating. Non-finite values become silence and finite
+    /// values are clamped to the PCM16 range before rounding.
+    pub fn copy_to_interleaved_pcm16(&self, destination: &mut [i16]) -> Result<(), BlockError> {
+        if destination.len() != self.channels * self.frames {
+            return Err(BlockError::ShapeMismatch);
+        }
+        for (frame, samples) in destination.chunks_exact_mut(self.channels).enumerate() {
+            for (channel, sample) in samples.iter_mut().enumerate() {
+                let value = self.channel(channel).unwrap()[frame];
+                let scaled = if value.is_finite() {
+                    (value.clamp(-1.0, 1.0) * 32_768.0).round()
+                } else {
+                    0.0
+                };
+                *sample = (scaled as i32).clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
             }
         }
         Ok(())
@@ -2911,6 +2948,33 @@ mod tests {
         );
         assert_eq!(
             block.copy_to_interleaved(&mut [0.0; 2]),
+            Err(BlockError::ShapeMismatch)
+        );
+    }
+
+    #[test]
+    fn block_bridges_pcm16_without_allocation_or_shape_guessing() {
+        let mut block = AudioBlock::new(2, 2).unwrap();
+        block
+            .copy_from_interleaved_pcm16(&[i16::MIN, 0, i16::MAX, 16_384])
+            .unwrap();
+        assert_eq!(block.channel(0).unwrap(), &[-1.0, 32_767.0 / 32_768.0]);
+        assert_eq!(block.channel(1).unwrap(), &[0.0, 0.5]);
+
+        block.channel_mut(0).unwrap()[0] = f32::NAN;
+        block.channel_mut(0).unwrap()[1] = 2.0;
+        block.channel_mut(1).unwrap()[0] = -2.0;
+        block.channel_mut(1).unwrap()[1] = 0.5;
+        let mut encoded = [0_i16; 4];
+        block.copy_to_interleaved_pcm16(&mut encoded).unwrap();
+        assert_eq!(encoded, [0, i16::MIN, i16::MAX, 16_384]);
+
+        assert_eq!(
+            block.copy_from_interleaved_pcm16(&[0_i16; 2]),
+            Err(BlockError::ShapeMismatch)
+        );
+        assert_eq!(
+            block.copy_to_interleaved_pcm16(&mut [0_i16; 2]),
             Err(BlockError::ShapeMismatch)
         );
     }
