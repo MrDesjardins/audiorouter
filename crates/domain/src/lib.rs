@@ -2173,6 +2173,9 @@ impl GraphStore {
         if self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
             return Err(StoreError::PlanLimitReached);
         }
+        if self.next_plan == u64::MAX {
+            return Err(StoreError::PlanLimitReached);
+        }
         self.next_plan += 1;
         let plan_id = EntityId::new(format!("plan-{}", self.next_plan));
         self.plans.insert(
@@ -3561,6 +3564,28 @@ mod tests {
             .unwrap();
         let original_id = original.id.clone();
         assert!(expired_store.plan_graph(&original_id, 0, original).is_ok());
+    }
+
+    #[test]
+    fn graph_store_rejects_plan_id_counter_exhaustion_without_mutation() {
+        let mut store = GraphStore::default();
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        store.insert_session(original.clone()).unwrap();
+        store.next_plan = u64::MAX;
+        let original_id = original.id.clone();
+
+        assert_eq!(
+            store.plan_graph(&original_id, 0, original),
+            Err(StoreError::PlanLimitReached)
+        );
+        assert_eq!(store.next_plan, u64::MAX);
+        assert!(store.plans.is_empty());
     }
 
     #[test]

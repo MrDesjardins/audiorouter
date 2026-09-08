@@ -40,6 +40,12 @@ dynamic latency, and quarantine/replacement behavior under bounded cleanup.
 This is deterministic containment evidence only; third-party plugin/editor
 and OS sandbox gates remain open.
 
+Closed an M01/SEC-12 numeric-boundary gap in `GraphStore`: exhausted graph-plan
+ID counters now return the existing bounded `PlanLimitReached` error instead of
+performing unchecked integer addition. A regression verifies the counter and
+pending-plan state remain unchanged. Domain tests (58), strict Clippy, and
+formatting pass; no audio or machine configuration was accessed.
+
 ## Fan-out topology safety (2026-09-08)
 
 Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out

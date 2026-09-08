@@ -11,6 +11,14 @@ failure, and verifies the generated in-memory plan is absent. Control tests
 (94), strict Clippy, and formatting pass; the test uses only an in-memory
 SQLite database and does not access audio or machine configuration.
 
+## 2026-09-08 - Graph-plan ID counter exhaustion
+
+`GraphStore::plan_graph` now checks the `u64` plan-ID counter before incrementing
+it. An exhausted counter returns the existing `PlanLimitReached` error and does
+not mutate the counter or pending plans, avoiding overflow panic/wrap behavior.
+The focused domain suite passed 58 tests with strict Clippy and formatting; no
+audio or machine configuration was accessed.
+
 ## 2026-09-08 - Durable graph-plan expiry hardening
 
 The durable `graph.commit` rehydration path now rejects expired or
