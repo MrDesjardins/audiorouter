@@ -39,6 +39,15 @@ if ($revision -ne $expectedRevision) {
 
 try {
     if (-not $SkipBuild) {
+        if (-not (Test-Path -LiteralPath $buildRoot -PathType Container)) {
+            Invoke-Native $cmake @(
+                '-S', $sdkRoot,
+                '-B', $buildRoot,
+                '-G', 'Visual Studio 18 2026',
+                '-A', 'x64',
+                '-DSMTG_CREATE_PLUGIN_LINK=0'
+            )
+        }
         Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'mda-vst3')
     }
     Require-File $validator 'built VST3 validator'

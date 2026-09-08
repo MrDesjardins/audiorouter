@@ -819,3 +819,14 @@ access conflict in the shared ignored build directory; it did not indicate an
 SDK or source failure. A sequential rerun passed the same 51 self-tests, 1,598
 validator tests, and offline loader checks, after which the exact generated
 build directory was removed.
+
+## Clean acceptance configuration fix (2026-09-07)
+
+The acceptance wrapper previously attempted `cmake --build` without creating
+the ignored build tree, so a clean checkout failed before compilation. It now
+configures `third_party/vst3sdk-build` with the installed `Visual Studio 18
+2026` x64 generator and `SMTG_CREATE_PLUGIN_LINK=0`, preventing SDK example
+plugin-link creation outside the repository. A clean rerun passed 51 SDK
+self-tests, 1,598 official validator tests with zero failures, and the offline
+loader. The generated repository build tree was removed; no user plugin
+directory, system registration, or audio configuration was changed.
