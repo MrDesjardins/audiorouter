@@ -41,6 +41,11 @@ native live wrapper: a disposable child route captured 33,075 frames and
 with persistent audio configuration unchanged. PID reuse, physical latency,
 managed-driver callback timing, and production isolation remain open.
 
+The paired process-tree exclusion wrapper also passed on 2026-09-08 with
+33,075 captured frames over 750 ms and unchanged persistent audio state. The
+result validates exclusion-mode lifecycle only; quantitative isolation and
+PID-reuse evidence remain open.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/

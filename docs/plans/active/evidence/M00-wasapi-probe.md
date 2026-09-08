@@ -910,3 +910,9 @@ nonzero payload bytes, then stopped and released its streams successfully.
 The wrapper reported unchanged persistent audio configuration. This strengthens
 controlled process-tree attribution evidence only; it is not PID-reuse,
 physical-latency, managed-driver callback, or production isolation evidence.
+
+The paired exclusion run completed with the same 750 ms bound and 33,075
+captured frames. It excluded the disposable child process tree, released the
+native streams, and reported no persistent configuration change. This
+confirms the exclusion API/lifecycle path; it does not establish a quantitative
+cross-process isolation threshold or PID-reuse protection.
