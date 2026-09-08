@@ -1936,7 +1936,6 @@ impl ControlPlane {
         // Fail closed if the durable latch cannot be read: a persistence
         // failure must never silently unmute a capture path.
         let privacy_muted = storage.load_privacy_mute()?;
-        let backend_epoch = storage.claim_backend_epoch()?;
         let virtual_buses = storage.load_virtual_buses()?;
         let mut persisted_sessions = Vec::new();
         let mut session_cursor = None;
@@ -2000,6 +1999,10 @@ impl ControlPlane {
                 ),
             );
         }
+        // Claim a new epoch only after every persisted state surface has been
+        // read and validated successfully; failed startup must not mutate the
+        // durable database while reporting an initialization error.
+        let backend_epoch = storage.claim_backend_epoch()?;
         Ok(Self {
             store,
             build: build.into(),

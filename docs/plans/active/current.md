@@ -97,7 +97,8 @@ Completed safe control slice M01/STATE-02/SEC-12 durable-startup failure
 handling: storage-backed control initialization now has a fallible
 `try_with_storage` path and the compatibility constructor fails closed instead
 of silently replacing unreadable persisted sessions, plans, or privacy state
-with defaults.
+with defaults. Backend-epoch claiming is deferred until all persisted state
+has hydrated successfully, so failed initialization performs no durable write.
 
 Completed safe control slice M01/SEC-12 startup session completeness:
 storage-backed initialization now restores all persisted sessions by walking

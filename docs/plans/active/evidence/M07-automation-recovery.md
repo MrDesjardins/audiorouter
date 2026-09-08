@@ -984,3 +984,7 @@ explicitly fails closed on the same error rather than creating an apparently
 successful empty state, preserving STATE-02's corruption boundary. Focused
 storage/control suites pass (58/86) with strict Clippy; no audio or machine
 configuration was accessed.
+
+Backend-epoch claiming is intentionally deferred until after all persisted
+state has been read and validated, preventing a failed startup from changing
+the durable database. The same focused suites pass after this ordering fix.
