@@ -18,6 +18,8 @@ pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
+pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
+pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
 pub const RECOVERY_SAFE_MODE_CRASHES: usize = 3;
@@ -1450,7 +1452,16 @@ impl EventLog {
         retained_at: Instant,
     ) -> u64 {
         let category = category.into();
-        if category == "meter" || category.starts_with("meter.") {
+        if category == "meter"
+            || category.starts_with("meter.")
+            || category.len() > MAX_EVENT_CATEGORY_BYTES
+            || operation_id
+                .as_ref()
+                .is_some_and(|value| value.len() > MAX_EVENT_OPERATION_ID_BYTES)
+            || session_id
+                .as_ref()
+                .is_some_and(|value| value.as_str().len() > MAX_ENTITY_ID_BYTES)
+        {
             return self.latest_sequence();
         }
         self.prune_expired(retained_at);
@@ -2407,6 +2418,35 @@ mod tests {
         assert_eq!(log.append(1, None, "state.changed", None), 1);
         assert_eq!(log.since(0, 10).unwrap().len(), 1);
         assert_eq!(log.since(0, 10).unwrap()[0].category, "state.changed");
+    }
+
+    #[test]
+    fn event_log_drops_oversized_metadata_without_advancing_sequence() {
+        let mut log = EventLog::new(1);
+        assert_eq!(
+            log.append(0, None, "c".repeat(MAX_EVENT_CATEGORY_BYTES + 1), None),
+            0
+        );
+        assert_eq!(
+            log.append(
+                0,
+                Some("o".repeat(MAX_EVENT_OPERATION_ID_BYTES + 1)),
+                "state.changed",
+                None
+            ),
+            0
+        );
+        assert_eq!(
+            log.append(
+                0,
+                None,
+                "state.changed",
+                Some(EntityId::new("s".repeat(MAX_ENTITY_ID_BYTES + 1)))
+            ),
+            0
+        );
+        assert!(log.is_empty());
+        assert_eq!(log.append(1, None, "state.changed", None), 1);
     }
 
     #[test]

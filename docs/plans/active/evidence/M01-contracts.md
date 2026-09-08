@@ -398,3 +398,8 @@ Virtual-bus lease acquisition now rejects owner IDs over the same 128-byte
 bound with `OwnerTooLong` before the owner is stored. The lease and registry
 mapping regression remains portable and does not access audio or machine
 configuration.
+
+The retained state-event log now drops oversized category, operation-ID, and
+session-ID metadata before sequence allocation, keeping event retention bounded
+in bytes as well as count/age. A regression covers each metadata field and
+confirms the next valid event still receives sequence 1.
