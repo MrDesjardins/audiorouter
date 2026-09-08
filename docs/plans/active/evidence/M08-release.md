@@ -376,3 +376,12 @@ lockfile/CycloneDX provenance, manifest hashes, and UI archive contents;
 asserted unsigned driver/signing/installer blockers; and removed temporary
 output. No installer, driver, signing, plugin registration, or audio
 configuration action occurred.
+
+## Aggregate safe-chain requalification (2026-09-07)
+
+The new sequential `tests/acceptance/safe-all.ps1` runner passed from a clean
+working tree. Its M08 stage again built and verified the unsigned release
+artifacts, including locked CLI/plugin-worker binaries, UI output, npm
+provenance, manifest hashes, archive contents, and explicit blocker state.
+Temporary output was removed and no installer, driver, signing, or audio
+configuration action occurred.
