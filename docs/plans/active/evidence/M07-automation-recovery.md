@@ -26,6 +26,15 @@ The startup-plan read query now excludes expired rows before applying the
 look-ahead bound, matching virtual-device hydration and preventing stale plans
 from causing a false oversized-inventory failure during restart.
 
+## 2026-09-08 - Safe acceptance requalification
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at `c438a21`, covering
+M01 CLI, M04 DSP/recording, M05 UI, M06 SDK/VST3, M07 headless, unsigned M08
+release preparation, traceability, documentation, and disposable native
+toolchain/SysVAD qualification. The chain removed temporary outputs and did
+not install/load a driver, change signing mode or registration, or alter
+machine audio configuration.
+
 ## 2026-09-06 — CLI graph plan/apply files
 
 Implemented the portable AUTO-04 CLI slice in `crates/cli`:

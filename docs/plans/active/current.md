@@ -52,6 +52,17 @@ device hydration and preventing stale records from consuming the look-ahead
 bound. Storage coverage is 72 tests with strict Clippy; no audio, driver, or
 machine configuration was accessed.
 
+## Safe acceptance requalification (2026-09-08)
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at `c438a21` after
+the pending-plan persistence fixes. It covered native toolchain discovery and
+compile, read-only 34-endpoint format inventory, disposable pinned SysVAD x64
+build/package/API validation, M01 CLI, M04 DSP/recording, M05 UI with its
+temporary production build, M06 SDK/VST3, M07 headless, unsigned M08 release
+preparation, traceability, and documentation. Temporary outputs/checkouts
+were removed; no driver was installed or loaded, signing mode or registration
+was changed, and no machine audio configuration was touched.
+
 ## Event replay page-cursor hardening (2026-09-08)
 
 Closed an M07/API-08 replay correctness gap: bounded `events.subscribe` pages
