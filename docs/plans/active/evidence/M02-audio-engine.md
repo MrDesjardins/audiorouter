@@ -873,3 +873,17 @@ bucket 13, 102 in bucket 14, and 5 in bucket 15. The routed aggregate was
 1,134,000 ns total and 28,400 ns maximum. Both runs completed with unchanged
 media state. This remains adapter/event-loop evidence, not native callback
 deadline compliance.
+
+## Portable scheduler deadline telemetry (2026-09-08)
+
+`RealtimeScheduler::process_once_with_deadline` now provides an explicit
+caller-owned deadline boundary. Completed processing that finishes after the
+deadline records a saturating miss count and total/maximum lateness using
+atomics only; the scheduler does not wait, allocate, log, or touch an
+endpoint. A regression verifies a late deadline is recorded while the active
+generation and processed output remain correct.
+
+Engine tests (72), doc-tests, strict Clippy, formatting, and diff checks pass.
+This closes portable callback-integration readiness only. Native endpoint-owned
+callback period/deadline measurements, managed-driver lifecycle, signing,
+physical latency, and manual application acceptance remain open.

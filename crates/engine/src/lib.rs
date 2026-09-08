@@ -1721,6 +1721,9 @@ pub struct CallbackMetrics {
     processing_time_ns_total: AtomicU64,
     processing_time_ns_max: AtomicU64,
     processing_time_buckets: [AtomicU64; PROCESSING_TIME_BUCKET_COUNT],
+    deadline_misses: AtomicU64,
+    deadline_lateness_ns_total: AtomicU64,
+    deadline_lateness_ns_max: AtomicU64,
 }
 
 /// Fixed logarithmic processing-time histogram size. Bucket zero represents a
@@ -1824,6 +1827,22 @@ impl CallbackMetrics {
         std::array::from_fn(|index| self.processing_time_buckets[index].load(Ordering::Relaxed))
     }
 
+    /// Number of completed processing observations that finished after the
+    /// caller-provided quantum deadline.
+    pub fn deadline_misses(&self) -> u64 {
+        self.deadline_misses.load(Ordering::Relaxed)
+    }
+
+    /// Total lateness, in nanoseconds, for missed deadlines.
+    pub fn deadline_lateness_ns_total(&self) -> u64 {
+        self.deadline_lateness_ns_total.load(Ordering::Relaxed)
+    }
+
+    /// Maximum lateness, in nanoseconds, for one missed deadline.
+    pub fn deadline_lateness_ns_max(&self) -> u64 {
+        self.deadline_lateness_ns_max.load(Ordering::Relaxed)
+    }
+
     pub fn record_clipping(&self, samples: usize) {
         self.clipped_samples
             .fetch_add(samples as u64, Ordering::Relaxed);
@@ -1853,6 +1872,31 @@ impl CallbackMetrics {
         let mut current = self.processing_time_ns_max.load(Ordering::Relaxed);
         while nanos > current {
             match self.processing_time_ns_max.compare_exchange_weak(
+                current,
+                nanos,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
+    }
+
+    fn record_deadline(&self, deadline: std::time::Instant) {
+        let Some(lateness) = std::time::Instant::now().checked_duration_since(deadline) else {
+            return;
+        };
+        let nanos = u64::try_from(lateness.as_nanos()).unwrap_or(u64::MAX);
+        self.deadline_misses.fetch_add(1, Ordering::Relaxed);
+        let _ = self.deadline_lateness_ns_total.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |value| Some(value.saturating_add(nanos)),
+        );
+        let mut current = self.deadline_lateness_ns_max.load(Ordering::Relaxed);
+        while nanos > current {
+            match self.deadline_lateness_ns_max.compare_exchange_weak(
                 current,
                 nanos,
                 Ordering::Relaxed,
@@ -2697,6 +2741,15 @@ impl RuntimeProcessor {
         input: &AudioBlockRing,
         output: &AudioBlockRing,
     ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        self.process_ring_once_with_deadline(input, output, None)
+    }
+
+    fn process_ring_once_with_deadline(
+        &self,
+        input: &AudioBlockRing,
+        output: &AudioBlockRing,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
         let Some(block) = input.try_receive() else {
             return Ok(None);
         };
@@ -2720,6 +2773,9 @@ impl RuntimeProcessor {
             .try_recycle(block)
             .map_err(|_| BlockError::ShapeMismatch)?;
         let generation = self.process(&mut destination);
+        if let Some(deadline) = deadline {
+            self.metrics.record_deadline(deadline);
+        }
         destination.generation = generation.map_or(0, RuntimeGeneration::value);
         if let Err(destination) = output.try_submit(destination) {
             output
@@ -2759,6 +2815,9 @@ pub struct SchedulerTelemetry {
     pub processing_time_ns_total: u64,
     pub processing_time_ns_max: u64,
     pub processing_time_histogram: [u64; PROCESSING_TIME_BUCKET_COUNT],
+    pub deadline_misses: u64,
+    pub deadline_lateness_ns_total: u64,
+    pub deadline_lateness_ns_max: u64,
     pub active_generation: Option<RuntimeGeneration>,
 }
 
@@ -2823,6 +2882,9 @@ impl RealtimeScheduler {
             processing_time_ns_total: self.processor.metrics().processing_time_ns_total(),
             processing_time_ns_max: self.processor.metrics().processing_time_ns_max(),
             processing_time_histogram: self.processor.metrics().processing_time_histogram(),
+            deadline_misses: self.processor.metrics().deadline_misses(),
+            deadline_lateness_ns_total: self.processor.metrics().deadline_lateness_ns_total(),
+            deadline_lateness_ns_max: self.processor.metrics().deadline_lateness_ns_max(),
             active_generation: self
                 .processor
                 .publication
@@ -2857,6 +2919,18 @@ impl RealtimeScheduler {
     /// Execute one nonblocking ownership-preserving scheduler step.
     pub fn process_once(&self) -> Result<Option<RuntimeGeneration>, BlockError> {
         self.processor.process_ring_once(&self.input, &self.output)
+    }
+
+    /// Execute one nonblocking scheduler step and compare its completed
+    /// processing boundary with a caller-owned quantum deadline. The deadline
+    /// observation uses atomics only and is intended for a future native
+    /// callback; this method does not wait, allocate, log, or touch an endpoint.
+    pub fn process_once_with_deadline(
+        &self,
+        deadline: std::time::Instant,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        self.processor
+            .process_ring_once_with_deadline(&self.input, &self.output, Some(deadline))
     }
 }
 
@@ -3802,6 +3876,34 @@ mod tests {
         assert_eq!(muted.channel(0).unwrap(), &[0.0, 0.0]);
         scheduler.output().try_recycle(muted).unwrap();
         assert_eq!(scheduler.telemetry().active_generation, None);
+    }
+
+    #[test]
+    fn realtime_scheduler_records_deadline_lateness_without_affecting_processing() {
+        let scheduler = RealtimeScheduler::new(1, 1, 2).unwrap();
+        let generation = RuntimeGeneration::new(22);
+        scheduler.processor().publish(RuntimeGraph::prepare(
+            generation,
+            vec![ProcessingStage::Gain { linear: 2.0 }],
+        ));
+        scheduler
+            .submit_input(scheduler.acquire_input().unwrap())
+            .unwrap();
+        let deadline = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_millis(1))
+            .unwrap();
+        assert_eq!(
+            scheduler.process_once_with_deadline(deadline).unwrap(),
+            Some(generation)
+        );
+        let output = scheduler.receive_output_for_generation(generation).unwrap();
+        assert_eq!(output.channel(0).unwrap(), &[0.0, 0.0]);
+        scheduler.output().try_recycle(output).unwrap();
+        let telemetry = scheduler.telemetry();
+        assert_eq!(telemetry.processed_quanta, 1);
+        assert_eq!(telemetry.deadline_misses, 1);
+        assert!(telemetry.deadline_lateness_ns_total >= telemetry.deadline_lateness_ns_max);
+        assert!(telemetry.deadline_lateness_ns_max > 0);
     }
 
     #[test]
