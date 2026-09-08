@@ -968,3 +968,12 @@ requires the plan's session ID to match the candidate on both write and read.
 Negative persisted revisions are rejected as corrupt plans. Regressions cover
 invalid candidates and mismatched IDs; storage passes 58 tests and control
 passes 86 tests with strict Clippy.
+
+## Durable startup failure handling (2026-09-08)
+
+`ControlPlane::try_with_storage` now propagates persistence-read and
+validation failures during startup. The existing compatibility constructor
+explicitly fails closed on the same error rather than creating an apparently
+successful empty state, preserving STATE-02's corruption boundary. Focused
+storage/control suites pass (58/86) with strict Clippy; no audio or machine
+configuration was accessed.

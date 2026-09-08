@@ -93,6 +93,12 @@ graph-plan writes and hydration now require the plan session ID to match the
 candidate session, reject negative persisted revisions, and validate the
 hydrated candidate and document budget before exposing a plan.
 
+Completed safe control slice M01/STATE-02/SEC-12 durable-startup failure
+handling: storage-backed control initialization now has a fallible
+`try_with_storage` path and the compatibility constructor fails closed instead
+of silently replacing unreadable persisted sessions, plans, or privacy state
+with defaults.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

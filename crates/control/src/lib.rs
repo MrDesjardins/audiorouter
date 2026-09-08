@@ -1929,57 +1929,62 @@ impl ControlPlane {
         }
     }
 
-    pub fn with_storage(build: impl Into<String>, storage: Storage) -> Self {
+    pub fn try_with_storage(
+        build: impl Into<String>,
+        storage: Storage,
+    ) -> Result<Self, audiorouter_storage::StorageError> {
         // Fail closed if the durable latch cannot be read: a persistence
         // failure must never silently unmute a capture path.
-        let privacy_muted = storage.load_privacy_mute().unwrap_or(true);
-        let backend_epoch = storage.claim_backend_epoch().unwrap_or(1);
-        let virtual_buses = storage.load_virtual_buses().unwrap_or_default();
-        let persisted_sessions = storage.list_sessions(128).unwrap_or_default();
+        let privacy_muted = storage.load_privacy_mute()?;
+        let backend_epoch = storage.claim_backend_epoch()?;
+        let virtual_buses = storage.load_virtual_buses()?;
+        let persisted_sessions = storage.list_sessions(128)?;
         let mut store = GraphStore::default();
         for session in persisted_sessions {
-            let history = storage.load_history(&session.id, 100).unwrap_or_default();
+            let history = storage.load_history(&session.id, 100)?;
             if history.is_empty() {
-                let _ = store.insert_session(session);
+                store.insert_session(session).map_err(|error| {
+                    audiorouter_storage::StorageError::InvalidSession(format!("{error:?}"))
+                })?;
             } else {
-                let _ = store.restore_history(history);
+                store.restore_history(history).map_err(|error| {
+                    audiorouter_storage::StorageError::InvalidSession(format!("{error:?}"))
+                })?;
             }
         }
         let now = unix_epoch_seconds();
         let mut virtual_bus_plans = HashMap::new();
-        if let Ok(plans) = storage.load_virtual_device_plans() {
-            for (id, operation, expires_at) in plans {
-                let Some(remaining) = expires_at.checked_sub(now) else {
-                    continue;
-                };
-                let Ok(operation) = virtual_bus_operation_from_value(&operation) else {
-                    continue;
-                };
-                virtual_bus_plans.insert(
-                    id,
-                    VirtualBusPlan {
-                        operation,
-                        expires_at: Instant::now() + Duration::from_secs(remaining as u64),
-                    },
-                );
-            }
+        for (id, operation, expires_at) in storage.load_virtual_device_plans()? {
+            let Some(remaining) = expires_at.checked_sub(now) else {
+                continue;
+            };
+            let operation = virtual_bus_operation_from_value(&operation).map_err(|_| {
+                audiorouter_storage::StorageError::InvalidPlan(
+                    "invalid persisted virtual-device plan".into(),
+                )
+            })?;
+            virtual_bus_plans.insert(
+                id,
+                VirtualBusPlan {
+                    operation,
+                    expires_at: Instant::now() + Duration::from_secs(remaining as u64),
+                },
+            );
         }
         let mut startup_plans = HashMap::new();
-        if let Ok(plans) = storage.load_startup_plans() {
-            for (id, enabled, expires_at) in plans {
-                let Some(remaining) = expires_at.checked_sub(now) else {
-                    continue;
-                };
-                startup_plans.insert(
-                    id,
-                    (
-                        enabled,
-                        Instant::now() + Duration::from_secs(remaining as u64),
-                    ),
-                );
-            }
+        for (id, enabled, expires_at) in storage.load_startup_plans()? {
+            let Some(remaining) = expires_at.checked_sub(now) else {
+                continue;
+            };
+            startup_plans.insert(
+                id,
+                (
+                    enabled,
+                    Instant::now() + Duration::from_secs(remaining as u64),
+                ),
+            );
         }
-        Self {
+        Ok(Self {
             store,
             build: build.into(),
             runtimes: HashMap::new(),
@@ -2004,7 +2009,13 @@ impl ControlPlane {
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
-        }
+        })
+    }
+
+    pub fn with_storage(build: impl Into<String>, storage: Storage) -> Self {
+        Self::try_with_storage(build, storage).unwrap_or_else(|error| {
+            panic!("AudioRouter storage initialization failed closed: {error:?}")
+        })
     }
 
     fn scoped_idempotency_key(&self, method: &str, key: &str) -> String {
