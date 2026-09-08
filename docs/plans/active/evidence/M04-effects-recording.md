@@ -145,6 +145,15 @@ counts. A temporary-file regression verifies PCM24 metadata and rejects a
 truncated payload; missing-file, rename, user metadata, and recycle operations
 remain open.
 
+## Stereo processor failure containment (2026-09-07)
+
+The portable runtime now fails closed for stereo Parametric EQ, compressor,
+gate, delay, and graphic-EQ stages when the right-channel state is missing or
+cannot be acquired. It clears both channels rather than leaving the right side
+dry after processing the left. A regression covers the missing-right-state
+case; engine tests pass 64 cases with strict Clippy, formatting, and diff
+checks. Native callback scheduling and hardware timing remain open.
+
 ## 2026-09-07 — Delay graph integration
 
 The portable graph now also integrates `delay@1`, using a preallocated bounded

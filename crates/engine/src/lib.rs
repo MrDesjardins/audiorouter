@@ -2718,9 +2718,11 @@ impl RuntimeGraph {
                         if let Some(samples) = block.channel_mut(0) {
                             left.process_interleaved(samples);
                         }
-                        if let (Some(filter), Some(samples)) =
-                            (right.as_ref(), block.channel_mut(1))
-                        {
+                        let Some(filter) = right.as_ref() else {
+                            block.clear();
+                            continue;
+                        };
+                        if let Some(samples) = block.channel_mut(1) {
                             if let Ok(mut filter) = filter.try_lock() {
                                 filter.process_interleaved(samples);
                             } else {
@@ -2738,9 +2740,11 @@ impl RuntimeGraph {
                         left.process_interleaved(samples);
                     }
                     if block.channels() == 2 {
-                        if let (Some(processor), Some(samples)) =
-                            (right.as_ref(), block.channel_mut(1))
-                        {
+                        let Some(processor) = right.as_ref() else {
+                            block.clear();
+                            continue;
+                        };
+                        if let Some(samples) = block.channel_mut(1) {
                             if let Ok(mut processor) = processor.try_lock() {
                                 processor.process_interleaved(samples);
                             } else {
@@ -2758,9 +2762,11 @@ impl RuntimeGraph {
                         left.process_interleaved(samples);
                     }
                     if block.channels() == 2 {
-                        if let (Some(processor), Some(samples)) =
-                            (right.as_ref(), block.channel_mut(1))
-                        {
+                        let Some(processor) = right.as_ref() else {
+                            block.clear();
+                            continue;
+                        };
+                        if let Some(samples) = block.channel_mut(1) {
                             if let Ok(mut processor) = processor.try_lock() {
                                 processor.process_interleaved(samples);
                             } else {
@@ -2785,8 +2791,11 @@ impl RuntimeGraph {
                         left.process_interleaved(samples);
                     }
                     if block.channels() == 2 {
-                        if let (Some(delay), Some(samples)) = (right.as_ref(), block.channel_mut(1))
-                        {
+                        let Some(delay) = right.as_ref() else {
+                            block.clear();
+                            continue;
+                        };
+                        if let Some(samples) = block.channel_mut(1) {
                             if let Ok(mut delay) = delay.try_lock() {
                                 delay.process_interleaved(samples);
                             } else {
@@ -2804,9 +2813,11 @@ impl RuntimeGraph {
                         left.process_interleaved(samples);
                     }
                     if block.channels() == 2 {
-                        if let (Some(processor), Some(samples)) =
-                            (right.as_ref(), block.channel_mut(1))
-                        {
+                        let Some(processor) = right.as_ref() else {
+                            block.clear();
+                            continue;
+                        };
+                        if let Some(samples) = block.channel_mut(1) {
                             if let Ok(mut processor) = processor.try_lock() {
                                 processor.process_interleaved(samples);
                             } else {
@@ -3826,6 +3837,36 @@ mod tests {
             .unwrap()
             .iter()
             .all(|sample| sample.abs() < 1.0));
+    }
+
+    #[test]
+    fn stereo_stateful_stage_silences_when_right_state_is_missing() {
+        let processor = audiorouter_dsp::Compressor::new(
+            audiorouter_dsp::CompressorParams {
+                threshold_db: -18.0,
+                ratio: 3.0,
+                attack_ms: 10.0,
+                release_ms: 150.0,
+                knee_db: 0.0,
+                makeup_db: 0.0,
+                sample_rate: 48_000.0,
+            },
+            1,
+        )
+        .unwrap();
+        let graph = RuntimeGraph::prepare(
+            RuntimeGeneration::new(14),
+            vec![ProcessingStage::Compressor {
+                left: Box::new(std::sync::Mutex::new(processor)),
+                right: None,
+            }],
+        );
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.5);
+        block.channel_mut(1).unwrap().fill(-0.5);
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.0; 128]);
+        assert_eq!(block.channel(1).unwrap(), &[0.0; 128]);
     }
 
     #[test]
