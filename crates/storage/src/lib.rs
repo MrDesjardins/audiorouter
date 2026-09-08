@@ -1084,15 +1084,17 @@ impl Storage {
 
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
         let document = Self::serialize_validated_session(session)?;
+        let revision = i64::try_from(session.revision)
+            .map_err(|_| StorageError::InvalidSession("session revision is too large".into()))?;
         let transaction = self.connection.unchecked_transaction()?;
         transaction.execute(
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
-            params![session.id.as_str(), session.revision as i64, &document],
+            params![session.id.as_str(), revision, &document],
         )?;
         transaction.execute(
             "INSERT INTO sessions(id, revision, document) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
-            params![session.id.as_str(), session.revision as i64, &document],
+            params![session.id.as_str(), revision, &document],
         )?;
         transaction.commit()?;
         Ok(())
@@ -1520,6 +1522,13 @@ impl Storage {
                 "session history limit must be between 1 and 101".into(),
             ));
         }
+        let before_revision = before_revision
+            .map(|revision| {
+                i64::try_from(revision).map_err(|_| {
+                    StorageError::InvalidSession("session revision cursor is too large".into())
+                })
+            })
+            .transpose()?;
         let mut statement = if before_revision.is_some() {
             self.connection.prepare(
                 "SELECT session_id, document FROM session_history WHERE session_id = ?1 AND revision < ?2
@@ -1533,10 +1542,9 @@ impl Storage {
         };
         let documents: Vec<(String, String)> = if let Some(before_revision) = before_revision {
             statement
-                .query_map(
-                    params![id.as_str(), before_revision as i64, limit as i64],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
-                )?
+                .query_map(params![id.as_str(), before_revision, limit as i64], |row| {
+                    Ok((row.get(0)?, row.get(1)?))
+                })?
                 .collect::<Result<_, _>>()?
         } else {
             statement
@@ -2128,6 +2136,8 @@ impl Storage {
     pub fn save_graph_plan(&self, plan: &GraphPlanRecord) -> Result<(), StorageError> {
         validate_plan_id(&plan.id)?;
         validate_plan_id(&plan.session_id)?;
+        let base_revision = i64::try_from(plan.base_revision)
+            .map_err(|_| StorageError::InvalidPlan("graph plan revision is too large".into()))?;
         let candidate = Self::serialize_validated_session(&plan.candidate)?;
         if plan.candidate.id.as_str() != plan.session_id {
             return Err(StorageError::InvalidPlan(
@@ -2140,7 +2150,7 @@ impl Storage {
             params![
                 plan.id,
                 plan.session_id,
-                plan.base_revision as i64,
+                base_revision,
                 candidate,
                 plan.expires_at
             ],
@@ -2380,7 +2390,9 @@ impl Storage {
         failure: Option<JournalFailureStage>,
     ) -> Result<(), StorageError> {
         validate_idempotency_key(key)?;
-        validate_journal_fields(operation, result, session.revision as i64)?;
+        let revision = i64::try_from(session.revision)
+            .map_err(|_| StorageError::InvalidSession("session revision is too large".into()))?;
+        validate_journal_fields(operation, result, revision)?;
         let document = Self::serialize_validated_session(session)?;
         self.prune_expired_journal()?;
         let transaction = self.connection.unchecked_transaction()?;
@@ -2391,7 +2403,7 @@ impl Storage {
         }
         transaction.execute(
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
-            params![session.id.as_str(), session.revision as i64, &document],
+            params![session.id.as_str(), revision, &document],
         )?;
         if failure == Some(JournalFailureStage::AfterHistory) {
             return Err(StorageError::InvalidSession(
@@ -2401,7 +2413,7 @@ impl Storage {
         transaction.execute(
             "INSERT INTO sessions(id, revision, document) VALUES (?1, ?2, ?3)
              ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
-            params![session.id.as_str(), session.revision as i64, &document],
+            params![session.id.as_str(), revision, &document],
         )?;
         if failure == Some(JournalFailureStage::AfterCurrent) {
             return Err(StorageError::InvalidSession(
@@ -2410,7 +2422,7 @@ impl Storage {
         }
         transaction.execute(
             "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![key, operation, result, session.revision as i64, request_hash],
+            params![key, operation, result, revision, request_hash],
         )?;
         if failure == Some(JournalFailureStage::AfterJournal) {
             return Err(StorageError::InvalidSession(
@@ -2573,6 +2585,37 @@ mod tests {
         assert!(matches!(
             storage.list_sessions_after(Some(invalid.as_str()), 1),
             Err(StorageError::InvalidSession(_))
+        ));
+    }
+
+    #[test]
+    fn revision_values_that_do_not_fit_sqlite_are_rejected() {
+        let storage = Storage::open_memory().unwrap();
+        let mut oversized_session = session();
+        oversized_session.revision = u64::MAX;
+        assert!(matches!(
+            storage.save_session(&oversized_session),
+            Err(StorageError::InvalidSession(message))
+                if message.contains("revision is too large")
+        ));
+
+        let candidate = session();
+        assert!(matches!(
+            storage.save_graph_plan(&GraphPlanRecord {
+                id: "oversized-revision-plan".into(),
+                session_id: candidate.id.as_str().into(),
+                base_revision: u64::MAX,
+                candidate,
+                expires_at: i64::MAX,
+            }),
+            Err(StorageError::InvalidPlan(message))
+                if message.contains("revision is too large")
+        ));
+
+        assert!(matches!(
+            storage.load_history_before(&session().id, Some(u64::MAX), 1),
+            Err(StorageError::InvalidSession(message))
+                if message.contains("revision cursor is too large")
         ));
     }
 

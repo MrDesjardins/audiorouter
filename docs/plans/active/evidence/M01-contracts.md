@@ -644,3 +644,11 @@ one-entry bounds for required scopes and warnings that their current response
 builders produce. Shared constants and control discovery assertions keep these
 contracts synchronized without imposing a limit on the intentionally unbounded
 client enrollment list.
+## SQLite revision-boundary validation (2026-09-08)
+
+Storage now uses checked conversion for session revisions, graph-plan base
+revisions, and history cursors before passing values to SQLite, preventing
+`u64` values above `i64::MAX` from wrapping and changing ordering or durable
+state. A regression covers session save, graph-plan save, and history lookup;
+storage (63) and control (87) tests plus strict Clippy, formatting, and diff
+checks passed. No audio or machine configuration was accessed.

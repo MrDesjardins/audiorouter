@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `b043c5e`, with the latest
+The latest validated implementation head is `272c4bd`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -137,6 +137,13 @@ read values and values outside SQLite's signed range on writes, preventing
 unchecked signed-to-unsigned wrapping. Recording/storage/control tests
 (10/62/87), strict Clippy, formatting, and diff checks pass; no recording file
 or audio/machine configuration was accessed.
+
+Completed safe storage slice M01/SEC-12 SQLite revision-boundary validation:
+session revisions, graph-plan base revisions, and history cursors now reject
+`u64` values that cannot be represented by SQLite's signed integer type before
+query or mutation. A boundary regression covers all three paths; storage
+(63), control (87), strict Clippy, formatting, and diff checks pass. No audio
+or machine configuration was accessed.
 
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
