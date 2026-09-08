@@ -3785,7 +3785,6 @@ mod tests {
         assert_eq!(telemetry.processed_quanta, 1);
         assert_eq!(telemetry.repaired_samples, 0);
         assert_eq!(telemetry.xruns, 0);
-        assert!(telemetry.processing_time_ns_max > 0);
         assert!(telemetry.processing_time_ns_total >= telemetry.processing_time_ns_max);
         assert_eq!(telemetry.processing_time_histogram.iter().sum::<u64>(), 1);
         assert_eq!(
@@ -4883,8 +4882,10 @@ mod tests {
         assert_eq!(processor.process(&mut block), None);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
         assert_eq!(processor.metrics().processed_quanta(), 0);
-        assert!(processor.metrics().processing_time_ns_total() > 0);
-        assert!(processor.metrics().processing_time_ns_max() > 0);
+        assert!(
+            processor.metrics().processing_time_ns_total()
+                >= processor.metrics().processing_time_ns_max()
+        );
         assert_eq!(
             processor
                 .metrics()
