@@ -1029,7 +1029,7 @@ fn method_output_schema(name: &str) -> Value {
                         "type": "object",
                         "properties": {
                             "items": { "type": "array", "maxItems": MAX_DEVICE_LIST_ITEMS, "items": item },
-                            "nextCursor": { "type": ["string", "null"] }
+                                "nextCursor": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
                         },
                         "required": ["items", "nextCursor"],
                         "additionalProperties": false
@@ -6689,6 +6689,16 @@ mod tests {
                 "{method_name} output planId bound"
             );
         }
+        let events = methods
+            .iter()
+            .find(|method| method["name"] == "events.subscribe")
+            .unwrap();
+        assert_eq!(
+            events["outputSchema"]["properties"]["snapshot"]["properties"]["sessions"]
+                ["properties"]["nextCursor"]["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES,
+            "events snapshot session cursor bound"
+        );
         assert_eq!(commit["outputSchema"]["type"], "object");
         let devices = methods
             .iter()

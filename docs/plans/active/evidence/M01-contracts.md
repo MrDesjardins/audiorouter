@@ -250,6 +250,14 @@ unit/integration targets, including the durable startup-plan coverage. Strict
 Clippy, formatting, and diff checks passed; no audio endpoint, driver, or
 machine configuration was accessed.
 
+## Nested event-snapshot cursor alignment (2026-09-08)
+
+The `events.subscribe` resynchronization snapshot now bounds its nested
+session-list cursor to the same 128-byte entity limit as the ordinary session
+list. Discovery regression coverage checks this nested field. Control/storage
+tests (86/52), strict Clippy, formatting, diff validation, and documentation
+validation pass; no audio or machine configuration was accessed.
+
 Startup plan metadata is now persisted in SQLite and reloaded by a new control
 plane instance, closing the restart gap for durable backends. The restart
 regression passes; the standalone storage test executable is blocked before
