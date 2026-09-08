@@ -1,5 +1,15 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Capture fallback HRESULT regression
+
+The Windows-audio unit suite now directly verifies that capture initialization
+fallback is limited to exact Win32 `E_INVALIDARG` (`0x80070057`). The predicate
+does not retry `AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`) or access denied
+(`0x80070005`), preserving those as distinct failures. The 30-test
+`audiorouter-windows-audio` suite, formatting, and strict Clippy pass. This is
+an offline error-classification test; it opens no stream and changes no audio
+configuration.
+
 ## 2026-09-08 - Digital impulse loopback correlation
 
 The guarded `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 1000` run

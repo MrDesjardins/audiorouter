@@ -2386,6 +2386,26 @@ mod tests {
     }
 
     #[test]
+    fn capture_initialization_fallback_is_limited_to_exact_e_invalidarg() {
+        let invalid_argument = windows::core::Error::new(
+            windows::core::HRESULT(0x80070057_u32 as i32),
+            "invalid argument",
+        );
+        let device_in_use = windows::core::Error::new(
+            windows::core::HRESULT(0x8889000A_u32 as i32),
+            "device in use",
+        );
+        let access_denied = windows::core::Error::new(
+            windows::core::HRESULT(0x80070005_u32 as i32),
+            "access denied",
+        );
+
+        assert!(should_retry_capture_initialization(&invalid_argument));
+        assert!(!should_retry_capture_initialization(&device_in_use));
+        assert!(!should_retry_capture_initialization(&access_denied));
+    }
+
+    #[test]
     fn process_loopback_rejects_zero_target_before_com_activation() {
         for mode in [
             ProcessLoopbackMode::IncludeTargetTree,

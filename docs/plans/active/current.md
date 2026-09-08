@@ -46,6 +46,14 @@ including native read-only inventory and disposable SysVAD qualification. Its
 temporary outputs were removed and it did not install/load a driver or alter
 machine audio configuration.
 
+## Capture retry classification regression (2026-09-08)
+
+Added a Windows-audio regression proving the capture fallback retries only
+exact `E_INVALIDARG` (`0x80070057`). `AUDCLNT_E_DEVICE_IN_USE` and access
+denied remain non-fallback errors, so an occupied endpoint cannot be silently
+reclassified as a format/event-mode incompatibility. The 30-test Windows-audio
+suite and strict Clippy pass; this test opens no audio stream.
+
 ## Current handoff correction (2026-09-08)
 
 The older historical notes below that describe missing Visual Studio/WDK or
