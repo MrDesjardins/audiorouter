@@ -642,3 +642,15 @@ wrapper verified unchanged media-device identity/state and exact temporary
 cleanup. It changed no defaults, volume, mute, privacy, driver, signing,
 startup, or other machine audio configuration. This qualifies digital signal
 propagation only; physical acoustic latency remains unqualified.
+## Bounded live endpoint lifecycle (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 250`.
+
+The authorized native check passed for 13 shared capture endpoints and 21
+render endpoints. It opened each client only for the bounded test duration,
+used silent render buffers, and stopped/resets clients during cleanup; one
+already-occupied render endpoint was recognized and handled. The acceptance
+script reported that defaults, volume, mute, privacy, drivers, signing, and
+startup configuration were unchanged. This is lifecycle evidence, not physical
+latency, process attribution, or production-driver evidence.
