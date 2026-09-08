@@ -414,3 +414,13 @@ bounded chunk admission, M05 UI, M06 SDK/worker checks, M07 headless checks,
 unsigned M08 artifacts, and documentation all passed. Temporary outputs were
 removed, and live audio, driver installation, signing-mode changes,
 plugin/startup registration, and machine audio configuration remained excluded.
+
+## Current pushed-head aggregate requalification (2026-09-07)
+
+The elevated sequential `tests/acceptance/safe-all.ps1` runner passed again at
+the current pushed head. Native compile and read-only 34-endpoint format
+inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/M06/M07,
+unsigned M08 artifact preparation/verification, and documentation all passed.
+Temporary outputs and the disposable SysVAD checkout were removed. No driver
+was installed or loaded; signing-mode changes, plugin/startup registration,
+and machine audio configuration remained excluded.
