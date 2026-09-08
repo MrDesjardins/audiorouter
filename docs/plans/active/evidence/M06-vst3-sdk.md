@@ -996,3 +996,12 @@ not contain additional `.vst3` bundles. Only the repository-local mda fixture
 is available for the current offline probe, so the required three-effect,
 two-vendor M06 matrix remains open. No plugin was downloaded, installed,
 registered, loaded, or executed during this inventory.
+
+## Plugin-state inventory hardening (2026-09-08)
+
+SQLite plugin-state listing now reads at most 501 rows, validates every
+returned record, and fails explicitly when more than the shared 500-item
+inventory bound exists. A 501-state regression passed with 69 storage tests,
+87 control tests, strict Clippy, and formatting. This changes metadata
+handling only; no plugin was executed and no audio or machine configuration
+was accessed.

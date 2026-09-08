@@ -46,6 +46,14 @@ acceptance requirement for three compatible x64 effects from at least two
 vendors therefore remains unverified. No plugin was downloaded, installed,
 registered, loaded, or executed; no compatibility claim was synthesized.
 
+## M06 plugin-state inventory hardening (2026-09-08)
+
+The SQLite plugin-state listing boundary now probes one row beyond its shared
+500-item limit and rejects an oversized result explicitly, preventing an
+unbounded legacy read while preserving per-state validation. Storage (69) and
+control (87) tests, strict package Clippy, formatting, and diff checks passed.
+No plugin was executed and no audio or machine configuration was accessed.
+
 ## Current actionable handoff (2026-09-08)
 
 The latest validated implementation head is `b120b87`, with the latest

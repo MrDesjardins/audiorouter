@@ -53,6 +53,7 @@ pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
 pub const MAX_RECORDING_LIST_ITEMS: usize = 500;
+pub const MAX_PLUGIN_STATE_LIST_ITEMS: usize = 500;
 pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
 pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
@@ -1533,21 +1534,30 @@ impl Storage {
             "SELECT id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes
              FROM plugin_states
              WHERE (?1 IS NULL OR plugin_id = ?1)
-             ORDER BY id ASC",
+             ORDER BY id ASC
+             LIMIT ?2",
         )?;
         let records = statement
-            .query_map(params![plugin_id], |row| {
-                Ok(PluginStateRecord {
-                    id: row.get(0)?,
-                    plugin_id: row.get(1)?,
-                    plugin_sha256: row.get(2)?,
-                    version: row_u32(row, 3)?,
-                    path: row.get(4)?,
-                    state_sha256: row.get(5)?,
-                    size_bytes: row_u64(row, 6)?,
-                })
-            })?
+            .query_map(
+                params![plugin_id, (MAX_PLUGIN_STATE_LIST_ITEMS + 1) as i64],
+                |row| {
+                    Ok(PluginStateRecord {
+                        id: row.get(0)?,
+                        plugin_id: row.get(1)?,
+                        plugin_sha256: row.get(2)?,
+                        version: row_u32(row, 3)?,
+                        path: row.get(4)?,
+                        state_sha256: row.get(5)?,
+                        size_bytes: row_u64(row, 6)?,
+                    })
+                },
+            )?
             .collect::<Result<Vec<_>, _>>()?;
+        if records.len() > MAX_PLUGIN_STATE_LIST_ITEMS {
+            return Err(StorageError::InvalidPluginState(
+                "plugin state list exceeds 500 items; use bounded state inventory".into(),
+            ));
+        }
         for record in &records {
             validate_plugin_state_record(record)?;
         }
@@ -4482,6 +4492,30 @@ mod tests {
             storage.list_plugin_states(None),
             Err(StorageError::InvalidPluginState(_))
         ));
+    }
+
+    #[test]
+    fn plugin_state_list_rejects_an_unbounded_result() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..=MAX_PLUGIN_STATE_LIST_ITEMS {
+            storage
+                .save_plugin_state(&PluginStateRecord {
+                    id: format!("state-{index:03}"),
+                    plugin_id: "plugin-1".into(),
+                    plugin_sha256: "a".repeat(64),
+                    version: 1,
+                    path: format!("C:\\AudioRouter\\state\\state-{index:03}.bin"),
+                    state_sha256: "b".repeat(64),
+                    size_bytes: 1,
+                })
+                .unwrap();
+        }
+        assert!(matches!(
+            storage.list_plugin_states(None),
+            Err(StorageError::InvalidPluginState(message))
+                if message.contains("exceeds 500")
+        ));
+        assert!(storage.list_plugin_states(Some("plugin-1")).is_err());
     }
 
     #[test]
