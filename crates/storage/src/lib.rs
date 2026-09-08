@@ -326,6 +326,30 @@ fn recording_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordingReco
     })
 }
 
+fn validate_recording_record(recording: &RecordingRecord) -> Result<(), StorageError> {
+    if recording.id.is_empty()
+        || recording.session_id.is_empty()
+        || recording.recorder_id.is_empty()
+        || recording.path.is_empty()
+        || recording.format.is_empty()
+        || recording.start_time.is_empty()
+        || recording.state.is_empty()
+        || !matches!(recording.channels, 1 | 2)
+        || !matches!(recording.sample_rate, 44_100 | 48_000)
+        || recording.id.len() > MAX_RECORDING_ID_BYTES
+        || recording.session_id.len() > MAX_RECORDING_ID_BYTES
+        || recording.recorder_id.len() > MAX_RECORDING_ID_BYTES
+        || !valid_recording_metadata(recording.title.as_deref())
+        || !valid_recording_metadata(recording.artist.as_deref())
+        || !valid_recording_metadata(recording.comment.as_deref())
+    {
+        return Err(StorageError::InvalidRecording(
+            "invalid recording fields".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct GraphPlanRecord {
     pub id: String,
@@ -1026,26 +1050,7 @@ impl Storage {
     }
 
     pub fn save_recording(&self, recording: &RecordingRecord) -> Result<(), StorageError> {
-        if recording.id.is_empty()
-            || recording.session_id.is_empty()
-            || recording.recorder_id.is_empty()
-            || recording.path.is_empty()
-            || recording.format.is_empty()
-            || recording.start_time.is_empty()
-            || recording.state.is_empty()
-            || !matches!(recording.channels, 1 | 2)
-            || !matches!(recording.sample_rate, 44_100 | 48_000)
-            || recording.id.len() > MAX_RECORDING_ID_BYTES
-            || recording.session_id.len() > MAX_RECORDING_ID_BYTES
-            || recording.recorder_id.len() > MAX_RECORDING_ID_BYTES
-            || !valid_recording_metadata(recording.title.as_deref())
-            || !valid_recording_metadata(recording.artist.as_deref())
-            || !valid_recording_metadata(recording.comment.as_deref())
-        {
-            return Err(StorageError::InvalidRecording(
-                "invalid recording fields".into(),
-            ));
-        }
+        validate_recording_record(recording)?;
         self.connection.execute(
             "INSERT INTO recordings
              (id, session_id, recorder_id, path, format, channels, sample_rate, frames,
@@ -1153,6 +1158,9 @@ impl Storage {
         let records = statement
             .query_map(params![session_id], recording_from_row)?
             .collect::<Result<Vec<_>, _>>()?;
+        for record in &records {
+            validate_recording_record(record)?;
+        }
         Ok(records)
     }
 
@@ -1224,6 +1232,9 @@ impl Storage {
                 .collect::<Result<Vec<_>, _>>()?
         };
         let has_more = records.len() > limit;
+        for record in &records {
+            validate_recording_record(record)?;
+        }
         records.truncate(limit);
         Ok((records, has_more))
     }
@@ -3906,6 +3917,35 @@ mod tests {
         assert!(matches!(
             storage.save_recording(&recording),
             Err(StorageError::InvalidRecording(message)) if message.contains("invalid recording fields")
+        ));
+    }
+
+    #[test]
+    fn recording_reads_reject_corrupt_rows() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute_batch("PRAGMA ignore_check_constraints = ON;")
+            .unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO recordings
+                 (id, session_id, recorder_id, path, format, channels, sample_rate,
+                  frames, file_bytes, start_time, state, missing, title, artist, comment)
+                 VALUES (?1, 'session', 'recorder', 'C:\\recordings\\bad.wav',
+                         'wav', 1, 48000, 0, 0, '2026-09-08T00:00:00Z',
+                         'completed', 0, NULL, NULL, NULL)",
+                [&"r".repeat(MAX_RECORDING_ID_BYTES + 1)],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.list_recordings(None),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.list_recordings_page(None, None, 1),
+            Err(StorageError::InvalidRecording(_))
         ));
     }
 

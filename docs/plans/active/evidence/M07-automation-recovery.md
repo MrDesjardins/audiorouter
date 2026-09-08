@@ -740,6 +740,14 @@ frame. Plugin-host tests and strict Clippy pass, and the complete M07 headless
 acceptance also passes with the MCP/worker lanes. No audio or machine
 configuration was accessed.
 
+## Recording read-boundary validation (2026-09-08)
+
+Recording list and paged-list reads now validate hydrated rows with the same
+identity, format, channel/rate, and metadata contract used on writes. A
+test-only corrupt row is rejected by both read surfaces; storage passes 59
+tests and control passes 87 tests with strict Clippy. No recording file or
+audio configuration was accessed.
+
 ## Startup session-page completeness (2026-09-08)
 
 Storage-backed control startup now walks the full bounded session inventory in

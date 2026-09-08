@@ -98,6 +98,11 @@ session lookup, history, and paged-list reads now verify the persisted SQLite
 row key matches the deserialized session ID, preventing identity substitution
 through a relocated or corrupted row.
 
+Completed safe storage slice M04/REC-04/SEC-12 recording read-boundary
+validation: recording list and paged-list hydration now reapply the shared
+identity, format, channel/rate, and metadata checks used by writes, rejecting
+corrupt persisted rows before they reach control or UI consumers.
+
 Completed safe control slice M01/STATE-02/SEC-12 durable-startup failure
 handling: storage-backed control initialization now has a fallible
 `try_with_storage` path and the compatibility constructor fails closed instead
