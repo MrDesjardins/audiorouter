@@ -42,6 +42,16 @@ directory. Neither check opens an audio stream or installs a driver.
 The contracts checks verify TypeScript type safety and catalog parity; they use
 only the local CLI schema and do not access audio or machine configuration.
 
+To run the complete non-live acceptance chain in milestone order, use:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\safe-all.ps1
+```
+
+This includes native compile and read-only format checks, disposable SysVAD
+reference qualification, M01/M04/M05/M06/M07/M08 acceptance, and documentation
+validation. It deliberately excludes all live-audio wrappers.
+
 For an explicitly authorized native adapter smoke on a Windows host, use:
 
 ```powershell
