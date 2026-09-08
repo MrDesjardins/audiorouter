@@ -323,6 +323,13 @@ encode and decode validation, preventing an untrusted worker from turning an
 error report into a large retained diagnostic. The focused protocol regression
 and workspace validation remain required evidence for this boundary.
 
+The feature-gated worker fixture now provides deterministic `crash`, `hang`,
+and `invalid-output` modes. Twelve process tests pass with the feature enabled:
+crash reaping, bounded hang kill, malformed-output rejection, normal IPC, and
+supervisor recovery are all exercised. This closes the controlled failure
+fixture portion of M06 evidence; it does not claim third-party plugin loading
+or full OS filesystem/network sandboxing.
+
 Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
 interoperability tests, 87 control tests, 39 plugin-host tests, and 8
 worker-process tests passed with doc-tests and strict Clippy. Durable plans,

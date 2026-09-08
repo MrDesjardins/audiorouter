@@ -837,6 +837,15 @@ serialization and after decoding. Empty or oversized codes are rejected as
 `InvalidFailureCode`, keeping failure diagnostics bounded independently of the
 larger worker message envelope.
 
+## Controlled worker failure fixtures (2026-09-08)
+
+The opt-in `test-fixtures` feature adds deterministic worker modes for a
+post-handshake crash, a nonresponsive hang, and malformed processed output.
+The process suite passed 12 tests with the feature enabled: the crash was
+reaped, the hang was killed by bounded shutdown, and malformed output was
+rejected at the reader boundary. The normal build does not enable these modes;
+no third-party plugin code or audio device was involved.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and

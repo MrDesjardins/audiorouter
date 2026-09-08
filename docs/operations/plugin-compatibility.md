@@ -55,6 +55,12 @@ according to the normal failure policy.
 Worker failure codes are limited to 128 bytes; empty or oversized codes are
 rejected before they can enter the process boundary or diagnostic state.
 
+The opt-in `test-fixtures` Cargo feature adds deterministic worker modes for
+crash, hang, and malformed output. The process tests prove bounded reaping,
+timeout kill, and reader-side rejection. These modes are test fixtures only;
+they are excluded from ordinary builds and do not represent third-party VST3
+execution or full OS filesystem/network sandboxing.
+
 ## Reporting a plugin result
 
 Record the plugin format, architecture, vendor, class identity, exact host

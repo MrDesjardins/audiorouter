@@ -2,11 +2,15 @@ use audiorouter_plugin_host::{
     read_worker_message, worker_clock_tick, write_worker_message, SharedAudioLayout,
     SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
 };
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
+#[cfg(feature = "test-fixtures")]
+use std::thread;
+#[cfg(feature = "test-fixtures")]
+use std::time::Duration;
 
-type WorkerArguments = (String, u16, Option<(PathBuf, PathBuf)>);
+type WorkerArguments = (String, u16, Option<(PathBuf, PathBuf)>, Option<String>);
 
 fn main() -> ExitCode {
     match run() {
@@ -19,7 +23,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let (plugin_sha256, channels, shared_paths) = parse_arguments()?;
+    let (plugin_sha256, channels, shared_paths, fixture_mode) = parse_arguments()?;
     let mut session = WorkerSession::new(&plugin_sha256, channels)
         .map_err(|error| format!("invalid worker configuration: {error:?}"))?;
     let mut shared = shared_paths
@@ -57,6 +61,18 @@ fn run() -> Result<(), String> {
     session
         .accept(&ready, 0)
         .map_err(|error| format!("ready rejected: {error:?}"))?;
+
+    #[cfg(feature = "test-fixtures")]
+    if fixture_mode.as_deref() == Some("crash") {
+        return Err("controlled fixture crash".into());
+    }
+
+    #[cfg(feature = "test-fixtures")]
+    if fixture_mode.as_deref() == Some("hang") {
+        loop {
+            thread::sleep(Duration::from_secs(60));
+        }
+    }
 
     loop {
         let message = read_worker_message(&mut reader)
@@ -121,6 +137,16 @@ fn run() -> Result<(), String> {
                 // Echoing validated samples makes the process boundary testable
                 // without executing untrusted plugin code.
                 let _ = parameters;
+                #[cfg(feature = "test-fixtures")]
+                if fixture_mode.as_deref() == Some("invalid-output") {
+                    let payload = br#"{"Processed":{"frame":{"sequence":1,"deadline_tick":1,"channels":1,"samples":[null]}}}"#;
+                    writer
+                        .write_all(&(payload.len() as u32).to_le_bytes())
+                        .and_then(|_| writer.write_all(payload))
+                        .and_then(|_| writer.flush())
+                        .map_err(|error| format!("invalid fixture write failed: {error}"))?;
+                    return Err("controlled fixture invalid output".into());
+                }
                 write_worker_message(&mut writer, &WorkerMessage::Processed { frame })
                     .map_err(|error| format!("processed write failed: {error:?}"))?;
             }
@@ -149,6 +175,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut channels = None;
     let mut input_path = None;
     let mut output_path = None;
+    let mut fixture_mode = None;
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "--plugin-sha256" => hash = arguments.next(),
@@ -163,6 +190,20 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             }
             "--input-path" => input_path = arguments.next().map(PathBuf::from),
             "--output-path" => output_path = arguments.next().map(PathBuf::from),
+            "--fixture-mode" => {
+                #[cfg(feature = "test-fixtures")]
+                {
+                    let mode = arguments
+                        .next()
+                        .ok_or_else(|| "--fixture-mode requires a value".to_string())?;
+                    if !matches!(mode.as_str(), "crash" | "hang" | "invalid-output") {
+                        return Err("unsupported --fixture-mode".into());
+                    }
+                    fixture_mode = Some(mode);
+                }
+                #[cfg(not(feature = "test-fixtures"))]
+                return Err("--fixture-mode is unavailable in this build".into());
+            }
             _ => return Err(format!("unknown argument: {argument}")),
         }
     }
@@ -175,8 +216,8 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
         return Err("--channels must be 1 or 2".into());
     }
     match (input_path, output_path) {
-        (Some(input), Some(output)) => Ok((hash, channels, Some((input, output)))),
-        (None, None) => Ok((hash, channels, None)),
+        (Some(input), Some(output)) => Ok((hash, channels, Some((input, output)), fixture_mode)),
+        (None, None) => Ok((hash, channels, None, fixture_mode)),
         _ => Err("--input-path and --output-path must be supplied together".into()),
     }
 }

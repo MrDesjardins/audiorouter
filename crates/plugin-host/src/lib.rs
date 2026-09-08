@@ -1808,7 +1808,22 @@ impl WorkerProcess {
         plugin_sha256: &str,
         channels: u16,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_inner(executable, plugin_sha256, channels, None)
+        Self::spawn_inner(executable, plugin_sha256, channels, None, None)
+    }
+
+    #[cfg(feature = "test-fixtures")]
+    pub fn spawn_fixture(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        mode: &str,
+    ) -> Result<Self, WorkerProcessError> {
+        if !matches!(mode, "crash" | "hang" | "invalid-output") {
+            return Err(WorkerProcessError::Protocol(
+                "invalid worker fixture mode".into(),
+            ));
+        }
+        Self::spawn_inner(executable, plugin_sha256, channels, None, Some(mode))
     }
 
     pub fn spawn_shared(
@@ -1817,7 +1832,7 @@ impl WorkerProcess {
         channels: u16,
         transport: SharedAudioTransport,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_inner(executable, plugin_sha256, channels, Some(transport))
+        Self::spawn_inner(executable, plugin_sha256, channels, Some(transport), None)
     }
 
     fn spawn_inner(
@@ -1825,6 +1840,7 @@ impl WorkerProcess {
         plugin_sha256: &str,
         channels: u16,
         mut shared: Option<SharedAudioTransport>,
+        fixture_mode: Option<&str>,
     ) -> Result<Self, WorkerProcessError> {
         let executable =
             validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
@@ -1845,6 +1861,9 @@ impl WorkerProcess {
             "--channels",
             &channels.to_string(),
         ]);
+        if let Some(mode) = fixture_mode {
+            command.args(["--fixture-mode", mode]);
+        }
         if let Some(transport) = shared.as_ref() {
             command.args([
                 "--input-path",

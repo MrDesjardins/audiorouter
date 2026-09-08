@@ -4,7 +4,25 @@ use audiorouter_plugin_host::{
     WorkerLatency, WorkerMessage, WorkerProcess,
 };
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+#[cfg(feature = "test-fixtures")]
+fn fixture_worker_path() -> String {
+    std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+        let test_exe = std::env::current_exe().expect("integration test path");
+        test_exe
+            .parent()
+            .and_then(|deps| deps.parent())
+            .expect("Cargo target directory")
+            .join(if cfg!(windows) {
+                "audiorouter-plugin-worker.exe"
+            } else {
+                "audiorouter-plugin-worker"
+            })
+            .to_string_lossy()
+            .into_owned()
+    })
+}
 
 #[test]
 fn disposable_worker_process_round_trips_control_and_audio_frames() {
@@ -440,4 +458,40 @@ fn disposable_worker_rejects_expired_deadline_frames() {
         audiorouter_plugin_host::WorkerProcessError::Protocol(code)
             if code.contains("DeadlineExpired")
     ));
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn controlled_worker_crash_is_reaped_without_host_panic() {
+    let worker = WorkerProcess::spawn_fixture(fixture_worker_path(), &"2".repeat(64), 1, "crash")
+        .expect("spawn crash fixture");
+    std::thread::sleep(Duration::from_millis(20));
+    let status = worker.shutdown().expect("reap crashed fixture");
+    assert!(!status.success());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn controlled_worker_hang_is_killed_by_bounded_shutdown() {
+    let worker = WorkerProcess::spawn_fixture(fixture_worker_path(), &"3".repeat(64), 1, "hang")
+        .expect("spawn hang fixture");
+    assert!(matches!(
+        worker.shutdown_with_timeout(Duration::from_millis(20)),
+        Err(audiorouter_plugin_host::WorkerProcessError::Timeout)
+    ));
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn controlled_worker_invalid_output_is_rejected_at_reader_boundary() {
+    let mut worker =
+        WorkerProcess::spawn_fixture(fixture_worker_path(), &"4".repeat(64), 1, "invalid-output")
+            .expect("spawn invalid-output fixture");
+    let frame =
+        WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 1, vec![0.25]).unwrap();
+    assert!(matches!(
+        worker.process(frame, Vec::new()),
+        Err(audiorouter_plugin_host::WorkerProcessError::Message(_))
+    ));
+    let _ = worker.shutdown();
 }
