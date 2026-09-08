@@ -673,6 +673,14 @@ include delivered 10,584 frames in 24 packets and 82 quanta; exclude delivered
 unchanged media state/configuration. This remains host telemetry, not deadline
 or physical-latency evidence.
 
+## Telemetry invariants (2026-09-07)
+
+Windows-audio regression coverage verifies that `ProcessLoopbackTelemetry` has
+an all-zero initial snapshot and that its saturating atomic increment helper
+does not wrap a counter at `u64::MAX`. The Windows-audio suite passed 29 tests,
+with strict Clippy, formatting, and diff checks passing. No audio stream or
+machine configuration was accessed by these tests.
+
 ## Synthetic packet-period boundary matrix (2026-09-07)
 
 The engine regression suite now covers a 127-frame packet followed by one

@@ -2401,6 +2401,27 @@ mod tests {
     }
 
     #[test]
+    fn process_loopback_telemetry_has_zero_state_and_saturating_counters() {
+        assert_eq!(
+            ProcessLoopbackTelemetry::default(),
+            ProcessLoopbackTelemetry {
+                wait_calls: 0,
+                wait_timeouts: 0,
+                packets: 0,
+                frames: 0,
+                minimum_packet_frames: 0,
+                maximum_packet_frames: 0,
+                silent_packets: 0,
+                rejected_packets: 0,
+            }
+        );
+
+        let counter = std::sync::atomic::AtomicU64::new(u64::MAX);
+        saturating_increment(&counter);
+        assert_eq!(counter.load(Ordering::Relaxed), u64::MAX);
+    }
+
+    #[test]
     fn restart_binding_requires_one_verified_executable_identity() {
         let candidate = ApplicationInfo {
             process_id: 7,

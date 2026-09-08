@@ -152,6 +152,14 @@ must be absolute and must not already exist; this prevents accidental overwrite
 of an earlier support bundle. The explicit `diagnostics export` form and the
 option form are equivalent.
 
+Process-loopback packet telemetry is currently exposed by the Windows adapter
+that owns a live capture object, not by the control-plane diagnostics response.
+Its bounded snapshot reports wait calls/timeouts, successful packets and
+frames, minimum/maximum packet period, silent packets, and rejected packets.
+When no native adapter session is owned by the control plane,
+`system.diagnostics.nativeAdapter` remains `not activated`; it must not be
+interpreted as a zeroed live stream.
+
 The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
 the enrolled client identity and cannot bypass the backend permission checks.
 See the [headless runbook](headless-runbook.md) for launch and recovery
