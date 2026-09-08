@@ -558,3 +558,14 @@ snapshot, and removes the executable and generated object. The authorized
 500 ms run captured 24,480 frames and submitted 28,800 silent render frames.
 This is repeatable event-path evidence; it does not claim audible routing,
 physical latency, driver behavior, or persistent configuration changes.
+
+## Current-head controlled process attribution (2026-09-07)
+
+The authorized `process-attribution` probe was rerun with a disposable child
+tone. Asynchronous process-loopback activation, 44.1 kHz PCM initialization,
+event registration, capture start, packet reads, and stop/reset all succeeded.
+The child exited with code 0; capture observed 49 packets/21,609 frames, zero
+silent packets, and 76,370 nonzero payload bytes. The temporary executable was
+removed. This confirms controlled include-tree data attribution only; PID reuse,
+physical latency, and production supervisor route restart remain separate
+gates.
