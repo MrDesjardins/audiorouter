@@ -844,3 +844,13 @@ M04, M05 with 91 UI tests and a temporary production build, M06 SDK/VST3,
 M07, unsigned M08 artifacts, traceability, and documentation validation.
 Temporary outputs/checkouts were removed. Production driver, signing,
 installer, hardware, and manual UI gates remain open.
+
+## Safe chain after scheduler lifecycle fix (2026-09-08)
+
+At pushed tip `76e3852`, the elevated `tests/acceptance/safe-all.ps1` chain
+passed all stages: read-only native toolchain/34-endpoint inventory and
+compile, disposable SysVAD x64 qualification, M01/M04/M05/M06/M07, unsigned
+M08 preparation, 158 normative requirement-map checks, and documentation
+validation. Temporary outputs/checkouts were removed. Driver installation or
+loading, signing-mode changes, plugin/startup registration, and machine audio
+configuration were excluded and unchanged.

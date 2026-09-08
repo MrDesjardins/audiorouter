@@ -43,6 +43,16 @@ The M06 SDK installer provenance acceptance also passed using disposable Git
 metadata and a rejected reparse-point destination. It made no SDK, plugin,
 driver, or audio configuration changes.
 
+## Safe acceptance after scheduler lifecycle fix (2026-09-08)
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at `76e3852` after
+the scheduler queue-invalidation change. It covered the native toolchain and
+34-endpoint format inventory, disposable SysVAD x64 qualification, M01/M04/
+M05/M06/M07, unsigned M08 release preparation, 158-ID traceability, and docs.
+Temporary outputs/checkouts were removed; no driver was installed or loaded,
+and no signing mode, plugin/startup registration, or machine audio setting was
+changed.
+
 ## Scheduler lifecycle queue invalidation (2026-09-08)
 
 Closed an M02/ARCH-04 generation-boundary gap in `RealtimeScheduler`: graph
