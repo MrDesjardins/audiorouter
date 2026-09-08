@@ -27,7 +27,7 @@ try {
             $text -notmatch 'packets=(\d+)' -or $text -notmatch 'source_frames=(\d+)' -or
             $text -notmatch 'engine_frames=(\d+)' -or
             $text -notmatch 'quantum_blocks=(\d+)' -or $text -notmatch 'scheduler_generation=1' -or
-            $text -notmatch 'rejected_packets=0') {
+            $text -notmatch 'rejected_packets=0' -or $text -notmatch 'scheduler_xruns=0') {
             throw "Rust process-loopback $mode failed`n$text"
         }
         $sourceFrames = [regex]::Match($text, 'source_frames=(\d+)')

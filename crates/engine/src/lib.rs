@@ -300,7 +300,7 @@ impl AudioBlockRing {
     /// blocks to this ring's bounded pool instead of dropping their storage.
     pub fn recycle_all(&self) -> usize {
         let mut recycled = 0;
-        while let Some(block) = self.ready.try_pop() {
+        while let Some(block) = self.ready.pop_for_drain() {
             if self.try_recycle(block).is_ok() {
                 recycled += 1;
             }
@@ -679,13 +679,20 @@ impl AudioBlockQueue {
     }
 
     pub fn try_pop(&self) -> Option<AudioBlock> {
-        match self.blocks.pop() {
+        match self.pop_for_drain() {
             Some(block) => Some(block),
             None => {
                 self.underruns.fetch_add(1, Ordering::Relaxed);
                 None
             }
         }
+    }
+
+    /// Remove one queued block without changing consumer underrun metrics.
+    /// Control-plane drains use this because reaching an empty queue is the
+    /// expected termination condition, not an audio consumer failure.
+    fn pop_for_drain(&self) -> Option<AudioBlock> {
+        self.blocks.pop()
     }
 
     /// Discard all currently queued blocks, used during stop/reconnect so old
@@ -3768,6 +3775,7 @@ mod tests {
         );
         assert_eq!(scheduler.output().ready(), 0);
         assert_eq!(scheduler.output().available(), 2);
+        assert_eq!(scheduler.telemetry().output_underruns, 0);
 
         let second = scheduler.acquire_input().unwrap();
         scheduler.submit_input(second).unwrap();

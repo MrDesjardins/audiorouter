@@ -207,8 +207,9 @@ fn process_loopback_smoke(
     }
     capture.stop()?;
     let telemetry = capture.telemetry();
+    let scheduler_telemetry = scheduler.telemetry();
     println!(
-        "process_loopback mode={} source_rate_hz=44100 engine_rate_hz=48000 resample_ratio={:.8} bytes_per_frame={} packets={} source_frames={} engine_frames={} quantum_blocks={} scheduler_generation={} waits={} timeouts={} packet_min_frames={} packet_max_frames={} silent_packets={} rejected_packets={} resampler_queued_frames={}",
+        "process_loopback mode={} source_rate_hz=44100 engine_rate_hz=48000 resample_ratio={:.8} bytes_per_frame={} packets={} source_frames={} engine_frames={} quantum_blocks={} scheduler_generation={} waits={} timeouts={} packet_min_frames={} packet_max_frames={} silent_packets={} rejected_packets={} resampler_queued_frames={} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_input_underruns={} scheduler_output_overruns={} scheduler_output_underruns={}",
         match mode {
             ProcessLoopbackMode::IncludeTargetTree => "include",
             ProcessLoopbackMode::ExcludeTargetTree => "exclude",
@@ -226,7 +227,13 @@ fn process_loopback_smoke(
         telemetry.maximum_packet_frames,
         telemetry.silent_packets,
         telemetry.rejected_packets,
-        resampler.queued_frames()
+        resampler.queued_frames(),
+        scheduler_telemetry.processed_quanta,
+        scheduler_telemetry.xruns,
+        scheduler_telemetry.input_overruns,
+        scheduler_telemetry.input_underruns,
+        scheduler_telemetry.output_overruns,
+        scheduler_telemetry.output_underruns
     );
     if source_frames == 0 || engine_frames == 0 {
         return Err(AudioError::InvalidFrameSize);

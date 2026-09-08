@@ -723,3 +723,16 @@ queue was 89 frames. Media-device identity/state snapshots were unchanged.
 This proves the adapter's explicit rate-domain bridge and lifecycle only; it
 does not claim drift correction against an independent render clock or
 physical/native production-driver latency.
+
+## Scheduler telemetry drain accounting (2026-09-08)
+
+The scheduler output-ring control-boundary drain now uses a non-counting raw
+pop. Intentional draining to an empty queue no longer increments the consumer
+underrun metric; actual empty consumer reads retain the underrun counter. A
+regression test covers generation replacement and asserts zero false output
+underruns.
+
+Engine tests (70), probe compilation, formatting, and the guarded 300 ms
+include/exclude live acceptance passed. Include emitted 107 and exclude 112
+generation-1 quanta; both modes reported zero scheduler xruns, input/output
+overruns, and input/output underruns. Media-device snapshots were unchanged.
