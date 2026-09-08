@@ -327,11 +327,13 @@ export interface DiscoveryDocument {
   presets: {
     voiceChains: Array<{
       id: string;
+      version: number;
       name: string;
       description: string;
     }>;
     eq: Array<{
       id: string;
+      version: number;
       name: string;
       description: string;
     }>;

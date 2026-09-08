@@ -239,6 +239,10 @@ pub enum EqPresetId {
 impl EqPresetId {
     pub const ALL: [Self; 3] = [Self::VoiceNeutral, Self::Hum50Hz, Self::Hum60Hz];
 
+    pub const fn version(self) -> u32 {
+        1
+    }
+
     pub const fn id(self) -> &'static str {
         match self {
             Self::VoiceNeutral => "voiceNeutral",
@@ -1147,6 +1151,10 @@ pub enum VoiceChainPresetId {
 
 impl VoiceChainPresetId {
     pub const ALL: [Self; 2] = [Self::VoiceNeutral, Self::VoiceGateAndCompression];
+
+    pub const fn version(self) -> u32 {
+        1
+    }
 
     pub const fn name(self) -> &'static str {
         match self {

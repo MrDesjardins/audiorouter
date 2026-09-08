@@ -2206,10 +2206,9 @@ mod tests {
         assert_eq!(voice_chains.len(), 2);
         assert_eq!(voice_chains[0]["id"], "voiceNeutral");
         assert_eq!(voice_chains[1]["id"], "voiceGateAndCompression");
-        assert!(voice_chains
-            .iter()
-            .all(|preset| preset["name"].as_str().is_some()
-                && preset["description"].as_str().is_some()));
+        assert!(voice_chains.iter().all(|preset| preset["version"] == 1
+            && preset["name"].as_str().is_some()
+            && preset["description"].as_str().is_some()));
         let eq = presets["eq"].as_array().unwrap();
         assert_eq!(
             eq.iter()

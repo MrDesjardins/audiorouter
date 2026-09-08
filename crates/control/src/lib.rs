@@ -604,10 +604,11 @@ fn method_output_schema(name: &str) -> Value {
                                 "type": "object",
                                 "properties": {
                                     "id": { "type": "string", "minLength": 1 },
+                                    "version": { "const": 1 },
                                     "name": { "type": "string", "minLength": 1 },
                                     "description": { "type": "string", "minLength": 1 }
                                 },
-                                "required": ["id", "name", "description"],
+                                "required": ["id", "version", "name", "description"],
                                 "additionalProperties": false
                             }
                         },
@@ -618,10 +619,11 @@ fn method_output_schema(name: &str) -> Value {
                                 "type": "object",
                                 "properties": {
                                     "id": { "type": "string", "minLength": 1 },
+                                    "version": { "const": 1 },
                                     "name": { "type": "string", "minLength": 1 },
                                     "description": { "type": "string", "minLength": 1 }
                                 },
-                                "required": ["id", "name", "description"],
+                                "required": ["id", "version", "name", "description"],
                                 "additionalProperties": false
                             }
                         }
@@ -1164,10 +1166,11 @@ fn method_output_schema(name: &str) -> Value {
                         "type": "object",
                         "properties": {
                             "id": { "type": "string", "minLength": 1 },
+                            "version": { "const": 1 },
                             "name": { "type": "string", "minLength": 1 },
                             "description": { "type": "string", "minLength": 1 }
                         },
-                        "required": ["id", "name", "description"],
+                        "required": ["id", "version", "name", "description"],
                         "additionalProperties": false
                     }
                 },
@@ -1178,10 +1181,11 @@ fn method_output_schema(name: &str) -> Value {
                         "type": "object",
                         "properties": {
                             "id": { "type": "string", "minLength": 1 },
+                            "version": { "const": 1 },
                             "name": { "type": "string", "minLength": 1 },
                             "description": { "type": "string", "minLength": 1 }
                         },
-                        "required": ["id", "name", "description"],
+                        "required": ["id", "version", "name", "description"],
                         "additionalProperties": false
                     }
                 }
@@ -2548,6 +2552,7 @@ impl ControlPlane {
             .map(|preset| {
                 json!({
                     "id": preset.id(),
+                    "version": preset.version(),
                     "name": preset.name(),
                     "description": preset.description()
                 })
@@ -2558,6 +2563,7 @@ impl ControlPlane {
             .map(|preset| {
                 json!({
                     "id": preset.id(),
+                    "version": preset.version(),
                     "name": preset.name(),
                     "description": preset.description()
                 })
@@ -6512,6 +6518,7 @@ mod tests {
             description["presets"]["voiceChains"][0]["id"],
             "voiceNeutral"
         );
+        assert_eq!(description["presets"]["voiceChains"][0]["version"], 1);
         assert_eq!(
             description["presets"]["voiceChains"][1]["name"],
             "Voice gate and compression"
@@ -6521,6 +6528,7 @@ mod tests {
             .is_some_and(|value| !value.is_empty()));
         assert_eq!(description["presets"]["eq"].as_array().unwrap().len(), 3);
         assert_eq!(description["presets"]["eq"][1]["id"], "hum50Hz");
+        assert_eq!(description["presets"]["eq"][1]["version"], 1);
         let presets = ControlPlane::default().dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
@@ -6530,6 +6538,11 @@ mod tests {
         let result = presets.result.unwrap();
         assert_eq!(result["voiceChains"].as_array().unwrap().len(), 2);
         assert_eq!(result["eq"].as_array().unwrap().len(), 3);
+        assert!(result["voiceChains"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|preset| preset["version"] == 1));
         let processors = ControlPlane::default().dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),

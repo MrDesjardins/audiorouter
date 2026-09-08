@@ -154,6 +154,15 @@ regressions cover zero, over-limit, and `usize::MAX` requests. The recording
 suite passed 30 tests, doc-tests, formatting, and strict Clippy. Native
 realtime recorder integration remains open.
 
+## Versioned built-in preset catalog (2026-09-08)
+
+The built-in voice-chain and EQ preset descriptors now expose a required
+numeric `version` field, currently `1`, through the DSP registry, `system.describe`,
+and `presets.list`. The Rust control/CLI regressions and TypeScript contract
+typechecks verify the field; the API reference documents it. This is metadata
+only: preset discovery remains read-only and application still requires an
+explicit graph plan/commit.
+
 ## Unpaged recording-list allocation bound (2026-09-07)
 
 The legacy array response path for `recordings.list` now uses the bounded

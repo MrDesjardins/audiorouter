@@ -34,6 +34,12 @@ The safe chain was requalified again at the pushed tree `3d01a6e` on
 [M08 release evidence](evidence/M08-release.md); temporary outputs and
 checkouts were removed and machine audio state was unchanged.
 
+The next safe slice is M04/DSP-01/API-01 preset contract versioning: built-in
+voice-chain and EQ catalog entries now carry an explicit version in the DSP
+registry, control schemas/responses, TypeScript contract, CLI assertion, and
+API reference. Verification and rollback are limited to portable catalog
+metadata; no graph, audio, or machine state is touched.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

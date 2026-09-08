@@ -127,7 +127,8 @@ the declared 1,024-sample pitch warmup and configured built-in delay at the
 The UI displays these parameter types and ranges as read-only metadata; it does
 not imply that an unavailable processor can be activated.
 
-The built-in preset catalog is exposed by `presets.list`. It currently includes
+The built-in preset catalog is exposed by `presets.list`. Each entry includes a
+stable numeric `version` alongside its ID, name, and explanation. It currently includes
 the voice-chain presets `voiceNeutral` and `voiceGateAndCompression`, plus EQ
 starting points `voiceNeutral`, `hum50Hz`, and `hum60Hz`. Preset discovery is
 read-only; applying a graph change still requires an explicit plan and commit.
