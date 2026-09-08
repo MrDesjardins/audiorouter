@@ -754,3 +754,11 @@ Both event-driven clients returned successful initialize, event-handle, start,
 stop, and reset results. The media-device snapshot was unchanged. This is
 shared-mode lifecycle evidence only and does not establish callback deadline,
 physical latency, managed-driver lifecycle, or production signing.
+
+## Long digital impulse correlation recheck (2026-09-08)
+
+The authorized 1,000-impulse VB-Audio cable acceptance detected 997 groups,
+with p95 inter-group spacing error of 0 frames and estimated onset of 67.27 ms.
+The capture/render processes completed their lifecycle and temporary artifacts
+were removed. This is digital signal-correlation evidence only; the estimated
+onset is not calibrated physical p95 latency and does not satisfy NFR-01/02/03.
