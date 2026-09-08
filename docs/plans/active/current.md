@@ -57,6 +57,13 @@ Unsupported preset payload versions now fail closed in `ParametricEq` and
 `VoiceChain` constructors before processor state is created, with focused
 regressions for both paths.
 
+M04 DSP/recording acceptance was requalified on 2026-09-08: 27 DSP tests and
+30 recording tests passed, including signal transfer, finite-output repair,
+long-duration pitch, WAV/FLAC, bounded queues, metadata, checkpoint/recovery,
+worker failure, pause/split, and library behavior. Formatting, strict package
+Clippy, and diff checks passed. This remains portable evidence; native realtime
+recorder integration and W1 hardware timing are still open.
+
 Completed safe contract slice M06/M07/SEC-12 plugin-size discoverability:
 the enforced 256 MiB plugin binary ceiling is exposed consistently by
 the `plugins.scan`, `plugins.list`, and `plugins.inspect` output schemas.

@@ -759,3 +759,14 @@ mutation. Regressions cover a corrupt negative row and an oversized write;
 recording (10), storage (62), and control (87) tests plus strict Clippy,
 formatting, and diff checks passed. No recording file, audio endpoint, or
 machine configuration was accessed.
+
+## M04 DSP/recording acceptance requalification (2026-09-08)
+
+`tests/acceptance/m04-dsp-recording.ps1` was requalified against the current
+tree. The DSP suite passed 27 tests, including deterministic transfer curves,
+finite-output repair, bounded state, and long-duration pitch behavior. The
+recording suite passed 30 tests, including WAV/FLAC round trips, bounded queues,
+metadata, checkpoint/recovery, worker failure, pause/split boundaries, and
+library inspection. Formatting, strict package Clippy, and `git diff --check`
+also passed. This is portable DSP/recording evidence; native realtime recorder
+integration, endpoint ownership, and W1 hardware timing remain open.
