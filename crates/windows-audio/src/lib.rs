@@ -9,6 +9,7 @@
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use windows_core::Interface;
 
 /// Maximum number of OS-provided audio-session names retained per process.
 pub const MAX_APPLICATION_AUDIO_DISPLAY_NAMES: usize = 64;
@@ -504,6 +505,347 @@ pub struct SharedRender {
     started: bool,
     event: EventHandle,
     _com: ComApartment,
+}
+
+/// The process tree selection supported by Windows process-loopback capture.
+/// The selection is explicit because Windows supports one target tree, not an
+/// arbitrary exclusion list.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProcessLoopbackMode {
+    IncludeTargetTree,
+    ExcludeTargetTree,
+}
+
+/// A bounded process-loopback capture client. Windows activates this client
+/// asynchronously through the process-loopback virtual device; the caller
+/// still owns packet copying and must not retain WASAPI's borrowed buffer.
+pub struct ProcessLoopbackCapture {
+    client: windows::Win32::Media::Audio::IAudioClient,
+    capture: windows::Win32::Media::Audio::IAudioCaptureClient,
+    bytes_per_frame: usize,
+    started: bool,
+    _event: EventHandle,
+    _com: ComApartment,
+}
+
+struct ProcessLoopbackCompletion {
+    // A COM interface cannot be Send/Sync. The callback transfers its one
+    // owned reference as an integer address; the activating thread rebuilds
+    // the IUnknown immediately after the wait and owns the release thereafter.
+    result: Option<Result<usize, windows::core::HRESULT>>,
+}
+
+#[windows::core::implement(windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler)]
+struct ProcessLoopbackCompletionHandler {
+    completion: Arc<(
+        std::sync::Mutex<ProcessLoopbackCompletion>,
+        std::sync::Condvar,
+    )>,
+}
+
+impl windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler_Impl
+    for ProcessLoopbackCompletionHandler_Impl
+{
+    fn ActivateCompleted(
+        &self,
+        operation: windows::core::Ref<
+            windows::Win32::Media::Audio::IActivateAudioInterfaceAsyncOperation,
+        >,
+    ) -> windows::core::Result<()> {
+        let mut activation_result = windows::core::HRESULT(0);
+        let mut activated_interface = None;
+        let result = unsafe {
+            match operation.ok().and_then(|operation| {
+                operation.GetActivateResult(&mut activation_result, &mut activated_interface)
+            }) {
+                Ok(()) if activation_result.is_ok() => match activated_interface {
+                    Some(interface) => Ok(interface.into_raw() as usize),
+                    None => Err(windows::core::HRESULT(0x80004002u32 as i32)),
+                },
+                Ok(()) => Err(activation_result),
+                Err(error) => Err(error.code()),
+            }
+        };
+        let (lock, wake) = &*self.completion;
+        if let Ok(mut state) = lock.lock() {
+            state.result = Some(result);
+            wake.notify_one();
+        }
+        Ok(())
+    }
+}
+
+impl ProcessLoopbackCapture {
+    /// Activate one process tree using the supported asynchronous Windows
+    /// process-loopback path. The process ID is only used as the activation
+    /// target; callers that persist bindings must separately verify process
+    /// creation identity before calling this method.
+    pub fn open(process_id: u32, mode: ProcessLoopbackMode) -> Result<Self, AudioError> {
+        use windows::Win32::Media::Audio::{
+            ActivateAudioInterfaceAsync, IAudioClient, AUDCLNT_SHAREMODE_SHARED,
+            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+            AUDCLNT_STREAMFLAGS_LOOPBACK, AUDIOCLIENT_ACTIVATION_PARAMS,
+            AUDIOCLIENT_ACTIVATION_PARAMS_0, AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+            AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS, PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE,
+            PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
+            VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, WAVEFORMATEX, WAVE_FORMAT_PCM,
+        };
+        use windows::Win32::System::Com::StructuredStorage::{
+            PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
+        };
+        use windows::Win32::System::Com::{CoTaskMemAlloc, BLOB};
+        use windows::Win32::System::Variant::VT_BLOB;
+
+        if process_id == 0 {
+            return Err(AudioError::ApplicationNotFound { process_id });
+        }
+        let com = ComApartment::initialize()?;
+        let process_params = AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
+            TargetProcessId: process_id,
+            ProcessLoopbackMode: match mode {
+                ProcessLoopbackMode::IncludeTargetTree => {
+                    PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
+                }
+                ProcessLoopbackMode::ExcludeTargetTree => {
+                    PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE
+                }
+            },
+        };
+        let activation_params = AUDIOCLIENT_ACTIVATION_PARAMS {
+            ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
+            Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
+                ProcessLoopbackParams: process_params,
+            },
+        };
+        let blob_size = std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>();
+        let blob_data = unsafe { CoTaskMemAlloc(blob_size) };
+        if blob_data.is_null() {
+            return Err(AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x8007000Eu32 as i32),
+                "process-loopback activation allocation failed",
+            )));
+        }
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                std::ptr::addr_of!(activation_params).cast::<u8>(),
+                blob_data.cast::<u8>(),
+                blob_size,
+            );
+        }
+        let property = PROPVARIANT {
+            Anonymous: PROPVARIANT_0 {
+                Anonymous: std::mem::ManuallyDrop::new(PROPVARIANT_0_0 {
+                    vt: VT_BLOB,
+                    wReserved1: 0,
+                    wReserved2: 0,
+                    wReserved3: 0,
+                    Anonymous: PROPVARIANT_0_0_0 {
+                        blob: BLOB {
+                            cbSize: blob_size as u32,
+                            pBlobData: blob_data.cast::<u8>(),
+                        },
+                    },
+                }),
+            },
+        };
+        let completion = Arc::new((
+            std::sync::Mutex::new(ProcessLoopbackCompletion { result: None }),
+            std::sync::Condvar::new(),
+        ));
+        let handler: windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler =
+            ProcessLoopbackCompletionHandler {
+                completion: Arc::clone(&completion),
+            }
+            .into();
+        let operation = unsafe {
+            ActivateAudioInterfaceAsync(
+                VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
+                &IAudioClient::IID,
+                Some(std::ptr::addr_of!(property)),
+                &handler,
+            )
+        }
+        .map_err(|error| AudioError::WindowsOperation {
+            operation: "ActivateAudioInterfaceAsync(process-loopback)",
+            error,
+        })?;
+        let (lock, wake) = &*completion;
+        let state = lock.lock().map_err(|_| {
+            AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x80004005u32 as i32),
+                "process-loopback activation state was poisoned",
+            ))
+        })?;
+        let timeout = std::time::Duration::from_secs(5);
+        let (mut state, timed_out) = wake
+            .wait_timeout_while(state, timeout, |state| state.result.is_none())
+            .map_err(|_| {
+                AudioError::Windows(windows::core::Error::new(
+                    windows::core::HRESULT(0x80004005u32 as i32),
+                    "process-loopback activation wait was poisoned",
+                ))
+            })?;
+        if timed_out.timed_out() && state.result.is_none() {
+            // Windows may still invoke the callback and read the PROPVARIANT.
+            // Leak the operation, handler, completion, and blob together on
+            // this exceptional timeout rather than creating a use-after-free.
+            std::mem::forget(operation);
+            std::mem::forget(handler);
+            std::mem::forget(property);
+            return Err(AudioError::Windows(windows::core::Error::new(
+                windows::core::HRESULT(0x800705B4u32 as i32),
+                "process-loopback activation timed out",
+            )));
+        }
+        let client_address = state
+            .result
+            .take()
+            .ok_or_else(|| {
+                windows::core::Error::new(
+                    windows::core::HRESULT(0x80004005u32 as i32),
+                    "process-loopback activation returned no client",
+                )
+            })
+            .and_then(|result| result.map_err(windows::core::Error::from))
+            .map_err(|error| AudioError::WindowsOperation {
+                operation: "ActivateAudioInterfaceAsync(process-loopback)",
+                error,
+            })?;
+        drop(state);
+        let client_unknown =
+            unsafe { windows::core::IUnknown::from_raw(client_address as *mut std::ffi::c_void) };
+        let client: IAudioClient =
+            client_unknown
+                .cast()
+                .map_err(|error| AudioError::WindowsOperation {
+                    operation: "ActivateAudioInterfaceAsync(process-loopback)/QueryInterface",
+                    error,
+                })?;
+        // The process-loopback virtual device does not expose a reliable
+        // endpoint mix format. Microsoft’s activation sample uses this
+        // caller-owned PCM shape and lets shared mode convert it.
+        let format = WAVEFORMATEX {
+            wFormatTag: WAVE_FORMAT_PCM as u16,
+            nChannels: 2,
+            nSamplesPerSec: 44_100,
+            nAvgBytesPerSec: 176_400,
+            nBlockAlign: 4,
+            wBitsPerSample: 16,
+            cbSize: 0,
+        };
+        let bytes_per_frame = usize::from(format.nBlockAlign);
+        let event = EventHandle(unsafe {
+            windows::Win32::System::Threading::CreateEventW(None, false, false, None)?
+        });
+        let initialized = unsafe {
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_LOOPBACK
+                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                    | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+                0,
+                0,
+                &format,
+                None,
+            )
+        };
+        initialized.map_err(|error| AudioError::WindowsOperation {
+            operation: "IAudioClient::Initialize(process-loopback)",
+            error,
+        })?;
+        unsafe { client.SetEventHandle(event.0)? };
+        let capture: windows::Win32::Media::Audio::IAudioCaptureClient =
+            unsafe { client.GetService()? };
+        drop(operation);
+        Ok(Self {
+            client,
+            capture,
+            bytes_per_frame,
+            started: false,
+            _event: event,
+            _com: com,
+        })
+    }
+
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        unsafe { self.client.Start()? };
+        self.started = true;
+        Ok(())
+    }
+
+    /// Bytes in one interleaved frame of the activated process-loopback mix
+    /// format. The value is fixed by the supported caller-owned PCM request
+    /// and is safe to use when sizing caller-owned packet storage.
+    pub fn bytes_per_frame(&self) -> usize {
+        self.bytes_per_frame
+    }
+
+    /// Copy one available packet into a caller-owned byte buffer. No borrowed
+    /// WASAPI pointer escapes this method, and silent packets are represented
+    /// by zero-filled caller storage.
+    pub fn read_packet(&self, destination: &mut [u8]) -> Result<Option<CapturePacket>, AudioError> {
+        let frames = unsafe { self.capture.GetNextPacketSize()? };
+        if frames == 0 {
+            return Ok(None);
+        }
+        let mut data = std::ptr::null_mut();
+        let mut packet_frames = frames;
+        let mut flags = 0;
+        let mut device_position = 0;
+        let mut qpc_position = 0;
+        unsafe {
+            self.capture.GetBuffer(
+                &mut data,
+                &mut packet_frames,
+                &mut flags,
+                Some(&mut device_position),
+                Some(&mut qpc_position),
+            )?;
+        }
+        let required = (packet_frames as usize)
+            .checked_mul(self.bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        if required > destination.len() {
+            unsafe { self.capture.ReleaseBuffer(packet_frames)? };
+            return Err(AudioError::BufferTooSmall {
+                required,
+                available: destination.len(),
+            });
+        }
+        if flags & windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
+            destination[..required].fill(0);
+        } else {
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    data.cast::<u8>(),
+                    destination.as_mut_ptr(),
+                    required,
+                );
+            }
+        }
+        unsafe { self.capture.ReleaseBuffer(packet_frames)? };
+        Ok(Some(CapturePacket {
+            frames: packet_frames,
+            flags,
+            device_position,
+            qpc_position,
+        }))
+    }
+
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        if self.started {
+            unsafe { self.client.Stop()? };
+            self.started = false;
+        }
+        unsafe { self.client.Reset()? };
+        Ok(())
+    }
+}
+
+impl Drop for ProcessLoopbackCapture {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
 }
 
 impl SharedCapture {
@@ -1912,6 +2254,19 @@ mod tests {
             AudioError::InvalidFrameSize.remediation(),
             "correct the endpoint format or stream request"
         );
+    }
+
+    #[test]
+    fn process_loopback_rejects_zero_target_before_com_activation() {
+        for mode in [
+            ProcessLoopbackMode::IncludeTargetTree,
+            ProcessLoopbackMode::ExcludeTargetTree,
+        ] {
+            assert!(matches!(
+                ProcessLoopbackCapture::open(0, mode),
+                Err(AudioError::ApplicationNotFound { process_id: 0 })
+            ));
+        }
     }
 
     #[test]

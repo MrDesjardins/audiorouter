@@ -729,3 +729,19 @@ not controlled by this fixture. The run passed with 11,025 captured frames.
 Temporary binaries are removed and no persistent audio configuration is changed.
 The include-tree regression was also rerun after the harness change: it passed
 with 10,584 frames and 34,368 nonzero bytes.
+
+## Rust process-loopback adapter (2026-09-07)
+
+The production `audiorouter-windows-audio` crate now exposes
+`ProcessLoopbackCapture` with explicit include/exclude target-tree mode. It
+uses `ActivateAudioInterfaceAsync`, transfers the callback-owned COM reference
+without crossing a Rust thread boundary as a COM object, initializes the
+supported event-driven 44.1 kHz stereo PCM shape, copies packets into bounded
+caller storage, and stops/resets deterministically. `PROPVARIANT` ownership is
+left to its Windows binding destructor; a temporary live run caught and fixed
+the double-free that otherwise caused `STATUS_HEAP_CORRUPTION`.
+
+The guarded Rust acceptance passed both modes for 250 ms: each reported 24
+packets and 10,584 frames, followed by unchanged media-device identity/state.
+This is process-loopback API/lifecycle evidence, not a claim of controlled
+cross-process signal rejection or physical latency.

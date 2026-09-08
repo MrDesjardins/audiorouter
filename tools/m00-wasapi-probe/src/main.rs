@@ -12,8 +12,8 @@ use audiorouter_engine::{
     RuntimeGraph, StreamingResampler,
 };
 use audiorouter_windows_audio::{
-    enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor, SharedCapture,
-    SharedRender,
+    enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
+    ProcessLoopbackCapture, ProcessLoopbackMode, SharedCapture, SharedRender,
 };
 use std::sync::{Arc, Condvar, Mutex};
 use windows::core::Result;
@@ -68,12 +68,68 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
+    if std::env::args().nth(1).as_deref() == Some("process-loopback") {
+        let duration_ms = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(500);
+        let mode = if std::env::args().nth(3).as_deref() == Some("exclude") {
+            ProcessLoopbackMode::ExcludeTargetTree
+        } else {
+            ProcessLoopbackMode::IncludeTargetTree
+        };
+        if let Err(error) = process_loopback_smoke(duration_ms, mode) {
+            eprintln!("process_loopback_error={error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
         let result = enumerate();
         CoUninitialize();
         result
     }
+}
+
+fn process_loopback_smoke(
+    duration_ms: u64,
+    mode: ProcessLoopbackMode,
+) -> std::result::Result<u32, AudioError> {
+    if !(100..=2_000).contains(&duration_ms) {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    let mut capture = ProcessLoopbackCapture::open(
+        unsafe { windows::Win32::System::Threading::GetCurrentProcessId() },
+        mode,
+    )?;
+    capture.start()?;
+    let mut buffer = vec![0u8; 65_536];
+    let started = std::time::Instant::now();
+    let mut packets = 0u32;
+    let mut frames = 0u32;
+    while started.elapsed() < std::time::Duration::from_millis(duration_ms) {
+        while let Some(packet) = capture.read_packet(&mut buffer)? {
+            packets = packets.saturating_add(1);
+            frames = frames.saturating_add(packet.frames);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    capture.stop()?;
+    println!(
+        "process_loopback mode={} bytes_per_frame={} packets={} frames={}",
+        match mode {
+            ProcessLoopbackMode::IncludeTargetTree => "include",
+            ProcessLoopbackMode::ExcludeTargetTree => "exclude",
+        },
+        capture.bytes_per_frame(),
+        packets,
+        frames
+    );
+    if frames == 0 {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    Ok(frames)
 }
 
 fn adapter_smoke(

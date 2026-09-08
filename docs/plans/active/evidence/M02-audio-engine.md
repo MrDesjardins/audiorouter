@@ -509,3 +509,14 @@ The adapter stopped and reset its streams, and the acceptance harness reported
 defaults, volume, mute, privacy, drivers, signing, and startup configuration
 unchanged. This proves selected-endpoint route activation only; calibrated
 physical latency and production-driver gates remain open.
+
+## Rust process-loopback adapter (2026-09-07)
+
+The Windows adapter now provides bounded asynchronous process-loopback capture
+with explicit include and exclude target-tree selection. Focused Windows tests
+(27), strict workspace Clippy, and the guarded live acceptance passed. Both
+modes completed 250 ms runs with 24 packets and 10,584 frames, and the harness
+verified stream stop/reset plus unchanged media-device identity/state. The
+implementation uses caller-owned packet storage and the supported 44.1 kHz
+stereo PCM/event-callback initialization shape; physical latency and full
+cross-process isolation thresholds remain separate gates.
