@@ -394,3 +394,13 @@ artifacts, including locked CLI/plugin-worker binaries, UI output, npm
 provenance, manifest hashes, archive contents, and explicit blocker state.
 Temporary output was removed and no installer, driver, signing, or audio
 configuration action occurred.
+
+## Current-head aggregate safe-chain requalification (2026-09-07)
+
+The elevated sequential `tests/acceptance/safe-all.ps1` runner passed at the
+current head. Read-only native inventory reported 31 endpoints; disposable
+SysVAD x64 build/package validation, M01, M04, M05, M06, M07, unsigned M08
+artifact preparation/verification, and documentation all passed. Temporary
+checkouts and artifacts were removed. Live audio, driver installation,
+signing-mode changes, plugin/startup registration, and machine audio
+configuration remained excluded.
