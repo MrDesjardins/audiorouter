@@ -63,6 +63,17 @@ preparation, traceability, and documentation. Temporary outputs/checkouts
 were removed; no driver was installed or loaded, signing mode or registration
 was changed, and no machine audio configuration was touched.
 
+## Live adapter requalification (2026-09-08)
+
+The explicitly authorized guarded live wrappers passed at `3179ad9`: the
+unrouted adapter processed 14,880 capture frames and 14,848 scheduler frames
+across 116 graph blocks, while the selected VB-Audio route processed 14,400
+capture and 14,336 routed frames across 112 blocks. Both runs reported zero
+xruns, overruns, deadline misses, and deadline lateness; stream stop/reset and
+media/configuration rollback checks passed. This remains shared-mode adapter
+evidence, not managed-driver callback, physical-latency, or production-routing
+evidence.
+
 ## Event replay page-cursor hardening (2026-09-08)
 
 Closed an M07/API-08 replay correctness gap: bounded `events.subscribe` pages

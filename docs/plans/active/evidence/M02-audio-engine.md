@@ -1096,3 +1096,13 @@ The guarded shared adapter and explicitly selected VB-Audio routed smoke tests
 also passed after the change; each stopped/reset its streams and verified
 unchanged media/configuration state. This is lifecycle evidence, not managed
 driver or physical-latency evidence.
+## 2026-09-08 - Live adapter requalification
+
+The guarded live adapter wrappers passed at `3179ad9`. The normal adapter
+processed 14,880 capture frames and 14,848 scheduler frames across 116 graph
+blocks. The explicitly selected VB-Audio route processed 14,400 capture and
+14,336 routed frames across 112 blocks. Both runs had zero xruns, overruns,
+deadline misses, and deadline lateness; streams stopped/reset and endpoint,
+media, and persistent configuration snapshots were unchanged. This qualifies
+the existing shared-mode adapter path only; it does not qualify a managed
+driver callback, production endpoint ownership, physical latency, or signing.
