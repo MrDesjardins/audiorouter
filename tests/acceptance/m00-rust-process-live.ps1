@@ -23,13 +23,18 @@ try {
         $exitCode = $LASTEXITCODE
         $text = $result -join "`n"
         if ($exitCode -ne 0 -or $text -notmatch ("process_loopback mode=" + $mode) -or
-            $text -notmatch 'packets=(\d+)' -or $text -notmatch 'frames=(\d+)' -or
+            $text -notmatch 'source_rate_hz=44100' -or $text -notmatch 'engine_rate_hz=48000' -or
+            $text -notmatch 'packets=(\d+)' -or $text -notmatch 'source_frames=(\d+)' -or
+            $text -notmatch 'engine_frames=(\d+)' -or
             $text -notmatch 'quantum_blocks=(\d+)' -or $text -notmatch 'scheduler_generation=1' -or
             $text -notmatch 'rejected_packets=0') {
             throw "Rust process-loopback $mode failed`n$text"
         }
-        $frames = [regex]::Match($text, 'frames=(\d+)')
-        if ([int]$frames.Groups[1].Value -le 0) { throw "Rust process-loopback $mode returned no frames`n$text" }
+        $sourceFrames = [regex]::Match($text, 'source_frames=(\d+)')
+        $engineFrames = [regex]::Match($text, 'engine_frames=(\d+)')
+        if ([int]$sourceFrames.Groups[1].Value -le 0 -or [int]$engineFrames.Groups[1].Value -le 0) {
+            throw "Rust process-loopback $mode returned no converted frames`n$text"
+        }
         $blocks = [regex]::Match($text, 'quantum_blocks=(\d+)')
         if ([int]$blocks.Groups[1].Value -le 0) { throw "Rust process-loopback $mode emitted no scheduler blocks`n$text" }
         Write-Output ("Rust process-loopback {0} passed: {1}" -f $mode, $text.Trim())

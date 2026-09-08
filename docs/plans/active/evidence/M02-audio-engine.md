@@ -704,3 +704,22 @@ Engine tests (69), Windows-audio tests (28), strict workspace Clippy, formatting
 and tool compilation passed. Guarded live include/exclude runs each observed
 441-frame packets and emitted 82 generation-1 scheduler quanta; stop/reset and
 media-state checks passed with no persistent audio configuration change.
+
+## Process-loopback rate-domain bridge (2026-09-08)
+
+The live process-loopback probe now makes the source/engine clock conversion
+explicit: caller-owned 44,100 Hz PCM16 stereo packets are accumulated into
+128-frame source blocks, passed through the bounded phase-preserving
+`StreamingResampler` at `44,100/48,000`, and drained into zero-or-more fixed
+128-frame 48 kHz scheduler quanta. The FIFO is allowed to emit an occasional
+second engine quantum after enough source data arrives; this prevents a false
+one-quantum-per-source-block assumption from filling the bounded queue.
+
+Focused engine tests (70), probe compilation, and formatting passed. The
+guarded 300 ms include/exclude acceptance passed: each mode captured 12,789
+source frames and emitted 13,696 engine frames across 107 generation-1 quanta;
+packets were 441 frames, rejected packets were zero, and the final resampler
+queue was 89 frames. Media-device identity/state snapshots were unchanged.
+This proves the adapter's explicit rate-domain bridge and lifecycle only; it
+does not claim drift correction against an independent render clock or
+physical/native production-driver latency.
