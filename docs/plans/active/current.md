@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `df35162`. Safe portable and
+The latest validated implementation head is `8335d9a`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion,
 scheduler deadline telemetry, and conservative p99.9 histogram bounds is
@@ -1692,4 +1692,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M00/M02/M03/ARCH-05 task: retain digital timing evidence while pursuing calibrated latency and managed endpoint-owned callback evidence after the production driver boundary exists.
 
 - Completed M02/API-01/ARCH-05 route-telemetry reporting alignment on 2026-09-08: the guarded 300 ms route acceptance now prints the validated processing and deadline-lateness p99.9 upper bounds in its summary. It passed with 14,400 captured and 13,856 routed frames, 32,768 ns processing p99.9 bound, zero deadline misses, and unchanged endpoint/configuration state.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Completed M00-M08 workspace regression at `8335d9a` on 2026-09-08: `cargo test --workspace`, strict workspace Clippy, formatting/diff checks, and documentation validation passed. Windows-audio tests exercised read-only identity/lifecycle behavior; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
