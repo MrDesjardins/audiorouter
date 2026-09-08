@@ -485,6 +485,14 @@ doc tests passed, including 28 domain and 32 storage tests; strict workspace
 Clippy, formatting, and diff checks also passed. No audio endpoint or machine
 configuration was changed.
 
+## Meter events are excluded from state replay (2026-09-07)
+
+The authoritative `EventLog` now discards `meter` and `meter.*` categories
+before allocating a sequence or retaining an event. This enforces the API
+contract that meter data is lossy/non-replayable and prevents accidental
+telemetry retention through a generic event append path. The domain suite
+passed 44 tests, doc-tests, formatting, and strict Clippy.
+
 ## Current-head headless requalification (2026-09-07)
 
 The M07 acceptance wrapper passed at the current head: 25 CLI tests, 2 MCP

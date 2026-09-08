@@ -1420,6 +1420,10 @@ impl EventLog {
         session_id: Option<EntityId>,
         retained_at: Instant,
     ) -> u64 {
+        let category = category.into();
+        if category == "meter" || category.starts_with("meter.") {
+            return self.latest_sequence();
+        }
         self.prune_expired(retained_at);
         let sequence = self.next_sequence;
         self.next_sequence = self.next_sequence.saturating_add(1);
@@ -1429,7 +1433,7 @@ impl EventLog {
                 backend_epoch: self.backend_epoch,
                 resource_revision,
                 operation_id,
-                category: category.into(),
+                category,
                 session_id,
             },
             retained_at,
@@ -2363,6 +2367,17 @@ mod tests {
         let mut log = EventLog::new(1);
         assert_eq!(log.since(0, 0), Err(EventReplayError::InvalidLimit));
         assert_eq!(log.since(0, 501), Err(EventReplayError::InvalidLimit));
+    }
+
+    #[test]
+    fn event_log_drops_meter_events_without_retaining_or_sequencing_them() {
+        let mut log = EventLog::new(1);
+        assert_eq!(log.append(0, None, "meter.updated", None), 0);
+        assert_eq!(log.append(0, None, "meter", None), 0);
+        assert!(log.is_empty());
+        assert_eq!(log.append(1, None, "state.changed", None), 1);
+        assert_eq!(log.since(0, 10).unwrap().len(), 1);
+        assert_eq!(log.since(0, 10).unwrap()[0].category, "state.changed");
     }
 
     #[test]
