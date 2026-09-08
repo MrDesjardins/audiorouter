@@ -30,6 +30,7 @@ const MAX_CONTROL_VALUE_COUNT: usize = 8192;
 const MAX_EVENT_SUBSCRIPTION_ITEMS: usize = 500;
 const MAX_SESSION_LIST_ITEMS: usize = 500;
 const MAX_GRAPH_HISTORY_ITEMS: usize = 100;
+const MAX_GRAPH_DIFF_ITEMS: usize = 3;
 const MAX_RECORDING_LIST_ITEMS: usize = 500;
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
@@ -908,7 +909,7 @@ fn method_output_schema(name: &str) -> Value {
                 "planId": { "type": "string", "minLength": 1 },
                 "baseRevision": { "type": "integer", "minimum": 0 },
                 "expiresInMs": { "type": "integer", "minimum": 1 },
-                "diff": { "type": "array" },
+                "diff": { "type": "array", "maxItems": MAX_GRAPH_DIFF_ITEMS },
                 "affectedDestinations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                 "warnings": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                 "requiredScopes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
@@ -6183,6 +6184,16 @@ mod tests {
             graph_plan_input["inputSchema"]["properties"]["candidate"]["properties"]["nodes"]
                 ["maxItems"],
             64
+        );
+        let graph_plan = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "graph.plan")
+            .unwrap();
+        assert_eq!(
+            graph_plan["outputSchema"]["properties"]["diff"]["maxItems"],
+            MAX_GRAPH_DIFF_ITEMS
         );
         assert_eq!(description["events"]["retention"]["maxEvents"], 10_000);
         assert_eq!(description["events"]["retention"]["maxAgeSeconds"], 900);

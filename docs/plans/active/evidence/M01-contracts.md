@@ -486,6 +486,9 @@ The `graph.plan` input now advertises the same bounded session schema used by
 create/import, including the 64-node and 128-edge limits. This aligns client
 preflight with candidate validation; live graph activation remains an M02 gate.
 
+The `graph.plan` result schema also advertises the fixed three-entry diff
+maximum produced by the name/nodes/edges planner comparison.
+
 The `events.subscribe` discovery contract now exposes its 500-event and
 500-session resync bounds plus the enforced event metadata lengths. Control
 discovery regression, strict Clippy, and documentation validation pass.
