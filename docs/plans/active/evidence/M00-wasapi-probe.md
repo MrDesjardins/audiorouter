@@ -547,3 +547,14 @@ one render endpoint correctly classified as occupied. The media-device snapshot
 was unchanged and the temporary executable was removed. Defaults, volume, mute,
 privacy, drivers, signing, startup registration, and other persistent audio
 configuration were not changed.
+
+## Repeatable event-path acceptance (2026-09-07)
+
+`tests/acceptance/m00-native-event-live.ps1` provides guarded,
+friendly-name-selected event qualification. It builds the native probe into an
+isolated temporary executable, runs `event-capture` and `event-render` on the
+selected VB-Audio pair, requires complete event lifecycles, compares the media
+snapshot, and removes the executable and generated object. The authorized
+500 ms run captured 24,480 frames and submitted 28,800 silent render frames.
+This is repeatable event-path evidence; it does not claim audible routing,
+physical latency, driver behavior, or persistent configuration changes.
