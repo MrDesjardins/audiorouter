@@ -768,6 +768,16 @@ commands and that `schema` exposes the authoritative
 This is contract/help validation only and does not access audio or machine
 configuration.
 
+## Multi-response transport bound (2026-09-08)
+
+The named-pipe `round_trip_many` client now rejects zero and over-500 response
+counts before opening or validating a pipe. This closes a lifecycle edge where
+an invalid response expectation could otherwise create a request with no
+completion boundary or exceed the bounded persistent-session policy. The
+regression runs on Windows and non-Windows paths; the transport suite passes
+18 tests, strict transport Clippy, formatting, and diff checks. No audio
+endpoint, driver, or machine configuration was accessed.
+
 The M07 wrapper was requalified again at the current tip. The same 22 CLI,
 MCP interoperability, 71 control, 31 plugin-host, and 8 worker-process tests
 passed with strict Clippy; temporary state only was used.

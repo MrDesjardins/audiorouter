@@ -19,6 +19,15 @@ pub enum TransportError {
 /// matching the control API's maximum page size.
 pub const MAX_SESSION_FRAMES: usize = 500;
 
+fn validate_response_count(responses: usize) -> Result<(), TransportError> {
+    if responses == 0 || responses > MAX_SESSION_FRAMES {
+        return Err(TransportError::Protocol(
+            "response frame count must be between 1 and 500".into(),
+        ));
+    }
+    Ok(())
+}
+
 impl std::fmt::Display for TransportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
@@ -435,6 +444,7 @@ mod windows_pipe {
         request: &[u8],
         responses: usize,
     ) -> Result<Vec<Vec<u8>>, TransportError> {
+        super::validate_response_count(responses)?;
         check_name(name)?;
         if request.len() < 4 || request.len() > MAX_FRAME_BYTES + 4 {
             return Err(TransportError::Protocol("invalid request frame".into()));
@@ -743,7 +753,12 @@ pub fn send_oneway(_: &str, _: &[u8]) -> Result<(), TransportError> {
 }
 
 #[cfg(not(windows))]
-pub fn round_trip_many(_: &str, _: &[u8], _: usize) -> Result<Vec<Vec<u8>>, TransportError> {
+pub fn round_trip_many(
+    _: &str,
+    _: &[u8],
+    responses: usize,
+) -> Result<Vec<Vec<u8>>, TransportError> {
+    validate_response_count(responses)?;
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -842,6 +857,23 @@ mod tests {
             serve_session("not-a-pipe", MAX_SESSION_FRAMES + 1, |_, _| Ok(None)),
             Err(TransportError::Protocol(
                 "session frame count must be between 1 and 500".into()
+            ))
+        );
+    }
+
+    #[test]
+    fn rejects_unbounded_multi_response_requests_before_platform_access() {
+        let request = [0, 0, 0, 0];
+        assert_eq!(
+            round_trip_many("not-a-pipe", &request, 0),
+            Err(TransportError::Protocol(
+                "response frame count must be between 1 and 500".into()
+            ))
+        );
+        assert_eq!(
+            round_trip_many("not-a-pipe", &request, MAX_SESSION_FRAMES + 1),
+            Err(TransportError::Protocol(
+                "response frame count must be between 1 and 500".into()
             ))
         );
     }
