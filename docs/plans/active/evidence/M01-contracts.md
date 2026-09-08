@@ -449,6 +449,11 @@ The discovered session port schema now limits `channels` to 1–2, matching the
 GRAPH-03 mono/stereo validator. A discovery regression asserts the maximum;
 this prevents schema-valid plans from being rejected later for channel shape.
 
+The discovered node parameter schema now declares both `maxProperties: 32` and
+a 128-character/UTF-8-byte documented `propertyNames` bound corresponding to
+the direct domain validator. Discovery regression coverage asserts the
+parameter-name metadata.
+
 Session display names use the same 256-byte UTF-8 bound as node display names.
 Direct validation rejects an oversized imported label with a bounded `name`
 path before graph processing. The regression is portable and does not access

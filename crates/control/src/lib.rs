@@ -1660,7 +1660,14 @@ fn session_item_schema() -> Value {
                         "name": { "type": "string", "minLength": 1, "maxLength": 256, "description": "Maximum 256 UTF-8 bytes." },
                         "enabled": { "type": "boolean" },
                         "bypass": { "type": "boolean" },
-                        "parameters": { "type": "object", "maxProperties": 32 },
+                        "parameters": {
+                            "type": "object",
+                            "maxProperties": 32,
+                            "propertyNames": {
+                                "maxLength": 128,
+                                "description": "Maximum 128 UTF-8 bytes per parameter name."
+                            }
+                        },
                         "ports": {
                             "type": "array",
                             "maxItems": 16,
@@ -6092,6 +6099,10 @@ mod tests {
         let node_schema = &session_schema["properties"]["nodes"]["items"];
         assert_eq!(node_schema["properties"]["ports"]["maxItems"], 16);
         assert_eq!(node_schema["properties"]["parameters"]["maxProperties"], 32);
+        assert_eq!(
+            node_schema["properties"]["parameters"]["propertyNames"]["maxLength"],
+            128
+        );
         assert_eq!(
             node_schema["properties"]["ports"]["items"]["properties"]["channels"]["maximum"],
             2
