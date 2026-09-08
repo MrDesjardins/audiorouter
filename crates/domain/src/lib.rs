@@ -21,6 +21,7 @@ pub const MAX_ENTITY_ID_BYTES: usize = 128;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 pub const MAX_PARAMETERS_PER_NODE: usize = 32;
+pub const MAX_PARAMETER_NAME_BYTES: usize = 128;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
 pub const RECOVERY_SAFE_MODE_CRASHES: usize = 3;
@@ -1089,7 +1090,15 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 maximum: MAX_PARAMETERS_PER_NODE,
             });
         }
-        for (name, value) in &node.parameters {
+        for (index, (name, value)) in node.parameters.iter().enumerate() {
+            if name.len() > MAX_PARAMETER_NAME_BYTES {
+                errors.push(ValidationError::LimitExceeded {
+                    path: format!("{path}.parameters[{index}].name"),
+                    requested: name.len(),
+                    maximum: MAX_PARAMETER_NAME_BYTES,
+                });
+                continue;
+            }
             let valid = match (node.kind, name.as_str()) {
                 (NodeKind::Gain, "gainDb") => value
                     .as_f64()
@@ -2877,6 +2886,24 @@ mod tests {
                     && *requested == MAX_PARAMETERS_PER_NODE + 1
                     && *maximum == MAX_PARAMETERS_PER_NODE
         )));
+    }
+
+    #[test]
+    fn rejects_oversized_node_parameter_names_without_echoing_them() {
+        let mut gain = node("gain", NodeKind::Gain, PortDirection::Input);
+        gain.parameters.insert(
+            "p".repeat(MAX_PARAMETER_NAME_BYTES + 1),
+            serde_json::json!(0),
+        );
+        let errors = validate_session(&session(vec![gain], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "nodes[0].parameters[0].name"
+                    && *requested == MAX_PARAMETER_NAME_BYTES + 1
+                    && *maximum == MAX_PARAMETER_NAME_BYTES
+        )));
+        assert!(format_validation_errors(&errors).len() < 256);
     }
 
     #[test]

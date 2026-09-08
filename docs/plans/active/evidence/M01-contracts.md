@@ -408,3 +408,9 @@ Domain session validation now limits each node to 32 parameter entries before
 iterating and validating values. A direct-session regression exceeds that bound
 and verifies a path-specific limit error; normal control requests retain their
 separate decoded JSON budgets.
+
+Node parameter names are limited to 128 UTF-8 bytes during direct session
+validation. Oversized names are rejected with an index-based path and are not
+echoed into the diagnostic, keeping hostile metadata from expanding validation
+responses. The regression is portable and does not access audio or machine
+configuration.
