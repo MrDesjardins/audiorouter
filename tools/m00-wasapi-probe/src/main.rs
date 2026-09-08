@@ -8,8 +8,8 @@
 //! endpoint-ID-selected digital route smoke for compatible 32-bit endpoints.
 
 use audiorouter_engine::{
-    AudioBlock, DriftController, ProcessingStage, RealtimeScheduler, RuntimeGeneration,
-    RuntimeGraph, StreamingResampler,
+    AudioBlock, DriftController, Pcm16QuantumAdapter, ProcessingStage, RealtimeScheduler,
+    RuntimeGeneration, RuntimeGraph, StreamingResampler,
 };
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
@@ -105,26 +105,51 @@ fn process_loopback_smoke(
     )?;
     capture.start()?;
     let mut buffer = vec![0u8; 65_536];
+    let mut pcm16 = vec![0i16; buffer.len() / 2];
+    let mut quantum = Pcm16QuantumAdapter::new(2).map_err(|_| AudioError::InvalidFrameSize)?;
+    let mut block = AudioBlock::new(2, 128).map_err(|_| AudioError::InvalidFrameSize)?;
     let started = std::time::Instant::now();
     let mut packets = 0u32;
     let mut frames = 0u32;
+    let mut quantum_blocks = 0u32;
     while started.elapsed() < std::time::Duration::from_millis(duration_ms) {
         while let Some(packet) = capture.read_packet(&mut buffer)? {
             packets = packets.saturating_add(1);
             frames = frames.saturating_add(packet.frames);
+            let sample_count = packet.frames as usize * capture.bytes_per_frame() / 2;
+            if sample_count > pcm16.len() || capture.bytes_per_frame() != 4 {
+                return Err(AudioError::InvalidFrameSize);
+            }
+            for (sample, bytes) in pcm16[..sample_count].iter_mut().zip(buffer[..sample_count * 2].chunks_exact(2)) {
+                *sample = i16::from_ne_bytes([bytes[0], bytes[1]]);
+            }
+            let mut offset = 0usize;
+            while offset < packet.frames as usize {
+                let consumed = quantum
+                    .push_interleaved(&pcm16[offset * 2..sample_count])
+                    .map_err(|_| AudioError::InvalidFrameSize)?;
+                offset += consumed;
+                if consumed == 0 {
+                    if !quantum.pop_into(&mut block).map_err(|_| AudioError::InvalidFrameSize)? {
+                        return Err(AudioError::InvalidFrameSize);
+                    }
+                    quantum_blocks = quantum_blocks.saturating_add(1);
+                }
+            }
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
     capture.stop()?;
     println!(
-        "process_loopback mode={} bytes_per_frame={} packets={} frames={}",
+        "process_loopback mode={} bytes_per_frame={} packets={} frames={} quantum_blocks={}",
         match mode {
             ProcessLoopbackMode::IncludeTargetTree => "include",
             ProcessLoopbackMode::ExcludeTargetTree => "exclude",
         },
         capture.bytes_per_frame(),
         packets,
-        frames
+        frames,
+        quantum_blocks
     );
     if frames == 0 {
         return Err(AudioError::InvalidFrameSize);

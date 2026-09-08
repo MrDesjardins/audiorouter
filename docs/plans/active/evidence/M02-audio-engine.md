@@ -536,6 +536,19 @@ diff checks passed. This is a portable adapter-boundary result; packet
 accumulation/splitting, native realtime scheduling, physical latency, and
 production-driver integration remain open.
 
+## Live PCM16 packet-boundary adapter (2026-09-07)
+
+The guarded `m00-rust-process-live.ps1 -AllowLiveAudio` acceptance fed actual
+Rust process-loopback packets through the fixed PCM16 quantum adapter. Include
+and exclude modes each delivered 10,584 PCM16 frames in 24 packets and emitted
+82 complete 128-frame engine quanta. Both modes stopped/reset successfully and
+the media-device identity/state snapshot was unchanged. No persistent audio
+configuration changed.
+
+This is packet-boundary and format-conversion evidence only. The adapter is not
+yet connected to the realtime scheduler rings; physical latency,
+generation-aware live routing, and production-driver integration remain open.
+
 ## Fixed PCM16 quantum adapter (2026-09-07)
 
 `Pcm16QuantumAdapter` stages split interleaved PCM16 packets in a fixed
