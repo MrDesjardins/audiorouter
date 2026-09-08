@@ -373,3 +373,13 @@ correction, and rejects a run if queue occupancy exceeds 1,024 frames or the
 correction exceeds the configured ±100 ppm bound. This makes the bounded
 feedback state observable to acceptance tooling; probe tests and strict Clippy
 pass, while live differing-rate execution remains blocked by host policy.
+
+## 2026-09-07 — Current-head Rust adapter route
+
+The authorized guarded route was replayed after the event-gated render and
+bounded streaming-resampler changes using the existing VB-Audio endpoints.
+The route reported 24,000 capture frames, 23,936 scheduler frames, and 23,456
+routed frames through the generation-1 graph. Endpoint/media identity and state
+were unchanged, and the temporary executable was removed. This is real
+existing-rate route evidence; it does not qualify differing-rate hardware
+clock behavior, native invalidation recovery, or physical acoustic latency.
