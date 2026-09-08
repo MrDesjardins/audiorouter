@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `622c547`, with the latest
+The latest validated implementation head is `09494d7`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -1879,4 +1879,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
 - Completed M00-M08 workspace regression at `03c58d9` on 2026-09-08: locked workspace tests, strict workspace Clippy, formatting/diff checks, and documentation acceptance passed after plugin-state read-boundary hardening. No driver, signing mode, plugin/startup registration, or machine audio configuration changed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Completed M00-M08 safe acceptance at `09494d7` on 2026-09-08: elevated native compile, read-only 34-endpoint format inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/M06/M07 acceptance, unsigned M08 preparation, and documentation validation passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

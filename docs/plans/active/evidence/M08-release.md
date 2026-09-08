@@ -38,6 +38,21 @@ startup entry was registered, and no machine audio configuration changed.
 Production driver/signing, installer, hardware/manual UI, native callback
 deadline, and physical-latency gates remain open.
 
+## Safe acceptance after workspace regression (`09494d7`, 2026-09-08)
+
+The elevated `tests/acceptance/safe-all.ps1` wrapper passed at the current
+head. Native compile and read-only 34-endpoint format inventory passed;
+disposable pinned SysVAD x64 build/package/API qualification passed with the
+installed VS/WDK toolchain; M01, M04, M05, M06, M07, unsigned M08, and
+documentation acceptance also passed. The restricted-shell first attempt was
+blocked by PnP inventory access denial; the elevated rerun completed without
+changing configuration. Temporary outputs/checkouts were removed.
+
+No driver was installed or loaded, signing mode was unchanged, no plugin or
+startup entry was registered, and no machine audio configuration changed.
+Production driver/signing, installer, hardware/manual UI, native callback
+deadline, and physical-latency gates remain open.
+
 ## Workspace regression after plugin-state read validation (`03c58d9`, 2026-09-08)
 
 The locked workspace test suite and strict workspace Clippy passed after the
