@@ -99,6 +99,11 @@ handling: storage-backed control initialization now has a fallible
 of silently replacing unreadable persisted sessions, plans, or privacy state
 with defaults.
 
+Completed safe control slice M01/SEC-12 startup session completeness:
+storage-backed initialization now restores all persisted sessions by walking
+bounded stable-cursor pages instead of truncating at the former 128-row
+bootstrap query. A 129-session regression covers the boundary.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

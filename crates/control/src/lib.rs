@@ -1938,7 +1938,23 @@ impl ControlPlane {
         let privacy_muted = storage.load_privacy_mute()?;
         let backend_epoch = storage.claim_backend_epoch()?;
         let virtual_buses = storage.load_virtual_buses()?;
-        let persisted_sessions = storage.list_sessions(128)?;
+        let mut persisted_sessions = Vec::new();
+        let mut session_cursor = None;
+        loop {
+            let page = storage.list_sessions_after(
+                session_cursor.as_deref(),
+                audiorouter_storage::MAX_SESSION_LIST_ITEMS,
+            )?;
+            if page.is_empty() {
+                break;
+            }
+            let page_len = page.len();
+            session_cursor = page.last().map(|session| session.id.as_str().to_owned());
+            persisted_sessions.extend(page);
+            if page_len < audiorouter_storage::MAX_SESSION_LIST_ITEMS {
+                break;
+            }
+        }
         let mut store = GraphStore::default();
         for session in persisted_sessions {
             let history = storage.load_history(&session.id, 100)?;
@@ -5786,6 +5802,23 @@ mod tests {
         assert_eq!(second["items"].as_array().unwrap().len(), 1);
         assert_eq!(second["items"][0]["id"], "c");
         assert!(second["nextCursor"].is_null());
+    }
+
+    #[test]
+    fn storage_startup_restores_sessions_beyond_first_page() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..129 {
+            let mut value = session();
+            value.id = EntityId::new(format!("session-{index:03}"));
+            value.nodes.clear();
+            value.edges.clear();
+            storage.save_session(&value).unwrap();
+        }
+
+        let plane = ControlPlane::try_with_storage("paged-startup", storage).unwrap();
+        let result = plane.sessions_list_page(None, 500).unwrap();
+        assert_eq!(result["items"].as_array().unwrap().len(), 129);
+        assert!(result["nextCursor"].is_null());
     }
 
     #[test]

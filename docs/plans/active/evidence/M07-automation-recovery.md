@@ -740,6 +740,13 @@ frame. Plugin-host tests and strict Clippy pass, and the complete M07 headless
 acceptance also passes with the MCP/worker lanes. No audio or machine
 configuration was accessed.
 
+## Startup session-page completeness (2026-09-08)
+
+Storage-backed control startup now walks the full bounded session inventory in
+stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
+limit without unbounded reads. A regression restores 129 valid sessions and
+confirms the complete inventory; control passes 87 tests with strict Clippy.
+
 Added a file-backed enrollment restart regression. An operator enrollment is
 created, the first control instance is dropped, and a second instance reloads
 the enrollment from SQLite before authorizing a recovery-clear request. This
