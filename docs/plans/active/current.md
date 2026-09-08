@@ -1690,3 +1690,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/CAP-05/QUAL-01 impulse-wrapper requalification on 2026-09-08: the 50-impulse VB-Audio run detected 45 groups with zero p95 spacing error and an estimated 82.54 ms digital onset; raw/log/object cleanup and unchanged configuration checks passed. This remains digital correlation evidence, not calibrated acoustic latency.
 - Next M00/M02/M03/ARCH-05 task: retain digital timing evidence while pursuing calibrated latency and managed endpoint-owned callback evidence after the production driver boundary exists.
+
+- Completed M02/API-01/ARCH-05 route-telemetry reporting alignment on 2026-09-08: the guarded 300 ms route acceptance now prints the validated processing and deadline-lateness p99.9 upper bounds in its summary. It passed with 14,400 captured and 13,856 routed frames, 32,768 ns processing p99.9 bound, zero deadline misses, and unchanged endpoint/configuration state.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

@@ -954,3 +954,11 @@ documentation validation pass. The guarded 300 ms runs reported processing
 p99.9 upper bounds of 32,768 ns and zero deadline-lateness p99.9 bounds, with
 unchanged media-device state. Native callback and hardware timing gates remain
 open.
+
+The guarded route acceptance summary now includes both validated p99.9 upper
+bounds instead of leaving them visible only in the underlying adapter line.
+The 300 ms route requalification reported 14,400 captured frames, 13,856
+routed frames, processing maximum 26,200 ns, processing p99.9 upper bound
+32,768 ns, and zero deadline misses/lateness. The endpoint snapshot and
+explicit configuration-safety checks passed; this remains shared-mode adapter
+evidence rather than production callback evidence.
