@@ -338,9 +338,14 @@ this is launch authorization evidence, not plugin execution evidence.
 Added bounded opaque state messages (`StateRestore`, `StateSave`, and `State`)
 to the worker protocol. Assets are limited to 512 KiB and must pass SHA-256
 integrity validation; the disposable worker round-trips one asset through the
-process API. Plugin-host coverage is now 45 library tests, 11 ordinary worker
-tests, and 15 feature-enabled worker tests. Vendor-specific VST3 state
+process API. Plugin-host coverage is now 45 library tests, 12 ordinary worker
+tests, and 16 feature-enabled worker tests. Vendor-specific VST3 state
 serialization remains a native-host gate.
+
+Both worker wrappers now expose version-aware restore helpers. They verify the
+versioned asset locally before IPC and return a typed `StateError::VersionMismatch`
+without killing or mutating a running worker; the process regression proves the
+rejection path and subsequent worker usability.
 
 `SupervisedWorkerProcess::spawn_verified` now composes that identity check with
 supervised worker creation. A process regression copied a temporary executable

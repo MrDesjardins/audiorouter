@@ -873,6 +873,11 @@ the encode/decode boundary. The process regression restores an asset and saves
 it back byte-for-byte; bounded and corrupt assets are rejected. This is worker
 transport evidence only and does not claim vendor-specific VST3 state support.
 
+Both worker wrappers now expose version-aware restore helpers. A mismatched
+version is rejected before IPC with a typed state error, and the worker remains
+usable; this preserves the version contract independently of vendor-specific
+native serialization.
+
 The negative process path also requests a save before restore. It returns the
 bounded `stateUnavailable` protocol failure and terminates the disposable
 worker, proving that missing state is not synthesized as an empty asset.

@@ -52,6 +52,12 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
     let latency = WorkerLatency::new(240, 48_000).unwrap();
     assert_eq!(worker.report_latency(latency).unwrap(), latency);
     let asset = PluginStateAsset::new(3, vec![1, 2, 3, 4]).unwrap();
+    assert!(matches!(
+        worker.restore_state_for_version(asset.clone(), 2),
+        Err(audiorouter_plugin_host::WorkerProcessError::State(
+            audiorouter_plugin_host::StateError::VersionMismatch
+        ))
+    ));
     worker.restore_state(asset.clone()).unwrap();
     assert_eq!(worker.save_state().unwrap(), asset);
     assert!(worker.shutdown().unwrap().success());

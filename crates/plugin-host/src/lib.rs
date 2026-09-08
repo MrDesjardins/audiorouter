@@ -1370,6 +1370,7 @@ pub enum WorkerProcessError {
     Message(WorkerMessageError),
     Protocol(String),
     PluginIdentity(IdentityVerificationError),
+    State(StateError),
     /// The bounded failure policy has latched quarantine; replacement is not
     /// permitted until an explicit operator retry clears that policy.
     Quarantined,
@@ -1828,6 +1829,18 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    pub fn restore_state_for_version(
+        &mut self,
+        asset: PluginStateAsset,
+        expected_version: u32,
+        now: Instant,
+    ) -> Result<(), WorkerProcessError> {
+        asset
+            .verify_for_restore(expected_version)
+            .map_err(WorkerProcessError::State)?;
+        self.restore_state(asset, now)
+    }
+
     pub fn save_state(&mut self, now: Instant) -> Result<PluginStateAsset, WorkerProcessError> {
         self.ensure_running()?;
         match self.process.save_state() {
@@ -2124,6 +2137,17 @@ impl WorkerProcess {
                 "unexpected state restore response".into(),
             )),
         }
+    }
+
+    pub fn restore_state_for_version(
+        &mut self,
+        asset: PluginStateAsset,
+        expected_version: u32,
+    ) -> Result<(), WorkerProcessError> {
+        asset
+            .verify_for_restore(expected_version)
+            .map_err(WorkerProcessError::State)?;
+        self.restore_state(asset)
     }
 
     pub fn save_state(&mut self) -> Result<PluginStateAsset, WorkerProcessError> {
