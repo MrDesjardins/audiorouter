@@ -145,6 +145,18 @@ virtual-device plan maps are already expiry-pruned and capped, while the
 operation outcome and plugin inventory caches have independent bounds. No
 redundant retention change was made.
 
+## Safe acceptance requalification after SDK/WDK verification (2026-09-08)
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at `d9e20682` with
+the installed VS2026/SDK/WDK toolchain. It covered native compile and
+read-only endpoint inventory, disposable pinned SysVAD x64 compile/package/API
+validation, the locked workspace and milestone acceptance suites, M06 SDK/
+VST3 qualification, M07 headless checks, unsigned M08 artifact preparation,
+158-ID traceability, and documentation validation (51 Markdown files, 160
+local links). The run exited 0 and cleaned its temporary outputs. It excluded
+driver installation/loading, test-signing mode changes, plugin/startup
+registration, and machine audio configuration changes.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models
