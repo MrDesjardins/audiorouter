@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `c25279a`. Safe portable and
+The latest validated implementation head is `65f83a5`. Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion, and
 scheduler telemetry accounting is implemented and regression-tested. The full
@@ -1547,6 +1547,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M02/M03/ARCH-05 task: connect this instrumentation to a production-style native scheduler callback when that scheduler owns an endpoint stream, then measure callback period/deadline distributions without changing the user's configured defaults.
 
 - Completed M02/ARCH-05/ENG-03 bounded callback histogram on 2026-09-08: runtime processing duration now has a fixed 32-bucket nanosecond histogram in addition to saturating total/maximum counters, allowing future off-thread percentile calculation without retaining per-callback samples. Engine tests (70), workspace compilation, strict Clippy, formatting, diff checks, and documentation validation passed. This remains portable instrumentation readiness, not native callback deadline evidence.
+- Next M02/M03/ARCH-05 task: connect the bounded telemetry to a production-style native scheduler callback when that scheduler owns an endpoint stream, then measure callback period/deadline distributions without changing the user's configured defaults.
+
+- Completed M02/ARCH-05/ENG-03 timing-test portability correction on 2026-09-08: timing regressions now validate accounting invariants without assuming that the platform clock has nonzero nanosecond resolution. Engine tests (71), strict Clippy, formatting, and diff checks passed. This preserves the native callback-deadline gate as unclaimed.
 - Next M02/M03/ARCH-05 task: connect the bounded telemetry to a production-style native scheduler callback when that scheduler owns an endpoint stream, then measure callback period/deadline distributions without changing the user's configured defaults.
 
 - Completed M02/ARCH-05/ENG-03 timing regression coverage on 2026-09-08: an inactive runtime now has explicit regression coverage proving that its silence path records one bounded timing-histogram observation without incrementing processed-quanta counts. Engine tests (71), strict Clippy, formatting, diff checks, and workspace compilation passed. This does not establish native callback deadline evidence.
