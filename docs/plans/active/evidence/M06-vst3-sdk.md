@@ -887,3 +887,11 @@ SDK self-tests, 1,598 official validator tests, and the offline loader checks
 180-byte state round-trip). The installed Visual Studio Community 2026 host
 resolved Windows SDK `10.0.28000.0`; no global SDK/plugin registration, driver,
 audio stream, or machine configuration was changed.
+
+## Plugin inventory response bound (2026-09-07)
+
+The `plugins.scan`, `plugins.list`, and `plugins.retry` output contract now
+advertises the plugin host's existing 256-candidate ceiling. Discovery
+regression coverage preserves the read-only boundary: scanning inspects
+metadata without loading plugin code, and no plugin registration or machine
+audio state is changed.

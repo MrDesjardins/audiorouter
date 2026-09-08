@@ -1028,6 +1028,7 @@ fn method_output_schema(name: &str) -> Value {
                 "directory": { "type": "string", "minLength": 1 },
                 "entries": {
                     "type": "array",
+                    "maxItems": audiorouter_plugin_host::MAX_SCAN_CANDIDATES,
                     "items": {
                         "type": "object",
                         "properties": {
@@ -6807,6 +6808,14 @@ mod tests {
         assert_eq!(
             routes["outputSchema"]["properties"]["complete"]["type"],
             "boolean"
+        );
+        let plugins = methods
+            .iter()
+            .find(|method| method["name"] == "plugins.scan")
+            .unwrap();
+        assert_eq!(
+            plugins["outputSchema"]["properties"]["entries"]["maxItems"],
+            audiorouter_plugin_host::MAX_SCAN_CANDIDATES
         );
         assert_eq!(
             routes["outputSchema"]["properties"]["paths"]["items"]["properties"]["nodes"]
