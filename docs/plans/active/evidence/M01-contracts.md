@@ -19,6 +19,16 @@ not mutate the counter or pending plans, avoiding overflow panic/wrap behavior.
 The focused domain suite passed 58 tests with strict Clippy and formatting; no
 audio or machine configuration was accessed.
 
+## 2026-09-08 - Durable graph-plan ID restart collision
+
+Storage-backed control initialization now reads retained graph-plan IDs and
+advances the in-memory numeric plan counter before accepting new plans. A new
+plan after restart therefore cannot reuse `plan-1` and overwrite the retained
+candidate; the regression creates `plan-1`, restarts, creates `plan-2`, and
+verifies both records. Control tests (95), storage/domain tests, strict Clippy,
+formatting, and documentation validation pass. No audio or machine
+configuration was accessed.
+
 ## 2026-09-08 - Durable graph-plan expiry hardening
 
 The durable `graph.commit` rehydration path now rejects expired or

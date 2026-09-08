@@ -2442,6 +2442,31 @@ impl Storage {
         }))
     }
 
+    /// Return retained graph-plan IDs so a restarted control plane can avoid
+    /// reusing a generated numeric plan ID before an older plan is committed.
+    pub fn list_graph_plan_ids(&self) -> Result<Vec<String>, StorageError> {
+        self.prune_expired_graph_plans()?;
+        let mut statement = self.connection.prepare(
+            "SELECT id FROM graph_plans
+             WHERE expires_at > strftime('%s', 'now') ORDER BY id LIMIT ?1",
+        )?;
+        let ids = statement
+            .query_map([audiorouter_domain::MAX_PENDING_GRAPH_PLANS + 1], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::Sql)?;
+        if ids.len() > audiorouter_domain::MAX_PENDING_GRAPH_PLANS {
+            return Err(StorageError::InvalidPlan(
+                "graph plan inventory exceeds 100 items".into(),
+            ));
+        }
+        for id in &ids {
+            validate_plan_id(id)?;
+        }
+        Ok(ids)
+    }
+
     pub fn delete_graph_plan(&self, id: &str) -> Result<(), StorageError> {
         validate_plan_id(id)?;
         self.connection

@@ -46,6 +46,13 @@ performing unchecked integer addition. A regression verifies the counter and
 pending-plan state remain unchanged. Domain tests (58), strict Clippy, and
 formatting pass; no audio or machine configuration was accessed.
 
+Closed an M01/GRAPH-03 restart collision: a storage-backed controller now
+advances its generated graph-plan counter past retained durable `plan-N` IDs.
+This prevents a new plan after restart from replacing an older uncommitted
+candidate. The restart regression verifies `plan-1` and `plan-2` coexist;
+control tests (95), strict Clippy, and formatting pass without audio or
+machine configuration access.
+
 ## Fan-out topology safety (2026-09-08)
 
 Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out

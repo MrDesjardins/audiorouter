@@ -1956,6 +1956,12 @@ pub struct GraphStore {
 }
 
 impl GraphStore {
+    /// Advance the generated plan-ID counter past identifiers restored from
+    /// durable storage. Callers must supply only a validated numeric suffix.
+    pub fn advance_plan_counter(&mut self, counter: u64) {
+        self.next_plan = self.next_plan.max(counter);
+    }
+
     pub fn remove_session(&mut self, id: &EntityId) -> Result<Session, StoreError> {
         let session = self
             .sessions

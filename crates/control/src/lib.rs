@@ -1994,6 +1994,14 @@ impl ControlPlane {
             }
         }
         let mut store = GraphStore::default();
+        for id in storage.list_graph_plan_ids()? {
+            if let Some(counter) = id
+                .strip_prefix("plan-")
+                .and_then(|suffix| suffix.parse::<u64>().ok())
+            {
+                store.advance_plan_counter(counter);
+            }
+        }
         for session in persisted_sessions {
             let history = storage.load_history(&session.id, 100)?;
             if history.is_empty() {
@@ -9312,6 +9320,47 @@ mod tests {
                 .result
                 .unwrap()["name"],
             "survives-restart"
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn restart_does_not_reuse_a_durable_graph_plan_id() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-plan-id-restart-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let original = session();
+        let mut first = ControlPlane::with_storage("first", Storage::open(&path).unwrap());
+        first.insert_session(original.clone()).unwrap();
+        let first_plan = first.plan_graph(&original.id, 0, original.clone()).unwrap();
+        assert_eq!(first_plan.as_str(), "plan-1");
+        drop(first);
+
+        let mut second = ControlPlane::with_storage("second", Storage::open(&path).unwrap());
+        let mut candidate = original.clone();
+        candidate.name = "second-plan".into();
+        let second_plan = second.plan_graph(&original.id, 0, candidate).unwrap();
+        assert_eq!(second_plan.as_str(), "plan-2");
+        let storage = second.storage.as_ref().unwrap();
+        assert_eq!(
+            storage
+                .load_graph_plan("plan-1")
+                .unwrap()
+                .unwrap()
+                .candidate
+                .name,
+            "test"
+        );
+        assert_eq!(
+            storage
+                .load_graph_plan("plan-2")
+                .unwrap()
+                .unwrap()
+                .candidate
+                .name,
+            "second-plan"
         );
         let _ = std::fs::remove_file(path);
     }
