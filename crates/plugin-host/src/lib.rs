@@ -628,18 +628,25 @@ fn resolve_binary_path(path: &Path) -> Result<PathBuf, InspectionError> {
         return Ok(path.to_path_buf());
     }
     let contents = path.join("Contents").join("x86_64-win");
-    let mut binaries = fs::read_dir(&contents)
-        .map_err(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                InspectionError::Missing
-            } else {
-                InspectionError::Io(error.to_string())
+    let entries = fs::read_dir(&contents).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            InspectionError::Missing
+        } else {
+            InspectionError::Io(error.to_string())
+        }
+    })?;
+    let mut binaries = Vec::with_capacity(2);
+    for entry in entries {
+        let path = entry
+            .map_err(|error| InspectionError::Io(error.to_string()))?
+            .path();
+        if path.is_file() {
+            binaries.push(path);
+            if binaries.len() > 1 {
+                return Err(InspectionError::NotPe);
             }
-        })?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|candidate| candidate.is_file())
-        .collect::<Vec<_>>();
+        }
+    }
     binaries.sort();
     if binaries.len() != 1 {
         return Err(InspectionError::NotPe);
@@ -3472,6 +3479,22 @@ mod tests {
         assert_eq!(identity.metadata.vendor.as_deref(), Some("Example Vendor"));
         assert_eq!(identity.metadata.version.as_deref(), Some("1.2.3"));
         assert_eq!(identity.metadata.class_ids.len(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_a_vst3_bundle_after_finding_a_second_binary() {
+        let root = temp_root();
+        let bundle = root.join("effect.vst3");
+        let binary_dir = bundle.join("Contents").join("x86_64-win");
+        fs::create_dir_all(&binary_dir).unwrap();
+        fs::write(binary_dir.join("first.vst3"), pe_x64()).unwrap();
+        fs::write(binary_dir.join("second.vst3"), pe_x64()).unwrap();
+
+        assert_eq!(
+            inspect_binary(&bundle, std::slice::from_ref(&root)),
+            Err(InspectionError::NotPe)
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

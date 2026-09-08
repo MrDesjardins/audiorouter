@@ -127,6 +127,15 @@ input from being allocated without bound. CLI coverage (26), strict Clippy,
 formatting, and diff checks pass. No audio or machine configuration was
 accessed.
 
+## VST3 bundle binary enumeration bound (2026-09-08)
+
+Closed an M06/SEC-12 plugin-scan gap: VST3 bundle resolution now stops after
+the second regular file in `Contents/x86_64-win` and rejects the bundle as
+invalid, since exactly one binary is required. It no longer collects an
+arbitrarily large malformed bundle directory before rejecting it. Plugin-host
+coverage (47), strict Clippy, formatting, and diff checks pass. No plugin was
+executed and no audio or machine configuration was accessed.
+
 ## Client-enrollment cardinality bound (2026-09-08)
 
 Durable and in-memory client enrollment paths now cap distinct identities at

@@ -1,5 +1,14 @@
 # M06 VST3 SDK boundary
 
+## Bundle binary enumeration bound (2026-09-08)
+
+VST3 bundle resolution now retains only the information needed to decide
+whether `Contents/x86_64-win` contains exactly one regular binary: it returns
+`notPe` as soon as a second binary is found. This prevents malformed bundles
+with large file counts from causing unbounded temporary path retention during
+scan. The regression and 47-test plugin-host suite pass with strict Clippy;
+no plugin was executed and no audio or machine configuration was accessed.
+
 ## Current installation verification (2026-09-07)
 
 The repository-local installer downloaded or verified the official Steinberg
