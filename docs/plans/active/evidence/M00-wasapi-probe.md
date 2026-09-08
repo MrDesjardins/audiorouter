@@ -632,3 +632,13 @@ snapshot was unchanged and removed the exact generated executable/object. This
 is controlled process-tree evidence; PID reuse and physical acoustic latency
 remain unqualified. No existing process was terminated and no audio setting was
 changed.
+
+## Digital loopback requalification (2026-09-07)
+
+The guarded `m00-native-loopback.ps1 -AllowLiveAudio` wrapper passed over the
+existing VB-Audio Virtual Cable. A bounded tone/capture run produced 219,572
+nonzero payload bytes over 1,000 ms capture and 1,500 ms tone windows. The
+wrapper verified unchanged media-device identity/state and exact temporary
+cleanup. It changed no defaults, volume, mute, privacy, driver, signing,
+startup, or other machine audio configuration. This qualifies digital signal
+propagation only; physical acoustic latency remains unqualified.
