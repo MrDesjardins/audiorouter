@@ -154,6 +154,14 @@ regressions cover zero, over-limit, and `usize::MAX` requests. The recording
 suite passed 30 tests, doc-tests, formatting, and strict Clippy. Native
 realtime recorder integration remains open.
 
+## Unpaged recording-list allocation bound (2026-09-07)
+
+The legacy array response path for `recordings.list` now uses the bounded
+500-record storage page query. If additional records exist, it returns an
+actionable pagination error instead of loading or silently dropping the rest;
+cursor-based callers retain the existing page contract. Control/storage tests
+and strict Clippy cover the change without opening audio or changing files.
+
 ## Bounded recording chunk admission (2026-09-07)
 
 `RecordingQueue::try_push` now rejects caller-owned chunks larger than 4,096

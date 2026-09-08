@@ -4099,16 +4099,23 @@ impl ControlPlane {
                 json!([])
             });
         };
-        let (records, has_more) = if paged {
-            storage
-                .list_recordings_page(session_id, cursor, limit as usize)
-                .map_err(storage_error)?
-        } else {
-            (
-                storage.list_recordings(session_id).map_err(storage_error)?,
-                false,
+        let (records, has_more) = storage
+            .list_recordings_page(
+                session_id,
+                cursor,
+                if paged {
+                    limit as usize
+                } else {
+                    MAX_RECORDING_LIST_ITEMS
+                },
             )
-        };
+            .map_err(storage_error)?;
+        if !paged && has_more {
+            return Err(ControlError::InvalidRequest(
+                "recordings.list requires cursor pagination when more than 500 records exist"
+                    .into(),
+            ));
+        }
         let values = records
             .into_iter()
             .map(|record| {
