@@ -44,8 +44,20 @@ $processingTimeTotal = [long]([regex]::Match($line, 'scheduler_processing_time_n
 $processingTimeMax = [long]([regex]::Match($line, 'scheduler_processing_time_ns_max=(\d+)').Groups[1].Value)
 $processingTimeSamples = [long]([regex]::Match($line, 'scheduler_processing_time_histogram_samples=(\d+)').Groups[1].Value)
 $processingTimeHistogram = [regex]::Match($line, 'scheduler_processing_time_histogram=([0-9:,]+)').Groups[1].Value
-if ($processingTimeHistogram.Split(',').Count -ne 32) {
+$processingTimeEntries = $processingTimeHistogram.Split(',')
+if ($processingTimeEntries.Count -ne 32) {
     throw "adapter smoke reported an incomplete processing-time histogram: $line"
+}
+$processingTimeHistogramSum = [long]0
+for ($bucket = 0; $bucket -lt 32; $bucket++) {
+    $parts = $processingTimeEntries[$bucket].Split(':')
+    if ($parts.Count -ne 2 -or $parts[0] -ne "$bucket" -or $parts[1] -notmatch '^\d+$') {
+        throw "adapter smoke reported malformed processing-time histogram bucket: $line"
+    }
+    $processingTimeHistogramSum += [long]$parts[1]
+}
+if ($processingTimeHistogramSum -ne $processingTimeSamples) {
+    throw "adapter smoke processing-time histogram sum did not match its sample count: $line"
 }
 if ($captureFrames -le 0 -or $graphGeneration -ne 1 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $renderFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks) {
     throw "adapter smoke reported invalid frame counts: $line"

@@ -72,7 +72,15 @@ try {
     $processingTimeMax = [long]([regex]::Match($line, 'scheduler_processing_time_ns_max=(\d+)').Groups[1].Value)
     $processingTimeSamples = [long]([regex]::Match($line, 'scheduler_processing_time_histogram_samples=(\d+)').Groups[1].Value)
     $processingTimeHistogram = [regex]::Match($line, 'scheduler_processing_time_histogram=([0-9:,]+)').Groups[1].Value
-    if ($processingTimeHistogram.Split(',').Count -ne 32) { throw "adapter route reported an incomplete processing-time histogram: $line" }
+    $processingTimeEntries = $processingTimeHistogram.Split(',')
+    if ($processingTimeEntries.Count -ne 32) { throw "adapter route reported an incomplete processing-time histogram: $line" }
+    $processingTimeHistogramSum = [long]0
+    for ($bucket = 0; $bucket -lt 32; $bucket++) {
+        $parts = $processingTimeEntries[$bucket].Split(':')
+        if ($parts.Count -ne 2 -or $parts[0] -ne "$bucket" -or $parts[1] -notmatch '^\d+$') { throw "adapter route reported malformed processing-time histogram bucket: $line" }
+        $processingTimeHistogramSum += [long]$parts[1]
+    }
+    if ($processingTimeHistogramSum -ne $processingTimeSamples) { throw "adapter route processing-time histogram sum did not match its sample count: $line" }
     if ($captureFrames -le 0 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $routedFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks) { throw "adapter route reported invalid frame or timing counts: $line" }
     $after = Get-MediaSnapshot
     if (Compare-Object -ReferenceObject $before -DifferenceObject $after) { throw 'media-device identity/state changed during adapter route acceptance' }
