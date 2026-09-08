@@ -53,6 +53,7 @@ pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
 pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
+pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
 /// One extra row is permitted so callers can detect a full page.
 pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
@@ -96,6 +97,15 @@ fn validate_idempotency_key(key: &str) -> Result<(), StorageError> {
     if key.is_empty() || key.len() > MAX_IDEMPOTENCY_KEY_BYTES {
         return Err(StorageError::InvalidJournal(
             "invalid idempotency key".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_request_hash(request_hash: &str) -> Result<(), StorageError> {
+    if request_hash.len() > MAX_REQUEST_HASH_BYTES {
+        return Err(StorageError::InvalidJournal(
+            "request hash is too large".into(),
         ));
     }
     Ok(())
@@ -906,6 +916,7 @@ impl Storage {
     ) -> Result<(), StorageError> {
         validate_plan_id(plan_id.as_str())?;
         validate_idempotency_key(idempotency_key)?;
+        validate_request_hash(request_hash)?;
         let snapshots = registry.snapshots();
         if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
             return Err(StorageError::InvalidSession(
@@ -2121,6 +2132,7 @@ impl Storage {
         request_hash: &str,
     ) -> Result<bool, StorageError> {
         validate_idempotency_key(key)?;
+        validate_request_hash(request_hash)?;
         let revision = i64::try_from(revision)
             .map_err(|_| StorageError::InvalidJournal("journal revision is too large".into()))?;
         validate_journal_fields(operation, result, revision)?;
@@ -2138,6 +2150,7 @@ impl Storage {
         request_hash: &str,
     ) -> Result<Option<String>, StorageError> {
         validate_idempotency_key(key)?;
+        validate_request_hash(request_hash)?;
         self.prune_expired_journal()?;
         let row: Option<(String, String, i64, String)> = self
             .connection
@@ -2151,6 +2164,7 @@ impl Storage {
         match row {
             Some((operation, result, revision, stored_hash)) => {
                 validate_journal_fields(&operation, &result, revision)?;
+                validate_request_hash(&stored_hash)?;
                 if stored_hash == request_hash {
                     Ok(Some(result))
                 } else {
@@ -2426,6 +2440,7 @@ impl Storage {
         failure: Option<JournalFailureStage>,
     ) -> Result<(), StorageError> {
         validate_idempotency_key(key)?;
+        validate_request_hash(request_hash)?;
         let revision = i64::try_from(session.revision)
             .map_err(|_| StorageError::InvalidSession("session revision is too large".into()))?;
         validate_journal_fields(operation, result, revision)?;
@@ -2994,6 +3009,15 @@ mod tests {
         assert!(matches!(
             storage.journal_commit("write-revision", "graph.commit", "{}", u64::MAX),
             Err(StorageError::InvalidJournal(message)) if message.contains("too large")
+        ));
+        let oversized_hash = "h".repeat(MAX_REQUEST_HASH_BYTES + 1);
+        assert!(matches!(
+            storage.journal_commit_with_hash("write-hash", "graph.commit", "{}", 0, &oversized_hash),
+            Err(StorageError::InvalidJournal(message)) if message.contains("hash")
+        ));
+        assert!(matches!(
+            storage.journal_result_checked("corrupt", &oversized_hash),
+            Err(StorageError::InvalidJournal(message)) if message.contains("hash")
         ));
     }
 

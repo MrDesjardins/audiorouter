@@ -677,3 +677,12 @@ Durable journal writes now convert `u64` revisions to SQLite's signed integer
 type before validation and insertion. Values above `i64::MAX` are rejected
 explicitly rather than relying on a wrapping cast. The focused regression is
 covered by the storage suite; no audio or machine configuration was accessed.
+
+## Journal request-hash boundary (2026-09-08)
+
+Direct journal writes, transactional session commits, virtual-bus commits, and
+checked replay lookups now cap request-hash strings at 128 bytes. Empty hashes
+remain valid for legacy journal rows; oversized input fails before SQLite
+mutation or replay lookup. Storage/control tests, strict Clippy, formatting,
+and documentation validation passed. No audio or machine configuration was
+accessed.

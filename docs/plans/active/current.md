@@ -176,6 +176,12 @@ before validation and insertion, explicitly rejecting values above
 `i64::MAX`. The focused storage regression and strict Clippy pass; no audio or
 machine configuration was accessed.
 
+Completed safe storage slice M07/SEC-12 journal request-hash validation:
+direct journal, transactional session, virtual-bus, and checked replay paths
+now cap request-hash strings at 128 bytes while preserving legacy empty hashes.
+Oversized values fail before SQLite mutation or lookup; focused storage/control
+tests and strict Clippy pass with no audio or machine configuration accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
