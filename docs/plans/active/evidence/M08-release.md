@@ -22,6 +22,16 @@ parsing, unsigned release acceptance, and diff checks pass. This remains
 preparation-only evidence; signing, driver, installer, clean-machine, and
 native-audio gates remain open.
 
+## Full safe-chain requalification after `f86f870` (2026-09-08)
+
+The repository safe acceptance chain passed: native compile and 34-endpoint
+read-only format inventory, disposable pinned SysVAD x64 compile/package/API
+qualification, workspace checks, M01 CLI, M04 DSP/recording, M05 UI, M06
+SDK/VST3, M07 headless, unsigned M08 preparation, and documentation validation
+(51 Markdown files, 158 local links). Temporary outputs and checkouts were
+removed. No driver was installed or loaded, signing mode and startup/plugin
+registration were unchanged, and no machine audio configuration changed.
+
 ## Unsigned release requalification after `ca4e8a4` (2026-09-08)
 
 The complete `tests/acceptance/m08-release.ps1` wrapper passed after the
