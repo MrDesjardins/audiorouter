@@ -43,6 +43,15 @@ extensible float variants, with unchanged media-device identity and temporary
 artifact cleanup. This is negotiation evidence only; it does not imply every
 endpoint accepts every requested format.
 
+The authorized 500 ms Rust adapter requalification also passed: the
+production adapter processed 24,480 captured frames into 191 generation-1
+graph blocks, with 24,448 scheduler frames, 25,536 silent render frames, zero
+xruns, and zero deadline misses. The explicitly selected VB-Audio route then
+processed 24,000 capture frames into 187 blocks and routed 23,936 frames with
+zero deadline misses. Both wrappers verified stream cleanup and unchanged
+media state. This remains user-mode adapter/digital-route evidence, not
+managed-driver callback or physical-latency evidence.
+
 ## Durable graph-history retention bound (2026-09-08)
 
 Closed a persistence retention gap in M01/STATE foundations. The SQLite

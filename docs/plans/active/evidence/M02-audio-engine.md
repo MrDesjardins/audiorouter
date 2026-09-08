@@ -1,5 +1,18 @@
 # M02 audio adapter groundwork
 
+## 2026-09-08 - Rust adapter and route requalification
+
+The guarded `m02-rust-adapter-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` run passed against the existing endpoints: 24,480 capture frames became
+191 generation-1 graph blocks and 24,448 scheduler frames; 25,536 silent
+render frames were submitted. Processing-time p99.9 upper bound was 65,536 ns,
+with zero xruns and deadline misses. The explicitly selected VB-Audio route
+also passed for 500 ms with 24,000 capture frames, 187 graph blocks, and
+23,936 routed frames; its processing-time p99.9 bound was 32,768 ns, with zero
+deadline misses. Both wrappers verified stream stop/reset, temporary cleanup,
+and unchanged media state. These are user-mode adapter and digital-route
+results, not managed-driver callback timing or physical acoustic latency.
+
 ## 2026-09-07 — Rust capture compatibility mode
 
 The Windows adapter now exposes an explicit `SharedCapture::open_polling`
