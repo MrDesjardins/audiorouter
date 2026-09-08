@@ -755,6 +755,15 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## Current headless acceptance (2026-09-08)
+
+The checked-in M07 acceptance passed at the current tree: M01 CLI acceptance,
+25 CLI tests, two MCP interoperability tests, 87 control tests, 39 plugin-host
+tests, eight worker-process tests, strict Clippy, and formatting all passed.
+No audio device, driver, plugin registration, or machine configuration was
+changed. Native sign-in/tray lifecycle and production audio restart evidence
+remain open.
+
 ## Journal read/write-boundary validation (2026-09-08)
 
 Operation-status and idempotency-replay reads now validate persisted operation

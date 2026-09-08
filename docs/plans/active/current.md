@@ -206,6 +206,11 @@ crates, with all doc-tests, strict workspace Clippy, formatting, and diff
 checks passing. No driver, signing mode, plugin/startup registration, or
 machine audio configuration changed.
 
+Requalified M07 headless acceptance at the current tree: M01 CLI acceptance,
+25 CLI tests, two MCP interoperability tests, 87 control tests, 39 plugin-host
+tests, eight worker-process tests, strict Clippy, and formatting passed. No
+audio device, driver, plugin registration, or machine configuration changed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
