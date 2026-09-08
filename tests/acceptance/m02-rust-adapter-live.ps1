@@ -28,7 +28,7 @@ if ($cargoExitCode -ne 0) {
     throw "production Rust adapter smoke failed with exit code $cargoExitCode`n$($output -join [Environment]::NewLine)"
 }
 $line = $output | Where-Object { $_ -match '^adapter_smoke ' } | Select-Object -Last 1
-if (-not $line -or $line -notmatch 'capture_packets=(\d+)' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'graph_generation=(\d+)' -or $line -notmatch 'graph_blocks=(\d+)' -or $line -notmatch 'scheduler_frames=(\d+)' -or $line -notmatch 'render_frames=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_total=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_max=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram_samples=(\d+)') {
+if (-not $line -or $line -notmatch 'capture_packets=(\d+)' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'graph_generation=(\d+)' -or $line -notmatch 'graph_blocks=(\d+)' -or $line -notmatch 'scheduler_frames=(\d+)' -or $line -notmatch 'render_frames=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_total=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_max=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram_samples=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram=([0-9:,]+)') {
     throw "adapter smoke did not report bounded capture/render counts`n$($output -join [Environment]::NewLine)"
 }
 $capturePackets = [int]([regex]::Match($line, 'capture_packets=(\d+)').Groups[1].Value)
@@ -43,6 +43,10 @@ $renderFrames = [int]([regex]::Match($line, 'render_frames=(\d+)').Groups[1].Val
 $processingTimeTotal = [long]([regex]::Match($line, 'scheduler_processing_time_ns_total=(\d+)').Groups[1].Value)
 $processingTimeMax = [long]([regex]::Match($line, 'scheduler_processing_time_ns_max=(\d+)').Groups[1].Value)
 $processingTimeSamples = [long]([regex]::Match($line, 'scheduler_processing_time_histogram_samples=(\d+)').Groups[1].Value)
+$processingTimeHistogram = [regex]::Match($line, 'scheduler_processing_time_histogram=([0-9:,]+)').Groups[1].Value
+if ($processingTimeHistogram.Split(',').Count -ne 32) {
+    throw "adapter smoke reported an incomplete processing-time histogram: $line"
+}
 if ($captureFrames -le 0 -or $graphGeneration -ne 1 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $renderFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks) {
     throw "adapter smoke reported invalid frame counts: $line"
 }

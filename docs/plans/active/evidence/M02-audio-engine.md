@@ -852,3 +852,15 @@ the processing-time histogram sample count to match it exactly. This prevents
 a route from passing with only a partial timing report. The 300 ms acceptance
 passed with 13,920 capture frames, 13,824 scheduler frames, and 13,824 routed
 frames; endpoint/media state remained unchanged.
+
+## Raw timing-distribution propagation (2026-09-08)
+
+The adapter probe now emits all 32 fixed processing-time histogram entries as
+`bucket:count` pairs. Both guarded adapter acceptance wrappers require exactly
+32 entries, and the routed wrapper preserves the complete distribution in its
+final summary. The guarded 300 ms adapter run reported 116 samples, with 22 in
+bucket 13 and 94 in bucket 14; the routed run reported 116 samples, with 9 in
+bucket 13, 102 in bucket 14, and 5 in bucket 15. The routed aggregate was
+1,134,000 ns total and 28,400 ns maximum. Both runs completed with unchanged
+media state. This remains adapter/event-loop evidence, not native callback
+deadline compliance.
