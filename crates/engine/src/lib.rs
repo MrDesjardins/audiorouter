@@ -4034,6 +4034,19 @@ mod tests {
     }
 
     #[test]
+    fn histogram_percentile_can_be_below_a_rare_absolute_maximum() {
+        let mut histogram = [0_u64; PROCESSING_TIME_BUCKET_COUNT];
+        histogram[13] = 999;
+        histogram[31] = 1;
+
+        assert_eq!(
+            histogram_upper_bound_ns(&histogram, 999_000),
+            Some(1u64 << 13)
+        );
+        assert!(histogram_upper_bound_ns(&histogram, 999_000).unwrap() < (1u64 << 31));
+    }
+
+    #[test]
     fn realtime_scheduler_filters_outputs_from_replaced_generations() {
         let scheduler = RealtimeScheduler::new(1, 1, 2).unwrap();
         scheduler.processor().publish(RuntimeGraph::prepare(

@@ -35,6 +35,11 @@ passes after the fix, as does the routed wrapper. Histogram accounting,
 sample counts, and totals remain enforced; no persistent audio configuration
 changed.
 
+Added a source-level engine regression for the quantile-tail case that exposed
+the adapter harness defect: p99.9 may be below a rare absolute maximum. The
+engine suite now passes 76 tests plus doc-tests and strict Clippy, with the
+quantile contract covered at its source.
+
 The complete elevated safe acceptance chain was requalified at pushed tree
 `9d6b267` on 2026-09-08 after M04 acceptance evidence was recorded. Native
 compile/inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/

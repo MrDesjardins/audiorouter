@@ -319,3 +319,12 @@ its `paths` array. This matches the graph inspector's bounded enumeration and
 its explicit `complete: false` result when more provenance exists. Control
 discovery regression coverage verifies the contract; native route activation
 and live audio remain open.
+
+## Quantile-tail regression (2026-09-08)
+
+Added an engine regression proving that a p99.9 histogram upper bound may be
+below a rare absolute maximum: 999 samples in bucket 13 and one sample in
+bucket 31 return the bucket-13 bound for p99.9. The engine suite passed 76
+tests plus doc-tests, strict Clippy, formatting, and diff checks. This anchors
+the quantile semantics used by the M02 acceptance wrappers; native callback
+timing remains open.
