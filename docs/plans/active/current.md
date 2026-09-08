@@ -1764,3 +1764,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/M08 disposable-artifact audit on 2026-09-08: two stale, named SysVAD reference checkouts were found in the user temp directory, verified to be outside the repository and not installed drivers, and removed. The repository probe directory contains only checked-in source/build scripts; no audio or machine configuration changed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Completed M01/API-01/SEC-12 public identifier schema alignment on 2026-09-08: control discovery now advertises authoritative 128-byte entity bounds for session, plan, node, recorder, event, and cursor inputs, plus the durable idempotency-key bound for operation lookup/cancel. Control/storage tests (86/52), strict Clippy, formatting, and documentation validation pass; no audio or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

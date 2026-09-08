@@ -579,6 +579,16 @@ node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative
 registries, preventing discovery clients from treating fixed inventories as
 unbounded.
+
+## Public identifier schema alignment (2026-09-08)
+
+Control input schemas now advertise the same 128-byte entity bound enforced by
+domain and storage for session, plan, node, and stable-identity cursor fields.
+Operation lookup/cancel IDs advertise the durable idempotency-key bound, and
+recorder/session event inputs expose the same session limit. Discovery
+regression coverage checks representative fields across these method groups.
+Control/storage tests (86/52), strict Clippy, formatting, and documentation
+validation pass; no audio or machine configuration was accessed.
 ## State-event category registry (2026-09-07)
 
 The 15 supported state-event categories are now centralized in one control

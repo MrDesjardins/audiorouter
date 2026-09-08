@@ -275,20 +275,20 @@ fn method_input_schema(name: &str) -> Value {
             &["clientId"],
         ),
         "operations.get" => object_schema(
-            json!({ "operationId": { "type": "string", "minLength": 1 } }),
+            json!({ "operationId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
             &["operationId"],
         ),
         "operations.cancel" => object_schema(
             json!({
-                "operationId": { "type": "string", "minLength": 1 },
+                "operationId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["operationId"],
         ),
         "recordings.list" => object_schema(
             json!({
-                "sessionId": { "type": ["string", "null"], "minLength": 1 },
-                "cursor": { "type": ["string", "null"], "minLength": 1 },
+                "sessionId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_RECORDING_LIST_ITEMS }
             }),
             &[],
@@ -298,7 +298,7 @@ fn method_input_schema(name: &str) -> Value {
         | "recorders.stop" => recorder_input_schema(true),
         "devices.list" => object_schema(
             json!({
-                "cursor": { "type": ["string", "null"], "minLength": 1 },
+                "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_DEVICE_LIST_ITEMS }
             }),
             &[],
@@ -330,7 +330,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "virtualDevices.list" => object_schema(
             json!({
-                "cursor": { "type": ["string", "null"], "minLength": 1 },
+                "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_VIRTUAL_DEVICE_LIST_ITEMS }
             }),
             &[],
@@ -343,7 +343,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "virtualDevices.apply" => object_schema(
             json!({
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["planId", "idempotencyKey"],
@@ -397,7 +397,7 @@ fn method_input_schema(name: &str) -> Value {
         "startup.plan" => object_schema(json!({ "enabled": { "type": "boolean" } }), &["enabled"]),
         "startup.apply" => object_schema(
             json!({
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["planId", "idempotencyKey"],
@@ -415,11 +415,11 @@ fn method_input_schema(name: &str) -> Value {
             &["recordingId"],
         ),
         "sessions.get" => object_schema(
-            json!({ "sessionId": { "type": "string", "minLength": 1 } }),
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
             &["sessionId"],
         ),
         "sessions.export" => object_schema(
-            json!({ "sessionId": { "type": "string", "minLength": 1 } }),
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
             &["sessionId"],
         ),
         "sessions.importPlan" => {
@@ -427,7 +427,7 @@ fn method_input_schema(name: &str) -> Value {
         }
         "sessions.importCommit" => object_schema(
             json!({
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["planId", "idempotencyKey"],
@@ -448,7 +448,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "sessions.list" => object_schema(
             json!({
-                "cursor": { "type": ["string", "null"] },
+                "cursor": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_SESSION_LIST_ITEMS }
             }),
             &[],
@@ -462,7 +462,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "sessions.duplicate" => object_schema(
             json!({
-                "sourceSessionId": { "type": "string", "minLength": 1 },
+                "sourceSessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "name": { "type": ["string", "null"] },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
@@ -472,7 +472,7 @@ fn method_input_schema(name: &str) -> Value {
         "routes.inspect" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "destinationNode": { "type": "string", "minLength": 1 }
+                "destinationNode": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
             }),
             &["sessionId", "destinationNode"],
         ),
@@ -486,7 +486,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "graph.undoPlan" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "baseRevision": { "type": "integer", "minimum": 0 }
             }),
             &["sessionId", "baseRevision"],
@@ -501,13 +501,13 @@ fn method_input_schema(name: &str) -> Value {
                     "maxItems": 32
                 },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_EVENT_SUBSCRIPTION_ITEMS },
-                "sessionId": { "type": ["string", "null"] }
+                "sessionId": { "type": ["string", "null"], "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
             }),
             &[],
         ),
         "graph.plan" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "baseRevision": { "type": "integer", "minimum": 0 },
                 "candidate": session_item_schema()
             }),
@@ -515,7 +515,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "graph.commit" => object_schema(
             json!({
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "baseRevision": { "type": "integer", "minimum": 0 },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                 "acknowledgments": {
@@ -532,7 +532,7 @@ fn method_input_schema(name: &str) -> Value {
 
 fn recorder_input_schema(frame_required: bool) -> Value {
     let mut properties = json!({
-        "sessionId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
     });
     if frame_required {
@@ -551,7 +551,7 @@ fn method_output_schema(name: &str) -> Value {
         | "recorders.split" | "recorders.stop" => json!({
             "type": "object",
             "properties": {
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "enum": ["idle", "armed", "recording", "paused", "stopping", "completed", "failed"] },
                 "parts": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PARTS },
                 "pauses": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PAUSES },
@@ -726,7 +726,7 @@ fn method_output_schema(name: &str) -> Value {
         "startup.plan" => json!({
             "type": "object",
             "properties": {
-                "planId": { "type": "string", "minLength": 1 },
+                "planId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "enabled": { "type": "boolean" },
                 "registration": { "const": "unavailable" },
                 "reason": { "type": "string", "minLength": 1 },
@@ -6639,6 +6639,39 @@ mod tests {
             commit["inputSchema"]["required"],
             json!(["planId", "baseRevision", "idempotencyKey"])
         );
+        for (method_name, field_name) in [
+            ("graph.commit", "planId"),
+            ("virtualDevices.apply", "planId"),
+            ("startup.apply", "planId"),
+            ("sessions.importCommit", "planId"),
+            ("sessions.get", "sessionId"),
+            ("sessions.export", "sessionId"),
+            ("sessions.duplicate", "sourceSessionId"),
+            ("routes.inspect", "destinationNode"),
+            ("graph.plan", "sessionId"),
+            ("graph.undoPlan", "sessionId"),
+        ] {
+            let method = methods
+                .iter()
+                .find(|method| method["name"] == method_name)
+                .unwrap();
+            assert_eq!(
+                method["inputSchema"]["properties"][field_name]["maxLength"],
+                audiorouter_domain::MAX_ENTITY_ID_BYTES,
+                "{method_name} input {field_name} bound"
+            );
+        }
+        for method_name in ["operations.get", "operations.cancel"] {
+            let method = methods
+                .iter()
+                .find(|method| method["name"] == method_name)
+                .unwrap();
+            assert_eq!(
+                method["inputSchema"]["properties"]["operationId"]["maxLength"],
+                audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES,
+                "{method_name} input operationId bound"
+            );
+        }
         assert_eq!(commit["outputSchema"]["type"], "object");
         let devices = methods
             .iter()
