@@ -606,3 +606,13 @@ configuration.
 The first guarded route attempt with that pair was blocked before inventory by
 Windows Application Control when launching its newly generated temporary Rust
 executable. No stream opened; existing-rate route evidence remains valid.
+
+## Repeatable endpoint-format acceptance (2026-09-07)
+
+`tests/acceptance/m00-native-format-inventory.ps1` now builds the native probe
+with a per-run temporary object, runs `inventory-formats`, requires one
+successful `GetMixFormat` result for every discovered endpoint, snapshots media
+identity/state, and removes both generated files. The authorized read-only run
+passed for all 34 active endpoints. The distinct formats were 48 kHz mono,
+48 kHz stereo, 96 kHz mono, and 96 kHz eight-channel float/PCM mix formats.
+No audio stream was opened and no machine configuration changed.
