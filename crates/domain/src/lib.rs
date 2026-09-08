@@ -163,6 +163,7 @@ pub fn node_registry() -> [NodeTypeSpec; 17] {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VirtualBusLeaseError {
     EmptyOwner,
+    OwnerTooLong,
     AlreadyOwned,
     NotOwner,
     StaleLease,
@@ -190,6 +191,9 @@ impl VirtualBusLease {
     pub fn acquire(&mut self, owner: EntityId) -> Result<u64, VirtualBusLeaseError> {
         if owner.as_str().is_empty() {
             return Err(VirtualBusLeaseError::EmptyOwner);
+        }
+        if owner.as_str().len() > MAX_ENTITY_ID_BYTES {
+            return Err(VirtualBusLeaseError::OwnerTooLong);
         }
         if self.owner.is_some() {
             return Err(VirtualBusLeaseError::AlreadyOwned);
@@ -232,6 +236,7 @@ pub enum VirtualBusError {
     MustBeDisabled,
     Owned,
     EmptyOwner,
+    OwnerTooLong,
     AlreadyOwned,
     NotOwner,
     StaleLease,
@@ -406,6 +411,7 @@ impl VirtualBusRegistry {
             .acquire(owner)
             .map_err(|error| match error {
                 VirtualBusLeaseError::EmptyOwner => VirtualBusError::EmptyOwner,
+                VirtualBusLeaseError::OwnerTooLong => VirtualBusError::OwnerTooLong,
                 VirtualBusLeaseError::AlreadyOwned => VirtualBusError::AlreadyOwned,
                 VirtualBusLeaseError::NotOwner => VirtualBusError::NotOwner,
                 VirtualBusLeaseError::StaleLease => VirtualBusError::StaleLease,
@@ -426,6 +432,7 @@ impl VirtualBusRegistry {
             .release(owner, generation)
             .map_err(|error| match error {
                 VirtualBusLeaseError::EmptyOwner => VirtualBusError::EmptyOwner,
+                VirtualBusLeaseError::OwnerTooLong => VirtualBusError::OwnerTooLong,
                 VirtualBusLeaseError::AlreadyOwned => VirtualBusError::AlreadyOwned,
                 VirtualBusLeaseError::NotOwner => VirtualBusError::NotOwner,
                 VirtualBusLeaseError::StaleLease => VirtualBusError::StaleLease,
@@ -2650,6 +2657,10 @@ mod tests {
         assert_eq!(
             lease.acquire(EntityId::new("")),
             Err(VirtualBusLeaseError::EmptyOwner)
+        );
+        assert_eq!(
+            lease.acquire(EntityId::new("o".repeat(MAX_ENTITY_ID_BYTES + 1))),
+            Err(VirtualBusLeaseError::OwnerTooLong)
         );
         let owner = EntityId::new("client");
         let first_generation = lease.acquire(owner.clone()).unwrap();

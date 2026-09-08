@@ -393,3 +393,8 @@ The managed virtual-bus registry applies the same bound at insertion time and
 returns `IdTooLong` before storing an oversized desired-state bus ID. The
 registry regression covers the limit and remains portable with no audio or
 machine configuration access.
+
+Virtual-bus lease acquisition now rejects owner IDs over the same 128-byte
+bound with `OwnerTooLong` before the owner is stored. The lease and registry
+mapping regression remains portable and does not access audio or machine
+configuration.
