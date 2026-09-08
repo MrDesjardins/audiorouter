@@ -549,6 +549,20 @@ This is packet-boundary and format-conversion evidence only. The adapter is not
 yet connected to the realtime scheduler rings; physical latency,
 generation-aware live routing, and production-driver integration remain open.
 
+## Live scheduler-ring integration (2026-09-07)
+
+The guarded `m00-rust-process-live.ps1 -AllowLiveAudio` acceptance now feeds
+the fixed PCM16 quantum adapter into a bounded `RealtimeScheduler`. Include and
+exclude modes each converted 10,584 frames across 24 packets into 82 exact
+128-frame blocks, processed every block as generation 1, and recycled the
+matching output. Both modes stopped/reset successfully and the media-device
+identity/state snapshot was unchanged. No persistent audio configuration
+changed.
+
+This proves process-loopback packet conversion and scheduler-ring ownership for
+the tested path. Deterministic overflow/underrun stress, native output routing,
+physical latency, and production-driver integration remain open.
+
 ## Fixed PCM16 quantum adapter (2026-09-07)
 
 `Pcm16QuantumAdapter` stages split interleaved PCM16 packets in a fixed

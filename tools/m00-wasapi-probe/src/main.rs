@@ -108,6 +108,13 @@ fn process_loopback_smoke(
     let mut pcm16 = vec![0i16; buffer.len() / 2];
     let mut quantum = Pcm16QuantumAdapter::new(2).map_err(|_| AudioError::InvalidFrameSize)?;
     let mut block = AudioBlock::new(2, 128).map_err(|_| AudioError::InvalidFrameSize)?;
+    let scheduler = RealtimeScheduler::new(8, 2, 128)
+        .map_err(|_| AudioError::InvalidFrameSize)?;
+    let generation = RuntimeGeneration::new(1);
+    scheduler.processor().publish(RuntimeGraph::prepare(
+        generation,
+        vec![ProcessingStage::Gain { linear: 0.5 }],
+    ));
     let started = std::time::Instant::now();
     let mut packets = 0u32;
     let mut frames = 0u32;
@@ -134,6 +141,31 @@ fn process_loopback_smoke(
                         return Err(AudioError::InvalidFrameSize);
                     }
                     quantum_blocks = quantum_blocks.saturating_add(1);
+                    let mut input = scheduler
+                        .acquire_input()
+                        .ok_or(AudioError::BufferTooSmall {
+                            required: 128,
+                            available: 0,
+                        })?;
+                    input
+                        .copy_from(&block)
+                        .map_err(|_| AudioError::InvalidFrameSize)?;
+                    scheduler
+                        .submit_input(input)
+                        .map_err(|_| AudioError::InvalidFrameSize)?;
+                    let processed = scheduler
+                        .process_once()
+                        .map_err(|_| AudioError::InvalidFrameSize)?;
+                    if processed != Some(generation) {
+                        return Err(AudioError::InvalidFrameSize);
+                    }
+                    let output = scheduler
+                        .receive_output_for_generation(generation)
+                        .ok_or(AudioError::InvalidFrameSize)?;
+                    scheduler
+                        .output()
+                        .try_recycle(output)
+                        .map_err(|_| AudioError::InvalidFrameSize)?;
                 }
             }
         }
@@ -141,7 +173,7 @@ fn process_loopback_smoke(
     }
     capture.stop()?;
     println!(
-        "process_loopback mode={} bytes_per_frame={} packets={} frames={} quantum_blocks={}",
+        "process_loopback mode={} bytes_per_frame={} packets={} frames={} quantum_blocks={} scheduler_generation={}",
         match mode {
             ProcessLoopbackMode::IncludeTargetTree => "include",
             ProcessLoopbackMode::ExcludeTargetTree => "exclude",
@@ -149,7 +181,8 @@ fn process_loopback_smoke(
         capture.bytes_per_frame(),
         packets,
         frames,
-        quantum_blocks
+        quantum_blocks,
+        generation.value()
     );
     if frames == 0 {
         return Err(AudioError::InvalidFrameSize);

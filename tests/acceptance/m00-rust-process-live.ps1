@@ -23,11 +23,14 @@ try {
         $exitCode = $LASTEXITCODE
         $text = $result -join "`n"
         if ($exitCode -ne 0 -or $text -notmatch ("process_loopback mode=" + $mode) -or
-            $text -notmatch 'packets=(\d+)' -or $text -notmatch 'frames=(\d+)') {
+            $text -notmatch 'packets=(\d+)' -or $text -notmatch 'frames=(\d+)' -or
+            $text -notmatch 'quantum_blocks=(\d+)' -or $text -notmatch 'scheduler_generation=1') {
             throw "Rust process-loopback $mode failed`n$text"
         }
         $frames = [regex]::Match($text, 'frames=(\d+)')
         if ([int]$frames.Groups[1].Value -le 0) { throw "Rust process-loopback $mode returned no frames`n$text" }
+        $blocks = [regex]::Match($text, 'quantum_blocks=(\d+)')
+        if ([int]$blocks.Groups[1].Value -le 0) { throw "Rust process-loopback $mode emitted no scheduler blocks`n$text" }
         Write-Output ("Rust process-loopback {0} passed: {1}" -f $mode, $text.Trim())
     }
     $after = Get-MediaSnapshot
