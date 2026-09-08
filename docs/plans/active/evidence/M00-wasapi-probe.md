@@ -667,3 +667,16 @@ buffers were silent, clients were stopped/reset by the harness, and the script
 reported defaults, volume, mute, privacy, drivers, signing, and startup
 configuration unchanged. This is event lifecycle evidence, not physical
 latency or production-driver evidence.
+## Bounded virtual-cable signal path (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
+-CaptureDurationMilliseconds 250 -ToneDurationMilliseconds 250`.
+
+The selected existing VB-Audio virtual cable passed the signal-path check:
+the 250 ms render tone produced 6,056 nonzero captured payload bytes. The
+harness verified capture/tone start-stop-reset lifecycle, compared media-device
+identity/state before and after, and removed temporary probe files. It reported
+defaults, volume, mute, privacy, drivers, signing, and startup configuration
+unchanged. This is signal-path evidence, not calibrated physical-latency or
+production-driver evidence.
