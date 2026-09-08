@@ -508,6 +508,10 @@ The checked-in M01 CLI acceptance was rerun on Windows after this alignment;
 application discovery and the offline command contract passed without opening
 an audio stream or changing machine configuration.
 
+The corresponding session lifecycle, deletion, and graph-commit output
+schemas now advertise the same 128-byte identity maximum for returned session
+IDs; native graph activation remains a separate open gate.
+
 Recorder lifecycle transition responses now expose the same 4,096-part and
 4,096-pause maxima for `recorders.arm` through `recorders.stop`, keeping all
 public recorder metadata schemas aligned with the validated bounds.

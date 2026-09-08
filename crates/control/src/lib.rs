@@ -790,7 +790,7 @@ fn method_output_schema(name: &str) -> Value {
         "sessions.delete" => json!({
             "type": "object",
             "properties": {
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "deleted": { "const": true }
             },
             "required": ["sessionId", "deleted"],
@@ -799,7 +799,7 @@ fn method_output_schema(name: &str) -> Value {
         "session.start" | "sessions.start" => json!({
             "type": "object",
             "properties": {
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "running" },
                 "generation": { "type": "integer", "minimum": 1 },
                 "runtime": { "const": "fake" }
@@ -810,7 +810,7 @@ fn method_output_schema(name: &str) -> Value {
         "session.stop" | "sessions.stop" => json!({
             "type": "object",
             "properties": {
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "stopped" },
                 "runtime": { "const": "fake" }
             },
@@ -929,7 +929,7 @@ fn method_output_schema(name: &str) -> Value {
         "graph.commit" => json!({
             "type": "object",
             "properties": {
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "revision": { "type": "integer", "minimum": 0 },
                 "idempotentReplay": { "type": "boolean" },
                 "activation": { "type": "object" }
