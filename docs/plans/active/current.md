@@ -35,6 +35,13 @@ passes after the fix, as does the routed wrapper. Histogram accounting,
 sample counts, and totals remain enforced; no persistent audio configuration
 changed.
 
+Requalified the plugin-host containment boundary on 2026-09-08: 39 unit tests
+plus doc-tests and 8 worker-process integration tests passed with strict
+Clippy. Worker lifetime termination, handshake identity, quarantine/heartbeat,
+bounded frames/deadlines, shared-memory guards, state integrity, and scanner
+limits remain covered. Actual third-party plugin execution and full OS
+filesystem/network sandboxing remain open.
+
 Added a source-level engine regression for the quantile-tail case that exposed
 the adapter harness defect: p99.9 may be below a rare absolute maximum. The
 engine suite now passes 76 tests plus doc-tests and strict Clippy, with the

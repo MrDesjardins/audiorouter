@@ -966,3 +966,14 @@ found 68 classes and verified finite stereo processing, five parameters with
 automation, and a 180-byte state round trip. Outputs were repository-local and
 temporary. No plugin was globally registered, no driver was installed, and no
 audio or machine configuration changed.
+
+## Plugin-host containment regression requalification (2026-09-08)
+
+The complete `audiorouter-plugin-host` target passed 39 unit tests plus
+doc-tests, and its worker-process integration target passed 8 tests. Coverage
+includes bounded worker frames/deadlines, handshake identity, quarantine and
+heartbeat policy, explicit worker termination, shared-memory epoch/sequence
+guards, state-file integrity/reparse protection, and bounded scanner behavior.
+Strict Clippy passed. This is portable/process-boundary evidence; actual
+third-party plugin execution and full OS filesystem/network sandboxing remain
+open.
