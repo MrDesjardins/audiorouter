@@ -38,6 +38,14 @@ files, 160 local links). Temporary outputs/checkouts were removed. Driver
 installation/loading, signing-mode changes, plugin/startup registration, and
 machine audio configuration were excluded and unchanged.
 
+## M06 fixture-gate inventory (2026-09-08)
+
+A read-only inventory of the standard system and user VST3 locations found no
+existing `.vst3` bundles beyond the repository-local mda fixture. The M06
+acceptance requirement for three compatible x64 effects from at least two
+vendors therefore remains unverified. No plugin was downloaded, installed,
+registered, loaded, or executed; no compatibility claim was synthesized.
+
 ## Current actionable handoff (2026-09-08)
 
 The latest validated implementation head is `b120b87`, with the latest

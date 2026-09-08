@@ -988,3 +988,11 @@ classes, finite stereo processing, five-parameter automation, and a 180-byte
 state round trip. No global plugin registration or audio configuration change
 occurred. The elevation requirement is an environment prerequisite, not an
 SDK or plugin compatibility result.
+
+## Fixture-gate inventory (2026-09-08)
+
+The standard system and user VST3 locations were inspected read-only and did
+not contain additional `.vst3` bundles. Only the repository-local mda fixture
+is available for the current offline probe, so the required three-effect,
+two-vendor M06 matrix remains open. No plugin was downloaded, installed,
+registered, loaded, or executed during this inventory.
