@@ -57,6 +57,11 @@ no audio endpoint or machine configuration is accessed.
 The subsequent full locked workspace tests and strict workspace Clippy also
 passed at `1b782fd3`; the M08 evidence records the complete result.
 
+Persisted plan hydration now also caps a far-future timestamp at the
+contractual five-minute TTL, preventing malformed database values from
+overflowing `Instant` construction. The control suite remains 93/93 with
+strict Clippy and formatting; no audio or machine state is accessed.
+
 ## Capture retry classification regression (2026-09-08)
 
 Added a Windows-audio regression proving the capture fallback retries only

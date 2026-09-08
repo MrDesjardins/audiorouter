@@ -1,5 +1,13 @@
 # M07 automation and recovery evidence
 
+## 2026-09-08 - Far-future restart timestamp cap
+
+The shared persisted-plan duration conversion caps future timestamps to the
+five-minute contract before constructing an in-memory `Instant`, preventing a
+malformed startup plan from panicking backend initialization. Control tests
+(93), strict Clippy, and formatting pass; no audio endpoint or machine
+configuration was accessed.
+
 ## 2026-09-08 - Restart expiry conversion hardening
 
 Startup-plan hydration now rejects non-positive or non-representable

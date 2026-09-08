@@ -100,6 +100,7 @@ fn remaining_persisted_plan_duration(expires_at: i64, now: i64) -> Option<Durati
         .filter(|remaining| *remaining > 0)
         .and_then(|remaining| u64::try_from(remaining).ok())
         .map(Duration::from_secs)
+        .map(|remaining| remaining.min(VIRTUAL_DEVICE_PLAN_TTL))
 }
 
 #[derive(Debug)]
@@ -5821,12 +5822,16 @@ mod tests {
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
 
     #[test]
-    fn persisted_plan_duration_rejects_expired_zero_and_overflowing_values() {
+    fn persisted_plan_duration_rejects_expired_and_caps_far_future_values() {
         assert_eq!(remaining_persisted_plan_duration(99, 100), None);
         assert_eq!(remaining_persisted_plan_duration(100, 100), None);
         assert_eq!(
             remaining_persisted_plan_duration(101, 100),
             Some(Duration::from_secs(1))
+        );
+        assert_eq!(
+            remaining_persisted_plan_duration(i64::MAX, 0),
+            Some(VIRTUAL_DEVICE_PLAN_TTL)
         );
         assert_eq!(remaining_persisted_plan_duration(i64::MIN, i64::MAX), None);
     }

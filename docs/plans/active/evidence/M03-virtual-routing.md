@@ -1,5 +1,13 @@
 # M03 virtual-routing contract evidence
 
+## 2026-09-08 - Far-future plan expiry cap
+
+Restart hydration caps positive persisted virtual-device and startup-plan
+lifetimes at the five-minute plan TTL. This prevents a corrupt or manually
+altered far-future SQLite timestamp from producing an `Instant` overflow or an
+effectively unbounded pending plan. Control tests (93), strict Clippy, and
+formatting pass; no endpoint or driver is activated.
+
 ## 2026-09-08 - Durable plan expiry reload hardening
 
 Control restart now uses a checked, strictly-positive remaining duration when
