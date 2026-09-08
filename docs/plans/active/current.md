@@ -351,6 +351,12 @@ stopped because release preparation correctly requires a clean Git tree while
 this new acceptance script was uncommitted. No product or machine state was
 changed.
 
+The clean rerun then passed with the toolchain verifier included: native
+compile/inventory, disposable SysVAD x64 package/API qualification, M01/M04/
+M05/M06/M07 acceptance, unsigned M08 preparation, and documentation validation.
+Temporary outputs/checkouts were removed; no driver, signing mode, plugin or
+startup registration, or machine audio configuration changed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

@@ -802,6 +802,16 @@ registered, or machine audio configuration altered. Production driver ownership,
 signing, installer, clean-machine, physical-latency, native callback deadline,
 and manual UI gates remain open.
 
+## Clean safe-chain requalification with toolchain guard (2026-09-08)
+
+After committing the read-only toolchain guard, `tests/acceptance/safe-all.ps1`
+passed from a clean tree. It verified Visual Studio/MSVC, the matching
+Windows SDK/WDK line, native compile and endpoint inventory, disposable SysVAD
+x64 package/API qualification, M01/M04/M05/M06/M07 acceptance, unsigned M08
+preparation, and documentation validation. Temporary outputs/checkouts were
+removed. No driver, signing-mode, plugin/startup registration, or machine
+audio configuration action occurred.
+
 ## Locked workspace regression after SDK documentation (2026-09-08)
 
 The locked workspace regression passed with 466 unit/integration tests, all
