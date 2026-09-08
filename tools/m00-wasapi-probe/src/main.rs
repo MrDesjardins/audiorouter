@@ -8,8 +8,8 @@
 //! endpoint-ID-selected digital route smoke for compatible 32-bit endpoints.
 
 use audiorouter_engine::{
-    AudioBlock, DriftController, Pcm16QuantumAdapter, ProcessingStage, RealtimeScheduler,
-    RuntimeGeneration, RuntimeGraph, StreamingResampler,
+    histogram_upper_bound_ns, AudioBlock, DriftController, Pcm16QuantumAdapter, ProcessingStage,
+    RealtimeScheduler, RuntimeGeneration, RuntimeGraph, StreamingResampler,
 };
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
@@ -567,6 +567,10 @@ fn adapter_smoke(
             .iter()
             .copied()
             .sum::<u64>();
+        let processing_time_p999_upper_bound_ns =
+            histogram_upper_bound_ns(&telemetry.processing_time_histogram, 999_000).unwrap_or(0);
+        let deadline_lateness_p999_upper_bound_ns =
+            histogram_upper_bound_ns(&telemetry.deadline_lateness_histogram, 999_000).unwrap_or(0);
         if telemetry.active_generation != Some(generation)
             || telemetry.processed_quanta != u64::from(graph_blocks)
             || processing_time_histogram_samples != telemetry.processed_quanta
@@ -585,7 +589,7 @@ fn adapter_smoke(
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={} scheduler_deadline_misses={} scheduler_deadline_lateness_ns_total={} scheduler_deadline_lateness_ns_max={} scheduler_deadline_lateness_histogram={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_p999_upper_bound_ns={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={} scheduler_deadline_misses={} scheduler_deadline_lateness_ns_total={} scheduler_deadline_lateness_ns_max={} scheduler_deadline_lateness_p999_upper_bound_ns={} scheduler_deadline_lateness_histogram={}",
             capture_info.id,
             render_info.id,
             capture_packets,
@@ -606,11 +610,13 @@ fn adapter_smoke(
             telemetry.output_overruns,
             telemetry.processing_time_ns_total,
             telemetry.processing_time_ns_max,
+            processing_time_p999_upper_bound_ns,
             processing_time_histogram_samples,
             processing_time_histogram,
             telemetry.deadline_misses,
             telemetry.deadline_lateness_ns_total,
             telemetry.deadline_lateness_ns_max,
+            deadline_lateness_p999_upper_bound_ns,
             deadline_lateness_histogram
         );
         Ok(())

@@ -1731,10 +1731,46 @@ pub struct CallbackMetrics {
 /// zero-nanosecond observation; later buckets cover successive powers of two
 /// nanoseconds, with the final bucket also containing larger values.
 pub const PROCESSING_TIME_BUCKET_COUNT: usize = 32;
+/// Percentile arguments use millionths so callers can avoid floating-point
+/// parsing at a diagnostics boundary (999_000 represents p99.9).
+pub const PERCENTILE_SCALE: u64 = 1_000_000;
 /// Fixed logarithmic histogram size for positive deadline lateness. Bucket
 /// zero represents sub-nanosecond lateness; the final bucket includes larger
 /// values.
 pub const DEADLINE_LATENESS_BUCKET_COUNT: usize = 32;
+
+/// Return the inclusive nanosecond upper bound of the bucket containing the
+/// requested percentile. The result is conservative because a logarithmic
+/// bucket does not retain individual samples. `percentile_million` must be in
+/// `1..=PERCENTILE_SCALE`; an empty histogram returns `None`.
+pub fn histogram_upper_bound_ns<const N: usize>(
+    histogram: &[u64; N],
+    percentile_million: u64,
+) -> Option<u64> {
+    if !(1..=PERCENTILE_SCALE).contains(&percentile_million) {
+        return None;
+    }
+    let total = histogram.iter().copied().sum::<u64>();
+    if total == 0 {
+        return None;
+    }
+    let rank = ((u128::from(total) * u128::from(percentile_million)
+        + u128::from(PERCENTILE_SCALE - 1))
+        / u128::from(PERCENTILE_SCALE))
+    .max(1);
+    let mut cumulative = 0u64;
+    for (bucket, count) in histogram.iter().copied().enumerate() {
+        cumulative = cumulative.saturating_add(count);
+        if u128::from(cumulative) >= rank {
+            return Some(if bucket == 0 {
+                0
+            } else {
+                1u64.checked_shl(bucket as u32).unwrap_or(u64::MAX)
+            });
+        }
+    }
+    Some(u64::MAX)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BlockMeterSnapshot {
@@ -1832,6 +1868,15 @@ impl CallbackMetrics {
         std::array::from_fn(|index| self.processing_time_buckets[index].load(Ordering::Relaxed))
     }
 
+    /// Return a conservative nanosecond upper bound for a processing-time
+    /// percentile, or `None` when the request is invalid or has no samples.
+    pub fn processing_time_percentile_upper_bound_ns(
+        &self,
+        percentile_million: u64,
+    ) -> Option<u64> {
+        histogram_upper_bound_ns(&self.processing_time_histogram(), percentile_million)
+    }
+
     /// Number of completed processing observations that finished after the
     /// caller-provided quantum deadline.
     pub fn deadline_misses(&self) -> u64 {
@@ -1852,6 +1897,15 @@ impl CallbackMetrics {
     /// Each missed deadline increments exactly one bucket.
     pub fn deadline_lateness_histogram(&self) -> [u64; DEADLINE_LATENESS_BUCKET_COUNT] {
         std::array::from_fn(|index| self.deadline_lateness_buckets[index].load(Ordering::Relaxed))
+    }
+
+    /// Return a conservative nanosecond upper bound for a deadline-lateness
+    /// percentile, or `None` when the request is invalid or has no samples.
+    pub fn deadline_lateness_percentile_upper_bound_ns(
+        &self,
+        percentile_million: u64,
+    ) -> Option<u64> {
+        histogram_upper_bound_ns(&self.deadline_lateness_histogram(), percentile_million)
     }
 
     pub fn record_clipping(&self, samples: usize) {
@@ -3948,6 +4002,24 @@ mod tests {
         assert_eq!(metrics.deadline_lateness_ns_total(), 0);
         assert_eq!(metrics.deadline_lateness_ns_max(), 0);
         assert_eq!(metrics.deadline_lateness_histogram().iter().sum::<u64>(), 0);
+    }
+
+    #[test]
+    fn histogram_percentile_returns_conservative_bucket_bounds() {
+        let mut histogram = [0_u64; PROCESSING_TIME_BUCKET_COUNT];
+        histogram[1] = 1;
+        histogram[3] = 9;
+        assert_eq!(histogram_upper_bound_ns(&histogram, 500_000), Some(8));
+        assert_eq!(histogram_upper_bound_ns(&histogram, 999_000), Some(8));
+        assert_eq!(histogram_upper_bound_ns(&histogram, 0), None);
+        assert_eq!(
+            histogram_upper_bound_ns(&histogram, PERCENTILE_SCALE + 1),
+            None
+        );
+        assert_eq!(
+            histogram_upper_bound_ns(&[0; PROCESSING_TIME_BUCKET_COUNT], 999_000),
+            None
+        );
     }
 
     #[test]

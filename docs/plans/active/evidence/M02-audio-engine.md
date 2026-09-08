@@ -930,3 +930,18 @@ completion does not increment deadline misses or the positive lateness
 histogram. Engine tests (73), strict Clippy, formatting, diff checks, and
 documentation validation pass. Native callback and hardware timing gates are
 unchanged.
+
+## Bounded percentile extraction (2026-09-08)
+
+The engine now exposes conservative upper-bound extraction from fixed
+logarithmic histograms. The 99.9th-percentile rank uses integer ceiling
+arithmetic, rejects invalid percentile inputs, returns no value for an empty
+histogram, and never reports below the bucket containing the selected sample.
+The adapter emits processing and deadline-lateness p99.9 upper-bound fields;
+both guarded live acceptance paths require those bounds to be at least the
+reported maxima. Engine tests (74), strict Clippy, formatting, tool checking,
+PowerShell parsing, live adapter/route acceptance, diff checks, and
+documentation validation pass. The guarded 300 ms runs reported processing
+p99.9 upper bounds of 32,768 ns and zero deadline-lateness p99.9 bounds, with
+unchanged media-device state. Native callback and hardware timing gates remain
+open.
