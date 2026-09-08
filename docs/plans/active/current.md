@@ -167,11 +167,10 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is the pending control-plane plan
-admission-bound change recorded in the next handoff commit, with the latest
+The latest validated implementation head is `3741785`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is `172a96b`; its event-replay cursor,
+The latest pushed plan/evidence tip is `3741785`; its event-replay cursor,
 Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
 bundles, so the required three-effect/two-vendor compatibility gate remains
