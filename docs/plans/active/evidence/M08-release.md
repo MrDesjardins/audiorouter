@@ -23,6 +23,12 @@ and no plugin/startup registration or machine audio configuration changed.
 Production driver ownership, signing, installer, clean-machine,
 physical-latency, and manual UI/accessibility gates remain open.
 
+The post-qualification artifact audit found two stale disposable SysVAD
+reference checkouts in the user temp directory. Their exact paths were
+validated under the temp root and removed recursively; the repository probe
+directory contained only checked-in `build.ps1` and `main.cpp` afterward. No
+driver was installed or loaded, and no machine audio configuration changed.
+
 ## Current-tip unsigned qualification (2026-09-07)
 
 The complete release-preparation acceptance passed at the current head. It
