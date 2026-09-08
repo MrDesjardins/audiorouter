@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $acceptanceRoot = Join-Path $repositoryRoot 'tests\acceptance'
 $steps = @(
+    @{ Name = 'M00 toolchain compatibility'; Script = Join-Path $acceptanceRoot 'm00-toolchain.ps1' },
     @{ Name = 'M00 native compile'; Script = Join-Path $acceptanceRoot 'm00-native-build.ps1' },
     @{ Name = 'M00 native format inventory'; Script = Join-Path $acceptanceRoot 'm00-native-format-inventory.ps1' },
     @{ Name = 'M00 pinned SysVAD qualification'; Script = Join-Path $repositoryRoot 'tools\m00-sysvad\qualify.ps1' },

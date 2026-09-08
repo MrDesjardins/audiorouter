@@ -343,6 +343,14 @@ with `-D warnings`, and the documentation acceptance passed. No driver,
 signing mode, plugin/startup registration, or machine audio configuration
 changed.
 
+Added and validated `tests/acceptance/m00-toolchain.ps1` for M00/ARCH-12:
+it read-only verifies Visual Studio/MSVC, Windows SDK headers/libraries, WDK
+build properties, `stampinf`, and the shared `28000` kit line. The verifier
+passed on the installed host; the first full-chain rerun reached M08 and
+stopped because release preparation correctly requires a clean Git tree while
+this new acceptance script was uncommitted. No product or machine state was
+changed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
