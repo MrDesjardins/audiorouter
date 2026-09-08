@@ -341,6 +341,16 @@ export interface DiscoveryDocument {
     maxNodesGlobal: number;
     maxEdgesGlobal: number;
     maxActiveSessions: number;
+    maxVirtualBuses: number;
+    maxDisplayNameBytes: number;
+    maxPortNameBytes: number;
+    maxPortsPerNode: number;
+    maxChannelMatrixCoefficients: number;
+    maxControlValueDepth: number;
+    maxControlStringBytes: number;
+    maxControlValueCount: number;
+    maxMethodNameBytes: number;
+    maxRequestIdBytes: number;
   };
   events: {
     stateCategories: string[];

@@ -428,6 +428,12 @@ reporting an oversized collection, preventing unbounded graph work and
 ambiguous name resolution. Domain regressions cover both conditions without
 audio or machine configuration access.
 
+`system.describe` now advertises the enforced graph text and shape limits:
+display-name bytes, port-name bytes, ports per node, and channel-matrix
+coefficients. The TypeScript discovery contract includes these fields and the
+control regression asserts the values match domain constants. This is portable
+API-contract evidence with no audio or machine configuration access.
+
 Session display names use the same 256-byte UTF-8 bound as node display names.
 Direct validation rejects an oversized imported label with a bounded `name`
 path before graph processing. The regression is portable and does not access

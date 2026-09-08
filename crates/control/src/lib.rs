@@ -616,13 +616,17 @@ fn method_output_schema(name: &str) -> Value {
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
                         "maxActiveSessions": { "type": "integer", "minimum": 1 },
                         "maxVirtualBuses": { "type": "integer", "minimum": 1 },
+                        "maxDisplayNameBytes": { "type": "integer", "minimum": 1 },
+                        "maxPortNameBytes": { "type": "integer", "minimum": 1 },
+                        "maxPortsPerNode": { "type": "integer", "minimum": 1 },
+                        "maxChannelMatrixCoefficients": { "type": "integer", "minimum": 1 },
                         "maxControlValueDepth": { "type": "integer", "minimum": 1 },
                         "maxControlStringBytes": { "type": "integer", "minimum": 1 },
                         "maxControlValueCount": { "type": "integer", "minimum": 1 },
                         "maxMethodNameBytes": { "type": "integer", "minimum": 1 },
                         "maxRequestIdBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -2468,6 +2472,10 @@ impl ControlPlane {
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
                 "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
                 "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES,
+                "maxDisplayNameBytes": audiorouter_domain::MAX_DISPLAY_NAME_BYTES,
+                "maxPortNameBytes": audiorouter_domain::MAX_PORT_NAME_BYTES,
+                "maxPortsPerNode": audiorouter_domain::MAX_PORTS_PER_NODE,
+                "maxChannelMatrixCoefficients": audiorouter_domain::MAX_CHANNEL_MATRIX_COEFFICIENTS,
                 "maxControlValueDepth": MAX_CONTROL_VALUE_DEPTH,
                 "maxControlStringBytes": MAX_CONTROL_STRING_BYTES,
                 "maxControlValueCount": MAX_CONTROL_VALUE_COUNT,
@@ -6026,6 +6034,22 @@ mod tests {
         assert_eq!(description["limits"]["maxEdgesGlobal"], 256);
         assert_eq!(description["limits"]["maxActiveSessions"], 2);
         assert_eq!(description["limits"]["maxVirtualBuses"], 8);
+        assert_eq!(
+            description["limits"]["maxDisplayNameBytes"],
+            audiorouter_domain::MAX_DISPLAY_NAME_BYTES
+        );
+        assert_eq!(
+            description["limits"]["maxPortNameBytes"],
+            audiorouter_domain::MAX_PORT_NAME_BYTES
+        );
+        assert_eq!(
+            description["limits"]["maxPortsPerNode"],
+            audiorouter_domain::MAX_PORTS_PER_NODE
+        );
+        assert_eq!(
+            description["limits"]["maxChannelMatrixCoefficients"],
+            audiorouter_domain::MAX_CHANNEL_MATRIX_COEFFICIENTS
+        );
         assert_eq!(
             description["limits"]["maxControlValueDepth"],
             MAX_CONTROL_VALUE_DEPTH
