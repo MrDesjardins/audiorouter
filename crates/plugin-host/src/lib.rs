@@ -99,6 +99,12 @@ impl InspectionError {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum IdentityVerificationError {
+    Inspection(InspectionError),
+    Changed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StateError {
     Empty,
     TooLarge,
@@ -315,6 +321,28 @@ impl PluginIdentity {
         } else {
             PluginCompatibility::UnsupportedFormat
         }
+    }
+
+    /// Reinspect the exact selected path before a worker is launched. This
+    /// prevents a discovery result from authorizing a replacement binary or
+    /// reparse-point path. Optional module metadata is intentionally excluded:
+    /// execution authorization is bound to the canonical binary fingerprint.
+    pub fn verify_current(
+        &self,
+        configured_roots: &[PathBuf],
+    ) -> Result<(), IdentityVerificationError> {
+        let current = inspect_binary(&self.path, configured_roots)
+            .map_err(IdentityVerificationError::Inspection)?;
+        if current.path != self.path
+            || current.binary_path != self.binary_path
+            || current.format != self.format
+            || current.architecture != self.architecture
+            || current.file_bytes != self.file_bytes
+            || current.sha256 != self.sha256
+        {
+            return Err(IdentityVerificationError::Changed);
+        }
+        Ok(())
     }
 }
 
@@ -3006,6 +3034,41 @@ mod tests {
         assert_eq!(identity.architecture, PeArchitecture::X64);
         assert_eq!(identity.sha256.len(), 64);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn plugin_identity_revalidation_rejects_changed_binary_bytes() {
+        let root = temp_root();
+        let path = root.join("effect.vst3");
+        fs::write(&path, pe_x64()).unwrap();
+        let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.verify_current(std::slice::from_ref(&root)), Ok(()));
+
+        let mut changed = pe_x64();
+        changed[0x90] = 1;
+        fs::write(&path, changed).unwrap();
+        assert_eq!(
+            identity.verify_current(std::slice::from_ref(&root)),
+            Err(IdentityVerificationError::Changed)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn plugin_identity_revalidation_keeps_root_containment_fail_closed() {
+        let root = temp_root();
+        let outside = temp_root();
+        let path = outside.join("effect.vst3");
+        fs::write(&path, pe_x64()).unwrap();
+        let identity = inspect_binary(&path, std::slice::from_ref(&outside)).unwrap();
+        assert_eq!(
+            identity.verify_current(std::slice::from_ref(&root)),
+            Err(IdentityVerificationError::Inspection(
+                InspectionError::OutsideConfiguredRoot
+            ))
+        );
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]

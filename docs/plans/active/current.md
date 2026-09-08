@@ -329,6 +329,12 @@ IPC, and supervisor containment are all exercised. This closes the controlled
 failure fixture portion of M06 evidence; it does not claim third-party plugin
 loading or full OS filesystem/network sandboxing.
 
+Added `PluginIdentity::verify_current` for the discovery-to-launch boundary.
+It rechecks canonical root containment and the selected binary's format,
+architecture, size, and SHA-256, rejecting replacement or outside-root content
+without rebinding. Two regressions cover changed bytes and a changed grant;
+this is launch authorization evidence, not plugin execution evidence.
+
 Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
 interoperability tests, 87 control tests, 39 plugin-host tests, and 8
 worker-process tests passed with doc-tests and strict Clippy. Durable plans,

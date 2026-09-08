@@ -70,6 +70,11 @@ successful metadata inspection. A failed or unavailable effect must leave a
 protected voice path silent or explicitly unavailable, not silently fall back
 to dry audio.
 
+Before a worker launch, callers can invoke `PluginIdentity::verify_current` with
+the approved configured roots. It rechecks the exact canonical path, binary
+fingerprint, format, architecture, and size, and fails closed if the file was
+replaced or moved outside the grant. It never selects a substitute path.
+
 Run the reproducible local qualification with:
 
 ```powershell

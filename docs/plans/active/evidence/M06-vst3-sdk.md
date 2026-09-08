@@ -847,6 +847,14 @@ supervisor heartbeat path, and malformed output was rejected at the reader
 boundary. The normal build does not enable these modes; no third-party plugin
 code or audio device was involved.
 
+## Discovery-to-launch identity revalidation (2026-09-08)
+
+`PluginIdentity::verify_current` now reinspects the exact selected path against
+the caller's configured roots and compares canonical path, binary path, format,
+architecture, byte count, and SHA-256. Changed bytes and a root-grant mismatch
+are rejected without substitution. This protects a future worker launch from
+stale scan results; it does not claim plugin execution or sandbox completion.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and
