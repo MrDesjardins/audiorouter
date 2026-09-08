@@ -497,3 +497,15 @@ run used zero-valued caller-owned render buffers, so `routed_frames=0` and
 It does not close endpoint-specific initialization failures, routed signal, or
 calibrated physical-latency gates. Media-device state and persistent audio
 configuration were unchanged.
+## Production Rust adapter route run (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 100`.
+
+The selected existing VB-Audio virtual cable completed the bounded route run
+with 4,800 capture frames, 4,736 scheduler frames, and 4,736 routed frames.
+The adapter stopped and reset its streams, and the acceptance harness reported
+defaults, volume, mute, privacy, drivers, signing, and startup configuration
+unchanged. This proves selected-endpoint route activation only; calibrated
+physical latency and production-driver gates remain open.
