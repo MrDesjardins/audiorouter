@@ -555,6 +555,18 @@ fn adapter_smoke(
             .map(|(bucket, count)| format!("{bucket}:{count}"))
             .collect::<Vec<_>>()
             .join(",");
+        let deadline_lateness_histogram = telemetry
+            .deadline_lateness_histogram
+            .iter()
+            .enumerate()
+            .map(|(bucket, count)| format!("{bucket}:{count}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let deadline_lateness_samples = telemetry
+            .deadline_lateness_histogram
+            .iter()
+            .copied()
+            .sum::<u64>();
         if telemetry.active_generation != Some(generation)
             || telemetry.processed_quanta != u64::from(graph_blocks)
             || processing_time_histogram_samples != telemetry.processed_quanta
@@ -562,6 +574,7 @@ fn adapter_smoke(
             || telemetry.input_overruns != 0
             || telemetry.output_overruns != 0
             || telemetry.deadline_misses > telemetry.processed_quanta
+            || deadline_lateness_samples != telemetry.deadline_misses
             || telemetry.deadline_lateness_ns_total < telemetry.deadline_lateness_ns_max
             || resampler_queued_frames > 1024
             || drift_correction_ppm.abs() > 100.0
@@ -572,7 +585,7 @@ fn adapter_smoke(
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={} scheduler_deadline_misses={} scheduler_deadline_lateness_ns_total={} scheduler_deadline_lateness_ns_max={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={} scheduler_deadline_misses={} scheduler_deadline_lateness_ns_total={} scheduler_deadline_lateness_ns_max={} scheduler_deadline_lateness_histogram={}",
             capture_info.id,
             render_info.id,
             capture_packets,
@@ -597,7 +610,8 @@ fn adapter_smoke(
             processing_time_histogram,
             telemetry.deadline_misses,
             telemetry.deadline_lateness_ns_total,
-            telemetry.deadline_lateness_ns_max
+            telemetry.deadline_lateness_ns_max,
+            deadline_lateness_histogram
         );
         Ok(())
     })();

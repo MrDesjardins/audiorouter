@@ -63,7 +63,7 @@ try {
     $routeText = $route.Output -join "`n"
     if ($route.ExitCode -ne 0) { throw "Rust adapter route failed`n$routeText" }
     $line = $route.Output | Where-Object { $_ -match '^adapter_smoke ' } | Select-Object -Last 1
-    if (-not $line -or $line -notmatch 'route=true' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'graph_blocks=(\d+)' -or $line -notmatch 'scheduler_frames=(\d+)' -or $line -notmatch 'routed_frames=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_total=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_max=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram_samples=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram=([0-9:,]+)' -or $line -notmatch 'scheduler_deadline_misses=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_total=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_max=(\d+)') { throw "adapter route did not report bounded routed frames and timing telemetry`n$routeText" }
+    if (-not $line -or $line -notmatch 'route=true' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'graph_blocks=(\d+)' -or $line -notmatch 'scheduler_frames=(\d+)' -or $line -notmatch 'routed_frames=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_total=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_max=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram_samples=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram=([0-9:,]+)' -or $line -notmatch 'scheduler_deadline_misses=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_total=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_max=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_histogram=([0-9:,]+)') { throw "adapter route did not report bounded routed frames and timing telemetry`n$routeText" }
     $captureFrames = [int]([regex]::Match($line, 'capture_frames=(\d+)').Groups[1].Value)
     $graphBlocks = [int]([regex]::Match($line, 'graph_blocks=(\d+)').Groups[1].Value)
     $schedulerFrames = [int]([regex]::Match($line, 'scheduler_frames=(\d+)').Groups[1].Value)
@@ -75,6 +75,15 @@ try {
     $deadlineMisses = [long]([regex]::Match($line, 'scheduler_deadline_misses=(\d+)').Groups[1].Value)
     $deadlineLatenessTotal = [long]([regex]::Match($line, 'scheduler_deadline_lateness_ns_total=(\d+)').Groups[1].Value)
     $deadlineLatenessMax = [long]([regex]::Match($line, 'scheduler_deadline_lateness_ns_max=(\d+)').Groups[1].Value)
+    $deadlineLatenessHistogram = [regex]::Match($line, 'scheduler_deadline_lateness_histogram=([0-9:,]+)').Groups[1].Value
+    $deadlineLatenessEntries = $deadlineLatenessHistogram.Split(',')
+    if ($deadlineLatenessEntries.Count -ne 32) { throw "adapter route reported an incomplete deadline-lateness histogram: $line" }
+    $deadlineLatenessSamples = [long]0
+    for ($bucket = 0; $bucket -lt 32; $bucket++) {
+        $parts = $deadlineLatenessEntries[$bucket].Split(':')
+        if ($parts.Count -ne 2 -or $parts[0] -ne "$bucket" -or $parts[1] -notmatch '^\d+$') { throw "adapter route reported malformed deadline-lateness histogram bucket: $line" }
+        $deadlineLatenessSamples += [long]$parts[1]
+    }
     $processingTimeEntries = $processingTimeHistogram.Split(',')
     if ($processingTimeEntries.Count -ne 32) { throw "adapter route reported an incomplete processing-time histogram: $line" }
     $processingTimeHistogramSum = [long]0
@@ -84,10 +93,10 @@ try {
         $processingTimeHistogramSum += [long]$parts[1]
     }
     if ($processingTimeHistogramSum -ne $processingTimeSamples) { throw "adapter route processing-time histogram sum did not match its sample count: $line" }
-    if ($captureFrames -le 0 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $routedFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessTotal -lt $deadlineLatenessMax) { throw "adapter route reported invalid frame or timing counts: $line" }
+    if ($captureFrames -le 0 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $routedFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessSamples -ne $deadlineMisses -or $deadlineLatenessTotal -lt $deadlineLatenessMax) { throw "adapter route reported invalid frame or timing counts: $line" }
     $after = Get-MediaSnapshot
     if (Compare-Object -ReferenceObject $before -DifferenceObject $after) { throw 'media-device identity/state changed during adapter route acceptance' }
-    Write-Output ("M02 Rust adapter route passed: render='{0}' capture='{1}' capture_frames={2} graph_blocks={3} scheduler_frames={4} routed_frames={5} processing_time_ns_total={6} processing_time_ns_max={7} processing_time_histogram_samples={8} processing_time_histogram={9} deadline_misses={10} deadline_lateness_ns_total={11} deadline_lateness_ns_max={12}" -f $renderLabel, $captureLabel, $captureFrames, $graphBlocks, $schedulerFrames, $routedFrames, $processingTimeTotal, $processingTimeMax, $processingTimeSamples, $processingTimeHistogram, $deadlineMisses, $deadlineLatenessTotal, $deadlineLatenessMax)
+    Write-Output ("M02 Rust adapter route passed: render='{0}' capture='{1}' capture_frames={2} graph_blocks={3} scheduler_frames={4} routed_frames={5} processing_time_ns_total={6} processing_time_ns_max={7} processing_time_histogram_samples={8} processing_time_histogram={9} deadline_misses={10} deadline_lateness_ns_total={11} deadline_lateness_ns_max={12} deadline_lateness_histogram={13}" -f $renderLabel, $captureLabel, $captureFrames, $graphBlocks, $schedulerFrames, $routedFrames, $processingTimeTotal, $processingTimeMax, $processingTimeSamples, $processingTimeHistogram, $deadlineMisses, $deadlineLatenessTotal, $deadlineLatenessMax, $deadlineLatenessHistogram)
     Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {

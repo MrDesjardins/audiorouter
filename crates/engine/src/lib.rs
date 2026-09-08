@@ -1724,12 +1724,17 @@ pub struct CallbackMetrics {
     deadline_misses: AtomicU64,
     deadline_lateness_ns_total: AtomicU64,
     deadline_lateness_ns_max: AtomicU64,
+    deadline_lateness_buckets: [AtomicU64; DEADLINE_LATENESS_BUCKET_COUNT],
 }
 
 /// Fixed logarithmic processing-time histogram size. Bucket zero represents a
 /// zero-nanosecond observation; later buckets cover successive powers of two
 /// nanoseconds, with the final bucket also containing larger values.
 pub const PROCESSING_TIME_BUCKET_COUNT: usize = 32;
+/// Fixed logarithmic histogram size for positive deadline lateness. Bucket
+/// zero represents sub-nanosecond lateness; the final bucket includes larger
+/// values.
+pub const DEADLINE_LATENESS_BUCKET_COUNT: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BlockMeterSnapshot {
@@ -1843,6 +1848,12 @@ impl CallbackMetrics {
         self.deadline_lateness_ns_max.load(Ordering::Relaxed)
     }
 
+    /// Return a bounded histogram snapshot of positive deadline lateness.
+    /// Each missed deadline increments exactly one bucket.
+    pub fn deadline_lateness_histogram(&self) -> [u64; DEADLINE_LATENESS_BUCKET_COUNT] {
+        std::array::from_fn(|index| self.deadline_lateness_buckets[index].load(Ordering::Relaxed))
+    }
+
     pub fn record_clipping(&self, samples: usize) {
         self.clipped_samples
             .fetch_add(samples as u64, Ordering::Relaxed);
@@ -1889,6 +1900,16 @@ impl CallbackMetrics {
         };
         let nanos = u64::try_from(lateness.as_nanos()).unwrap_or(u64::MAX);
         self.deadline_misses.fetch_add(1, Ordering::Relaxed);
+        let bucket = if nanos == 0 {
+            0
+        } else {
+            ((u64::BITS - nanos.leading_zeros()) as usize).min(DEADLINE_LATENESS_BUCKET_COUNT - 1)
+        };
+        let _ = self.deadline_lateness_buckets[bucket].fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |value| Some(value.saturating_add(1)),
+        );
         let _ = self.deadline_lateness_ns_total.fetch_update(
             Ordering::Relaxed,
             Ordering::Relaxed,
@@ -2818,6 +2839,7 @@ pub struct SchedulerTelemetry {
     pub deadline_misses: u64,
     pub deadline_lateness_ns_total: u64,
     pub deadline_lateness_ns_max: u64,
+    pub deadline_lateness_histogram: [u64; DEADLINE_LATENESS_BUCKET_COUNT],
     pub active_generation: Option<RuntimeGeneration>,
 }
 
@@ -2885,6 +2907,7 @@ impl RealtimeScheduler {
             deadline_misses: self.processor.metrics().deadline_misses(),
             deadline_lateness_ns_total: self.processor.metrics().deadline_lateness_ns_total(),
             deadline_lateness_ns_max: self.processor.metrics().deadline_lateness_ns_max(),
+            deadline_lateness_histogram: self.processor.metrics().deadline_lateness_histogram(),
             active_generation: self
                 .processor
                 .publication
@@ -3904,6 +3927,10 @@ mod tests {
         assert_eq!(telemetry.deadline_misses, 1);
         assert!(telemetry.deadline_lateness_ns_total >= telemetry.deadline_lateness_ns_max);
         assert!(telemetry.deadline_lateness_ns_max > 0);
+        assert_eq!(
+            telemetry.deadline_lateness_histogram.iter().sum::<u64>(),
+            telemetry.deadline_misses
+        );
     }
 
     #[test]

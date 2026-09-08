@@ -902,3 +902,16 @@ and reset their streams and verified unchanged media-device state. This is
 shared-mode endpoint-adapter evidence only; it does not establish managed
 virtual-driver ownership, production callback compliance, physical latency, or
 long-term soak behavior.
+
+## Deadline-lateness distribution (2026-09-08)
+
+Scheduler telemetry now retains a fixed 32-bucket logarithmic histogram for
+positive deadline lateness. The adapter output preserves all buckets, and both
+guarded acceptance wrappers require sequential bucket labels, numeric counts,
+and a histogram sum equal to the reported deadline misses.
+
+The follow-up 300 ms adapter run processed 120 quanta with zero deadline
+misses/lateness; the routed run processed 116 quanta with zero deadline
+misses/lateness. Both stopped/reset their streams and verified unchanged media
+state. This remains shared-mode adapter evidence, not managed-driver callback,
+physical-latency, or long-term soak evidence.
