@@ -1246,6 +1246,7 @@ impl Storage {
 
     pub fn save_plugin_state(&self, state: &PluginStateRecord) -> Result<(), StorageError> {
         if state.id.is_empty()
+            || state.id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
             || state.plugin_id.is_empty()
             || !is_sha256(&state.plugin_sha256)
             || state.version == 0
@@ -3507,6 +3508,24 @@ mod tests {
             plugin_sha256: "a".repeat(64),
             version: 1,
             path: "relative/state.bin".into(),
+            state_sha256: "b".repeat(64),
+            size_bytes: 1,
+        };
+        assert!(matches!(
+            storage.save_plugin_state(&state),
+            Err(StorageError::InvalidPluginState(_))
+        ));
+    }
+
+    #[test]
+    fn plugin_state_rejects_unbounded_record_ids() {
+        let storage = Storage::open_memory().unwrap();
+        let state = PluginStateRecord {
+            id: "s".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1),
+            plugin_id: "plugin-1".into(),
+            plugin_sha256: "a".repeat(64),
+            version: 1,
+            path: "C:\\AudioRouter\\state\\state-1.bin".into(),
             state_sha256: "b".repeat(64),
             size_bytes: 1,
         };
