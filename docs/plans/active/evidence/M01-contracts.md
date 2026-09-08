@@ -511,3 +511,8 @@ an audio stream or changing machine configuration.
 Recorder lifecycle transition responses now expose the same 4,096-part and
 4,096-pause maxima for `recorders.arm` through `recorders.stop`, keeping all
 public recorder metadata schemas aligned with the validated bounds.
+
+Session-scoped inputs for deletion, lifecycle control, duplication, route
+inspection, and graph history now advertise the domain's 128-byte session
+identity limit, preventing clients from submitting values the backend cannot
+accept.

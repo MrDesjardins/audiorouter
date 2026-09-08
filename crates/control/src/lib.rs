@@ -424,14 +424,14 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "sessions.delete" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["sessionId"],
         ),
         "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
             &["sessionId"],
@@ -453,7 +453,7 @@ fn method_input_schema(name: &str) -> Value {
         "sessions.duplicate" => object_schema(
             json!({
                 "sourceSessionId": { "type": "string", "minLength": 1 },
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "name": { "type": ["string", "null"] },
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
@@ -461,14 +461,14 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "routes.inspect" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "destinationNode": { "type": "string", "minLength": 1 }
             }),
             &["sessionId", "destinationNode"],
         ),
         "graph.history" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1 },
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "cursor": { "type": ["string", "null"] },
                 "limit": { "type": "integer", "minimum": 1, "maximum": MAX_GRAPH_HISTORY_ITEMS }
             }),
