@@ -250,14 +250,15 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `27540fe`, with the latest
+The latest validated implementation head is `d3a26924`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is `27540fe`; its event-replay cursor,
+The latest pushed plan/evidence tip is `d3a26924`; its event-replay cursor,
 Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
-bundles, so the required three-effect/two-vendor compatibility gate remains
-explicitly open.
+bundles, so the loader matrix now covers six effects across two vendors. The
+official ChowMatrix validator still has two fixture-specific failures, and
+worker/editor containment remains explicitly open.
 Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion,
