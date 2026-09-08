@@ -1633,6 +1633,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Completed M02/ARCH-05/ENG-03 bounded deadline-lateness distribution slice on 2026-09-08: scheduler telemetry now retains a fixed 32-bucket lateness histogram, and both guarded adapter acceptance paths validate its shape and sample count against deadline misses. The follow-up 300 ms adapter/route runs reported zero misses and zero lateness with unchanged media state; this remains shared-mode adapter evidence, not production callback compliance.
 - Next M02/M03/ARCH-05 task: connect the bounded lateness distribution to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
 
+- Completed M02/ARCH-05 deadline-boundary correction on 2026-09-08: an exactly-on-time scheduler completion is no longer classified as a miss; only strictly positive lateness enters the miss counters and histogram. Engine tests (72), strict Clippy, formatting, diff checks, and documentation validation pass.
+- Next M02/M03/ARCH-05 task: connect the corrected bounded lateness distribution to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
+
 - Completed M00-M08/API-01/SEC-12 safe-chain requalification after `d0461a8` on 2026-09-08: native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification, full workspace checks, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation (51 Markdown files/158 local links) all passed. Temporary outputs/checkouts were removed; no driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the bounded lateness distribution to the managed endpoint-owned production scheduler after driver lifecycle exists and collect release-hardware p99.9 evidence.
 

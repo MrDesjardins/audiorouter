@@ -1898,6 +1898,9 @@ impl CallbackMetrics {
         let Some(lateness) = std::time::Instant::now().checked_duration_since(deadline) else {
             return;
         };
+        if lateness.is_zero() {
+            return;
+        }
         let nanos = u64::try_from(lateness.as_nanos()).unwrap_or(u64::MAX);
         self.deadline_misses.fetch_add(1, Ordering::Relaxed);
         let bucket = if nanos == 0 {

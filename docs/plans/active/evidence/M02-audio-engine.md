@@ -915,3 +915,10 @@ misses/lateness; the routed run processed 116 quanta with zero deadline
 misses/lateness. Both stopped/reset their streams and verified unchanged media
 state. This remains shared-mode adapter evidence, not managed-driver callback,
 physical-latency, or long-term soak evidence.
+
+## Strict deadline-boundary correction (2026-09-08)
+
+Deadline accounting now treats completion exactly at the supplied deadline as
+on time. Only strictly positive `Instant` lateness increments the miss count,
+lateness totals/maximum, and positive-only histogram. Engine tests (72), strict
+Clippy, formatting, diff checks, and documentation validation pass.
