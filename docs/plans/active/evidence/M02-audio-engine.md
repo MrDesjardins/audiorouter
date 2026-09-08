@@ -535,3 +535,19 @@ non-finite, clamp, and shape regressions. Strict engine Clippy, formatting, and
 diff checks passed. This is a portable adapter-boundary result; packet
 accumulation/splitting, native realtime scheduling, physical latency, and
 production-driver integration remain open.
+
+## Fixed PCM16 quantum adapter (2026-09-07)
+
+`Pcm16QuantumAdapter` stages split interleaved PCM16 packets in a fixed
+one-quantum buffer. It accepts complete frames only, returns the number of
+frames consumed, stops accepting input once 128 frames are ready, and exposes
+`pop_into` to decode the complete block into caller-owned planar engine
+storage. It rejects malformed channel shapes and destination shapes without
+discarding pending audio. No allocation occurs after construction and the
+buffer cannot grow beyond one mono/stereo quantum.
+
+The focused engine suite passed 67 tests, including split-packet accumulation,
+backpressure, exact 128-frame output, and shape regressions. Strict engine
+Clippy, formatting, and diff checks passed. Native packet-boundary integration,
+realtime scheduling, physical latency, and production-driver integration remain
+open.

@@ -19,6 +19,8 @@ pub const MAX_EXTRA_COMPENSATION_MS: u32 = 250;
 pub const MAX_DELAY_FRAMES: usize = 48_000;
 pub const MAX_DRIFT_CORRECTION_PPM: f64 = 999_999.0;
 
+const PCM16_QUANTUM_SAMPLES: usize = MAX_CHANNELS * PROCESSING_QUANTUM_FRAMES;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LatencyCompensationError {
     Empty,
@@ -691,6 +693,74 @@ pub enum BlockError {
     ShapeMismatch,
     InvalidSampleRate,
     InvalidDriftCorrection,
+}
+
+/// Fixed-capacity interleaved PCM16 staging for the engine quantum. The
+/// adapter accepts partial packets and stops accepting input when one complete
+/// block is ready; callers must drain that block before pushing more samples.
+/// This makes packet accumulation bounded and allocation-free after creation.
+#[derive(Debug)]
+pub struct Pcm16QuantumAdapter {
+    channels: usize,
+    pending_frames: usize,
+    pending: [i16; PCM16_QUANTUM_SAMPLES],
+}
+
+impl Pcm16QuantumAdapter {
+    /// Create a staging adapter for one mono or stereo 128-frame quantum.
+    pub fn new(channels: usize) -> Result<Self, BlockError> {
+        if !(1..=MAX_CHANNELS).contains(&channels) {
+            return Err(BlockError::InvalidChannels);
+        }
+        Ok(Self {
+            channels,
+            pending_frames: 0,
+            pending: [0; PCM16_QUANTUM_SAMPLES],
+        })
+    }
+
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
+    pub fn pending_frames(&self) -> usize {
+        self.pending_frames
+    }
+
+    /// Copy as many complete interleaved frames as fit. The returned count is
+    /// the number of source frames consumed; a zero return means the caller
+    /// must first call `pop_into`.
+    pub fn push_interleaved(&mut self, source: &[i16]) -> Result<usize, BlockError> {
+        if source.len() % self.channels != 0 {
+            return Err(BlockError::ShapeMismatch);
+        }
+        let available = PROCESSING_QUANTUM_FRAMES - self.pending_frames;
+        let frames = (source.len() / self.channels).min(available);
+        let sample_count = frames * self.channels;
+        self.pending[self.pending_frames * self.channels..][..sample_count]
+            .copy_from_slice(&source[..sample_count]);
+        self.pending_frames += frames;
+        Ok(frames)
+    }
+
+    /// Decode one complete quantum into a preallocated planar engine block.
+    /// A block is left queued until this succeeds, so a shape error cannot
+    /// silently discard captured samples.
+    pub fn pop_into(&mut self, destination: &mut AudioBlock) -> Result<bool, BlockError> {
+        if destination.channels() != self.channels
+            || destination.frames() != PROCESSING_QUANTUM_FRAMES
+        {
+            return Err(BlockError::ShapeMismatch);
+        }
+        if self.pending_frames < PROCESSING_QUANTUM_FRAMES {
+            return Ok(false);
+        }
+        destination.copy_from_interleaved_pcm16(
+            &self.pending[..self.channels * PROCESSING_QUANTUM_FRAMES],
+        )?;
+        self.pending_frames = 0;
+        Ok(true)
+    }
 }
 
 /// A preallocated planar float32 block. Samples are stored channel-major:
@@ -2977,6 +3047,37 @@ mod tests {
             block.copy_to_interleaved_pcm16(&mut [0_i16; 2]),
             Err(BlockError::ShapeMismatch)
         );
+    }
+
+    #[test]
+    fn pcm16_quantum_adapter_accumulates_split_packets_with_backpressure() {
+        let mut adapter = Pcm16QuantumAdapter::new(2).unwrap();
+        let mut first = vec![0_i16; 100 * 2];
+        for (index, sample) in first.iter_mut().enumerate() {
+            *sample = index as i16;
+        }
+        assert_eq!(adapter.push_interleaved(&first).unwrap(), 100);
+        assert_eq!(adapter.pending_frames(), 100);
+
+        let second = vec![1_i16; 40 * 2];
+        assert_eq!(adapter.push_interleaved(&second).unwrap(), 28);
+        assert_eq!(adapter.pending_frames(), PROCESSING_QUANTUM_FRAMES);
+        assert_eq!(adapter.push_interleaved(&second).unwrap(), 0);
+
+        let mut block = AudioBlock::new(2, PROCESSING_QUANTUM_FRAMES).unwrap();
+        assert!(adapter.pop_into(&mut block).unwrap());
+        assert_eq!(adapter.pending_frames(), 0);
+        assert_eq!(block.channel(0).unwrap()[0], 0.0);
+        assert_eq!(block.channel(1).unwrap()[0], 1.0 / 32_768.0);
+        assert_eq!(block.channel(0).unwrap()[127], 1.0 / 32_768.0);
+        assert!(!adapter.pop_into(&mut block).unwrap());
+
+        assert_eq!(
+            adapter.push_interleaved(&[0_i16]),
+            Err(BlockError::ShapeMismatch)
+        );
+        let mut wrong = AudioBlock::new(1, PROCESSING_QUANTUM_FRAMES).unwrap();
+        assert_eq!(adapter.pop_into(&mut wrong), Err(BlockError::ShapeMismatch));
     }
 
     #[test]
