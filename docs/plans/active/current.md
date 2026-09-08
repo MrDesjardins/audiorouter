@@ -347,6 +347,12 @@ versioned asset locally before IPC and return a typed `StateError::VersionMismat
 without killing or mutating a running worker; the process regression proves the
 rejection path and subsequent worker usability.
 
+Added typed `DescribeParameters`/`Parameters` worker messages with bounded
+descriptor validation: at most 256 unique IDs, finite normalized ranges, and
+128-byte titles. The disposable worker returns an explicit empty catalog;
+native plugin parameter discovery remains open. Plugin-host coverage is now 46
+library tests, 13 ordinary worker tests, and 17 feature-enabled worker tests.
+
 Aligned the plugin-host state contract with the storage boundary by rejecting
 version `0` during asset construction, restore verification, and worker-wire
 validation. The existing version/integrity regression now covers this invalid

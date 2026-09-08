@@ -46,6 +46,7 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
                 .into_owned()
         });
     let mut worker = WorkerProcess::spawn(worker_path, &hash, 2).expect("spawn worker client");
+    assert!(worker.describe_parameters().unwrap().is_empty());
     let deadline = worker_clock_tick().saturating_add(10_000);
     let frame = WorkerFrame::new(1, deadline, 2, vec![0.25, -0.25, 0.0, 0.1]).unwrap();
     assert_eq!(worker.process(frame.clone(), Vec::new()).unwrap(), frame);

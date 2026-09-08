@@ -878,6 +878,14 @@ version is rejected before IPC with a typed state error, and the worker remains
 usable; this preserves the version contract independently of vendor-specific
 native serialization.
 
+## Typed worker parameter descriptors (2026-09-08)
+
+The worker protocol now validates bounded typed parameter descriptors: no more
+than 256 unique IDs, 128-byte non-empty titles, finite normalized ranges, and
+defaults inside those ranges. A process regression requests the disposable
+worker's explicit empty catalog; native VST3 parameter discovery and mapping
+remain open.
+
 State version `0` is now rejected consistently during asset construction,
 restore verification, and worker-wire validation, matching the existing
 storage contract. The protocol regression covers a correctly hashed but

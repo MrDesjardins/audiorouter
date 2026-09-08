@@ -32,6 +32,8 @@ pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 pub const MAX_PARAMETER_EVENTS: usize = 128;
+pub const MAX_PARAMETER_DESCRIPTORS: usize = 256;
+pub const MAX_PARAMETER_TITLE_BYTES: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
 pub const MAX_WORKER_FAILURE_CODE_BYTES: usize = 128;
 pub const MAX_WORKER_STATE_BYTES: usize = 512 * 1024;
@@ -820,6 +822,7 @@ pub enum WorkerMessageError {
     Json(String),
     InvalidFrame(WorkerFrameError),
     InvalidParameter(ParameterEventError),
+    InvalidParameterDescriptor(ParameterDescriptorError),
     InvalidProtocolVersion,
     InvalidPluginHash,
     InvalidFailureCode,
@@ -845,6 +848,7 @@ pub enum WorkerSessionError {
     Frame(WorkerFrameError),
     InvalidLatency,
     InvalidState,
+    InvalidParameterDescriptor(ParameterDescriptorError),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1083,6 +1087,60 @@ pub struct ParameterEvent {
     pub sample_offset: usize,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ParameterDescriptor {
+    pub parameter_id: u32,
+    pub title: String,
+    pub default_value: f32,
+    pub minimum: f32,
+    pub maximum: f32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ParameterDescriptorError {
+    TooMany,
+    EmptyTitle,
+    TitleTooLong,
+    NonFiniteValue,
+    InvalidRange,
+    DuplicateId,
+}
+
+impl ParameterDescriptor {
+    pub fn new(
+        parameter_id: u32,
+        title: impl Into<String>,
+        default_value: f32,
+        minimum: f32,
+        maximum: f32,
+    ) -> Result<Self, ParameterDescriptorError> {
+        let title = title.into();
+        if title.is_empty() {
+            return Err(ParameterDescriptorError::EmptyTitle);
+        }
+        if title.len() > MAX_PARAMETER_TITLE_BYTES {
+            return Err(ParameterDescriptorError::TitleTooLong);
+        }
+        if !default_value.is_finite() || !minimum.is_finite() || !maximum.is_finite() {
+            return Err(ParameterDescriptorError::NonFiniteValue);
+        }
+        if !(0.0..=1.0).contains(&minimum)
+            || !(0.0..=1.0).contains(&maximum)
+            || minimum >= maximum
+            || !(minimum..=maximum).contains(&default_value)
+        {
+            return Err(ParameterDescriptorError::InvalidRange);
+        }
+        Ok(Self {
+            parameter_id,
+            title,
+            default_value,
+            minimum,
+            maximum,
+        })
+    }
+}
+
 /// Control messages for the future disposable native worker. Audio payloads
 /// are bounded here for testability; the production transport may replace the
 /// samples with shared-memory handles without changing lifecycle semantics.
@@ -1095,6 +1153,10 @@ pub enum WorkerMessage {
         channels: u16,
     },
     Ready,
+    DescribeParameters,
+    Parameters {
+        descriptors: Vec<ParameterDescriptor>,
+    },
     Process {
         frame: WorkerFrame,
         parameters: Vec<ParameterEvent>,
@@ -1217,6 +1279,9 @@ impl WorkerSession {
             WorkerMessageError::InvalidFrame(error) => WorkerSessionError::Frame(error),
             WorkerMessageError::InvalidLatency => WorkerSessionError::InvalidLatency,
             WorkerMessageError::InvalidState => WorkerSessionError::InvalidState,
+            WorkerMessageError::InvalidParameterDescriptor(error) => {
+                WorkerSessionError::InvalidParameterDescriptor(error)
+            }
             _ => WorkerSessionError::UnexpectedMessage,
         })?;
         match (&self.state, message) {
@@ -1281,6 +1346,7 @@ impl WorkerSession {
                 | WorkerMessage::StateSave
                 | WorkerMessage::StateRestore { .. },
             ) => Ok(None),
+            (WorkerSessionState::Active, WorkerMessage::DescribeParameters) => Ok(None),
             (
                 WorkerSessionState::Active,
                 WorkerMessage::Shutdown | WorkerMessage::Failure { .. },
@@ -1836,6 +1902,24 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    pub fn describe_parameters(
+        &mut self,
+        now: Instant,
+    ) -> Result<Vec<ParameterDescriptor>, WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.describe_parameters() {
+            Ok(descriptors) => {
+                self.supervisor.heartbeat(now);
+                Ok(descriptors)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
     pub fn restore_state_for_version(
         &mut self,
         asset: PluginStateAsset,
@@ -2142,6 +2226,18 @@ impl WorkerProcess {
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected state restore response".into(),
+            )),
+        }
+    }
+
+    pub fn describe_parameters(&mut self) -> Result<Vec<ParameterDescriptor>, WorkerProcessError> {
+        self.write(&WorkerMessage::DescribeParameters)
+            .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::Parameters { descriptors } => Ok(descriptors),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected parameter description response".into(),
             )),
         }
     }
@@ -2457,6 +2553,9 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         WorkerMessage::StateRestore { asset } | WorkerMessage::State { asset } => {
             validate_worker_state(asset)?;
         }
+        WorkerMessage::Parameters { descriptors } => {
+            validate_parameter_descriptors(descriptors)?;
+        }
         _ => {}
     }
     Ok(())
@@ -2478,6 +2577,35 @@ fn validate_worker_state(asset: &PluginStateAsset) -> Result<(), WorkerMessageEr
             .collect::<String>()
     {
         return Err(WorkerMessageError::InvalidState);
+    }
+    Ok(())
+}
+
+fn validate_parameter_descriptors(
+    descriptors: &[ParameterDescriptor],
+) -> Result<(), WorkerMessageError> {
+    if descriptors.len() > MAX_PARAMETER_DESCRIPTORS {
+        return Err(WorkerMessageError::InvalidParameterDescriptor(
+            ParameterDescriptorError::TooMany,
+        ));
+    }
+    for (index, descriptor) in descriptors.iter().enumerate() {
+        ParameterDescriptor::new(
+            descriptor.parameter_id,
+            descriptor.title.clone(),
+            descriptor.default_value,
+            descriptor.minimum,
+            descriptor.maximum,
+        )
+        .map_err(WorkerMessageError::InvalidParameterDescriptor)?;
+        if descriptors[..index]
+            .iter()
+            .any(|previous| previous.parameter_id == descriptor.parameter_id)
+        {
+            return Err(WorkerMessageError::InvalidParameterDescriptor(
+                ParameterDescriptorError::DuplicateId,
+            ));
+        }
     }
     Ok(())
 }
@@ -3763,6 +3891,35 @@ mod tests {
         assert_eq!(queue.push(event), Err(event));
         assert_eq!(queue.overflow_count(), 1);
         assert_eq!(queue.pop(), Some(event));
+    }
+
+    #[test]
+    fn parameter_descriptors_are_bounded_and_normalized() {
+        let descriptor = ParameterDescriptor::new(4, "Mix", 0.5, 0.0, 1.0).unwrap();
+        let message = WorkerMessage::Parameters {
+            descriptors: vec![descriptor.clone()],
+        };
+        assert_eq!(
+            decode_worker_message(&encode_worker_message(&message).unwrap()).unwrap(),
+            message
+        );
+        assert_eq!(
+            ParameterDescriptor::new(4, "", 0.5, 0.0, 1.0),
+            Err(ParameterDescriptorError::EmptyTitle)
+        );
+        assert_eq!(
+            ParameterDescriptor::new(4, "Mix", 1.1, 0.0, 1.0),
+            Err(ParameterDescriptorError::InvalidRange)
+        );
+        let duplicate = WorkerMessage::Parameters {
+            descriptors: vec![descriptor.clone(), descriptor],
+        };
+        assert_eq!(
+            encode_worker_message(&duplicate),
+            Err(WorkerMessageError::InvalidParameterDescriptor(
+                ParameterDescriptorError::DuplicateId
+            ))
+        );
     }
 
     #[test]

@@ -63,6 +63,11 @@ Callers with a known schema can use `restore_state_for_version` to reject a
 version mismatch before sending state to the worker.
 State version `0` is invalid at both the asset and worker-wire boundaries.
 
+Worker parameter descriptors are bounded to 256 entries and 128-byte titles;
+IDs must be unique and normalized defaults/ranges must be finite and within
+`0..=1`. The disposable worker currently reports an empty descriptor catalog
+until native plugin parameter discovery is connected.
+
 The opt-in `test-fixtures` Cargo feature adds deterministic worker modes for
 crash, hang, and malformed output. The process tests prove bounded reaping,
 timeout kill, supervisor containment, and reader-side rejection. These modes are test fixtures only;

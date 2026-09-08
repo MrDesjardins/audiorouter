@@ -157,6 +157,15 @@ fn run() -> Result<(), String> {
                 write_worker_message(&mut writer, &WorkerMessage::Latency(latency))
                     .map_err(|error| format!("latency write failed: {error:?}"))?;
             }
+            WorkerMessage::DescribeParameters => {
+                write_worker_message(
+                    &mut writer,
+                    &WorkerMessage::Parameters {
+                        descriptors: Vec::new(),
+                    },
+                )
+                .map_err(|error| format!("parameter description write failed: {error:?}"))?;
+            }
             WorkerMessage::StateRestore { asset } => {
                 state = Some(asset.clone());
                 write_worker_message(&mut writer, &WorkerMessage::State { asset })
