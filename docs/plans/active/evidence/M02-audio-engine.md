@@ -962,3 +962,12 @@ routed frames, processing maximum 26,200 ns, processing p99.9 upper bound
 32,768 ns, and zero deadline misses/lateness. The endpoint snapshot and
 explicit configuration-safety checks passed; this remains shared-mode adapter
 evidence rather than production callback evidence.
+
+## Rust adapter live requalification (2026-09-08)
+
+The guarded 300 ms production Rust adapter smoke completed with 32 capture
+packets, 15,360 captured/scheduled frames, 15,456 silent render frames, 120
+graph blocks, zero xruns, zero deadline misses, and a 32,768 ns processing
+p99.9 upper bound. Streams stopped/reset cleanly and the media-device snapshot
+was unchanged. This is shared-mode endpoint evidence; managed-driver callback,
+physical-latency, signing, and installer gates remain open.
