@@ -344,6 +344,15 @@ the installed Visual Studio Community 2026 MSVC and Windows SDK/WDK toolchain.
 This verification compiled only; it did not execute the probe or touch audio
 configuration. Generated build outputs were removed afterward.
 
+Rechecked the SDK prerequisite on 2026-09-08 after the user reported that the
+reference repository was not an installer: the machine already contains the
+matching Windows SDK/WDK `10.0.28000.0` headers, libraries, binaries, and WDK
+build properties. The official Microsoft `10.1.28000.2705` bootstrapper was
+downloaded to the user temp directory, but its unattended setup remained
+resident without adding a kit directory, so only the two processes launched by
+this check were stopped and the temporary bootstrapper was removed. Existing
+SDK/WDK state was not modified; no driver or audio configuration was touched.
+
 ## M00 execution log
 
 ### M00 working scope
