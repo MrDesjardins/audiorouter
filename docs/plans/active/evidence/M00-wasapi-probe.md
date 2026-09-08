@@ -669,6 +669,21 @@ already-occupied render endpoint was recognized and handled. The acceptance
 script reported that defaults, volume, mute, privacy, drivers, signing, and
 startup configuration were unchanged. This is lifecycle evidence, not physical
 latency, process attribution, or production-driver evidence.
+
+## Bounded live endpoint lifecycle requalification (2026-09-08)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds
+250`.
+
+The current native probe exercised 13 active capture and 21 active render
+endpoints. All bounded capture and silent-render lifecycle checks passed; one
+occupied render endpoint was recognized as the expected
+`AUDCLNT_E_DEVICE_IN_USE` case. The wrapper stopped/reset clients, verified
+the media-device snapshot, and reported defaults, volume, mute, privacy,
+drivers, signing, and startup configuration unchanged. This remains endpoint
+lifecycle evidence, not physical acoustic latency or managed-driver callback
+evidence.
 ## Event-driven live lifecycle (2026-09-07)
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File

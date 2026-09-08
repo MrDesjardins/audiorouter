@@ -1666,3 +1666,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M00/CAP-04/QUAL-01 digital loopback requalification on 2026-09-08: the guarded existing VB-Audio render-to-capture path produced 209,982 nonzero payload bytes over a 1,000 ms capture window, stopped/reset cleanly, and preserved the media-device snapshot with exact temporary cleanup. This is digital propagation evidence only; physical acoustic latency, managed-driver ownership, signing, and installer gates remain open.
 - Next M00/M02/M03/ARCH-05 task: retain the digital loopback result while pursuing physical acoustic latency only with suitable hardware and managed endpoint-owned callback evidence after a production driver exists.
+
+- Completed M00/CAP-01/CAP-02/NFR-01 endpoint lifecycle requalification on 2026-09-08: the current native sweep passed 13 capture and 21 render endpoints for bounded start/stop/reset behavior, correctly recognizing one occupied render endpoint, with unchanged media/configuration state.
+- Next M00/M02/M03/ARCH-05 task: retain the lifecycle and digital-loopback evidence while pursuing physical acoustic latency only with suitable hardware and managed endpoint-owned callback evidence after a production driver exists.
