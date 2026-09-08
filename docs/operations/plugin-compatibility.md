@@ -42,6 +42,12 @@ and deliberate retry from the processing generation. It does not create native
 windows or claim editor compatibility; those remain a Windows/UI acceptance
 gate.
 
+Worker sessions retain the latest validated plugin latency. A plugin may report
+a changed bounded sample count at the negotiated sample rate; changing the
+sample rate is rejected and cannot overwrite the prior value. This protects
+control-plane compensation state, but does not substitute for measured
+plugin-added latency or realtime graph evidence.
+
 ## Reporting a plugin result
 
 Record the plugin format, architecture, vendor, class identity, exact host

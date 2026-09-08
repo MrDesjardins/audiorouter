@@ -818,6 +818,15 @@ prove that open, close, failure, and retry do not restart processing. This is
 policy evidence only: no native window was created, no plugin editor code was
 loaded, and native UI-thread ownership remains an open Windows acceptance gate.
 
+## Dynamic latency session boundary (2026-09-08)
+
+`WorkerSession` now retains the latest bounded latency report and permits
+dynamic sample-count changes only when the negotiated sample rate remains
+constant. A sample-rate change is rejected and leaves the previous report
+intact. This protects downstream compensation from silently adopting an
+incompatible rate. The regression is protocol-state evidence, not a measured
+plugin latency or realtime graph-compensation result.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and

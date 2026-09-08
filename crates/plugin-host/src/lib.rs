@@ -1116,6 +1116,7 @@ pub struct WorkerSession {
     channels: u16,
     state: WorkerSessionState,
     frame_guard: WorkerFrameGuard,
+    latency: Option<(u32, u32)>,
 }
 
 impl WorkerSession {
@@ -1135,11 +1136,22 @@ impl WorkerSession {
             channels,
             state: WorkerSessionState::AwaitingHello,
             frame_guard: WorkerFrameGuard::new(),
+            latency: None,
         })
     }
 
     pub fn state(&self) -> WorkerSessionState {
         self.state
+    }
+
+    /// Return the most recent worker-reported latency. The sample rate is
+    /// fixed for a session; plugins may change their sample count dynamically
+    /// but may not change the graph's negotiated rate underneath it.
+    pub fn latency(&self) -> Option<WorkerLatency> {
+        self.latency.map(|(samples, sample_rate_hz)| WorkerLatency {
+            samples,
+            sample_rate_hz,
+        })
     }
 
     pub fn hello_sent(&mut self) -> Result<(), WorkerSessionError> {
@@ -1206,10 +1218,17 @@ impl WorkerSession {
                     .map_err(WorkerSessionError::Frame)?;
                 Ok(None)
             }
-            (
-                WorkerSessionState::Active,
-                WorkerMessage::Latency(_) | WorkerMessage::ProcessedShared { .. },
-            ) => Ok(None),
+            (WorkerSessionState::Active, WorkerMessage::Latency(latency)) => {
+                if self
+                    .latency
+                    .is_some_and(|(_, sample_rate_hz)| sample_rate_hz != latency.sample_rate_hz)
+                {
+                    return Err(WorkerSessionError::InvalidLatency);
+                }
+                self.latency = Some((latency.samples, latency.sample_rate_hz));
+                Ok(None)
+            }
+            (WorkerSessionState::Active, WorkerMessage::ProcessedShared { .. }) => Ok(None),
             (
                 WorkerSessionState::Active,
                 WorkerMessage::Shutdown | WorkerMessage::Failure { .. },
@@ -3680,6 +3699,38 @@ mod tests {
         );
         assert_eq!(session.accept(&WorkerMessage::Shutdown, 10), Ok(None));
         assert_eq!(session.state(), WorkerSessionState::Closed);
+    }
+
+    #[test]
+    fn worker_session_retains_dynamic_latency_at_one_sample_rate() {
+        let hash = "d".repeat(64);
+        let mut session = WorkerSession::new(hash.clone(), 2).unwrap();
+        session
+            .accept(
+                &WorkerMessage::Hello {
+                    protocol_version: WORKER_PROTOCOL_VERSION,
+                    plugin_sha256: hash,
+                    channels: 2,
+                },
+                0,
+            )
+            .unwrap();
+        session.accept(&WorkerMessage::Ready, 0).unwrap();
+
+        let first = WorkerLatency::new(128, 48_000).unwrap();
+        let updated = WorkerLatency::new(256, 48_000).unwrap();
+        session.accept(&WorkerMessage::Latency(first), 1).unwrap();
+        assert_eq!(session.latency(), Some(first));
+        session.accept(&WorkerMessage::Latency(updated), 2).unwrap();
+        assert_eq!(session.latency(), Some(updated));
+        assert_eq!(
+            session.accept(
+                &WorkerMessage::Latency(WorkerLatency::new(256, 44_100).unwrap()),
+                3,
+            ),
+            Err(WorkerSessionError::InvalidLatency)
+        );
+        assert_eq!(session.latency(), Some(updated));
     }
 
     #[test]
