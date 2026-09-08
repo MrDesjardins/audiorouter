@@ -12,6 +12,20 @@ signing mode changed, and no plugin/startup registration or machine audio
 configuration changed. Production driver ownership, signing, installer,
 clean-machine, physical-latency, and manual UI/accessibility gates remain open.
 
+## Safe-chain requalification after control schema alignment (`e22a89f`, 2026-09-08)
+
+The elevated non-mutating command `powershell.exe -NoProfile
+-ExecutionPolicy Bypass -File tests/acceptance/safe-all.ps1` passed at
+`e22a89f`. Native compile, 34-endpoint read-only inventory, disposable pinned
+SysVAD x64 package/API qualification, M01/M04/M05/M06/M07 validation, unsigned
+M08 preparation, and documentation validation (51 Markdown files, 158 local
+links) all passed. Temporary outputs and checkouts were removed.
+
+No driver was installed or loaded, signing mode was unchanged, no plugin or
+startup entry was registered, and no machine audio configuration changed.
+Production driver/signing, installer, hardware/manual UI, native callback
+deadline, and physical-latency gates remain open.
+
 ## Safe-chain requalification after durable journal hardening (2026-09-08)
 
 The guarded `tests/acceptance/safe-all.ps1` chain completed at the current
