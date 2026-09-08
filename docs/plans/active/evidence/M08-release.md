@@ -560,3 +560,18 @@ No driver was installed or loaded, signing mode was unchanged, no plugin or
 startup entry was registered, and no machine audio configuration changed.
 Production driver/signing, installer, hardware/manual UI, native callback
 deadline, and physical-latency gates remain open.
+
+## Safe-chain requalification after shared-mode deadline qualification (`29951c3`, 2026-09-08)
+
+The elevated non-mutating command `powershell.exe -NoProfile
+-ExecutionPolicy Bypass -File tests/acceptance/safe-all.ps1` passed at
+`29951c3`. Native compile, 34-endpoint read-only inventory, disposable pinned
+SysVAD x64 package/API qualification, full workspace regression, M01/M04/M05/
+M06/M07 validation, unsigned M08 preparation, and documentation validation
+(51 Markdown files, 158 local links) all passed. Temporary outputs and
+checkouts were removed.
+
+No driver was installed or loaded, signing mode was unchanged, no plugin or
+startup entry was registered, and no machine audio configuration changed.
+Production driver/signing, installer, hardware/manual UI, native callback
+deadline, and physical-latency gates remain open.
