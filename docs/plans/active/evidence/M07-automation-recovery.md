@@ -988,3 +988,10 @@ configuration was accessed.
 Backend-epoch claiming is intentionally deferred until after all persisted
 state has been read and validated, preventing a failed startup from changing
 the durable database. The same focused suites pass after this ordering fix.
+
+## Startup session-page completeness (2026-09-08)
+
+Storage-backed control startup now walks the full bounded session inventory in
+stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
+limit without unbounded reads. A regression restores 129 valid sessions and
+confirms the complete inventory; control passes 87 tests with strict Clippy.
