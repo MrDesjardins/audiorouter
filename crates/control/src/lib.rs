@@ -28,6 +28,10 @@ const MAX_CONTROL_VALUE_DEPTH: usize = 32;
 const MAX_CONTROL_STRING_BYTES: usize = 4096;
 const MAX_CONTROL_VALUE_COUNT: usize = 8192;
 const MAX_EVENT_SUBSCRIPTION_ITEMS: usize = 500;
+const MAX_SESSION_LIST_ITEMS: usize = 500;
+const MAX_GRAPH_HISTORY_ITEMS: usize = 100;
+const MAX_RECORDING_LIST_ITEMS: usize = 500;
+const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
@@ -262,7 +266,7 @@ fn method_input_schema(name: &str) -> Value {
             json!({
                 "sessionId": { "type": ["string", "null"], "minLength": 1 },
                 "cursor": { "type": ["string", "null"], "minLength": 1 },
-                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_RECORDING_LIST_ITEMS }
             }),
             &[],
         ),
@@ -272,7 +276,7 @@ fn method_input_schema(name: &str) -> Value {
         "devices.list" => object_schema(
             json!({
                 "cursor": { "type": ["string", "null"], "minLength": 1 },
-                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_DEVICE_LIST_ITEMS }
             }),
             &[],
         ),
@@ -432,7 +436,7 @@ fn method_input_schema(name: &str) -> Value {
         "sessions.list" => object_schema(
             json!({
                 "cursor": { "type": ["string", "null"] },
-                "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_SESSION_LIST_ITEMS }
             }),
             &[],
         ),
@@ -463,7 +467,7 @@ fn method_input_schema(name: &str) -> Value {
             json!({
                 "sessionId": { "type": "string", "minLength": 1 },
                 "cursor": { "type": ["string", "null"] },
-                "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_GRAPH_HISTORY_ITEMS }
             }),
             &["sessionId"],
         ),
@@ -726,12 +730,24 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["planId", "state", "registration", "reason"],
             "additionalProperties": false
         }),
-        "sessions.list" | "graph.history" => {
+        "sessions.list" => {
             let item = session_item_schema();
             json!({
                 "type": "object",
                 "properties": {
-                    "items": { "type": "array", "items": item },
+                    "items": { "type": "array", "maxItems": MAX_SESSION_LIST_ITEMS, "items": item },
+                    "nextCursor": { "type": ["string", "null"] }
+                },
+                "required": ["items", "nextCursor"],
+                "additionalProperties": false
+            })
+        }
+        "graph.history" => {
+            let item = session_item_schema();
+            json!({
+                "type": "object",
+                "properties": {
+                    "items": { "type": "array", "maxItems": MAX_GRAPH_HISTORY_ITEMS, "items": item },
                     "nextCursor": { "type": ["string", "null"] }
                 },
                 "required": ["items", "nextCursor"],
@@ -985,7 +1001,7 @@ fn method_output_schema(name: &str) -> Value {
                     {
                         "type": "object",
                         "properties": {
-                            "items": { "type": "array", "items": item },
+                            "items": { "type": "array", "maxItems": MAX_DEVICE_LIST_ITEMS, "items": item },
                             "nextCursor": { "type": ["string", "null"] }
                         },
                         "required": ["items", "nextCursor"],
@@ -1184,7 +1200,7 @@ fn method_output_schema(name: &str) -> Value {
                     {
                         "type": "object",
                         "properties": {
-                            "items": { "type": "array", "items": item },
+                            "items": { "type": "array", "maxItems": MAX_RECORDING_LIST_ITEMS, "items": item },
                             "nextCursor": { "type": ["string", "null"] }
                         },
                         "required": ["items", "nextCursor"],
@@ -2826,7 +2842,7 @@ impl ControlPlane {
         before_revision: Option<u64>,
         limit: usize,
     ) -> Result<Value, ControlError> {
-        let limit = limit.clamp(1, 100);
+        let limit = limit.clamp(1, MAX_GRAPH_HISTORY_ITEMS);
         let history = if self.store.session(session_id).is_some() {
             self.store
                 .history_before(session_id, before_revision, limit + 1)
@@ -2878,7 +2894,7 @@ impl ControlPlane {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<Value, ControlError> {
-        if !(1..=500).contains(&limit) {
+        if !(1..=MAX_SESSION_LIST_ITEMS).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
             ));
@@ -4037,7 +4053,7 @@ impl ControlPlane {
             })
             .transpose()?;
         let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
-        if !(1..=MAX_EVENT_SUBSCRIPTION_ITEMS as u64).contains(&limit) {
+        if !(1..=MAX_RECORDING_LIST_ITEMS as u64).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
             ));
@@ -4617,7 +4633,7 @@ impl ControlPlane {
             .and_then(Value::as_u64)
             .unwrap_or(0);
         let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
-        if !(1..=500).contains(&limit) {
+        if !(1..=MAX_EVENT_SUBSCRIPTION_ITEMS as u64).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
             ));
@@ -4711,7 +4727,7 @@ impl ControlPlane {
             })
             .transpose()?;
         let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
-        if !(1..=500).contains(&limit) {
+        if !(1..=MAX_DEVICE_LIST_ITEMS as u64).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
             ));
@@ -6557,6 +6573,18 @@ mod tests {
                 ["minimum"],
             0
         );
+        assert_eq!(
+            sessions["outputSchema"]["properties"]["items"]["maxItems"],
+            MAX_SESSION_LIST_ITEMS
+        );
+        let history = methods
+            .iter()
+            .find(|method| method["name"] == "graph.history")
+            .unwrap();
+        assert_eq!(
+            history["outputSchema"]["properties"]["items"]["maxItems"],
+            MAX_GRAPH_HISTORY_ITEMS
+        );
         let session_get = methods
             .iter()
             .find(|method| method["name"] == "sessions.get")
@@ -6772,6 +6800,10 @@ mod tests {
         assert_eq!(
             recordings["outputSchema"]["oneOf"][1]["properties"]["nextCursor"]["type"],
             json!(["string", "null"])
+        );
+        assert_eq!(
+            recordings["outputSchema"]["oneOf"][1]["properties"]["items"]["maxItems"],
+            MAX_RECORDING_LIST_ITEMS
         );
         let recording = methods
             .iter()

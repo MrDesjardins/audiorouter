@@ -486,6 +486,10 @@ The `recordings.recovery` output schema now exposes the existing 4,096-part and
 4,096-pause checkpoint bounds, sourced from the recording validator constants.
 This keeps recovery metadata bounded and discoverable without opening audio.
 
+Paged session, graph-history, and recording-list responses now advertise their
+runtime cardinality limits (500, 100, and 500 respectively), with discovery
+regressions guarding the contract.
+
 The checked-in M01 CLI acceptance was rerun on Windows after this alignment;
 application discovery and the offline command contract passed without opening
 an audio stream or changing machine configuration.

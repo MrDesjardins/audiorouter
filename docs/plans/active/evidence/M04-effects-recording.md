@@ -656,3 +656,6 @@ The public `recordings.recovery` schema now advertises the recorder's existing
 4,096-part and 4,096-pause restore limits, sourced from the same constants
 used by validation. Recording tests (30), control discovery tests (86), and
 strict Clippy passed; native realtime recorder integration remains open.
+
+Paged recording-list discovery now advertises its 500-item page bound, matching
+the control dispatcher and storage page request limit.
