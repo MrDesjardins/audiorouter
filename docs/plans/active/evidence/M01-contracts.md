@@ -259,6 +259,12 @@ same bound, with a regression covering an oversized cursor. Control/storage
 tests (86/52), strict Clippy, formatting, diff validation, and documentation
 validation pass; no audio or machine configuration was accessed.
 
+The `system.describe` output schema was also updated to include the new
+`maxRevisionCursorBytes` limit as a required field, preventing the discovery
+document from contradicting its own returned payload. Focused control/storage
+validation, strict Clippy, formatting, diff checks, and documentation
+validation pass.
+
 ## Nested event-snapshot cursor alignment (2026-09-08)
 
 The `events.subscribe` resynchronization snapshot now bounds its nested

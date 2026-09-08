@@ -1777,3 +1777,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed M01/API-01/SEC-12 graph-history cursor boundary on 2026-09-08: decimal `u64` revision cursors now reject values above the exact 20-byte representation limit before parsing, and input/output discovery plus `system.describe` expose the same bound. Control/storage tests (86/52), strict Clippy, formatting, diff validation, and documentation validation pass; no audio or machine configuration was accessed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Corrected M01/API-01/SEC-12 discovery self-schema for the graph-history cursor boundary on 2026-09-08: `system.describe` now declares `maxRevisionCursorBytes` in both its limits properties and required list, matching the returned payload. Focused control/storage tests, strict Clippy, formatting, diff checks, and documentation validation pass; no audio or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.

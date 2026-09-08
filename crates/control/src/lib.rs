@@ -648,9 +648,10 @@ fn method_output_schema(name: &str) -> Value {
                         "maxControlStringBytes": { "type": "integer", "minimum": 1 },
                         "maxControlValueCount": { "type": "integer", "minimum": 1 },
                         "maxMethodNameBytes": { "type": "integer", "minimum": 1 },
-                        "maxRequestIdBytes": { "type": "integer", "minimum": 1 }
+                        "maxRequestIdBytes": { "type": "integer", "minimum": 1 },
+                        "maxRevisionCursorBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxActiveSessions", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
                     "additionalProperties": false
                 },
                 "events": {
