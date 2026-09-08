@@ -67,6 +67,13 @@ were removed and the media state remained unchanged. This validates digital
 signal propagation and cadence only; calibrated physical acoustic latency and
 managed-driver ownership remain open.
 
+The guarded event-driven native acceptance passed over the selected VB-Audio
+pair at 500 ms: capture read 24,480 frames and silent render submitted 28,800
+frames. Both event clients started/stopped/reset successfully, temporary
+artifacts were removed, and the media snapshot was unchanged. This validates
+the event-driven lifecycle shape only; production driver ownership and
+physical latency remain open.
+
 ## Safe acceptance requalification at current head (2026-09-08)
 
 After a sandbox-only `Get-PnpDevice` permission failure, the complete

@@ -11,6 +11,13 @@ the temporary executable, object, raw capture, and logs. This is digital
 propagation/cadence evidence only; the estimated onset is not calibrated
 physical acoustic latency and does not close the managed-driver gate.
 
+The guarded `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds
+500` acceptance passed over the selected VB-Audio pair. Event-driven capture
+read 24,480 frames and silent render submitted 28,800 frames; start/stop/reset
+all succeeded and the media-device snapshot remained unchanged. This is
+event-lifecycle evidence only and does not close production-driver ownership
+or physical-latency gates.
+
 ## 2026-09-08 - Guarded native live acceptance
 
 Using the installed Visual Studio/Windows SDK/WDK toolchain, the explicit
