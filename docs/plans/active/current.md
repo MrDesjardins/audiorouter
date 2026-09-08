@@ -70,6 +70,11 @@ worker failure, pause/split, and library behavior. Formatting, strict package
 Clippy, and diff checks passed. This remains portable evidence; native realtime
 recorder integration and W1 hardware timing are still open.
 
+Removed the stale unused M04-unavailable processor value and corrected the UI
+fixture that repeated its obsolete reason. Control tests (87), strict Clippy,
+focused UI tests (4), TypeScript typecheck, and diff checks passed; no audio or
+machine configuration was accessed.
+
 Completed safe contract slice M06/M07/SEC-12 plugin-size discoverability:
 the enforced 256 MiB plugin binary ceiling is exposed consistently by
 the `plugins.scan`, `plugins.list`, and `plugins.inspect` output schemas.

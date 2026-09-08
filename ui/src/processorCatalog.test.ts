@@ -5,14 +5,14 @@ const pitch: ProcessorDescriptor = {
   id: "pitch",
   version: 1,
   category: "pitch",
-  availability: { status: "unavailable", reason: "requires M04 graph integration" },
+  availability: { status: "unavailable", reason: "synthetic test fixture" },
   latencySamples: 1024,
   parameters: [],
 };
 
 describe("processor catalog presentation", () => {
   it("preserves explicit unavailable reasons and latency", () => {
-    expect(processorAvailabilityText(pitch)).toBe("unavailable: requires M04 graph integration");
+    expect(processorAvailabilityText(pitch)).toBe("unavailable: synthetic test fixture");
     expect(processorLatencyText(pitch)).toBe("1024 samples latency");
   });
 

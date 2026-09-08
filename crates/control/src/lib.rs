@@ -2692,10 +2692,6 @@ impl ControlPlane {
     }
 
     fn processor_catalog() -> Value {
-        let _unavailable = json!({
-            "status": "unavailable",
-            "reason": "requires M04 graph integration"
-        });
         let available = json!({ "status": "available" });
         json!([
             {

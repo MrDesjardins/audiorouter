@@ -770,3 +770,12 @@ metadata, checkpoint/recovery, worker failure, pause/split boundaries, and
 library inspection. Formatting, strict package Clippy, and `git diff --check`
 also passed. This is portable DSP/recording evidence; native realtime recorder
 integration, endpoint ownership, and W1 hardware timing remain open.
+
+## Processor catalog stale-availability cleanup (2026-09-08)
+
+Removed an unused control-plane availability value that still referenced the
+obsolete `requires M04 graph integration` state after built-in processors had
+become available. The UI presentation fixture now uses an explicitly synthetic
+unavailable reason, preventing stale milestone text from being mistaken for a
+runtime capability report. Control tests (87), strict Clippy, the focused UI
+processor-catalog suite (4), TypeScript typecheck, and diff checks passed.
