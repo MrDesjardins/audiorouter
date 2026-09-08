@@ -20,6 +20,7 @@ pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
 pub const MAX_DISPLAY_NAME_BYTES: usize = 256;
 pub const MAX_PORT_NAME_BYTES: usize = 128;
+pub const MAX_PORTS_PER_NODE: usize = 16;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 pub const MAX_PARAMETERS_PER_NODE: usize = 32;
@@ -1084,7 +1085,15 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 maximum: MAX_DISPLAY_NAME_BYTES,
             });
         }
-        for (port_index, port) in node.ports.iter().enumerate() {
+        if node.ports.len() > MAX_PORTS_PER_NODE {
+            errors.push(ValidationError::LimitExceeded {
+                path: format!("{path}.ports"),
+                requested: node.ports.len(),
+                maximum: MAX_PORTS_PER_NODE,
+            });
+        }
+        let mut port_names = HashSet::new();
+        for (port_index, port) in node.ports.iter().take(MAX_PORTS_PER_NODE).enumerate() {
             if port.name.len() > MAX_PORT_NAME_BYTES {
                 errors.push(ValidationError::LimitExceeded {
                     path: format!("{path}.ports[{port_index}].name"),
@@ -1092,6 +1101,12 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     maximum: MAX_PORT_NAME_BYTES,
                 });
                 continue;
+            }
+            if !port_names.insert(port.name.as_str()) {
+                errors.push(ValidationError::DuplicateId {
+                    path: format!("{path}.ports[{port_index}].name"),
+                    id: port.name.clone(),
+                });
             }
             if !(1..=2).contains(&port.channels) {
                 errors.push(ValidationError::InvalidChannels {
@@ -2974,6 +2989,35 @@ mod tests {
                     && *maximum == MAX_PORT_NAME_BYTES
         )));
         assert!(format_validation_errors(&errors).len() < 512);
+    }
+
+    #[test]
+    fn rejects_oversized_and_ambiguous_port_definitions() {
+        let mut gain = node("gain", NodeKind::Gain, PortDirection::Input);
+        gain.ports = (0..=MAX_PORTS_PER_NODE)
+            .map(|index| Port {
+                name: if index < 2 {
+                    "duplicate".into()
+                } else {
+                    format!("port-{index}")
+                },
+                direction: PortDirection::Input,
+                channels: 1,
+            })
+            .collect();
+        let errors = validate_session(&session(vec![gain], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::LimitExceeded { path, requested, maximum }
+                if path == "nodes[0].ports"
+                    && *requested == MAX_PORTS_PER_NODE + 1
+                    && *maximum == MAX_PORTS_PER_NODE
+        )));
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::DuplicateId { path, id }
+                if path == "nodes[0].ports[1].name" && id == "duplicate"
+        )));
     }
 
     #[test]

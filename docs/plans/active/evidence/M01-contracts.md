@@ -421,3 +421,9 @@ port lookup or graph-index insertion, and diagnostics use bounded index/field
 paths rather than echoing hostile port text. The domain regression covers all
 three boundaries; this remains portable validation with no audio or machine
 configuration access.
+
+Each node's port definitions are bounded to 16 entries, and port names must be
+unique before edge lookup. Validation inspects at most the bounded prefix after
+reporting an oversized collection, preventing unbounded graph work and
+ambiguous name resolution. Domain regressions cover both conditions without
+audio or machine configuration access.
