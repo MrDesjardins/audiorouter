@@ -1092,6 +1092,21 @@ impl Storage {
         Ok(())
     }
 
+    fn validate_stored_session_revision(
+        stored_revision: i64,
+        session: &Session,
+    ) -> Result<(), StorageError> {
+        let stored_revision = u64::try_from(stored_revision).map_err(|_| {
+            StorageError::InvalidSession("persisted session revision is negative".into())
+        })?;
+        if session.revision != stored_revision {
+            return Err(StorageError::InvalidSession(
+                "persisted session revision does not match document".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
         let document = Self::serialize_validated_session(session)?;
         let revision = i64::try_from(session.revision)
@@ -1541,33 +1556,34 @@ impl Storage {
             .transpose()?;
         let mut statement = if before_revision.is_some() {
             self.connection.prepare(
-                "SELECT session_id, document FROM session_history WHERE session_id = ?1 AND revision < ?2
+                "SELECT session_id, revision, document FROM session_history WHERE session_id = ?1 AND revision < ?2
                  ORDER BY revision DESC LIMIT ?3",
             )?
         } else {
             self.connection.prepare(
-                "SELECT session_id, document FROM session_history WHERE session_id = ?1
+                "SELECT session_id, revision, document FROM session_history WHERE session_id = ?1
                  ORDER BY revision DESC LIMIT ?2",
             )?
         };
-        let documents: Vec<(String, String)> = if let Some(before_revision) = before_revision {
+        let documents: Vec<(String, i64, String)> = if let Some(before_revision) = before_revision {
             statement
                 .query_map(params![id.as_str(), before_revision, limit as i64], |row| {
-                    Ok((row.get(0)?, row.get(1)?))
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
                 })?
                 .collect::<Result<_, _>>()?
         } else {
             statement
                 .query_map(params![id.as_str(), limit as i64], |row| {
-                    Ok((row.get(0)?, row.get(1)?))
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
                 })?
                 .collect::<Result<_, _>>()?
         };
         documents
             .into_iter()
-            .map(|(stored_id, document)| {
+            .map(|(stored_id, stored_revision, document)| {
                 let session = Self::deserialize_validated_session(&document)?;
                 Self::validate_stored_session_identity(&stored_id, &session)?;
+                Self::validate_stored_session_revision(stored_revision, &session)?;
                 Ok(session)
             })
             .collect()
@@ -1575,17 +1591,18 @@ impl Storage {
 
     pub fn load_session(&self, id: &EntityId) -> Result<Option<Session>, StorageError> {
         validate_session_id(id)?;
-        let row: Option<(String, String)> = self
+        let row: Option<(String, i64, String)> = self
             .connection
             .query_row(
-                "SELECT id, document FROM sessions WHERE id = ?1",
+                "SELECT id, revision, document FROM sessions WHERE id = ?1",
                 params![id.as_str()],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .optional()?;
-        row.map(|(stored_id, document)| {
+        row.map(|(stored_id, stored_revision, document)| {
             let session = Self::deserialize_validated_session(&document)?;
             Self::validate_stored_session_identity(&stored_id, &session)?;
+            Self::validate_stored_session_revision(stored_revision, &session)?;
             Ok(session)
         })
         .transpose()
@@ -1623,28 +1640,31 @@ impl Storage {
         }
         let mut statement = if cursor.is_some() {
             self.connection.prepare(
-                "SELECT id, document FROM sessions WHERE id > ?1 ORDER BY id ASC LIMIT ?2",
+                "SELECT id, revision, document FROM sessions WHERE id > ?1 ORDER BY id ASC LIMIT ?2",
             )?
         } else {
             self.connection
-                .prepare("SELECT id, document FROM sessions ORDER BY id ASC LIMIT ?1")?
+                .prepare("SELECT id, revision, document FROM sessions ORDER BY id ASC LIMIT ?1")?
         };
-        let documents: Vec<(String, String)> = if let Some(cursor) = cursor {
+        let documents: Vec<(String, i64, String)> = if let Some(cursor) = cursor {
             statement
                 .query_map(params![cursor, limit as i64], |row| {
-                    Ok((row.get(0)?, row.get(1)?))
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
                 })?
                 .collect::<Result<_, _>>()?
         } else {
             statement
-                .query_map(params![limit as i64], |row| Ok((row.get(0)?, row.get(1)?)))?
+                .query_map(params![limit as i64], |row| {
+                    Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+                })?
                 .collect::<Result<_, _>>()?
         };
         documents
             .into_iter()
-            .map(|(stored_id, document)| {
+            .map(|(stored_id, stored_revision, document)| {
                 let session = Self::deserialize_validated_session(&document)?;
                 Self::validate_stored_session_identity(&stored_id, &session)?;
+                Self::validate_stored_session_revision(stored_revision, &session)?;
                 Ok(session)
             })
             .collect()
@@ -2662,6 +2682,43 @@ mod tests {
         assert!(matches!(
             storage.list_sessions_after(None, 1),
             Err(StorageError::InvalidSession(_))
+        ));
+    }
+
+    #[test]
+    fn session_reads_reject_revision_mismatches() {
+        let storage = Storage::open_memory().unwrap();
+        let value = session();
+        storage.save_session(&value).unwrap();
+        storage
+            .connection
+            .execute(
+                "UPDATE sessions SET revision = ?1 WHERE id = ?2",
+                rusqlite::params![value.revision as i64 + 1, value.id.as_str()],
+            )
+            .unwrap();
+        storage
+            .connection
+            .execute(
+                "UPDATE session_history SET revision = ?1 WHERE session_id = ?2",
+                rusqlite::params![value.revision as i64 + 1, value.id.as_str()],
+            )
+            .unwrap();
+
+        assert!(matches!(
+            storage.load_session(&value.id),
+            Err(StorageError::InvalidSession(message))
+                if message.contains("revision does not match")
+        ));
+        assert!(matches!(
+            storage.load_history(&value.id, 1),
+            Err(StorageError::InvalidSession(message))
+                if message.contains("revision does not match")
+        ));
+        assert!(matches!(
+            storage.list_sessions_after(None, 1),
+            Err(StorageError::InvalidSession(message))
+                if message.contains("revision does not match")
         ));
     }
 

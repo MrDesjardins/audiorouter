@@ -151,6 +151,13 @@ so negative SQLite values fail closed instead of wrapping to a valid-looking
 version. The focused regression and strict storage Clippy pass; no plugin was
 executed and no audio or machine configuration was accessed.
 
+Completed safe storage slice M01/SEC-12 persisted session revision integrity:
+session lookup, history, and stable-cursor list hydration now compare the
+SQLite revision column with the validated document revision and reject
+mismatches or negative values. Storage/control tests (65/87), strict Clippy,
+formatting, and diff checks pass; no audio or machine configuration was
+accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

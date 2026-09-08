@@ -652,3 +652,12 @@ revisions, and history cursors before passing values to SQLite, preventing
 state. A regression covers session save, graph-plan save, and history lookup;
 storage (63) and control (87) tests plus strict Clippy, formatting, and diff
 checks passed. No audio or machine configuration was accessed.
+
+## Persisted session revision integrity (2026-09-08)
+
+Session lookup, history, and stable-cursor list hydration now read the
+SQLite revision column and compare it with the validated session document.
+Negative or mismatched values fail closed instead of allowing stale ordering
+metadata to escape storage. A regression covers all three read surfaces;
+storage (65) and control (87) tests plus strict Clippy, formatting, and diff
+checks passed. No audio or machine configuration was accessed.
