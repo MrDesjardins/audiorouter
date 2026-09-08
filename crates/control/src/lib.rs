@@ -4769,8 +4769,8 @@ impl ControlPlane {
                     .collect::<Result<Vec<_>, ControlError>>()
             })
             .transpose()?;
-        let events = match self.events.since(after_sequence, limit as usize) {
-            Ok(events) => events,
+        let (events, next_sequence) = match self.events.since_page(after_sequence, limit as usize) {
+            Ok(page) => page,
             Err(EventReplayError::InvalidLimit) => {
                 return Err(ControlError::InvalidRequest(
                     "limit must be between 1 and 500".into(),
@@ -4785,28 +4785,29 @@ impl ControlPlane {
                     "nextSequence": self.events.latest_sequence()
                 }));
             }
-        }
-        .into_iter()
-        .filter(|event| {
-            let session_matches = session_filter
-                .as_ref()
-                .map(|id| event.session_id.is_none() || event.session_id.as_ref() == Some(id))
-                .unwrap_or(true);
-            let category_matches = category_filter
-                .as_ref()
-                .map(|categories| {
-                    categories
-                        .iter()
-                        .any(|category| category == &event.category)
-                })
-                .unwrap_or(true);
-            session_matches && category_matches
-        })
-        .collect::<Vec<_>>();
+        };
+        let events = events
+            .into_iter()
+            .filter(|event| {
+                let session_matches = session_filter
+                    .as_ref()
+                    .map(|id| event.session_id.is_none() || event.session_id.as_ref() == Some(id))
+                    .unwrap_or(true);
+                let category_matches = category_filter
+                    .as_ref()
+                    .map(|categories| {
+                        categories
+                            .iter()
+                            .any(|category| category == &event.category)
+                    })
+                    .unwrap_or(true);
+                session_matches && category_matches
+            })
+            .collect::<Vec<_>>();
         Ok(json!({
             "backendEpoch": self.events.backend_epoch(),
             "events": events,
-            "nextSequence": self.events.latest_sequence(),
+            "nextSequence": next_sequence,
         }))
     }
 
@@ -8020,6 +8021,41 @@ mod tests {
         assert_eq!(result["backendEpoch"], 1);
         assert_eq!(result["events"].as_array().unwrap().len(), 2);
         assert_eq!(result["events"][1]["operationId"], "event-commit");
+    }
+
+    #[test]
+    fn events_subscribe_page_cursor_does_not_skip_retained_events() {
+        let mut plane = ControlPlane::default();
+        for index in 0..=500 {
+            plane.events.append(
+                index,
+                Some(format!("page-{index}")),
+                "state.test",
+                Some(EntityId::new("session")),
+            );
+        }
+
+        let first = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(40)),
+            method: "events.subscribe".into(),
+            params: Some(json!({ "afterSequence": 0, "limit": 500 })),
+        });
+        let first_result = first.result.unwrap();
+        assert_eq!(first_result["events"].as_array().unwrap().len(), 500);
+        assert_eq!(first_result["nextSequence"], 500);
+
+        let second = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(41)),
+            method: "events.subscribe".into(),
+            params: Some(json!({ "afterSequence": 500, "limit": 500 })),
+        });
+        let second_result = second.result.unwrap();
+        assert_eq!(second_result["events"].as_array().unwrap().len(), 1);
+        assert_eq!(second_result["events"][0]["resourceRevision"], 500);
+        assert_eq!(second_result["events"][0]["operationId"], "page-500");
+        assert_eq!(second_result["nextSequence"], 501);
     }
 
     #[test]

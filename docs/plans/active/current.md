@@ -16,6 +16,20 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## Event replay page-cursor hardening (2026-09-08)
+
+Closed an M07/API-08 replay correctness gap: bounded `events.subscribe` pages
+now return the last inspected event sequence when a page is full, rather than
+the event-log tail. This lets a client resume at `nextSequence` without
+skipping retained events that were outside the first page. The legacy domain
+`since` API remains unchanged; control dispatch uses the page-aware API, and
+both domain and control regressions cover a 501-event boundary. Control passes
+88 tests with strict Clippy; the locked workspace suite passes. No audio or
+machine configuration was accessed.
+
+Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to
+the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 ## UI inventory cursor consumption (2026-09-08)
 
 Closed an M05/API parity gap in the live UI backend: recordings, sessions,

@@ -755,6 +755,16 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## Event replay page cursor (2026-09-08)
+
+`EventLog::since_page` now returns both the bounded event page and the cursor
+for the last event inspected. `events.subscribe` uses that cursor, so a full
+500-event response does not advance to a newer tail and skip events 501 onward.
+The domain regression appends 501 events and resumes the second page; the
+control regression verifies the JSON `nextSequence` and the retained boundary
+event. Control passes 88 tests, strict Clippy passes, and the locked workspace
+test suite passes. No audio or machine configuration was accessed.
+
 ## M07 headless acceptance requalification (2026-09-08)
 
 `tests/acceptance/m07-headless.ps1` passed against the current tree: 25 CLI

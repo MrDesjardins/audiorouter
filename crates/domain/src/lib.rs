@@ -1590,6 +1590,19 @@ impl EventLog {
         after_sequence: u64,
         limit: usize,
     ) -> Result<Vec<StateEvent>, EventReplayError> {
+        self.since_page(after_sequence, limit)
+            .map(|(events, _)| events)
+    }
+
+    /// Replay one bounded page and return the sequence cursor for the events
+    /// inspected by this call. When the page is full, the cursor is the last
+    /// inspected event rather than the current log tail, so a caller can
+    /// continue without skipping events that remain in the retained log.
+    pub fn since_page(
+        &mut self,
+        after_sequence: u64,
+        limit: usize,
+    ) -> Result<(Vec<StateEvent>, u64), EventReplayError> {
         if !(1..=500).contains(&limit) {
             return Err(EventReplayError::InvalidLimit);
         }
@@ -1599,13 +1612,22 @@ impl EventLog {
                 return Err(EventReplayError::ResyncRequired);
             }
         }
-        Ok(self
+        let events = self
             .events
             .iter()
             .filter(|event| event.event.sequence > after_sequence)
             .take(limit)
             .map(|event| event.event.clone())
-            .collect())
+            .collect::<Vec<_>>();
+        let next_sequence = if events.len() == limit {
+            events
+                .last()
+                .map(|event| event.sequence)
+                .unwrap_or(after_sequence)
+        } else {
+            self.latest_sequence()
+        };
+        Ok((events, next_sequence))
     }
 }
 
@@ -2537,6 +2559,21 @@ mod tests {
             Err(EventReplayError::ResyncRequired)
         ));
         assert_eq!(log.since(log.latest_sequence(), 10).unwrap(), Vec::new());
+    }
+
+    #[test]
+    fn event_log_page_cursor_does_not_skip_events_after_a_full_page() {
+        let mut log = EventLog::new(1);
+        for index in 0..=500 {
+            log.append(index, None, "state.changed", None);
+        }
+        let (first, cursor) = log.since_page(0, 500).unwrap();
+        assert_eq!(first.len(), 500);
+        assert_eq!(cursor, 500);
+        let (second, next_cursor) = log.since_page(cursor, 500).unwrap();
+        assert_eq!(second.len(), 1);
+        assert_eq!(second[0].sequence, 501);
+        assert_eq!(next_cursor, 501);
     }
 
     #[test]
