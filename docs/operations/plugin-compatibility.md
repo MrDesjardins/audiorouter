@@ -52,6 +52,9 @@ When a worker rejects a latency update, the process adapter returns the
 worker's structured protocol failure so callers can quarantine or retry it
 according to the normal failure policy.
 
+Worker failure codes are limited to 128 bytes; empty or oversized codes are
+rejected before they can enter the process boundary or diagnostic state.
+
 ## Reporting a plugin result
 
 Record the plugin format, architecture, vendor, class identity, exact host

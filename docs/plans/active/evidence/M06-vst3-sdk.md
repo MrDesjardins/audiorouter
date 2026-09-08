@@ -832,6 +832,11 @@ sample-rate change. The worker rejected it, and `WorkerProcess::report_latency`
 now preserves the structured `session:InvalidLatency` failure for callers;
 the adapter no longer collapses that result into an unclassified response.
 
+Worker failure-code payloads are additionally capped at 128 bytes before
+serialization and after decoding. Empty or oversized codes are rejected as
+`InvalidFailureCode`, keeping failure diagnostics bounded independently of the
+larger worker message envelope.
+
 ## Cross-vendor loader matrix (2026-09-08)
 
 After the zero-parameter probe correction, the native loader was rebuilt and

@@ -318,6 +318,11 @@ latency-failure propagation remain covered. Actual third-party plugin
 execution, controlled crash/hang/invalid-sample fixtures, and full OS
 filesystem/network sandboxing remain open.
 
+The worker protocol now also bounds failure-code payloads to 128 bytes at both
+encode and decode validation, preventing an untrusted worker from turning an
+error report into a large retained diagnostic. The focused protocol regression
+and workspace validation remain required evidence for this boundary.
+
 Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
 interoperability tests, 87 control tests, 39 plugin-host tests, and 8
 worker-process tests passed with doc-tests and strict Clippy. Durable plans,

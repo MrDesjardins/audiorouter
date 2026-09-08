@@ -33,6 +33,7 @@ pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 pub const MAX_PARAMETER_EVENTS: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
+pub const MAX_WORKER_FAILURE_CODE_BYTES: usize = 128;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
 pub const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -2251,7 +2252,9 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         WorkerMessage::Latency(latency) => {
             WorkerLatency::new(latency.samples, latency.sample_rate_hz)?;
         }
-        WorkerMessage::Failure { code } if code.is_empty() => {
+        WorkerMessage::Failure { code }
+            if code.is_empty() || code.len() > MAX_WORKER_FAILURE_CODE_BYTES =>
+        {
             return Err(WorkerMessageError::InvalidFailureCode);
         }
         _ => {}
@@ -3583,6 +3586,12 @@ mod tests {
             decode_worker_message(&oversized),
             Err(WorkerMessageError::TooLarge { .. })
         ));
+        assert_eq!(
+            encode_worker_message(&WorkerMessage::Failure {
+                code: "x".repeat(MAX_WORKER_FAILURE_CODE_BYTES + 1),
+            }),
+            Err(WorkerMessageError::InvalidFailureCode)
+        );
     }
 
     #[test]
