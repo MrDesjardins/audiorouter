@@ -1215,7 +1215,7 @@ fn method_output_schema(name: &str) -> Value {
             let item = recording_item_schema();
             json!({
                 "oneOf": [
-                    { "type": "array", "items": item.clone() },
+                    { "type": "array", "maxItems": MAX_RECORDING_LIST_ITEMS, "items": item.clone() },
                     {
                         "type": "object",
                         "properties": {
@@ -7000,6 +7000,10 @@ mod tests {
         );
         assert_eq!(
             recordings["outputSchema"]["oneOf"][1]["properties"]["items"]["maxItems"],
+            MAX_RECORDING_LIST_ITEMS
+        );
+        assert_eq!(
+            recordings["outputSchema"]["oneOf"][0]["maxItems"],
             MAX_RECORDING_LIST_ITEMS
         );
         let recording = methods

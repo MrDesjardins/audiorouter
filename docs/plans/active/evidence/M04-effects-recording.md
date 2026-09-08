@@ -162,6 +162,11 @@ actionable pagination error instead of loading or silently dropping the rest;
 cursor-based callers retain the existing page contract. Control/storage tests
 and strict Clippy cover the change without opening audio or changing files.
 
+The unpaged `recordings.list` array schema now advertises the same 500-item
+maximum as its bounded runtime path. Responses with more records require the
+cursor form, preserving complete inventory semantics without unbounded
+allocation or silent truncation.
+
 ## Bounded recording chunk admission (2026-09-07)
 
 `RecordingQueue::try_push` now rejects caller-owned chunks larger than 4,096
