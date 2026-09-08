@@ -53,6 +53,12 @@ candidate. The restart regression verifies `plan-1` and `plan-2` coexist;
 control tests (95), strict Clippy, and formatting pass without audio or
 machine configuration access.
 
+Closed an M01/M03 persistence-safety gap in timestamped pending-plan
+allocation: startup and virtual-device plans now skip IDs already retained
+after restart before inserting a new plan, while preserving explicit same-ID
+replacement at the storage API boundary. Control tests (95), strict Clippy,
+and formatting pass; no audio or machine configuration was accessed.
+
 ## Fan-out topology safety (2026-09-08)
 
 Closed an M02/GRAPH-01/ARCH-07 fail-closed gap in the portable fan-out

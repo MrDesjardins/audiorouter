@@ -5127,12 +5127,20 @@ impl ControlPlane {
                 "too many pending startup plans".into(),
             ));
         }
-        let plan_id = EntityId::new(format!(
-            "startup-plan-{}-{}",
-            unix_epoch_millis(),
-            self.next_startup_plan
-        ));
-        self.next_startup_plan = self.next_startup_plan.saturating_add(1);
+        let plan_id = loop {
+            let counter = self.next_startup_plan;
+            let plan_id = EntityId::new(format!("startup-plan-{}-{counter}", unix_epoch_millis()));
+            if !self.startup_plans.contains_key(&plan_id) {
+                self.next_startup_plan = counter.saturating_add(1);
+                break plan_id;
+            }
+            if counter == u64::MAX {
+                return Err(ControlError::InvalidRequest(
+                    "startup plan ID space is exhausted".into(),
+                ));
+            }
+            self.next_startup_plan += 1;
+        };
         self.startup_plans.insert(
             plan_id.clone(),
             (enabled, Instant::now() + VIRTUAL_DEVICE_PLAN_TTL),
@@ -5222,12 +5230,20 @@ impl ControlPlane {
                 "too many pending virtual-device plans".into(),
             ));
         }
-        let plan_id = EntityId::new(format!(
-            "virtual-plan-{}-{}",
-            unix_epoch_millis(),
-            self.next_virtual_bus_plan
-        ));
-        self.next_virtual_bus_plan = self.next_virtual_bus_plan.saturating_add(1);
+        let plan_id = loop {
+            let counter = self.next_virtual_bus_plan;
+            let plan_id = EntityId::new(format!("virtual-plan-{}-{counter}", unix_epoch_millis()));
+            if !self.virtual_bus_plans.contains_key(&plan_id) {
+                self.next_virtual_bus_plan = counter.saturating_add(1);
+                break plan_id;
+            }
+            if counter == u64::MAX {
+                return Err(ControlError::InvalidRequest(
+                    "virtual-device plan ID space is exhausted".into(),
+                ));
+            }
+            self.next_virtual_bus_plan += 1;
+        };
         let expires_at = unix_epoch_seconds() + VIRTUAL_DEVICE_PLAN_TTL.as_secs() as i64;
         self.virtual_bus_plans.insert(
             plan_id.clone(),

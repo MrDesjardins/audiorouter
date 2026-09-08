@@ -29,6 +29,15 @@ verifies both records. Control tests (95), storage/domain tests, strict Clippy,
 formatting, and documentation validation pass. No audio or machine
 configuration was accessed.
 
+## 2026-09-08 - Timestamped pending-plan collision guard
+
+Startup and virtual-device plan allocation now checks the hydrated in-memory
+pending-plan maps before choosing a timestamp-plus-counter ID. If a restart
+has retained that ID, the bounded counter advances and a new ID is selected;
+the storage layer's intentional replacement behavior is unchanged. Control
+coverage (95), strict Clippy, formatting, and documentation validation pass.
+No audio or machine configuration was accessed.
+
 ## 2026-09-08 - Durable graph-plan expiry hardening
 
 The durable `graph.commit` rehydration path now rejects expired or
