@@ -762,3 +762,13 @@ with p95 inter-group spacing error of 0 frames and estimated onset of 67.27 ms.
 The capture/render processes completed their lifecycle and temporary artifacts
 were removed. This is digital signal-correlation evidence only; the estimated
 onset is not calibrated physical p95 latency and does not satisfy NFR-01/02/03.
+
+## Native digital signal-path recheck (2026-09-08)
+
+The bounded native tone/loopback acceptance passed with the explicitly
+selected VB-Audio endpoints: a 1,500 ms render tone produced 213,082 nonzero
+capture payload bytes during the 1,000 ms capture window. Capture and render
+lifecycle cleanup succeeded and defaults, volume, mute, privacy, drivers,
+signing, startup configuration, and media state were unchanged. This confirms
+digital signal transfer only; it is not calibrated physical latency or
+managed-driver/application compatibility evidence.
