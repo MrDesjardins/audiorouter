@@ -23,6 +23,9 @@ use zip::ZipArchive;
 /// expire quickly and are never a durable unbounded collection; the extra row
 /// is a look-ahead sentinel for fail-closed validation.
 pub const MAX_PENDING_PLAN_RECORDS: usize = 100;
+/// Maximum number of enrolled local client identities retained by the control
+/// plane. The extra row used by list reads is a fail-closed overflow sentinel.
+pub const MAX_CLIENT_ENROLLMENTS: usize = 256;
 
 #[derive(Debug)]
 pub enum StorageError {
@@ -2130,6 +2133,23 @@ impl Storage {
     pub fn save_client_enrollment(&self, client_id: &str, role: &str) -> Result<(), StorageError> {
         validate_client_id(client_id)?;
         validate_client_role(role)?;
+        let exists: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM client_enrollments WHERE client_id = ?1)",
+            params![client_id],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            let count: usize = self.connection.query_row(
+                "SELECT COUNT(*) FROM client_enrollments",
+                [],
+                |row| row.get(0),
+            )?;
+            if count >= MAX_CLIENT_ENROLLMENTS {
+                return Err(StorageError::InvalidEnrollment(
+                    "client enrollment limit reached".into(),
+                ));
+            }
+        }
         self.connection.execute(
             "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)
              VALUES (?1, ?2, 0, NULL)
@@ -2171,14 +2191,20 @@ impl Storage {
 
     pub fn list_client_enrollments(&self) -> Result<Vec<(String, String, bool)>, StorageError> {
         let mut statement = self.connection.prepare(
-            "SELECT client_id, role, revoked FROM client_enrollments ORDER BY client_id ASC",
+            "SELECT client_id, role, revoked FROM client_enrollments
+             ORDER BY client_id ASC LIMIT ?1",
         )?;
         let records: Vec<(String, String, bool)> = statement
-            .query_map([], |row| {
+            .query_map([MAX_CLIENT_ENROLLMENTS + 1], |row| {
                 Ok((row.get(0)?, row.get(1)?, row.get::<_, i64>(2)? != 0))
             })?
             .collect::<Result<_, _>>()
             .map_err(StorageError::Sql)?;
+        if records.len() > MAX_CLIENT_ENROLLMENTS {
+            return Err(StorageError::InvalidEnrollment(
+                "client enrollment inventory exceeds limit".into(),
+            ));
+        }
         for (client_id, role, _) in &records {
             validate_client_id(client_id.as_str())?;
             validate_client_role(role.as_str())?;
@@ -4264,6 +4290,39 @@ mod tests {
         assert!(matches!(
             storage.list_client_enrollments(),
             Err(StorageError::InvalidEnrollment(_))
+        ));
+    }
+
+    #[test]
+    fn client_enrollment_writes_and_reads_are_bounded() {
+        let storage = Storage::open_memory().unwrap();
+        for index in 0..MAX_CLIENT_ENROLLMENTS {
+            storage
+                .save_client_enrollment(&format!("client-{index}"), "observer")
+                .unwrap();
+        }
+        assert!(matches!(
+            storage.save_client_enrollment("client-overflow", "observer"),
+            Err(StorageError::InvalidEnrollment(message))
+                if message == "client enrollment limit reached"
+        ));
+        assert_eq!(
+            storage.list_client_enrollments().unwrap().len(),
+            MAX_CLIENT_ENROLLMENTS
+        );
+
+        storage
+            .connection
+            .execute(
+                "INSERT INTO client_enrollments(client_id, role, revoked, revoked_at)
+                 VALUES ('client-corrupt-overflow', 'observer', 0, NULL)",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.list_client_enrollments(),
+            Err(StorageError::InvalidEnrollment(message))
+                if message == "client enrollment inventory exceeds limit"
         ));
     }
 

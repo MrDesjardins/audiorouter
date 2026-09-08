@@ -1220,6 +1220,7 @@ fn method_output_schema(name: &str) -> Value {
         }),
         "clients.list" => json!({
             "type": "array",
+            "maxItems": audiorouter_storage::MAX_CLIENT_ENROLLMENTS,
             "items": {
                 "type": "object",
                 "properties": {
@@ -2263,6 +2264,14 @@ impl ControlPlane {
         }
         if client_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
             return Err(ControlError::InvalidRequest("client_id is too long".into()));
+        }
+        if self.storage.is_none()
+            && !self.enrollments.contains_key(&client_id)
+            && self.enrollments.len() >= audiorouter_storage::MAX_CLIENT_ENROLLMENTS
+        {
+            return Err(ControlError::InvalidRequest(
+                "client enrollment limit reached".into(),
+            ));
         }
         if let Some(storage) = &self.storage {
             storage
@@ -9378,6 +9387,25 @@ mod tests {
         assert!(plane.revoke_client("client").unwrap());
         assert!(plane.grant_for_client("client").unwrap().is_none());
         assert!(!plane.revoke_client("client").unwrap());
+    }
+
+    #[test]
+    fn in_memory_client_enrollments_are_bounded() {
+        let mut plane = ControlPlane::new("enrollment-limit");
+        for index in 0..audiorouter_storage::MAX_CLIENT_ENROLLMENTS {
+            plane
+                .enroll_client(format!("client-{index}"), ClientRole::Observer)
+                .unwrap();
+        }
+        assert!(matches!(
+            plane.enroll_client("client-overflow", ClientRole::Observer),
+            Err(ControlError::InvalidRequest(message))
+                if message == "client enrollment limit reached"
+        ));
+        assert_eq!(
+            plane.client_records().unwrap().len(),
+            audiorouter_storage::MAX_CLIENT_ENROLLMENTS
+        );
     }
 
     #[test]

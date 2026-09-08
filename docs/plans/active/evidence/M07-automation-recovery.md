@@ -807,6 +807,15 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## Client-enrollment cardinality bound (2026-09-08)
+
+Durable client enrollment writes now cap distinct identities at 256, and
+inventory reads use a 257-row look-ahead sentinel before validating records.
+The in-memory control path enforces the same ceiling, while updates to an
+existing identity remain allowed. Storage/control regressions cover write
+overflow, read overflow, and in-memory overflow; focused suites pass 73/92.
+No audio or machine configuration was accessed.
+
 ## Mutation bucket retention bound (2026-09-08)
 
 The in-memory mutation rate limiter now caps distinct client buckets at 256.

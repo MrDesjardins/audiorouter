@@ -99,6 +99,14 @@ growing control memory without weakening per-client burst/refill behavior.
 Control tests (91), strict Clippy, formatting, diff checks, and documentation
 validation pass. No audio or machine configuration was accessed.
 
+## Client-enrollment cardinality bound (2026-09-08)
+
+Durable and in-memory client enrollment paths now cap distinct identities at
+256. SQLite inventory reads use a one-row overflow sentinel, and new writes
+fail closed while updates to existing identities remain valid. Storage/control
+tests (73/92), strict Clippy, formatting, diff checks, and documentation
+validation pass. No audio or machine configuration was accessed.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models
