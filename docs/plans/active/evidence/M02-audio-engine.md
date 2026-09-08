@@ -418,6 +418,14 @@ sleep on the realtime path. The focused Windows-audio suite passes 22 tests
 with formatting and strict Clippy; native fault-injection evidence remains a
 separate host/device gate.
 
+The recovery boundary now also provides
+`replace_with_refreshed_bound_with_retry` for both stream directions. It stops
+and releases the failed client before invoking the bounded exact-binding retry
+policy, so no old client overlaps a replacement and no substitute endpoint can
+be selected. The focused Windows-audio suite remains green at 22 tests with
+doc-tests, formatting, and strict Clippy; actual device-invalidation fault
+injection is still unqualified.
+
 The full locked workspace was then requalified at this checkpoint: 393
 unit/integration tests, all doc-tests, and strict all-target/all-feature
 Clippy with `-D warnings` passed. This validates dependent control and

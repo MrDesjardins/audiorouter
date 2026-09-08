@@ -489,6 +489,30 @@ pub struct SharedRender {
 }
 
 impl SharedCapture {
+    /// Stop, release, refresh, and reopen the exact capture binding with a
+    /// bounded retry policy for transient device/service failures. The old
+    /// client is released before any retry, and no substitute endpoint is
+    /// ever selected.
+    pub fn replace_with_refreshed_bound_with_retry(
+        mut self,
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<Self, AudioError> {
+        let stop_result = self.stop();
+        drop(self);
+        stop_result?;
+        Self::open_refreshed_bound_with_retry(
+            monitor,
+            expected,
+            buffer_duration_100ns,
+            max_attempts,
+            retry_delay_ms,
+        )
+    }
+
     /// Refresh and reopen the exact capture binding with a bounded retry
     /// policy for transient device/service failures. This helper is intended
     /// for the control/recovery thread; it never sleeps on an audio callback
@@ -842,6 +866,30 @@ impl Drop for SharedCapture {
 }
 
 impl SharedRender {
+    /// Stop, release, refresh, and reopen the exact render binding with a
+    /// bounded retry policy for transient device/service failures. The old
+    /// client is released before any retry, and no substitute endpoint is
+    /// ever selected.
+    pub fn replace_with_refreshed_bound_with_retry(
+        mut self,
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<Self, AudioError> {
+        let stop_result = self.stop();
+        drop(self);
+        stop_result?;
+        Self::open_refreshed_bound_with_retry(
+            monitor,
+            expected,
+            buffer_duration_100ns,
+            max_attempts,
+            retry_delay_ms,
+        )
+    }
+
     /// Refresh and reopen the exact render binding with a bounded retry
     /// policy for transient device/service failures. This helper is intended
     /// for the control/recovery thread; it never sleeps on an audio callback
