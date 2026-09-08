@@ -175,7 +175,7 @@ fn process_loopback_smoke(
     capture.stop()?;
     let telemetry = capture.telemetry();
     println!(
-        "process_loopback mode={} bytes_per_frame={} packets={} frames={} quantum_blocks={} scheduler_generation={} waits={} timeouts={} packet_min_frames={} packet_max_frames={} silent_packets={}",
+        "process_loopback mode={} bytes_per_frame={} packets={} frames={} quantum_blocks={} scheduler_generation={} waits={} timeouts={} packet_min_frames={} packet_max_frames={} silent_packets={} rejected_packets={}",
         match mode {
             ProcessLoopbackMode::IncludeTargetTree => "include",
             ProcessLoopbackMode::ExcludeTargetTree => "exclude",
@@ -189,7 +189,8 @@ fn process_loopback_smoke(
         telemetry.wait_timeouts,
         telemetry.minimum_packet_frames,
         telemetry.maximum_packet_frames,
-        telemetry.silent_packets
+        telemetry.silent_packets,
+        telemetry.rejected_packets
     );
     if frames == 0 {
         return Err(AudioError::InvalidFrameSize);

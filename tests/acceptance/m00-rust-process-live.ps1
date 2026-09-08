@@ -24,7 +24,8 @@ try {
         $text = $result -join "`n"
         if ($exitCode -ne 0 -or $text -notmatch ("process_loopback mode=" + $mode) -or
             $text -notmatch 'packets=(\d+)' -or $text -notmatch 'frames=(\d+)' -or
-            $text -notmatch 'quantum_blocks=(\d+)' -or $text -notmatch 'scheduler_generation=1') {
+            $text -notmatch 'quantum_blocks=(\d+)' -or $text -notmatch 'scheduler_generation=1' -or
+            $text -notmatch 'rejected_packets=0') {
             throw "Rust process-loopback $mode failed`n$text"
         }
         $frames = [regex]::Match($text, 'frames=(\d+)')

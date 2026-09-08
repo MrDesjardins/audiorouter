@@ -210,6 +210,7 @@ pub struct ProcessLoopbackTelemetry {
     pub minimum_packet_frames: u32,
     pub maximum_packet_frames: u32,
     pub silent_packets: u64,
+    pub rejected_packets: u64,
 }
 
 #[derive(Debug, Default)]
@@ -221,6 +222,7 @@ struct ProcessLoopbackTelemetryCounters {
     minimum_packet_frames: AtomicU64,
     maximum_packet_frames: AtomicU64,
     silent_packets: AtomicU64,
+    rejected_packets: AtomicU64,
 }
 
 fn saturating_increment(counter: &AtomicU64) {
@@ -858,6 +860,7 @@ impl ProcessLoopbackCapture {
             maximum_packet_frames: self.telemetry.maximum_packet_frames.load(Ordering::Relaxed)
                 as u32,
             silent_packets: self.telemetry.silent_packets.load(Ordering::Relaxed),
+            rejected_packets: self.telemetry.rejected_packets.load(Ordering::Relaxed),
         }
     }
 
@@ -885,6 +888,7 @@ impl ProcessLoopbackCapture {
         }
         if validate_process_loopback_packet_frames(packet_frames).is_err() {
             unsafe { self.capture.ReleaseBuffer(packet_frames)? };
+            saturating_increment(&self.telemetry.rejected_packets);
             return Err(AudioError::InvalidFrameSize);
         }
         let required = (packet_frames as usize)

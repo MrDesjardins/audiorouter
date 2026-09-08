@@ -660,6 +660,19 @@ quanta with unchanged media state and no persistent audio configuration
 changes. These observations do not establish realtime deadline or physical
 latency compliance.
 
+## Rejected-period telemetry (2026-09-07)
+
+`ProcessLoopbackTelemetry` now includes a saturating `rejected_packets` counter.
+The process-loopback adapter increments it only after releasing a packet that
+violates the zero/4,096-frame admission policy, so rejected ownership cannot
+remain held while diagnostics are recorded.
+
+The guarded live acceptance reported zero rejected packets in both modes:
+include delivered 10,584 frames in 24 packets and 82 quanta; exclude delivered
+11,025 frames in 25 packets and 86 quanta. Both observed 441-frame packets and
+unchanged media state/configuration. This remains host telemetry, not deadline
+or physical-latency evidence.
+
 ## Synthetic packet-period boundary matrix (2026-09-07)
 
 The engine regression suite now covers a 127-frame packet followed by one
