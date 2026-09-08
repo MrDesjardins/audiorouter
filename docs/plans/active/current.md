@@ -52,6 +52,12 @@ VB-Audio pair: 24,480 capture frames and 28,320 silent render frames over
 driver, signing, and startup state. This remains shared-mode lifecycle
 evidence, not managed-driver callback or latency proof.
 
+Requalified the bounded digital impulse return path on 2026-09-08 using the
+explicit VB-Audio pair: 97/100 impulse groups detected, zero p95 spacing error,
+and 69.13 ms estimated digital onset. Temporary artifacts were cleaned up and
+persistent audio state was unchanged. This is digital correlation only, not
+calibrated acoustic latency or production-driver callback evidence.
+
 Requalified the Rust asynchronous process-loopback bridge on 2026-09-08 in
 both include and exclude modes for 500 ms. The runs produced 182 and 187
 scheduler quanta respectively, with explicit 44.1 kHz-to-48 kHz conversion,

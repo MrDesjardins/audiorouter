@@ -925,3 +925,13 @@ cross-process isolation threshold or PID-reuse protection.
 streams completed their event-driven lifecycle and cleanup; defaults, volume,
 mute, privacy, driver, signing, and startup state were unchanged. This is
 shared-mode event lifecycle evidence, not production callback or latency proof.
+
+## Native digital impulse requalification (2026-09-08)
+
+`tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 100`
+passed on the explicitly selected VB-Audio cable. The analyzer detected 97 of
+100 impulse groups, with zero p95 spacing error and an estimated digital onset
+of 69.13 ms. Temporary executable/object/raw/log artifacts were cleaned up,
+and persistent audio configuration was unchanged. This is digital return-path
+correlation only; it is not calibrated acoustic latency or production-driver
+callback evidence.
