@@ -1,5 +1,17 @@
 # M07 automation and recovery evidence
 
+## 2026-09-08 - In-memory ephemeral-plan admission bounds
+
+The control plane now removes expired entries before admitting new startup,
+session-import, and virtual-device plans, and rejects new plans when the
+shared 100-entry pending-plan bound is full. This complements the SQLite
+hydration look-ahead guard: a restart cannot hydrate an oversized pending-plan
+set, and a live control process cannot grow its ephemeral maps without bound.
+The regression fills each map, checks the capacity rejection, and verifies an
+expired startup entry is reclaimed. `cargo test -p audiorouter-control --locked`
+passes 89 tests; no audio endpoint, driver, or machine configuration was
+accessed.
+
 ## 2026-09-06 — CLI graph plan/apply files
 
 Implemented the portable AUTO-04 CLI slice in `crates/cli`:

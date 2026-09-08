@@ -33,6 +33,15 @@ explicitly. This prevents a corrupted database from expanding startup memory
 before validation. Storage coverage is 71 tests with strict Clippy; no audio,
 driver, or machine configuration was accessed.
 
+## In-memory ephemeral-plan admission bounds (2026-09-08)
+
+Closed the corresponding M01/M03/M07/SEC-12 control-plane gap: startup,
+session-import, and virtual-device plan maps now prune expired entries before
+admission and cap live entries at the shared 100-plan limit. A control
+regression fills each map, verifies deterministic rejection at capacity, and
+confirms an expired entry is reclaimed. Control coverage is 89 tests with
+strict Clippy; no audio, driver, or machine configuration was accessed.
+
 ## Event replay page-cursor hardening (2026-09-08)
 
 Closed an M07/API-08 replay correctness gap: bounded `events.subscribe` pages
@@ -158,7 +167,8 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `172a96b`, with the latest
+The latest validated implementation head is the pending control-plane plan
+admission-bound change recorded in the next handoff commit, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 The latest pushed plan/evidence tip is `172a96b`; its event-replay cursor,

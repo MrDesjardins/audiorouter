@@ -16,7 +16,8 @@ use audiorouter_protocol::{
 };
 use audiorouter_recording::{RecorderController, RecorderState};
 use audiorouter_storage::{
-    GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_RECORDING_LIST_ITEMS,
+    GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_PENDING_PLAN_RECORDS,
+    MAX_RECORDING_LIST_ITEMS,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -3735,6 +3736,14 @@ impl ControlPlane {
                 "session already exists".into(),
             ));
         }
+        let now = Instant::now();
+        self.session_import_plans
+            .retain(|_, (_, expires_at)| *expires_at > now);
+        if self.session_import_plans.len() >= MAX_PENDING_PLAN_RECORDS {
+            return Err(ControlError::InvalidRequest(
+                "too many pending session import plans".into(),
+            ));
+        }
         let plan_id = EntityId::new(format!("session-import-{}", self.next_session_import_plan));
         self.next_session_import_plan = self.next_session_import_plan.saturating_add(1);
         self.session_import_plans.insert(
@@ -5033,6 +5042,14 @@ impl ControlPlane {
             .and_then(|value| value.get("enabled"))
             .and_then(Value::as_bool)
             .ok_or_else(|| ControlError::InvalidRequest("enabled is required".into()))?;
+        let now = Instant::now();
+        self.startup_plans
+            .retain(|_, (_, expires_at)| *expires_at > now);
+        if self.startup_plans.len() >= MAX_PENDING_PLAN_RECORDS {
+            return Err(ControlError::InvalidRequest(
+                "too many pending startup plans".into(),
+            ));
+        }
         let plan_id = EntityId::new(format!(
             "startup-plan-{}-{}",
             unix_epoch_millis(),
@@ -5120,6 +5137,14 @@ impl ControlPlane {
         )?;
         let mut candidate = self.virtual_buses.clone();
         apply_virtual_bus_operation(&mut candidate, &operation)?;
+        let now = Instant::now();
+        self.virtual_bus_plans
+            .retain(|_, plan| plan.expires_at > now);
+        if self.virtual_bus_plans.len() >= MAX_PENDING_PLAN_RECORDS {
+            return Err(ControlError::InvalidRequest(
+                "too many pending virtual-device plans".into(),
+            ));
+        }
         let plan_id = EntityId::new(format!(
             "virtual-plan-{}-{}",
             unix_epoch_millis(),
@@ -6118,6 +6143,97 @@ mod tests {
         ));
         plane.session_stop(&running.id).unwrap();
         assert_eq!(plane.delete_session(&running.id).unwrap()["deleted"], true);
+    }
+
+    #[test]
+    fn ephemeral_plan_maps_bound_pending_entries_and_prune_expired_entries() {
+        let mut plane = ControlPlane::default();
+
+        for index in 0..MAX_PENDING_PLAN_RECORDS {
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(index as u64)),
+                method: "startup.plan".into(),
+                params: Some(json!({ "enabled": true })),
+            });
+            assert!(response.result.is_some(), "startup plan {index} failed");
+        }
+        let startup_overflow = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(MAX_PENDING_PLAN_RECORDS as u64)),
+            method: "startup.plan".into(),
+            params: Some(json!({ "enabled": true })),
+        });
+        assert!(startup_overflow
+            .error
+            .as_ref()
+            .is_some_and(|error| error.message.contains("too many pending startup plans")));
+
+        for index in 0..MAX_PENDING_PLAN_RECORDS {
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!((1000 + index) as u64)),
+                method: "virtualDevices.plan".into(),
+                params: Some(json!({
+                    "operation": {
+                        "action": "create",
+                        "id": "bus-pending",
+                        "name": "Pending"
+                    }
+                })),
+            });
+            assert!(response.result.is_some(), "virtual plan {index} failed");
+        }
+        let virtual_overflow = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2000)),
+            method: "virtualDevices.plan".into(),
+            params: Some(json!({
+                "operation": {
+                    "action": "create",
+                    "id": "bus-pending",
+                    "name": "Pending"
+                }
+            })),
+        });
+        assert!(virtual_overflow.error.as_ref().is_some_and(|error| error
+            .message
+            .contains("too many pending virtual-device plans")));
+
+        for index in 0..MAX_PENDING_PLAN_RECORDS {
+            let mut imported = session();
+            imported.id = EntityId::new(format!("import-{index}"));
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!((3000 + index) as u64)),
+                method: "sessions.importPlan".into(),
+                params: Some(json!({ "session": imported })),
+            });
+            assert!(response.result.is_some(), "import plan {index} failed");
+        }
+        let import_overflow = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4000)),
+            method: "sessions.importPlan".into(),
+            params: Some(json!({ "session": session() })),
+        });
+        assert!(import_overflow.error.as_ref().is_some_and(|error| error
+            .message
+            .contains("too many pending session import plans")));
+
+        let existing_startup = plane.startup_plans.keys().next().cloned().unwrap();
+        plane.startup_plans.remove(&existing_startup);
+        plane.startup_plans.insert(
+            EntityId::new("expired-startup"),
+            (true, Instant::now() - Duration::from_secs(1)),
+        );
+        let recovered = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4001)),
+            method: "startup.plan".into(),
+            params: Some(json!({ "enabled": false })),
+        });
+        assert!(recovered.result.is_some());
     }
 
     #[test]
