@@ -1669,7 +1669,7 @@ fn session_item_schema() -> Value {
                                 "properties": {
                                     "name": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Maximum 128 UTF-8 bytes." },
                                     "direction": { "enum": ["input", "output"] },
-                                    "channels": { "type": "integer", "minimum": 1, "maximum": 8 }
+                                    "channels": { "type": "integer", "minimum": 1, "maximum": 2 }
                                 },
                                 "required": ["name", "direction", "channels"],
                                 "additionalProperties": false
@@ -6092,6 +6092,10 @@ mod tests {
         let node_schema = &session_schema["properties"]["nodes"]["items"];
         assert_eq!(node_schema["properties"]["ports"]["maxItems"], 16);
         assert_eq!(node_schema["properties"]["parameters"]["maxProperties"], 32);
+        assert_eq!(
+            node_schema["properties"]["ports"]["items"]["properties"]["channels"]["maximum"],
+            2
+        );
         let edge_schema = &session_schema["properties"]["edges"]["items"];
         assert_eq!(edge_schema["properties"]["matrix"]["maxItems"], 4);
         let create_input = description["methods"]

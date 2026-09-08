@@ -445,6 +445,10 @@ same bounded session schema rather than an unconstrained object placeholder.
 Discovery regression coverage verifies the node and edge collection limits on
 both submission surfaces.
 
+The discovered session port schema now limits `channels` to 1–2, matching the
+GRAPH-03 mono/stereo validator. A discovery regression asserts the maximum;
+this prevents schema-valid plans from being rejected later for channel shape.
+
 Session display names use the same 256-byte UTF-8 bound as node display names.
 Direct validation rejects an oversized imported label with a bounded `name`
 path before graph processing. The regression is portable and does not access
