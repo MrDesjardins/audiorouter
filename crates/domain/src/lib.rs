@@ -387,6 +387,9 @@ impl VirtualBusRegistry {
             .iter_mut()
             .find(|bus| bus.id == *id)
             .ok_or(VirtualBusError::NotFound)?;
+        if !enabled && bus.lease.owner().is_some() {
+            return Err(VirtualBusError::Owned);
+        }
         bus.enabled = enabled;
         Ok(())
     }
@@ -2878,11 +2881,18 @@ mod tests {
         let generation = registry
             .acquire_lease(&first, EntityId::new("client"))
             .unwrap();
-        registry.set_enabled(&first, false).unwrap();
-        assert_eq!(registry.delete(&first), Err(VirtualBusError::Owned));
+        assert_eq!(
+            registry.set_enabled(&first, false),
+            Err(VirtualBusError::Owned)
+        );
+        assert_eq!(
+            registry.delete(&first),
+            Err(VirtualBusError::MustBeDisabled)
+        );
         registry
             .release_lease(&first, &EntityId::new("client"), generation)
             .unwrap();
+        registry.set_enabled(&first, false).unwrap();
         registry.delete(&first).unwrap();
         assert!(registry.list().is_empty());
     }

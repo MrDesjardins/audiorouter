@@ -1692,6 +1692,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Requalified the M00-M08 safe acceptance chain after `f86f870` on 2026-09-08: native compile and 34-endpoint read-only inventory, disposable pinned SysVAD x64 qualification, workspace checks, M01/M04/M05/M06/M07 validation, unsigned M08 preparation, and documentation validation (51 Markdown files/158 local links) all passed. Temporary outputs/checkouts were removed; driver installation/loading, signing-mode changes, plugin/startup registration, and machine audio configuration were not performed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+- Completed M03/VDEV-05/VDEV-10/SEC-12 virtual-bus ownership safety on 2026-09-08: disabling a leased virtual bus now fails with `Owned` until the lease is explicitly released, matching the existing deletion guard and preventing an implicit invalidation of an active writer. Domain tests (53), strict Clippy, formatting, and diff checks pass; no driver, endpoint, or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 - Completed M00/SEC-12 acceptance-wrapper cleanup propagation on 2026-09-08: all six custom-output native live wrappers now remove adjacent implicit objects, and the 21-script parse check plus bounded VB-Audio loopback passed with no temporary or repository artifacts left behind. No audio configuration changed.
 - Next M00/M02/M03/ARCH-05 task: retain isolated wrapper cleanup while pursuing calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.
 

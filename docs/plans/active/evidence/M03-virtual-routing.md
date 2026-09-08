@@ -302,6 +302,16 @@ The legacy unpaged `virtualDevices.list` array response now advertises the
 authoritative eight-bus domain ceiling. The in-memory registry already rejects
 the ninth bus, so complete unpaged results remain safe without arbitrary
 truncation or managed-driver activation.
+
+## Leased-bus disable safety (2026-09-08)
+
+`VirtualBusRegistry::set_enabled(false)` now rejects a bus with an active
+writer lease using `VirtualBusError::Owned`. The caller must release the
+current generation or perform an explicit recovery force-release before
+disabling the bus; deletion retains its separate disabled and ownership guards.
+The domain suite passes 53 tests with strict Clippy, formatting, and diff
+checks. This is portable ownership evidence only; no driver or endpoint was
+activated.
 ## Virtual-bus name limit (2026-09-07)
 
 The managed virtual-bus name ceiling is now the public domain constant
