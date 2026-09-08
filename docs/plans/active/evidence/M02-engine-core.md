@@ -312,3 +312,10 @@ Control discovery tests (86), strict Clippy, formatting, diff checks, and
 documentation validation pass. The path-list count remains intentionally
 unbounded until the complete-provenance versus truncation policy is specified;
 native route activation remains open.
+## Route-output cardinality contract (2026-09-07)
+
+The `routes.inspect` output schema now advertises `MAX_ROUTE_PATHS` (500) for
+its `paths` array. This matches the graph inspector's bounded enumeration and
+its explicit `complete: false` result when more provenance exists. Control
+discovery regression coverage verifies the contract; native route activation
+and live audio remain open.

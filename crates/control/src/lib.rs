@@ -894,6 +894,7 @@ fn method_output_schema(name: &str) -> Value {
                 "complete": { "type": "boolean" },
                 "paths": {
                     "type": "array",
+                    "maxItems": audiorouter_domain::MAX_ROUTE_PATHS,
                     "items": {
                         "type": "object",
                         "properties": {
@@ -6731,6 +6732,14 @@ mod tests {
             session_get["outputSchema"]["properties"]["edges"]["items"]["properties"]["sourceNode"]
                 ["type"],
             "string"
+        );
+        let routes = methods
+            .iter()
+            .find(|method| method["name"] == "routes.inspect")
+            .unwrap();
+        assert_eq!(
+            routes["outputSchema"]["properties"]["paths"]["maxItems"],
+            audiorouter_domain::MAX_ROUTE_PATHS
         );
         let handshake = methods
             .iter()
