@@ -1,5 +1,14 @@
 # M01 contracts and control-plane evidence
 
+## 2026-09-08 - CLI document-read bound
+
+The CLI now reads API parameter and saved JSON plan files through a bounded
+reader (4 MiB), and session create/import documents through the shared 1 MiB
+session-document limit. API stdin uses the same bounded path before parsing.
+A regression verifies over-limit input is rejected after reading only the
+bounded sentinel byte. CLI tests (26), strict Clippy, formatting, and diff
+checks pass; no audio or machine configuration was accessed.
+
 ## 2026-09-08 - Global session cardinality bound
 
 The domain `GraphStore` and both direct SQLite session-write paths now enforce

@@ -117,6 +117,16 @@ plugin-host (46 library/20 fixture-process), transport (18), and
 Windows-audio (29) coverage plus doc-tests. No audio endpoint, driver, or
 machine configuration was changed.
 
+## CLI document-read bound (2026-09-08)
+
+Closed an M01/SEC-12 adapter boundary: CLI API parameters and saved JSON plan
+files now use a bounded reader capped at 4 MiB, while session create/import
+documents use the existing 1 MiB session-document limit. The same limit is
+applied to stdin API calls before JSON parsing, preventing oversized local
+input from being allocated without bound. CLI coverage (26), strict Clippy,
+formatting, and diff checks pass. No audio or machine configuration was
+accessed.
+
 ## Client-enrollment cardinality bound (2026-09-08)
 
 Durable and in-memory client enrollment paths now cap distinct identities at

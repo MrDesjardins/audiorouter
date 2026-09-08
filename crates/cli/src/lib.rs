@@ -6,6 +6,39 @@ use audiorouter_storage::Storage;
 use serde_json::{json, Value};
 use std::io::{BufRead, Read, Write};
 
+const MAX_CLI_API_DOCUMENT_BYTES: usize = 4 * 1024 * 1024;
+
+fn read_bounded_text<R: Read>(
+    reader: R,
+    maximum: usize,
+    description: &str,
+) -> Result<String, CliError> {
+    let read_limit = u64::try_from(maximum)
+        .ok()
+        .and_then(|value| value.checked_add(1))
+        .ok_or_else(|| CliError::InvalidArguments("text input limit is too large".into()))?;
+    let mut document = String::new();
+    reader
+        .take(read_limit)
+        .read_to_string(&mut document)
+        .map_err(|error| CliError::Io(error.to_string()))?;
+    if document.len() > maximum {
+        return Err(CliError::InvalidArguments(format!(
+            "{description} exceeds the {maximum}-byte limit"
+        )));
+    }
+    Ok(document)
+}
+
+fn read_bounded_file(
+    path: &std::path::Path,
+    maximum: usize,
+    description: &str,
+) -> Result<String, CliError> {
+    let file = std::fs::File::open(path).map_err(|error| CliError::Io(error.to_string()))?;
+    read_bounded_text(file, maximum, description)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputMode {
     Human,
@@ -701,10 +734,11 @@ fn api_subcommand(args: &[&str]) -> Result<Value, CliError> {
             let params = match args.get(3).copied() {
                 None => None,
                 Some("-") => {
-                    let mut document = String::new();
-                    std::io::stdin()
-                        .read_to_string(&mut document)
-                        .map_err(|error| CliError::Io(error.to_string()))?;
+                    let document = read_bounded_text(
+                        std::io::stdin(),
+                        MAX_CLI_API_DOCUMENT_BYTES,
+                        "API params",
+                    )?;
                     Some(parse_api_params(&document)?)
                 }
                 Some(path) => {
@@ -714,8 +748,8 @@ fn api_subcommand(args: &[&str]) -> Result<Value, CliError> {
                             "params file path must be absolute".into(),
                         ));
                     }
-                    let document = std::fs::read_to_string(path)
-                        .map_err(|error| CliError::Io(error.to_string()))?;
+                    let document =
+                        read_bounded_file(path, MAX_CLI_API_DOCUMENT_BYTES, "API params")?;
                     Some(parse_api_params(&document)?)
                 }
             };
@@ -741,7 +775,7 @@ fn api_subcommand(args: &[&str]) -> Result<Value, CliError> {
 }
 
 fn parse_api_params(document: &str) -> Result<Value, CliError> {
-    if document.len() > 4 * 1024 * 1024 {
+    if document.len() > MAX_CLI_API_DOCUMENT_BYTES {
         return Err(CliError::InvalidArguments(
             "API params exceed the 4 MiB limit".into(),
         ));
@@ -1165,15 +1199,17 @@ fn positional_path(
 }
 
 fn read_session(path: &std::path::Path) -> Result<audiorouter_domain::Session, CliError> {
-    let document =
-        std::fs::read_to_string(path).map_err(|error| CliError::Io(error.to_string()))?;
+    let document = read_bounded_file(
+        path,
+        audiorouter_storage::MAX_SESSION_DOCUMENT_BYTES,
+        "session document",
+    )?;
     serde_json::from_str(&document)
         .map_err(|error| CliError::InvalidArguments(format!("invalid session JSON: {error}")))
 }
 
 fn read_json_object(path: &std::path::Path) -> Result<Value, CliError> {
-    let document =
-        std::fs::read_to_string(path).map_err(|error| CliError::Io(error.to_string()))?;
+    let document = read_bounded_file(path, MAX_CLI_API_DOCUMENT_BYTES, "JSON document")?;
     let value: Value = serde_json::from_str(&document)
         .map_err(|error| CliError::InvalidArguments(format!("invalid JSON: {error}")))?;
     if !value.is_object() {
@@ -1371,8 +1407,11 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
                 "document path must be absolute".into(),
             ));
         }
-        let document = std::fs::read_to_string(document_path)
-            .map_err(|error| CliError::Io(error.to_string()))?;
+        let document = read_bounded_file(
+            document_path,
+            audiorouter_storage::MAX_SESSION_DOCUMENT_BYTES,
+            "session document",
+        )?;
         let session: audiorouter_domain::Session = serde_json::from_str(&document)
             .map_err(|error| CliError::InvalidArguments(error.to_string()))?;
         let mut plane = ControlPlane::with_storage("cli", storage);
@@ -1619,8 +1658,11 @@ fn import_session(args: &[&str]) -> Result<Value, CliError> {
                 "usage: import <document-path> --database <path> [--idempotency-key KEY]".into(),
             )
         })?;
-    let document =
-        std::fs::read_to_string(path).map_err(|error| CliError::Io(error.to_string()))?;
+    let document = read_bounded_file(
+        std::path::Path::new(path),
+        audiorouter_storage::MAX_SESSION_DOCUMENT_BYTES,
+        "session document",
+    )?;
     let storage = database(args)?;
     let session: audiorouter_domain::Session = serde_json::from_str(&document)
         .map_err(|error| CliError::InvalidArguments(error.to_string()))?;
@@ -2069,6 +2111,20 @@ fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounded_text_reader_rejects_input_before_unbounded_growth() {
+        let input = vec![b'x'; MAX_CLI_API_DOCUMENT_BYTES + 1];
+        assert!(matches!(
+            read_bounded_text(
+                std::io::Cursor::new(input),
+                MAX_CLI_API_DOCUMENT_BYTES,
+                "API params"
+            ),
+            Err(CliError::InvalidArguments(message))
+                if message == "API params exceeds the 4194304-byte limit"
+        ));
+    }
 
     #[test]
     fn help_and_json_schema_are_available_offline() {
