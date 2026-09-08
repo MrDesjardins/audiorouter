@@ -22,6 +22,15 @@ parsing, unsigned release acceptance, and diff checks pass. This remains
 preparation-only evidence; signing, driver, installer, clean-machine, and
 native-audio gates remain open.
 
+## Unsigned release requalification after `ca4e8a4` (2026-09-08)
+
+The complete `tests/acceptance/m08-release.ps1` wrapper passed after the
+required-artifact verifier change. The optimized Rust binaries, UI production
+archive, cargo/npm SBOMs, lock snapshot, notices, manifest checksums, and
+unsigned blocker assertions all passed in a disposable temporary directory;
+the directory was removed afterward. No signing, installer, driver, audio
+endpoint, or machine configuration was accessed.
+
 ## Safe-chain requalification after `0162438` (2026-09-08)
 
 The canonical safe acceptance chain passed again after telemetry overflow
