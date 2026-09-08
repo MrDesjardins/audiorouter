@@ -386,6 +386,19 @@ The route wrapper now uses a per-run temporary object path and cleans it with
 the executable, so this host-policy failure cannot strand `main.obj` in the
 repository.
 
+## Repeatable differing-rate route (2026-09-07)
+
+The route acceptance now accepts both exact endpoint IDs as an alternative to
+friendly-name resolution. This preserves fail-closed opaque binding while
+allowing a run to bypass the host's blocked temporary native inventory launch.
+Using the 96 kHz mono Digital Audio Interface capture ID and 48 kHz stereo
+CABLE render ID, the authorized 500 ms wrapper run passed with 48,000 capture
+frames, 23,936 scheduler frames, and 23,936 routed frames. The output reported
+zero XRuns and input/output overruns, 133 queued resampler frames, and
+correction within the configured ±100 ppm bound. Media identity/state and
+temporary-artifact cleanup checks passed; no persistent audio configuration
+changed.
+
 ## 2026-09-07 — Current-head Rust adapter route
 
 The authorized guarded route was replayed after the event-gated render and

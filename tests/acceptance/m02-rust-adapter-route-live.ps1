@@ -2,7 +2,9 @@ param(
     [switch]$AllowLiveAudio,
     [int]$DurationMilliseconds = 500,
     [string]$RenderFriendlyName = 'CABLE Input (VB-Audio Virtual Cable)',
-    [string]$CaptureFriendlyName = 'CABLE Output (VB-Audio Virtual Cable)'
+    [string]$CaptureFriendlyName = 'CABLE Output (VB-Audio Virtual Cable)',
+    [string]$RenderEndpointId = '',
+    [string]$CaptureEndpointId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +17,14 @@ $probeDirectory = Join-Path $workspace 'tools/m00-native-wasapi-probe'
 $buildScript = Join-Path $probeDirectory 'build.ps1'
 $output = Join-Path ([IO.Path]::GetTempPath()) ("audiorouter-m02-route-{0}.exe" -f ([guid]::NewGuid()))
 $temporaryObject = [IO.Path]::ChangeExtension($output, '.obj')
+$explicitEndpointIds = -not [string]::IsNullOrWhiteSpace($RenderEndpointId) -and
+    -not [string]::IsNullOrWhiteSpace($CaptureEndpointId)
+$renderLabel = if ($explicitEndpointIds) { $RenderEndpointId } else { $RenderFriendlyName }
+$captureLabel = if ($explicitEndpointIds) { $CaptureEndpointId } else { $CaptureFriendlyName }
+if (([string]::IsNullOrWhiteSpace($RenderEndpointId)) -xor
+    ([string]::IsNullOrWhiteSpace($CaptureEndpointId))) {
+    throw 'RenderEndpointId and CaptureEndpointId must be supplied together'
+}
 
 function Get-MediaSnapshot {
     @(Get-PnpDevice -Class Media -PresentOnly | ForEach-Object {
@@ -34,17 +44,21 @@ function Invoke-External([scriptblock]$Command) {
 
 $before = Get-MediaSnapshot
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Output $output -Object $temporaryObject
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output -PathType Leaf)) { throw 'native endpoint inventory probe build failed' }
-    $inventory = Invoke-External { & $output inventory }
-    $inventoryText = $inventory.Output -join "`n"
-    if ($inventory.ExitCode -ne 0) { throw "native endpoint inventory failed`n$inventoryText" }
-    $render = [regex]::Match($inventoryText, ('render\[\d+\] name=' + [regex]::Escape($RenderFriendlyName) + ' id=(.+)$'), [Text.RegularExpressions.RegexOptions]::Multiline)
-    $capture = [regex]::Match($inventoryText, ('capture\[\d+\] name=' + [regex]::Escape($CaptureFriendlyName) + ' id=(.+)$'), [Text.RegularExpressions.RegexOptions]::Multiline)
-    if (-not $render.Success -or -not $capture.Success) { throw "requested route endpoints were not both found: '$RenderFriendlyName' / '$CaptureFriendlyName'" }
+    if (-not $explicitEndpointIds) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Output $output -Object $temporaryObject
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output -PathType Leaf)) { throw 'native endpoint inventory probe build failed' }
+        $inventory = Invoke-External { & $output inventory }
+        $inventoryText = $inventory.Output -join "`n"
+        if ($inventory.ExitCode -ne 0) { throw "native endpoint inventory failed`n$inventoryText" }
+        $render = [regex]::Match($inventoryText, ('render\[\d+\] name=' + [regex]::Escape($RenderFriendlyName) + ' id=(.+)$'), [Text.RegularExpressions.RegexOptions]::Multiline)
+        $capture = [regex]::Match($inventoryText, ('capture\[\d+\] name=' + [regex]::Escape($CaptureFriendlyName) + ' id=(.+)$'), [Text.RegularExpressions.RegexOptions]::Multiline)
+        if (-not $render.Success -or -not $capture.Success) { throw "requested route endpoints were not both found: '$RenderFriendlyName' / '$CaptureFriendlyName'" }
+        $RenderEndpointId = $render.Groups[1].Value.Trim()
+        $CaptureEndpointId = $capture.Groups[1].Value.Trim()
+    }
 
     $route = Invoke-External {
-        & cargo run --manifest-path (Join-Path $workspace 'tools/m00-wasapi-probe/Cargo.toml') -- adapter-route $DurationMilliseconds $capture.Groups[1].Value.Trim() $render.Groups[1].Value.Trim()
+        & cargo run --manifest-path (Join-Path $workspace 'tools/m00-wasapi-probe/Cargo.toml') -- adapter-route $DurationMilliseconds $CaptureEndpointId $RenderEndpointId
     }
     $routeText = $route.Output -join "`n"
     if ($route.ExitCode -ne 0) { throw "Rust adapter route failed`n$routeText" }
@@ -56,7 +70,7 @@ try {
     if ($captureFrames -le 0 -or $schedulerFrames -le 0 -or $routedFrames -le 0) { throw "adapter route reported invalid frame counts: $line" }
     $after = Get-MediaSnapshot
     if (Compare-Object -ReferenceObject $before -DifferenceObject $after) { throw 'media-device identity/state changed during adapter route acceptance' }
-    Write-Output ("M02 Rust adapter route passed: render='{0}' capture='{1}' capture_frames={2} scheduler_frames={3} routed_frames={4}" -f $RenderFriendlyName, $CaptureFriendlyName, $captureFrames, $schedulerFrames, $routedFrames)
+    Write-Output ("M02 Rust adapter route passed: render='{0}' capture='{1}' capture_frames={2} scheduler_frames={3} routed_frames={4}" -f $renderLabel, $captureLabel, $captureFrames, $schedulerFrames, $routedFrames)
     Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {
