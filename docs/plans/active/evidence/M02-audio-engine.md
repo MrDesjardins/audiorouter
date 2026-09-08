@@ -1106,3 +1106,12 @@ deadline misses, and deadline lateness; streams stopped/reset and endpoint,
 media, and persistent configuration snapshots were unchanged. This qualifies
 the existing shared-mode adapter path only; it does not qualify a managed
 driver callback, production endpoint ownership, physical latency, or signing.
+
+## 2026-09-08 - RMS-window allocation bound
+
+The engine's public `RmsWindow::new` now caps caller-requested storage at
+480,000 samples, the ten-second upper bound used by the internal 48 kHz meter,
+and rejects zero or oversized capacities before allocation. The regression
+covers both invalid boundaries; engine coverage is 77 tests with strict
+Clippy. This is a portable allocation-safety boundary and does not access
+audio devices or machine configuration.

@@ -42,6 +42,14 @@ matching the control and SQLite boundaries. Domain and control regressions,
 workspace tests, and strict Clippy pass; no audio or machine configuration was
 accessed.
 
+## RMS-window allocation bound (2026-09-08)
+
+Closed an M02/SEC-12 constructor gap: the public engine `RmsWindow` now
+rejects capacities above 480,000 samples, matching the DSP meter's ten-second
+maximum at the 48 kHz internal rate, before allocation. The boundary regression
+covers zero and oversized capacities; engine coverage is 77 tests with strict
+Clippy and no audio or machine configuration was accessed.
+
 ## Ephemeral-plan hydration bounds (2026-09-08)
 
 Closed an M03/M07/SEC-12 persistence gap: startup and pending virtual-device

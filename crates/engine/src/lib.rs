@@ -18,6 +18,9 @@ pub const MAX_FANOUT_BRANCHES: usize = 8;
 pub const MAX_EXTRA_COMPENSATION_MS: u32 = 250;
 pub const MAX_DELAY_FRAMES: usize = 48_000;
 pub const MAX_DRIFT_CORRECTION_PPM: f64 = 999_999.0;
+/// Maximum caller-owned rolling RMS window at the internal 48 kHz rate.
+/// This matches the DSP meter's ten-second configurable upper bound.
+pub const MAX_RMS_WINDOW_SAMPLES: usize = INTERNAL_SAMPLE_RATE_HZ as usize * 10;
 
 const PCM16_QUANTUM_SAMPLES: usize = MAX_CHANNELS * PROCESSING_QUANTUM_FRAMES;
 pub const MAX_PCM16_PACKET_FRAMES: usize = 4_096;
@@ -161,7 +164,7 @@ pub struct RmsWindow {
 
 impl RmsWindow {
     pub fn new(capacity_samples: usize) -> Result<Self, MeterError> {
-        if capacity_samples == 0 {
+        if !(1..=MAX_RMS_WINDOW_SAMPLES).contains(&capacity_samples) {
             return Err(MeterError::InvalidCapacity);
         }
         Ok(Self {
@@ -4195,6 +4198,10 @@ mod tests {
     fn rolling_rms_window_is_bounded_and_resettable() {
         assert!(matches!(
             RmsWindow::new(0),
+            Err(MeterError::InvalidCapacity)
+        ));
+        assert!(matches!(
+            RmsWindow::new(MAX_RMS_WINDOW_SAMPLES + 1),
             Err(MeterError::InvalidCapacity)
         ));
         let mut window = RmsWindow::new(2).unwrap();
