@@ -172,6 +172,12 @@ session, and recorder identifiers. The public recording item schema advertises
 the same limit; path length remains unspecified because no owning validation
 policy exists yet.
 
+The recording path audit found no platform path-length limit enforced by the
+owning storage or recording policy. Existing safety checks cover absolute
+paths, approved roots, reparse-point escapes, file existence, and supported
+extensions; path strings therefore remain intentionally unbounded in the API
+until a documented Windows support ceiling is approved.
+
 ## Bounded recording chunk admission (2026-09-07)
 
 `RecordingQueue::try_push` now rejects caller-owned chunks larger than 4,096
