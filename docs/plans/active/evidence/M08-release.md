@@ -526,3 +526,21 @@ No driver was installed or loaded, signing mode was unchanged, no plugin or
 startup entry was registered, and no machine audio configuration changed.
 Production driver/signing, installer, hardware/manual UI, callback deadline,
 and physical-latency gates remain open.
+
+## Safe-chain requalification after raw timing histogram validation (`f0d1b03`, 2026-09-08)
+
+The elevated non-mutating command `powershell.exe -NoProfile
+-ExecutionPolicy Bypass -File tests/acceptance/safe-all.ps1` passed at
+`f0d1b03`. It completed native compile and 34-endpoint read-only inventory,
+disposable pinned SysVAD x64 build/package/API qualification, M01 CLI, M04
+DSP/recording, M05 UI (typecheck, 88 tests, temporary production build), M06
+SDK/VST3 validation, M07 headless checks, unsigned M08 artifact preparation,
+and documentation validation (51 Markdown files, 158 local links). Temporary
+outputs/checkouts were removed.
+
+No driver was installed or loaded, signing mode was unchanged, no plugin or
+startup entry was registered, and no machine audio configuration changed.
+Production driver/signing, installer, hardware/manual UI, callback deadline,
+and physical-latency gates remain open. The next authorized work remains
+native production-style scheduler callback period/deadline evidence when that
+callback owns an endpoint stream.
