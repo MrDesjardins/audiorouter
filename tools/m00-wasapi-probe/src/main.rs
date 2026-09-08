@@ -111,7 +111,7 @@ fn process_loopback_smoke(
     let scheduler = RealtimeScheduler::new(8, 2, 128)
         .map_err(|_| AudioError::InvalidFrameSize)?;
     let generation = RuntimeGeneration::new(1);
-    scheduler.processor().publish(RuntimeGraph::prepare(
+    let _ = scheduler.publish(RuntimeGraph::prepare(
         generation,
         vec![ProcessingStage::Gain { linear: 0.5 }],
     ));
@@ -233,7 +233,7 @@ fn adapter_smoke(
     let scheduler = RealtimeScheduler::new(8, usize::from(capture_info.channels), 128)
         .map_err(|_| AudioError::InvalidFrameSize)?;
     let generation = RuntimeGeneration::new(1);
-    scheduler.processor().publish(RuntimeGraph::prepare(
+    let _ = scheduler.publish(RuntimeGraph::prepare(
         generation,
         vec![ProcessingStage::Gain { linear: 0.5 }],
     ));

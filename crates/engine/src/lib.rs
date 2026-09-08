@@ -294,6 +294,19 @@ impl AudioBlockRing {
         self.free.try_release(block)
     }
 
+    /// Recycle every queued block, used by the control boundary when a new
+    /// runtime generation is published. This never waits and restores the
+    /// blocks to this ring's bounded pool instead of dropping their storage.
+    pub fn recycle_all(&self) -> usize {
+        let mut recycled = 0;
+        while let Some(block) = self.ready.try_pop() {
+            if self.try_recycle(block).is_ok() {
+                recycled += 1;
+            }
+        }
+        recycled
+    }
+
     pub fn overruns(&self) -> u64 {
         self.ready.overruns()
     }
@@ -2677,6 +2690,15 @@ impl RealtimeScheduler {
         &self.processor
     }
 
+    /// Publish a prepared graph from the control boundary and recycle any
+    /// already queued output from the prior generation. A callback that races
+    /// this operation can still submit an old block; generation-filtered
+    /// receive remains the final protection for that in-flight case.
+    pub fn publish(&self, graph: RuntimeGraph) -> usize {
+        self.processor.publish(graph);
+        self.output.recycle_all()
+    }
+
     /// Prepare and publish a graph through the scheduler's own lifecycle
     /// boundary. Invalid candidates are rejected before replacing the active
     /// generation, preserving the previous graph.
@@ -3674,6 +3696,38 @@ mod tests {
             .receive_output_for_generation(RuntimeGeneration::new(31))
             .is_none());
         assert_eq!(scheduler.output().available(), 1);
+    }
+
+    #[test]
+    fn scheduler_publish_recycles_queued_generation_before_replacement() {
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        let first_generation = RuntimeGeneration::new(40);
+        assert_eq!(
+            scheduler.publish(RuntimeGraph::prepare(first_generation, Vec::new())),
+            0
+        );
+        let first = scheduler.acquire_input().unwrap();
+        scheduler.submit_input(first).unwrap();
+        assert_eq!(scheduler.process_once().unwrap(), Some(first_generation));
+        assert_eq!(scheduler.output().ready(), 1);
+        assert_eq!(scheduler.output().available(), 1);
+
+        let second_generation = RuntimeGeneration::new(41);
+        assert_eq!(
+            scheduler.publish(RuntimeGraph::prepare(second_generation, Vec::new())),
+            1
+        );
+        assert_eq!(scheduler.output().ready(), 0);
+        assert_eq!(scheduler.output().available(), 2);
+
+        let second = scheduler.acquire_input().unwrap();
+        scheduler.submit_input(second).unwrap();
+        assert_eq!(scheduler.process_once().unwrap(), Some(second_generation));
+        let output = scheduler
+            .receive_output_for_generation(second_generation)
+            .unwrap();
+        assert_eq!(output.generation(), second_generation.value());
+        scheduler.output().try_recycle(output).unwrap();
     }
 
     #[test]

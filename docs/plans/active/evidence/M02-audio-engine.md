@@ -602,3 +602,17 @@ storage, transport, domain, DSP, protocol, and their documented test targets.
 This is portable and Windows host test evidence; it does not close native
 realtime timing, physical latency, driver, signing, installer, or hardware
 acceptance gates.
+
+## Generation replacement and live recheck (2026-09-07)
+
+`RealtimeScheduler::publish` now recycles queued output blocks at the control
+publication boundary before exposing the replacement generation. A concurrent
+old callback may still submit an old block, so generation-filtered receive
+remains the final protection; the new regression verifies queued ownership is
+restored and the next block is processed under the replacement generation.
+
+The engine suite passed 69 tests, strict Clippy, formatting, and diff checks
+passed, and the guarded process-loopback acceptance re-ran successfully in both
+include and exclude modes (10,584 frames, 82 generation-1 quanta each). No
+persistent audio configuration changed. Native callback timing and physical
+latency remain unqualified.
