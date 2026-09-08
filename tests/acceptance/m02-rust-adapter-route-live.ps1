@@ -74,7 +74,7 @@ try {
     if ($captureFrames -le 0 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $routedFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks) { throw "adapter route reported invalid frame or timing counts: $line" }
     $after = Get-MediaSnapshot
     if (Compare-Object -ReferenceObject $before -DifferenceObject $after) { throw 'media-device identity/state changed during adapter route acceptance' }
-    Write-Output ("M02 Rust adapter route passed: render='{0}' capture='{1}' capture_frames={2} scheduler_frames={3} routed_frames={4}" -f $renderLabel, $captureLabel, $captureFrames, $schedulerFrames, $routedFrames)
+    Write-Output ("M02 Rust adapter route passed: render='{0}' capture='{1}' capture_frames={2} graph_blocks={3} scheduler_frames={4} routed_frames={5} processing_time_ns_total={6} processing_time_ns_max={7} processing_time_histogram_samples={8}" -f $renderLabel, $captureLabel, $captureFrames, $graphBlocks, $schedulerFrames, $routedFrames, $processingTimeTotal, $processingTimeMax, $processingTimeSamples)
     Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {
