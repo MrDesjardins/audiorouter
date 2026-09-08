@@ -869,7 +869,15 @@ impl Storage {
     }
 
     pub fn save_session(&self, session: &Session) -> Result<(), StorageError> {
+        validate_session(session)
+            .map_err(|errors| StorageError::InvalidSession(format_validation_errors(&errors)))?;
         let document = serde_json::to_string(session)?;
+        if document.len() > MAX_SESSION_DOCUMENT_BYTES {
+            return Err(StorageError::DocumentTooLarge {
+                bytes: document.len(),
+                maximum: MAX_SESSION_DOCUMENT_BYTES,
+            });
+        }
         let transaction = self.connection.unchecked_transaction()?;
         transaction.execute(
             "INSERT OR REPLACE INTO session_history(session_id, revision, document) VALUES (?1, ?2, ?3)",
@@ -2245,6 +2253,19 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn direct_session_save_rejects_invalid_domain_documents() {
+        let storage = Storage::open_memory().unwrap();
+        let mut invalid = session();
+        invalid.name = "x".repeat(257);
+
+        assert!(matches!(
+            storage.save_session(&invalid),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(storage.load_session(&invalid.id).unwrap().is_none());
     }
 
     #[test]

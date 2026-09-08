@@ -699,6 +699,14 @@ checkpoint contents or file behavior. Storage coverage passes 41 tests with
 strict Clippy, formatting, and diff checks; no audio endpoint or machine
 configuration was accessed.
 
+## Direct session persistence validation (2026-09-08)
+
+`Storage::save_session` now revalidates the domain session and enforces the
+existing 1 MiB serialized-document ceiling before opening its transaction.
+Direct callers can no longer persist an invalid session while bypassing the
+control layer. Storage coverage passes 43 tests with strict Clippy and
+formatting; no audio endpoint or machine configuration was accessed.
+
 Paged recording-list discovery now advertises its 500-item page bound, matching
 the control dispatcher and storage page request limit.
 
