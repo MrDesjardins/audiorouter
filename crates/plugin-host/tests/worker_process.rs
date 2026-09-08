@@ -4,7 +4,9 @@ use audiorouter_plugin_host::{
     WorkerLatency, WorkerMessage, WorkerProcess,
 };
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+#[cfg(feature = "test-fixtures")]
+use std::time::Duration;
+use std::time::Instant;
 
 #[cfg(feature = "test-fixtures")]
 fn fixture_worker_path() -> String {

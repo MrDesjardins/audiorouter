@@ -2,7 +2,9 @@ use audiorouter_plugin_host::{
     read_worker_message, worker_clock_tick, write_worker_message, SharedAudioLayout,
     SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
 };
-use std::io::{self, BufReader, BufWriter, Write};
+#[cfg(feature = "test-fixtures")]
+use std::io::Write;
+use std::io::{self, BufReader, BufWriter};
 use std::path::PathBuf;
 use std::process::ExitCode;
 #[cfg(feature = "test-fixtures")]
@@ -23,7 +25,7 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let (plugin_sha256, channels, shared_paths, fixture_mode) = parse_arguments()?;
+    let (plugin_sha256, channels, shared_paths, _fixture_mode) = parse_arguments()?;
     let mut session = WorkerSession::new(&plugin_sha256, channels)
         .map_err(|error| format!("invalid worker configuration: {error:?}"))?;
     let mut shared = shared_paths
@@ -63,12 +65,12 @@ fn run() -> Result<(), String> {
         .map_err(|error| format!("ready rejected: {error:?}"))?;
 
     #[cfg(feature = "test-fixtures")]
-    if fixture_mode.as_deref() == Some("crash") {
+    if _fixture_mode.as_deref() == Some("crash") {
         return Err("controlled fixture crash".into());
     }
 
     #[cfg(feature = "test-fixtures")]
-    if fixture_mode.as_deref() == Some("hang") {
+    if _fixture_mode.as_deref() == Some("hang") {
         loop {
             thread::sleep(Duration::from_secs(60));
         }
@@ -138,7 +140,7 @@ fn run() -> Result<(), String> {
                 // without executing untrusted plugin code.
                 let _ = parameters;
                 #[cfg(feature = "test-fixtures")]
-                if fixture_mode.as_deref() == Some("invalid-output") {
+                if _fixture_mode.as_deref() == Some("invalid-output") {
                     let payload = br#"{"Processed":{"frame":{"sequence":1,"deadline_tick":1,"channels":1,"samples":[null]}}}"#;
                     writer
                         .write_all(&(payload.len() as u32).to_le_bytes())
@@ -175,7 +177,10 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut channels = None;
     let mut input_path = None;
     let mut output_path = None;
+    #[cfg(feature = "test-fixtures")]
     let mut fixture_mode = None;
+    #[cfg(not(feature = "test-fixtures"))]
+    let fixture_mode: Option<String> = None;
     while let Some(argument) = arguments.next() {
         match argument.as_str() {
             "--plugin-sha256" => hash = arguments.next(),
