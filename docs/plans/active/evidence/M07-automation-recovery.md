@@ -914,3 +914,10 @@ The full locked workspace was requalified again: 412 unit/integration tests
 and all doc-tests passed, workspace strict Clippy passed, and documentation
 acceptance passed. These gates remain non-audio and do not modify machine
 configuration.
+## Durable idempotency-key boundary (2026-09-08)
+
+SQLite journal reads and writes now reject empty or over-128-byte idempotency
+keys before querying or mutating the database. All public control schemas
+advertise the same maximum, preventing an API/storage contract mismatch.
+Storage/control tests pass (49/86) with strict Clippy and formatting; no audio
+or machine configuration was accessed.

@@ -30,6 +30,7 @@ pub enum StorageError {
     InvalidPluginState(String),
     InvalidEnrollment(String),
     InvalidPlan(String),
+    InvalidJournal(String),
     CorruptDatabase(String),
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
@@ -51,6 +52,7 @@ pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_RECORDING_ID_BYTES: usize = 128;
 pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
+pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
 
 fn validate_recording_checkpoint_id(recording_id: &str) -> Result<(), StorageError> {
     if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
@@ -64,6 +66,15 @@ fn validate_recording_checkpoint_id(recording_id: &str) -> Result<(), StorageErr
 fn validate_plan_id(id: &str) -> Result<(), StorageError> {
     if id.is_empty() || id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
         return Err(StorageError::InvalidPlan("invalid plan ID".into()));
+    }
+    Ok(())
+}
+
+fn validate_idempotency_key(key: &str) -> Result<(), StorageError> {
+    if key.is_empty() || key.len() > MAX_IDEMPOTENCY_KEY_BYTES {
+        return Err(StorageError::InvalidJournal(
+            "invalid idempotency key".into(),
+        ));
     }
     Ok(())
 }
@@ -1741,6 +1752,7 @@ impl Storage {
     }
 
     pub fn journal_result(&self, key: &str) -> Result<Option<String>, StorageError> {
+        validate_idempotency_key(key)?;
         self.connection
             .query_row(
                 "SELECT result FROM operation_journal WHERE idempotency_key = ?1",
@@ -1755,6 +1767,7 @@ impl Storage {
         &self,
         operation_id: &str,
     ) -> Result<Option<(String, String, u64, String)>, StorageError> {
+        validate_idempotency_key(operation_id)?;
         self.connection
             .query_row(
                 "SELECT operation, result, committed_revision, created_at
@@ -1844,6 +1857,7 @@ impl Storage {
         revision: u64,
         request_hash: &str,
     ) -> Result<bool, StorageError> {
+        validate_idempotency_key(key)?;
         self.prune_expired_journal()?;
         let inserted = self.connection.execute(
             "INSERT OR IGNORE INTO operation_journal(idempotency_key, operation, result, committed_revision, request_hash) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1857,6 +1871,7 @@ impl Storage {
         key: &str,
         request_hash: &str,
     ) -> Result<Option<String>, StorageError> {
+        validate_idempotency_key(key)?;
         self.prune_expired_journal()?;
         let row: Option<(String, String)> = self
             .connection
@@ -2113,6 +2128,7 @@ impl Storage {
         request_hash: &str,
         failure: Option<JournalFailureStage>,
     ) -> Result<(), StorageError> {
+        validate_idempotency_key(key)?;
         let document = Self::serialize_validated_session(session)?;
         self.prune_expired_journal()?;
         let transaction = self.connection.unchecked_transaction()?;
@@ -2326,6 +2342,30 @@ mod tests {
             }),
             Err(StorageError::InvalidPlan(_))
         ));
+    }
+
+    #[test]
+    fn journal_operations_reject_empty_or_unbounded_keys() {
+        let storage = Storage::open_memory().unwrap();
+        let oversized = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1);
+        for key in ["", &oversized] {
+            assert!(matches!(
+                storage.journal_result(key),
+                Err(StorageError::InvalidJournal(_))
+            ));
+            assert!(matches!(
+                storage.operation_status(key),
+                Err(StorageError::InvalidJournal(_))
+            ));
+            assert!(matches!(
+                storage.journal_commit(key, "operation", "{}", 1),
+                Err(StorageError::InvalidJournal(_))
+            ));
+            assert!(matches!(
+                storage.journal_result_checked(key, "hash"),
+                Err(StorageError::InvalidJournal(_))
+            ));
+        }
     }
 
     #[test]
