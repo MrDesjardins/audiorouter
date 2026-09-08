@@ -2460,15 +2460,12 @@ mod tests {
                 .map(|branch| format!("l{level}-{branch}"))
                 .collect::<Vec<_>>();
             for id in &current {
-                let mut branch = node(id, NodeKind::Gain, PortDirection::Input);
+                let mut branch = node(id, NodeKind::Mixer, PortDirection::Input);
                 branch.ports.push(Port {
                     name: "out".into(),
                     direction: PortDirection::Output,
                     channels: 1,
                 });
-                branch
-                    .parameters
-                    .insert("gainDb".into(), serde_json::json!(0.0));
                 nodes.push(branch);
             }
             for source in &previous {
@@ -2481,7 +2478,7 @@ mod tests {
             }
             previous = current;
         }
-        nodes.push(node("out", NodeKind::PhysicalOutput, PortDirection::Input));
+        nodes.push(node("out", NodeKind::Mixer, PortDirection::Input));
         for source in previous {
             let mut route_edge = edge(&format!("{source}-out"), &source, "out");
             route_edge.source_port = "out".into();
