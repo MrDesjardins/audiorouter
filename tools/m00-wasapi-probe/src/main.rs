@@ -149,7 +149,9 @@ fn adapter_smoke(
         let mut pending_frames = 0usize;
         let mut routed_frames = 0u32;
         let mut drift = (capture_info.sample_rate_hz != render_info.sample_rate_hz)
-            .then(|| DriftController::new(capture_info.sample_rate_hz, render_info.sample_rate_hz, 64 * 128, 100.0))
+            // Keep the controller target at the midpoint of the bounded
+            // resampler FIFO so both clock directions have room to recover.
+            .then(|| DriftController::new(capture_info.sample_rate_hz, render_info.sample_rate_hz, 512, 100.0))
             .transpose()
             .map_err(|_| AudioError::InvalidFrameSize)?;
         let mut streaming_resampler = (capture_info.sample_rate_hz != render_info.sample_rate_hz)

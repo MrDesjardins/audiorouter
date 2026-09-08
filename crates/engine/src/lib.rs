@@ -3731,6 +3731,17 @@ mod tests {
     }
 
     #[test]
+    fn drift_controller_target_can_be_centered_in_a_bounded_fifo() {
+        let mut controller = DriftController::new(48_000, 44_100, 512, 100.0).unwrap();
+        controller.observe_queue(512);
+        assert_eq!(controller.correction_ppm(), 0.0);
+        controller.observe_queue(1024);
+        assert!(controller.correction_ppm() > 0.0);
+        controller.observe_queue(0);
+        assert!(controller.correction_ppm() < 0.0);
+    }
+
+    #[test]
     fn prepared_runtime_graph_processes_stages_in_order() {
         let graph = RuntimeGraph::prepare(
             RuntimeGeneration::new(7),

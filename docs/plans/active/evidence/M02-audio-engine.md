@@ -361,3 +361,9 @@ to route submission and avoids treating an unavailable render period as a
 successful write. Compile/tests and strict Clippy pass; the follow-up live run
 was blocked before execution by the host's Application Control policy (OS
 error 4551), so no new runtime route claim is made.
+
+The differing-rate route now targets 512 queued source frames, the midpoint of
+its fixed 1,024-frame resampler FIFO. This avoids the previous unreachable
+8,192-frame target, which forced the integral/proportional controller to remain
+at a correction bound. A centered-target regression and focused engine/probe
+checks pass; hardware clock behavior remains unqualified.
