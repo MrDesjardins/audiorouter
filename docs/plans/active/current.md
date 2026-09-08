@@ -363,6 +363,13 @@ each is represented in the delivery traceability table. It reports coverage
 only; it does not promote unverified implementation, hardware, driver,
 signing, installer, or usability gates.
 
+The clean safe chain was requalified with both M00/M08 guards enabled:
+toolchain compatibility, native compile/inventory, disposable SysVAD x64
+qualification, M01/M04/M05/M06/M07 acceptance, unsigned M08 preparation, 158-ID
+traceability, and documentation validation all passed. Temporary outputs and
+checkouts were removed; native driver lifecycle, signing, installer, hardware,
+physical latency, and manual UI gates remain open.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

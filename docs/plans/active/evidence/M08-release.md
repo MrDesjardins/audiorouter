@@ -819,6 +819,16 @@ normative requirement IDs extracted from the specification. Every ID is covered
 by the delivery traceability table. This verifies documentation coverage only;
 it does not claim that every requirement has implementation or release evidence.
 
+## Clean safe-chain requalification with traceability guard (2026-09-08)
+
+The clean `tests/acceptance/safe-all.ps1` chain passed with the read-only
+toolchain and range-aware traceability checks enabled. It covered native
+compile/inventory, disposable SysVAD x64 qualification, M01/M04/M05/M06/M07,
+unsigned M08 preparation, 158 normative requirement-map checks, and
+documentation validation. Temporary outputs/checkouts were removed. No driver,
+signing-mode, plugin/startup registration, or machine audio configuration action
+occurred; production and hardware gates remain open.
+
 ## Locked workspace regression after SDK documentation (2026-09-08)
 
 The locked workspace regression passed with 466 unit/integration tests, all
