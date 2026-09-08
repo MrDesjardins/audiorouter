@@ -105,6 +105,12 @@ Windows Job Object changes, the complete locked workspace validation passed:
 workspace Clippy, formatting, and diff checks also passed. Tests used
 temporary/local fixtures only; no audio endpoint or machine configuration was
 changed.
+
+The same safe chain was rerun at pushed head `8fd56c1` and passed. This
+requalification remains unsigned and non-release evidence: no driver was
+installed or loaded, no live audio or startup/plugin registration was used,
+and signing, installer, clean-machine, hardware, and manual acceptance gates
+remain open.
 ## 2026-09-06 — Workspace validation after hardening
 
 The complete `cargo test --workspace --locked` suite passed after the
