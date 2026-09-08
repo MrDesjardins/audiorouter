@@ -3249,6 +3249,9 @@ impl ControlPlane {
         grant: &ClientGrant,
         client_id: Option<&str>,
     ) -> JsonRpcResponse {
+        if request.validate().is_err() {
+            return self.dispatch(request);
+        }
         let id = request.id.clone();
         let Some(spec) = API_METHODS.iter().find(|spec| spec.name == request.method) else {
             return self.dispatch(request);
@@ -8281,6 +8284,19 @@ mod tests {
         };
         let response = plane.dispatch_authorized(request, &ClientGrant::read_only());
         assert_eq!(response.error.unwrap().code, -32001);
+    }
+
+    #[test]
+    fn authorized_dispatch_validates_known_methods_before_authorization() {
+        let mut plane = ControlPlane::default();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!({ "nested": "x".repeat(MAX_REQUEST_ID_BYTES) })),
+            method: "graph.commit".into(),
+            params: None,
+        };
+        let response = plane.dispatch_authorized(request, &ClientGrant::read_only());
+        assert_eq!(response.error.unwrap().code, -32600);
     }
 
     #[test]

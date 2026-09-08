@@ -369,3 +369,9 @@ budgets. `system.describe` exposes the same value as `maxRequestIdBytes` so
 clients can discover the boundary. The regression uses a nested object with an
 oversized string and is portable; it opens no audio device and changes no
 machine configuration.
+
+Authorized dispatch now applies that same request validation before method
+lookup, permission checks, and rate limiting. A malformed request for a known
+method therefore receives the standard Invalid Request response instead of a
+permission response that echoes unvalidated metadata. The authorized control
+regression and full workspace validation pass.
