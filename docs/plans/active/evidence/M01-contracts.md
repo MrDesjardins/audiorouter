@@ -352,3 +352,12 @@ Validation errors now use stable human-readable messages containing their
 field paths, and graph/session API errors join those messages instead of
 exposing Rust debug syntax. Domain regression coverage verifies deterministic
 multi-error formatting.
+
+## JSON-RPC method-name bound (2026-09-07)
+
+The protocol parser now rejects method identifiers longer than 128 UTF-8 bytes
+before control dispatch. The limit is also advertised as
+`system.describe.limits.maxMethodNameBytes`, keeping protocol enforcement and
+the discoverable API contract aligned. Protocol coverage passes 6 tests and
+control coverage passes 85 tests with strict Clippy and formatting. This is a
+portable request-boundary check; no audio or machine configuration is involved.

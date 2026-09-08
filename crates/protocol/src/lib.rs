@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
+pub const MAX_METHOD_NAME_BYTES: usize = 128;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FrameError {
@@ -97,7 +98,10 @@ impl JsonRpcRequest {
     }
 
     pub fn validate(&self) -> Result<(), MessageError> {
-        if self.jsonrpc != "2.0" || self.method.is_empty() {
+        if self.jsonrpc != "2.0"
+            || self.method.is_empty()
+            || self.method.len() > MAX_METHOD_NAME_BYTES
+        {
             Err(MessageError::InvalidRequest)
         } else {
             Ok(())
@@ -264,6 +268,17 @@ mod tests {
         );
         assert_eq!(
             parse_rpc_message(br#"{"jsonrpc":"2.0","id":1,"method":""}"#),
+            Err(MessageError::InvalidRequest)
+        );
+        assert_eq!(
+            parse_rpc_message(
+                &serde_json::to_vec(&json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "x".repeat(MAX_METHOD_NAME_BYTES + 1)
+                }))
+                .unwrap()
+            ),
             Err(MessageError::InvalidRequest)
         );
     }
