@@ -357,11 +357,19 @@ fn adapter_smoke(
             )));
         }
         let telemetry = scheduler.telemetry();
+        let resampler_queued_frames = streaming_resampler
+            .as_ref()
+            .map_or(0, StreamingResampler::queued_frames);
+        let drift_correction_ppm = drift
+            .as_ref()
+            .map_or(0.0, DriftController::correction_ppm);
         if telemetry.active_generation != Some(generation)
             || telemetry.processed_quanta != u64::from(graph_blocks)
             || telemetry.xruns != 0
             || telemetry.input_overruns != 0
             || telemetry.output_overruns != 0
+            || resampler_queued_frames > 1024
+            || drift_correction_ppm.abs() > 100.0
         {
             return Err(AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x80004005u32 as i32),
@@ -369,7 +377,7 @@ fn adapter_smoke(
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={}",
             capture_info.id,
             render_info.id,
             capture_packets,
@@ -382,6 +390,8 @@ fn adapter_smoke(
             render_frames,
             routed_frames,
             route,
+            resampler_queued_frames,
+            drift_correction_ppm,
             telemetry.processed_quanta,
             telemetry.xruns,
             telemetry.input_overruns,

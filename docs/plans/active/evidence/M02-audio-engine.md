@@ -367,3 +367,9 @@ its fixed 1,024-frame resampler FIFO. This avoids the previous unreachable
 8,192-frame target, which forced the integral/proportional controller to remain
 at a correction bound. A centered-target regression and focused engine/probe
 checks pass; hardware clock behavior remains unqualified.
+
+Adapter-route output now reports the resampler queue depth and applied drift
+correction, and rejects a run if queue occupancy exceeds 1,024 frames or the
+correction exceeds the configured ±100 ppm bound. This makes the bounded
+feedback state observable to acceptance tooling; probe tests and strict Clippy
+pass, while live differing-rate execution remains blocked by host policy.
