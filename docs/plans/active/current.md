@@ -16,6 +16,25 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## M06 independent VST3 fixture qualification (2026-09-08)
+
+Built the official ChowMatrix VST3 source fixture from Chowdhury DSP commit
+`40d8e0ef1f752a6843099ff3dfc3d99132b332eb` in a disposable checkout using the
+repository-local CMake 4.4.0, Visual Studio Community 2026/MSVC 14.51.36231,
+and Windows SDK `10.0.28000.0`. The resulting x64 bundle was recognized by
+`plugins scan` as `supportedVst3X64`; its binary SHA-256 is
+`9ed07c61c3ddba6504b7307a92087ee37ec6236e2989954b4cc2e8053ee0d457`.
+
+The corrected native loader loaded the real bundle, enumerated its audio
+effect class, processed a finite offline stereo block, and round-tripped 3364
+bytes of component state. The loader now accepts the valid zero-parameter
+controller case; this fixes a probe false negative. The official SDK validator
+reported 45 passed and 2 failed (32-bit state transition and bus activation),
+so this independent fixture is useful compatibility evidence but does not
+close the M06 three-effect/two-vendor gate. The temporary checkout was not
+installed or registered and was removed after evidence capture; no audio or
+machine configuration changed.
+
 ## Graph-plan retention bound (2026-09-08)
 
 Closed an M01/SEC-12 memory-retention gap in `GraphStore`: expired plans are

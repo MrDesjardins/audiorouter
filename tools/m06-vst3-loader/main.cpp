@@ -323,9 +323,6 @@ int wmain(int argc, wchar_t** argv) {
                     throw std::runtime_error("controller initialize failed");
                 }
                 const auto parameter_count = controller->getParameterCount();
-                if (parameter_count <= 0) {
-                    throw std::runtime_error("controller exposes no parameters");
-                }
                 for (int32 index = 0; index < parameter_count; ++index) {
                     Vst::ParameterInfo parameter{};
                     if (controller->getParameterInfo(index, parameter) != kResultOk) {

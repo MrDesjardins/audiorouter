@@ -1006,6 +1006,40 @@ is available for the current offline probe, so the required three-effect,
 two-vendor M06 matrix remains open. No plugin was downloaded, installed,
 registered, loaded, or executed during this inventory.
 
+## Independent ChowMatrix fixture (2026-09-08)
+
+The official [ChowMatrix source repository](https://github.com/Chowdhury-DSP/ChowMatrix)
+was cloned with submodules into a disposable temporary directory and built at
+commit `40d8e0ef1f752a6843099ff3dfc3d99132b332eb` with repository-local CMake
+4.4.0, Visual Studio Community 2026/MSVC 14.51.36231, and Windows SDK
+`10.0.28000.0`. The source is BSD-3-Clause licensed. No source, binary, or
+plugin registration was added to this repository or the system.
+
+The produced bundle was:
+
+`ChowMatrix.vst3/Contents/x86_64-win/ChowMatrix.vst3`, 6,294,016 bytes,
+SHA-256 `9ed07c61c3ddba6504b7307a92087ee37ec6236e2989954b4cc2e8053ee0d457`.
+
+The read-only AudioRouter scanner identified the bundle as a supported x64
+VST3. The native M06 loader initially rejected it because its controller has
+zero automatable parameters. That was a loader-probe defect: zero parameters
+is a valid VST3 surface. After removing that assumption, the rebuilt loader
+passed against the same bundle:
+
+`classes=2`, audio effect `ChowMatrix`, finite offline stereo processing at 64
+frames, `parameters=0`, and a 3364-byte component-state round trip.
+
+The official SDK validator was also run against the same disposable bundle.
+It reported 45 tests passed and 2 failed: `Valid State Transition 32bits` and
+`Bus Activation`. The remaining failures are fixture compatibility findings,
+not AudioRouter scanner or loader failures, and are retained rather than
+waived. This adds one independently sourced vendor/effect to the evidence
+set, but the M06 requirement for three compatible x64 effects from at least
+two vendors remains open until the full fixture matrix and worker/editor
+containment checks pass. The disposable checkout and generated outputs were
+removed after capture; no driver, plugin registration, or machine audio
+configuration was changed.
+
 ## SDK installer provenance acceptance (2026-09-08)
 
 `tests/acceptance/m06-sdk-installer.ps1` passed: a disposable checkout with

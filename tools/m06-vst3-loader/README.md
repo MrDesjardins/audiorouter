@@ -8,7 +8,9 @@ the module. It also processes one bounded offline stereo block, checks that
 the output is finite, initializes the associated controller, and exercises
 normalized parameter set/readback while restoring the original values. It does
 an in-memory component state save/restore, and does not create an editor, open
-an audio device, or alter machine configuration.
+an audio device, or alter machine configuration. A valid effect with no
+automatable parameters is accepted; automation checks run when parameters are
+exposed.
 
 Build and run from the repository root:
 
