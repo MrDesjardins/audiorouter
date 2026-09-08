@@ -30,7 +30,7 @@ configuration was accessed.
 Closed an M03/M07/SEC-12 persistence gap: startup and pending virtual-device
 plan hydration now reads at most 101 rows and rejects an oversized inventory
 explicitly. This prevents a corrupted database from expanding startup memory
-before validation. Storage coverage is 71 tests with strict Clippy; no audio,
+before validation. Storage coverage is 72 tests with strict Clippy; no audio,
 driver, or machine configuration was accessed.
 
 ## In-memory ephemeral-plan admission bounds (2026-09-08)
