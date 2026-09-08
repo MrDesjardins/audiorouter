@@ -551,6 +551,11 @@ Durable graph, startup, and virtual-device plan writes now enforce the shared
 regression coverage passes 47 storage tests; control behavior and error
 mapping remain compatible, and no audio or machine configuration was accessed.
 
+The enrollment read and revoke paths now apply the same nonempty, 128-byte
+client-ID validation as enrollment writes, so malformed direct-storage calls
+cannot bypass the identity boundary. Storage/control tests pass (49/86) with
+strict Clippy and formatting; no audio or machine configuration was accessed.
+
 The discovered processor catalog now advertises its seven-entry bound, while
 node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative

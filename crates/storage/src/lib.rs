@@ -79,6 +79,15 @@ fn validate_idempotency_key(key: &str) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn validate_client_id(client_id: &str) -> Result<(), StorageError> {
+    if client_id.is_empty() || client_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+        return Err(StorageError::InvalidEnrollment(
+            "invalid client enrollment ID".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn valid_recording_metadata(value: Option<&str>) -> bool {
     match value {
         None => true,
@@ -1787,10 +1796,8 @@ impl Storage {
     }
 
     pub fn save_client_enrollment(&self, client_id: &str, role: &str) -> Result<(), StorageError> {
-        if client_id.is_empty()
-            || client_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
-            || !matches!(role, "observer" | "editor" | "operator")
-        {
+        validate_client_id(client_id)?;
+        if !matches!(role, "observer" | "editor" | "operator") {
             return Err(StorageError::InvalidEnrollment(
                 "invalid client enrollment fields".into(),
             ));
@@ -1805,6 +1812,7 @@ impl Storage {
     }
 
     pub fn revoke_client_enrollment(&self, client_id: &str) -> Result<bool, StorageError> {
+        validate_client_id(client_id)?;
         Ok(self.connection.execute(
             "UPDATE client_enrollments SET revoked=1, revoked_at=CURRENT_TIMESTAMP
              WHERE client_id = ?1 AND revoked = 0",
@@ -1816,6 +1824,7 @@ impl Storage {
         &self,
         client_id: &str,
     ) -> Result<Option<(String, bool)>, StorageError> {
+        validate_client_id(client_id)?;
         self.connection
             .query_row(
                 "SELECT role, revoked FROM client_enrollments WHERE client_id = ?1",
@@ -3322,6 +3331,15 @@ mod tests {
                 &"c".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1),
                 "editor"
             ),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
+        assert!(matches!(
+            storage
+                .revoke_client_enrollment(&"c".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1)),
+            Err(StorageError::InvalidEnrollment(_))
+        ));
+        assert!(matches!(
+            storage.load_client_enrollment(""),
             Err(StorageError::InvalidEnrollment(_))
         ));
     }

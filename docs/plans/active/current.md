@@ -1720,6 +1720,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Requalified the guarded M00–M08 safe acceptance chain at `719f0a8` on 2026-09-08 after the storage/API boundary changes: native compile/inventory, disposable SysVAD x64 package/API qualification, portable milestone checks, and documentation validation completed with temporary cleanup. No driver installation/loading, signing-mode change, registration, or machine audio configuration occurred; production driver/signing, installer, physical-latency, and manual UI gates remain open.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+- Completed M01/SEC-12 enrollment read-boundary hardening on 2026-09-08: SQLite client-enrollment lookup and revoke now enforce the same nonempty 128-byte identity contract as writes. Storage/control tests (49/86), strict Clippy, formatting, and diff checks pass; no audio or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 - Requalified M02/ARCH-05 shared-mode Rust adapter behavior on 2026-09-08: the guarded 300 ms live smoke processed 15,360 capture/scheduler frames and 15,456 silent render frames with zero xruns/deadline misses and a 32,768 ns processing p99.9 upper bound; streams stopped/reset and media-device state was unchanged. This is not managed-driver callback or physical-latency evidence.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
