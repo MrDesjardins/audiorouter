@@ -2116,6 +2116,7 @@ pub struct BoundedParameterQueue {
 impl BoundedParameterQueue {
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "parameter queue capacity must be positive");
+        let capacity = capacity.min(MAX_PARAMETER_EVENTS);
         Self {
             events: VecDeque::with_capacity(capacity),
             capacity,
@@ -2143,6 +2144,7 @@ impl BoundedParameterQueue {
 impl BoundedFrameQueue {
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "worker frame queue capacity must be positive");
+        let capacity = capacity.min(MAX_WORKER_FRAMES);
         Self {
             frames: VecDeque::with_capacity(capacity),
             capacity,
@@ -3182,6 +3184,18 @@ mod tests {
         assert_eq!(queue.push(event), Err(event));
         assert_eq!(queue.overflow_count(), 1);
         assert_eq!(queue.pop(), Some(event));
+    }
+
+    #[test]
+    fn queue_constructors_cap_requested_capacity_before_allocation() {
+        assert_eq!(
+            BoundedFrameQueue::new(usize::MAX).capacity,
+            MAX_WORKER_FRAMES
+        );
+        assert_eq!(
+            BoundedParameterQueue::new(usize::MAX).capacity,
+            MAX_PARAMETER_EVENTS
+        );
     }
 
     #[test]

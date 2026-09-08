@@ -849,3 +849,12 @@ regression rejects an offset equal to the frame count in both forms while the
 existing valid in-frame round trip remains accepted. The plugin-host suite
 passed 36 unit tests and 8 worker-process tests with strict Clippy, formatting,
 and doc-tests. Native plugin execution and full OS sandboxing remain open.
+
+## Bounded queue construction (2026-09-07)
+
+Worker frame and parameter queue constructors now clamp requested capacities to
+the existing protocol limits before allocating their `VecDeque` storage. A
+regression using `usize::MAX` confirms frame queues remain capped at 2,048
+entries and parameter queues at 128 entries. The plugin-host library tests and
+strict Clippy pass. Worker subprocess tests remain blocked by the host's
+Application Control policy (OS error 4551), not by the queue change.
