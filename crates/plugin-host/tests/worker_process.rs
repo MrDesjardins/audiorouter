@@ -163,6 +163,54 @@ fn verified_supervised_launch_rejects_missing_identity_before_spawning() {
 }
 
 #[test]
+fn supervised_worker_round_trips_versioned_state_without_restarting() {
+    let hash = "7".repeat(64);
+    let worker_path =
+        std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
+            let test_exe = std::env::current_exe().expect("integration test path");
+            test_exe
+                .parent()
+                .and_then(|deps| deps.parent())
+                .expect("Cargo target directory")
+                .join(if cfg!(windows) {
+                    "audiorouter-plugin-worker.exe"
+                } else {
+                    "audiorouter-plugin-worker"
+                })
+                .to_string_lossy()
+                .into_owned()
+        });
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let now = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn(worker_path, &identity, 1, now)
+        .expect("spawn supervised worker");
+    let asset = PluginStateAsset::new(8, vec![9, 8, 7]).unwrap();
+    assert!(matches!(
+        worker.restore_state_for_version(asset.clone(), 7, now),
+        Err(audiorouter_plugin_host::WorkerProcessError::State(
+            audiorouter_plugin_host::StateError::VersionMismatch
+        ))
+    ));
+    assert_eq!(
+        worker.state(),
+        audiorouter_plugin_host::WorkerState::Running
+    );
+    worker
+        .restore_state_for_version(asset.clone(), 8, now)
+        .unwrap();
+    assert_eq!(worker.save_state(now).unwrap(), asset);
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[test]
 fn disposable_worker_rejects_a_runtime_sample_rate_change() {
     let hash = "1".repeat(64);
     let worker_path =

@@ -863,7 +863,7 @@ it is not third-party VST3 execution or full sandbox evidence.
 
 A second process regression verifies that a missing scanned identity fails
 before worker creation with a typed inspection error. The ordinary worker
-suite has 12 passing tests; the feature-enabled fixture suite has 16.
+suite has 13 passing tests; the feature-enabled fixture suite has 17.
 
 ## Opaque worker state transport (2026-09-08)
 
@@ -886,6 +886,10 @@ invalid-version asset.
 The negative process path also requests a save before restore. It returns the
 bounded `stateUnavailable` protocol failure and terminates the disposable
 worker, proving that missing state is not synthesized as an empty asset.
+
+The supervised process regression also performs version-aware restore, verifies
+that a mismatched version does not restart or kill the worker, then restores and
+saves a compatible asset successfully.
 
 ## Cross-vendor loader matrix (2026-09-08)
 

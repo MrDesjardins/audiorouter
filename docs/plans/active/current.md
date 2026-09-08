@@ -361,8 +361,12 @@ execution and full OS sandboxing remain open.
 
 The companion regressions prove a missing identity is rejected before process
 creation and unavailable state fails closed. The ordinary process suite now has
-12 passing tests, and the feature-enabled suite has 16; no child is spawned for
+13 passing tests, and the feature-enabled suite has 17; no child is spawned for
 the missing-plugin case.
+
+The supervised wrapper now also round-trips versioned opaque state and proves a
+version mismatch leaves the processing worker running. This keeps state control
+operations independent from processing-generation restart behavior.
 
 Requalified M07 headless acceptance on 2026-09-08: 25 CLI tests, 2 MCP
 interoperability tests, 87 control tests, 39 plugin-host tests, and 8
