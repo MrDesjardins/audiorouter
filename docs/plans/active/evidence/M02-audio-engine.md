@@ -724,6 +724,21 @@ This proves the adapter's explicit rate-domain bridge and lifecycle only; it
 does not claim drift correction against an independent render clock or
 physical/native production-driver latency.
 
+## Differing-rate native route qualification (2026-09-08)
+
+The guarded, endpoint-ID-selected route wrapper passed against the current
+96 kHz mono capture endpoint and 48 kHz stereo render endpoint. The Rust
+adapter processed 28,800 capture frames into 14,336 scheduler/routed frames,
+with generation 1 active and zero scheduler xruns or overruns. The bounded
+streaming resampler and drift controller were exercised; correction reached
+the declared -100 ppm bound during this short run. The wrapper verified
+media-device identity/state equality and the documented unchanged defaults,
+volume, mute, privacy, driver/signing, and startup state.
+
+This is endpoint-specific shared-mode adapter evidence only. The correction
+bound and short duration do not establish long-term independent-clock lock,
+physical latency, managed virtual-driver lifecycle, or Discord/OBS behavior.
+
 ## Scheduler telemetry drain accounting (2026-09-08)
 
 The scheduler output-ring control-boundary drain now uses a non-counting raw
