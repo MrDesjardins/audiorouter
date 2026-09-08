@@ -340,24 +340,24 @@ fn method_input_schema(name: &str) -> Value {
             &["planId", "idempotencyKey"],
         ),
         "recordings.get" => object_schema(
-            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
             &["recordingId"],
         ),
         "recordings.recovery" => object_schema(
-            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
             &["recordingId"],
         ),
         "recordings.reveal" => object_schema(
-            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
             &["recordingId"],
         ),
         "recordings.preview" => object_schema(
-            json!({ "recordingId": { "type": "string", "minLength": 1 } }),
+            json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
             &["recordingId"],
         ),
         "recordings.setMetadata" => object_schema(
             json!({
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "title": { "type": ["string", "null"], "maxLength": 256 },
                 "artist": { "type": ["string", "null"], "maxLength": 256 },
                 "comment": { "type": ["string", "null"], "maxLength": 256 },
@@ -367,7 +367,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "recordings.rename" => object_schema(
             json!({
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "newPath": { "type": "string", "minLength": 1 },
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
@@ -394,12 +394,12 @@ fn method_input_schema(name: &str) -> Value {
             &["planId", "idempotencyKey"],
         ),
         "recordings.removeEntry" => object_schema(
-            json!({ "recordingId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }),
+            json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES }, "idempotencyKey": { "type": "string", "minLength": 1 } }),
             &["recordingId"],
         ),
         "recordings.recycle" => object_schema(
             json!({
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "confirm": { "type": "boolean" },
                 "idempotencyKey": { "type": "string", "minLength": 1 }
             }),
@@ -1232,7 +1232,7 @@ fn method_output_schema(name: &str) -> Value {
         "recordings.recovery" => json!({
             "type": "object",
             "properties": {
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "status": { "enum": ["missing", "available"] },
                 "checkpoint": {
                     "type": "object",
@@ -1254,7 +1254,7 @@ fn method_output_schema(name: &str) -> Value {
         "recordings.preview" => json!({
             "type": "object",
             "properties": {
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "preview": {
                     "oneOf": [
                         {
@@ -1295,7 +1295,7 @@ fn method_output_schema(name: &str) -> Value {
         "recordings.setMetadata" => json!({
             "type": "object",
             "properties": {
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "updated": { "const": true }
             },
             "required": ["recordingId", "updated"],
@@ -1304,7 +1304,7 @@ fn method_output_schema(name: &str) -> Value {
         "recordings.rename" => json!({
             "type": "object",
             "properties": {
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "renamed": { "const": true },
                 "path": { "type": "string", "minLength": 1 },
                 "fileAction": { "const": "renamed" }
@@ -1315,7 +1315,7 @@ fn method_output_schema(name: &str) -> Value {
         "recordings.removeEntry" => json!({
             "type": "object",
             "properties": {
-                "recordingId": { "type": "string", "minLength": 1 },
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "removed": { "const": true },
                 "fileAction": { "const": "none" }
             },
@@ -1327,7 +1327,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "recordingId": { "type": "string", "minLength": 1 },
+                        "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                         "path": { "type": "string", "minLength": 1 },
                         "revealed": { "const": true }
                     },
@@ -1337,7 +1337,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "recordingId": { "type": "string", "minLength": 1 },
+                        "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                         "path": { "type": "string", "minLength": 1 },
                         "revealed": { "const": false },
                         "reason": { "const": "missing" }
@@ -1352,7 +1352,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "recordingId": { "type": "string", "minLength": 1 },
+                        "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                         "path": { "type": "string", "minLength": 1 },
                         "fileAction": { "const": "none" },
                         "reason": { "const": "missing" }
@@ -1363,7 +1363,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "recordingId": { "type": "string", "minLength": 1 },
+                        "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                         "path": { "type": "string", "minLength": 1 },
                         "fileAction": { "const": "recycle" },
                         "preview": { "const": true }
@@ -1374,7 +1374,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "recordingId": { "type": "string", "minLength": 1 },
+                        "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                         "path": { "type": "string", "minLength": 1 },
                         "fileAction": { "const": "recycled" },
                         "missing": { "const": true }
@@ -1385,7 +1385,7 @@ fn method_output_schema(name: &str) -> Value {
                 {
                     "type": "object",
                     "properties": {
-                        "recordingId": { "type": "string", "minLength": 1 },
+                        "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                         "path": { "type": "string", "minLength": 1 },
                         "fileAction": { "const": "none" },
                         "reason": { "const": "recycleUnavailable" }
@@ -7014,6 +7014,43 @@ mod tests {
             recording["outputSchema"]["properties"]["sampleRate"]["enum"],
             json!([44100, 48000])
         );
+        for method_name in [
+            "recordings.get",
+            "recordings.recovery",
+            "recordings.preview",
+            "recordings.setMetadata",
+            "recordings.rename",
+            "recordings.reveal",
+            "recordings.recycle",
+            "recordings.removeEntry",
+        ] {
+            let method = methods
+                .iter()
+                .find(|method| method["name"] == method_name)
+                .unwrap();
+            let schema = &method["outputSchema"];
+            let schema = if method_name == "recordings.get"
+                || method_name == "recordings.recovery"
+                || method_name == "recordings.preview"
+                || method_name == "recordings.setMetadata"
+                || method_name == "recordings.rename"
+                || method_name == "recordings.removeEntry"
+            {
+                schema
+            } else {
+                &schema["oneOf"][0]
+            };
+            let field = if method_name == "recordings.get" {
+                "id"
+            } else {
+                "recordingId"
+            };
+            assert_eq!(
+                schema["properties"][field]["maxLength"],
+                audiorouter_storage::MAX_RECORDING_ID_BYTES,
+                "{method_name} output identity bound"
+            );
+        }
     }
 
     #[test]
