@@ -461,3 +461,20 @@ preparation, contracts, and documentation. Temporary build/checkouts were
 removed by the acceptance flow. Live audio, driver installation/loading,
 signing-mode changes, plugin/startup registration, installer, hardware, and
 manual UI/accessibility gates remain explicitly unattempted.
+## Current-head safe-chain requalification (2026-09-07)
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/safe-all.ps1` at pushed head `f741be5`.
+
+The complete non-mutating qualification chain passed: native M00 compile and
+34-endpoint format inventory; disposable pinned SysVAD x64 build/package/API
+validation; locked workspace tests; M01 CLI; M04 DSP/recording; M05 UI
+typecheck, 88 tests, and temporary production build; M06 SDK provenance and
+VST3 build/validator/offline loader; M07 headless checks; unsigned M08 release
+preparation; and documentation validation (51 Markdown files, 157 local
+links). Temporary build outputs and the SysVAD checkout were removed.
+
+The chain did not install or load a driver, change signing mode, register a
+plugin or startup entry, or modify machine audio configuration. Native driver
+installation/signing, installer, hardware/manual acceptance, and physical
+latency remain open release gates.
