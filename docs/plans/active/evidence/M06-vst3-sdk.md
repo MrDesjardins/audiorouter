@@ -944,3 +944,10 @@ ancestry before returning opaque metadata. A corrupt-row regression fails
 closed. Storage (60) and control (87) tests, strict Clippy, formatting, and
 diff checks passed; no plugin was executed and no audio or machine
 configuration was accessed. Plugin execution and OS sandbox gates remain open.
+## Plugin-state SQLite numeric boundary (2026-09-08)
+
+Persisted plugin-state `size_bytes` values now use checked signed-to-unsigned
+decoding, matching the existing version boundary. Negative legacy or corrupt
+values fail before metadata reaches plugin consumers. Storage coverage increased
+to 67 tests; strict Clippy, formatting, and diff checks passed. No plugin was
+executed and no audio or machine configuration was accessed.

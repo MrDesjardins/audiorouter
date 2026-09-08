@@ -164,6 +164,12 @@ conversion to `usize`, preventing malformed persistence data from wrapping
 into an unbounded count. The focused storage regression and strict Clippy pass;
 no audio or machine configuration was accessed.
 
+Completed safe storage slice M06/SEC-12 plugin-state size decoding validation:
+persisted plugin-state `size_bytes` values now use checked signed-to-unsigned
+decoding, so negative legacy values fail before metadata reaches plugin
+consumers. The focused storage regression and strict Clippy pass; no plugin was
+executed and no audio or machine configuration was accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.

@@ -1513,7 +1513,7 @@ impl Storage {
                     version: row_u32(row, 3)?,
                     path: row.get(4)?,
                     state_sha256: row.get(5)?,
-                    size_bytes: row.get::<_, i64>(6)? as u64,
+                    size_bytes: row_u64(row, 6)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -4406,6 +4406,27 @@ mod tests {
                  (id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes)
                  VALUES ('negative-version', 'plugin-1', ?1, -1,
                          'C:\\AudioRouter\\state\\state.bin', ?2, 1)",
+                rusqlite::params!["a".repeat(64), "b".repeat(64)],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.list_plugin_states(None),
+            Err(StorageError::Sql(
+                rusqlite::Error::FromSqlConversionFailure(..)
+            ))
+        ));
+    }
+
+    #[test]
+    fn plugin_state_reads_reject_negative_sizes() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO plugin_states
+                 (id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes)
+                 VALUES ('negative-size', 'plugin-1', ?1, 1,
+                         'C:\\AudioRouter\\state\\state.bin', ?2, -1)",
                 rusqlite::params!["a".repeat(64), "b".repeat(64)],
             )
             .unwrap();
