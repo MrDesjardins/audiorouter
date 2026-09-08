@@ -156,6 +156,16 @@ replay without replacement, preserving idempotency semantics. Storage/control
 tests (74/92) and strict Clippy pass; no audio or machine configuration was
 accessed.
 
+## Safe acceptance requalification after CLI/plugin bounds (2026-09-08)
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at `6db20704` with
+exit code 0. It covered native toolchain/compile and read-only endpoint
+inventory, disposable pinned SysVAD x64 qualification, workspace and M01/
+M04/M05/M06/M07 acceptance, unsigned M08 artifacts, 158-ID traceability, and
+documentation validation (51 Markdown files, 160 local links). Temporary
+outputs were cleaned; driver installation/loading, signing-mode changes,
+plugin/startup registration, and machine audio configuration were excluded.
+
 The same ceiling is advertised as
 `system.describe.limits.maxOperationJournalEntries`, with a self-consistency
 regression tied to the storage constant.
