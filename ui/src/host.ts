@@ -119,6 +119,7 @@ function isHostBridge(value: unknown): value is AudioRouterHostBridge {
   const candidate = value as { transport?: unknown; sessionId?: unknown };
   return typeof candidate.sessionId === "string" &&
     candidate.sessionId.length > 0 &&
+    candidate.sessionId.length <= 128 &&
     typeof candidate.transport === "object" &&
     candidate.transport !== null &&
     typeof (candidate.transport as { send?: unknown }).send === "function";
@@ -135,7 +136,7 @@ function isWebView2Webview(value: unknown): value is WebView2Webview {
 /** Select the injected native backend, or remain safely disconnected. */
 export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined): UiBackend {
   if (isHostBridge(host)) return createLiveBackendFromTransport(host.transport, host.sessionId);
-  if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0) {
+  if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
     return createLiveBackendFromTransport(new WebView2RpcTransport(webview), sessionId);
   }
   return createDisconnectedBackend();

@@ -682,3 +682,10 @@ Invalid requests are rejected locally and never cross the page/host boundary.
 M05 acceptance passed with TypeScript typechecking, 86 Vitest tests, and a
 disposable three-file Vite production build. No native host, audio stream,
 driver, or machine configuration was accessed.
+
+## Session identity bounds (2026-09-07)
+
+The direct injected bridge and WebView2 session path now reject session
+identities longer than 128 characters, matching the boundary's bounded-input
+policy. TypeScript typechecking and all 86 Vitest tests passed. No native host,
+audio stream, driver, or machine configuration was accessed.
