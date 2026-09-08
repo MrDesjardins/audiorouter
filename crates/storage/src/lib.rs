@@ -48,6 +48,7 @@ pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
 pub const MAX_BUNDLE_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_RECORDING_ID_BYTES: usize = 128;
+pub const MAX_RECORDING_METADATA_CHARS: usize = 256;
 
 fn validate_recording_checkpoint_id(recording_id: &str) -> Result<(), StorageError> {
     if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
@@ -56,6 +57,16 @@ fn validate_recording_checkpoint_id(recording_id: &str) -> Result<(), StorageErr
         ));
     }
     Ok(())
+}
+
+fn valid_recording_metadata(value: Option<&str>) -> bool {
+    match value {
+        None => true,
+        Some(value) => {
+            value.chars().count() <= MAX_RECORDING_METADATA_CHARS
+                && !value.chars().any(char::is_control)
+        }
+    }
 }
 pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 
@@ -902,6 +913,9 @@ impl Storage {
             || recording.id.len() > MAX_RECORDING_ID_BYTES
             || recording.session_id.len() > MAX_RECORDING_ID_BYTES
             || recording.recorder_id.len() > MAX_RECORDING_ID_BYTES
+            || !valid_recording_metadata(recording.title.as_deref())
+            || !valid_recording_metadata(recording.artist.as_deref())
+            || !valid_recording_metadata(recording.comment.as_deref())
         {
             return Err(StorageError::InvalidRecording(
                 "invalid recording fields".into(),
@@ -3231,6 +3245,40 @@ mod tests {
             storage.save_recording(&recording),
             Err(StorageError::InvalidRecording(message)) if message.contains("invalid recording fields")
         ));
+    }
+
+    #[test]
+    fn recording_rows_reject_invalid_metadata_fields() {
+        let storage = Storage::open_memory().unwrap();
+        let base = RecordingRecord {
+            id: "metadata-recording".into(),
+            session_id: "session".into(),
+            recorder_id: "recorder".into(),
+            path: "C:\\recordings\\metadata.wav".into(),
+            format: "wav".into(),
+            channels: 1,
+            sample_rate: 48_000,
+            frames: 1,
+            file_bytes: 1,
+            start_time: "2026-09-08T00:00:00Z".into(),
+            state: "completed".into(),
+            missing: false,
+            title: None,
+            artist: None,
+            comment: None,
+        };
+        for metadata in [
+            Some("bad\nvalue".to_owned()),
+            Some("x".repeat(MAX_RECORDING_METADATA_CHARS + 1)),
+        ] {
+            let mut recording = base.clone();
+            recording.title = metadata;
+            assert!(matches!(
+                storage.save_recording(&recording),
+                Err(StorageError::InvalidRecording(message))
+                    if message.contains("invalid recording fields")
+            ));
+        }
     }
 
     #[test]

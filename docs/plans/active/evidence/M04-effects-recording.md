@@ -594,6 +594,15 @@ At the current head, the checked-in wrapper passed 25 DSP tests and 30 recording
 tests, including the 60-second pitch-duration extremes. The process-scoped
 PowerShell execution-policy bypass was not persisted; no audio device or machine
 configuration was accessed.
+
+## Recording-row metadata bound (2026-09-08)
+
+`Storage::save_recording` now validates title, artist, and comment values at
+the persistence boundary: each is at most 256 Unicode characters and contains
+no control characters. Direct-storage regression coverage rejects both forms
+of invalid metadata. Storage coverage passes 42 tests with strict Clippy,
+formatting, and diff checks; no audio endpoint or machine configuration was
+accessed.
 All 25 DSP tests and 30 recording tests passed, including the dedicated
 sixty-second pitch-duration regression, incremental WAV/FLAC recovery, and
 metadata/path safeguards. Formatting, strict Clippy, and diff checks passed.

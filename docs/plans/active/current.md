@@ -1698,6 +1698,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Completed M04/REC-04/SEC-12 recording-checkpoint identity hardening on 2026-09-08: direct storage checkpoint save/load/clear operations now enforce the shared 128-byte recording ID bound, preventing a lower-level caller from bypassing recording identity limits. Storage tests (41), strict Clippy, formatting, and diff checks pass; no audio endpoint or machine configuration was accessed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+- Completed M04/REC-04/SEC-12 recording metadata persistence hardening on 2026-09-08: direct storage row writes now enforce the shared 256-character, no-control-character title/artist/comment contract, preventing invalid metadata from bypassing the recording library and API validators. Storage tests (42), strict Clippy, formatting, and diff checks pass; no audio endpoint or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 - Completed M00/SEC-12 acceptance-wrapper cleanup propagation on 2026-09-08: all six custom-output native live wrappers now remove adjacent implicit objects, and the 21-script parse check plus bounded VB-Audio loopback passed with no temporary or repository artifacts left behind. No audio configuration changed.
 - Next M00/M02/M03/ARCH-05 task: retain isolated wrapper cleanup while pursuing calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.
 
