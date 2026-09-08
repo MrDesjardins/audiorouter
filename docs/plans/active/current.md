@@ -74,7 +74,8 @@ Completed safe storage slice M03/M07/SEC-12 virtual-device commit-boundary
 validation: the durable virtual-bus commit helpers now validate plan IDs and
 idempotency keys before changing desired state or writing journal rows. The
 focused storage regression covers both invalid-key forms and the oversized
-plan identifier.
+plan identifier. The same commit path now prunes expired journal outcomes
+before insertion, with runtime-retention coverage.
 
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is

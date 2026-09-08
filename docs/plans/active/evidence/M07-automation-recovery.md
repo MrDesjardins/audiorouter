@@ -939,3 +939,8 @@ bounded plan-ID and idempotency-key contracts as their individual persistence
 APIs before deleting plans, replacing desired state, or inserting journal
 outcomes. The focused storage suite passes 54 tests with strict Clippy; no
 driver, endpoint, or machine configuration was accessed.
+
+The same virtual-device journal path also performs the normal expiry sweep
+before inserting a new outcome. A regression confirms stale rows are removed
+while the current outcome remains available; storage now passes 55 tests and
+strict Clippy.

@@ -800,6 +800,7 @@ impl Storage {
             ));
         }
         let result = serde_json::to_string(result)?;
+        self.prune_expired_journal()?;
         let transaction = self.connection.unchecked_transaction()?;
         transaction.execute("DELETE FROM virtual_buses", [])?;
         for snapshot in snapshots {
@@ -2537,6 +2538,38 @@ mod tests {
             ),
             Err(StorageError::InvalidJournal(_))
         ));
+    }
+
+    #[test]
+    fn virtual_bus_journal_commit_prunes_expired_outcomes() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO operation_journal
+                 (idempotency_key, operation, result, committed_revision, request_hash,
+                  created_at)
+                 VALUES ('expired', 'virtualDevices.apply', '{}', 0, '',
+                         datetime('now', '-2 days'))",
+                [],
+            )
+            .unwrap();
+
+        storage
+            .save_virtual_buses_and_journal(
+                &VirtualBusRegistry::default(),
+                &EntityId::new("plan"),
+                "current",
+                "hash",
+                &serde_json::json!({ "state": "applied" }),
+            )
+            .unwrap();
+
+        assert!(storage.journal_result("expired").unwrap().is_none());
+        assert_eq!(
+            storage.journal_result("current").unwrap().as_deref(),
+            Some("{\"state\":\"applied\"}")
+        );
     }
 
     #[test]
