@@ -408,3 +408,12 @@ routed frames through the generation-1 graph. Endpoint/media identity and state
 were unchanged, and the temporary executable was removed. This is real
 existing-rate route evidence; it does not qualify differing-rate hardware
 clock behavior, native invalidation recovery, or physical acoustic latency.
+
+The adapter now also exposes bounded `open_refreshed_bound_with_retry` helpers
+for capture and render. They run only on the recovery/control thread, force a
+fresh snapshot before every exact-ID/direction/format validation, retry only
+`DeviceInUse`, `DeviceInvalidated`, or `ServiceUnavailable`, and cap attempts
+at five with a one-second maximum delay. They never select a substitute or
+sleep on the realtime path. The focused Windows-audio suite passes 22 tests
+with formatting and strict Clippy; native fault-injection evidence remains a
+separate host/device gate.

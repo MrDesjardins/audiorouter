@@ -489,6 +489,33 @@ pub struct SharedRender {
 }
 
 impl SharedCapture {
+    /// Refresh and reopen the exact capture binding with a bounded retry
+    /// policy for transient device/service failures. This helper is intended
+    /// for the control/recovery thread; it never sleeps on an audio callback
+    /// and never selects a substitute endpoint.
+    pub fn open_refreshed_bound_with_retry(
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<Self, AudioError> {
+        let attempts = max_attempts.clamp(1, 5);
+        let delay = retry_delay_ms.min(1_000);
+        for attempt in 0..attempts {
+            match Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns) {
+                Ok(client) => return Ok(client),
+                Err(error) if attempt + 1 < attempts && error.is_retryable() => {
+                    if delay != 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(delay));
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        unreachable!("bounded capture reopen loop always returns")
+    }
+
     /// Stop and release this capture client, refresh endpoint metadata, and
     /// open the same verified binding as a new client. The old client is
     /// always dropped before activation; missing/direction-changed/format-
@@ -815,6 +842,33 @@ impl Drop for SharedCapture {
 }
 
 impl SharedRender {
+    /// Refresh and reopen the exact render binding with a bounded retry
+    /// policy for transient device/service failures. This helper is intended
+    /// for the control/recovery thread; it never sleeps on an audio callback
+    /// and never selects a substitute endpoint.
+    pub fn open_refreshed_bound_with_retry(
+        monitor: &mut EndpointMonitor,
+        expected: &EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<Self, AudioError> {
+        let attempts = max_attempts.clamp(1, 5);
+        let delay = retry_delay_ms.min(1_000);
+        for attempt in 0..attempts {
+            match Self::open_refreshed_bound(monitor, expected, buffer_duration_100ns) {
+                Ok(client) => return Ok(client),
+                Err(error) if attempt + 1 < attempts && error.is_retryable() => {
+                    if delay != 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(delay));
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        unreachable!("bounded render reopen loop always returns")
+    }
+
     /// Stop and release this render client, refresh endpoint metadata, and
     /// open the same verified binding as a new client. The old client is
     /// always dropped before activation; endpoint changes fail closed.
