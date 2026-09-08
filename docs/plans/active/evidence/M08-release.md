@@ -404,3 +404,13 @@ artifact preparation/verification, and documentation all passed. Temporary
 checkouts and artifacts were removed. Live audio, driver installation,
 signing-mode changes, plugin/startup registration, and machine audio
 configuration remained excluded.
+
+## Latest-head aggregate requalification (2026-09-07)
+
+At pushed head `ed988a2`, the elevated sequential safe acceptance runner passed
+all stages again. Read-only native format inventory reported 34 endpoints;
+disposable SysVAD x64 qualification, M01 CLI, M04 DSP/recording including
+bounded chunk admission, M05 UI, M06 SDK/worker checks, M07 headless checks,
+unsigned M08 artifacts, and documentation all passed. Temporary outputs were
+removed, and live audio, driver installation, signing-mode changes,
+plugin/startup registration, and machine audio configuration remained excluded.
