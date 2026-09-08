@@ -6819,6 +6819,24 @@ mod tests {
             .iter()
             .find(|method| method["name"] == "graph.commit")
             .unwrap();
+        for method_name in [
+            "sessions.delete",
+            "session.start",
+            "sessions.start",
+            "session.stop",
+            "sessions.stop",
+            "graph.commit",
+        ] {
+            let method = methods
+                .iter()
+                .find(|method| method["name"] == method_name)
+                .unwrap();
+            assert_eq!(
+                method["outputSchema"]["properties"]["sessionId"]["maxLength"],
+                audiorouter_domain::MAX_ENTITY_ID_BYTES,
+                "{method_name} output sessionId bound"
+            );
+        }
         assert_eq!(
             commit["outputSchema"]["properties"]["revision"]["minimum"],
             0
