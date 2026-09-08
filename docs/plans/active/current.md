@@ -71,6 +71,12 @@ bounded recovery, process-loopback limits and telemetry, read-only application
 inventory, and restart identity matching. No device configuration changed;
 managed-driver callback timing and physical latency remain open.
 
+The guarded routed adapter was also qualified for 2,000 ms on the explicit
+VB-Audio pair: 96,480 captured frames, 96,384 scheduler frames, 95,904 routed
+frames, 753 graph blocks, 32,768 ns processing p99.9, and zero deadline misses
+or lateness. Stream cleanup and all endpoint/configuration snapshots passed;
+this remains user-space adapter evidence, not managed-driver callback proof.
+
 The complete safe acceptance chain was requalified at `cbf52f4` on
 2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
 read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/

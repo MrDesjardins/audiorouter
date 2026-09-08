@@ -645,6 +645,17 @@ zero silent packets. Media state and persistent audio configuration were
 unchanged. These are host observations, not callback deadline or physical
 latency evidence.
 
+## Routed adapter 2-second qualification (2026-09-08)
+
+The guarded routed adapter wrapper passed for 2,000 ms on the explicitly
+selected VB-Audio pair: 96,480 captured frames, 96,384 scheduler frames,
+95,904 routed frames, and 753 graph blocks. Processing p99.9 was 32,768 ns
+(maximum 28,900 ns); deadline misses and lateness were zero, and all 32
+histogram buckets were present. Streams stopped/reset cleanly and defaults,
+volume, mute, privacy, driver, signing, and startup snapshots were unchanged.
+This is shared-mode user-space adapter evidence, not managed-driver callback or
+physical-latency qualification.
+
 ## Windows-audio identity and adapter regression suite (2026-09-08)
 
 The complete `audiorouter-windows-audio` test target passed 29 tests plus
