@@ -745,3 +745,12 @@ The guarded Rust acceptance passed both modes for 250 ms: each reported 24
 packets and 10,584 frames, followed by unchanged media-device identity/state.
 This is process-loopback API/lifecycle evidence, not a claim of controlled
 cross-process signal rejection or physical latency.
+
+## Native event-driven lifecycle recheck (2026-09-08)
+
+The bounded native event acceptance passed for 300 ms on the explicitly named
+VB-Audio endpoints: 14,400 capture frames and 19,200 silent render frames.
+Both event-driven clients returned successful initialize, event-handle, start,
+stop, and reset results. The media-device snapshot was unchanged. This is
+shared-mode lifecycle evidence only and does not establish callback deadline,
+physical latency, managed-driver lifecycle, or production signing.
