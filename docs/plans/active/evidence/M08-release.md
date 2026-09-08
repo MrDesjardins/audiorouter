@@ -440,6 +440,17 @@ artifact preparation/verification, and documentation acceptance. Temporary
 outputs and checkouts were removed. No driver was installed or loaded, and no
 signing-mode, plugin/startup registration, or machine audio configuration
 changed.
+
+## Pushed-head safe-chain requalification at `19f86e8` (2026-09-07)
+
+The elevated sequential `tests/acceptance/safe-all.ps1` runner passed at the
+new pushed head. Native compile and read-only 34-endpoint format inventory,
+disposable pinned SysVAD x64 build/package/API qualification, full locked
+workspace tests, M01 CLI, M04 DSP/recording, M05 UI, M06 SDK/VST3, M07
+headless, unsigned M08 artifact preparation/verification, and documentation all
+passed. Temporary outputs/checkouts were removed. Driver installation/loading,
+signing-mode changes, plugin/startup registration, live audio, installer,
+hardware, and manual UI/accessibility gates remained excluded.
 ## Safe-chain requalification at `0e28f3a` (2026-09-07)
 
 The complete safe acceptance chain passed at the current pushed head: native
