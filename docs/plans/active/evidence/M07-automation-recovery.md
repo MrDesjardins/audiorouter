@@ -485,6 +485,13 @@ doc tests passed, including 28 domain and 32 storage tests; strict workspace
 Clippy, formatting, and diff checks also passed. No audio endpoint or machine
 configuration was changed.
 
+## Current-head headless requalification (2026-09-07)
+
+The M07 acceptance wrapper passed at the current head: 25 CLI tests, 2 MCP
+interoperability tests, 84 control tests, 35 plugin-host tests, and 8 worker
+process tests. The run remained configuration-only and did not open an audio
+device, install a driver, register startup, or change machine state.
+
 SQLite now persists the safe-mode latch alongside bounded crash markers. A
 file-backed regression verifies that three crashes retain safe mode across a
 storage reopen and that the explicit clear operation removes both markers and
