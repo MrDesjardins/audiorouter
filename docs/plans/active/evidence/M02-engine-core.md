@@ -1,5 +1,14 @@
 # M02 realtime engine core groundwork
 
+## 2026-09-08 - Mixer compiler fail-closed topology guard
+
+`compile_mixer_session` now rejects an isolated enabled node outside the
+validated source-to-mixer-to-output topology. Edge-count checks already
+rejected unrelated connected branches, but an enabled node with no edge could
+previously be silently omitted from the prepared mixer graph. A regression
+covers the isolated-node case. Engine tests (77), formatting, strict Clippy,
+and diff checks pass; no audio endpoint or machine configuration is accessed.
+
 ## 2026-09-08 - Fan-out compiler fail-closed topology guard
 
 `compile_fanout_session` now rejects a session containing any unrelated

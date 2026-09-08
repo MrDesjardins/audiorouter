@@ -25,6 +25,12 @@ silently omitting it from the prepared runtime. The new regression and the
 This remains portable graph evidence; native endpoint routing is unchanged and
 the managed-driver gate remains open.
 
+The same fail-closed participant check now covers the portable mixer
+compiler: an isolated enabled node cannot be silently dropped from a prepared
+source-to-mixer-to-output graph. The regression passes with the 77-test engine
+suite and strict Clippy. This remains portable topology evidence and does not
+change native routing behavior.
+
 ## Native lifecycle and process-attribution acceptance (2026-09-08)
 
 With explicit live-audio authorization, the guarded `m00-native-live.ps1`

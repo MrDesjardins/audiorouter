@@ -2595,6 +2595,16 @@ pub fn compile_mixer_session(
     {
         return Err(GraphCompileError::UnsupportedTopology);
     }
+    let mut participants = source_ids;
+    participants.insert(mixer.id.clone());
+    participants.insert(destination.id.clone());
+    if session
+        .nodes
+        .iter()
+        .any(|node| node.enabled && !participants.contains(&node.id))
+    {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
     let mixer = MixerStage::new(usize::from(mixer_input.channels), matrices)
         .map_err(|_| GraphCompileError::UnsupportedTopology)?;
     Ok(CompiledMixerGraph {
@@ -3630,6 +3640,17 @@ mod tests {
         });
         assert!(matches!(
             compile_mixer_session(&unrelated, RuntimeGeneration::new(13)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
+
+        let mut isolated = session.clone();
+        isolated.nodes.push(node(
+            "isolated",
+            NodeKind::Gain,
+            vec![port("out", PortDirection::Output)],
+        ));
+        assert!(matches!(
+            compile_mixer_session(&isolated, RuntimeGeneration::new(14)),
             Err(GraphCompileError::UnsupportedTopology)
         ));
     }
