@@ -11,6 +11,15 @@ the temporary executable, object, raw capture, and logs. This is digital
 propagation/cadence evidence only; the estimated onset is not calibrated
 physical acoustic latency and does not close the managed-driver gate.
 
+The guarded `m00-rust-process-live.ps1 -AllowLiveAudio -DurationMilliseconds
+250` acceptance passed both Rust asynchronous process-loopback modes. Include
+converted 10,584 source frames at 44.1 kHz into 11,392 48 kHz engine frames
+and 89 exact quanta; exclude converted 11,025 into 11,904 and 93 quanta.
+Both modes reported zero rejected packets and zero scheduler XRuns, input or
+output overruns/underruns, and the wrapper verified unchanged media state.
+This strengthens the Rust adapter boundary but does not close production
+driver callback timing or physical acoustic latency.
+
 The guarded `m00-native-event-live.ps1 -AllowLiveAudio -DurationMilliseconds
 500` acceptance passed over the selected VB-Audio pair. Event-driven capture
 read 24,480 frames and silent render submitted 28,800 frames; start/stop/reset

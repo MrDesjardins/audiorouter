@@ -67,6 +67,14 @@ were removed and the media state remained unchanged. This validates digital
 signal propagation and cadence only; calibrated physical acoustic latency and
 managed-driver ownership remain open.
 
+The guarded Rust asynchronous process-loopback acceptance also passed at
+250 ms in both include and exclude modes. Include converted 10,584 source
+frames into 11,392 engine frames across 89 generation-1 quanta; exclude
+converted 11,025 into 11,904 across 93 quanta. Both reported zero rejected
+packets and zero scheduler XRuns/overruns/underruns, with stream cleanup and
+unchanged media state. This is Rust adapter/process-loopback evidence, not
+production-driver callback timing or physical-latency evidence.
+
 The guarded event-driven native acceptance passed over the selected VB-Audio
 pair at 500 ms: capture read 24,480 frames and silent render submitted 28,800
 frames. Both event clients started/stopped/reset successfully, temporary
