@@ -104,6 +104,20 @@ if ($names.Count -eq 0) {
 if (-not $names.Contains("THIRD-PARTY-NOTICES.txt")) {
     throw "release manifest does not include THIRD-PARTY-NOTICES.txt"
 }
+$requiredArtifacts = @(
+    "audiorouter-cli.exe",
+    "audiorouter-plugin-worker.exe",
+    "audiorouter-ui.zip",
+    "sbom.cargo.json",
+    "sbom.npm.json",
+    "sbom.npm.package-lock.json",
+    "THIRD-PARTY-NOTICES.txt"
+)
+foreach ($required in $requiredArtifacts) {
+    if (-not $names.Contains($required)) {
+        throw "release manifest is missing required artifact: $required"
+    }
+}
 
 $allowed = [Collections.Generic.HashSet[string]]::new($names, [StringComparer]::OrdinalIgnoreCase)
 $null = $allowed.Add("release-manifest.json")

@@ -6,6 +6,26 @@ $root = Join-Path ([IO.Path]::GetTempPath()) ("audiorouter-release-verify-" + [g
 $verifier = Join-Path $PSScriptRoot "verify-artifacts.ps1"
 try {
     New-Item -ItemType Directory -Path $root | Out-Null
+    function New-RequiredArtifactEntries {
+        param([Parameter(Mandatory = $true)][string]$Directory)
+        $entries = @()
+        foreach ($name in @(
+            "audiorouter-cli.exe",
+            "audiorouter-plugin-worker.exe",
+            "audiorouter-ui.zip",
+            "sbom.npm.json",
+            "sbom.npm.package-lock.json"
+        )) {
+            $path = Join-Path $Directory $name
+            [IO.File]::WriteAllBytes($path, [byte[]](9, 8, 7))
+            $entries += [ordered]@{
+                file = $name
+                sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+                bytes = (Get-Item -LiteralPath $path).Length
+            }
+        }
+        return $entries
+    }
     $artifactPath = Join-Path $root "sample.bin"
     [IO.File]::WriteAllBytes($artifactPath, [byte[]](1, 2, 3, 5, 8))
     $noticePath = Join-Path $root "THIRD-PARTY-NOTICES.txt"
@@ -15,6 +35,7 @@ try {
     $hash = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $noticeHash = (Get-FileHash -LiteralPath $noticePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $sbomHash = (Get-FileHash -LiteralPath $sbomPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $requiredEntries = New-RequiredArtifactEntries $root
     $manifest = [ordered]@{
         format = "audiorouter.release-preparation"
         schemaVersion = 1
@@ -25,7 +46,7 @@ try {
             [ordered]@{ file = "sample.bin"; sha256 = $hash; bytes = 5 }
             [ordered]@{ file = "sbom.cargo.json"; sha256 = $sbomHash; bytes = (Get-Item -LiteralPath $sbomPath).Length }
             [ordered]@{ file = "THIRD-PARTY-NOTICES.txt"; sha256 = $noticeHash; bytes = (Get-Item -LiteralPath $noticePath).Length }
-        )
+        ) + $requiredEntries
         signed = $false
         publicationReady = $false
         blockers = @("test blocker")
@@ -82,12 +103,16 @@ try {
     try {
         New-Item -ItemType SymbolicLink -Path $linkPath -Target $noticePath -ErrorAction Stop | Out-Null
         $linkHash = (Get-FileHash -LiteralPath $linkPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $linkRequiredEntries = New-RequiredArtifactEntries $root
         $linkManifest = [ordered]@{
             format = "audiorouter.release-preparation"
             schemaVersion = 1
             architecture = "x64"
             sourceRevision = ("b" * 40)
-            artifacts = @([ordered]@{ file = "linked.bin"; sha256 = $linkHash; bytes = (Get-Item -LiteralPath $linkPath).Length })
+            artifacts = @([ordered]@{ file = "linked.bin"; sha256 = $linkHash; bytes = (Get-Item -LiteralPath $linkPath).Length }) + $linkRequiredEntries + @(
+                [ordered]@{ file = "THIRD-PARTY-NOTICES.txt"; sha256 = $noticeHash; bytes = (Get-Item -LiteralPath $noticePath).Length }
+                [ordered]@{ file = "sbom.cargo.json"; sha256 = $sbomHash; bytes = (Get-Item -LiteralPath $sbomPath).Length }
+            )
             signed = $false
             publicationReady = $false
             blockers = @("test blocker")

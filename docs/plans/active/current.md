@@ -1682,6 +1682,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Completed M07/SEC-12 transport lifecycle hardening on 2026-09-08: the multi-response named-pipe client now rejects zero or over-500 response counts before endpoint/pipe access, preventing an unbounded or non-completing request from holding a session. Native transport tests (18), strict transport Clippy, formatting, and diff checks pass; no audio or machine configuration changed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+- Completed M08/SEC-12 release-manifest completeness hardening on 2026-09-08: artifact verification and acceptance now require both release executables, the UI archive, cargo/npm SBOMs, the npm lock snapshot, and third-party notices, in addition to checksum/list validation. PowerShell parsing, unsigned release acceptance, and diff checks pass; no signing, installer, driver, audio, or machine configuration changed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 - Completed M00/SEC-12 acceptance-wrapper cleanup propagation on 2026-09-08: all six custom-output native live wrappers now remove adjacent implicit objects, and the 21-script parse check plus bounded VB-Audio loopback passed with no temporary or repository artifacts left behind. No audio configuration changed.
 - Next M00/M02/M03/ARCH-05 task: retain isolated wrapper cleanup while pursuing calibrated latency only after the physical return path is measurable and the managed endpoint-owned callback exists.
 

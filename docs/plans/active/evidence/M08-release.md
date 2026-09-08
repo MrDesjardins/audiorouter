@@ -12,6 +12,16 @@ signing mode changed, and no plugin/startup registration or machine audio
 configuration changed. Production driver ownership, signing, installer,
 clean-machine, physical-latency, and manual UI/accessibility gates remain open.
 
+## Release artifact completeness (2026-09-08)
+
+`verify-artifacts.ps1` now requires the complete unsigned preparation set:
+the CLI and plugin-worker executables, UI archive, cargo and npm SBOMs, npm
+lock snapshot, and third-party notices. The M08 acceptance wrapper asserts the
+same required names before inspecting archive/SBOM structure. PowerShell
+parsing, unsigned release acceptance, and diff checks pass. This remains
+preparation-only evidence; signing, driver, installer, clean-machine, and
+native-audio gates remain open.
+
 ## Safe-chain requalification after `0162438` (2026-09-08)
 
 The canonical safe acceptance chain passed again after telemetry overflow
