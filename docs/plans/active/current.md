@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `80cfa46`, with the latest
+The latest validated implementation head is `cbf52f4`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -28,6 +28,14 @@ scheduler deadline telemetry, and conservative p99.9 histogram bounds is
 implemented and regression-tested. The full locked workspace suite, guarded
 include/exclude process-loopback acceptance, and safe acceptance chain pass
 with unchanged media state.
+
+The complete safe acceptance chain was requalified at `cbf52f4` on
+2026-09-08 after backup write-path enforcement: native compile and 34-endpoint
+read-only inventory, disposable pinned SysVAD x64 qualification, M01/M04/M05/
+M06/M07 validation, unsigned M08 preparation, and documentation acceptance
+(51 Markdown files, 160 local links) all passed. Temporary outputs/checkouts
+were removed; no driver, signing mode, plugin/startup registration, or machine
+audio configuration changed.
 
 The safe chain was requalified again at the pushed tree `3d01a6e` on
 2026-09-08 after the discovery self-consistency regression. Evidence is in

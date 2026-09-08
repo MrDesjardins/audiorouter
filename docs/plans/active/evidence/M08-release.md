@@ -1,5 +1,17 @@
 # M08 release evidence
 
+## Safe-chain requalification after backup write-boundary fix (2026-09-08)
+
+At pushed revision `cbf52f4`, the complete safe acceptance chain passed:
+native WASAPI compile and read-only 34-endpoint inventory, disposable pinned
+SysVAD x64 qualification/package/API validation, M01 CLI, M04 DSP/recording,
+M05 UI, M06 SDK/VST3, M07 headless, unsigned M08 artifact preparation and
+verification, and documentation acceptance (51 Markdown files, 160 local
+links). The storage backup write-boundary regression is included in this
+tree. Temporary outputs and checkouts were removed; no driver was installed
+or loaded, no signing mode changed, and no plugin/startup registration or
+machine audio configuration was changed.
+
 ## Safe-chain requalification after `95fab8d` (2026-09-08)
 
 The repository-wide safe acceptance chain passed at the pushed percentile
