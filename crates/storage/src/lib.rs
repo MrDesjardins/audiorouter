@@ -70,6 +70,13 @@ fn validate_plan_id(id: &str) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn validate_session_id(id: &EntityId) -> Result<(), StorageError> {
+    if id.as_str().is_empty() || id.as_str().len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+        return Err(StorageError::InvalidSession("invalid session ID".into()));
+    }
+    Ok(())
+}
+
 fn validate_idempotency_key(key: &str) -> Result<(), StorageError> {
     if key.is_empty() || key.len() > MAX_IDEMPOTENCY_KEY_BYTES {
         return Err(StorageError::InvalidJournal(
@@ -929,6 +936,7 @@ impl Storage {
     }
 
     pub fn delete_session(&self, id: &EntityId) -> Result<bool, StorageError> {
+        validate_session_id(id)?;
         let transaction = self.connection.unchecked_transaction()?;
         let changed =
             transaction.execute("DELETE FROM sessions WHERE id = ?1", params![id.as_str()])?;
@@ -1365,6 +1373,7 @@ impl Storage {
         before_revision: Option<u64>,
         limit: usize,
     ) -> Result<Vec<Session>, StorageError> {
+        validate_session_id(id)?;
         let mut statement = if before_revision.is_some() {
             self.connection.prepare(
                 "SELECT document FROM session_history WHERE session_id = ?1 AND revision < ?2
@@ -1397,6 +1406,7 @@ impl Storage {
     }
 
     pub fn load_session(&self, id: &EntityId) -> Result<Option<Session>, StorageError> {
+        validate_session_id(id)?;
         let document: Option<String> = self
             .connection
             .query_row(
@@ -1429,6 +1439,13 @@ impl Storage {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<Vec<Session>, StorageError> {
+        if let Some(cursor) = cursor {
+            if cursor.is_empty() || cursor.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES {
+                return Err(StorageError::InvalidSession(
+                    "invalid session cursor".into(),
+                ));
+            }
+        }
         let mut statement = if cursor.is_some() {
             self.connection
                 .prepare("SELECT document FROM sessions WHERE id > ?1 ORDER BY id ASC LIMIT ?2")?
@@ -1452,6 +1469,7 @@ impl Storage {
     }
 
     pub fn export_session(&self, id: &EntityId) -> Result<Option<String>, StorageError> {
+        validate_session_id(id)?;
         self.load_session(id)?
             .map(|session| serde_json::to_string(&session).map_err(StorageError::Json))
             .transpose()
@@ -1465,6 +1483,7 @@ impl Storage {
         id: &EntityId,
         destination: impl AsRef<std::path::Path>,
     ) -> Result<(), StorageError> {
+        validate_session_id(id)?;
         let destination = destination.as_ref();
         if !destination.is_absolute() {
             return Err(StorageError::InvalidBackupPath(
@@ -2324,6 +2343,32 @@ mod tests {
             .load_session(&EntityId::new("missing"))
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn direct_session_reads_and_deletes_reject_unbounded_ids() {
+        let storage = Storage::open_memory().unwrap();
+        let invalid = EntityId::new("s".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1));
+        assert!(matches!(
+            storage.load_session(&invalid),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.load_history(&invalid, 1),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.delete_session(&invalid),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.export_session(&invalid),
+            Err(StorageError::InvalidSession(_))
+        ));
+        assert!(matches!(
+            storage.list_sessions_after(Some(invalid.as_str()), 1),
+            Err(StorageError::InvalidSession(_))
+        ));
     }
 
     #[test]

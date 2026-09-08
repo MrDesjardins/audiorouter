@@ -1729,6 +1729,9 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Completed M06/SEC-12 plugin-state removal identity hardening on 2026-09-08: plugin-state deletion now enforces the same 128-byte record-ID limit as persistence. Storage tests (50), strict Clippy, formatting, and diff checks pass; no plugin was executed and no audio or machine configuration was accessed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+- Completed M01/SEC-12 session read-boundary hardening on 2026-09-08: session lookup, history, export, deletion, and stable-cursor storage APIs now enforce the shared 128-byte identity limit. Storage tests (51), strict Clippy, formatting, and diff checks pass; no audio or machine configuration was accessed.
+- Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
 - Requalified M02/ARCH-05 shared-mode Rust adapter behavior on 2026-09-08: the guarded 300 ms live smoke processed 15,360 capture/scheduler frames and 15,456 silent render frames with zero xruns/deadline misses and a 32,768 ns processing p99.9 upper bound; streams stopped/reset and media-device state was unchanged. This is not managed-driver callback or physical-latency evidence.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
 

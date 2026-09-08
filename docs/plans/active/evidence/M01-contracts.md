@@ -556,6 +556,12 @@ client-ID validation as enrollment writes, so malformed direct-storage calls
 cannot bypass the identity boundary. Storage/control tests pass (49/86) with
 strict Clippy and formatting; no audio or machine configuration was accessed.
 
+Session lookup, history, export, deletion, and stable-cursor reads now reject
+empty or over-128-byte session identities before SQLite access. A focused
+regression covers each direct storage path; storage coverage passes 51 tests
+with strict Clippy and formatting, with no audio or machine configuration
+accessed.
+
 The discovered processor catalog now advertises its seven-entry bound, while
 node and processor parameter arrays use the domain's 32-parameter maximum.
 Node-type and preset catalog maxima are also sourced from their authoritative
