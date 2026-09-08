@@ -1059,7 +1059,7 @@ fn method_output_schema(name: &str) -> Value {
                                     "binaryPath": { "type": "string", "minLength": 1 },
                                     "format": { "enum": ["vst3", "vst2", "unknown"] },
                                     "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
-                                    "fileBytes": { "type": "integer", "minimum": 1 },
+                                    "fileBytes": { "type": "integer", "minimum": 1, "maximum": audiorouter_plugin_host::MAX_PLUGIN_BYTES },
                                     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
                                     "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
                                 },
@@ -1088,7 +1088,7 @@ fn method_output_schema(name: &str) -> Value {
                         "binaryPath": { "type": "string", "minLength": 1 },
                         "format": { "enum": ["vst3", "vst2", "unknown"] },
                         "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
-                        "fileBytes": { "type": "integer", "minimum": 1 },
+                        "fileBytes": { "type": "integer", "minimum": 1, "maximum": audiorouter_plugin_host::MAX_PLUGIN_BYTES },
                         "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
                         "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
                     },
@@ -6673,6 +6673,10 @@ mod tests {
                 .unwrap()
                 .len(),
             7
+        );
+        assert_eq!(
+            method["outputSchema"]["properties"]["identity"]["properties"]["fileBytes"]["maximum"],
+            audiorouter_plugin_host::MAX_PLUGIN_BYTES
         );
         assert!(method["outputSchema"]["required"]
             .as_array()

@@ -901,3 +901,11 @@ identity limit before persisting opaque state metadata. A direct-storage
 regression rejects oversized IDs on both save and removal; storage coverage
 passes 50 tests with strict Clippy and formatting. Plugin execution and OS
 sandbox gates remain open.
+
+## Plugin binary-size schema alignment (2026-09-08)
+
+The `fileBytes` field in `plugins.scan`, `plugins.list`, and `plugins.inspect`
+now advertises the enforced 256 MiB `MAX_PLUGIN_BYTES` ceiling. Control (86)
+and plugin-host (39 plus 8 worker-process) tests, strict Clippy, formatting,
+diff checks, and documentation validation passed. Plugin execution and OS
+sandbox gates remain open; no plugin was loaded by this change.
