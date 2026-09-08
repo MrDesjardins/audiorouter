@@ -1073,3 +1073,15 @@ or stop. The regression queues an input block, replaces the graph, and checks
 that the input pool is restored; it also verifies deactivation drains a queued
 block. Engine tests (77), strict Clippy, and formatting pass. No audio endpoint
 or machine configuration was accessed.
+
+## Live Rust adapter and routed requalification (2026-09-08)
+
+The guarded `m02-rust-adapter-live.ps1 -AllowLiveAudio -DurationMilliseconds
+300` run passed with 14,880 capture frames, 14,848 scheduler frames, 116 graph
+blocks, zero xruns/overruns/deadline misses, and a 32,768 ns processing p99.9
+upper bound. The routed wrapper passed with explicitly selected VB-Audio
+endpoints, 14,400 capture frames, and 14,336 scheduler/routed frames, also with
+zero deadline misses/lateness. Both wrappers stopped/reset streams, removed
+temporary outputs, and verified unchanged media/configuration state. This is
+shared-mode adapter evidence, not managed-driver callback or physical-latency
+evidence.

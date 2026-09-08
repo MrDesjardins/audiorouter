@@ -53,6 +53,18 @@ Temporary outputs/checkouts were removed; no driver was installed or loaded,
 and no signing mode, plugin/startup registration, or machine audio setting was
 changed.
 
+## Live Rust adapter requalification (2026-09-08)
+
+The guarded 300 ms Rust adapter smoke passed on the existing endpoints with
+14,880 capture frames, 14,848 scheduler frames, 116 graph blocks, zero
+xruns/overruns/deadline misses, and an unchanged media snapshot. The explicit
+VB-Audio routed smoke also passed with 14,400 capture frames and 14,336
+scheduler/routed frames, zero deadline misses/lateness, and unchanged defaults,
+volume, mute, privacy, driver, signing, and startup state. Streams were
+stopped/reset and temporary outputs removed. This is shared-mode adapter
+evidence, not managed-driver callback, physical-latency, or production-driver
+evidence.
+
 ## Scheduler lifecycle queue invalidation (2026-09-08)
 
 Closed an M02/ARCH-04 generation-boundary gap in `RealtimeScheduler`: graph
