@@ -53,6 +53,16 @@ JSON-RPC, and TypeScript contracts without loading plugin code. A trailing-
 comma-tolerant fixture regression, plugin-host/control tests (39/90), strict
 Clippy, contracts typecheck/drift, and documentation validation pass.
 
+## Native VST3 parameter descriptor evidence (2026-09-08)
+
+The offline VST3 loader now enforces the worker's 256-entry descriptor ceiling,
+validates finite normalized defaults, and emits bounded controller records with
+parameter ID, ASCII-safe title, default, step count, and flags. The pinned SDK
+acceptance passed after rebuilding with VS2026; the five mda matrix effects
+emitted 5/13/8/4/7 descriptors, while the zero-parameter ChowMatrix case
+remained valid. This is native offline discovery evidence only; mapping into
+the Rust worker catalog and third-party realtime execution remain open.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models

@@ -18,10 +18,26 @@
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/vsttypes.h"
 
 namespace fs = std::filesystem;
 using namespace Steinberg;
 using GetPluginFactoryProc = IPluginFactory* (PLUGIN_API*)();
+
+template <std::size_t N>
+static std::string bounded_ascii(const Vst::TChar (&value)[N]) {
+    std::string result;
+    result.reserve(N);
+    for (const auto character : value) {
+        if (character == 0) {
+            break;
+        }
+        result.push_back(character >= 32 && character <= 126
+                             ? static_cast<char>(character)
+                             : '?');
+    }
+    return result;
+}
 
 class MemoryStream final : public IBStream {
 public:
@@ -323,11 +339,25 @@ int wmain(int argc, wchar_t** argv) {
                     throw std::runtime_error("controller initialize failed");
                 }
                 const auto parameter_count = controller->getParameterCount();
+                constexpr int32 max_parameter_descriptors = 256;
+                if (parameter_count < 0 || parameter_count > max_parameter_descriptors) {
+                    throw std::runtime_error("parameter descriptor count exceeds bounded contract");
+                }
                 for (int32 index = 0; index < parameter_count; ++index) {
                     Vst::ParameterInfo parameter{};
                     if (controller->getParameterInfo(index, parameter) != kResultOk) {
                         throw std::runtime_error("getParameterInfo failed");
                     }
+                    if (!std::isfinite(parameter.defaultNormalizedValue) ||
+                        parameter.defaultNormalizedValue < 0.0 ||
+                        parameter.defaultNormalizedValue > 1.0) {
+                        throw std::runtime_error("parameter descriptor has invalid default");
+                    }
+                    std::cout << "parameter[" << index << "] id=" << parameter.id
+                              << " title=" << bounded_ascii(parameter.title)
+                              << " default=" << parameter.defaultNormalizedValue
+                              << " step_count=" << parameter.stepCount
+                              << " flags=" << parameter.flags << "\n";
                     const auto original = controller->getParamNormalized(parameter.id);
                     if (!std::isfinite(original) || original < 0.0 || original > 1.0) {
                         throw std::runtime_error("parameter returned invalid normalized value");
@@ -349,6 +379,7 @@ int wmain(int argc, wchar_t** argv) {
                 component = nullptr;
                 std::cout << "processed offline block: channels=" << channels
                           << " frames=64 finite=true parameters=" << parameter_count
+                          << " parameter_descriptors=" << parameter_count
                           << " automation=verified state_bytes=" << state_bytes
                           << " class_index=" << index << " class_name=" << info.name << "\n";
                 processed_audio_effect = true;

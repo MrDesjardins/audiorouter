@@ -28,6 +28,14 @@ function Invoke-Native([string]$File, [string[]]$Arguments) {
     }
 }
 
+function Invoke-NativeCapture([string]$File, [string[]]$Arguments) {
+    $output = @(& $File @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "$File failed with exit code $LASTEXITCODE`n$($output -join "`n")"
+    }
+    return $output
+}
+
 Require-File $cmake 'repository-local CMake'
 Require-File (Join-Path $sdkRoot 'CMakeLists.txt') 'VST3 SDK checkout'
 Require-File (Join-Path $sdkRoot 'pluginterfaces\base\ipluginbase.h') 'VST3 SDK header'
@@ -55,7 +63,10 @@ try {
 
     Invoke-Native $validator @($bundle)
     Invoke-Native 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $loaderScript)
-    Invoke-Native $loader @($bundle)
+    $defaultLoaderOutput = Invoke-NativeCapture $loader @($bundle)
+    if (-not (($defaultLoaderOutput -join "`n") -match 'parameter_descriptors=\d+')) {
+        throw 'offline loader did not report a bounded parameter descriptor catalog'
+    }
     $matrixClasses = @(0, 4, 6, 8, 10)
     foreach ($classIndex in $matrixClasses) {
         Invoke-Native $loader @($bundle, '--class-index', "$classIndex")

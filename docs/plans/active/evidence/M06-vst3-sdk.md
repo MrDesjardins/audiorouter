@@ -901,6 +901,22 @@ saves a compatible asset successfully.
 
 ## Cross-vendor loader matrix (2026-09-08)
 
+## Native controller descriptor discovery (2026-09-08)
+
+The offline loader now applies the worker descriptor ceiling while inspecting
+each controller: negative or over-256 counts fail closed, defaults must be
+finite normalized values, and each bounded record reports the VST3 parameter
+ID, an ASCII-safe title, normalized default, step count, and flags. The
+acceptance wrapper asserts that the default mda run emits the descriptor-count
+field rather than only relying on the process exit code.
+
+The rebuilt loader and pinned SDK acceptance passed with the installed
+VS2026/MSVC/Windows SDK toolchain. The mda matrix emitted 5, 13, 8, 4, and 7
+descriptor records for Ambience, BeatBox, Combo, DeEsser, and Degrade. The
+ChowMatrix controller emitted a valid zero-entry catalog. This is native
+offline discovery evidence and does not yet map vendor-specific VST3 metadata
+into the Rust worker catalog or claim third-party realtime execution.
+
 After the zero-parameter probe correction, the native loader was rebuilt and
 run against five distinct classes in the pinned mda bundle. These all passed
 the same bounded offline stereo processing, finite-output, parameter

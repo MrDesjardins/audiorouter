@@ -7,6 +7,9 @@ component to inspect its bus counts, then terminates/releases it and unloads
 the module. It also processes one bounded offline stereo block, checks that
 the output is finite, initializes the associated controller, and exercises
 normalized parameter set/readback while restoring the original values. It does
+bounded controller descriptor discovery (parameter ID, ASCII-safe title,
+normalized default, step count, and flags) and rejects catalogs larger than
+the worker contract's 256-entry limit. It does
 an in-memory component state save/restore, and does not create an editor, open
 an audio device, or alter machine configuration. A valid effect with no
 automatable parameters is accepted; automation checks run when parameters are
