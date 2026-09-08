@@ -105,3 +105,14 @@ render buffers, stopped/reset clients, and verified unchanged defaults,
 volume, mute, privacy, driver/signing, startup configuration, and media state.
 This is endpoint lifecycle evidence only, not production-driver or physical
 latency evidence.
+
+## Superseding status note (2026-09-08)
+
+The dated inventory and its original conclusion above are historical: they
+describe the machine before the later native toolchain and probe work. They
+must not be read as the current result. Subsequent evidence in this file and
+in [M00 WASAPI probe evidence](M00-wasapi-probe.md) records successful native
+endpoint inventory, shared render/capture lifecycle, process-loopback
+include/exclude, digital signal, and bounded timing runs. The remaining M00
+gates are explicitly listed in the active plan and are not waived by those
+later results.
