@@ -469,3 +469,9 @@ supported mono/stereo conversion. The bound is checked before node/port lookup,
 so dangling-edge imports cannot bypass it; the regression covers an oversized
 matrix referencing missing nodes. This remains portable validation with no
 audio or machine configuration access.
+
+The read-only `applications.list` response now bounds OS-provided audio-session
+metadata to 64 names per process and 256 UTF-8 bytes per name; its schema and
+Windows-audio admission helper share those constants. This prevents discovery
+metadata from expanding control responses without limit while retaining the
+explicit distinction between observed sessions and guaranteed process capture.

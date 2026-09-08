@@ -274,3 +274,14 @@ quanta, and the active graph generation. Counters remain atomic and monotonic;
 the diagnostics caller can diff snapshots without adding work to the realtime
 processing boundary. Control/API publication and native callback timing remain
 open.
+
+## Bounded application-session metadata (2026-09-07)
+
+Windows audio-session discovery now retains at most 64 display names per
+process, rejects names over 256 UTF-8 bytes, and saturates session counters
+before the read-only inventory is exposed. The `applications.list` schema
+advertises the same bounds (and the fixed 260-character executable limit).
+Windows-audio tests (26), control discovery tests (86), full workspace tests,
+strict Clippy, and documentation validation pass. Discovery remains read-only:
+it opens no audio stream, changes no endpoint, and does not claim process
+loopback activation or native realtime routing.

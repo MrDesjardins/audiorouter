@@ -10,6 +10,11 @@ use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+/// Maximum number of OS-provided audio-session names retained per process.
+pub const MAX_APPLICATION_AUDIO_DISPLAY_NAMES: usize = 64;
+/// Maximum UTF-8 byte length of one retained OS-provided session name.
+pub const MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES: usize = 256;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EndpointDirection {
     Capture,
@@ -216,6 +221,17 @@ fn sort_application_audio_inventory(inventory: &mut [ApplicationAudioInfo]) {
         item.display_names.sort_unstable();
         item.display_names.dedup();
     }
+}
+
+fn retain_audio_display_name(display_names: &mut Vec<String>, name: String) {
+    if name.is_empty()
+        || name.len() > MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES
+        || display_names.len() >= MAX_APPLICATION_AUDIO_DISPLAY_NAMES
+        || display_names.iter().any(|existing| existing == &name)
+    {
+        return;
+    }
+    display_names.push(name);
 }
 
 #[derive(Debug)]
@@ -1434,23 +1450,24 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                                     render_session_count: 0,
                                     display_names: Vec::new(),
                                 });
-                        entry.total_session_count += 1;
+                        entry.total_session_count = entry.total_session_count.saturating_add(1);
                         if state == AudioSessionStateActive {
-                            entry.active_session_count += 1;
+                            entry.active_session_count =
+                                entry.active_session_count.saturating_add(1);
                         }
                         if is_capture {
-                            entry.capture_session_count += 1;
+                            entry.capture_session_count =
+                                entry.capture_session_count.saturating_add(1);
                         } else {
-                            entry.render_session_count += 1;
+                            entry.render_session_count =
+                                entry.render_session_count.saturating_add(1);
                         }
                         let Ok(display_name) = session.GetDisplayName() else {
                             continue;
                         };
                         if !display_name.is_null() {
                             if let Ok(name) = display_name.to_string() {
-                                if !name.is_empty() && !entry.display_names.contains(&name) {
-                                    entry.display_names.push(name);
-                                }
+                                retain_audio_display_name(&mut entry.display_names, name);
                             }
                             CoTaskMemFree(Some(display_name.0 as *const core::ffi::c_void));
                         }
@@ -2112,6 +2129,24 @@ mod tests {
             vec![4, 20]
         );
         assert_eq!(inventory[1].display_names, vec!["alpha", "zulu"]);
+    }
+
+    #[test]
+    fn audio_display_names_are_bounded_before_retention() {
+        let mut names = Vec::new();
+        retain_audio_display_name(&mut names, "valid".into());
+        retain_audio_display_name(&mut names, "valid".into());
+        retain_audio_display_name(
+            &mut names,
+            "x".repeat(MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES + 1),
+        );
+        for index in 1..=MAX_APPLICATION_AUDIO_DISPLAY_NAMES {
+            retain_audio_display_name(&mut names, format!("name-{index}"));
+        }
+        assert_eq!(names.len(), MAX_APPLICATION_AUDIO_DISPLAY_NAMES);
+        assert!(names.iter().all(|name| {
+            !name.is_empty() && name.len() <= MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES
+        }));
     }
 
     #[test]

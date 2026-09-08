@@ -953,7 +953,7 @@ fn method_output_schema(name: &str) -> Value {
                 "type": "object",
                 "properties": {
                     "processId": { "type": "integer", "minimum": 1 },
-                    "executable": { "type": "string" },
+                    "executable": { "type": "string", "maxLength": 260 },
                     "creationTime100ns": { "type": ["string", "null"] },
                     "audioActivity": { "enum": ["active", "inactive", "none"] },
                     "captureCapability": { "enum": ["observed", "notObserved"] },
@@ -961,7 +961,14 @@ fn method_output_schema(name: &str) -> Value {
                     "activeAudioSessionCount": { "type": "integer", "minimum": 0 },
                     "captureSessionCount": { "type": "integer", "minimum": 0 },
                     "renderSessionCount": { "type": "integer", "minimum": 0 },
-                    "audioDisplayNames": { "type": "array", "items": { "type": "string" } }
+                    "audioDisplayNames": {
+                        "type": "array",
+                        "maxItems": audiorouter_windows_audio::MAX_APPLICATION_AUDIO_DISPLAY_NAMES,
+                        "items": {
+                            "type": "string",
+                            "maxLength": audiorouter_windows_audio::MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES
+                        }
+                    }
                 },
                 "required": ["processId", "executable", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "renderSessionCount", "audioDisplayNames"],
                 "additionalProperties": false
@@ -6698,6 +6705,19 @@ mod tests {
         assert_eq!(
             applications["outputSchema"]["items"]["properties"]["renderSessionCount"]["type"],
             "integer"
+        );
+        assert_eq!(
+            applications["outputSchema"]["items"]["properties"]["executable"]["maxLength"],
+            260
+        );
+        assert_eq!(
+            applications["outputSchema"]["items"]["properties"]["audioDisplayNames"]["maxItems"],
+            audiorouter_windows_audio::MAX_APPLICATION_AUDIO_DISPLAY_NAMES
+        );
+        assert_eq!(
+            applications["outputSchema"]["items"]["properties"]["audioDisplayNames"]["items"]
+                ["maxLength"],
+            audiorouter_windows_audio::MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES
         );
         let recordings = methods
             .iter()
