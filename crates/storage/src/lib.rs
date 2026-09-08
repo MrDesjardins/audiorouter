@@ -756,6 +756,7 @@ impl Storage {
         registry: &VirtualBusRegistry,
         plan_id: &EntityId,
     ) -> Result<(), StorageError> {
+        validate_plan_id(plan_id.as_str())?;
         let snapshots = registry.snapshots();
         if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
             return Err(StorageError::InvalidSession(
@@ -790,6 +791,8 @@ impl Storage {
         request_hash: &str,
         result: &Value,
     ) -> Result<(), StorageError> {
+        validate_plan_id(plan_id.as_str())?;
+        validate_idempotency_key(idempotency_key)?;
         let snapshots = registry.snapshots();
         if snapshots.len() > audiorouter_domain::MAX_VIRTUAL_BUSES {
             return Err(StorageError::InvalidSession(
@@ -2500,6 +2503,39 @@ mod tests {
         assert!(matches!(
             storage.delete_graph_plan(oversized.as_str()),
             Err(StorageError::InvalidPlan(_))
+        ));
+    }
+
+    #[test]
+    fn virtual_bus_commit_paths_reject_unbounded_plan_and_journal_ids() {
+        let storage = Storage::open_memory().unwrap();
+        let registry = VirtualBusRegistry::default();
+        let oversized_plan = EntityId::new("p".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1));
+
+        assert!(matches!(
+            storage.save_virtual_buses_and_delete_plan(&registry, &oversized_plan),
+            Err(StorageError::InvalidPlan(_))
+        ));
+        assert!(matches!(
+            storage.save_virtual_buses_and_journal(
+                &registry,
+                &EntityId::new("plan"),
+                "",
+                "hash",
+                &serde_json::json!({})
+            ),
+            Err(StorageError::InvalidJournal(_))
+        ));
+        let oversized_key = "k".repeat(MAX_IDEMPOTENCY_KEY_BYTES + 1);
+        assert!(matches!(
+            storage.save_virtual_buses_and_journal(
+                &registry,
+                &EntityId::new("plan"),
+                &oversized_key,
+                "hash",
+                &serde_json::json!({})
+            ),
+            Err(StorageError::InvalidJournal(_))
         ));
     }
 

@@ -931,3 +931,11 @@ is oversized, so the write path cannot produce an out-of-budget recovery copy.
 The focused regression verifies the rejection and cleanup; the 53-test storage
 suite and strict Clippy pass. No audio, driver, or machine configuration was
 accessed.
+
+## Virtual-device durable commit boundary (2026-09-08)
+
+The two storage helpers used by virtual-device apply now enforce the same
+bounded plan-ID and idempotency-key contracts as their individual persistence
+APIs before deleting plans, replacing desired state, or inserting journal
+outcomes. The focused storage suite passes 54 tests with strict Clippy; no
+driver, endpoint, or machine configuration was accessed.

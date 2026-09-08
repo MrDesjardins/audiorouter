@@ -70,6 +70,12 @@ configuration backup ceiling now matches the specification's documented
 100 MiB budget, and newly created backup outputs are size-checked and removed
 when oversized. The focused storage regression covers the write-path cleanup.
 
+Completed safe storage slice M03/M07/SEC-12 virtual-device commit-boundary
+validation: the durable virtual-bus commit helpers now validate plan IDs and
+idempotency keys before changing desired state or writing journal rows. The
+focused storage regression covers both invalid-key forms and the oversized
+plan identifier.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
