@@ -18,7 +18,7 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `62c01c7`, with the latest
+The latest validated implementation head is `d54c7c3`, with the latest
 safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
 and subsequent schema/storage-boundary regressions validated by focused tests.
 Safe portable and
@@ -34,7 +34,7 @@ The safe chain was requalified again at the pushed tree `3d01a6e` on
 [M08 release evidence](evidence/M08-release.md); temporary outputs and
 checkouts were removed and machine audio state was unchanged.
 
-The next safe slice is M04/DSP-01/API-01 preset contract versioning: built-in
+Completed safe slice M04/DSP-01/API-01 preset contract versioning: built-in
 voice-chain and EQ catalog entries now carry an explicit version in the DSP
 registry, control schemas/responses, TypeScript contract, CLI assertion, and
 API reference. Verification and rollback are limited to portable catalog
