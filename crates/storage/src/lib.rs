@@ -369,6 +369,16 @@ fn row_u64(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<u64> {
     })
 }
 
+fn row_u32(row: &rusqlite::Row<'_>, index: usize) -> rusqlite::Result<u32> {
+    u32::try_from(row_u64(row, index)?).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            rusqlite::types::Type::Integer,
+            Box::new(error),
+        )
+    })
+}
+
 fn validate_recording_record(recording: &RecordingRecord) -> Result<(), StorageError> {
     if recording.id.is_empty()
         || recording.session_id.is_empty()
@@ -1480,7 +1490,7 @@ impl Storage {
                     id: row.get(0)?,
                     plugin_id: row.get(1)?,
                     plugin_sha256: row.get(2)?,
-                    version: row.get::<_, i64>(3)? as u32,
+                    version: row_u32(row, 3)?,
                     path: row.get(4)?,
                     state_sha256: row.get(5)?,
                     size_bytes: row.get::<_, i64>(6)? as u64,
@@ -4313,6 +4323,27 @@ mod tests {
         assert!(matches!(
             storage.list_plugin_states(None),
             Err(StorageError::InvalidPluginState(_))
+        ));
+    }
+
+    #[test]
+    fn plugin_state_reads_reject_negative_versions() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO plugin_states
+                 (id, plugin_id, plugin_sha256, version, path, state_sha256, size_bytes)
+                 VALUES ('negative-version', 'plugin-1', ?1, -1,
+                         'C:\\AudioRouter\\state\\state.bin', ?2, 1)",
+                rusqlite::params!["a".repeat(64), "b".repeat(64)],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.list_plugin_states(None),
+            Err(StorageError::Sql(
+                rusqlite::Error::FromSqlConversionFailure(..)
+            ))
         ));
     }
 }

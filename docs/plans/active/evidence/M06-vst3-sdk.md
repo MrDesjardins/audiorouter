@@ -928,6 +928,14 @@ the installed Visual Studio Community 2026/MSVC and Windows SDK
 configuration changed. This does not satisfy the required independent
 multi-vendor fixture, editor, or full OS-sandbox execution gates.
 
+## Plugin-state numeric read validation (2026-09-08)
+
+Persisted plugin-state versions now use checked SQLite integer decoding. A
+negative version regression fails closed rather than wrapping to a large
+nonzero `u32` value that could bypass the version invariant. The focused
+storage regression and strict Clippy passed; no plugin was executed and no
+audio or machine configuration was accessed.
+
 ## Plugin-state read-boundary validation (2026-09-08)
 
 Plugin-state list hydration now revalidates persisted record IDs, plugin IDs,

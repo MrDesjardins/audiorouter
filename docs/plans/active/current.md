@@ -145,6 +145,12 @@ query or mutation. A boundary regression covers all three paths; storage
 (63), control (87), strict Clippy, formatting, and diff checks pass. No audio
 or machine configuration was accessed.
 
+Completed safe storage slice M06/SEC-12 plugin-state numeric read validation:
+persisted plugin-state versions now use checked signed-to-unsigned decoding,
+so negative SQLite values fail closed instead of wrapping to a valid-looking
+version. The focused regression and strict storage Clippy pass; no plugin was
+executed and no audio or machine configuration was accessed.
+
 The next actionable item is native callback deadline/period evidence only when
 the production-style native scheduler owns an endpoint stream. That gate is
 not satisfied by the current process-loopback diagnostic or portable rings.
