@@ -116,3 +116,12 @@ endpoint inventory, shared render/capture lifecycle, process-loopback
 include/exclude, digital signal, and bounded timing runs. The remaining M00
 gates are explicitly listed in the active plan and are not waived by those
 later results.
+
+## Toolchain and native probe requalification (2026-09-08)
+
+`tests/acceptance/m00-toolchain.ps1` passed with Visual Studio Community 18.0,
+MSVC 14.51.36231, and Windows SDK/WDK 10.0.28000.0. The custom-output
+`tests/acceptance/m00-native-build.ps1` compile also passed; its temporary
+executable and adjacent object were removed and no repository object remained.
+This was compile-only/read-only validation: no driver, signing mode, stream, or
+machine audio configuration was changed.

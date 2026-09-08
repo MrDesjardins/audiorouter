@@ -30,6 +30,15 @@ machine configuration was accessed.
 Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to
 the managed endpoint-owned production scheduler after driver lifecycle exists.
 
+## VS/WDK and Windows SDK requalification (2026-09-08)
+
+The installed native toolchain is usable: Visual Studio Community 18.0
+(MSVC 14.51.36231), Windows SDK/WDK 10.0.28000.0, and the required WDK
+properties/tools were discovered read-only. The custom-output native WASAPI
+probe compiled successfully and left no repository object. This validates the
+SDK/build prerequisite, not driver installation, signing, or production
+endpoint routing.
+
 ## UI inventory cursor consumption (2026-09-08)
 
 Closed an M05/API parity gap in the live UI backend: recordings, sessions,
