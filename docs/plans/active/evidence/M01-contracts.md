@@ -703,3 +703,12 @@ discovery, graph planning, session lifecycle, recording operations, validated
 bundle import/export, backup/restore, and authorization boundaries. The
 acceptance uses temporary databases and files and removes them on completion;
 no user database, audio endpoint, driver, or machine configuration was accessed.
+
+## Graph-plan retention bound (2026-09-08)
+
+`GraphStore` now removes expired pending plans before admitting a new one and
+rejects admission above the shared 100-plan ceiling with typed
+`PlanLimitReached`. Restored plans use the same admission path. A regression
+covers both the full active set and expiry-pruning behavior; the domain suite
+passes 55 tests with strict Clippy. No audio or machine configuration was
+accessed.

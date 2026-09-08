@@ -5657,6 +5657,7 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
             audiorouter_domain::StoreError::SessionNotFound => "notFound",
             audiorouter_domain::StoreError::PlanNotFound => "notFound",
             audiorouter_domain::StoreError::PlanExpired => "planExpired",
+            audiorouter_domain::StoreError::PlanLimitReached => "planLimitReached",
             audiorouter_domain::StoreError::InvalidGraph(_) => "invalidGraph",
             audiorouter_domain::StoreError::RevisionConflict { .. } => "revisionConflict",
             audiorouter_domain::StoreError::EmptyIdempotencyKey => "invalidRequest",
@@ -5685,6 +5686,10 @@ fn application_error_data(code: &str) -> Value {
             "read the latest session revision and create a new plan",
         ),
         "planExpired" => (true, "create a new plan from the current session revision"),
+        "planLimitReached" => (
+            true,
+            "wait for an existing plan to expire, then retry planning",
+        ),
         "storageFailure" => (
             true,
             "inspect backend health and retry after the failure is resolved",

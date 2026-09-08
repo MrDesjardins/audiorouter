@@ -16,6 +16,15 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+## Graph-plan retention bound (2026-09-08)
+
+Closed an M01/SEC-12 memory-retention gap in `GraphStore`: expired plans are
+pruned before new planning, and no more than 100 live graph plans are retained
+at once. A typed `planLimitReached` error gives callers a retryable outcome
+when all slots are active; restoring persisted plans uses the same bound.
+Domain coverage is 55 tests with strict Clippy; no audio or machine
+configuration was accessed.
+
 ## Ephemeral-plan hydration bounds (2026-09-08)
 
 Closed an M03/M07/SEC-12 persistence gap: startup and pending virtual-device

@@ -14,6 +14,7 @@ pub const CURRENT_SESSION_SCHEMA_VERSION: u32 = 1;
 pub const MAX_NODES_GLOBAL: usize = 128;
 pub const MAX_EDGES_GLOBAL: usize = 256;
 pub const GRAPH_PLAN_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+pub const MAX_PENDING_GRAPH_PLANS: usize = 100;
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
@@ -1909,6 +1910,7 @@ pub enum StoreError {
     SessionNotFound,
     PlanNotFound,
     PlanExpired,
+    PlanLimitReached,
     InvalidGraph(Vec<ValidationError>),
     RevisionConflict { expected: u64, actual: u64 },
     EmptyIdempotencyKey,
@@ -2145,6 +2147,11 @@ impl GraphStore {
             return Err(StoreError::SessionNotFound);
         }
         validate_session(&candidate).map_err(StoreError::InvalidGraph)?;
+        let now = std::time::Instant::now();
+        self.plans.retain(|_, plan| plan.expires_at > now);
+        if self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
+            return Err(StoreError::PlanLimitReached);
+        }
         self.next_plan += 1;
         let plan_id = EntityId::new(format!("plan-{}", self.next_plan));
         self.plans.insert(
@@ -2184,6 +2191,11 @@ impl GraphStore {
             return Err(StoreError::SessionNotFound);
         }
         validate_session(&candidate).map_err(StoreError::InvalidGraph)?;
+        let now = std::time::Instant::now();
+        self.plans.retain(|_, plan| plan.expires_at > now);
+        if self.plans.len() >= MAX_PENDING_GRAPH_PLANS {
+            return Err(StoreError::PlanLimitReached);
+        }
         self.plans.insert(
             plan_id,
             GraphPlan {
@@ -3415,6 +3427,41 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].revision, 1);
         assert_eq!(history[0].name, "updated");
+    }
+
+    #[test]
+    fn graph_store_bounds_pending_plans_and_prunes_expired_entries() {
+        let mut store = GraphStore::default();
+        let original = session(
+            vec![
+                node("in", NodeKind::PhysicalInput, PortDirection::Output),
+                node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+            ],
+            vec![edge("e", "in", "out")],
+        );
+        store.insert_session(original.clone()).unwrap();
+        for _ in 0..MAX_PENDING_GRAPH_PLANS {
+            store
+                .plan_graph_with_ttl(
+                    &original.id,
+                    0,
+                    original.clone(),
+                    std::time::Duration::from_secs(60),
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            store.plan_graph(&original.id, 0, original.clone()),
+            Err(StoreError::PlanLimitReached)
+        );
+
+        let mut expired_store = GraphStore::default();
+        expired_store.insert_session(original.clone()).unwrap();
+        expired_store
+            .plan_graph_with_ttl(&original.id, 0, original.clone(), std::time::Duration::ZERO)
+            .unwrap();
+        let original_id = original.id.clone();
+        assert!(expired_store.plan_graph(&original_id, 0, original).is_ok());
     }
 
     #[test]
