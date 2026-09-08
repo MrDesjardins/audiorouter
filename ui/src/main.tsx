@@ -6,6 +6,6 @@ import { createInitialBackend } from "./host";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App backend={createInitialBackend(window.__AUDIO_ROUTER_HOST__, window.chrome?.webview, window.__AUDIO_ROUTER_SESSION_ID__)} />
+    <App backend={createInitialBackend(window.__AUDIO_ROUTER_HOST__, window.chrome?.webview, window.__AUDIO_ROUTER_SESSION_ID__, window.location.origin)} />
   </StrictMode>,
 );

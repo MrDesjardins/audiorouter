@@ -698,3 +698,10 @@ origin are ignored before request correlation; the default remains compatible
 with the existing injected test seam until a native shell supplies its exact
 trusted origin. M05 typecheck and all 87 Vitest tests passed. Native shell
 packaging and manual acceptance remain open.
+
+The normal `main.tsx` WebView2 construction path now supplies the loaded page's
+`window.location.origin` to the transport, making the origin gate active for
+the live UI rather than only for callers that manually configure the class.
+Malformed or originless host responses therefore remain disconnected from
+pending requests. The 87-test UI suite and typecheck pass; native packaging and
+manual acceptance remain open.

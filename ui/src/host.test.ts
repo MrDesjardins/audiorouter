@@ -111,9 +111,10 @@ describe("native host bridge", () => {
       addEventListener: () => undefined,
       removeEventListener: () => undefined,
     };
-    const backend = createInitialBackend(null, webview, "session-2");
+    const backend = createInitialBackend(null, webview, "session-2", "https://app.audiorouter.local");
     expect(backend.connected).toBe(true);
     expect(createInitialBackend(null, webview, "").connected).toBe(false);
     expect(createInitialBackend(null, webview, "x".repeat(129)).connected).toBe(false);
+    expect(createInitialBackend(null, webview, "session-2").connected).toBe(false);
   });
 });

@@ -141,10 +141,11 @@ function isWebView2Webview(value: unknown): value is WebView2Webview {
 }
 
 /** Select the injected native backend, or remain safely disconnected. */
-export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined): UiBackend {
+export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined, webviewOrigin: unknown = undefined): UiBackend {
   if (isHostBridge(host)) return createLiveBackendFromTransport(host.transport, host.sessionId);
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
-    return createLiveBackendFromTransport(new WebView2RpcTransport(webview), sessionId);
+    if (typeof webviewOrigin !== "string" || webviewOrigin.length < 1 || webviewOrigin.length > 256) return createDisconnectedBackend();
+    return createLiveBackendFromTransport(new WebView2RpcTransport(webview, 5000, 64, webviewOrigin), sessionId);
   }
   return createDisconnectedBackend();
 }
