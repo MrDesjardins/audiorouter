@@ -301,3 +301,10 @@ virtual-device plan/item schemas, and `system.describe` discovery all reuse
 the same value; the domain boundary regression covers an over-limit name.
 Domain/control tests, strict Clippy, formatting, and documentation validation
 pass. Driver installation and endpoint activation remain open.
+## Virtual-device identity contract (2026-09-07)
+
+Managed virtual-device plan operations and list items now advertise the shared
+128-byte entity-ID limit enforced by the domain registry. Control discovery
+regression coverage verifies both input and output schemas. Workspace tests,
+strict Clippy, formatting, and documentation validation pass; driver
+installation and endpoint activation remain open.

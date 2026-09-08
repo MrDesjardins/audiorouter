@@ -322,7 +322,7 @@ fn method_input_schema(name: &str) -> Value {
                     "type": "object",
                     "properties": {
                         "action": { "enum": ["create", "rename", "setEnabled", "delete"] },
-                        "id": { "type": "string", "minLength": 1 },
+                        "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                         "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_VIRTUAL_BUS_NAME_CHARS },
                         "enabled": { "type": "boolean" }
                     },
@@ -1578,7 +1578,7 @@ fn virtual_device_item_schema() -> Value {
     json!({
         "type": "object",
         "properties": {
-            "id": { "type": "string", "minLength": 1 },
+            "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
             "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_VIRTUAL_BUS_NAME_CHARS },
             "direction": { "const": "bidirectional" },
             "channels": { "const": 2 },
@@ -6314,6 +6314,21 @@ mod tests {
         assert_eq!(
             virtual_devices["inputSchema"]["properties"]["limit"]["maximum"],
             MAX_VIRTUAL_DEVICE_LIST_ITEMS
+        );
+        assert_eq!(
+            virtual_devices["outputSchema"]["oneOf"][0]["items"]["properties"]["id"]["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
+        );
+        let virtual_device_plan = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "virtualDevices.plan")
+            .unwrap();
+        assert_eq!(
+            virtual_device_plan["inputSchema"]["properties"]["operation"]["properties"]["id"]
+                ["maxLength"],
+            audiorouter_domain::MAX_ENTITY_ID_BYTES
         );
         assert!(description["events"]["stateCategories"]
             .as_array()
