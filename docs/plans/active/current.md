@@ -37,6 +37,10 @@ regression passes with the 78-test engine suite and strict Clippy. This is
 portable graph validation only; native routing and machine audio configuration
 are unchanged.
 
+The post-change workspace requalification also passed with all workspace
+features and the locked dependency set; the result is recorded in the M08
+release evidence. No live endpoint was opened for this source-only check.
+
 ## Native lifecycle and process-attribution acceptance (2026-09-08)
 
 With explicit live-audio authorization, the guarded `m00-native-live.ps1`

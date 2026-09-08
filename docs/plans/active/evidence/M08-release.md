@@ -856,6 +856,16 @@ loading, signing-mode changes, plugin/startup registration, and machine audio
 configuration were excluded and unchanged.
 # M08 release evidence
 
+## 2026-09-08 - Workspace requalification after linear topology guard (`a8a9fc14`)
+
+`cargo test --workspace --all-features --quiet --locked` passed all workspace
+suites, including engine (78), control (92), domain (57), DSP (27), plugin
+host (47) and worker (20), recording (30), storage (80), transport (18), and
+Windows audio (29). The focused engine Clippy and documentation validation also
+passed. This verifies the portable compiler change across workspace consumers;
+native driver ownership, signing, clean-machine, physical-latency, and manual
+UI gates remain open. No audio endpoint or machine configuration was changed.
+
 ## 2026-09-08 - Safe acceptance requalification at `4d9ce1f4`
 
 The complete `tests/acceptance/safe-all.ps1` chain passed at the current
