@@ -440,3 +440,13 @@ artifact preparation/verification, and documentation acceptance. Temporary
 outputs and checkouts were removed. No driver was installed or loaded, and no
 signing-mode, plugin/startup registration, or machine audio configuration
 changed.
+## Safe-chain requalification at `0e28f3a` (2026-09-07)
+
+The complete safe acceptance chain passed at the current pushed head: native
+compile, read-only endpoint format inventory (34 endpoints), disposable SysVAD
+x64 compile/package/API qualification, workspace tests, M01 CLI, M04 DSP and
+recording, M05 UI, M06 SDK/VST3, M07 headless, unsigned M08 artifact
+preparation, contracts, and documentation. Temporary build/checkouts were
+removed by the acceptance flow. Live audio, driver installation/loading,
+signing-mode changes, plugin/startup registration, installer, hardware, and
+manual UI/accessibility gates remain explicitly unattempted.
