@@ -1898,6 +1898,10 @@ impl CallbackMetrics {
         let Some(lateness) = std::time::Instant::now().checked_duration_since(deadline) else {
             return;
         };
+        self.record_deadline_lateness(lateness);
+    }
+
+    fn record_deadline_lateness(&self, lateness: std::time::Duration) {
         if lateness.is_zero() {
             return;
         }
@@ -3934,6 +3938,16 @@ mod tests {
             telemetry.deadline_lateness_histogram.iter().sum::<u64>(),
             telemetry.deadline_misses
         );
+    }
+
+    #[test]
+    fn deadline_telemetry_does_not_count_an_exactly_on_time_completion() {
+        let metrics = CallbackMetrics::default();
+        metrics.record_deadline_lateness(std::time::Duration::ZERO);
+        assert_eq!(metrics.deadline_misses(), 0);
+        assert_eq!(metrics.deadline_lateness_ns_total(), 0);
+        assert_eq!(metrics.deadline_lateness_ns_max(), 0);
+        assert_eq!(metrics.deadline_lateness_histogram().iter().sum::<u64>(), 0);
     }
 
     #[test]

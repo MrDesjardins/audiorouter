@@ -922,3 +922,11 @@ Deadline accounting now treats completion exactly at the supplied deadline as
 on time. Only strictly positive `Instant` lateness increments the miss count,
 lateness totals/maximum, and positive-only histogram. Engine tests (72), strict
 Clippy, formatting, diff checks, and documentation validation pass.
+
+## Deterministic exact-deadline regression (2026-09-08)
+
+A direct zero-duration lateness regression now proves that an exactly on-time
+completion does not increment deadline misses or the positive lateness
+histogram. Engine tests (73), strict Clippy, formatting, diff checks, and
+documentation validation pass. Native callback and hardware timing gates are
+unchanged.
