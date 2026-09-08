@@ -732,3 +732,11 @@ edit from reaching the transport. The regression uses supplementary Unicode
 characters to verify code-point counting rather than JavaScript UTF-16 units.
 UI tests, typecheck, build, and documentation validation are the evidence; the
 native shell and manual visual/accessibility gates remain open.
+
+## M05 UI acceptance requalification (2026-09-08)
+
+`tests/acceptance/m05-ui.ps1` passed: TypeScript typecheck, 14 Vitest files
+with 89 tests, and a temporary three-file production build. The build output
+was disposable and removed by the wrapper. This validates the portable UI
+contract/presentation surface; native shell packaging and manual visual,
+keyboard, screen-reader, and accessibility acceptance remain open.

@@ -48,6 +48,11 @@ worker-process tests passed with doc-tests and strict Clippy. Durable plans,
 backup/restore, recovery, privacy, authorization, and worker boundaries were
 exercised without audio or machine-configuration access.
 
+Requalified M05 UI acceptance on 2026-09-08: TypeScript typecheck, 14 Vitest
+files with 89 tests, and a temporary three-file production build passed. The
+portable UI surface remains validated; native shell packaging and manual
+visual/accessibility acceptance remain open.
+
 Added a source-level engine regression for the quantile-tail case that exposed
 the adapter harness defect: p99.9 may be below a rare absolute maximum. The
 engine suite now passes 76 tests plus doc-tests and strict Clippy, with the
