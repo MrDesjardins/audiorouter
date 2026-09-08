@@ -887,3 +887,18 @@ Engine tests (72), doc-tests, strict Clippy, formatting, and diff checks pass.
 This closes portable callback-integration readiness only. Native endpoint-owned
 callback period/deadline measurements, managed-driver lifecycle, signing,
 physical latency, and manual application acceptance remain open.
+
+## Shared-mode scheduler deadline qualification (2026-09-08)
+
+The authorized guarded adapter and explicitly selected VB-Audio route now call
+`RealtimeScheduler::process_once_with_deadline` for each processed 128-frame
+engine quantum. The acceptance wrappers require deadline-miss and lateness
+fields and validate their bounds alongside the existing processing histogram.
+
+The 300 ms adapter run processed 120 quanta with zero xruns, zero deadline
+misses, and zero deadline lateness. The routed run processed 112 quanta with
+zero xruns, zero deadline misses, and zero deadline lateness. Both runs stopped
+and reset their streams and verified unchanged media-device state. This is
+shared-mode endpoint-adapter evidence only; it does not establish managed
+virtual-driver ownership, production callback compliance, physical latency, or
+long-term soak behavior.

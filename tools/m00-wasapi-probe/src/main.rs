@@ -113,11 +113,10 @@ fn process_loopback_smoke(
     // the graph is fixed at 48 kHz. Keep the clock-domain conversion explicit;
     // this probe does not claim long-term drift correction because it has no
     // independent render clock.
-    let mut resampler = StreamingResampler::new(2, 1024)
-        .map_err(|_| AudioError::InvalidFrameSize)?;
+    let mut resampler =
+        StreamingResampler::new(2, 1024).map_err(|_| AudioError::InvalidFrameSize)?;
     let resample_ratio = 44_100.0_f64 / 48_000.0_f64;
-    let scheduler = RealtimeScheduler::new(8, 2, 128)
-        .map_err(|_| AudioError::InvalidFrameSize)?;
+    let scheduler = RealtimeScheduler::new(8, 2, 128).map_err(|_| AudioError::InvalidFrameSize)?;
     let generation = RuntimeGeneration::new(1);
     let _ = scheduler.publish(RuntimeGraph::prepare(
         generation,
@@ -131,77 +130,82 @@ fn process_loopback_smoke(
     while started.elapsed() < std::time::Duration::from_millis(duration_ms) {
         if capture.wait_for_data(10)? {
             while let Some(packet) = capture.read_packet(&mut buffer)? {
-            packets = packets.saturating_add(1);
-            source_frames = source_frames.saturating_add(packet.frames);
-            let sample_count = packet.frames as usize * capture.bytes_per_frame() / 2;
-            if sample_count > pcm16.len() || capture.bytes_per_frame() != 4 {
-                return Err(AudioError::InvalidFrameSize);
-            }
-            for (sample, bytes) in pcm16[..sample_count].iter_mut().zip(buffer[..sample_count * 2].chunks_exact(2)) {
-                *sample = i16::from_ne_bytes([bytes[0], bytes[1]]);
-            }
-            let mut offset = 0usize;
-            while offset < packet.frames as usize {
+                packets = packets.saturating_add(1);
+                source_frames = source_frames.saturating_add(packet.frames);
+                let sample_count = packet.frames as usize * capture.bytes_per_frame() / 2;
+                if sample_count > pcm16.len() || capture.bytes_per_frame() != 4 {
+                    return Err(AudioError::InvalidFrameSize);
+                }
+                for (sample, bytes) in pcm16[..sample_count]
+                    .iter_mut()
+                    .zip(buffer[..sample_count * 2].chunks_exact(2))
+                {
+                    *sample = i16::from_ne_bytes([bytes[0], bytes[1]]);
+                }
+                let mut offset = 0usize;
+                while offset < packet.frames as usize {
                     let consumed = quantum
                         .push_packet(&pcm16[offset * 2..sample_count])
-                    .map_err(|_| AudioError::InvalidFrameSize)?;
-                offset += consumed;
-                if consumed == 0 {
-                    if !quantum
-                        .pop_into(&mut source_block)
-                        .map_err(|_| AudioError::InvalidFrameSize)?
-                    {
-                        return Err(AudioError::InvalidFrameSize);
-                    }
-                    let accepted = resampler
-                        .push(&source_block)
                         .map_err(|_| AudioError::InvalidFrameSize)?;
-                    if accepted != source_block.frames() {
-                        return Err(AudioError::BufferTooSmall {
-                            required: source_block.frames(),
-                            available: accepted,
-                        });
-                    }
-                    loop {
-                        let produced = resampler
-                            .process(&mut engine_block, resample_ratio)
-                            .map_err(|_| AudioError::InvalidFrameSize)?;
-                        if produced == 0 {
-                            break;
-                        }
-                        if produced != engine_block.frames() {
+                    offset += consumed;
+                    if consumed == 0 {
+                        if !quantum
+                            .pop_into(&mut source_block)
+                            .map_err(|_| AudioError::InvalidFrameSize)?
+                        {
                             return Err(AudioError::InvalidFrameSize);
                         }
-                        quantum_blocks = quantum_blocks.saturating_add(1);
-                        engine_frames = engine_frames.saturating_add(engine_block.frames() as u32);
-                        let mut input = scheduler
-                            .acquire_input()
-                            .ok_or(AudioError::BufferTooSmall {
-                                required: 128,
-                                available: 0,
-                            })?;
-                        input
-                            .copy_from(&engine_block)
+                        let accepted = resampler
+                            .push(&source_block)
                             .map_err(|_| AudioError::InvalidFrameSize)?;
-                        scheduler
-                            .submit_input(input)
-                            .map_err(|_| AudioError::InvalidFrameSize)?;
-                        let processed = scheduler
-                            .process_once()
-                            .map_err(|_| AudioError::InvalidFrameSize)?;
-                        if processed != Some(generation) {
-                            return Err(AudioError::InvalidFrameSize);
+                        if accepted != source_block.frames() {
+                            return Err(AudioError::BufferTooSmall {
+                                required: source_block.frames(),
+                                available: accepted,
+                            });
                         }
-                        let output = scheduler
-                            .receive_output_for_generation(generation)
-                            .ok_or(AudioError::InvalidFrameSize)?;
-                        scheduler
-                            .output()
-                            .try_recycle(output)
-                            .map_err(|_| AudioError::InvalidFrameSize)?;
+                        loop {
+                            let produced = resampler
+                                .process(&mut engine_block, resample_ratio)
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                            if produced == 0 {
+                                break;
+                            }
+                            if produced != engine_block.frames() {
+                                return Err(AudioError::InvalidFrameSize);
+                            }
+                            quantum_blocks = quantum_blocks.saturating_add(1);
+                            engine_frames =
+                                engine_frames.saturating_add(engine_block.frames() as u32);
+                            let mut input =
+                                scheduler
+                                    .acquire_input()
+                                    .ok_or(AudioError::BufferTooSmall {
+                                        required: 128,
+                                        available: 0,
+                                    })?;
+                            input
+                                .copy_from(&engine_block)
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                            scheduler
+                                .submit_input(input)
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                            let processed = scheduler
+                                .process_once()
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                            if processed != Some(generation) {
+                                return Err(AudioError::InvalidFrameSize);
+                            }
+                            let output = scheduler
+                                .receive_output_for_generation(generation)
+                                .ok_or(AudioError::InvalidFrameSize)?;
+                            scheduler
+                                .output()
+                                .try_recycle(output)
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
+                        }
                     }
                 }
-            }
             }
         }
     }
@@ -271,15 +275,12 @@ fn adapter_smoke(
         return Err(AudioError::InvalidFrameSize);
     }
     if route
-        && (!render_info.is_ieee_float32()
-            || render_info.channels == 0
-            || render_info.channels > 2)
+        && (!render_info.is_ieee_float32() || render_info.channels == 0 || render_info.channels > 2)
     {
         return Err(AudioError::InvalidFrameSize);
     }
     let mut monitor = EndpointMonitor::start()?;
-    let mut capture =
-        SharedCapture::open_refreshed_bound(&mut monitor, capture_info, 1_000_000)?;
+    let mut capture = SharedCapture::open_refreshed_bound(&mut monitor, capture_info, 1_000_000)?;
     let mut render = SharedRender::open_refreshed_bound(&mut monitor, render_info, 1_000_000)?;
     let scheduler = RealtimeScheduler::new(8, usize::from(capture_info.channels), 128)
         .map_err(|_| AudioError::InvalidFrameSize)?;
@@ -316,7 +317,14 @@ fn adapter_smoke(
         let mut drift = (capture_info.sample_rate_hz != render_info.sample_rate_hz)
             // Keep the controller target at the midpoint of the bounded
             // resampler FIFO so both clock directions have room to recover.
-            .then(|| DriftController::new(capture_info.sample_rate_hz, render_info.sample_rate_hz, 512, 100.0))
+            .then(|| {
+                DriftController::new(
+                    capture_info.sample_rate_hz,
+                    render_info.sample_rate_hz,
+                    512,
+                    100.0,
+                )
+            })
             .transpose()
             .map_err(|_| AudioError::InvalidFrameSize)?;
         let mut streaming_resampler = (capture_info.sample_rate_hz != render_info.sample_rate_hz)
@@ -378,9 +386,9 @@ fn adapter_smoke(
                             let resampler = streaming_resampler
                                 .as_mut()
                                 .ok_or(AudioError::InvalidFrameSize)?;
-                            let accepted = resampler.push(&source_block).map_err(|_| {
-                                AudioError::InvalidFrameSize
-                            })?;
+                            let accepted = resampler
+                                .push(&source_block)
+                                .map_err(|_| AudioError::InvalidFrameSize)?;
                             if accepted != source_block.frames() {
                                 return Err(AudioError::BufferTooSmall {
                                     required: source_block.frames(),
@@ -394,7 +402,10 @@ fn adapter_smoke(
                                 .process(
                                     &mut block,
                                     drift.as_ref().map_or_else(
-                                        || capture_info.sample_rate_hz as f64 / render_info.sample_rate_hz as f64,
+                                        || {
+                                            capture_info.sample_rate_hz as f64
+                                                / render_info.sample_rate_hz as f64
+                                        },
                                         DriftController::adjusted_ratio,
                                     ),
                                 )
@@ -416,7 +427,13 @@ fn adapter_smoke(
                             continue;
                         }
                         let processed_generation = scheduler
-                            .process_once()
+                            .process_once_with_deadline(
+                                std::time::Instant::now()
+                                    .checked_add(std::time::Duration::from_nanos(
+                                        (128_u64 * 1_000_000_000) / 48_000,
+                                    ))
+                                    .unwrap_or_else(std::time::Instant::now),
+                            )
                             .map_err(|_| AudioError::InvalidFrameSize)?;
                         if let Some(output) = scheduler.receive_output() {
                             if processed_generation != Some(generation)
@@ -525,9 +542,7 @@ fn adapter_smoke(
         let resampler_queued_frames = streaming_resampler
             .as_ref()
             .map_or(0, StreamingResampler::queued_frames);
-        let drift_correction_ppm = drift
-            .as_ref()
-            .map_or(0.0, DriftController::correction_ppm);
+        let drift_correction_ppm = drift.as_ref().map_or(0.0, DriftController::correction_ppm);
         let processing_time_histogram_samples = telemetry
             .processing_time_histogram
             .iter()
@@ -546,6 +561,8 @@ fn adapter_smoke(
             || telemetry.xruns != 0
             || telemetry.input_overruns != 0
             || telemetry.output_overruns != 0
+            || telemetry.deadline_misses > telemetry.processed_quanta
+            || telemetry.deadline_lateness_ns_total < telemetry.deadline_lateness_ns_max
             || resampler_queued_frames > 1024
             || drift_correction_ppm.abs() > 100.0
         {
@@ -555,7 +572,7 @@ fn adapter_smoke(
             )));
         }
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={} scheduler_deadline_misses={} scheduler_deadline_lateness_ns_total={} scheduler_deadline_lateness_ns_max={}",
             capture_info.id,
             render_info.id,
             capture_packets,
@@ -577,7 +594,10 @@ fn adapter_smoke(
             telemetry.processing_time_ns_total,
             telemetry.processing_time_ns_max,
             processing_time_histogram_samples,
-            processing_time_histogram
+            processing_time_histogram,
+            telemetry.deadline_misses,
+            telemetry.deadline_lateness_ns_total,
+            telemetry.deadline_lateness_ns_max
         );
         Ok(())
     })();
