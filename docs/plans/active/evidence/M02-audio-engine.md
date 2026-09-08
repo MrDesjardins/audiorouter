@@ -819,3 +819,12 @@ diff checks, and documentation validation passed. The histogram is portable
 instrumentation readiness only; it does not establish native callback p99.9 or
 deadline compliance until a production-style native scheduler owns the endpoint
 callback.
+
+## Inactive-runtime timing regression (2026-09-08)
+
+The engine regression suite now covers the pre-activation silence path: it
+verifies that an inactive `RuntimeProcessor` records exactly one nonzero timing
+observation while leaving processed-quanta telemetry at zero and clearing the
+block. Engine tests (71), strict Clippy, formatting, diff checks, and workspace
+compilation passed. This remains portable instrumentation evidence and does not
+establish native callback deadline compliance.
