@@ -67,6 +67,18 @@ were removed and the media state remained unchanged. This validates digital
 signal propagation and cadence only; calibrated physical acoustic latency and
 managed-driver ownership remain open.
 
+## Safe acceptance requalification at current head (2026-09-08)
+
+After a sandbox-only `Get-PnpDevice` permission failure, the complete
+`tests/acceptance/safe-all.ps1` chain was rerun with authorized native access
+and passed. It covered M00 toolchain/native compile and 34-endpoint format
+inventory, disposable pinned SysVAD x64 compile/package/API validation, M01
+CLI, M04 DSP/recording, M05 UI (91 tests plus typecheck/build), M06 SDK/VST3,
+M07 headless control/CLI/MCP/plugin validation, unsigned M08 artifact
+preparation, 158-ID traceability, and documentation validation (51 Markdown
+files/160 links). Temporary artifacts and checkouts were removed. No driver
+was installed or loaded and no machine audio configuration changed.
+
 ## Durable graph-history retention bound (2026-09-08)
 
 Closed a persistence retention gap in M01/STATE foundations. The SQLite
