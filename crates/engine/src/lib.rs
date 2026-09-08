@@ -1718,6 +1718,8 @@ pub struct CallbackMetrics {
     repaired_samples: AtomicU64,
     clipped_samples: AtomicU64,
     xruns: AtomicU64,
+    processing_time_ns_total: AtomicU64,
+    processing_time_ns_max: AtomicU64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1798,6 +1800,18 @@ impl CallbackMetrics {
         self.xruns.load(Ordering::Relaxed)
     }
 
+    /// Total monotonic processing time observed at the runtime boundary.
+    /// This is diagnostic data only; it is updated without allocation, locks,
+    /// logging, or I/O and is read from a control/diagnostics thread.
+    pub fn processing_time_ns_total(&self) -> u64 {
+        self.processing_time_ns_total.load(Ordering::Relaxed)
+    }
+
+    /// Maximum monotonic processing time observed for one runtime block.
+    pub fn processing_time_ns_max(&self) -> u64 {
+        self.processing_time_ns_max.load(Ordering::Relaxed)
+    }
+
     pub fn record_clipping(&self, samples: usize) {
         self.clipped_samples
             .fetch_add(samples as u64, Ordering::Relaxed);
@@ -1805,6 +1819,27 @@ impl CallbackMetrics {
 
     pub fn record_xrun(&self) {
         self.xruns.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_processing_time(&self, duration: std::time::Duration) {
+        let nanos = u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX);
+        let _ = self.processing_time_ns_total.fetch_update(
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+            |value| Some(value.saturating_add(nanos)),
+        );
+        let mut current = self.processing_time_ns_max.load(Ordering::Relaxed);
+        while nanos > current {
+            match self.processing_time_ns_max.compare_exchange_weak(
+                current,
+                nanos,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(observed) => current = observed,
+            }
+        }
     }
 
     fn record(&self, repaired: usize) {
@@ -2595,13 +2630,16 @@ impl RuntimeProcessor {
     /// Process one block and return the active generation. Before a graph is
     /// published, the block is cleared and `None` is returned.
     pub fn process(&self, block: &mut AudioBlock) -> Option<RuntimeGeneration> {
+        let started = std::time::Instant::now();
         let Some(graph) = self.publication.load() else {
             block.clear();
+            self.metrics.record_processing_time(started.elapsed());
             return None;
         };
         self.privacy_mute.apply(block);
         graph.process_instrumented(block, &self.metrics);
         self.meter.observe(block);
+        self.metrics.record_processing_time(started.elapsed());
         Some(graph.generation())
     }
 
@@ -2696,6 +2734,8 @@ pub struct SchedulerTelemetry {
     pub processed_quanta: u64,
     pub repaired_samples: u64,
     pub xruns: u64,
+    pub processing_time_ns_total: u64,
+    pub processing_time_ns_max: u64,
     pub active_generation: Option<RuntimeGeneration>,
 }
 
@@ -2757,6 +2797,8 @@ impl RealtimeScheduler {
             processed_quanta: self.processor.metrics().processed_quanta(),
             repaired_samples: self.processor.metrics().repaired_samples(),
             xruns: self.processor.metrics().xruns(),
+            processing_time_ns_total: self.processor.metrics().processing_time_ns_total(),
+            processing_time_ns_max: self.processor.metrics().processing_time_ns_max(),
             active_generation: self
                 .processor
                 .publication
@@ -3711,18 +3753,19 @@ mod tests {
         assert_eq!(output.channel(0).unwrap(), &[0.5, -1.0]);
         assert_eq!(output.generation(), 21);
         scheduler.output().try_recycle(output).unwrap();
+        let telemetry = scheduler.telemetry();
+        assert_eq!(telemetry.input_overruns, 0);
+        assert_eq!(telemetry.input_underruns, 0);
+        assert_eq!(telemetry.output_overruns, 0);
+        assert_eq!(telemetry.output_underruns, 0);
+        assert_eq!(telemetry.processed_quanta, 1);
+        assert_eq!(telemetry.repaired_samples, 0);
+        assert_eq!(telemetry.xruns, 0);
+        assert!(telemetry.processing_time_ns_max > 0);
+        assert!(telemetry.processing_time_ns_total >= telemetry.processing_time_ns_max);
         assert_eq!(
-            scheduler.telemetry(),
-            SchedulerTelemetry {
-                input_overruns: 0,
-                input_underruns: 0,
-                output_overruns: 0,
-                output_underruns: 0,
-                processed_quanta: 1,
-                repaired_samples: 0,
-                xruns: 0,
-                active_generation: Some(RuntimeGeneration::new(21)),
-            }
+            telemetry.active_generation,
+            Some(RuntimeGeneration::new(21))
         );
         assert_eq!(scheduler.input().ready(), 0);
         assert_eq!(scheduler.output().ready(), 0);

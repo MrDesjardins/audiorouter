@@ -790,3 +790,18 @@ configuration, and media-device identity were unchanged. This is bounded
 shared-mode adapter/route evidence only; it does not prove managed AudioRouter
 driver lifecycle, Discord/OBS compatibility, physical latency, or callback
 deadline compliance.
+
+## Runtime processing-time instrumentation (2026-09-08)
+
+`CallbackMetrics` now records saturating total and maximum monotonic processing
+duration in nanoseconds at the `RuntimeProcessor` boundary. `SchedulerTelemetry`
+exposes both values for off-thread diagnostics. The update uses atomics only:
+it allocates no memory, takes no locks, logs nothing, and performs no I/O.
+Processing without an active graph is timed as well, so a future native callback
+can account for the complete runtime boundary rather than only successful graph
+blocks.
+
+The engine suite (70 tests), locked workspace tests/doc-tests, strict Clippy,
+formatting, and diff checks passed. This is instrumentation readiness and
+portable processing evidence; it is not native callback p99.9/deadline evidence
+until a production-style native scheduler owns the endpoint callback.
