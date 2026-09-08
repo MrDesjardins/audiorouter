@@ -161,3 +161,26 @@ the driver, APO/INF, and `sysvad.cat` outputs. The exact temporary checkout
 and generated outputs were removed. The build's local automatic test signature
 is not production signing evidence; no driver was installed or loaded, test
 signing was not enabled, and no machine audio configuration changed.
+
+## 2026-09-08 â€” Installed-toolchain qualification
+
+The read-only M00 toolchain acceptance verified Visual Studio Community
+18.9.2, MSVC 14.51.36231, and Windows SDK/WDK `10.0.28000.0`. The repository
+native probe compile passed with the same installed headers, libraries, and
+WDK properties.
+
+The authorized `tools/m00-sysvad/qualify.ps1` run used a disposable checkout
+of Microsoft driver-samples at revision
+`197ba2156a60e2b76fcd4820bae594223e91a1e9` and WIL at
+`3c00e7f1d8cf9930bbb8e5be3ef0df65c84e8928`. The normal x64 build compiled
+the sample driver and APO targets, generated the x64 package/catalog, and
+reported successful package/API validation with no signability errors or
+warnings. The sample's automatic test signature is not production signing
+evidence. The exact temporary checkout and outputs were removed by the
+qualification helper.
+
+This closes the local compile/package prerequisite but not AudioRouter-specific
+driver adaptation, isolated target-machine testing, installation/loading,
+restart/rebind, uninstall, Secure Boot/HVCI, or production signing. No driver
+was installed or loaded, and no test-signing mode, plugin/startup registration,
+or machine audio configuration changed.

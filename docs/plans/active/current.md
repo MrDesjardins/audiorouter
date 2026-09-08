@@ -123,6 +123,28 @@ The same ceiling is advertised as
 `system.describe.limits.maxOperationJournalEntries`, with a self-consistency
 regression tied to the storage constant.
 
+## Windows SDK/WDK installation and SysVAD qualification (2026-09-08)
+
+The requested Windows SDK is already installed through the native Visual
+Studio/WDK toolchain; no additional SDK installer was run. Read-only
+verification found SDK/WDK `10.0.28000.0`, MSVC `14.51.36231`, audio and kernel
+headers, x64 libraries, and `signtool.exe`. The repository native compile gate
+passed with that toolchain.
+
+The authorized disposable SysVAD qualification cloned the pinned Microsoft
+driver-samples revision, initialized its pinned WIL submodule, built the x64
+sample and APO targets, generated the package/catalog, and passed normal
+package/API validation. The checkout and all generated outputs were removed.
+This closes the host toolchain/build prerequisite only; it does not establish
+AudioRouter driver behavior, target-machine lifecycle, production signing,
+installation, or clean uninstall evidence. No driver, plugin, startup
+registration, or machine audio configuration changed.
+
+The control-plane audit also confirmed that session-import, startup, and
+virtual-device plan maps are already expiry-pruned and capped, while the
+operation outcome and plugin inventory caches have independent bounds. No
+redundant retention change was made.
+
 ## Editor lifecycle policy groundwork (2026-09-08)
 
 Closed a control-plane portion of M06/PLUG-04: `EditorLifecycle` models
