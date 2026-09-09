@@ -1,8 +1,11 @@
 import {
   Background,
   Controls,
+  Handle,
   MiniMap,
+  Position,
   ReactFlow,
+  type Connection,
   type Edge as FlowEdge,
   type Node as FlowNode,
 } from "@xyflow/react";
@@ -16,6 +19,7 @@ type SessionFlowCanvasProps = {
   session: Session;
   selectedNodeId: string;
   onSelect: (id: string) => void;
+  onConnect: (connection: Connection) => void;
 };
 
 function positionFor(index: number) {
@@ -26,7 +30,7 @@ function positionFor(index: number) {
   };
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onConnect }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
@@ -37,10 +41,12 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
     data: {
       label: (
         <div className="flow-node-content" aria-label={`${node.name}, ${node.kind}`}>
+          {node.ports.filter((port) => port.direction === "input").map((port, portIndex) => <Handle key={`input-${port.name}`} type="target" id={port.name} position={Position.Left} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} input`} />)}
           <span className="node-kind">{node.kind}</span>
           <strong>{node.name}</strong>
           <small>{node.ports.length} port{node.ports.length === 1 ? "" : "s"} - {node.enabled ? "enabled" : "disabled"}</small>
           <span className="flow-port-list">{nodePortLabels(node).map((port) => <small key={port}>{port}</small>)}</span>
+          {node.ports.filter((port) => port.direction === "output").map((port, portIndex) => <Handle key={`output-${port.name}`} type="source" id={port.name} position={Position.Right} style={{ top: `${35 + portIndex * 18}px` }} aria-label={`${node.name} ${port.name} output`} />)}
         </div>
       ),
     },
@@ -72,9 +78,10 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect }: Session
         nodes={nodes}
         edges={edges}
         fitView
-        nodesConnectable={false}
+        nodesConnectable
         nodesDraggable
         onNodeClick={(_, node) => onSelect(node.id)}
+        onConnect={onConnect}
         onNodeDragStop={(_, node) => { const next = { ...positions, [node.id]: node.position }; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >

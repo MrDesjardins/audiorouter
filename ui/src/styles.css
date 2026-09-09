@@ -33,7 +33,7 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .session-flow-canvas { position: relative; height: 520px; min-height: 360px; margin-top: 1rem; border: 1px solid #293344; border-radius: 8px; overflow: hidden; background: #101722; }
 .session-flow-toolbar { position: absolute; z-index: 5; display: flex; align-items: center; gap: .75rem; padding: .5rem; }
 .session-flow-canvas .react-flow__node { font-size: .85rem; }
-.session-flow-canvas .react-flow__handle { opacity: 0; }
+.session-flow-canvas .react-flow__handle { width: .55rem; height: .55rem; opacity: .85; background: var(--accent, #65d1b5); border: 1px solid var(--panel, #162132); }
 .flow-node-content { display: grid; gap: .25rem; text-align: left; }
 .flow-node-content strong { font-size: .95rem; }
 .flow-node-content small { color: #a9b7ca; }
