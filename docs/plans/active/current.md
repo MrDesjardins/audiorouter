@@ -56,6 +56,15 @@ release completion.
   contract is found; retain independent-plugin, native-shell/HWND, production
   driver, signing, installer, and physical-latency gates.
 
+- Requalified M08 unsigned release preparation on 2026-09-09: optimized CLI and
+  plugin-worker artifacts, production UI archive, Cargo/npm SBOMs, third-party
+  notices, manifest hashes, archive contents, and unsigned/publication-blocker
+  assertions all passed. Temporary release output was removed; no installer,
+  driver, signing, or audio configuration action occurred.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; retain independent-plugin, native-shell/HWND, production
+  driver, signing, installer, clean-machine, and physical-latency gates.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `f6ec7a1c` on 2026-09-09. VS2026/WDK discovery and native compile,
   read-only 31-endpoint inventory, disposable SysVAD x64 compile/package/API/
