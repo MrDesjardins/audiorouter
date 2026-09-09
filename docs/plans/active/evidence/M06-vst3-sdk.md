@@ -1260,6 +1260,14 @@ was accessed.
 
 ## ReaPlugs compatibility inspection (2026-09-08)
 
+The scanner now identifies the six x64 DLLs as `vst2` from the PE export
+`VSTPluginMain`, while retaining `unsupportedFormat` compatibility. This is
+format identity evidence only; no DLL was loaded or executed. The VST2 worker
+adapter, rights review, and runtime compatibility matrix remain open under
+`PLUG-07`. The CLI scan passed with six entries; plugin-host (47), DSP (28),
+and strict package Clippy passed. No audio endpoint or machine configuration
+was accessed.
+
 Six user-installed ReaPlugs effect DLLs were copied to the ignored repository
 fixture directory for a read-only compatibility scan. The scanner identified
 all six as x64 but classified them as `unsupportedFormat` with no VST3 class

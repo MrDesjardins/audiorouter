@@ -453,15 +453,14 @@ fn inspect_binary_with_control(
     {
         return Err(InspectionError::OutsideConfiguredRoot);
     }
-    let format = match canonical
+    let mut format = match canonical
         .extension()
         .and_then(|value| value.to_str())
         .map(|value| value.to_ascii_lowercase())
         .as_deref()
     {
         Some("vst3") => PluginFormat::Vst3,
-        // A DLL extension alone does not prove VST2; retain the binary as an
-        // inspected unknown candidate rather than advertising compatibility.
+        // The PE export is checked below before a DLL is classified as VST2.
         Some("dll") => PluginFormat::Unknown,
         _ => return Err(InspectionError::UnsupportedExtension),
     };
@@ -508,6 +507,9 @@ fn inspect_binary_with_control(
     let architecture = parse_pe_architecture(&bytes).ok_or(InspectionError::NotPe)?;
     if architecture != PeArchitecture::X64 {
         return Err(InspectionError::UnsupportedArchitecture);
+    }
+    if format == PluginFormat::Unknown && pe_export_exists(&bytes, b"VSTPluginMain") == Some(true) {
+        format = PluginFormat::Vst2;
     }
     let digest = Sha256::digest(&bytes);
     let plugin_metadata = if format == PluginFormat::Vst3 && canonical.is_dir() {
@@ -754,6 +756,84 @@ fn parse_pe_architecture(bytes: &[u8]) -> Option<PeArchitecture> {
         0xaa64 => Some(PeArchitecture::Arm64),
         _ => Some(PeArchitecture::Unknown),
     }
+}
+
+fn pe_export_exists(bytes: &[u8], wanted: &[u8]) -> Option<bool> {
+    let Some(pe_offset) = bytes
+        .get(0x3c..0x40)
+        .and_then(|value| value.try_into().ok())
+        .map(u32::from_le_bytes)
+        .map(|value| value as usize)
+    else {
+        return Some(false);
+    };
+    let Some(number_of_sections) = read_u16(bytes, pe_offset.checked_add(6)?) else {
+        return Some(false);
+    };
+    let Some(optional_size) = read_u16(bytes, pe_offset.checked_add(20)?) else {
+        return Some(false);
+    };
+    let optional = pe_offset.checked_add(24)?;
+    if read_u16(bytes, optional)? != 0x20b {
+        return Some(false);
+    }
+    let export_rva = read_u32(bytes, optional.checked_add(112)?)?;
+    if export_rva == 0 {
+        return Some(false);
+    }
+    let sections = optional.checked_add(optional_size as usize)?;
+    let export_offset = rva_to_offset(bytes, export_rva, sections, number_of_sections)?;
+    let number_of_names = read_u32(bytes, export_offset.checked_add(24)?)? as usize;
+    let names_rva = read_u32(bytes, export_offset.checked_add(32)?)?;
+    let names_offset = rva_to_offset(bytes, names_rva, sections, number_of_sections)?;
+    for index in 0..number_of_names {
+        let entry = names_offset.checked_add(index.checked_mul(4)?)?;
+        let name_rva = read_u32(bytes, entry)?;
+        let name_offset = rva_to_offset(bytes, name_rva, sections, number_of_sections)?;
+        let end = bytes[name_offset..]
+            .iter()
+            .position(|byte| *byte == 0)
+            .and_then(|length| name_offset.checked_add(length))?;
+        if &bytes[name_offset..end] == wanted {
+            return Some(true);
+        }
+    }
+    Some(false)
+}
+
+fn read_u16(bytes: &[u8], offset: usize) -> Option<u16> {
+    Some(u16::from_le_bytes(
+        bytes.get(offset..offset.checked_add(2)?)?.try_into().ok()?,
+    ))
+}
+
+fn read_u32(bytes: &[u8], offset: usize) -> Option<u32> {
+    Some(u32::from_le_bytes(
+        bytes.get(offset..offset.checked_add(4)?)?.try_into().ok()?,
+    ))
+}
+
+fn rva_to_offset(
+    bytes: &[u8],
+    rva: u32,
+    sections: usize,
+    number_of_sections: u16,
+) -> Option<usize> {
+    for index in 0..usize::from(number_of_sections) {
+        let section = sections.checked_add(index.checked_mul(40)?)?;
+        let virtual_size = read_u32(bytes, section.checked_add(8)?)?;
+        let virtual_address = read_u32(bytes, section.checked_add(12)?)?;
+        let raw_size = read_u32(bytes, section.checked_add(16)?)?;
+        let size = virtual_size.max(raw_size);
+        if rva >= virtual_address && rva - virtual_address < size {
+            let raw_offset = read_u32(bytes, section.checked_add(20)?)?;
+            return raw_offset
+                .checked_add(rva - virtual_address)
+                .map(|offset| offset as usize)
+                .filter(|offset| *offset < bytes.len());
+        }
+    }
+    None
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -18,9 +18,9 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 The installed ReaPlugs effect DLLs were copied only to the ignored
 `third_party/local-test-fixtures/ReaPlugs` directory for compatibility testing.
-The scanner classified all six x64 binaries as `unsupportedFormat` with no
-VST3 class IDs. A read-only PE export inspection found `VSTPluginMain` in all
-six, confirming the legacy VST2 entry-point boundary; none was loaded or
+The scanner now identifies all six x64 binaries as `vst2` by their read-only
+PE export while retaining `unsupportedFormat` compatibility and no VST3 class
+IDs. This confirms the legacy VST2 entry-point boundary; none was loaded or
 executed. Built-in native transformation is the supported path: DSP and engine
 revalidation passed gain/EQ, gate,
 compression, limiting, delay, pitch, metering, finite-sample repair, and
