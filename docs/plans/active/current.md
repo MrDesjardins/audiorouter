@@ -55,6 +55,12 @@ release completion.
   plugin-host Clippy, formatting, and diff checks passed; no plugin or machine
   configuration changed.
 
+- Closed a second PLUG-03/PLUG-07 format-boundary gap on 2026-09-09: the native
+  VST2 adapter now enforces the worker's 8–192 kHz negotiated-rate range and
+  rejects oversized block sizes before dispatching setup opcodes. Boundary
+  regressions verify invalid rates/sizes cause zero dispatcher calls; focused
+  VST2 tests, strict Clippy, formatting, and diff checks pass.
+
 - Requalified the locked workspace and guarded M00-M08 chain at pushed head
   `4dc9b67a` on 2026-09-09: workspace tests/doc-tests, strict all-target
   Clippy, formatting, 31-endpoint read-only inventory, disposable pinned
