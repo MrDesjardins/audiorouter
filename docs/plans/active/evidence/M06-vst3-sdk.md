@@ -1953,3 +1953,16 @@ feature-enabled process regression passed 23 tests with six expected
 fixture-dependent tests ignored; ordinary single-stream constructors remain
 unchanged. This is a production-shaped process-owner contract, not yet the
 production VST3 plugin worker or realtime scheduling path.
+
+## Guarded acceptance after native parameter delivery (2026-09-09)
+
+The complete guarded `tests/acceptance/safe-all.ps1` chain passed after the
+native offline loader began sending a bounded `IParameterChanges` event:
+VS2026/MSVC/SDK/WDK discovery and native compile, read-only inventory of 31
+audio endpoints, disposable pinned SysVAD x64 qualification, M01/M04/M05,
+VST3 validator and AGain auxiliary-bus/parameter probes, VST2 modern/legacy/
+fault fixtures, M07, unsigned M08 artifacts, 159 traceability mappings, and
+documentation validation covering 51 Markdown files and 163 local links.
+The wrapper cleaned temporary outputs. It did not install or load a driver,
+register a plugin, change signing mode, open an audio stream, or persist a
+machine audio configuration.
