@@ -117,6 +117,13 @@ Callers with a known graph rate can use
 `SupervisedWorkerProcess::spawn_with_sample_rate` or its verified variant;
 rates are bounded to 8–192 kHz and are passed explicitly to the worker.
 
+The repeatable native matrix currently covers all six local ReaPlugs effects
+(ReaComp, ReaDelay, ReaEQ, ReaFIR, ReaGate, and ReaXcomp) at 44.1, 48, and
+96 kHz (18 processing combinations). The explicitly selected installed
+Pitchproof x64 VST2 binary has passed the same three processing rates.
+These are compatibility observations only: they do not establish licensing
+or redistribution rights, editor compatibility, or release qualification.
+
 Run the reproducible local qualification with:
 
 ```powershell
