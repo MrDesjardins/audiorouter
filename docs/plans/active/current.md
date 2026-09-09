@@ -47,6 +47,22 @@ release completion.
   installer, shell/HWND, physical-latency, and independent-plugin gates.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `8476aeae` on 2026-09-09 after the UI-03 topology editor
+  integration. Toolchain/native compile, read-only endpoint inventory,
+  disposable SysVAD qualification, M01/M04/M05, pinned VST3 SDK/native
+  workers, repository VST2 modern/legacy/state/fault fixtures, M07 (including
+  67 plugin-host and 13 worker-process tests), unsigned M08 artifacts, 159
+  traceability IDs, and documentation validation (51 Markdown files/163 local
+  links) passed. The run removed 13 run-owned temporary children and used
+  logs outside the repository; no driver installation/loading, signing-mode
+  change, plugin/startup registration, audio stream, or persistent machine
+  audio configuration occurred.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; otherwise retain independent-plugin, native-shell/HWND,
+  production-driver, signing, installer, clean-machine, and physical-latency
+  gates.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `0ee952ad` on 2026-09-09. Toolchain/native compile, read-only
   endpoint inventory, disposable SysVAD x64 compile/package/API/signability,
   M01/M04/M05 (including the current UI build and tests), pinned VST3 SDK and
