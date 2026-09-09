@@ -1315,6 +1315,25 @@ bounded VST2 editor flag and preferred rectangle response. This is discovery
 only: no HWND was supplied, no editor window was opened, and native UI-thread
 containment remains unqualified.
 
+## VST2 dispatcher opcode correction (2026-09-08)
+
+The Windows VST2 adapter had used shifted dispatcher constants for setup:
+sample-rate and block-size setup overlapped the VST2 chunk-state operations,
+and mains lifecycle was also offset. The adapter now uses the VST2 2.4 values
+`effSetSampleRate=10`, `effSetBlockSize=11`, and `effMainsChanged=12`; a Windows
+unit test locks these values alongside the existing editor and chunk opcodes.
+
+The complete ignored local ReaPlugs matrix was rerun individually after the
+correction. `reacomp-standalone.dll`, `readelay-standalone.dll`,
+`reaeq-standalone.dll`, `reafir_standalone.dll`, `reagate-standalone.dll`, and
+`reaxcomp-standalone.dll` each passed the verified x64 worker acceptance:
+contained load, parameter discovery and bounded automation, finite stereo
+processing, editor-capability discovery, bounded latency, expected state
+handling, and clean shutdown. This is stronger adapter/fixture evidence and
+explains the prior four failures as an AudioRouter ABI bug, but it is not
+blanket VST2 compatibility. No native editor HWND was created, no audio device
+was opened, and the ignored DLLs were not committed.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

@@ -82,17 +82,19 @@ The worker supervisor now passes only verified x64 VST2 identities to the
 contained worker. Plugin-host tests (50), worker-process tests (13), and strict
 Clippy passed.
 
-The opt-in native VST2 matrix loaded and processed ReaComp and ReaGate
-successfully. ReaDelay and ReaXComp exceeded the five-second worker response
-deadline; ReaEQ and ReaFIR terminated the worker during processing. These four
-remain explicit unsupported fixtures for this adapter revision and were
-contained without audio-device access.
+The opt-in native VST2 matrix now loads and processes all six copied ReaPlugs
+fixtures successfully inside the bounded worker. The cause of the earlier
+four-fixture failures was an adapter ABI defect: VST2 dispatcher opcodes for
+sample-rate, block-size, and mains lifecycle had been shifted onto the chunk
+state opcodes. Correcting them restored all six bounded acceptance runs; no
+audio-device access was involved. This is fixture evidence, not blanket VST2
+compatibility or release qualification.
 
 The worker host callback now answers only bounded version, 48 kHz sample-rate,
-and block-size queries. ReaEQ still exceeded the five-second response deadline
-with both short and 128-frame blocks, so the acceptance criteria were not
-relaxed to hide the incompatibility. ReaComp passed again with a 128-frame
-block after the lifecycle and sidechain fixes.
+and block-size queries. ReaComp, ReaGate, ReaDelay, ReaXComp, ReaEQ, and ReaFIR
+all passed the opt-in 128-frame worker acceptance after the dispatcher-opcode
+correction. The regression test remains per-binary and isolated so a future
+fixture failure cannot be generalized away.
 
 The opt-in ReaComp acceptance now also discovers its VST2 parameter descriptors
 and applies the first descriptor's bounded default-value event before the
@@ -109,9 +111,23 @@ worker's block-boundary automation semantics rather than pretending to be
 sample-accurate.
 
 The worker also exposes a read-only `DescribeEditor` response. ReaComp and
-ReaGate both passed bounded editor-capability/rectangle discovery. No HWND was
-created and no native editor was opened; UI-thread ownership, close/retry
-semantics, and editor isolation remain a separate gate.
+all five editor-capable ReaPlugs passed bounded editor-capability/rectangle
+discovery. No HWND was created and no native editor was opened; UI-thread
+ownership, close/retry semantics, and editor isolation remain a separate gate.
+
+## VST2 dispatcher opcode regression (2026-09-08)
+
+Corrected the Windows VST2 adapter's lifecycle dispatch constants to the VST2
+2.4 values: `effSetSampleRate=10`, `effSetBlockSize=11`, and
+`effMainsChanged=12`. The previous values overlapped the `effGetChunk` and
+`effSetChunk` state opcodes, so valid plugins could receive the wrong operation
+during setup and appear to hang or fail during processing. A Windows opcode
+regression test locks the mapping. The isolated opt-in matrix was rerun with
+each ignored ReaPlugs fixture: all six passed load, bounded parameter/control,
+process, editor-capability, latency, state behavior, and shutdown acceptance.
+This does not open an editor or qualify chunk-capable state because the current
+fixtures do not provide that evidence; no audio endpoint or machine setting
+was accessed.
 
 The locked all-workspace regression sweep then passed, including control (97),
 domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport

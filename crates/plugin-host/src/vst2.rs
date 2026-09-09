@@ -221,11 +221,11 @@ const EFF_OPEN: i32 = 0;
 #[cfg(windows)]
 const EFF_CLOSE: i32 = 1;
 #[cfg(windows)]
-const EFF_SET_BLOCK_SIZE: i32 = 23;
+const EFF_SET_SAMPLE_RATE: i32 = 10;
 #[cfg(windows)]
-const EFF_SET_SAMPLE_RATE: i32 = 24;
+const EFF_SET_BLOCK_SIZE: i32 = 11;
 #[cfg(windows)]
-const EFF_MAINS_CHANGED: i32 = 29;
+const EFF_MAINS_CHANGED: i32 = 12;
 #[cfg(windows)]
 const EFF_GET_PARAM_NAME: i32 = 8;
 #[cfg(windows)]
@@ -242,6 +242,21 @@ const AUDIO_MASTER_VERSION: i32 = 1;
 const AUDIO_MASTER_GET_SAMPLE_RATE: i32 = 10;
 #[cfg(windows)]
 const AUDIO_MASTER_GET_BLOCK_SIZE: i32 = 11;
+
+#[cfg(all(test, windows))]
+mod opcode_tests {
+    use super::*;
+
+    #[test]
+    fn uses_vst2_dispatcher_opcodes_for_lifecycle_and_state() {
+        assert_eq!(EFF_SET_SAMPLE_RATE, 10);
+        assert_eq!(EFF_SET_BLOCK_SIZE, 11);
+        assert_eq!(EFF_MAINS_CHANGED, 12);
+        assert_eq!(EFF_EDIT_GET_RECT, 13);
+        assert_eq!(EFF_GET_CHUNK, 23);
+        assert_eq!(EFF_SET_CHUNK, 24);
+    }
+}
 
 #[cfg(windows)]
 #[derive(Debug)]
