@@ -3697,6 +3697,7 @@ impl WorkerProcess {
         receive_worker_message(&self.reader, WORKER_RESPONSE_TIMEOUT)
     }
 
+    #[cfg(feature = "test-fixtures")]
     fn read_until_deadline(
         &mut self,
         deadline_tick: u64,

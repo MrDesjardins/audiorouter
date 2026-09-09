@@ -1,10 +1,12 @@
+#[cfg(feature = "test-fixtures")]
+use audiorouter_plugin_host::stage_engine_worker_result;
 #[cfg(all(windows, feature = "test-fixtures"))]
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
 use audiorouter_plugin_host::{
-    decode_worker_message, encode_worker_message, inspect_binary, stage_engine_worker_result,
-    worker_clock_tick, EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat,
-    PluginIdentity, PluginStateAsset, SharedAudioLayout, SharedAudioTransport,
-    SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
+    EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
+    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
+    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::{WorkerAudioBusLayout, WorkerBusSession};

@@ -20,6 +20,14 @@ worker-process suite then passed 27 tests with six expected fixture-dependent
 skips. This remains an echo-fixture integration check, not production VST3 or
 realtime callback evidence.
 
+The guarded `safe-all.ps1` chain was requalified after this handoff work:
+VS2026/WDK/native compile, read-only 31-endpoint inventory, disposable SysVAD
+package/API/signability checks, M01/M04/M05, VST3 validators and auxiliary
+probe, VST2 modern/legacy/fault fixtures, M07, unsigned M08 preparation,
+traceability, and 51-file/163-link documentation validation passed. Strict
+all-features and no-feature workspace Clippy also passed after test-only
+symbols were correctly feature-gated.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with

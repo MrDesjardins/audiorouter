@@ -409,7 +409,7 @@ fn run() -> Result<(), String> {
 fn run_multi_bus(
     plugin_sha256: String,
     layout: WorkerAudioBusLayout,
-    fixture_mode: Option<&str>,
+    _fixture_mode: Option<&str>,
 ) -> Result<(), String> {
     if layout.input_buses() != layout.output_buses() {
         return Err("multi-bus fixture requires symmetric input/output buses".into());
@@ -434,7 +434,7 @@ fn run_multi_bus(
         return Err("multi-bus worker requires Ready after HelloBuses".into());
     }
     #[cfg(feature = "test-fixtures")]
-    if fixture_mode == Some("hang") {
+    if _fixture_mode == Some("hang") {
         loop {
             std::thread::sleep(std::time::Duration::from_secs(60));
         }
