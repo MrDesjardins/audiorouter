@@ -1,5 +1,27 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Latest guarded requalification reconciliation
+
+The latest guarded runs supersede the endpoint counts from earlier runs while
+preserving those historical observations. `m00-native-live.ps1` passed all 13
+capture and 18 render endpoints at 100 ms, with one occupied render correctly
+classified. `m00-native-format-inventory.ps1` passed read-only activation and
+`GetMixFormat` inspection for 31 endpoints, including 48 kHz 32-bit
+extensible mono/stereo and 96 kHz 32-bit mono/eight-channel formats.
+
+The selected VB-Audio pair also passed event-driven capture/render at 200 ms
+(10,080 capture and 14,400 submitted render frames), endpoint loopback at 500
+ms capture/800 ms tone (72,054 nonzero payload bytes), and digital impulse
+correlation (97/100 groups, zero p95 spacing error, estimated onset 72.21 ms).
+The controlled process attribution and exclusion runs passed at 500 ms with
+21,609 frames/77,823 nonzero bytes and 22,050 frames respectively. The Rust
+process-loopback include/exclude run passed at 250 ms with 89/93 scheduler
+blocks and zero rejected packets, XRuns, and queue overruns. Every wrapper
+stopped/reset streams, removed temporary artifacts where applicable, and
+verified unchanged media state. These are current shared/event/process-loopback
+and digital-correlation observations; calibrated physical latency, actual PID
+reuse, managed-driver callback routing, and production signing remain open.
+
 ## 2026-09-08 - Current process restart identity requalification
 
 `cargo test -p audiorouter-windows-audio --locked -- --nocapture` passed all
