@@ -139,6 +139,13 @@ release completion.
   acoustic latency evidence; managed-driver, signing, and native-shell gates
   remain open.
 
+- Completed the remaining bounded native process-loopback probes on 2026-09-09:
+  process attribution captured 21,609 frames/76,370 nonzero bytes, and
+  process exclusion captured 22,050 frames; both child-process lifecycle runs
+  passed with unchanged media state and cleanup. These are API/lifecycle and
+  controlled-tree evidence only, not a full cross-process isolation threshold
+  or production virtual-driver claim.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI
