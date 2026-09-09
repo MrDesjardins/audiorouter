@@ -22,6 +22,15 @@ verified unchanged media state. These are current shared/event/process-loopback
 and digital-correlation observations; calibrated physical latency, actual PID
 reuse, managed-driver callback routing, and production signing remain open.
 
+## 2026-09-08 - Longer impulse correlation requalification
+
+The guarded native impulse wrapper was rerun with 1,000 impulses on the
+explicitly named VB-Audio virtual-cable pair. It detected 998 groups, with p95
+spacing error of 0 frames and estimated onset of 52.88 ms. Capture/render
+teardown, temporary cleanup, and media-state preservation passed. The onset is
+an uncalibrated digital-correlation estimate, not physical acoustic latency;
+managed-driver callback and production gates remain open.
+
 ## 2026-09-08 - Current process restart identity requalification
 
 `cargo test -p audiorouter-windows-audio --locked -- --nocapture` passed all
