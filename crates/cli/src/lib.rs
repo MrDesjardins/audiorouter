@@ -503,6 +503,18 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
     let mut plane = ControlPlane::with_storage("cli", database(args)?);
     let mut params = params;
     let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    if method == "recordings.recycle"
+        && params
+            .as_ref()
+            .and_then(|value| value.get("confirm"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        && idempotency_key.is_none()
+    {
+        return Err(CliError::InvalidArguments(
+            "--idempotency-key is required with --confirm".into(),
+        ));
+    }
     if let Some(key) = idempotency_key {
         if !matches!(
             method,
@@ -1934,7 +1946,7 @@ fn mcp_tools() -> Value {
         { "name": "set_privacy_mute", "description": "Latch or clear process-local privacy mute; requires capture scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["muted", "idempotencyKey"], "additionalProperties": false } },
         { "name": "clear_recovery_safe_mode", "description": "Clear the latched crash-recovery safe mode after stability is confirmed; requires session-control scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["idempotencyKey"], "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file; requires an idempotency key.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["recordingId", "idempotencyKey"], "additionalProperties": false } },
-        { "name": "recycle_recording", "description": "Preview or explicitly recycle a recording through the OS Recycle Bin; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "confirm": { "type": "boolean" } }, "required": ["recordingId"], "additionalProperties": false } },
+        { "name": "recycle_recording", "description": "Preview or explicitly recycle a recording through the OS Recycle Bin; confirmed recycling requires an idempotency key.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "confirm": { "type": "boolean" }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
         { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
         { "name": "control_session", "description": "Start or stop one session through the authorized lifecycle API with an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "action": { "enum": ["start", "stop"] }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "action", "idempotencyKey"], "additionalProperties": false } },

@@ -92,6 +92,12 @@ release completion.
   Read-only get/preview behavior remains keyless; the confirmed recycle path is
   intentionally tracked as a separate platform-dependent mutation slice.
 
+- Closed the confirmed-recycle key boundary on 2026-09-09: recycle previews
+  remain read-only without a key, while confirmed recycle requests—including
+  already-missing files—require a non-empty idempotency key before the file
+  action decision. Backend, CLI, MCP, focused tests, Clippy, formatting, diff,
+  and documentation checks passed; no real recording file was touched.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown

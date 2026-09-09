@@ -4723,6 +4723,17 @@ impl ControlPlane {
             .get("confirm")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        if confirm {
+            params
+                .get("idempotencyKey")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "idempotencyKey is required for confirmed recycle".into(),
+                    )
+                })?;
+        }
         let storage = self
             .storage
             .as_ref()
@@ -8896,7 +8907,11 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(12)),
             method: "recordings.recycle".into(),
-            params: Some(json!({ "recordingId": "recording-recycle", "confirm": true })),
+            params: Some(json!({
+                "recordingId": "recording-recycle",
+                "confirm": true,
+                "idempotencyKey": "recycle-missing"
+            })),
         });
         assert_eq!(missing.result.unwrap()["reason"], "missing");
     }
