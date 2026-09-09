@@ -263,7 +263,9 @@ MIDI, utility, or streaming DLLs, pass
 remaining audio-effect candidates continue independently. The default mode
 still fails on the first x64 candidate regression, so ordinary acceptance does
 not hide a broken effect. The fixture directory is local-only and is not part
-of source or release artifacts.
+of source or release artifacts. The wrapper also verifies every x64 candidate's
+size and SHA-256 before and after the worker matrix, so a plugin that mutates
+its own binary fails the acceptance rather than being recorded as compatible.
 
 Chunk-state coverage can be run with the repository-owned fixture:
 

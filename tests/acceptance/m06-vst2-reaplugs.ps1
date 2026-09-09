@@ -57,6 +57,13 @@ if ($supportedFixtures.Count -eq 0) {
 
 $qualifiedFixtures = @()
 $rejectedFixtures = @()
+$initialFingerprints = @{}
+foreach ($fixture in $supportedFixtures) {
+    $initialFingerprints[$fixture.FullName] = @{
+        Length = $fixture.Length
+        SHA256 = (Get-FileHash -LiteralPath $fixture.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+}
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 $previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
@@ -91,6 +98,14 @@ try {
     if ($qualifiedFixtures.Count -eq 0) {
         throw "No x64 VST2 candidates passed the bounded audio-effect acceptance."
     }
+    foreach ($fixture in $supportedFixtures) {
+        $finalFile = Get-Item -LiteralPath $fixture.FullName
+        $finalHash = (Get-FileHash -LiteralPath $fixture.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $initial = $initialFingerprints[$fixture.FullName]
+        if ($finalFile.Length -ne $initial.Length -or $finalHash -ne $initial.SHA256) {
+            throw "VST2 candidate changed during acceptance: $($fixture.FullName)"
+        }
+    }
     Write-Output "M06 VST2 acceptance passed for $($qualifiedFixtures.Count) x64 fixtures at 44.1, 48, and 96 kHz."
     if ($rejectedFixtures.Count -gt 0) {
         Write-Output "Rejected incompatible x64 candidates: $($rejectedFixtures.Name -join ', ')"
@@ -108,4 +123,4 @@ try {
     }
 }
 
-Write-Output 'Scope: ignored local VST2 fixtures and disposable worker processes, including intra-block parameter-offset coverage; no plugin registration or audio configuration changes.'
+Write-Output 'Scope: ignored local VST2 fixtures and disposable worker processes, including intra-block parameter-offset coverage and before/after binary-integrity checks; no plugin registration or audio configuration changes.'

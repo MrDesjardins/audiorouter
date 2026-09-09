@@ -159,6 +159,12 @@ release completion.
   contained-worker evidence to verify that plugin execution did not mutate its
   binary; explicit ReaComp processing/editor containment still passes.
 
+- Extended the directory-wide ReaPlugs wrapper on 2026-09-09 with before/after
+  size and SHA-256 checks for every x64 candidate. This preserves isolated
+  incompatible-candidate reporting while failing closed if any loaded plugin
+  mutates its binary; the existing worker matrix and environment restoration
+  remain unchanged.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,
