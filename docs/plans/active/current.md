@@ -93,6 +93,12 @@ transition; normal blocks do not re-enter plugin lifecycle callbacks.
 The Windows dispatcher-count regression covers both the cached repeat and the
 format-change transition.
 
+Added bounded VST2 `effEditOpen`, `effEditClose`, and `effEditIdle` primitives
+with explicit editor-open state and RAII close ordering. They are intentionally
+not called by the worker yet: the API documents that only a future dedicated
+Windows UI thread may invoke them, and parent-window authorization/message-pump
+ownership remain required before exposing editor controls.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

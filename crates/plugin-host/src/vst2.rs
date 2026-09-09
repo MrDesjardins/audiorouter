@@ -231,6 +231,12 @@ const EFF_GET_PARAM_NAME: i32 = 8;
 #[cfg(windows)]
 const EFF_EDIT_GET_RECT: i32 = 13;
 #[cfg(windows)]
+const EFF_EDIT_OPEN: i32 = 14;
+#[cfg(windows)]
+const EFF_EDIT_CLOSE: i32 = 15;
+#[cfg(windows)]
+const EFF_EDIT_IDLE: i32 = 19;
+#[cfg(windows)]
 const EFF_GET_CHUNK: i32 = 23;
 #[cfg(windows)]
 const EFF_SET_CHUNK: i32 = 24;
@@ -254,6 +260,9 @@ mod opcode_tests {
         assert_eq!(EFF_SET_BLOCK_SIZE, 11);
         assert_eq!(EFF_MAINS_CHANGED, 12);
         assert_eq!(EFF_EDIT_GET_RECT, 13);
+        assert_eq!(EFF_EDIT_OPEN, 14);
+        assert_eq!(EFF_EDIT_CLOSE, 15);
+        assert_eq!(EFF_EDIT_IDLE, 19);
         assert_eq!(EFF_GET_CHUNK, 23);
         assert_eq!(EFF_SET_CHUNK, 24);
     }
@@ -284,7 +293,7 @@ mod opcode_tests {
             num_parameters: 0,
             num_inputs: 1,
             num_outputs: 1,
-            flags: 0,
+            flags: VST2_FLAG_HAS_EDITOR,
             reserved_1: 0,
             reserved_2: 0,
             initial_delay: 0,
@@ -303,6 +312,7 @@ mod opcode_tests {
             module: ptr::null_mut(),
             effect,
             processing_format: None,
+            editor_open: false,
         };
         DISPATCH_COUNT.store(0, Ordering::Relaxed);
 
@@ -310,7 +320,15 @@ mod opcode_tests {
         library.set_processing_format(48_000.0, 128).unwrap();
         library.set_processing_format(48_000.0, 256).unwrap();
 
-        assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 7);
+        library.open_editor(1).unwrap();
+        library.idle_editor().unwrap();
+        library.close_editor().unwrap();
+
+        assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 10);
+        assert!(matches!(
+            library.close_editor(),
+            Err(Vst2LibraryError::InvalidEditor)
+        ));
         drop(library);
     }
 }
@@ -335,6 +353,7 @@ pub struct Vst2Library {
     module: *mut c_void,
     effect: *mut Vst2Effect,
     processing_format: Option<(u32, i32)>,
+    editor_open: bool,
 }
 
 #[cfg(windows)]
@@ -401,6 +420,7 @@ impl Vst2Library {
             module,
             effect,
             processing_format: None,
+            editor_open: false,
         })
     }
 
@@ -643,6 +663,75 @@ impl Vst2Library {
             .map_err(|_| Vst2LibraryError::InvalidEditor)
     }
 
+    /// Open the native editor with a caller-owned parent window. This must be
+    /// invoked only on the worker's dedicated Windows UI thread; this method
+    /// does not create a window, validate cross-process authorization, or run a
+    /// message pump.
+    pub fn open_editor(&mut self, parent_window: usize) -> Result<(), Vst2LibraryError> {
+        if !self.has_editor() || parent_window == 0 || self.editor_open {
+            return Err(Vst2LibraryError::InvalidEditor);
+        }
+        // SAFETY: The effect is valid for this library lifetime, and the
+        // parent handle is supplied by the future authorized UI host. The
+        // caller owns the UI-thread/message-pump invariant.
+        let result = unsafe {
+            (*self.effect).dispatcher.expect("validated dispatcher")(
+                self.effect,
+                EFF_EDIT_OPEN,
+                0,
+                0,
+                parent_window as *mut c_void,
+                0.0,
+            )
+        };
+        if result < 0 {
+            return Err(Vst2LibraryError::InvalidEditor);
+        }
+        self.editor_open = true;
+        Ok(())
+    }
+
+    /// Close an editor previously opened on the owning UI thread.
+    pub fn close_editor(&mut self) -> Result<(), Vst2LibraryError> {
+        if !self.editor_open {
+            return Err(Vst2LibraryError::InvalidEditor);
+        }
+        // SAFETY: The effect and editor state are valid, and this call is
+        // restricted to the owning UI thread by the caller.
+        unsafe {
+            (*self.effect).dispatcher.expect("validated dispatcher")(
+                self.effect,
+                EFF_EDIT_CLOSE,
+                0,
+                0,
+                ptr::null_mut(),
+                0.0,
+            );
+        }
+        self.editor_open = false;
+        Ok(())
+    }
+
+    /// Run one bounded native-editor idle tick on the owning UI thread.
+    pub fn idle_editor(&mut self) -> Result<(), Vst2LibraryError> {
+        if !self.editor_open {
+            return Err(Vst2LibraryError::InvalidEditor);
+        }
+        // SAFETY: The effect and editor state are valid, and this call is
+        // restricted to the owning UI thread by the caller.
+        unsafe {
+            (*self.effect).dispatcher.expect("validated dispatcher")(
+                self.effect,
+                EFF_EDIT_IDLE,
+                0,
+                0,
+                ptr::null_mut(),
+                0.0,
+            );
+        }
+        Ok(())
+    }
+
     pub fn latency(&self, sample_rate_hz: u32) -> Result<crate::WorkerLatency, Vst2LibraryError> {
         // SAFETY: This method is only available for a successfully validated
         // handle, so the initial-delay field is readable for its lifetime.
@@ -719,6 +808,9 @@ impl Drop for Vst2Library {
         unsafe {
             if !self.effect.is_null() {
                 if let Some(dispatcher) = (*self.effect).dispatcher {
+                    if self.editor_open {
+                        dispatcher(self.effect, EFF_EDIT_CLOSE, 0, 0, ptr::null_mut(), 0.0);
+                    }
                     dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 0, ptr::null_mut(), 0.0);
                     dispatcher(self.effect, EFF_CLOSE, 0, 0, ptr::null_mut(), 0.0);
                 }

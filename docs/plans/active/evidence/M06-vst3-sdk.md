@@ -1381,6 +1381,12 @@ reentrancy while keeping all calls on the contained worker thread.
 The Windows unit regression verifies the exact dispatcher-call count for a
 repeated format and one subsequent format change.
 
+The ABI layer now includes bounded native-editor open, close, and idle dispatch
+primitives with one-editor-at-a-time state and close-before-effect teardown.
+Focused Windows tests lock the VST2 editor opcodes and lifecycle state. No
+editor window was created by this change; dedicated UI-thread ownership and
+explicit parent authorization remain the integration gate.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export
