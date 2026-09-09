@@ -491,11 +491,11 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "sessions.get" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
-            &["sessionId"],
+            &["sessionId", "idempotencyKey"],
         ),
         "sessions.export" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
-            &["sessionId"],
+            &["sessionId", "idempotencyKey"],
         ),
         "sessions.importPlan" => {
             object_schema(json!({ "session": session_item_schema() }), &["session"])
@@ -533,7 +533,7 @@ fn method_input_schema(name: &str) -> Value {
                 "session": session_item_schema(),
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["session"],
+            &["session", "idempotencyKey"],
         ),
         "sessions.duplicate" => object_schema(
             json!({
@@ -542,7 +542,7 @@ fn method_input_schema(name: &str) -> Value {
                 "name": { "type": ["string", "null"] },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["sourceSessionId", "sessionId"],
+            &["sourceSessionId", "sessionId", "idempotencyKey"],
         ),
         "routes.inspect" => object_schema(
             json!({
@@ -3793,28 +3793,24 @@ impl ControlPlane {
     }
 
     fn dispatch_session_start(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.unwrap_or_else(|| json!({}));
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and idempotencyKey are required".into())
+        })?;
         let id = session_id_from_params(Some(params.clone()))?;
-        let operation = params
+        let idempotency_key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
-            .map(|key| {
-                let request = json!({ "sessionId": id, "action": "start" });
-                (
-                    self.scoped_idempotency_key("sessions.start", key),
-                    Self::request_hash(&request),
-                )
-            });
-        if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
-                return Ok(previous);
-            }
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("sessions.start", idempotency_key),
+            Self::request_hash(&json!({ "sessionId": id, "action": "start" })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
         }
         let result = self.session_start(&id)?;
-        if let Some((key, hash)) = operation {
-            self.journal_idempotent_result(&key, "sessions.start", &hash, &result)?;
-        }
+        self.journal_idempotent_result(&operation.0, "sessions.start", &operation.1, &result)?;
         Ok(result)
     }
 
@@ -4007,8 +4003,15 @@ impl ControlPlane {
     }
 
     fn dispatch_session_delete(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.unwrap_or_else(|| json!({}));
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and idempotencyKey are required".into())
+        })?;
         let id = session_id_from_params(Some(params.clone()))?;
+        params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let operation = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
@@ -4052,8 +4055,15 @@ impl ControlPlane {
     }
 
     fn dispatch_session_stop(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.unwrap_or_else(|| json!({}));
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and idempotencyKey are required".into())
+        })?;
         let id = session_id_from_params(Some(params.clone()))?;
+        params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let operation = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
@@ -6035,7 +6045,10 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
             method: "session.start".into(),
-            params: Some(json!({ "sessionId": "session" })),
+            params: Some(json!({
+                "sessionId": "session",
+                "idempotencyKey": "rate-limit-start"
+            })),
         };
         for _ in 0..40 {
             assert!(plane

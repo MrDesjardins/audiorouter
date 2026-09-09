@@ -73,6 +73,12 @@ release completion.
   existing control/CLI focused suites pass after updating enrollment fixtures;
   no authorization scope or enrolled-client state was changed by validation.
 
+- Closed the session-lifecycle key-contract gap on 2026-09-09: session start,
+  stop, and delete schemas and dispatchers now reject missing or empty
+  idempotency keys while preserving scoped durable replay. The focused control
+  suite passed all 98 tests with formatting and diff checks; no runtime audio
+  session or persistent machine configuration was changed.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown
