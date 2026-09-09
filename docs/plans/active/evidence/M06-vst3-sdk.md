@@ -69,6 +69,13 @@ two input buses and one output bus. No audio device was opened and no machine
 configuration changed. This is native offline parameter-delivery evidence, not
 the supervised realtime VST3 worker or graph scheduler.
 
+The complete guarded `tests/acceptance/m06-vst3-sdk.ps1` wrapper then passed
+with the rebuilt probe: SDK/validator compilation, 51 validator self-tests,
+mda and AGain validators, AGain main and side-chain processing, explicit
+single-bus rejection, and the five-class mda matrix. The wrapper removed the
+generated loader executable/object afterward. No plugin registration, audio
+device, or machine configuration action occurred.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's

@@ -67,6 +67,12 @@ is implemented, but rights/editor/release qualification remains open.
   side-chain class all produced finite output, with no audio device or machine
   configuration access. This is native offline parameter-event evidence, not
   supervised realtime VST3 execution.
+- Requalified the complete guarded M06 VST3 acceptance after native parameter
+  event support on 2026-09-09: pinned SDK build, 51 validator self-tests,
+  mda validator, AGain validator, AGain main and auxiliary-bus probes, explicit
+  single-bus rejection, and the five-class mda matrix all passed. The wrapper
+  removed generated loader artifacts; no plugin registration, audio device, or
+  machine configuration change occurred.
 - Hardened the M06/PLUG-03 typed multi-bus worker deadline on 2026-09-09: response reads now stop at the quantum deadline (still capped by the five-second IPC bound), and a controlled no-result worker returned within 100 ms instead of waiting for the global timeout. The supervised expired-quantum path remains fail-closed and records the worker failure. Feature-enabled worker-process tests passed 26 tests with six expected fixture-dependent skips; strict Clippy, formatting, and diff checks passed. No production VST3 worker, realtime callback, plugin registration, audio stream, or machine audio configuration was used.
 - Exercised the M06/PLUG-03 production-shaped handoff on 2026-09-09: a supervised multi-bus result now passes through the validated worker client, caller-owned staging storage, and `RuntimeBusGeneration`, preserving sequence identity and publishing both main and auxiliary output blocks. The feature-enabled worker-process suite passed 27 tests with six expected fixture-dependent skips; strict Clippy, formatting, and diff checks passed. This is still echo-fixture integration evidence, not production VST3 execution or realtime callback evidence.
 - Extended the M06/PLUG-03 worker fixture on 2026-09-09 to accept bounded asymmetric layouts such as two input buses to one output bus, preserving only the declared main output and rejecting layouts that would require synthesizing an undeclared input. The feature-enabled worker-process suite passed 28 tests with six expected fixture-dependent skips; strict feature-enabled and default workspace Clippy, formatting, and diff checks passed. This remains protocol/fixture evidence; production VST3 execution and realtime graph scheduling remain gated.
