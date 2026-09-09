@@ -71,6 +71,14 @@ and callback signatures, replacing-process requirement, and bounded
 mono/stereo/parameter validation are covered by two focused tests. No unsafe
 block, DLL load, callback invocation, or machine-state operation was added.
 
+The same module now contains a Windows-only RAII loader for the eventual
+worker: it resolves only `VSTPluginMain`, validates the returned header, sets
+bounded format values, processes caller-owned fixed blocks, and closes the
+effect/library on drop. Unsafe FFI invariants are documented. It is not yet
+connected to `WorkerProcess`, so no third-party DLL can be loaded by the
+application path; native runtime loading and ReaPlugs processing remain an
+explicit next acceptance gate.
+
 The worker supervisor now returns the explicit `Vst2AdapterUnavailable` error
 for an identified x64 VST2 binary and remains stopped. This prevents a newly
 recognized legacy DLL from crossing the runtime boundary accidentally while

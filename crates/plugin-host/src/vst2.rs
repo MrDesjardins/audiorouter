@@ -5,6 +5,12 @@
 //! those operations only after identity verification and worker containment.
 
 use std::ffi::c_void;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use std::path::Path;
+#[cfg(windows)]
+use std::ptr;
 
 /// The VST2 `AEffect` magic (`'VstP'`) in little-endian form.
 pub const VST2_EFFECT_MAGIC: i32 = 0x5673_7450;
@@ -181,6 +187,7 @@ mod tests {
             effect.validate_audio_effect(),
             Err(Vst2HeaderError::InvalidMagic)
         );
+
         let mut effect = valid_effect();
         effect.num_outputs = 3;
         assert_eq!(
@@ -194,4 +201,239 @@ mod tests {
             Err(Vst2HeaderError::MissingReplacingProcessor)
         );
     }
+}
+
+#[cfg(windows)]
+const EFF_OPEN: i32 = 0;
+#[cfg(windows)]
+const EFF_CLOSE: i32 = 1;
+#[cfg(windows)]
+const EFF_SET_BLOCK_SIZE: i32 = 23;
+#[cfg(windows)]
+const EFF_SET_SAMPLE_RATE: i32 = 24;
+
+#[cfg(windows)]
+#[derive(Debug)]
+pub enum Vst2LibraryError {
+    InvalidPath,
+    LoadLibrary(u32),
+    MissingEntryPoint,
+    NullEffect,
+    InvalidEffect(Vst2HeaderError),
+}
+
+#[cfg(windows)]
+pub struct Vst2Library {
+    module: *mut c_void,
+    effect: *mut Vst2Effect,
+}
+
+#[cfg(windows)]
+impl Vst2Library {
+    /// Load one already-verified native x64 VST2 DLL. This function executes
+    /// the DLL's loader and `VSTPluginMain`; callers must invoke it only from
+    /// the disposable worker after identity and job-sandbox setup.
+    pub fn load(path: &Path) -> Result<Self, Vst2LibraryError> {
+        if !path.is_absolute() || !path.is_file() {
+            return Err(Vst2LibraryError::InvalidPath);
+        }
+        let wide: Vec<u16> = path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        // SAFETY: `wide` is NUL-terminated and remains alive for the call;
+        // Windows owns the returned module handle until `FreeLibrary`.
+        let module = unsafe { load_library_w(wide.as_ptr()) };
+        if module.is_null() {
+            return Err(Vst2LibraryError::LoadLibrary(last_error()));
+        }
+        // SAFETY: `VSTPluginMain` is converted only after GetProcAddress
+        // returns a non-null address. The VST2 ABI defines this exact C
+        // calling convention and signature for the exported entry point.
+        let Some(entry) = (unsafe { get_proc_address(module, c"VSTPluginMain".as_ptr()) })
+            .map(|address| unsafe { std::mem::transmute::<*mut c_void, Vst2PluginMain>(address) })
+        else {
+            // SAFETY: `module` is the valid handle returned above and has not
+            // been transferred anywhere else.
+            unsafe { free_library(module) };
+            return Err(Vst2LibraryError::MissingEntryPoint);
+        };
+        // SAFETY: The entry point is from the validated module. The callback
+        // performs no blocking work and returns no borrowed data.
+        let effect = unsafe { entry(host_callback) };
+        if effect.is_null() {
+            // SAFETY: `module` remains owned locally after a null entry result.
+            unsafe { free_library(module) };
+            return Err(Vst2LibraryError::NullEffect);
+        }
+        // SAFETY: The plugin owns this pointer, but the entry-point contract
+        // makes the returned AEffect readable until effClose.
+        let validation = unsafe { (*effect).validate_audio_effect() };
+        if let Err(error) = validation {
+            // SAFETY: A valid dispatcher is required by the ABI, but invalid
+            // headers cannot be trusted. Unload without invoking plugin code.
+            unsafe { free_library(module) };
+            return Err(Vst2LibraryError::InvalidEffect(error));
+        }
+        // SAFETY: The validated dispatcher is called only during worker setup,
+        // never from the realtime engine callback.
+        unsafe {
+            ((*effect).dispatcher.expect("validated dispatcher"))(
+                effect,
+                EFF_OPEN,
+                0,
+                0,
+                ptr::null_mut(),
+                0.0,
+            )
+        };
+        Ok(Self { module, effect })
+    }
+
+    pub fn set_processing_format(
+        &mut self,
+        sample_rate_hz: f32,
+        block_size: i32,
+    ) -> Result<(), Vst2LibraryError> {
+        if !sample_rate_hz.is_finite()
+            || !(1.0..=192_000.0).contains(&sample_rate_hz)
+            || !(1..=2048).contains(&block_size)
+        {
+            return Err(Vst2LibraryError::InvalidPath);
+        }
+        // SAFETY: The effect was validated at load and remains owned by this
+        // handle. These setup opcodes run on the worker control thread.
+        unsafe {
+            let dispatcher = (*self.effect).dispatcher.expect("validated dispatcher");
+            dispatcher(
+                self.effect,
+                EFF_SET_SAMPLE_RATE,
+                0,
+                0,
+                ptr::null_mut(),
+                sample_rate_hz,
+            );
+            dispatcher(
+                self.effect,
+                EFF_SET_BLOCK_SIZE,
+                0,
+                block_size as isize,
+                ptr::null_mut(),
+                0.0,
+            );
+        }
+        Ok(())
+    }
+
+    /// Process one bounded block on the worker thread. The slices are fixed
+    /// caller-owned buffers; this method does not allocate or touch the audio
+    /// engine's realtime callback.
+    pub fn process_replacing(
+        &mut self,
+        inputs: &[&[f32]],
+        outputs: &mut [&mut [f32]],
+    ) -> Result<(), Vst2LibraryError> {
+        if inputs.len() != outputs.len()
+            || !(1..=VST2_MAX_AUDIO_CHANNELS as usize).contains(&inputs.len())
+            || inputs.iter().any(|channel| channel.is_empty())
+            || inputs
+                .iter()
+                .any(|channel| channel.len() != inputs[0].len())
+            || outputs
+                .iter()
+                .any(|channel| channel.len() != inputs[0].len())
+        {
+            return Err(Vst2LibraryError::InvalidPath);
+        }
+        let mut input_ptrs: [*const f32; VST2_MAX_AUDIO_CHANNELS as usize] =
+            [ptr::null(); VST2_MAX_AUDIO_CHANNELS as usize];
+        let mut output_ptrs: [*mut f32; VST2_MAX_AUDIO_CHANNELS as usize] =
+            [ptr::null_mut(); VST2_MAX_AUDIO_CHANNELS as usize];
+        for (index, channel) in inputs.iter().enumerate() {
+            input_ptrs[index] = channel.as_ptr();
+        }
+        for (index, channel) in outputs.iter_mut().enumerate() {
+            output_ptrs[index] = channel.as_mut_ptr();
+        }
+        // SAFETY: All pointers refer to caller-owned slices with equal,
+        // non-empty lengths; channel count is bounded by the validated effect.
+        unsafe {
+            let process = (*self.effect)
+                .process_replacing
+                .expect("validated replacing processor");
+            process(
+                self.effect,
+                input_ptrs.as_ptr(),
+                output_ptrs.as_mut_ptr(),
+                inputs[0].len() as i32,
+            );
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for Vst2Library {
+    fn drop(&mut self) {
+        // SAFETY: Drop runs on the owning worker thread; the effect and module
+        // were created together and no caller retains their raw pointers.
+        unsafe {
+            if !self.effect.is_null() {
+                if let Some(dispatcher) = (*self.effect).dispatcher {
+                    dispatcher(self.effect, EFF_CLOSE, 0, 0, ptr::null_mut(), 0.0);
+                }
+            }
+            if !self.module.is_null() {
+                free_library(self.module);
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+unsafe extern "C" fn host_callback(
+    _: *mut Vst2Effect,
+    _: i32,
+    _: i32,
+    _: isize,
+    _: *mut c_void,
+    _: f32,
+) -> isize {
+    0
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn LoadLibraryW(name: *const u16) -> *mut c_void;
+    fn GetProcAddress(module: *mut c_void, name: *const i8) -> *mut c_void;
+    fn FreeLibrary(module: *mut c_void) -> i32;
+    fn GetLastError() -> u32;
+}
+
+#[cfg(windows)]
+unsafe fn load_library_w(name: *const u16) -> *mut c_void {
+    // SAFETY: Caller supplies a valid NUL-terminated UTF-16 path.
+    unsafe { LoadLibraryW(name) }
+}
+
+#[cfg(windows)]
+unsafe fn get_proc_address(module: *mut c_void, name: *const i8) -> Option<*mut c_void> {
+    // SAFETY: Caller supplies a valid module handle and NUL-terminated name.
+    let address = unsafe { GetProcAddress(module, name) };
+    (!address.is_null()).then_some(address)
+}
+
+#[cfg(windows)]
+unsafe fn free_library(module: *mut c_void) {
+    // SAFETY: Caller owns a live module handle and calls this exactly once.
+    unsafe { FreeLibrary(module) };
+}
+
+#[cfg(windows)]
+fn last_error() -> u32 {
+    // SAFETY: GetLastError has no preconditions and reads the current thread's
+    // Win32 error value immediately after the failed loader call.
+    unsafe { GetLastError() }
 }

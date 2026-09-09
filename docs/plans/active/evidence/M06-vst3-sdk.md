@@ -1267,6 +1267,12 @@ and parameter count. Two focused ABI tests passed. This does not load or call
 any DLL; the Windows worker adapter must still own the lifetime and enforce the
 callback/audio-buffer policy before runtime support can be enabled.
 
+The ABI module now also provides a Windows-only RAII library handle with
+bounded format setup, replacing-process buffer checks, documented FFI safety
+invariants, and deterministic cleanup. Package compilation and strict Clippy
+pass. It remains deliberately disconnected from worker startup; no third-party
+DLL was loaded or called by this change.
+
 ## ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export
