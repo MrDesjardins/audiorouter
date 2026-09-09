@@ -49,6 +49,17 @@ release completion.
   shell/HWND, physical-latency, manual accessibility, and independent-plugin
   gates.
 
+- Requalified the local legacy VST2 ReaPlugs boundary on 2026-09-09: six x64
+  effects (ReaComp, ReaDelay, ReaEQ, ReaFIR, ReaGate, and ReaXComp) passed
+  contained worker processing at 44.1, 48, and 96 kHz, including parameter
+  offset coverage and before/after DLL integrity checks. The script restored
+  `AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE`; no plugin
+  registration, audio stream, or machine configuration changed. Independent
+  rights-cleared VST2 qualification remains open.
+- Next safe task: run the installed-plugin boundary check, then retain the
+  independent-plugin, editor, native driver callback, signing, installer,
+  shell/HWND, physical-latency, and manual accessibility gates.
+
 - Requalified the focused M05 UI acceptance at the current head on 2026-09-09:
   TypeScript typecheck, all 16 UI test files/111 tests, and the temporary
   production Vite bundle (210 modules, three output files) passed. The runner
