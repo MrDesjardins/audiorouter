@@ -1,10 +1,10 @@
 #[cfg(all(windows, feature = "test-fixtures"))]
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
 use audiorouter_plugin_host::{
-    decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
-    EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
-    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
-    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    decode_worker_message, encode_worker_message, inspect_binary, stage_engine_worker_result,
+    worker_clock_tick, EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat,
+    PluginIdentity, PluginStateAsset, SharedAudioLayout, SharedAudioTransport,
+    SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::{WorkerAudioBusLayout, WorkerBusSession};
@@ -248,6 +248,65 @@ fn typed_multi_bus_worker_process_client_round_trips_buses() {
         .expect("round trip typed multi-bus quantum");
     assert_eq!(processed.frames(), frames.frames());
     assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn supervised_multi_bus_result_stages_into_engine_generation() {
+    let hash = "e".repeat(64);
+    let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let started = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn_multi_bus_fixture(
+        fixture_worker_path(),
+        &identity,
+        &layout,
+        started,
+    )
+    .expect("spawn supervised multi-bus worker");
+    let deadline = worker_clock_tick().saturating_add(10_000);
+    let input = layout
+        .input_frames(vec![
+            WorkerFrame::new(31, deadline, 2, vec![0.1, 0.2]).unwrap(),
+            WorkerFrame::new(31, deadline, 1, vec![0.3]).unwrap(),
+        ])
+        .unwrap();
+    let output = worker
+        .process_buses(input, Vec::new(), started)
+        .expect("supervised multi-bus result");
+
+    let mut storage = [
+        audiorouter_engine::AudioBlock::new(2, 1).unwrap(),
+        audiorouter_engine::AudioBlock::new(1, 1).unwrap(),
+    ];
+    let mut references = [None, None];
+    let result = stage_engine_worker_result(&output, &mut storage, &mut references).unwrap();
+    let generation = audiorouter_engine::RuntimeBusGeneration::prepare(
+        audiorouter_engine::RuntimeGeneration::new(9),
+        audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2, 1]).unwrap(),
+    )
+    .unwrap();
+    let mut main = audiorouter_engine::AudioBlock::new(2, 1).unwrap();
+    let mut sidechain = audiorouter_engine::AudioBlock::new(1, 1).unwrap();
+    let mut destinations = [&mut main, &mut sidechain];
+    assert_eq!(
+        generation
+            .accept_worker_result(result.identity(), &result, &mut destinations)
+            .unwrap(),
+        audiorouter_engine::RuntimeBusProcessOutcome::Processed
+    );
+    assert_eq!(result.identity().sequence, 31);
+    assert_eq!(main.channel(0).unwrap(), &[0.1]);
+    assert_eq!(sidechain.channel(0).unwrap(), &[0.3]);
+    let _ = worker.shutdown();
 }
 
 #[cfg(feature = "test-fixtures")]

@@ -13,6 +13,13 @@ skips; strict Clippy, formatting, and diff checks passed. This is containment
 evidence only: no production VST3 worker, realtime callback, plugin
 registration, audio stream, or machine audio configuration was used.
 
+The supervised result handoff was also exercised end to end through caller-owned
+staging blocks and `RuntimeBusGeneration`: both main and auxiliary output buses
+were published with the original sequence identity. The feature-enabled
+worker-process suite then passed 27 tests with six expected fixture-dependent
+skips. This remains an echo-fixture integration check, not production VST3 or
+realtime callback evidence.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with
