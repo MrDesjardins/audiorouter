@@ -67,4 +67,11 @@ describe("keyboard connection dialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Keyboard connection" })).toBeNull());
     expect(screen.getByText("Connection added to the draft. Review and plan the changes before committing.")).toBeTruthy();
   });
+
+  it("renders named canvas handles for connected graph editing", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+
+    expect(await screen.findByLabelText("Microphone out output")).toBeTruthy();
+    expect(await screen.findByLabelText("Voice gain in input")).toBeTruthy();
+  });
 });
