@@ -929,6 +929,16 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
     assert!(!editor.has_editor);
     assert_eq!(editor.width, 0);
     assert_eq!(editor.height, 0);
+    let descriptors = worker
+        .describe_parameters(Instant::now())
+        .expect("native VST3 parameter description response");
+    assert!(!descriptors.is_empty());
+    assert!(descriptors.iter().all(|descriptor| {
+        descriptor.default_value.is_finite()
+            && (0.0..=1.0).contains(&descriptor.default_value)
+            && descriptor.minimum == 0.0
+            && descriptor.maximum == 1.0
+    }));
     let authorization = EditorParentAuthorizationIssuer::from_key([7; 32])
         .issue(1, std::process::id())
         .expect("native VST3 editor authorization fixture");

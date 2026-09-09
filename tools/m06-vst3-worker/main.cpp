@@ -723,6 +723,8 @@ public:
         return result;
     }
 
+    Vst::IEditController* controller() const { return controller_; }
+
 private:
     static void append_u32(std::vector<uint8_t>& output, uint32_t value) {
         output.push_back(static_cast<uint8_t>(value & 0xff));
@@ -850,6 +852,42 @@ static std::string quote_json(const std::string& value) {
     }
     result.push_back('"');
     return result;
+}
+
+static std::string quote_vst3_title(const Vst::String128& title) {
+    std::string value;
+    for (const auto code_unit : title) {
+        if (code_unit == 0) break;
+        const auto character = static_cast<unsigned int>(code_unit);
+        value.push_back(character >= 0x20 && character <= 0x7e
+                            ? static_cast<char>(character)
+                            : '?');
+    }
+    if (value.empty()) value = "Parameter";
+    return quote_json(value);
+}
+
+static std::string parameter_descriptors_message(Vst::IEditController* controller) {
+    const auto count = controller->getParameterCount();
+    if (count < 0 || count > static_cast<int32>(kMaxParameters)) {
+        throw protocol_error("VST3 parameter descriptor count exceeds the bounded contract");
+    }
+    std::ostringstream output;
+    output << "{\"type\":\"Parameters\",\"payload\":{\"descriptors\":[";
+    for (int32 index = 0; index < count; ++index) {
+        Vst::ParameterInfo info{};
+        require_result("VST3 parameter info", controller->getParameterInfo(index, info));
+        if (!std::isfinite(info.defaultNormalizedValue) ||
+            info.defaultNormalizedValue < 0.0 || info.defaultNormalizedValue > 1.0) {
+            throw protocol_error("VST3 parameter default is outside the normalized contract");
+        }
+        if (index != 0) output << ',';
+        output << "{\"parameter_id\":" << info.id << ",\"title\":"
+               << quote_vst3_title(info.title) << ",\"default_value\":"
+               << info.defaultNormalizedValue << ",\"minimum\":0,\"maximum\":1}";
+    }
+    output << "]}}";
+    return output.str();
 }
 
 static std::string processed_message(uint64_t sequence, uint64_t deadline, uint16_t channels,
@@ -1005,6 +1043,10 @@ int wmain(int argc, wchar_t** argv) {
             if (json == "{\"type\":\"Shutdown\"}") return 0;
             if (json == "{\"type\":\"DescribeEditor\"}") {
                 write_frame(kNoEditorMessage);
+                continue;
+            }
+            if (json == "{\"type\":\"DescribeParameters\"}") {
+                write_frame(parameter_descriptors_message(effect.controller()));
                 continue;
             }
             if (json.find("\"type\":\"EditorOpen\"") != std::string::npos ||
