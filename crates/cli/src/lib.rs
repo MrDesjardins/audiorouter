@@ -3464,6 +3464,22 @@ mod tests {
                 json!(["sessionId", "frame", "idempotencyKey"]),
             ),
             (
+                "pause_recorder",
+                json!(["sessionId", "frame", "idempotencyKey"]),
+            ),
+            (
+                "resume_recorder",
+                json!(["sessionId", "frame", "idempotencyKey"]),
+            ),
+            (
+                "split_recorder",
+                json!(["sessionId", "frame", "idempotencyKey"]),
+            ),
+            (
+                "stop_recorder",
+                json!(["sessionId", "frame", "idempotencyKey"]),
+            ),
+            (
                 "set_recording_metadata",
                 json!(["recordingId", "idempotencyKey"]),
             ),
@@ -3480,6 +3496,10 @@ mod tests {
             (
                 "control_session",
                 json!(["sessionId", "action", "idempotencyKey"]),
+            ),
+            (
+                "apply_graph_change",
+                json!(["planId", "baseRevision", "idempotencyKey"]),
             ),
         ] {
             let tool = tools
