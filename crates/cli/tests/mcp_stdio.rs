@@ -114,6 +114,30 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
         "graphicEq"
     );
 
+    let invalid_devices = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 22,
+            "method": "tools/call",
+            "params": { "name": "list_devices", "arguments": { "limit": 0 } }
+        }),
+    );
+    assert_eq!(invalid_devices["result"]["isError"], true);
+    assert_eq!(
+        invalid_devices["result"]["structuredContent"]["error"]["message"],
+        "limit must be between 1 and 500"
+    );
+    let error_text = invalid_devices["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    let error_payload: Value = serde_json::from_str(error_text).unwrap();
+    assert_eq!(
+        error_payload["error"]["message"],
+        "limit must be between 1 and 500"
+    );
+
     let resources = send(
         &mut input,
         &mut output,
