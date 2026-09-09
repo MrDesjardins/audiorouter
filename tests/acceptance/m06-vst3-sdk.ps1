@@ -37,6 +37,32 @@ function Invoke-NativeCapture([string]$File, [string[]]$Arguments) {
     return $output
 }
 
+function Invoke-ExpectedFailure([string]$File, [string[]]$Arguments, [string]$ExpectedText) {
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $File
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    # ArgumentList is unavailable on the Windows PowerShell/.NET runtime used
+    # by the acceptance host; these arguments are paths/options without quote
+    # characters, so ordinary quoted Windows command-line arguments suffice.
+    $startInfo.Arguments = ($Arguments | ForEach-Object { '"' + $_ + '"' }) -join ' '
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
+    $output = @($stdout, $stderr)
+    if ($exitCode -eq 0) {
+        throw "$File unexpectedly accepted the unsupported fixture"
+    }
+    if (($output -join "`n") -notmatch [regex]::Escape($ExpectedText)) {
+        throw "$File failed for an unexpected reason; expected '$ExpectedText'`n$($output -join "`n")"
+    }
+}
+
 Require-File $cmake 'repository-local CMake'
 Require-File (Join-Path $sdkRoot 'CMakeLists.txt') 'VST3 SDK checkout'
 Require-File (Join-Path $sdkRoot 'pluginterfaces\base\ipluginbase.h') 'VST3 SDK header'
@@ -68,6 +94,7 @@ try {
     Invoke-Native $validator @($againBundle)
     Invoke-Native 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $loaderScript)
     Invoke-Native $loader @($againBundle, '--class-index', '0')
+    Invoke-ExpectedFailure $loader @($againBundle, '--class-index', '2') 'probe requires one input and output bus'
     $defaultLoaderOutput = Invoke-NativeCapture $loader @($bundle)
     if (-not (($defaultLoaderOutput -join "`n") -match 'parameter_descriptors=\d+')) {
         throw 'offline loader did not report a bounded parameter descriptor catalog'
@@ -76,7 +103,7 @@ try {
     foreach ($classIndex in $matrixClasses) {
         Invoke-Native $loader @($bundle, '--class-index', "$classIndex")
     }
-    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, offline loader, AGain main class, and five-class mda matrix.'
+    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, offline loader, AGain main class, explicit side-chain layout rejection, and five-class mda matrix.'
 } finally {
     foreach ($generated in @($loader, $loaderObject)) {
         if (Test-Path -LiteralPath $generated) {

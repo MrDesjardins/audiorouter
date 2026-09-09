@@ -1606,3 +1606,12 @@ independent VST3 bundle; no plugin was registered, copied, or loaded beyond
 the explicitly selected offline fixtures, and no audio configuration changed.
 The independent rights-cleared fixture, broader bus-layout, editor, dynamic
 latency, and release gates remain open.
+
+The acceptance harness was then corrected for the installed Windows
+PowerShell/.NET runtime, which promotes native stderr to a terminating error
+when a nonzero command is captured. It now uses an explicit bounded process
+capture for the intentional AGain side-chain rejection. The M06 VST3 script
+passed with exit code 0: both official validators, AGain main-class processing,
+the specific one-input/one-output rejection, and the five-class mda matrix all
+passed. Generated loader outputs were removed; no system plugin link,
+registration, audio stream, or machine configuration was changed.
