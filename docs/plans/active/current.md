@@ -86,6 +86,18 @@ release completion.
   `index.html` and asset files; the locked repository `ui/dist` output was not
   changed, and the temporary directory was removed.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `0c9641bd` on 2026-09-09 after the UI diagnostics audit. The
+  elevated read-only run passed VS2026/WDK discovery and native compile,
+  31-endpoint inventory, disposable SysVAD x64 compile/package/API/signability,
+  M01/M04/M05, pinned VST3 SDK/validator and native workers, repository VST2
+  modern/legacy/state/fault fixtures, M07, unsigned M08 preparation, 159
+  traceability mappings, and documentation validation (51 Markdown files/163
+  local links). Temporary outputs and environment overrides were restored; no
+  driver installation/loading, signing-mode change, plugin/startup
+  registration, audio stream, or persistent machine audio configuration
+  occurred.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;
