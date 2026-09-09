@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `127b6d26` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `f9636235` (2026-09-09). The guarded M00-M08
 chain passed at its clean parent `eb0ad978`; the focused native auxiliary-bus
 transformation regression and all-features plugin-host checks pass at this
 checkpoint. The repository is clean; no driver or
@@ -128,6 +128,15 @@ is implemented, but rights/editor/release qualification remains open.
   tests (86), strict engine Clippy, formatting, and diff checks passed. This
   is bounded graph staging; a background native worker loop, callback timing,
   and physical-latency evidence remain open.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain from
+  clean pushed head `f9636235` on 2026-09-09 after the scheduler change. The
+  installed VS2026/WDK native checks, disposable SysVAD qualification, M01,
+  M04, M05, VST3 SDK/native single-/multi-bus worker probes, VST2
+  modern/legacy/state/fault fixtures, M07, unsigned M08 preparation, 159
+  traceability mappings, and documentation validation (51 Markdown files/163
+  local links) passed. Temporary outputs were removed; no driver installation
+  or loading, signing-mode change, registration, audio stream, or persistent
+  machine audio configuration occurred.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   the native VST3 worker integration on 2026-09-09. The chain passed native
   toolchain/endpoint checks, disposable pinned SysVAD x64 qualification, M01,
