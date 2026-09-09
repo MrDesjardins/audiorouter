@@ -96,6 +96,11 @@ release completion.
   rerun is the authoritative result. No driver or plugin was installed,
   registered, or loaded, and no audio or persistent machine configuration
   changed.
+- Re-ran strict all-features workspace lint on 2026-09-09 with
+  `cargo clippy --workspace --all-targets --all-features -- -D warnings`;
+  compilation and linting completed successfully. This confirms the portable
+  and plugin-host code remains warning-free after the current qualification
+  work; no machine or audio configuration changed.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
