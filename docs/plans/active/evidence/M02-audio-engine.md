@@ -1,5 +1,16 @@
 # M02 audio adapter groundwork
 
+## 2026-09-08 - Differing-rate route requalification
+
+The guarded `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` run passed on the explicitly selected VB-Audio
+pair: 96 kHz capture to 48 kHz render, 47,040 capture frames, 183 graph
+blocks, 23,424 scheduler frames, and 23,424 routed frames. The negotiated
+128-frame graph deadline was 1,333,334 ns; processing p99.9 was 65,536 ns,
+with zero deadline misses and zero deadline lateness. Media-state snapshots
+and temporary cleanup passed. This remains shared-mode user-space evidence,
+not managed-driver callback, independent-clock, or physical-latency evidence.
+
 ## 2026-09-08 - Portable liveness and recovery boundary audit
 
 The Windows adapter's recovery boundary was re-audited against CAP-06,
