@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Node, RouteInspection } from "@audiorouter/contracts";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
-import { createDisconnectedBackend, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
+import { createDisconnectedBackend, formatUiError, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceInfo } from "@audiorouter/contracts";
 import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, removeDraftConnection, removeDraftNode, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type LibraryNodeKind } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
@@ -210,10 +210,10 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refreshApplications = () => {
-    void backend.listApplications().then((items) => { setApplications(items); setApplicationsError(null); }).catch((error) => { setApplications([]); setApplicationsError(error instanceof Error ? error.message : "Application inventory unavailable"); });
+    void backend.listApplications().then((items) => { setApplications(items); setApplicationsError(null); }).catch((error) => { setApplications([]); setApplicationsError(formatUiError(error, "Application inventory unavailable")); });
   };
   const refreshDevices = () => {
-    void backend.listDevices().then((items) => { setDevices(items); setDevicesError(null); }).catch((error) => { setDevices([]); setDevicesError(error instanceof Error ? error.message : "Device inventory unavailable"); });
+    void backend.listDevices().then((items) => { setDevices(items); setDevicesError(null); }).catch((error) => { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); });
   };
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
@@ -251,12 +251,12 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [backend, session.id]);
   useEffect(() => {
     let active = true;
-    void backend.listApplications().then((items) => { if (active) { setApplications(items); setApplicationsError(null); } }).catch((error) => { if (active) { setApplications([]); setApplicationsError(error instanceof Error ? error.message : "Application inventory unavailable"); } });
+    void backend.listApplications().then((items) => { if (active) { setApplications(items); setApplicationsError(null); } }).catch((error) => { if (active) { setApplications([]); setApplicationsError(formatUiError(error, "Application inventory unavailable")); } });
     return () => { active = false; };
   }, [backend]);
   useEffect(() => {
     let active = true;
-    void backend.listDevices().then((items) => { if (active) { setDevices(items); setDevicesError(null); } }).catch((error) => { if (active) { setDevices([]); setDevicesError(error instanceof Error ? error.message : "Device inventory unavailable"); } });
+    void backend.listDevices().then((items) => { if (active) { setDevices(items); setDevicesError(null); } }).catch((error) => { if (active) { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); } });
     return () => { active = false; };
   }, [backend]);
   useEffect(() => {

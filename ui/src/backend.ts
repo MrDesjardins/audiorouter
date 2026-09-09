@@ -1,4 +1,4 @@
-import { createAudioRouterClient } from "@audiorouter/contracts";
+import { AudioRouterRpcError, createAudioRouterClient } from "@audiorouter/contracts";
 import type {
   AudioRouterClient,
   ApplicationInfo,
@@ -41,6 +41,18 @@ import type {
 import { demoSession, demoSessions } from "./fixtures";
 
 export type ApplicationRow = ApplicationInfo;
+
+/** Formats structured backend failures without losing actionable audio guidance. */
+export function formatUiError(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  if (!(error instanceof AudioRouterRpcError) || !error.data) return error.message;
+  const { code, hresult, remediation, retryable } = error.data;
+  const hresultText = typeof hresult === "number"
+    ? `, HRESULT 0x${(hresult >>> 0).toString(16).padStart(8, "0").toUpperCase()}`
+    : "";
+  const retryText = retryable ? " Retry may succeed." : "";
+  return `${error.message} [${code}${hresultText}] ${remediation}${retryText}`;
+}
 
 export type UiBackendSnapshot = {
   status: StatusSnapshot;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, SnapshotCache, type UiBackend } from "./backend";
+import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, formatUiError, SnapshotCache, type UiBackend } from "./backend";
+import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
 
@@ -20,6 +21,30 @@ describe("disconnected backend", () => {
     await expect(backend.commitGraph("plan-1", demoSession.revision, "ui-op")).rejects.toThrow(
       "backend is disconnected",
     );
+  });
+});
+
+describe("UI error formatting", () => {
+  it("keeps audio category, HRESULT, remediation, and retry guidance", () => {
+    const error = new AudioRouterRpcError({
+      code: -32010,
+      message: "Windows audio endpoint enumeration failed.",
+      data: {
+        code: "deviceInUse",
+        fieldPath: null,
+        resourceIds: [],
+        retryable: true,
+        remediation: "Retry after the owning stream releases the endpoint.",
+        hresult: 0x8889000A,
+      },
+    });
+    expect(formatUiError(error, "fallback")).toBe(
+      "Windows audio endpoint enumeration failed. [deviceInUse, HRESULT 0x8889000A] Retry after the owning stream releases the endpoint. Retry may succeed.",
+    );
+  });
+
+  it("uses the fallback for non-error failures", () => {
+    expect(formatUiError("bad failure", "Inventory unavailable")).toBe("Inventory unavailable");
   });
 });
 
