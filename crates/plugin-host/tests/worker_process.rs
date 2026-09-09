@@ -1010,14 +1010,24 @@ fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
     let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
         .expect("inspect VST3 fixture without loading it");
     let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).expect("side-chain layout");
-    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_multi_bus(
-        worker_path,
-        &identity,
-        std::slice::from_ref(&root),
-        &layout,
-        Instant::now(),
-    )
-    .expect("launch native VST3 multi-bus worker");
+    let sample_rate_hz = std::env::var("AUDIOROUTER_VST3_SAMPLE_RATE")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .expect("valid AUDIOROUTER_VST3_SAMPLE_RATE")
+        })
+        .unwrap_or(48_000);
+    let mut worker =
+        SupervisedWorkerProcess::spawn_verified_native_vst3_multi_bus_with_sample_rate(
+            worker_path,
+            &identity,
+            std::slice::from_ref(&root),
+            &layout,
+            sample_rate_hz,
+            Instant::now(),
+        )
+        .expect("launch native VST3 multi-bus worker");
     let main = WorkerFrame::new(
         1,
         worker_clock_tick().saturating_add(10_000),

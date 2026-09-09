@@ -63,6 +63,10 @@ SHA-256 `7dabe7771290361b418bc2aa4ae6246c8660ca09baa63aea61f41e27026fa8a6`;
 processing, finite output, state save, supervised restart/restoration, and
 shutdown passed at each rate. Native editor support and the complete M06
 acceptance gate remain open.
+The auxiliary-bus worker now uses the same explicit-rate boundary; AGain's
+two-input/one-output side-chain path passed at 44.1, 48, and 96 kHz with finite
+output and successful graph-result staging. This remains worker/fixture
+evidence, not production-driver or physical-latency evidence.
 
 ## Inspection and execution boundary
 

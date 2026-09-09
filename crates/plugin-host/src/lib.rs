@@ -2869,6 +2869,7 @@ impl SupervisedWorkerProcess {
             layout,
             WorkerSupervisor::new(),
             now,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
             None,
         )
         .map_err(|(error, _)| error)
@@ -2885,6 +2886,27 @@ impl SupervisedWorkerProcess {
         layout: &WorkerAudioBusLayout,
         now: Instant,
     ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_verified_native_vst3_multi_bus_with_sample_rate(
+            executable,
+            identity,
+            configured_roots,
+            layout,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            now,
+        )
+    }
+
+    /// Spawn the native VST3 auxiliary-bus worker at an explicitly bounded
+    /// graph sample rate after revalidating the bundle.
+    #[cfg(windows)]
+    pub fn spawn_verified_native_vst3_multi_bus_with_sample_rate(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        layout: &WorkerAudioBusLayout,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
         identity
             .verify_current(configured_roots)
             .map_err(WorkerProcessError::PluginIdentity)?;
@@ -2894,6 +2916,7 @@ impl SupervisedWorkerProcess {
             layout,
             WorkerSupervisor::new(),
             now,
+            sample_rate_hz,
             Some(&identity.binary_path),
         )
         .map_err(|(error, _)| error)
@@ -2952,6 +2975,7 @@ impl SupervisedWorkerProcess {
         layout: &WorkerAudioBusLayout,
         mut supervisor: WorkerSupervisor,
         now: Instant,
+        sample_rate_hz: u32,
         plugin_path: Option<&Path>,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
         if identity.format == PluginFormat::Vst2 {
@@ -2976,11 +3000,12 @@ impl SupervisedWorkerProcess {
             ));
         }
         let process = if let Some(plugin_path) = plugin_path {
-            WorkerProcess::spawn_multi_bus_for_plugin(
+            WorkerProcess::spawn_multi_bus_for_plugin_with_sample_rate(
                 &executable,
                 plugin_path,
                 &identity.sha256,
                 layout,
+                sample_rate_hz,
             )
         } else {
             WorkerProcess::spawn_multi_bus(&executable, &identity.sha256, layout)
@@ -2992,7 +3017,7 @@ impl SupervisedWorkerProcess {
                 executable,
                 identity: identity.clone(),
                 channels: layout.input_buses()[0],
-                sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
+                sample_rate_hz,
                 shared_transport: false,
                 bus_layout: Some(layout.clone()),
                 plugin_path: plugin_path.map(Path::to_path_buf),
@@ -3527,6 +3552,7 @@ impl SupervisedWorkerProcess {
                 &layout,
                 supervisor,
                 now,
+                sample_rate_hz,
                 plugin_path.as_deref(),
             );
         }
@@ -3747,11 +3773,30 @@ impl WorkerProcess {
         plugin_sha256: &str,
         layout: &WorkerAudioBusLayout,
     ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_multi_bus_for_plugin_with_sample_rate(
+            executable,
+            plugin_path,
+            plugin_sha256,
+            layout,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+        )
+    }
+
+    /// Spawn the native multi-bus worker with an explicit bounded sample
+    /// rate. The rate is passed to the worker before its first process call.
+    #[cfg(windows)]
+    pub fn spawn_multi_bus_for_plugin_with_sample_rate(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        layout: &WorkerAudioBusLayout,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
         Self::spawn_inner(
             executable,
             plugin_sha256,
             layout.input_buses().first().copied().unwrap_or(0),
-            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            sample_rate_hz,
             None,
             None,
             Some(plugin_path.as_ref()),

@@ -56,6 +56,12 @@ release completion.
   shutdown passed at each rate. Native editor and complete M06 gates remain
   open.
 
+- Extended the native VST3 auxiliary-bus launch boundary on 2026-09-09 with an
+  explicit sample-rate variant while preserving the 48 kHz API default. AGain's
+  two-input/one-output side-chain worker and graph-result staging passed at
+  44.1/48/96 kHz; worker-process multi-bus tests and strict plugin-host checks
+  pass. Production driver and physical-latency gates remain open.
+
 - Closed a DSP-01/03 contract drift on 2026-09-09. The compressor's supported
   knee control and the gate's supported hysteresis, ratio, and hold controls are
   now accepted by domain validation, described by both node and processor API
