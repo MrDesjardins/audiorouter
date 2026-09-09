@@ -52,6 +52,12 @@ is implemented, but rights/editor/release qualification remains open.
   installation/loading, signing-mode change, plugin/startup registration,
   audio stream, or persistent machine audio configuration occurred.
 
+- Requalified the full locked workspace at pushed head `740d2305` on
+  2026-09-09: 466 unit/integration tests and all workspace doc-tests passed;
+  all-target all-features Clippy, formatting, and diff checks also passed.
+  This confirms the CLI/MCP parity changes did not regress other adapters or
+  realtime safety boundaries.
+
 - Added M06/PLUG-04 validated state restoration across deliberate worker
   replacement on 2026-09-09: `restart_with_state` preserves the verified
   plugin path, restores a version/size/hash-checked opaque asset before
