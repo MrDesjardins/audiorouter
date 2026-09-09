@@ -36,6 +36,12 @@ is implemented, but rights/editor/release qualification remains open.
   into source control. Rights, independent-vendor coverage, editor success,
   latency/soak, and release qualification remain prerequisites.
 
+- Closed the companion M07/AUTO-06 MCP discovery gap on 2026-09-09: the
+  `cancel_operation` tool now advertises its optional idempotency key with the
+  same bounded string contract as the backend and CLI. Added schema regression
+  coverage; MCP stdio interoperability and the full headless suite remain
+  green.
+
 - Added M06/PLUG-04 validated state restoration across deliberate worker
   replacement on 2026-09-09: `restart_with_state` preserves the verified
   plugin path, restores a version/size/hash-checked opaque asset before
