@@ -1584,3 +1584,25 @@ the already-qualified Pitchproof x64/x86 pair. No additional x64 VST3 bundle or
 second-vendor x64 audio-effect fixture was available. No plugin was loaded,
 copied, registered, or modified, and no audio or machine configuration changed.
 The independent-fixture gate therefore remains externally blocked.
+
+## AGain lifecycle compatibility and independent-fixture follow-up (2026-09-09)
+
+The canonical Steinberg `AGain` sample from the pinned SDK was built as an
+x64 repository-local bundle with plugin-link creation disabled. The official
+validator reported 94 tests passed and 0 failed. AudioRouter's native offline
+loader initially received `0x80004001` (`E_NOTIMPL`) from
+`IAudioProcessor::setProcessing(true)`; the SDK's `AudioEffect` base
+implementation returns that result when the hook is not overridden, and the
+SDK processing tests do not treat it as a processing failure. The loader now
+accepts only `kNotImplemented` for that lifecycle call and still requires
+successful processing, finite output, parameter automation, and state
+round-trip. AGain's main stereo effect class passed all of those checks.
+
+AGain's side-chain class was intentionally not counted in the one-input/
+one-output probe because its bus layout is different and was rejected before
+processing. The existing mda validator and five-class matrix passed after the
+loader change. A read-only inventory of the checked machine roots found no
+independent VST3 bundle; no plugin was registered, copied, or loaded beyond
+the explicitly selected offline fixtures, and no audio configuration changed.
+The independent rights-cleared fixture, broader bus-layout, editor, dynamic
+latency, and release gates remain open.
