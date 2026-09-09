@@ -12,11 +12,13 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `46a2008e` (2026-09-08). The guarded
-M00-M08 chain, all-features workspace tests, strict all-features Clippy, and
-documentation validation pass at this checkpoint. The repository remains
-clean; no driver or startup/plugin registration, signing-mode change, audio
-stream, or persistent machine audio configuration has been performed.
+The latest pushed checkpoint is `858d2f49` (2026-09-08). The guarded M00-M08
+chain, all-features workspace tests, strict all-features Clippy, UI checks,
+legacy VST2 fixture coverage, and documentation validation pass at the
+preceding implementation checkpoints. The repository is clean; no driver or
+startup/plugin registration, signing-mode change, audio stream, or persistent
+machine audio configuration has been performed. The gated x64 VST2 boundary
+is implemented, but rights/editor/release qualification remains open.
 
 - Requalified the complete guarded M00–M08 `safe-all.ps1` chain at pushed head `4475a5d0` on 2026-09-08: VS/WDK discovery/native compile, read-only 31-endpoint inventory, disposable SysVAD x64 package/API qualification, portable milestone checks, VST3 SDK/validator, modern/legacy/fault VST2 fixtures, M07, unsigned M08 artifacts, 159 traceability mappings, and documentation validation (51 files/161 links) passed. Temporary outputs/checkouts were cleaned; no driver installation/loading, signing-mode change, plugin/startup registration, stream, or machine audio configuration occurred. Production driver/signing, installer, clean-machine, physical-latency, and manual UI gates remain open.
 - Next M02/M03/M06 task: retain this validated user-mode boundary while awaiting the production managed-driver callback, independent plugin fixture/rights evidence, physical latency setup, and authenticated native-shell HWND owner.
