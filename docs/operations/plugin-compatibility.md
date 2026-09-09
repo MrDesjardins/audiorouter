@@ -156,6 +156,9 @@ third-party rights, editor support, physical latency, or release qualification.
 The remaining local ReaFIR and ReaXComp DLLs were then rechecked through the
 same path at all three rates (six more cases), completing the 18-case
 six-effect matrix.
+The canonical `m06-vst2-reaplugs.ps1` wrapper was subsequently run over the
+same ignored directory; its x64 classifier and per-candidate worker loop also
+passed all 18 cases, including intra-block parameter-offset coverage.
 
 Run the reproducible local qualification with:
 

@@ -102,6 +102,13 @@ release completion.
   compatibility and failure-containment evidence, not rights or release
   qualification.
 
+- Ran the canonical `m06-vst2-reaplugs.ps1` wrapper on 2026-09-09 after the
+  direct matrix checks. Its x64 PE classifier and isolated worker loop passed
+  all six ignored ReaPlugs audio effects at 44.1, 48, and 96 kHz (18 cases),
+  including bounded intra-block parameter automation. The wrapper restored
+  both VST2 environment variables; no plugin registration, audio stream, or
+  machine configuration changed.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
