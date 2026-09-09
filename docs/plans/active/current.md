@@ -98,6 +98,12 @@ release completion.
   registration, audio stream, or persistent machine audio configuration
   occurred.
 
+- Closed the final user-visible UI raw-error path on 2026-09-09: the
+  backend-derived EQ response request now preserves structured diagnostics
+  through the shared formatter. The UI audit reports no remaining direct
+  `Error.message` presentation expressions in `App.tsx`; typecheck and 98 tests
+  pass. Native shell/manual accessibility acceptance remains open.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;

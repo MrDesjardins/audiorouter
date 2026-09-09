@@ -84,7 +84,7 @@ function EqResponsePreview({ node, backend }: { node: Node; backend: UiBackend }
         gainDb: Number(node.parameters[`${prefix}GainDb`] ?? (legacy ? node.parameters.gainDb : 0)),
       };
     });
-    void backend.processorResponse({ sampleRateHz: 48000, bands, frequenciesHz: EQ_RESPONSE_FREQUENCIES }).then((value) => { if (active) { setResponse(value); setError(null); } }).catch((reason) => { if (active) { setResponse(null); setError(reason instanceof Error ? reason.message : "EQ response unavailable."); } });
+    void backend.processorResponse({ sampleRateHz: 48000, bands, frequenciesHz: EQ_RESPONSE_FREQUENCIES }).then((value) => { if (active) { setResponse(value); setError(null); } }).catch((reason) => { if (active) { setResponse(null); setError(formatUiError(reason, "EQ response unavailable.")); } });
     return () => { active = false; };
   }, [backend, node.kind, node.parameters]);
   if (node.kind !== "parametricEq") return null;
