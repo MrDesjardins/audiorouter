@@ -12,6 +12,9 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
+- Requalified the complete guarded M00–M08 `safe-all.ps1` chain at pushed head `4475a5d0` on 2026-09-08: VS/WDK discovery/native compile, read-only 31-endpoint inventory, disposable SysVAD x64 package/API qualification, portable milestone checks, VST3 SDK/validator, modern/legacy/fault VST2 fixtures, M07, unsigned M08 artifacts, 159 traceability mappings, and documentation validation (51 files/161 links) passed. Temporary outputs/checkouts were cleaned; no driver installation/loading, signing-mode change, plugin/startup registration, stream, or machine audio configuration occurred. Production driver/signing, installer, clean-machine, physical-latency, and manual UI gates remain open.
+- Next M02/M03/M06 task: retain this validated user-mode boundary while awaiting the production managed-driver callback, independent plugin fixture/rights evidence, physical latency setup, and authenticated native-shell HWND owner.
+
 M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.

@@ -1,5 +1,17 @@
 # M08 release evidence
 
+## 2026-09-08 - Full guarded chain at executable-identity head
+
+The complete `safe-all.ps1` chain passed at pushed head `4475a5d0`: VS/WDK
+discovery and native compile, read-only 31-endpoint inventory, disposable
+SysVAD x64 package/API qualification, portable M01/M04/M05 checks, VST3 SDK
+and validator, VST2 modern/legacy/fault fixtures, M07, unsigned M08 artifact
+verification, 159 traceability mappings, and documentation validation (51
+files/161 links). Temporary outputs/checkouts were cleaned. No driver was
+installed or loaded, no signing mode or registration changed, and no stream or
+machine audio configuration was modified; production driver/signing,
+installer, clean-machine, physical-latency, and manual UI gates remain open.
+
 ## 2026-09-08 - Complete safe acceptance at `2c8ab54d`
 
 The elevated `tests/acceptance/safe-all.ps1` chain passed at the pushed head:
