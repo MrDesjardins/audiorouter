@@ -46,6 +46,12 @@ an output layout larger than the input layout is rejected during worker startup
 instead of synthesizing an audio bus. The feature-enabled worker-process suite
 remained at 29 passing tests with six expected fixture-dependent skips.
 
+The complete guarded acceptance chain was requalified after these regressions:
+the pinned VST3 validators and AGain auxiliary-bus probe passed alongside the
+VST2 modern/legacy/fault matrix and all other M00-M08 checks. No driver,
+plugin registration, audio stream, signing-mode, or persistent machine audio
+configuration action occurred.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with
