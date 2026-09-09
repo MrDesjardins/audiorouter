@@ -1985,3 +1985,11 @@ This prevents a nonzero sample offset from being silently moved to the block
 boundary. The ReaPlugs acceptance matrix exercises offsets 0 and 64 in a
 128-frame block for all six local effects at 44.1, 48, and 96 kHz (18 isolated
 worker runs); finite output passed and the fixture environment was restored.
+
+The complete guarded M00-M08 acceptance chain was then rerun after this worker
+change. Native toolchain/endpoint checks, disposable SysVAD qualification,
+portable and UI milestones, VST3, VST2 modern/legacy/state/fault fixtures,
+M07, unsigned M08 preparation, 159 traceability mappings, and documentation
+validation all passed. No driver installation/loading, plugin registration,
+audio stream, signing-mode change, or persistent machine audio configuration
+was performed.

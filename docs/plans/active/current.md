@@ -94,6 +94,15 @@ is implemented, but rights/editor/release qualification remains open.
   opt-in ReaPlugs matrix now exercises offsets 0 and 64 in a 128-frame stereo
   block across all six local fixtures and three sample rates; finite processing
   passed, with environment variables restored and no audio configuration change.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
+  the VST2 automation fix on 2026-09-09. VS2026/MSVC/SDK/WDK discovery and
+  native compile, read-only 31-endpoint inventory, disposable pinned SysVAD
+  x64 qualification, M01/M04/M05, VST3 validators and transformation probes,
+  VST2 modern/legacy/state/fault fixtures, M07, unsigned M08 artifacts, 159
+  traceability mappings, and documentation validation (51 Markdown files/163
+  local links) passed. Temporary outputs were cleaned; no driver installation
+  or loading, signing-mode change, plugin/startup registration, audio stream,
+  or persistent machine audio configuration occurred.
 - Hardened the M06/PLUG-03 typed multi-bus worker deadline on 2026-09-09: response reads now stop at the quantum deadline (still capped by the five-second IPC bound), and a controlled no-result worker returned within 100 ms instead of waiting for the global timeout. The supervised expired-quantum path remains fail-closed and records the worker failure. Feature-enabled worker-process tests passed 26 tests with six expected fixture-dependent skips; strict Clippy, formatting, and diff checks passed. No production VST3 worker, realtime callback, plugin registration, audio stream, or machine audio configuration was used.
 - Exercised the M06/PLUG-03 production-shaped handoff on 2026-09-09: a supervised multi-bus result now passes through the validated worker client, caller-owned staging storage, and `RuntimeBusGeneration`, preserving sequence identity and publishing both main and auxiliary output blocks. The feature-enabled worker-process suite passed 27 tests with six expected fixture-dependent skips; strict Clippy, formatting, and diff checks passed. This is still echo-fixture integration evidence, not production VST3 execution or realtime callback evidence.
 - Extended the M06/PLUG-03 worker fixture on 2026-09-09 to accept bounded asymmetric layouts such as two input buses to one output bus, preserving only the declared main output and rejecting layouts that would require synthesizing an undeclared input. The feature-enabled worker-process suite passed 28 tests with six expected fixture-dependent skips; strict feature-enabled and default workspace Clippy, formatting, and diff checks passed. This remains protocol/fixture evidence; production VST3 execution and realtime graph scheduling remain gated.
