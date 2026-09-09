@@ -416,6 +416,12 @@ fn process_vst2_frame(
     }
     let inputs: Vec<&[f32]> = input_channels.iter().map(Vec::as_slice).collect();
     let mut outputs: Vec<&mut [f32]> = output_channels.iter_mut().map(Vec::as_mut_slice).collect();
+    plugin
+        .set_processing_format(
+            48_000.0,
+            i32::try_from(frames).map_err(|_| "frame count overflow")?,
+        )
+        .map_err(|error| format!("format setup failed: {error:?}"))?;
     for event in parameters {
         if event.sample_offset >= frames {
             return Err(format!(
@@ -427,12 +433,6 @@ fn process_vst2_frame(
             .set_parameter(event.parameter_id, event.normalized_value)
             .map_err(|error| format!("parameter update failed: {error:?}"))?;
     }
-    plugin
-        .set_processing_format(
-            48_000.0,
-            i32::try_from(frames).map_err(|_| "frame count overflow")?,
-        )
-        .map_err(|error| format!("format setup failed: {error:?}"))?;
     plugin
         .process_replacing(&inputs, &mut outputs)
         .map_err(|error| format!("process callback failed: {error:?}"))?;

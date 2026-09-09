@@ -1381,6 +1381,10 @@ reentrancy while keeping all calls on the contained worker thread.
 The Windows unit regression verifies the exact dispatcher-call count for a
 repeated format and one subsequent format change.
 
+VST2 block handling now performs format setup before parameter setters, so
+automation observes an initialized effect. The six ReaPlugs and repository
+chunk-state fixture acceptance runs passed with this order.
+
 The ABI layer now includes bounded native-editor open, close, and idle dispatch
 primitives with one-editor-at-a-time state and close-before-effect teardown.
 Focused Windows tests lock the VST2 editor opcodes and lifecycle state. No

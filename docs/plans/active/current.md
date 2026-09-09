@@ -93,6 +93,11 @@ transition; normal blocks do not re-enter plugin lifecycle callbacks.
 The Windows dispatcher-count regression covers both the cached repeat and the
 format-change transition.
 
+The worker now applies the cached format before VST2 parameter automation on a
+block, ensuring legacy setters see the negotiated sample rate and block size.
+The six-binary ReaPlugs matrix and chunk-state behavioral fixture both passed
+after this ordering change.
+
 Added bounded VST2 `effEditOpen`, `effEditClose`, and `effEditIdle` primitives
 with explicit editor-open state and RAII close ordering. They are intentionally
 not called by the worker yet: the API documents that only a future dedicated
