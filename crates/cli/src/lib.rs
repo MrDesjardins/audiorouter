@@ -1425,7 +1425,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         let session: audiorouter_domain::Session = serde_json::from_str(&document)
             .map_err(|error| CliError::InvalidArguments(error.to_string()))?;
         let mut plane = ControlPlane::with_storage("cli", storage);
-        let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+        let idempotency_key = option_value(args, "--idempotency-key")?;
         return plane
             .dispatch(audiorouter_protocol::JsonRpcRequest {
                 jsonrpc: "2.0".into(),
@@ -1460,7 +1460,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
                 )
             })?;
         let mut plane = ControlPlane::with_storage("cli", storage);
-        let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+        let idempotency_key = option_value(args, "--idempotency-key")?;
         return plane
             .dispatch(audiorouter_protocol::JsonRpcRequest {
                 jsonrpc: "2.0".into(),
@@ -1485,7 +1485,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
             .map_err(|error| CliError::InvalidArguments(error.to_string()));
     }
     let mut plane = ControlPlane::with_storage("cli", storage);
-    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    let idempotency_key = option_value(args, "--idempotency-key")?;
     let method = match action {
         "start" => "sessions.start",
         "stop" => "sessions.stop",
@@ -1919,12 +1919,12 @@ fn mcp_tools() -> Value {
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
         { "name": "cancel_operation", "description": "Request cancellation with an idempotency key; completed operations are never undone.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["operationId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content; requires recording scope. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] }, "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
-        { "name": "arm_recorder", "description": "Arm a session recorder at the control boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
-        { "name": "start_recorder", "description": "Start a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
-        { "name": "pause_recorder", "description": "Pause a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
-        { "name": "resume_recorder", "description": "Resume a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
-        { "name": "split_recorder", "description": "Split a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
-        { "name": "stop_recorder", "description": "Stop a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
+        { "name": "arm_recorder", "description": "Arm a session recorder at the control boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "start_recorder", "description": "Start a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "pause_recorder", "description": "Pause a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "resume_recorder", "description": "Resume a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "split_recorder", "description": "Split a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "stop_recorder", "description": "Stop a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "get_recording_recovery", "description": "Read a validated recorder recovery checkpoint without audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "preview_recording", "description": "Inspect recording file metadata without decoding audio; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
@@ -1937,7 +1937,7 @@ fn mcp_tools() -> Value {
         { "name": "recycle_recording", "description": "Preview or explicitly recycle a recording through the OS Recycle Bin; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "confirm": { "type": "boolean" } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
         { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
-        { "name": "control_session", "description": "Start or stop one session through the authorized lifecycle API.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "action": { "enum": ["start", "stop"] } }, "required": ["sessionId", "action"], "additionalProperties": false } },
+        { "name": "control_session", "description": "Start or stop one session through the authorized lifecycle API with an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "action": { "enum": ["start", "stop"] }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "action", "idempotencyKey"], "additionalProperties": false } },
         { "name": "call_api", "description": "Call one validated permitted AudioRouter API method.", "inputSchema": { "type": "object", "properties": { "method": { "type": "string" }, "params": { "type": ["object", "null"] } }, "required": ["method"], "additionalProperties": false } }
     ])
 }
@@ -2006,7 +2006,10 @@ fn mcp_tool_call(
                 "stop" => "sessions.stop",
                 _ => return mcp_tool_error(id, "control_session action must be start or stop"),
             };
-            let params = json!({ "sessionId": arguments["sessionId"] });
+            let params = json!({
+                "sessionId": arguments["sessionId"],
+                "idempotencyKey": arguments["idempotencyKey"]
+            });
             return mcp_dispatch_tool(plane, client_id, grant, pipe_name, id, method, Some(params));
         }
         "call_api" => {
@@ -3115,6 +3118,8 @@ mod tests {
             &created_document_arg,
             "--database",
             &created_database_arg,
+            "--idempotency-key",
+            "create-cli-1",
             "--json",
         ])
         .unwrap();
@@ -3189,6 +3194,8 @@ mod tests {
             duplicate_id,
             "--database",
             &database_arg,
+            "--idempotency-key",
+            "duplicate-cli-1",
             "--json",
         ])
         .unwrap();
@@ -3199,6 +3206,8 @@ mod tests {
             "session-fixture",
             "--database",
             &database_arg,
+            "--idempotency-key",
+            "delete-cli-1",
             "--json",
         ])
         .unwrap();
@@ -3209,6 +3218,8 @@ mod tests {
             duplicate_id,
             "--database",
             &database_arg,
+            "--idempotency-key",
+            "delete-cli-2",
             "--json",
         ])
         .unwrap();
@@ -3242,6 +3253,8 @@ mod tests {
             &candidate_arg,
             "--database",
             &database_arg,
+            "--idempotency-key",
+            "create-cli-3",
             "--json",
         ])
         .unwrap();

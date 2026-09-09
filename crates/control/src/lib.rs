@@ -491,11 +491,11 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "sessions.get" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
-            &["sessionId", "idempotencyKey"],
+            &["sessionId"],
         ),
         "sessions.export" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
-            &["sessionId", "idempotencyKey"],
+            &["sessionId"],
         ),
         "sessions.importPlan" => {
             object_schema(json!({ "session": session_item_schema() }), &["session"])
@@ -512,14 +512,14 @@ fn method_input_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["sessionId"],
+            &["sessionId", "idempotencyKey"],
         ),
         "session.start" | "sessions.start" | "session.stop" | "sessions.stop" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["sessionId"],
+            &["sessionId", "idempotencyKey"],
         ),
         "sessions.list" => object_schema(
             json!({
@@ -614,9 +614,9 @@ fn recorder_input_schema(frame_required: bool) -> Value {
         properties["frame"] = json!({ "type": "integer", "minimum": 0 });
     }
     if frame_required {
-        object_schema(properties, &["sessionId", "frame"])
+        object_schema(properties, &["sessionId", "frame", "idempotencyKey"])
     } else {
-        object_schema(properties, &["sessionId"])
+        object_schema(properties, &["sessionId", "idempotencyKey"])
     }
 }
 
@@ -3919,6 +3919,11 @@ impl ControlPlane {
     fn dispatch_session_create(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params =
             params.ok_or_else(|| ControlError::InvalidRequest("session is required".into()))?;
+        params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let session: Session = serde_json::from_value(
             params
                 .get("session")
@@ -3953,6 +3958,11 @@ impl ControlPlane {
         let params = params.ok_or_else(|| {
             ControlError::InvalidRequest("duplicate parameters are required".into())
         })?;
+        params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let source_id: EntityId =
             serde_json::from_value(params.get("sourceSessionId").cloned().ok_or_else(|| {
                 ControlError::InvalidRequest("sourceSessionId is required".into())
@@ -4167,7 +4177,9 @@ impl ControlPlane {
         method: &str,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
-        let params = params.unwrap_or_else(|| json!({}));
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and idempotencyKey are required".into())
+        })?;
         let session_id = params
             .get("sessionId")
             .and_then(Value::as_str)
@@ -4182,19 +4194,16 @@ impl ControlPlane {
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|key| !key.is_empty())
-            .map(str::to_owned);
+            .map(str::to_owned)
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let request_hash = Self::request_hash(&json!({
             "method": method,
             "sessionId": session_id,
             "frame": frame,
         }));
-        let scoped_key = idempotency
-            .as_deref()
-            .map(|key| self.scoped_idempotency_key(method, key));
-        if let Some(key) = scoped_key.as_deref() {
-            if let Some(result) = self.lookup_idempotent_result(key, &request_hash)? {
-                return Ok(result);
-            }
+        let scoped_key = self.scoped_idempotency_key(method, &idempotency);
+        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+            return Ok(result);
         }
         let restored = if self.recorders.contains_key(&session_id) {
             None
@@ -4258,9 +4267,7 @@ impl ControlPlane {
                 .save_recording_checkpoint(session_id.as_str(), &checkpoint)
                 .map_err(storage_error)?;
         }
-        if let Some(key) = scoped_key {
-            self.journal_idempotent_result(&key, method, &request_hash, &result)?;
-        }
+        self.journal_idempotent_result(&scoped_key, method, &request_hash, &result)?;
         let revision = self
             .store
             .session(&session_id)
@@ -7878,7 +7885,8 @@ mod tests {
             params: Some(json!({
                 "sourceSessionId": "source",
                 "sessionId": "copy",
-                "name": null
+                "name": null,
+                "idempotencyKey": "duplicate-null-name"
             })),
         });
         assert!(response.result.is_some());
@@ -9840,26 +9848,29 @@ mod tests {
         plane.create_session(session()).unwrap();
         let grant = ClientGrant::with_scopes([PermissionScope::Read, PermissionScope::Record]);
         for (method, params) in [
-            ("recorders.arm", json!({"sessionId": "session"})),
+            (
+                "recorders.arm",
+                json!({"sessionId": "session", "idempotencyKey": "arm-lifecycle"}),
+            ),
             (
                 "recorders.start",
-                json!({"sessionId": "session", "frame": 10}),
+                json!({"sessionId": "session", "frame": 10, "idempotencyKey": "start-lifecycle"}),
             ),
             (
                 "recorders.pause",
-                json!({"sessionId": "session", "frame": 20}),
+                json!({"sessionId": "session", "frame": 20, "idempotencyKey": "pause-lifecycle"}),
             ),
             (
                 "recorders.resume",
-                json!({"sessionId": "session", "frame": 30}),
+                json!({"sessionId": "session", "frame": 30, "idempotencyKey": "resume-lifecycle"}),
             ),
             (
                 "recorders.split",
-                json!({"sessionId": "session", "frame": 40}),
+                json!({"sessionId": "session", "frame": 40, "idempotencyKey": "split-lifecycle"}),
             ),
             (
                 "recorders.stop",
-                json!({"sessionId": "session", "frame": 50}),
+                json!({"sessionId": "session", "frame": 50, "idempotencyKey": "stop-lifecycle"}),
             ),
         ] {
             let response = plane.dispatch_authorized(
@@ -9877,7 +9888,9 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(7)),
             method: "recorders.stop".into(),
-            params: Some(json!({"sessionId": "session", "frame": 50})),
+            params: Some(
+                json!({"sessionId": "session", "frame": 50, "idempotencyKey": "stop-unauthed"}),
+            ),
         });
         assert!(response.error.is_some());
     }
@@ -9937,7 +9950,7 @@ mod tests {
                     jsonrpc: "2.0".into(),
                     id: Some(json!(1)),
                     method: "recorders.arm".into(),
-                    params: Some(json!({"sessionId": "session"})),
+                    params: Some(json!({"sessionId": "session", "idempotencyKey": "arm-restart"})),
                 })
                 .result
                 .is_some());
@@ -9946,7 +9959,7 @@ mod tests {
                     jsonrpc: "2.0".into(),
                     id: Some(json!(2)),
                     method: "recorders.start".into(),
-                    params: Some(json!({"sessionId": "session", "frame": 128})),
+                    params: Some(json!({"sessionId": "session", "frame": 128, "idempotencyKey": "start-restart"})),
                 })
                 .result
                 .is_some());
@@ -9957,7 +9970,11 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(3)),
             method: "recorders.pause".into(),
-            params: Some(json!({"sessionId": "session", "frame": 256})),
+            params: Some(json!({
+                "sessionId": "session",
+                "frame": 256,
+                "idempotencyKey": "pause-restart"
+            })),
         });
         assert_eq!(response.result.unwrap()["state"], "paused");
         let _ = std::fs::remove_file(path);

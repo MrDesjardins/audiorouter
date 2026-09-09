@@ -79,6 +79,13 @@ release completion.
   suite passed all 98 tests with formatting and diff checks; no runtime audio
   session or persistent machine configuration was changed.
 
+- Closed the recorder and MCP session-control key-contract gap on 2026-09-09:
+  all recorder input schemas/dispatch paths now require durable idempotency
+  keys, and the MCP control_session adapter forwards its required key instead
+  of dropping it. Recorder lifecycle/checkpoint regressions, control tests,
+  formatting, and diff checks remain the validation target; no audio stream was
+  opened.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown
