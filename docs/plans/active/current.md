@@ -67,6 +67,12 @@ release completion.
   interoperability tests (2), strict Clippy, formatting, and diff checks pass;
   no audio stream or machine configuration changed.
 
+- Revalidated M07 headless acceptance at pushed head `32256834` on 2026-09-09:
+  CLI (29), control (98), MCP interoperability (2), plugin-host (67), and
+  worker-process (13) tests passed with strict Clippy. No audio device, driver,
+  plugin registration, startup registration, or machine configuration action
+  occurred.
+
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
   ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and
