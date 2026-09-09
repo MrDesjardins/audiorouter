@@ -4,11 +4,13 @@ use audiorouter_plugin_host::stage_engine_worker_result;
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterEvent;
+#[cfg(feature = "test-fixtures")]
+use audiorouter_plugin_host::SupervisedBusWorkerLoop;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
-    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedBusWorkerLoop,
-    SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
+    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::{WorkerAudioBusLayout, WorkerBusSession};
