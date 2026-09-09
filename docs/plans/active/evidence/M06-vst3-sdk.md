@@ -2052,6 +2052,13 @@ existing three-failure quarantine threshold. The owner exposed terminal
 failure, and the final missing result was published as scheduler silence. This
 is deterministic containment evidence, not a native third-party fault soak.
 
+The owner timing regression then crossed 64 consecutive `[stereo, mono]`
+fixture quanta through the fixed two-slot scheduler. Every output was finite,
+the worker remained healthy, and the measured per-quantum staging/worker round
+trip stayed below 100 ms in the guarded run. This is short worker-thread
+evidence only; it does not qualify the realtime callback, an eight-hour W2
+soak, or physical latency.
+
 The guarded `tests/acceptance/safe-all.ps1` chain was rerun after this policy
 change and passed its native toolchain/endpoint and disposable SysVAD checks,
 portable M01/M04/M05/M07 checks, native VST3 and available VST2 fixture

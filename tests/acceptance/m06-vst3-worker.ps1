@@ -31,10 +31,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "native VST3 asynchronous worker acceptance failed with exit code $LASTEXITCODE" }
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --exact supervised_bus_worker_loop_silences_after_a_bounded_worker_failure --nocapture
     if ($LASTEXITCODE -ne 0) { throw "supervised multi-bus failure recovery acceptance failed with exit code $LASTEXITCODE" }
+    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --exact supervised_bus_worker_loop_keeps_repeated_quanta_bounded --nocapture
+    if ($LASTEXITCODE -ne 0) { throw "supervised multi-bus repeated-quantum acceptance failed with exit code $LASTEXITCODE" }
 } finally {
     if ($null -eq $previousFixture) { Remove-Item Env:AUDIOROUTER_VST3_FIXTURE -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_FIXTURE = $previousFixture }
     if ($null -eq $previousWorker) { Remove-Item Env:AUDIOROUTER_VST3_NATIVE_WORKER -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_NATIVE_WORKER = $previousWorker }
     Remove-Item -LiteralPath $worker,$workerObject -Force -ErrorAction SilentlyContinue
 }
-Write-Output 'M06 native VST3 worker acceptance passed: isolated AGain single-stream and auxiliary-bus processing, asynchronous graph staging, finite transformed output, and bounded shutdown.'
+Write-Output 'M06 native VST3 worker acceptance passed: isolated AGain single-stream and auxiliary-bus processing, asynchronous graph staging, bounded restart/quarantine recovery, repeated-quantum timing, finite transformed output, and bounded shutdown.'
 Write-Output 'Scope: repository-local native worker and AGain fixture; no plugin registration, audio stream, or machine audio configuration changes.'
