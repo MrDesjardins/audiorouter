@@ -117,9 +117,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-
 ```
 
 The wrapper prints the binary SHA-256, restores any pre-existing
-`AUDIOROUTER_VST2_FIXTURE` value, and never changes audio configuration.
-Qualification remains fixture-specific and does not establish rights to
-redistribute the installed binary.
+`AUDIOROUTER_VST2_FIXTURE` value, and never changes audio configuration. Its
+processing and editor-containment checks both pass for the current fixture:
+the editor enters `effEditOpen` but does not return within five seconds, so
+the worker is terminated and reaped. This is contained editor-failure
+evidence, not successful editor-window support. Qualification remains
+fixture-specific and does not establish rights to redistribute the installed
+binary.
 
 The sibling `pitchproof.dll` from the same installation is an x86 binary and
 was rejected by read-only inspection as `unsupportedArchitecture`; it was not

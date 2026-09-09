@@ -24,6 +24,18 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Installed VST2 worker acceptance failed with exit code $LASTEXITCODE"
     }
+    & cargo test -p audiorouter-plugin-host --test worker_process `
+        --features test-fixtures --locked -- `
+        --ignored --exact dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor --nocapture
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installed VST2 editor-thread containment failed with exit code $LASTEXITCODE"
+    }
+    & cargo test -p audiorouter-plugin-host --test worker_process `
+        --features test-fixtures --locked -- `
+        --ignored --exact supervised_vst2_editor_timeout_kills_the_worker_and_records_failure --nocapture
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installed VST2 supervised editor containment failed with exit code $LASTEXITCODE"
+    }
     Write-Output 'Installed VST2 worker acceptance passed.'
 } finally {
     if ($null -eq $previousFixture) {
