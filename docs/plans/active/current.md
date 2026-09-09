@@ -201,7 +201,7 @@ is implemented, but rights/editor/release qualification remains open.
   acceptance passed after this regression, including native single-stream
   recovery. Automatic policy is now bounded and fail-closed; native fault soak,
   callback timing, and physical latency remain open.
-- Added a bounded repeated-quantum owner regression on 2026-09-09: 4,096
+- Added a bounded repeated-quantum owner regression on 2026-09-09: 16,384
   consecutive `[stereo, mono]` fixture quanta crossed the preallocated graph
   scheduler and returned finite output without worker failure; the measured
   per-quantum staging/worker round trip stayed below 100 ms in the guarded

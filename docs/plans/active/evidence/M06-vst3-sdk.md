@@ -2052,7 +2052,7 @@ existing three-failure quarantine threshold. The owner exposed terminal
 failure, and the final missing result was published as scheduler silence. This
 is deterministic containment evidence, not a native third-party fault soak.
 
-The owner timing regression then crossed 4,096 consecutive `[stereo, mono]`
+The owner timing regression then crossed 16,384 consecutive `[stereo, mono]`
 fixture quanta through the fixed two-slot scheduler. Every output was finite,
 the worker remained healthy, and the measured per-quantum staging/worker round
 trip stayed below 100 ms in the guarded run. This is short worker-thread
