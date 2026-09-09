@@ -1,8 +1,9 @@
 # Plugin compatibility snapshot
 
-AudioRouter's supported plugin boundary is VST3 x64. VST2, x86, arbitrary
-binary execution, and a universal commercial-plugin guarantee are outside the
-current qualification.
+AudioRouter's release-qualified plugin boundary remains VST3 x64. A gated
+Windows-only VST2 x64 worker adapter is available for explicitly selected
+user-installed audio-effect DLLs; x86, arbitrary binary execution, and a
+universal commercial-plugin guarantee remain outside qualification.
 
 ## Verified fixture
 
@@ -33,10 +34,14 @@ against canonical/reparse-point boundaries. Invalid candidates remain visible
 as inspection errors. Missing or malformed optional module metadata leaves
 those fields empty and does not turn a binary into a compatibility claim.
 
-The future worker path has bounded frames, deadlines, heartbeats, shared-memory
-layout checks, failure quarantine, and process cleanup. Full OS-level
-filesystem/network sandboxing, native plugin execution, and a multi-vendor
-compatibility matrix remain open release work. The host library now also has a
+The worker path has bounded frames, deadlines, heartbeats, shared-memory layout
+checks, failure quarantine, and process cleanup. Full OS-level
+filesystem/network sandboxing and a multi-vendor compatibility matrix remain
+open release work. The native VST2 adapter has passed the local six-binary
+ReaPlugs worker matrix for bounded load, processing, parameters, latency, state
+capability, editor capability discovery, and shutdown. This is fixture evidence
+only: native editor window open/close, chunk-capable state, rights review, and
+release qualification remain open. The host library now also has a
 control-plane `EditorLifecycle` policy that separates editor open/close/failure
 and deliberate retry from the processing generation. It does not create native
 windows or claim editor compatibility; those remain a Windows/UI acceptance
