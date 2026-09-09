@@ -92,6 +92,16 @@ release completion.
   shell/HWND, physical-latency, manual accessibility, and independent-vendor
   plugin blockers.
 
+- Requalified M08 unsigned release preparation on 2026-09-09: optimized CLI
+  artifacts, production UI bundle (210 modules), SBOM/notice material, hashes,
+  archive contents, and unsigned/publication-blocker assertions passed. All
+  release output was disposable and removed by the runner; no installer,
+  driver, signing operation, or audio configuration action occurred.
+- Next safe task: continue with any remaining independently observable plan
+  gate; do not represent the product as releasable until signing, installer,
+  clean-machine, driver, shell/HWND, physical-latency, accessibility, and
+  independent-vendor plugin evidence exists.
+
 - Requalified the focused M05 UI acceptance at the current head on 2026-09-09:
   TypeScript typecheck, all 16 UI test files/111 tests, and the temporary
   production Vite bundle (210 modules, three output files) passed. The runner
