@@ -1,5 +1,16 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Capture initialization error-source diagnostics
+
+The capture adapter now labels initialization failures by delivery mode:
+`IAudioClient::Initialize(capture,event-callback)` for the first attempt and
+`IAudioClient::Initialize(capture,polling)` for the exact `E_INVALIDARG`
+fallback. The retry predicate remains restricted to `0x80070057`; device-in-
+use, access-denied, and other failures are not reclassified. The focused
+Windows-audio suite passed 31 tests, strict Clippy passed with `-D warnings`,
+formatting and diff checks passed, and no audio stream or machine configuration
+was changed.
+
 ## 2026-09-08 - Latest guarded requalification reconciliation
 
 The latest guarded runs supersede the endpoint counts from earlier runs while

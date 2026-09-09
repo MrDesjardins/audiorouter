@@ -500,6 +500,14 @@ fn should_retry_capture_initialization(error: &windows::core::Error) -> bool {
     error.code() == windows::core::HRESULT(0x80070057u32 as i32)
 }
 
+fn capture_initialize_operation(event_driven: bool) -> &'static str {
+    if event_driven {
+        "IAudioClient::Initialize(capture,event-callback)"
+    } else {
+        "IAudioClient::Initialize(capture,polling)"
+    }
+}
+
 impl Drop for EventHandle {
     fn drop(&mut self) {
         unsafe {
@@ -1156,7 +1164,7 @@ impl SharedCapture {
         };
         unsafe { windows::Win32::System::Com::CoTaskMemFree(Some(format.cast())) };
         initialized.map_err(|error| AudioError::WindowsOperation {
-            operation: "IAudioClient::Initialize(capture)",
+            operation: capture_initialize_operation(event_driven),
             error,
         })?;
         if let Some(event) = &event {
@@ -2766,6 +2774,18 @@ mod tests {
         assert!(should_retry_capture_initialization(&invalid_argument));
         assert!(!should_retry_capture_initialization(&device_in_use));
         assert!(!should_retry_capture_initialization(&other_failure));
+    }
+
+    #[test]
+    fn capture_initialize_errors_identify_delivery_mode() {
+        assert_eq!(
+            capture_initialize_operation(true),
+            "IAudioClient::Initialize(capture,event-callback)"
+        );
+        assert_eq!(
+            capture_initialize_operation(false),
+            "IAudioClient::Initialize(capture,polling)"
+        );
     }
 
     #[cfg(windows)]

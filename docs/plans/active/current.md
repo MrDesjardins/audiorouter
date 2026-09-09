@@ -16,6 +16,9 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+- Hardened M00 capture diagnostics on 2026-09-08: `IAudioClient::Initialize` failures now identify whether event-callback or polling delivery was being initialized. The fallback remains restricted to exact `E_INVALIDARG`; device-in-use, access-denied, and other HRESULTs remain visible without reclassification. Windows-audio tests (31), strict Clippy, formatting, and diff checks passed; no stream or machine configuration changed.
+- Next M00/M02 task: retain the explicit retry diagnostics while connecting the adapter to the managed endpoint-owned callback after the production driver boundary exists.
+
 - Requalified the guarded differing-rate M02 route on 2026-09-08: explicitly selected 96 kHz capture to 48 kHz render produced 47,040 capture frames, 183 graph blocks, 23,424 scheduler frames, and 23,424 routed frames. The 128-frame negotiated deadline was 1,333,334 ns; processing p99.9 was 65,536 ns with zero deadline misses/lateness. Stream cleanup and media-state preservation passed. This remains shared-mode user-space evidence, not managed-driver callback or physical-latency qualification.
 - Next M02/M03 task: connect the rate-aware scheduler to the managed endpoint-owned callback after driver lifecycle exists; retain the guarded differing-rate route as repeatable user-mode evidence.
 
