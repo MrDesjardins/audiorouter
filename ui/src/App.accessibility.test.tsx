@@ -74,4 +74,14 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByLabelText("Microphone out output")).toBeTruthy();
     expect(await screen.findByLabelText("Voice gain in input")).toBeTruthy();
   });
+
+  it("persists tidy layout positions as presentation state", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Tidy layout" }));
+    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({
+      mic: { x: 0, y: 0 },
+      voice: { x: 260, y: 0 },
+    });
+  });
 });

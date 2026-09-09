@@ -36,6 +36,11 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onSelectM
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
   const highlightedNodeIds = relatedNodeIds(session, selectedNodeId);
+  const tidyLayout = () => {
+    const next = Object.fromEntries(session.nodes.map((node, index) => [node.id, positionFor(index)]));
+    setPositions(next);
+    writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+  };
   const nodes: FlowNode[] = session.nodes.map((node, index) => ({
     id: node.id,
     position: positions[node.id] ?? positionFor(index),
@@ -74,7 +79,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onSelectM
 
   return (
     <div className="session-flow-canvas" aria-label="Signal-flow graph">
-      <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); setPositions({}); }}>Reset layout</button></div>
+      <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); setPositions({}); }}>Reset layout</button></div>
       <ReactFlow
         nodes={nodes}
         edges={edges}
