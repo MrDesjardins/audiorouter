@@ -3417,6 +3417,31 @@ mod tests {
             .unwrap();
         let startup_apply_payload: Value = serde_json::from_str(startup_apply_content).unwrap();
         assert_eq!(startup_apply_payload["result"]["state"], "unavailable");
+        let recording_grant = audiorouter_control::ClientGrant::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::Record,
+        ]);
+        let recorder = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &recording_grant,
+            None,
+            &json!({
+                "id": 15,
+                "params": {
+                    "name": "control_recorder",
+                    "arguments": {
+                        "sessionId": "session-fixture",
+                        "action": "arm",
+                        "idempotencyKey": "mcp-recorder-arm-1"
+                    }
+                }
+            }),
+        );
+        assert_eq!(recorder["result"]["isError"], false);
+        let recorder_content = recorder["result"]["content"][0]["text"].as_str().unwrap();
+        let recorder_payload: Value = serde_json::from_str(recorder_content).unwrap();
+        assert_eq!(recorder_payload["result"]["state"], "armed");
         let recovery = mcp_tool_call(
             &mut plane,
             "mcp-test",

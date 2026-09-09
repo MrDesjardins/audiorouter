@@ -94,6 +94,12 @@ release completion.
   Clippy, formatting, and diff checks pass. No audio or machine configuration
   changed.
 
+- Strengthened AUTO-07 coverage on 2026-09-09: the CLI MCP regression now
+  dispatches `control_recorder` through an explicit read-plus-record grant and
+  verifies the canonical `armed` result, in addition to checking all three
+  compatibility-tool schemas. Focused CLI/MCP tests, strict Clippy, formatting,
+  and diff checks pass; no audio stream or machine configuration changed.
+
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
   ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and
