@@ -22,8 +22,10 @@ built and checked with the installed Visual Studio 2026 toolchain:
   the official validator reported 94 passed and 0 failed, and AudioRouter's
   offline loader passed its main stereo effect class with finite processing,
   bounded parameter automation, and state round-trip. Its side-chain class
-  remains outside this one-input/one-output probe because it exposes a
-  different bus layout.
+  also passed the explicit `--multi-bus` offline probe: its two-input/one-output
+  layout was activated and processed with finite output. This is auxiliary-bus
+  loader evidence only; the supervised realtime multi-bus worker path remains
+  gated and the default one-input/one-output probe still rejects that class.
 
 These are offline fixture results, not proof that every class or third-party
 plugin is compatible with a realtime AudioRouter route. Some fixture classes
