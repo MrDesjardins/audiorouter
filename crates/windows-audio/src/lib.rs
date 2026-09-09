@@ -1844,7 +1844,7 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                     entry.th32ProcessID,
                 )
                 .ok()
-                .and_then(|handle| {
+                .map(|handle| {
                     let mut path_buffer = vec![0u16; 32_768];
                     let mut path_length = path_buffer.len() as u32;
                     let executable_path = QueryFullProcessImageNameW(
@@ -1862,16 +1862,14 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                     let result =
                         GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user);
                     let _ = CloseHandle(handle);
-                    result.ok().map(|_| {
-                        (
-                            (u64::from(creation.dwHighDateTime) << 32)
-                                | u64::from(creation.dwLowDateTime),
-                            executable_path,
-                        )
-                    })
+                    let creation_time = result.ok().map(|_| {
+                        (u64::from(creation.dwHighDateTime) << 32)
+                            | u64::from(creation.dwLowDateTime)
+                    });
+                    (creation_time, executable_path)
                 });
-                let (creation_time_100ns, executable_path) = creation_time_100ns
-                    .map_or((None, None), |(creation, path)| (Some(creation), path));
+                let (creation_time_100ns, executable_path) =
+                    creation_time_100ns.map_or((None, None), |(creation, path)| (creation, path));
                 applications.push(ApplicationInfo {
                     process_id: entry.th32ProcessID,
                     executable,

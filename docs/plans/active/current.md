@@ -28,6 +28,9 @@ the user's audio configuration and do not install drivers or alter defaults.
 - Requalified the M05 UI against the expanded application contract on 2026-09-08: TypeScript typecheck, 14 Vitest files/91 tests, and a temporary production build all passed. The temporary build was removed; no backend, audio, or machine configuration changed.
 - Next M05/M06 task: retain executable-path identity as read-only discovery data until the authenticated native shell and managed process-capture owner are available.
 
+- Corrected CAP-05 metadata retention on 2026-09-08: executable path and creation-time queries are now tracked independently, so a failed creation-time query no longer discards a successfully observed path. Control (97) and Windows-audio (32) tests, strict workspace Clippy, formatting, and diff checks passed; no audio or machine configuration changed.
+- Next CAP-06 task: require both path and creation identity for durable process binding when the managed process-capture owner is integrated; preserve null metadata as fail-closed.
+
 - Requalified the guarded differing-rate M02 route on 2026-09-08: explicitly selected 96 kHz capture to 48 kHz render produced 47,040 capture frames, 183 graph blocks, 23,424 scheduler frames, and 23,424 routed frames. The 128-frame negotiated deadline was 1,333,334 ns; processing p99.9 was 65,536 ns with zero deadline misses/lateness. Stream cleanup and media-state preservation passed. This remains shared-mode user-space evidence, not managed-driver callback or physical-latency qualification.
 - Next M02/M03 task: connect the rate-aware scheduler to the managed endpoint-owned callback after driver lifecycle exists; retain the guarded differing-rate route as repeatable user-mode evidence.
 

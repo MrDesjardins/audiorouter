@@ -1,5 +1,15 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Independent process metadata retention
+
+The Windows inventory now retains an executable path even when the separate
+creation-time query is unavailable; it no longer discards usable identity
+metadata because the two limited-information queries share one handle. The
+Rust application inventory requalification returned 443 records, including
+195 with both path and creation timestamp. Control (97) and Windows-audio
+(32) tests, strict Clippy, formatting, and diff checks passed. No audio or
+machine configuration changed.
+
 ## 2026-09-08 - Rust application identity inventory
 
 The read-only CLI application inventory completed successfully through the
