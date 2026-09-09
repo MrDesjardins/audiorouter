@@ -3420,6 +3420,31 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
+        let denied_generic = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 8,
+                "params": {
+                    "name": "call_api",
+                    "arguments": {
+                        "method": "clients.authorize",
+                        "params": {
+                            "clientId": "attempted-escalation",
+                            "role": "operator",
+                            "idempotencyKey": "attempted-escalation-1"
+                        }
+                    }
+                }
+            }),
+        );
+        assert_eq!(denied_generic["result"]["isError"], true);
+        assert_eq!(
+            denied_generic["result"]["structuredContent"]["error"]["data"]["code"],
+            "permissionDenied"
+        );
         let startup = mcp_tool_call(
             &mut plane,
             "mcp-test",
