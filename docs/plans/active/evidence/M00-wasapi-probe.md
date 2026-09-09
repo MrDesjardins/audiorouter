@@ -1,5 +1,24 @@
 # M00 WASAPI probe
 
+## 2026-09-09 - Current guarded live requalification
+
+The authorized guarded native probes were rerun with the installed VS2026 /
+Windows SDK / WDK toolchain. `m00-native-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 100` passed all 13 capture and 18 render endpoints;
+one already-occupied render endpoint was reported as occupied rather than
+treated as a probe failure. The event-callback probe on the explicit VB-Audio
+pair passed at 500 ms with 24,000 captured frames and 28,800 submitted render
+frames.
+
+The explicit VB-Audio tone-to-capture probe passed with a 1,500 ms tone and
+1,000 ms capture, reporting 215,332 nonzero payload bytes. Controlled process
+attribution passed with 21,609 captured frames and 77,823 nonzero bytes;
+process-tree exclusion passed with 22,050 captured frames. Every probe
+verified unchanged media-device state and removed its temporary executable,
+object, logs, and child processes. These results provide current shared/event
+capture, render, signal-path, and process-loopback evidence; they do not close
+managed-driver, calibrated physical-latency, or signing gates.
+
 ## 2026-09-08 - Independent process metadata retention
 
 The Windows inventory now retains an executable path even when the separate

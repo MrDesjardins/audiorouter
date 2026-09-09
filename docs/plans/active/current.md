@@ -64,6 +64,17 @@ release completion.
   loading, signing-mode changes, plugin/startup registration, audio streams,
   and persistent machine audio configuration remained out of scope.
 
+- Requalified the authorized native M00 live paths on 2026-09-09. Shared
+  capture/render passed all 13 capture and 18 render endpoints at 100 ms, with
+  one occupied render endpoint correctly classified; event capture/render on
+  the explicit VB-Audio pair passed with 24,000/28,800 frames. The reversible
+  VB-Audio tone-to-capture path passed with 215,332 nonzero bytes, while
+  disposable process attribution and exclusion passed with 21,609/22,050
+  frames and 77,823 nonzero bytes for the include path. Media snapshots were
+  unchanged and all temporary processes/artifacts were removed. This advances
+  CAP-01/02/05/06 evidence but does not claim managed-driver routing,
+  calibrated physical latency, or signing completion.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
