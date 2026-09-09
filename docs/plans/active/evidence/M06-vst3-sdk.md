@@ -1540,3 +1540,15 @@ tree or release artifacts. This confirms that the built-in DSP path—not a
 VST2/standalone compatibility assumption—is the native basic-transformation
 path. DSP coverage (27) and engine coverage (78) passed with strict Clippy;
 no audio endpoint or machine configuration was accessed.
+## Optional native VST2 matrix requalification (2026-09-08)
+
+At pushed head `2905572a`, all six ignored local ReaPlugs x64 VST2 effects
+passed verified worker processing at 44.1, 48, and 96 kHz (18 combinations).
+The installed Pitchproof x64 VST2 binary also passed processing at all three
+rates, followed by dedicated and supervised editor-containment tests. Its
+SHA-256 remained
+`1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`.
+The wrappers restored both VST2 environment variables and did not copy,
+register, or alter plugins or audio configuration. This is compatibility and
+containment evidence only; rights, successful editor integration, and release
+qualification remain open.
