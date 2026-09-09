@@ -1755,6 +1755,16 @@ feature-enabled worker-process suite passed 22 tests with six expected
 fixture-dependent tests ignored; no realtime callback or machine audio path
 was used.
 
+The fixture-gated `SupervisedWorkerProcess` path now owns a multi-bus worker
+using the same heartbeat, immediate-failure, restart, and quarantine ledger as
+the legacy worker. It refreshes heartbeat only after `WorkerProcess` returns a
+validated complete bus set, terminates and records protocol failures, and
+restarts with the exact negotiated layout while retaining failure history. A
+Windows feature-enabled regression passed 24 worker-process tests with six
+expected fixture-dependent tests ignored. This is supervised fixture evidence;
+the production VST3 plugin loader and realtime graph scheduler remain separate
+gates.
+
 The plugin-host API now exposes a fixture-gated `WorkerProcess` multi-bus
 client. It launches the separately negotiated bus worker, validates the exact
 `HelloBuses` layout, exchanges a complete `ProcessBuses` quantum, validates

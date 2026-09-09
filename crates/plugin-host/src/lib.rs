@@ -2315,6 +2315,7 @@ pub struct SupervisedWorkerProcess {
     channels: u16,
     sample_rate_hz: u32,
     shared_transport: bool,
+    bus_layout: Option<WorkerAudioBusLayout>,
 }
 
 impl SupervisedWorkerProcess {
@@ -2408,7 +2409,67 @@ impl SupervisedWorkerProcess {
             channels,
             sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
+            bus_layout: None,
         })
+    }
+
+    /// Spawn a fixture-backed multi-bus worker under the same bounded
+    /// identity, heartbeat, and quarantine ledger as the single-stream
+    /// worker. Production plugin loading remains intentionally separate.
+    #[cfg(feature = "test-fixtures")]
+    pub fn spawn_multi_bus_fixture(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        layout: &WorkerAudioBusLayout,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_multi_bus_fixture_with_supervisor(
+            executable,
+            identity,
+            layout,
+            WorkerSupervisor::new(),
+            now,
+        )
+        .map_err(|(error, _)| error)
+    }
+
+    #[cfg(feature = "test-fixtures")]
+    fn spawn_multi_bus_fixture_with_supervisor(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        layout: &WorkerAudioBusLayout,
+        mut supervisor: WorkerSupervisor,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let executable = match validate_worker_executable(executable.as_ref()) {
+            Ok(path) => path,
+            Err(error) => {
+                supervisor.record_failure(now);
+                return Err((WorkerProcessError::Spawn(error), supervisor));
+            }
+        };
+        if let Err(error) = supervisor.start(identity, now) {
+            return Err((
+                WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
+                supervisor,
+            ));
+        }
+        match WorkerProcess::spawn_multi_bus_fixture(&executable, &identity.sha256, layout) {
+            Ok(process) => Ok(Self {
+                process,
+                supervisor,
+                executable,
+                identity: identity.clone(),
+                channels: layout.input_buses()[0],
+                sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
+                shared_transport: false,
+                bus_layout: Some(layout.clone()),
+            }),
+            Err(error) => {
+                supervisor.record_failure(now);
+                Err((error, supervisor))
+            }
+        }
     }
 
     /// Spawn a replacement while preserving the caller-owned failure ledger.
@@ -2480,6 +2541,7 @@ impl SupervisedWorkerProcess {
                 channels,
                 sample_rate_hz,
                 shared_transport: false,
+                bus_layout: None,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -2577,6 +2639,7 @@ impl SupervisedWorkerProcess {
                 channels,
                 sample_rate_hz,
                 shared_transport: true,
+                bus_layout: None,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -2641,6 +2704,30 @@ impl SupervisedWorkerProcess {
             Ok(frame) => {
                 self.supervisor.heartbeat(now);
                 Ok(frame)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    /// Process one multi-bus quantum while refreshing supervision only after
+    /// a fully validated result is returned. Any protocol or deadline error
+    /// terminates the worker and records an immediate failure.
+    #[cfg(feature = "test-fixtures")]
+    pub fn process_buses(
+        &mut self,
+        frames: WorkerAudioBusFrames,
+        parameters: Vec<ParameterEvent>,
+        now: Instant,
+    ) -> Result<WorkerAudioBusFrames, WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.process_buses(frames, parameters) {
+            Ok(frames) => {
+                self.supervisor.heartbeat(now);
+                Ok(frames)
             }
             Err(error) => {
                 terminate_child(&mut self.process.child);
@@ -2843,6 +2930,7 @@ impl SupervisedWorkerProcess {
             channels: _channels,
             sample_rate_hz: _sample_rate_hz,
             shared_transport: _shared_transport,
+            bus_layout: _bus_layout,
         } = self;
         supervisor
     }
@@ -2860,6 +2948,7 @@ impl SupervisedWorkerProcess {
             channels,
             sample_rate_hz,
             shared_transport,
+            bus_layout,
         } = self;
         let state = supervisor.state();
         if state == WorkerState::Running {
@@ -2872,6 +2961,14 @@ impl SupervisedWorkerProcess {
         }
         let transport = process.take_shared_transport();
         drop(process);
+        #[cfg(feature = "test-fixtures")]
+        if let Some(layout) = bus_layout {
+            return Self::spawn_multi_bus_fixture_with_supervisor(
+                executable, &identity, &layout, supervisor, now,
+            );
+        }
+        #[cfg(not(feature = "test-fixtures"))]
+        let _ = bus_layout;
         if shared_transport {
             let Some(transport) = transport else {
                 return Err((

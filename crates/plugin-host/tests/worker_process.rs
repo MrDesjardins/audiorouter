@@ -252,6 +252,60 @@ fn typed_multi_bus_worker_process_client_round_trips_buses() {
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn supervised_multi_bus_worker_restarts_with_same_layout_and_ledger() {
+    let hash = "c".repeat(64);
+    let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let start = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn_multi_bus_fixture(
+        fixture_worker_path(),
+        &identity,
+        &layout,
+        start,
+    )
+    .expect("spawn supervised multi-bus worker");
+    let deadline = worker_clock_tick().saturating_add(10_000);
+    let frames = layout
+        .input_frames(vec![
+            WorkerFrame::new(21, deadline, 2, vec![0.1, 0.2]).unwrap(),
+            WorkerFrame::new(21, deadline, 1, vec![0.3]).unwrap(),
+        ])
+        .unwrap();
+    assert_eq!(
+        worker
+            .process_buses(frames.clone(), Vec::new(), start)
+            .unwrap()
+            .frames(),
+        frames.frames()
+    );
+    assert_eq!(
+        worker.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let mut replacement = worker
+        .restart(start)
+        .expect("restart supervised multi-bus worker");
+    assert_eq!(replacement.failure_diagnostic().unwrap().failure_count, 1);
+    assert_eq!(
+        replacement
+            .process_buses(frames, Vec::new(), start)
+            .unwrap()
+            .sequence(),
+        21
+    );
+    assert!(replacement.shutdown().unwrap().success());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn disposable_worker_rejects_invalid_sample_rate_before_spawn() {
     for sample_rate_hz in [MIN_WORKER_SAMPLE_RATE_HZ - 1, MAX_WORKER_SAMPLE_RATE_HZ + 1] {
         assert!(matches!(
