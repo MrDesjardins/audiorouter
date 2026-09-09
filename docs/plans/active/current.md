@@ -14,8 +14,8 @@ installer, clean-machine, and manual UI gates remain open. Read the
 
 The latest pushed checkpoint is `52f3a8a9` (2026-09-09). The guarded M00-M08
 chain, all-features workspace tests, strict all-features Clippy, UI checks,
-legacy VST2 fixture coverage, and documentation validation pass at the
-preceding implementation checkpoints. The repository is clean; no driver or
+legacy VST2 fixture coverage, and documentation validation pass at this
+checkpoint. The repository is clean; no driver or
 startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
