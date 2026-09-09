@@ -40,8 +40,9 @@ filesystem/network sandboxing and a multi-vendor compatibility matrix remain
 open release work. The native VST2 adapter has passed the local six-binary
 ReaPlugs worker matrix for bounded load, processing, parameters, latency, state
 capability, editor capability discovery, and shutdown. This is fixture evidence
-only: native editor window open/close, chunk-capable state, rights review, and
-release qualification remain open. The host library now also has a
+only: native editor window open/close, rights review, and release qualification
+remain open. The repository-owned fixture additionally qualifies opaque
+chunk-state save/restore and the legacy `main` export through the worker. The host library now also has a
 control-plane `EditorLifecycle` policy that separates editor open/close/failure
 and deliberate retry from the processing generation. It does not create native
 windows or claim editor compatibility; those remain a Windows/UI acceptance
@@ -125,9 +126,9 @@ Chunk-state coverage can be run with the repository-owned fixture:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-state-fixture.ps1
 ```
 
-The script compiles an ignored x64 VST2 DLL with `effFlagsProgramChunks`, runs
-the verified worker acceptance, and leaves no registered plugin or system
-audio changes.
+The script compiles ignored x64 VST2 DLLs with `effFlagsProgramChunks`, plus a
+`main`-only variant, and runs the verified worker acceptance for both. It
+leaves no registered plugin or system audio changes.
 
 See [SDK setup](sdk-setup.md) and [release notes](release-notes.md) for the
 toolchain and current qualification boundaries.
