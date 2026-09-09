@@ -19,6 +19,7 @@ type SessionFlowCanvasProps = {
   session: Session;
   selectedNodeId: string;
   onSelect: (id: string) => void;
+  onSelectMany?: (ids: string[]) => void;
   onConnect: (connection: Connection) => void;
 };
 
@@ -30,7 +31,7 @@ function positionFor(index: number) {
   };
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onConnect }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onSelectMany, onConnect }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
@@ -80,6 +81,8 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onConnect
         fitView
         nodesConnectable
         nodesDraggable
+        selectionOnDrag
+        onSelectionChange={({ nodes: selectedNodes }) => onSelectMany?.(selectedNodes.map((node) => node.id))}
         onNodeClick={(_, node) => onSelect(node.id)}
         onConnect={onConnect}
         onNodeDragStop={(_, node) => { const next = { ...positions, [node.id]: node.position }; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
