@@ -131,6 +131,16 @@ release completion.
   qualification scripts while retaining production driver, signing, installer,
   shell/HWND, physical-latency, accessibility, and independent-vendor gates.
 
+- Revalidated the read-only M00 native format inventory on 2026-09-09:
+  31 active endpoints were enumerated, including validated 48 kHz mono/stereo
+  and 96 kHz mono/eight-channel format metadata. GetMixFormat and endpoint
+  activation probes passed without starting an audio stream or modifying
+  driver, defaults, volume, mute, privacy, signing, or startup configuration.
+- Next safe task: continue with any remaining independently observable native
+  adapter evidence while retaining differing-rate, production-driver,
+  signing, installer, shell/HWND, physical-latency, accessibility, and
+  independent-vendor blockers.
+
 - Requalified M06 VST3 SDK acceptance on 2026-09-09: the pinned checkout built,
   validator self-tests passed, offline loader and AGain main/auxiliary-bus
   classes passed, explicit single-bus rejection passed, and the five-class mda
