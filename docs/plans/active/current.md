@@ -54,6 +54,16 @@ release completion.
   future state qualification should use a behavior-specific independent test
   rather than weakening the repository fixture's assertions.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `e2b9cfc3` on 2026-09-09. M00–M08 passed: VS2026/MSVC/SDK/WDK
+  discovery, read-only 31-endpoint inventory, disposable pinned SysVAD
+  compile/package/API/signability, M01/M04/M05, VST3 SDK and native worker
+  paths, modern/legacy/fault VST2 fixtures, M07, unsigned M08 artifacts,
+  159 traceability mappings, and documentation validation (51 Markdown files,
+  163 local links). Temporary outputs were cleaned; driver installation or
+  loading, signing-mode changes, plugin/startup registration, audio streams,
+  and persistent machine audio configuration remained out of scope.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
