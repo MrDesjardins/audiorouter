@@ -1181,6 +1181,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Compressor, "releaseMs") => value.as_f64().is_some_and(|release| {
                     release.is_finite() && (10.0..=2_000.0).contains(&release)
                 }),
+                (NodeKind::Compressor, "kneeDb") => value
+                    .as_f64()
+                    .is_some_and(|knee| knee.is_finite() && (0.0..=24.0).contains(&knee)),
                 (NodeKind::Compressor, "makeupDb") => value
                     .as_f64()
                     .is_some_and(|makeup| makeup.is_finite() && (0.0..=24.0).contains(&makeup)),
@@ -1190,9 +1193,18 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Gate, "rangeDb") => value
                     .as_f64()
                     .is_some_and(|range| range.is_finite() && (0.0..=80.0).contains(&range)),
+                (NodeKind::Gate, "hysteresisDb") => value.as_f64().is_some_and(|hysteresis| {
+                    hysteresis.is_finite() && (0.0..=12.0).contains(&hysteresis)
+                }),
+                (NodeKind::Gate, "ratio") => value
+                    .as_f64()
+                    .is_some_and(|ratio| ratio.is_finite() && (1.0..=20.0).contains(&ratio)),
                 (NodeKind::Gate, "attackMs") => value
                     .as_f64()
                     .is_some_and(|attack| attack.is_finite() && (0.1..=100.0).contains(&attack)),
+                (NodeKind::Gate, "holdMs") => value
+                    .as_f64()
+                    .is_some_and(|hold| hold.is_finite() && (0.0..=1_000.0).contains(&hold)),
                 (NodeKind::Gate, "releaseMs") => value.as_f64().is_some_and(|release| {
                     release.is_finite() && (10.0..=2_000.0).contains(&release)
                 }),
@@ -2415,6 +2427,31 @@ mod tests {
             .unwrap_err()
             .iter()
             .any(|error| matches!(error, ValidationError::InvalidParameter { .. })));
+    }
+
+    #[test]
+    fn validates_dynamics_controls_exposed_by_the_dsp_contract() {
+        let mut compressor = node("compressor", NodeKind::Compressor, PortDirection::Input);
+        compressor
+            .parameters
+            .insert("kneeDb".into(), serde_json::json!(6.0));
+        assert!(validate_session(&session(vec![compressor], vec![])).is_ok());
+
+        let mut gate = node("gate", NodeKind::Gate, PortDirection::Input);
+        gate.parameters
+            .insert("hysteresisDb".into(), serde_json::json!(3.0));
+        gate.parameters
+            .insert("ratio".into(), serde_json::json!(4.0));
+        gate.parameters
+            .insert("holdMs".into(), serde_json::json!(50.0));
+        assert!(validate_session(&session(vec![gate.clone()], vec![])).is_ok());
+
+        gate.parameters
+            .insert("holdMs".into(), serde_json::json!(1000.1));
+        assert!(validate_session(&session(vec![gate], vec![]))
+            .unwrap_err()
+            .iter()
+            .any(|error| matches!(error, ValidationError::InvalidParameter { path } if path == "nodes[0].parameters.holdMs")));
     }
 
     #[test]

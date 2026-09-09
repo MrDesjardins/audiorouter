@@ -27,6 +27,15 @@ driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
 
+- Closed a DSP-01/03 contract drift on 2026-09-09. The compressor's supported
+  knee control and the gate's supported hysteresis, ratio, and hold controls are
+  now accepted by domain validation, described by both node and processor API
+  schemas, and consumed by engine compilation. Defaults now match the processing
+  specification (6 dB knee, 4:1 gate ratio, 50 ms hold). Focused domain,
+  control-description, and engine compilation tests pass; this is portable
+  contract evidence and does not advance the separate native, plugin-rights, or
+  release gates.
+
 - Ran the existing contained-worker acceptance against four user-supplied local
   ReaPlugs x64 VST2 effects on 2026-09-09: ReaComp, ReaEQ, ReaDelay, and ReaGate
   each loaded and processed through the native VST2 adapter at 44.1, 48, and

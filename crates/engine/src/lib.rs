@@ -2830,6 +2830,11 @@ pub fn compile_session_at_sample_rate(
                     .get("releaseMs")
                     .and_then(|value| value.as_f64())
                     .unwrap_or(150.0) as f32;
+                let knee_db = node
+                    .parameters
+                    .get("kneeDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(6.0) as f32;
                 let makeup_db = node
                     .parameters
                     .get("makeupDb")
@@ -2846,7 +2851,7 @@ pub fn compile_session_at_sample_rate(
                     ratio,
                     attack_ms,
                     release_ms,
-                    knee_db: 0.0,
+                    knee_db,
                     makeup_db,
                     sample_rate: sample_rate_hz as f32,
                 };
@@ -2876,11 +2881,26 @@ pub fn compile_session_at_sample_rate(
                     .get("rangeDb")
                     .and_then(|value| value.as_f64())
                     .unwrap_or(60.0) as f32;
+                let hysteresis_db = node
+                    .parameters
+                    .get("hysteresisDb")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(3.0) as f32;
+                let ratio = node
+                    .parameters
+                    .get("ratio")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(4.0) as f32;
                 let attack_ms = node
                     .parameters
                     .get("attackMs")
                     .and_then(|value| value.as_f64())
                     .unwrap_or(5.0) as f32;
+                let hold_ms = node
+                    .parameters
+                    .get("holdMs")
+                    .and_then(|value| value.as_f64())
+                    .unwrap_or(50.0) as f32;
                 let release_ms = node
                     .parameters
                     .get("releaseMs")
@@ -2894,11 +2914,11 @@ pub fn compile_session_at_sample_rate(
                     .unwrap_or(1);
                 let params = audiorouter_dsp::GateParams {
                     threshold_db,
-                    hysteresis_db: 3.0,
-                    ratio: 2.0,
+                    hysteresis_db,
+                    ratio,
                     range_db,
                     attack_ms,
-                    hold_ms: 150.0,
+                    hold_ms,
                     release_ms,
                     sample_rate: sample_rate_hz as f32,
                 };

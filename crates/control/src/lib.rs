@@ -2780,12 +2780,16 @@ impl ControlPlane {
                 { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 3.0 },
                 { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 200.0, "default": 10.0 },
                 { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 },
+                { "name": "kneeDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 24.0, "default": 6.0 },
                 { "name": "makeupDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 24.0, "default": 0.0 }
             ]),
             audiorouter_domain::NodeKind::Gate => json!([
                 { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -45.0 },
                 { "name": "rangeDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 60.0 },
                 { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 100.0, "default": 5.0 },
+                { "name": "hysteresisDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 12.0, "default": 3.0 },
+                { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 4.0 },
+                { "name": "holdMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 1000.0, "default": 50.0 },
                 { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 }
             ]),
             audiorouter_domain::NodeKind::Limiter => json!([
@@ -2831,7 +2835,10 @@ impl ControlPlane {
                 "parameters": [
                     { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -45.0 },
                     { "name": "rangeDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 80.0, "default": 60.0 },
+                    { "name": "hysteresisDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 12.0, "default": 3.0 },
+                    { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 4.0 },
                     { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 100.0, "default": 5.0 },
+                    { "name": "holdMs", "type": "number", "unit": "ms", "minimum": 0.0, "maximum": 1000.0, "default": 50.0 },
                     { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 }
                 ]
             },
@@ -2843,6 +2850,7 @@ impl ControlPlane {
                     { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 3.0 },
                     { "name": "attackMs", "type": "number", "unit": "ms", "minimum": 0.1, "maximum": 200.0, "default": 10.0 },
                     { "name": "releaseMs", "type": "number", "unit": "ms", "minimum": 10.0, "maximum": 2000.0, "default": 150.0 },
+                    { "name": "kneeDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 24.0, "default": 6.0 },
                     { "name": "makeupDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 24.0, "default": 0.0 }
                 ]
             },
@@ -6981,6 +6989,23 @@ mod tests {
             .unwrap();
         assert_eq!(parametric_eq["parameters"][0]["default"], 1000.0);
         assert_eq!(parametric_eq["parameters"][1]["default"], 1.0);
+        let compressor = description["processors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|processor| processor["id"] == "compressor")
+            .unwrap();
+        assert_eq!(compressor["parameters"][4]["name"], "kneeDb");
+        assert_eq!(compressor["parameters"][4]["default"], 6.0);
+        let gate = description["processors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|processor| processor["id"] == "gate")
+            .unwrap();
+        assert_eq!(gate["parameters"][2]["name"], "hysteresisDb");
+        assert_eq!(gate["parameters"][5]["name"], "holdMs");
+        assert_eq!(gate["parameters"][5]["default"], 50.0);
         let gain = description["nodeTypes"]
             .as_array()
             .unwrap()
