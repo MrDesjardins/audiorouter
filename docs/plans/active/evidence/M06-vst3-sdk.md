@@ -1566,3 +1566,12 @@ This confirms that the next independent-fixture gate depends on a user-supplied
 rights-cleared x64 VST2 or VST3 binary. Until then, the existing worker,
 failure-containment, and multi-rate evidence remains valid but cannot be
 promoted to broad compatibility or release qualification.
+## All-features workspace requalification (2026-09-08)
+
+`cargo test --workspace --all-features --locked` passed 466 unit/integration
+tests and all workspace doc-tests at pushed head `479a7ad7`. The feature
+enabled worker-process suite passed 21 tests with six expected native-fixture
+tests ignored, and the Windows-audio suite passed 32 tests. This confirms the
+VST2 worker, failure-containment, and Windows identity contracts compile and
+remain green together. No plugin registration, audio stream, driver, signing
+mode, or machine configuration changed.
