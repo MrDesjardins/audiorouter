@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `b2ad16ae`; later commits after
+The active branch is currently pushed through `0ee952ad`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -45,6 +45,21 @@ release completion.
 - Next safe task: continue portable hardening only where a concrete uncovered
   contract is found; otherwise retain the explicit native driver, signing,
   installer, shell/HWND, physical-latency, and independent-plugin gates.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `0ee952ad` on 2026-09-09. Toolchain/native compile, read-only
+  endpoint inventory, disposable SysVAD x64 compile/package/API/signability,
+  M01/M04/M05 (including the current UI build and tests), pinned VST3 SDK and
+  native workers, repository VST2 modern/legacy/state/fault fixtures, M07,
+  unsigned M08 artifacts, 159 traceability IDs, and documentation validation
+  (51 Markdown files/163 local links) all passed. The runner removed 13
+  run-owned temporary children and used logs outside the repository; no driver
+  installation/loading, signing-mode change, plugin/startup registration,
+  audio stream, or persistent machine audio configuration occurred.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; otherwise retain the independent-plugin, native-shell/
+  HWND, production-driver, signing, installer, clean-machine, and physical-
+  latency gates.
 
 - Hardened M06/PLUG-04 generic VST3 controls on 2026-09-09: the native worker
   now rejects duplicate controller parameter IDs before emitting its bounded
