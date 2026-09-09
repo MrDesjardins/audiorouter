@@ -140,6 +140,81 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
     assert!(worker.shutdown().unwrap().success());
 }
 
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires the repository-owned VST2 chunk-state fixture"]
+fn verified_worker_applies_restored_vst2_chunk_state() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 state acceptance"),
+    );
+    assert!(plugin_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "audiorouter-vst2-state-fixture.dll"));
+    let root = plugin_path
+        .parent()
+        .expect("VST2 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST2 state fixture without loading it");
+    let worker_path = fixture_worker_path();
+    let mut worker = SupervisedWorkerProcess::spawn_verified(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        Instant::now(),
+    )
+    .expect("load VST2 state fixture in the isolated worker");
+    let descriptors = worker
+        .describe_parameters(Instant::now())
+        .expect("describe VST2 state fixture parameters");
+    assert_eq!(descriptors.len(), 1);
+    let saved = worker
+        .save_state(Instant::now())
+        .expect("save VST2 chunk state");
+    assert_eq!(saved.bytes.len(), std::mem::size_of::<f32>());
+
+    let changed = worker
+        .process(
+            WorkerFrame::new(
+                1,
+                worker_clock_tick().saturating_add(10_000),
+                2,
+                vec![1.0, -1.0, 0.0, 0.0],
+            )
+            .unwrap(),
+            vec![audiorouter_plugin_host::ParameterEvent {
+                parameter_id: descriptors[0].parameter_id,
+                normalized_value: 0.25,
+                sample_offset: 0,
+            }],
+            Instant::now(),
+        )
+        .expect("process changed VST2 state");
+    assert!((changed.samples[0] - 0.25).abs() < f32::EPSILON);
+
+    worker
+        .restore_state(saved, Instant::now())
+        .expect("restore VST2 chunk state");
+    let restored = worker
+        .process(
+            WorkerFrame::new(
+                2,
+                worker_clock_tick().saturating_add(10_000),
+                2,
+                vec![1.0, -1.0, 0.0, 0.0],
+            )
+            .unwrap(),
+            Vec::new(),
+            Instant::now(),
+        )
+        .expect("process restored VST2 state");
+    assert!((restored.samples[0] - 0.5).abs() < f32::EPSILON);
+    assert!(worker.shutdown().unwrap().success());
+}
+
 #[cfg(feature = "test-fixtures")]
 #[test]
 fn disposable_worker_process_round_trips_non_empty_parameter_descriptors() {

@@ -81,6 +81,11 @@ compiler built its ignored DLL, which passed the verified worker acceptance
 with opaque VST2 program-chunk save/restore. This supplies chunk-state evidence
 without redistributing a third-party binary.
 
+The stronger behavioral round trip initially exposed that `effSetChunk` was
+being called with a hard-coded byte count of one. The adapter now passes the
+bounded chunk length; the fixture test changes its mix parameter, verifies the
+changed audio, restores the saved chunk, and verifies the original mix returns.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

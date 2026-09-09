@@ -516,7 +516,7 @@ impl Vst2Library {
                 self.effect,
                 EFF_SET_CHUNK,
                 0,
-                1,
+                bytes.len() as isize,
                 bytes.as_ptr().cast_mut().cast(),
                 0.0,
             )

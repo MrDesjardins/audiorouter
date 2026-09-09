@@ -1368,6 +1368,11 @@ state-save/restore, and shutdown checks. This is chunk-state contract evidence
 without using a third-party binary for that capability; native editor
 open/close and full rights/release review remain open.
 
+The behavioral chunk regression also caught and fixed a real ABI argument bug:
+`effSetChunk` now receives the actual bounded state length rather than a
+hard-coded value. The fixture test proves changed mix output, restores the
+saved opaque chunk, and then observes the original mix output again.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

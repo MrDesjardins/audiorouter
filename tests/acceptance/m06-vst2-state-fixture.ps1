@@ -42,6 +42,9 @@ try {
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
         --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
     if ($LASTEXITCODE -ne 0) { throw "VST2 state fixture acceptance failed with exit code $LASTEXITCODE" }
+    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+        --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
+    if ($LASTEXITCODE -ne 0) { throw "VST2 state round-trip acceptance failed with exit code $LASTEXITCODE" }
 } finally {
     if ($null -eq $previousFixture) {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue
