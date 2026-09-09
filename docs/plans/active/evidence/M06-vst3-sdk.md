@@ -1575,3 +1575,12 @@ tests ignored, and the Windows-audio suite passed 32 tests. This confirms the
 VST2 worker, failure-containment, and Windows identity contracts compile and
 remain green together. No plugin registration, audio stream, driver, signing
 mode, or machine configuration changed.
+
+## Current installed-fixture inventory (2026-09-08)
+
+A read-only recursive inventory of the common Windows VST2/VST3 directories
+found 11 DLL candidates: the known ReaPlugs standalone/MIDI/utility assets and
+the already-qualified Pitchproof x64/x86 pair. No additional x64 VST3 bundle or
+second-vendor x64 audio-effect fixture was available. No plugin was loaded,
+copied, registered, or modified, and no audio or machine configuration changed.
+The independent-fixture gate therefore remains externally blocked.
