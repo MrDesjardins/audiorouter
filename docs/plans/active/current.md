@@ -3261,3 +3261,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Completed a read-only Windows plugin-location inventory on 2026-09-08: no additional VST3 binaries were found in the standard machine/user locations checked. The available candidates remain the six copied local ReaPlugs VST2 effects plus installed Pitchproof x64 VST2; its x86 sibling remains rejected. No binary was copied, registered, loaded, or executed by this inventory, and no audio or machine configuration changed.
 - Next M06 task: obtain an additional rights-cleared independent x64 VST2/VST3 fixture or integrate the issuer with an authenticated native shell once a real HWND owner exists; retain fail-closed editor controls and the gated VST2 release boundary.
+
+- Requalified ENG-01 contract parity on 2026-09-08 after the VST2 UI wording change: contracts typecheck and the drift checker passed with 61 methods, 17 node kinds, and 7 processors matching the UI/CLI catalogs. The plugin path placeholder now names both `.vst3` and `.dll` candidates. No audio or machine configuration changed.
+- Next M06 task: obtain an additional rights-cleared independent x64 VST2/VST3 fixture or integrate the issuer with an authenticated native shell once a real HWND owner exists; retain fail-closed editor controls and the gated VST2 release boundary.
