@@ -646,25 +646,27 @@ fn list_subcommand(args: &[&str], parent: &str) -> Result<Value, CliError> {
             if cursor.is_some() || limit.is_some() {
                 device_request.params = Some(json!({ "cursor": cursor, "limit": limit }));
             }
-            plane
-                .dispatch(device_request)
-                .result
-                .unwrap_or_else(|| json!([]))
+            dispatch_discovery_result(plane.dispatch(device_request))?
         }
-        "apps" | "applications" => plane
-            .dispatch(request("apps.list"))
-            .result
-            .unwrap_or_else(|| json!([])),
+        "apps" | "applications" => dispatch_discovery_result(plane.dispatch(request("apps.list")))?,
         "nodes" if matches!(expected, "types" | "describe") => {
             plane.describe()["nodeTypes"].clone()
         }
-        "processors" => plane
-            .dispatch(request("processors.list"))
-            .result
-            .unwrap_or_else(|| json!([])),
+        "processors" => dispatch_discovery_result(plane.dispatch(request("processors.list")))?,
         "api" => plane.describe()["methods"].clone(),
         _ => unreachable!(),
     })
+}
+
+/// Preserve structured discovery failures while retaining legacy array results on success.
+fn dispatch_discovery_result(
+    response: audiorouter_protocol::JsonRpcResponse,
+) -> Result<Value, CliError> {
+    if response.error.is_some() {
+        return serde_json::to_value(response)
+            .map_err(|error| CliError::InvalidArguments(error.to_string()));
+    }
+    Ok(response.result.unwrap_or_else(|| json!([])))
 }
 
 fn virtual_devices_command(args: &[&str]) -> Result<Value, CliError> {
@@ -2138,6 +2140,29 @@ mod tests {
         let schema: Value = serde_json::from_str(&run(["schema", "--json"]).unwrap()).unwrap();
         assert_eq!(schema["protocolVersion"]["major"], 1);
         assert_eq!(schema["limits"]["maxVirtualBuses"], 8);
+    }
+
+    #[test]
+    fn discovery_errors_keep_the_json_rpc_error_data() {
+        let response = audiorouter_protocol::JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            result: None,
+            error: Some(audiorouter_protocol::JsonRpcError {
+                code: -32010,
+                message: "Windows audio endpoint enumeration failed.".into(),
+                data: Some(json!({
+                    "code": "deviceInUse",
+                    "hresult": 0x8889000A_u32,
+                    "retryable": true,
+                    "remediation": "Retry after the owning stream releases the endpoint."
+                })),
+            }),
+        };
+        let value = dispatch_discovery_result(response).unwrap();
+        assert_eq!(value["error"]["data"]["code"], "deviceInUse");
+        assert_eq!(value["error"]["data"]["hresult"], 0x8889000A_u32);
+        assert_eq!(value["error"]["data"]["retryable"], true);
     }
 
     #[test]
