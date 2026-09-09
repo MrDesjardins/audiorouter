@@ -45,10 +45,22 @@ describe("appendDraftConnection", () => {
     const inserted = insertDraftMixer(connected, "edge-1");
     const mixer = inserted.nodes.find((node) => node.kind === "mixer");
     expect(mixer).toMatchObject({ id: "mixer-1", name: "Mixer 1" });
+    expect(mixer?.ports.every((port) => port.channels === 1)).toBe(true);
     expect(inserted.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([["mic", "mixer-1"], ["mixer-1", "voice"]]);
     const restored = removeSinglePathDraftMixer(inserted, "mixer-1");
     expect(restored.nodes.some((node) => node.id === "mixer-1")).toBe(false);
     expect(restored.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([["mic", "voice"]]);
+  });
+
+  it("keeps a stereo source width when inserting before a mono destination", () => {
+    const stereoSource = { ...demoSession, nodes: demoSession.nodes.map((node) => node.id === "mic" ? { ...node, ports: [{ ...node.ports[0], channels: 2 as 1 | 2 }] } : node) };
+    const connected = appendDraftConnection(stereoSource, "mic", "out", "voice", "in");
+    const inserted = insertDraftMixer(connected, "edge-1");
+    expect(inserted.nodes.find((node) => node.id === "mixer-1")?.ports).toEqual([
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ]);
+    expect(inserted.edges.at(-1)?.matrix).toEqual([1, 0]);
   });
 
   it("refuses to remove a mixer with ambiguous topology", () => {

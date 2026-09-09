@@ -198,11 +198,15 @@ export function appendDraftConnection(
 export function insertDraftMixer(session: Session, edgeId: EntityId): Session {
   const edge = session.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
+  const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
+  const sourcePort = sourceNode?.ports.find((port) => port.name === edge.sourcePort);
+  if (!sourcePort || sourcePort.direction !== "output") throw new Error("Inserted mixer requires an output source port");
   const withoutEdge = removeDraftConnection(session, edgeId);
   const withMixer = appendLibraryNode(withoutEdge, "mixer");
   const mixer = withMixer.nodes.at(-1);
   if (!mixer) throw new Error("Unable to create an inserted mixer");
-  const upstream = appendDraftConnection(withMixer, edge.sourceNode, edge.sourcePort, mixer.id, "in");
+  const widthMatched = { ...withMixer, nodes: withMixer.nodes.map((node) => node.id === mixer.id ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) } : node) };
+  const upstream = appendDraftConnection(widthMatched, edge.sourceNode, edge.sourcePort, mixer.id, "in");
   const split = appendDraftConnection(upstream, mixer.id, "out", edge.destinationNode, edge.destinationPort);
   return { ...split, edges: split.edges.map((candidate) => candidate.sourceNode === mixer.id && candidate.destinationNode === edge.destinationNode ? { ...candidate, matrix: [...edge.matrix] } : candidate) };
 }
