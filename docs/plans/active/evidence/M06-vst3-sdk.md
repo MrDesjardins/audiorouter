@@ -1300,6 +1300,10 @@ chunks, so state save returns an explicit `UnsupportedFeature` response and
 the worker remains usable; state chunk translation for chunk-capable plugins,
 native editor containment, and plugin-reported latency are not yet qualified.
 
+The ReaComp run now also reports its bounded `AEffect::initial_delay` through
+the worker latency response and passes the existing latency bound. Native
+editor containment remains open; no editor window was opened.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

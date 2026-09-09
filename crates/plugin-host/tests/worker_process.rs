@@ -129,6 +129,10 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         )
         .expect("VST2 worker processing");
     assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+    let latency = worker
+        .report_latency(WorkerLatency::new(0, 48_000).unwrap(), Instant::now())
+        .expect("query VST2 latency");
+    assert!(latency.samples <= 48_000 * 10);
     assert!(worker.shutdown().unwrap().success());
 }
 

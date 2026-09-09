@@ -177,6 +177,14 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("processed write failed: {error:?}"))?;
             }
             WorkerMessage::Latency(latency) => {
+                #[cfg(windows)]
+                let latency = if let Some(plugin) = vst2_plugin.as_ref() {
+                    plugin
+                        .latency(latency.sample_rate_hz)
+                        .map_err(|error| format!("VST2 latency query failed: {error:?}"))?
+                } else {
+                    latency
+                };
                 #[cfg(feature = "test-fixtures")]
                 let latency = if _fixture_mode.as_deref() == Some("latency") {
                     audiorouter_plugin_host::WorkerLatency::new(

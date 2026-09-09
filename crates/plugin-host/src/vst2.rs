@@ -513,6 +513,17 @@ impl Vst2Library {
         unsafe { (*self.effect).flags & VST2_FLAG_PROGRAM_CHUNKS != 0 }
     }
 
+    pub fn latency(&self, sample_rate_hz: u32) -> Result<crate::WorkerLatency, Vst2LibraryError> {
+        // SAFETY: This method is only available for a successfully validated
+        // handle, so the initial-delay field is readable for its lifetime.
+        let samples = unsafe { (*self.effect).initial_delay };
+        if samples < 0 {
+            return Err(Vst2LibraryError::InvalidState);
+        }
+        crate::WorkerLatency::new(samples as u32, sample_rate_hz)
+            .map_err(|_| Vst2LibraryError::InvalidState)
+    }
+
     /// Process one bounded block on the worker thread. The slices are fixed
     /// caller-owned buffers; this method does not allocate or touch the audio
     /// engine's realtime callback.
