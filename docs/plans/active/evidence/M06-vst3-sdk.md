@@ -1636,6 +1636,15 @@ unit tests, 21 worker-process tests, doc-tests, formatting, and strict Clippy.
 The current runtime and single-stream wire path are unchanged; actual
 side-chain scheduling and shared-memory ownership remain open.
 
+`SharedAudioBusTransport` now owns one explicit mapped slot per declared input
+or output bus. Creation/opening requires caller-supplied absolute non-reparse
+paths with bounded cardinality; writes validate the complete bus set before
+publishing each slot, and reads return `MissingBus` or an incoherence error
+until all slots share identity and quantum shape. A transport regression
+round-trips a main-plus-side-chain set in both directions and verifies the
+pre-publication missing-bus and alias boundaries. The transport is not yet
+wired into `WorkerProcess` or realtime graph scheduling.
+
 The worker protocol now carries bounded `ProcessBuses` and `ProcessedBuses`
 message shapes. Encode/decode validation rechecks the serialized bus layout,
 requires one valid frame per declared bus, and rejects mismatched channels,

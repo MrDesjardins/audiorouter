@@ -4156,6 +4156,201 @@ impl SharedAudioTransport {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SharedAudioBusError {
+    InvalidLayout(WorkerAudioBusLayoutError),
+    InvalidFrames(WorkerAudioBusFramesError),
+    MissingBus,
+    Incoherent(WorkerAudioBusFramesError),
+    Shared(SharedAudioError),
+    AliasedPaths,
+}
+
+/// Caller-owned fixed shared-memory slots for every bus on each side of a
+/// multi-bus worker. Each slot is independently acquire/release protected by
+/// `SharedAudioRegion`; a read is promoted to a bus-frame set only after all
+/// slots agree on sequence, deadline, and quantum size.
+pub struct SharedAudioBusTransport {
+    layout: WorkerAudioBusLayout,
+    inputs: Vec<SharedAudioRegion>,
+    outputs: Vec<SharedAudioRegion>,
+}
+
+impl SharedAudioBusTransport {
+    pub fn create(
+        input_paths: &[PathBuf],
+        output_paths: &[PathBuf],
+        layout: WorkerAudioBusLayout,
+    ) -> Result<Self, SharedAudioBusError> {
+        validate_bus_paths(input_paths, output_paths)?;
+        if input_paths.len() != layout.input_buses().len() {
+            return Err(SharedAudioBusError::InvalidLayout(
+                WorkerAudioBusLayoutError::MissingMainInput,
+            ));
+        }
+        if output_paths.len() != layout.output_buses().len() {
+            return Err(SharedAudioBusError::InvalidLayout(
+                WorkerAudioBusLayoutError::MissingMainOutput,
+            ));
+        }
+        let mut created = Vec::new();
+        let result = (|| {
+            let mut inputs = Vec::with_capacity(input_paths.len());
+            for (path, channels) in input_paths.iter().zip(layout.input_buses()) {
+                let region = SharedAudioRegion::create(
+                    path,
+                    SharedAudioLayout::new(*channels).map_err(SharedAudioBusError::Shared)?,
+                )
+                .map_err(SharedAudioBusError::Shared)?;
+                created.push(path.clone());
+                inputs.push(region);
+            }
+            let mut outputs = Vec::with_capacity(output_paths.len());
+            for (path, channels) in output_paths.iter().zip(layout.output_buses()) {
+                let region = SharedAudioRegion::create(
+                    path,
+                    SharedAudioLayout::new(*channels).map_err(SharedAudioBusError::Shared)?,
+                )
+                .map_err(SharedAudioBusError::Shared)?;
+                created.push(path.clone());
+                outputs.push(region);
+            }
+            Ok(Self {
+                layout,
+                inputs,
+                outputs,
+            })
+        })();
+        if result.is_err() {
+            for path in created {
+                let _ = fs::remove_file(path);
+            }
+        }
+        result
+    }
+
+    pub fn open(
+        input_paths: &[PathBuf],
+        output_paths: &[PathBuf],
+        layout: WorkerAudioBusLayout,
+    ) -> Result<Self, SharedAudioBusError> {
+        validate_bus_paths(input_paths, output_paths)?;
+        if input_paths.len() != layout.input_buses().len() {
+            return Err(SharedAudioBusError::InvalidLayout(
+                WorkerAudioBusLayoutError::MissingMainInput,
+            ));
+        }
+        if output_paths.len() != layout.output_buses().len() {
+            return Err(SharedAudioBusError::InvalidLayout(
+                WorkerAudioBusLayoutError::MissingMainOutput,
+            ));
+        }
+        let mut inputs = Vec::with_capacity(input_paths.len());
+        for (path, channels) in input_paths.iter().zip(layout.input_buses()) {
+            inputs.push(
+                SharedAudioRegion::open(
+                    path,
+                    SharedAudioLayout::new(*channels).map_err(SharedAudioBusError::Shared)?,
+                )
+                .map_err(SharedAudioBusError::Shared)?,
+            );
+        }
+        let mut outputs = Vec::with_capacity(output_paths.len());
+        for (path, channels) in output_paths.iter().zip(layout.output_buses()) {
+            outputs.push(
+                SharedAudioRegion::open(
+                    path,
+                    SharedAudioLayout::new(*channels).map_err(SharedAudioBusError::Shared)?,
+                )
+                .map_err(SharedAudioBusError::Shared)?,
+            );
+        }
+        Ok(Self {
+            layout,
+            inputs,
+            outputs,
+        })
+    }
+
+    pub fn layout(&self) -> &WorkerAudioBusLayout {
+        &self.layout
+    }
+
+    pub fn write_input(
+        &mut self,
+        frames: &WorkerAudioBusFrames,
+    ) -> Result<(), SharedAudioBusError> {
+        let validated = self
+            .layout
+            .input_frames(frames.frames().to_vec())
+            .map_err(SharedAudioBusError::InvalidFrames)?;
+        for (region, frame) in self.inputs.iter_mut().zip(validated.frames()) {
+            region.write(frame).map_err(SharedAudioBusError::Shared)?;
+        }
+        Ok(())
+    }
+
+    pub fn read_input(&self) -> Result<WorkerAudioBusFrames, SharedAudioBusError> {
+        read_bus_regions(&self.inputs, self.layout.input_buses())
+    }
+
+    pub fn write_output(
+        &mut self,
+        frames: &WorkerAudioBusFrames,
+    ) -> Result<(), SharedAudioBusError> {
+        let validated = self
+            .layout
+            .output_frames(frames.frames().to_vec())
+            .map_err(SharedAudioBusError::InvalidFrames)?;
+        for (region, frame) in self.outputs.iter_mut().zip(validated.frames()) {
+            region.write(frame).map_err(SharedAudioBusError::Shared)?;
+        }
+        Ok(())
+    }
+
+    pub fn read_output(&self) -> Result<WorkerAudioBusFrames, SharedAudioBusError> {
+        read_bus_regions(&self.outputs, self.layout.output_buses())
+    }
+
+    pub fn flush(&mut self) -> Result<(), SharedAudioBusError> {
+        for region in self.inputs.iter_mut().chain(self.outputs.iter_mut()) {
+            region.flush().map_err(SharedAudioBusError::Shared)?;
+        }
+        Ok(())
+    }
+}
+
+fn validate_bus_paths(
+    input_paths: &[PathBuf],
+    output_paths: &[PathBuf],
+) -> Result<(), SharedAudioBusError> {
+    let all_paths = input_paths.iter().chain(output_paths.iter());
+    let paths: Vec<&Path> = all_paths.map(PathBuf::as_path).collect();
+    if paths.len() > MAX_WORKER_AUDIO_BUSES * 2
+        || paths.iter().enumerate().any(|(index, path)| {
+            !path.is_absolute() || path_has_reparse_ancestor(path) || paths[..index].contains(path)
+        })
+    {
+        return Err(SharedAudioBusError::AliasedPaths);
+    }
+    Ok(())
+}
+
+fn read_bus_regions(
+    regions: &[SharedAudioRegion],
+    channels: &[u16],
+) -> Result<WorkerAudioBusFrames, SharedAudioBusError> {
+    let mut frames = Vec::with_capacity(regions.len());
+    for region in regions {
+        match region.read() {
+            Ok(frame) => frames.push(frame),
+            Err(SharedAudioError::Empty) => return Err(SharedAudioBusError::MissingBus),
+            Err(error) => return Err(SharedAudioBusError::Shared(error)),
+        }
+    }
+    WorkerAudioBusFrames::new(channels, frames).map_err(SharedAudioBusError::Incoherent)
+}
+
 /// Describes one fixed-capacity audio slot for a future OS shared mapping.
 /// The slot itself is fixed-size and endian-stable; decoding returns an owned
 /// validated frame for the control boundary.
@@ -5656,6 +5851,46 @@ mod tests {
         drop(host);
         fs::remove_file(input_path).unwrap();
         fs::remove_file(output_path).unwrap();
+    }
+
+    #[test]
+    fn shared_audio_bus_transport_requires_all_slots_and_round_trips_buses() {
+        let root = temp_root();
+        let input_paths = vec![root.join("input-main"), root.join("input-sidechain")];
+        let output_paths = vec![root.join("output-main")];
+        let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+        let mut host =
+            SharedAudioBusTransport::create(&input_paths, &output_paths, layout.clone()).unwrap();
+        let mut worker =
+            SharedAudioBusTransport::open(&input_paths, &output_paths, layout.clone()).unwrap();
+
+        assert_eq!(worker.read_input(), Err(SharedAudioBusError::MissingBus));
+        let input_frames = layout
+            .input_frames(vec![
+                WorkerFrame::new(1, 100, 2, vec![0.1, 0.2]).unwrap(),
+                WorkerFrame::new(1, 100, 1, vec![0.3]).unwrap(),
+            ])
+            .unwrap();
+        host.write_input(&input_frames).unwrap();
+        assert_eq!(worker.read_input().unwrap(), input_frames);
+
+        let output_frames = layout
+            .output_frames(vec![WorkerFrame::new(1, 100, 2, vec![0.4, 0.5]).unwrap()])
+            .unwrap();
+        worker.write_output(&output_frames).unwrap();
+        assert_eq!(host.read_output().unwrap(), output_frames);
+
+        let aliased = vec![root.join("alias")];
+        assert!(matches!(
+            SharedAudioBusTransport::create(&aliased, &aliased, layout),
+            Err(SharedAudioBusError::AliasedPaths)
+        ));
+        drop(worker);
+        drop(host);
+        for path in input_paths.iter().chain(output_paths.iter()) {
+            fs::remove_file(path).unwrap();
+        }
+        fs::remove_dir(root).unwrap();
     }
 
     #[test]
