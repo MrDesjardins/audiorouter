@@ -764,6 +764,16 @@ release completion.
   evidence while retaining production driver, signing, installer, shell/HWND,
   manual accessibility, and independent-vendor blockers.
 
+- Requalified the authorized bounded process-loopback paths on 2026-09-09:
+  controlled attribution captured 3,969 frames and 8,290 nonzero bytes, while
+  the explicit child-exclusion mode captured 4,410 frames and reported the
+  expected exclude mode. Disposable child processes, probes, and media-state
+  checks completed cleanly; no persistent audio configuration changed. The
+  exclusion result validates API mode/lifecycle, not a full isolation threshold.
+- Next safe task: continue with the remaining physical-latency and native
+  adapter evidence while retaining production driver, signing, installer,
+  shell/HWND, manual accessibility, and independent-vendor blockers.
+
 - Completed the API reference parity pass on 2026-09-09: every documented
   mutating recorder, startup, plugin-retry, virtual-device, import, graph,
   session-lifecycle, and recording operation now states its idempotency-key
