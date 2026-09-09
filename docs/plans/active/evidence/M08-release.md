@@ -991,3 +991,16 @@ mode changed, plugin or startup entry was registered, audio stream was opened,
 or persistent machine audio configuration was altered. This remains guarded
 pre-release evidence; production driver/signing, installer, clean-machine,
 physical-latency, and manual UI gates remain open.
+## Complete guarded acceptance at `f6b394e2` (2026-09-08)
+
+The guarded `tests/acceptance/safe-all.ps1` chain passed after the verified
+application identity UI panel was added. It covered the installed VS2026/WDK
+toolchain, native endpoint inventory, disposable pinned SysVAD x64
+package/API/signability qualification, M01/M04, M05 UI (15 test files/93
+tests and temporary production build), M06 SDK/VST3 and VST2 fixtures, M07,
+unsigned M08 preparation, 159 normative requirement mappings, and
+documentation validation (51 Markdown files, 161 local links). Temporary
+outputs and checkouts were cleaned. No driver installation/loading,
+signing-mode change, plugin/startup registration, audio stream, or persistent
+machine audio configuration occurred. This remains guarded preparation rather
+than signed-release or production-driver evidence.
