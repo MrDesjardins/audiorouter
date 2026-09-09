@@ -1169,3 +1169,22 @@ processing-time bound. Streams stopped/reset successfully and endpoint,
 media, and persistent configuration snapshots were unchanged. This proves
 native built-in DSP execution through the shared-mode adapter; managed-driver
 callback timing, physical latency, and production signing remain open.
+## Negotiated-rate deadline requalification (2026-09-08)
+
+After the adapter deadline-rate correction, the guarded endpoint-ID-selected
+route was rerun for 500 ms from the documented 96 kHz mono capture endpoint
+`{0.0.1.00000000}.{2b694137-729a-4e08-b290-e891a6bc2487}` to the documented
+48 kHz stereo render endpoint
+`{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}`. The route passed
+with 48,000 capture frames, 187 graph blocks, 23,936 scheduler frames, and
+23,904 routed frames. Processing p99.9 was 32,768 ns; deadline misses and
+lateness were zero, and the wrapper reported zero scheduler overruns/XRuns.
+The wrapper verified unchanged endpoint/media state and restored/cleaned all
+temporary resources. This is shared-mode adapter evidence, not managed-driver
+callback, independent-clock, or physical-latency qualification.
+
+Command:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-rust-adapter-route-live.ps1 -AllowLiveAudio -DurationMilliseconds 500 -CaptureEndpointId '{0.0.1.00000000}.{2b694137-729a-4e08-b290-e891a6bc2487}' -RenderEndpointId '{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}'
+```
