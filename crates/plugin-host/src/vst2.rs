@@ -496,6 +496,14 @@ mod opcode_tests {
             library.process_replacing(&inputs, &mut malformed_outputs),
             Err(Vst2LibraryError::InvalidPath)
         ));
+        let extra_input = [0.0; 4];
+        let mut extra_output = [0.0; 4];
+        let mismatched_inputs = [&input[..], &extra_input[..]];
+        let mut mismatched_outputs = [&mut output[..], &mut extra_output[..]];
+        assert!(matches!(
+            library.process_replacing(&mismatched_inputs, &mut mismatched_outputs),
+            Err(Vst2LibraryError::InvalidPath)
+        ));
         let oversized_input = vec![0.0; crate::MAX_WORKER_FRAMES + 1];
         let mut oversized_output = vec![0.0; crate::MAX_WORKER_FRAMES + 1];
         let oversized_inputs = [&oversized_input[..]];
@@ -951,7 +959,9 @@ impl Vst2Library {
         inputs: &[&[f32]],
         outputs: &mut [&mut [f32]],
     ) -> Result<(), Vst2LibraryError> {
-        if !(1..=VST2_MAX_INPUT_CHANNELS as usize).contains(&inputs.len())
+        if inputs.len() != self.input_channels()
+            || outputs.len() != self.output_channels()
+            || !(1..=VST2_MAX_INPUT_CHANNELS as usize).contains(&inputs.len())
             || !(1..=VST2_MAX_AUDIO_CHANNELS as usize).contains(&outputs.len())
             || inputs.iter().any(|channel| channel.is_empty())
             || inputs

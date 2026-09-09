@@ -61,6 +61,13 @@ release completion.
   regressions verify invalid rates/sizes cause zero dispatcher calls; focused
   VST2 tests, strict Clippy, formatting, and diff checks pass.
 
+- Closed a PLUG-03/PLUG-07 channel-shape gap on 2026-09-09: the native VST2
+  process adapter now requires caller channel counts to match the validated
+  effect's declared input/output counts before constructing ABI pointer arrays.
+  A mismatched-cardinality regression passes with the focused VST2 tests,
+  strict Clippy, formatting, and diff checks; no plugin or machine
+  configuration changed.
+
 - Requalified the locked workspace and guarded M00-M08 chain at pushed head
   `4dc9b67a` on 2026-09-09: workspace tests/doc-tests, strict all-target
   Clippy, formatting, 31-endpoint read-only inventory, disposable pinned
