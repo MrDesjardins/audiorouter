@@ -29,6 +29,9 @@ release and must not be presented as an installable Windows audio product.
   `VSTPluginMain` and legacy `main` fixtures, including chunk-state restoration,
   invalid-output rejection, crash containment, and hang reaping. This does not
   grant redistribution rights or make the VST2 extension release-qualified.
+- Windows endpoint and application discovery failures preserve stable audio
+  categories, unsigned HRESULTs, retryability, and remediation guidance;
+  `AUDCLNT_E_DEVICE_IN_USE` remains distinct from `E_INVALIDARG`.
 - The native WASAPI probes qualify shared capture across 13 endpoints,
   process-loopback include/exclude and controlled attribution, silent render
   lifecycle, and endpoint timing baselines. The guarded production Rust adapter

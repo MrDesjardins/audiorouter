@@ -5490,10 +5490,10 @@ impl ControlPlane {
                 return Ok(snapshot.clone());
             }
         }
-        let applications = audiorouter_windows_audio::enumerate_applications()
-            .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        let applications =
+            audiorouter_windows_audio::enumerate_applications().map_err(audio_control_error)?;
         let audio = audiorouter_windows_audio::enumerate_application_audio()
-            .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+            .map_err(audio_control_error)?;
         let snapshot = json!(applications
             .into_iter()
             .map(|application| {
