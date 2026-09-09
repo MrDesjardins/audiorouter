@@ -290,6 +290,21 @@ mod opcode_tests {
         0
     }
 
+    unsafe extern "C" fn non_finite_process(
+        _: *mut Vst2Effect,
+        _: *const *const f32,
+        outputs: *mut *mut f32,
+        frames: i32,
+    ) {
+        // SAFETY: The test supplies one output channel with the declared
+        // number of frames to the ABI callback.
+        unsafe {
+            for frame in 0..frames as usize {
+                *(*outputs).add(frame) = f32::NAN;
+            }
+        }
+    }
+
     #[test]
     fn processing_format_setup_is_cached_until_the_format_changes() {
         let effect = Box::new(Vst2Effect {
@@ -340,6 +355,51 @@ mod opcode_tests {
         ));
         drop(library);
     }
+
+    #[test]
+    fn process_replacing_rejects_non_finite_native_output() {
+        let effect = Box::new(Vst2Effect {
+            magic: VST2_EFFECT_MAGIC,
+            dispatcher: Some(counting_dispatcher),
+            process: None,
+            set_parameter: None,
+            get_parameter: None,
+            num_programs: 0,
+            num_parameters: 0,
+            num_inputs: 1,
+            num_outputs: 1,
+            flags: VST2_FLAG_CAN_REPLACING,
+            reserved_1: 0,
+            reserved_2: 0,
+            initial_delay: 0,
+            real_quality: 0,
+            off_quality: 0,
+            io_ratio: 1.0,
+            object: ptr::null_mut(),
+            user: ptr::null_mut(),
+            unique_id: 0,
+            version: 0,
+            process_replacing: Some(non_finite_process),
+            future: [0; 56],
+        });
+        let effect = Box::into_raw(effect);
+        let mut library = Vst2Library {
+            module: ptr::null_mut(),
+            effect,
+            processing_format: None,
+            editor_open: false,
+        };
+        let input = [0.0; 4];
+        let mut output = [0.0; 4];
+        let inputs = [&input[..]];
+        let mut outputs = [&mut output[..]];
+
+        assert!(matches!(
+            library.process_replacing(&inputs, &mut outputs),
+            Err(Vst2LibraryError::NonFiniteOutput)
+        ));
+        drop(library);
+    }
 }
 
 #[cfg(windows)]
@@ -355,6 +415,7 @@ pub enum Vst2LibraryError {
     StateUnsupported,
     StateTooLarge,
     InvalidEditor,
+    NonFiniteOutput,
 }
 
 #[cfg(windows)]
@@ -798,6 +859,13 @@ impl Vst2Library {
                 output_ptrs.as_mut_ptr(),
                 inputs[0].len() as i32,
             );
+        }
+        if outputs
+            .iter()
+            .flat_map(|channel| channel.iter())
+            .any(|sample| !sample.is_finite())
+        {
+            return Err(Vst2LibraryError::NonFiniteOutput);
         }
         Ok(())
     }

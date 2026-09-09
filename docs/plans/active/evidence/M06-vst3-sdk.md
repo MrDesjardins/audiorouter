@@ -1398,14 +1398,16 @@ are still required for actual editor integration.
 The native layer now includes a disposable `Vst2EditorThread`. It owns a
 separate VST2 instance, runs the Windows message pump, and serializes editor
 open/close/idle calls away from the processing instance. Package tests and
-strict Clippy pass. It is not wired to worker messages or a parent-window
-authorization token, so no editor window was opened by this change.
+strict Clippy pass. Worker messages now delegate to this owner, but the
+control-plane parent-window authorization token is not implemented, so editor
+controls remain gated.
 
 The worker protocol now carries bounded editor open/close requests and returns
 `editorUnavailable` as an optional unsupported feature when no VST2 editor
 thread is present. The generic worker regression verifies that this response
 does not terminate the worker or interrupt subsequent processing. Actual
-authorized HWND integration remains open.
+authorized HWND integration remains gated by the missing control-plane
+authorization token and native third-party editor behavior.
 
 ## Native editor probe and ABI correction (2026-09-08)
 
@@ -1418,6 +1420,12 @@ test records that bounded timeout and does not claim a successful native editor
 window. This is a third-party editor-hosting compatibility blocker, not an
 audio-device-use or endpoint-configuration failure; no persistent audio state
 was changed.
+
+The native processing boundary now independently rejects non-finite output
+before returning from `process_replacing`; a focused Windows regression uses a
+synthetic callback that writes NaN and verifies `NonFiniteOutput`. The worker's
+existing pre-framing finite check remains defense in depth, preserving the
+failure/quarantine and protected-voice silence policy.
 
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 

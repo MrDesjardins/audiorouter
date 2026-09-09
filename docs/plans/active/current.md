@@ -70,6 +70,11 @@ copying it into the framed response. A NaN/Inf result is a contained worker
 failure and therefore follows the existing failure/quarantine policy; it is
 never serialized as audio or allowed onto a protected path.
 
+The same finite-output invariant is now enforced inside `Vst2Library::process_replacing`
+before control returns from the native callback boundary. A focused Windows
+regression injects NaN output and verifies `NonFiniteOutput`; the worker-level
+check remains as defense in depth before framing.
+
 Added `tests/acceptance/m06-vst2-reaplugs.ps1` to rerun every ignored local
 VST2 DLL independently through the verified worker test. It requires Windows,
 restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value, and changes no
@@ -100,9 +105,8 @@ after this ordering change.
 
 Added bounded VST2 `effEditOpen`, `effEditClose`, and `effEditIdle` primitives
 with explicit editor-open state and RAII close ordering. They are intentionally
-not called by the worker yet: the API documents that only a future dedicated
-Windows UI thread may invoke them, and parent-window authorization/message-pump
-ownership remain required before exposing editor controls.
+invoked only by the dedicated Windows editor thread; parent-window
+authorization remains required before exposing editor controls.
 
 Editor opens now reject zero or stale parent handles through a read-only
 `IsWindow` check before calling plugin code; explicit control-plane
@@ -110,9 +114,9 @@ authorization and dedicated UI-thread/message-pump ownership remain required.
 
 Added a disposable `Vst2EditorThread` owner that loads a separate editor
 instance, pumps the Windows queue, and serializes editor open/close/idle calls
-on its own thread. It is not connected to worker messages yet, so it cannot
-alter processing or expose an unauthorized window; the remaining integration
-gate is to pass an explicitly authorized parent from the control plane.
+on its own thread. The worker protocol now delegates editor requests to this
+owner without sharing the processing instance; the remaining integration gate
+is to pass an explicitly authorized parent from the control plane.
 
 Worker messages now carry bounded `EditorOpen`/`EditorClose` requests and
 explicit opened/closed responses. A worker without a VST2 editor returns
@@ -128,8 +132,8 @@ plugin failure; it does not claim successful editor-window compatibility.
 The worker/editor thread remains disposable and the processing path is not
 replaced or reconfigured by this probe.
 
-Ordered next tasks: (1) implement actual native editor open/close only behind a
-worker-owned Windows UI thread and explicit parent/window authorization; (2)
+Ordered next tasks: (1) complete explicit parent/window authorization for the
+worker-owned native editor path; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)
 complete per-binary quarantine diagnostics and add invalid-sample/layout
 regressions;
