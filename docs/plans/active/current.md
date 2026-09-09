@@ -13,7 +13,7 @@ installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
 The latest clean full M00-M08 acceptance passed at checkpoint `6d8e6ad2`; the
-latest portable metering checkpoint is `99ccfe1c`; the latest guarded/live
+latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
