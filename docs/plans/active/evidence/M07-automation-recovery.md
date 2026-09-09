@@ -851,6 +851,15 @@ stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
 
+## Dedicated headless requalification (2026-09-09)
+
+The dedicated M07 acceptance passed with 26 CLI tests, 2 MCP interoperability
+tests, 97 control tests, 57 plugin-host tests, 13 worker-process tests, and
+strict Clippy. The run created 13 project-named temporary SQLite fixtures;
+they were removed only after direct-child temp-root validation, and a
+follow-up scan found zero `audiorouter-*` matches. No audio, driver, startup
+registration, signing, or persistent machine configuration changed.
+
 ## Operation-journal cardinality bound (2026-09-08)
 
 SQLite idempotency outcomes now retain at most 4,096 recent entries. Journal
