@@ -119,11 +119,12 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
     assert_eq!(identity.format, PluginFormat::Vst2);
     assert_eq!(identity.architecture, PeArchitecture::X64);
     let worker_path = fixture_worker_path();
-    let mut worker = SupervisedWorkerProcess::spawn_verified(
+    let mut worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
         worker_path,
         &identity,
         std::slice::from_ref(&root),
         2,
+        44_100,
         Instant::now(),
     )
     .expect("load VST2 fixture in the isolated worker");
@@ -165,9 +166,9 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         .expect("VST2 worker processing");
     assert!(processed.samples.iter().all(|sample| sample.is_finite()));
     let latency = worker
-        .report_latency(WorkerLatency::new(0, 48_000).unwrap(), Instant::now())
+        .report_latency(WorkerLatency::new(0, 44_100).unwrap(), Instant::now())
         .expect("query VST2 latency");
-    assert!(latency.samples <= 48_000 * 10);
+    assert!(latency.samples <= 44_100 * 10);
     assert!(worker.shutdown().unwrap().success());
 }
 

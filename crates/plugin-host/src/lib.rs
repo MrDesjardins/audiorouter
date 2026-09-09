@@ -42,6 +42,7 @@ pub const MAX_WORKER_STATE_BYTES: usize = 512 * 1024;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
 pub const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+pub const DEFAULT_WORKER_SAMPLE_RATE_HZ: u32 = 48_000;
 
 /// Milliseconds since the Unix epoch used for cross-process frame deadlines.
 pub fn worker_clock_tick() -> u64 {
@@ -1889,6 +1890,7 @@ pub struct SupervisedWorkerProcess {
     executable: PathBuf,
     identity: PluginIdentity,
     channels: u16,
+    sample_rate_hz: u32,
     shared_transport: bool,
 }
 
@@ -1900,8 +1902,34 @@ impl SupervisedWorkerProcess {
         now: Instant,
     ) -> Result<Self, WorkerProcessError> {
         let supervisor = WorkerSupervisor::new();
-        Self::spawn_with_supervisor(executable, identity, channels, supervisor, now)
-            .map_err(|(error, _)| error)
+        Self::spawn_with_supervisor_at_sample_rate(
+            executable,
+            identity,
+            channels,
+            supervisor,
+            now,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+        )
+        .map_err(|(error, _)| error)
+    }
+
+    pub fn spawn_with_sample_rate(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        let supervisor = WorkerSupervisor::new();
+        Self::spawn_with_supervisor_at_sample_rate(
+            executable,
+            identity,
+            channels,
+            supervisor,
+            now,
+            sample_rate_hz,
+        )
+        .map_err(|(error, _)| error)
     }
 
     /// Spawn only after revalidating the exact scanned plugin identity against
@@ -1918,6 +1946,20 @@ impl SupervisedWorkerProcess {
             .verify_current(configured_roots)
             .map_err(WorkerProcessError::PluginIdentity)?;
         Self::spawn(executable, identity, channels, now)
+    }
+
+    pub fn spawn_verified_with_sample_rate(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        channels: u16,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        identity
+            .verify_current(configured_roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        Self::spawn_with_sample_rate(executable, identity, channels, sample_rate_hz, now)
     }
 
     #[cfg(feature = "test-fixtures")]
@@ -1941,6 +1983,7 @@ impl SupervisedWorkerProcess {
             executable,
             identity: identity.clone(),
             channels,
+            sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
         })
     }
@@ -1952,8 +1995,26 @@ impl SupervisedWorkerProcess {
         executable: impl AsRef<Path>,
         identity: &PluginIdentity,
         channels: u16,
+        supervisor: WorkerSupervisor,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        Self::spawn_with_supervisor_at_sample_rate(
+            executable,
+            identity,
+            channels,
+            supervisor,
+            now,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+        )
+    }
+
+    fn spawn_with_supervisor_at_sample_rate(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
         mut supervisor: WorkerSupervisor,
         now: Instant,
+        sample_rate_hz: u32,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
         let executable = match validate_worker_executable(executable.as_ref()) {
             Ok(path) => path,
@@ -1972,14 +2033,20 @@ impl SupervisedWorkerProcess {
             ));
         }
         let process_result = if identity.format == PluginFormat::Vst2 {
-            WorkerProcess::spawn_for_plugin(
+            WorkerProcess::spawn_for_plugin_with_sample_rate(
                 &executable,
                 &identity.binary_path,
                 &identity.sha256,
                 channels,
+                sample_rate_hz,
             )
         } else {
-            WorkerProcess::spawn(&executable, &identity.sha256, channels)
+            WorkerProcess::spawn_with_sample_rate(
+                &executable,
+                &identity.sha256,
+                channels,
+                sample_rate_hz,
+            )
         };
         match process_result {
             Ok(process) => Ok(Self {
@@ -1988,6 +2055,7 @@ impl SupervisedWorkerProcess {
                 executable,
                 identity: identity.clone(),
                 channels,
+                sample_rate_hz,
                 shared_transport: false,
             }),
             Err(error) => {
@@ -2004,23 +2072,43 @@ impl SupervisedWorkerProcess {
         transport: SharedAudioTransport,
         now: Instant,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_shared_with_supervisor(
+        Self::spawn_shared_with_sample_rate(
+            executable,
+            identity,
+            channels,
+            transport,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            now,
+        )
+    }
+
+    pub fn spawn_shared_with_sample_rate(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        transport: SharedAudioTransport,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_shared_with_supervisor_at_sample_rate(
             executable,
             identity,
             channels,
             transport,
             WorkerSupervisor::new(),
+            sample_rate_hz,
             now,
         )
         .map_err(|(error, _)| error)
     }
 
-    fn spawn_shared_with_supervisor(
+    fn spawn_shared_with_supervisor_at_sample_rate(
         executable: impl AsRef<Path>,
         identity: &PluginIdentity,
         channels: u16,
         transport: SharedAudioTransport,
         mut supervisor: WorkerSupervisor,
+        sample_rate_hz: u32,
         now: Instant,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
         let executable = match validate_worker_executable(executable.as_ref()) {
@@ -2040,15 +2128,22 @@ impl SupervisedWorkerProcess {
             ));
         }
         let process_result = if identity.format == PluginFormat::Vst2 {
-            WorkerProcess::spawn_shared_for_plugin(
+            WorkerProcess::spawn_shared_for_plugin_with_sample_rate(
                 &executable,
                 &identity.binary_path,
                 &identity.sha256,
                 channels,
                 transport,
+                sample_rate_hz,
             )
         } else {
-            WorkerProcess::spawn_shared(&executable, &identity.sha256, channels, transport)
+            WorkerProcess::spawn_shared_with_sample_rate(
+                &executable,
+                &identity.sha256,
+                channels,
+                transport,
+                sample_rate_hz,
+            )
         };
         match process_result {
             Ok(process) => Ok(Self {
@@ -2057,6 +2152,7 @@ impl SupervisedWorkerProcess {
                 executable,
                 identity: identity.clone(),
                 channels,
+                sample_rate_hz,
                 shared_transport: true,
             }),
             Err(error) => {
@@ -2322,6 +2418,7 @@ impl SupervisedWorkerProcess {
             executable: _executable,
             identity: _identity,
             channels: _channels,
+            sample_rate_hz: _sample_rate_hz,
             shared_transport: _shared_transport,
         } = self;
         supervisor
@@ -2338,6 +2435,7 @@ impl SupervisedWorkerProcess {
             executable,
             identity,
             channels,
+            sample_rate_hz,
             shared_transport,
         } = self;
         let state = supervisor.state();
@@ -2360,11 +2458,24 @@ impl SupervisedWorkerProcess {
                     supervisor,
                 ));
             };
-            Self::spawn_shared_with_supervisor(
-                executable, &identity, channels, transport, supervisor, now,
+            Self::spawn_shared_with_supervisor_at_sample_rate(
+                executable,
+                &identity,
+                channels,
+                transport,
+                supervisor,
+                sample_rate_hz,
+                now,
             )
         } else {
-            Self::spawn_with_supervisor(executable, &identity, channels, supervisor, now)
+            Self::spawn_with_supervisor_at_sample_rate(
+                executable,
+                &identity,
+                channels,
+                supervisor,
+                now,
+                sample_rate_hz,
+            )
         }
     }
 
@@ -2386,7 +2497,29 @@ impl WorkerProcess {
         plugin_sha256: &str,
         channels: u16,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_inner(executable, plugin_sha256, channels, None, None, None)
+        Self::spawn_with_sample_rate(
+            executable,
+            plugin_sha256,
+            channels,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+        )
+    }
+
+    pub fn spawn_with_sample_rate(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            channels,
+            sample_rate_hz,
+            None,
+            None,
+            None,
+        )
     }
 
     #[cfg(windows)]
@@ -2396,10 +2529,28 @@ impl WorkerProcess {
         plugin_sha256: &str,
         channels: u16,
     ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_for_plugin_with_sample_rate(
+            executable,
+            plugin_path,
+            plugin_sha256,
+            channels,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+        )
+    }
+
+    #[cfg(windows)]
+    pub fn spawn_for_plugin_with_sample_rate(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
         Self::spawn_inner(
             executable,
             plugin_sha256,
             channels,
+            sample_rate_hz,
             None,
             None,
             Some(plugin_path.as_ref()),
@@ -2412,6 +2563,19 @@ impl WorkerProcess {
         _: impl AsRef<Path>,
         _: &str,
         _: u16,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST2 loading requires Windows".into(),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_for_plugin_with_sample_rate(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: u16,
+        _: u32,
     ) -> Result<Self, WorkerProcessError> {
         Err(WorkerProcessError::Protocol(
             "VST2 loading requires Windows".into(),
@@ -2433,7 +2597,15 @@ impl WorkerProcess {
                 "invalid worker fixture mode".into(),
             ));
         }
-        Self::spawn_inner(executable, plugin_sha256, channels, None, Some(mode), None)
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            channels,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            None,
+            Some(mode),
+            None,
+        )
     }
 
     pub fn spawn_shared(
@@ -2442,10 +2614,27 @@ impl WorkerProcess {
         channels: u16,
         transport: SharedAudioTransport,
     ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_shared_with_sample_rate(
+            executable,
+            plugin_sha256,
+            channels,
+            transport,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+        )
+    }
+
+    pub fn spawn_shared_with_sample_rate(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        transport: SharedAudioTransport,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
         Self::spawn_inner(
             executable,
             plugin_sha256,
             channels,
+            sample_rate_hz,
             Some(transport),
             None,
             None,
@@ -2460,10 +2649,30 @@ impl WorkerProcess {
         channels: u16,
         transport: SharedAudioTransport,
     ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_shared_for_plugin_with_sample_rate(
+            executable,
+            plugin_path,
+            plugin_sha256,
+            channels,
+            transport,
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+        )
+    }
+
+    #[cfg(windows)]
+    pub fn spawn_shared_for_plugin_with_sample_rate(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        transport: SharedAudioTransport,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
         Self::spawn_inner(
             executable,
             plugin_sha256,
             channels,
+            sample_rate_hz,
             Some(transport),
             None,
             Some(plugin_path.as_ref()),
@@ -2487,6 +2696,7 @@ impl WorkerProcess {
         executable: impl AsRef<Path>,
         plugin_sha256: &str,
         channels: u16,
+        sample_rate_hz: u32,
         mut shared: Option<SharedAudioTransport>,
         fixture_mode: Option<&str>,
         plugin_path: Option<&Path>,
@@ -2499,6 +2709,9 @@ impl WorkerProcess {
         if !matches!(channels, 1 | 2) {
             return Err(WorkerProcessError::Protocol("invalid channel count".into()));
         }
+        if !(8_000..=192_000).contains(&sample_rate_hz) {
+            return Err(WorkerProcessError::Protocol("invalid sample rate".into()));
+        }
         let mut command = Command::new(&executable);
         // Plugin workers must not inherit backend credentials or unrelated
         // environment configuration. The executable is absolute and the
@@ -2509,6 +2722,8 @@ impl WorkerProcess {
             plugin_sha256,
             "--channels",
             &channels.to_string(),
+            "--sample-rate",
+            &sample_rate_hz.to_string(),
         ]);
         if let Some(plugin_path) = plugin_path {
             command.args(["--plugin-path", &plugin_path.to_string_lossy()]);

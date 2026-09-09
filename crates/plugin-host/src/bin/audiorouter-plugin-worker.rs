@@ -4,7 +4,8 @@ use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
     read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
-    SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession, WORKER_PROTOCOL_VERSION,
+    SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession,
+    DEFAULT_WORKER_SAMPLE_RATE_HZ, WORKER_PROTOCOL_VERSION,
 };
 #[cfg(feature = "test-fixtures")]
 use std::io::Write;
@@ -19,6 +20,7 @@ use std::time::Duration;
 type WorkerArguments = (
     String,
     u16,
+    u32,
     Option<(PathBuf, PathBuf)>,
     Option<String>,
     Option<PathBuf>,
@@ -35,7 +37,8 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let (plugin_sha256, channels, shared_paths, _fixture_mode, plugin_path) = parse_arguments()?;
+    let (plugin_sha256, channels, sample_rate_hz, shared_paths, _fixture_mode, plugin_path) =
+        parse_arguments()?;
     #[cfg(windows)]
     let mut vst2_plugin = plugin_path
         .clone()
@@ -167,7 +170,9 @@ fn run() -> Result<(), String> {
                 }
                 #[cfg(windows)]
                 if let Some(plugin) = vst2_plugin.as_mut() {
-                    if let Err(error) = process_vst2_frame(plugin, &mut frame, &parameters) {
+                    if let Err(error) =
+                        process_vst2_frame(plugin, &mut frame, &parameters, sample_rate_hz)
+                    {
                         let failure = format!("vst2Processing:{error}");
                         write_worker_message(
                             &mut writer,
@@ -392,6 +397,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut arguments = std::env::args().skip(1);
     let mut hash = None;
     let mut channels = None;
+    let mut sample_rate_hz = None;
     let mut input_path = None;
     let mut output_path = None;
     let mut plugin_path = None;
@@ -409,6 +415,15 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
                         .ok_or_else(|| "--channels requires a value".to_string())?
                         .parse::<u16>()
                         .map_err(|_| "--channels must be 1 or 2".to_string())?,
+                )
+            }
+            "--sample-rate" => {
+                sample_rate_hz = Some(
+                    arguments
+                        .next()
+                        .ok_or_else(|| "--sample-rate requires a value".to_string())?
+                        .parse::<u32>()
+                        .map_err(|_| "--sample-rate must be an integer".to_string())?,
                 )
             }
             "--input-path" => input_path = arguments.next().map(PathBuf::from),
@@ -447,15 +462,27 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     if !matches!(channels, 1 | 2) {
         return Err("--channels must be 1 or 2".into());
     }
+    let sample_rate_hz = sample_rate_hz.unwrap_or(DEFAULT_WORKER_SAMPLE_RATE_HZ);
+    if !(8_000..=192_000).contains(&sample_rate_hz) {
+        return Err("--sample-rate must be between 8000 and 192000 Hz".into());
+    }
     match (input_path, output_path) {
         (Some(input), Some(output)) => Ok((
             hash,
             channels,
+            sample_rate_hz,
             Some((input, output)),
             fixture_mode,
             plugin_path,
         )),
-        (None, None) => Ok((hash, channels, None, fixture_mode, plugin_path)),
+        (None, None) => Ok((
+            hash,
+            channels,
+            sample_rate_hz,
+            None,
+            fixture_mode,
+            plugin_path,
+        )),
         _ => Err("--input-path and --output-path must be supplied together".into()),
     }
 }
@@ -465,6 +492,7 @@ fn process_vst2_frame(
     plugin: &mut Vst2Library,
     frame: &mut audiorouter_plugin_host::WorkerFrame,
     parameters: &[audiorouter_plugin_host::ParameterEvent],
+    sample_rate_hz: u32,
 ) -> Result<(), String> {
     let channels = usize::from(frame.channels);
     let frames = frame.samples.len() / channels;
@@ -483,7 +511,7 @@ fn process_vst2_frame(
     let mut outputs: Vec<&mut [f32]> = output_channels.iter_mut().map(Vec::as_mut_slice).collect();
     plugin
         .set_processing_format(
-            48_000.0,
+            sample_rate_hz as f32,
             i32::try_from(frames).map_err(|_| "frame count overflow")?,
         )
         .map_err(|error| format!("format setup failed: {error:?}"))?;

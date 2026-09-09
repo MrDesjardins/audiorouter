@@ -113,6 +113,9 @@ fingerprint, format, architecture, and size, and fails closed if the file was
 replaced or moved outside the grant. It never selects a substitute path.
 `SupervisedWorkerProcess::spawn_verified` composes that check with supervised
 worker creation for callers that need one launch operation.
+Callers with a known graph rate can use
+`SupervisedWorkerProcess::spawn_with_sample_rate` or its verified variant;
+rates are bounded to 8–192 kHz and are passed explicitly to the worker.
 
 Run the reproducible local qualification with:
 
