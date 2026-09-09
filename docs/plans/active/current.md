@@ -58,6 +58,17 @@ release completion.
   the repository's existing `ui/dist` output was left untouched after its
   Windows file lock caused the default build cleanup to return `EPERM`.
 
+- Requalified the clean M00/M01/M04/M05/M06/M07 chain and M08 release
+  preparation at pushed head `669380e1` on 2026-09-09. The read-only endpoint
+  inventory found 31 endpoints; disposable x64 SysVAD compilation/package and
+  signability passed; UI, CLI/MCP, native VST3 worker, and modern/legacy VST2
+  fixture gates passed; and unsigned optimized Rust/UI artifacts were prepared
+  and verified. The first run stopped at M08 because a formatter-only change
+  made the tree dirty; after committing that correction, M08 passed from the
+  clean tree. Temporary checkouts/artifacts were removed and no driver,
+  plugin-registration, signing-mode, stream, or persistent audio change was
+  made.
+
 - Ran the existing contained-worker acceptance against four user-supplied local
   ReaPlugs x64 VST2 effects on 2026-09-09: ReaComp, ReaEQ, ReaDelay, and ReaGate
   each loaded and processed through the native VST2 adapter at 44.1, 48, and
