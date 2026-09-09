@@ -743,6 +743,16 @@ release completion.
   data-path/latency gates while retaining production driver, signing,
   installer, shell/HWND, manual accessibility, and independent-vendor blockers.
 
+- Requalified the authorized event-driven M00 path on 2026-09-09 using the
+  existing VB-Audio Cable endpoints: capture produced 4,800 frames and silent
+  render submitted 9,600 frames during the 100 ms bounded run. Initialize,
+  event setup, start/stop/reset cleanup, and media identity/state comparison
+  passed. Defaults, volume, mute, privacy, drivers, signing, and startup
+  configuration remained unchanged.
+- Next safe task: continue with the remaining virtual-loopback and calibrated
+  latency evidence while retaining production driver, signing, installer,
+  shell/HWND, manual accessibility, and independent-vendor blockers.
+
 - Completed the API reference parity pass on 2026-09-09: every documented
   mutating recorder, startup, plugin-retry, virtual-device, import, graph,
   session-lifecycle, and recording operation now states its idempotency-key
