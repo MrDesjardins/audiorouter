@@ -146,6 +146,14 @@ release completion.
   controlled-tree evidence only, not a full cross-process isolation threshold
   or production virtual-driver claim.
 
+- Requalified the current endpoint-ID-selected differing-rate route on
+  2026-09-09: 96 kHz mono capture fed 48 kHz stereo render for 48,000 capture,
+  23,936 scheduler, and 23,936 routed frames over 500 ms. The run reported a
+  1,333,334 ns graph deadline, 32,768 ns processing p99.9 upper bound, zero
+  deadline misses/XRuns, and bounded resampling; stream cleanup and unchanged
+  media state passed. This remains short-duration shared-mode evidence, not
+  independent-clock lock, managed-driver callback, or physical-latency proof.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI
