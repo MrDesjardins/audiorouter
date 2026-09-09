@@ -1257,3 +1257,14 @@ deadline, 12,480 capture frames, 97 graph blocks, and zero deadline misses,
 XRuns, or queue overruns. Stream teardown and media-state preservation passed.
 This remains shared-mode adapter evidence, not managed-driver callback or
 physical-latency qualification.
+
+## Differing-rate route requalification (2026-09-08)
+
+The hardened route wrapper passed for 250 ms using the documented 96 kHz mono
+capture endpoint and 48 kHz stereo render endpoint. It processed 23,040
+capture frames into 90 graph blocks, 11,520 scheduler frames, and 11,424
+routed frames. The computed 128-frame deadline was 1,333,334 ns; processing
+p99.9 was 65,536 ns, with zero deadline misses/lateness and no telemetry
+accounting faults. Endpoint/media state was unchanged after teardown. This is
+shared-mode adapter evidence only, not managed-driver callback, independent
+clock, or physical-latency qualification.
