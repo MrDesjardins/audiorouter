@@ -28,9 +28,14 @@ if ($cargoExitCode -ne 0) {
     throw "production Rust adapter smoke failed with exit code $cargoExitCode`n$($output -join [Environment]::NewLine)"
 }
 $line = $output | Where-Object { $_ -match '^adapter_smoke ' } | Select-Object -Last 1
-if (-not $line -or $line -notmatch 'capture_packets=(\d+)' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'graph_generation=(\d+)' -or $line -notmatch 'graph_blocks=(\d+)' -or $line -notmatch 'scheduler_frames=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_total=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_max=(\d+)' -or $line -notmatch 'scheduler_processing_time_p999_upper_bound_ns=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram_samples=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram=([0-9:,]+)' -or $line -notmatch 'scheduler_deadline_misses=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_total=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_max=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_p999_upper_bound_ns=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_histogram=([0-9:,]+)') {
+if (-not $line -or $line -notmatch 'capture_rate_hz=(\d+)' -or $line -notmatch 'render_rate_hz=(\d+)' -or $line -notmatch 'graph_quantum_frames=(\d+)' -or $line -notmatch 'graph_deadline_ns=(\d+)' -or $line -notmatch 'capture_packets=(\d+)' -or $line -notmatch 'capture_frames=(\d+)' -or $line -notmatch 'graph_generation=(\d+)' -or $line -notmatch 'graph_blocks=(\d+)' -or $line -notmatch 'scheduler_frames=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_total=(\d+)' -or $line -notmatch 'scheduler_processing_time_ns_max=(\d+)' -or $line -notmatch 'scheduler_processing_time_p999_upper_bound_ns=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram_samples=(\d+)' -or $line -notmatch 'scheduler_processing_time_histogram=([0-9:,]+)' -or $line -notmatch 'scheduler_deadline_misses=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_total=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_ns_max=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_p999_upper_bound_ns=(\d+)' -or $line -notmatch 'scheduler_deadline_lateness_histogram=([0-9:,]+)') {
     throw "adapter smoke did not report bounded capture/render counts`n$($output -join [Environment]::NewLine)"
 }
+$captureRate = [long]([regex]::Match($line, 'capture_rate_hz=(\d+)').Groups[1].Value)
+$renderRate = [long]([regex]::Match($line, 'render_rate_hz=(\d+)').Groups[1].Value)
+$quantumFrames = [long]([regex]::Match($line, 'graph_quantum_frames=(\d+)').Groups[1].Value)
+$graphDeadline = [long]([regex]::Match($line, 'graph_deadline_ns=(\d+)').Groups[1].Value)
+$expectedDeadline = [long][Math]::Ceiling(($quantumFrames * 1000000000.0) / $captureRate)
 $capturePackets = [int]([regex]::Match($line, 'capture_packets=(\d+)').Groups[1].Value)
 if ($capturePackets -le 0) {
     throw 'adapter smoke reported no capture packets'
@@ -76,7 +81,7 @@ if ($processingTimeHistogramSum -ne $processingTimeSamples) {
 # A p99.9 upper bound may be below the absolute maximum when the maximum is
 # an allowed tail outlier. Validate totals and histogram accounting separately;
 # requiring the quantile bound to cover the maximum would reject valid data.
-if ($captureFrames -le 0 -or $graphGeneration -ne 1 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $renderFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessSamples -ne $deadlineMisses -or $deadlineLatenessTotal -lt $deadlineLatenessMax) {
+if ($captureRate -le 0 -or $renderRate -le 0 -or $quantumFrames -ne 128 -or $graphDeadline -ne $expectedDeadline -or $captureFrames -le 0 -or $graphGeneration -ne 1 -or $graphBlocks -le 0 -or $schedulerFrames -le 0 -or $renderFrames -le 0 -or $processingTimeTotal -lt $processingTimeMax -or $processingTimeSamples -ne $graphBlocks -or $deadlineMisses -gt $graphBlocks -or $deadlineLatenessSamples -ne $deadlineMisses -or $deadlineLatenessTotal -lt $deadlineLatenessMax) {
     throw "adapter smoke reported invalid frame counts: $line"
 }
 $after = Get-MediaSnapshot

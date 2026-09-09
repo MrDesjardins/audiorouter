@@ -1246,3 +1246,14 @@ endpoint activation/metadata inspection, removes its temporary executable, and
 verifies media-device state preservation. This is endpoint-format evidence, not
 evidence of arbitrary format negotiation, managed-driver routing, or physical
 latency.
+
+## Rate-aware adapter smoke assertion (2026-09-08)
+
+The live adapter wrapper was hardened to require the probe's capture/render
+rates, 128-frame quantum, and computed graph deadline, then independently
+recalculate the expected deadline with ceiling nanosecond arithmetic. The
+requalified 250 ms smoke passed at 48 kHz capture/render with a 2,666,667 ns
+deadline, 12,480 capture frames, 97 graph blocks, and zero deadline misses,
+XRuns, or queue overruns. Stream teardown and media-state preservation passed.
+This remains shared-mode adapter evidence, not managed-driver callback or
+physical-latency qualification.
