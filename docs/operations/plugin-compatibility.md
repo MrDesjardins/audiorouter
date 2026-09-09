@@ -146,6 +146,14 @@ Pitchproof x64 VST2 binary has passed the same three processing rates.
 These are compatibility observations only: they do not establish licensing
 or redistribution rights, editor compatibility, or release qualification.
 
+On 2026-09-09, the same contained-worker processing check was run directly
+against the user-supplied installed ReaComp, ReaEQ, ReaDelay, and ReaGate x64
+VST2 DLLs. All four passed at 44.1, 48, and 96 kHz (12 processing cases).
+The check used process-local environment overrides and restored the prior
+values afterward; it did not copy or register the DLLs or change machine audio
+state. These results remain local compatibility evidence and do not establish
+third-party rights, editor support, physical latency, or release qualification.
+
 Run the reproducible local qualification with:
 
 ```powershell

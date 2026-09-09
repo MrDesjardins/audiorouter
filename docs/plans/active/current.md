@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `2844d5f4` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `452bdde2` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -26,6 +26,16 @@ continue only with portable hardening and preserve the native-shell, production
 driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
+
+- Ran the existing contained-worker acceptance against four user-supplied local
+  ReaPlugs x64 VST2 effects on 2026-09-09: ReaComp, ReaEQ, ReaDelay, and ReaGate
+  each loaded and processed through the native VST2 adapter at 44.1, 48, and
+  96 kHz (12 real-plugin processing cases passed). The check used only
+  process-local `AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE`
+  values and restored both afterward; it did not copy, register, edit, or
+  commit the installed binaries and did not change machine audio state. This
+  is compatibility evidence for PLUG-07, not rights, editor, latency, or
+  release qualification.
 
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
