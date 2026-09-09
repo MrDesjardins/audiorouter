@@ -733,6 +733,16 @@ release completion.
   formatting, and diff checks passed. No audio or machine configuration
   changed.
 
+- Requalified the authorized bounded M00 native live lifecycle on 2026-09-09:
+  13 capture endpoints and 18 render endpoints were exercised for 50 ms each;
+  one occupied render endpoint was reported and handled as expected. Capture,
+  silent render, stop/reset cleanup, and media identity/state comparison passed.
+  Defaults, volume, mute, privacy, drivers, signing, and startup configuration
+  remained unchanged.
+- Next safe task: continue with the remaining independently observable native
+  data-path/latency gates while retaining production driver, signing,
+  installer, shell/HWND, manual accessibility, and independent-vendor blockers.
+
 - Completed the API reference parity pass on 2026-09-09: every documented
   mutating recorder, startup, plugin-retry, virtual-device, import, graph,
   session-lifecycle, and recording operation now states its idempotency-key
