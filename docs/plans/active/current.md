@@ -54,6 +54,13 @@ release completion.
   typecheck and 98 tests pass. Native shell/manual conflict and accessibility
   acceptance remain open.
 
+- Extended UI structured-error presentation on 2026-09-09 across startup,
+  plugin discovery/inspection, session and recording inventory, route
+  inspection, and recovery inspection. These paths now preserve typed backend
+  codes, HRESULTs, retryability, and remediation through the same formatter as
+  graph operations. UI typecheck and 98 tests pass; native shell/manual
+  accessibility acceptance remains open.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;

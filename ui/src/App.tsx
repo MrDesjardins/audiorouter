@@ -24,19 +24,19 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
   const [plan, setPlan] = useState<import("@audiorouter/contracts").StartupPlanResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const refresh = () => {
-    void backend.getStartup().then((result) => { setStatus(result); setEnabled(result.enabled); setMessage(null); }).catch((error) => setMessage(error instanceof Error ? error.message : "Startup status unavailable."));
+    void backend.getStartup().then((result) => { setStatus(result); setEnabled(result.enabled); setMessage(null); }).catch((error) => setMessage(formatUiError(error, "Startup status unavailable.")));
   };
   useEffect(() => { setPlan(null); refresh(); }, [backend]);
   const createPlan = async () => {
     setMessage("Planning sign-in startup policy...");
     try { const result = await backend.planStartup(enabled); setPlan(result); setMessage(result.reason); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Startup planning unavailable."); }
+    catch (error) { setMessage(formatUiError(error, "Startup planning unavailable.")); }
   };
   const applyPlan = async () => {
     if (!plan) return;
     setMessage("Applying startup policy...");
     try { const result = await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply")); setPlan(null); setMessage(result.reason); refresh(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Startup apply unavailable."); }
+    catch (error) { setMessage(formatUiError(error, "Startup apply unavailable.")); }
   };
   return <section className="panel startup-panel" aria-labelledby="startup-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="startup-heading">Start at sign-in</h2></div><button type="button" className="secondary" onClick={refresh}>Refresh</button></div><p className="muted">{status?.reason ?? "Loading startup capability..."}</p><label>Desired policy<select aria-label="Desired sign-in startup policy" value={enabled ? "enabled" : "disabled"} onChange={(event) => { setEnabled(event.target.value === "enabled"); setPlan(null); }} disabled={!backend.connected}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></label><div className="actions"><button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected}>Plan startup policy</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()}>Apply planned policy</button>}</div>{message && <p className="muted" role="status">{message}</p>}<p className="muted">Registration is currently unavailable in this build. Planning and applying only exercise the authorized backend boundary; they do not register Windows startup.</p></section>;
 }
@@ -107,25 +107,25 @@ function PluginScanPanel({ backend }: { backend: UiBackend }) {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
     setMessage("Scanning selected directory...");
     try { setResult(await backend.scanPlugins(directory.trim())); setMessage("Plugin scan completed without loading plugin code."); }
-    catch (error) { setResult(null); setMessage(error instanceof Error ? error.message : "Plugin scan unavailable."); }
+    catch (error) { setResult(null); setMessage(formatUiError(error, "Plugin scan unavailable.")); }
   };
   const list = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
     setMessage("Loading the last explicit plugin scan...");
     try { setResult(await backend.listPlugins(directory.trim())); setMessage("Loaded the last backend scan without rescanning."); }
-    catch (error) { setResult(null); setMessage(error instanceof Error ? error.message : "Plugin inventory unavailable."); }
+    catch (error) { setResult(null); setMessage(formatUiError(error, "Plugin inventory unavailable.")); }
   };
   const inspect = async () => {
     if (!inspectionPath.trim()) { setMessage("Enter an absolute plugin path."); return; }
     setMessage("Inspecting selected plugin path...");
     try { setInspection(await backend.inspectPlugin(inspectionPath.trim())); setMessage("Plugin inspection completed without loading plugin code."); }
-    catch (error) { setInspection(null); setMessage(error instanceof Error ? error.message : "Plugin inspection unavailable."); }
+    catch (error) { setInspection(null); setMessage(formatUiError(error, "Plugin inspection unavailable.")); }
   };
   const retry = async () => {
     if (!directory.trim()) { setMessage("Enter an absolute plugin directory."); return; }
     setMessage("Retrying selected directory scan...");
     try { setResult(await backend.retryPlugins(directory.trim(), uiIdempotencyKey("plugins-retry"))); setMessage("Plugin scan retry completed without loading plugin code."); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Plugin scan retry unavailable."); }
+    catch (error) { setMessage(formatUiError(error, "Plugin scan retry unavailable.")); }
   };
   const selectInspectionPath = (path: string) => { setInspectionPath(path); setMessage("Selected the discovered path; inspect it explicitly when ready."); };
   return <section className="panel plugin-scan-panel" aria-labelledby="plugin-scan-heading"><div className="section-heading"><div><p className="eyebrow">VST3 and VST2 discovery</p><h2 id="plugin-scan-heading">Plugin scan</h2></div><span className="badge">{result?.entries.length ?? 0}</span></div><p className="muted">Choose a directory explicitly. Discovery inspects bounded metadata only; it does not load or execute plugins.</p><label>Absolute plugin directory<input aria-label="Absolute plugin directory" value={directory} onChange={(event) => setDirectory(event.target.value)} disabled={!backend.connected} placeholder="C:\\Plugins" /></label><button type="button" className="secondary" onClick={() => void scan()} disabled={!backend.connected}>Scan directory</button><button type="button" className="secondary" onClick={() => void list()} disabled={!backend.connected}>Load last scan</button><button type="button" className="secondary" onClick={() => void retry()} disabled={!backend.connected}>Retry scan</button>{result && <ul aria-label="Plugin scan results">{result.entries.length === 0 ? <li className="muted">No VST3, VST2, or other DLL candidates found.</li> : result.entries.map((entry) => <li key={entry.path}><strong>{entry.path}</strong> <small>{entry.identity ? `${entry.identity.format} · ${entry.identity.architecture} · ${entry.identity.compatibility}` : `${entry.errorCode ?? "unknown"}: ${entry.error ?? "inspection failed"}`}</small><button type="button" className="secondary" onClick={() => selectInspectionPath(entry.path)} disabled={!backend.connected}>Select for inspection</button></li>)}</ul>}<label>Absolute plugin path<input aria-label="Absolute plugin path" value={inspectionPath} onChange={(event) => setInspectionPath(event.target.value)} disabled={!backend.connected} placeholder="C:\\Plugins\\effect.vst3 or effect.dll" /></label><button type="button" className="secondary" onClick={() => void inspect()} disabled={!backend.connected}>Inspect path</button>{inspection && <p className="muted" role="status">{inspection.identity ? `${inspection.identity.format} ${inspection.identity.architecture} · ${inspection.identity.compatibility}` : `${inspection.errorCode ?? "unknown"}: ${inspection.error ?? "inspection failed"}`}</p>}{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">The explicit <code>pluginScan</code> permission is required by the backend; selecting a result only copies its path, and inspection remains explicit. Loading the last scan never triggers a new filesystem scan.</p></section>;
@@ -249,8 +249,8 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
-    void backend.listSessions().then((items) => { setListedSessions(items); setSessionInventoryError(null); }).catch((error) => { setSessionInventoryError(error instanceof Error ? error.message : "Session inventory unavailable"); if (!backend.connected) setListedSessions(demoSessions); else setListedSessions([]); });
-    void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(error instanceof Error ? error.message : "Recording library unavailable"); });
+    void backend.listSessions().then((items) => { setListedSessions(items); setSessionInventoryError(null); }).catch((error) => { setSessionInventoryError(formatUiError(error, "Session inventory unavailable")); if (!backend.connected) setListedSessions(demoSessions); else setListedSessions([]); });
+    void backend.listRecordings(session.id).then((items) => { setRecordings(items); setRecordingsError(null); }).catch((error) => { setRecordings([]); setRecordingsError(formatUiError(error, "Recording library unavailable")); });
     refreshApplications();
     refreshDevices();
   };
@@ -386,9 +386,9 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       } else setActionMessage(formatUiError(error, "Unable to commit acknowledged changes."));
     }
   };
-  const inspectRoute = async () => { setActionMessage("Inspecting route..."); try { setRouteInspection(await backend.inspectRoute(selectedNode.id)); setActionMessage("Route inspection refreshed from the backend."); } catch (error) { setRouteInspection(null); setActionMessage(error instanceof Error ? error.message : "Unable to inspect route."); } };
-  const previewRecording = async (recordingId: string) => { setPreviewMessage("Inspecting recording..."); try { const result = await backend.previewRecording(recordingId); setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`); } catch (error) { setPreviewMessage(error instanceof Error ? error.message : "Recording preview unavailable."); } };
-  const inspectRecovery = async (recordingId: string) => { setRecoveryMessage("Inspecting recorder recovery..."); try { const result = await backend.getRecordingRecovery(recordingId); setRecoveryMessage(result.status === "missing" ? "No persisted recovery checkpoint is available." : `Recovery checkpoint: ${result.checkpoint.state}.`); } catch (error) { setRecoveryMessage(error instanceof Error ? error.message : "Recording recovery unavailable."); } };
+  const inspectRoute = async () => { setActionMessage("Inspecting route..."); try { setRouteInspection(await backend.inspectRoute(selectedNode.id)); setActionMessage("Route inspection refreshed from the backend."); } catch (error) { setRouteInspection(null); setActionMessage(formatUiError(error, "Unable to inspect route.")); } };
+  const previewRecording = async (recordingId: string) => { setPreviewMessage("Inspecting recording..."); try { const result = await backend.previewRecording(recordingId); setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`); } catch (error) { setPreviewMessage(formatUiError(error, "Recording preview unavailable.")); } };
+  const inspectRecovery = async (recordingId: string) => { setRecoveryMessage("Inspecting recorder recovery..."); try { const result = await backend.getRecordingRecovery(recordingId); setRecoveryMessage(result.status === "missing" ? "No persisted recovery checkpoint is available." : `Recovery checkpoint: ${result.checkpoint.state}.`); } catch (error) { setRecoveryMessage(formatUiError(error, "Recording recovery unavailable.")); } };
   const saveRecordingTitle = async (recordingId: string) => { try { const title = metadataTitles[recordingId]?.trim() ?? ""; await backend.setRecordingMetadata(recordingId, { title: title || null, idempotencyKey: uiIdempotencyKey("recording-metadata") }); setRecordings((current) => current.map((item) => item.id === recordingId ? { ...item, title: title || null } : item)); setPreviewMessage("Recording metadata saved; the audio file was unchanged."); } catch (error) { setPreviewMessage(error instanceof Error ? error.message : "Unable to save recording metadata."); } };
   const removeRecordingEntry = async (recordingId: string) => { if (!window.confirm("Remove this library entry? The audio file will be preserved.")) return; try { await backend.removeRecordingEntry(recordingId, uiIdempotencyKey("recording-entry-remove")); setRecordings((current) => current.filter((item) => item.id !== recordingId)); setPreviewMessage("Library entry removed; the audio file was preserved."); } catch (error) { setPreviewMessage(error instanceof Error ? error.message : "Unable to remove recording entry."); } };
   const renameRecording = async (recordingId: string, newPath: string) => { try { const result = await backend.renameRecording(recordingId, newPath.trim(), uiIdempotencyKey("recording-rename")); setRecordings((current) => current.map((item) => item.id === recordingId ? { ...item, path: result.path, missing: false } : item)); setPreviewMessage("Recording renamed within the approved directory."); } catch (error) { setPreviewMessage(error instanceof Error ? error.message : "Unable to rename recording."); } };
