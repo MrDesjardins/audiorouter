@@ -75,4 +75,11 @@ describe("appendDraftConnection", () => {
     const mixer = appendLibraryNode(demoSession, "mixer");
     expect(() => removeSinglePathDraftMixer(mixer, "mixer-1")).toThrow("exactly one incoming and one outgoing");
   });
+
+  it("refuses to reconnect a mixer with a malformed channel matrix", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const inserted = insertDraftMixer(connected, "edge-1");
+    const malformed = { ...inserted, edges: inserted.edges.map((edge) => edge.sourceNode === "mic" ? { ...edge, matrix: [] } : edge) };
+    expect(() => removeSinglePathDraftMixer(malformed, "mixer-1")).toThrow("valid channel matrices");
+  });
 });

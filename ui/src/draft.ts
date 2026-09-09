@@ -225,6 +225,9 @@ export function removeSinglePathDraftMixer(session: Session, mixerId: EntityId):
   const sourcePort = sourceNode?.ports.find((port) => port.name === incoming[0].sourcePort);
   const destinationPort = destinationNode?.ports.find((port) => port.name === outgoing[0].destinationPort);
   if (!sourcePort || !mixerInput || !mixerOutput || !destinationPort) throw new Error("Mixer connections reference unknown ports");
+  if (incoming[0].matrix.length !== mixerInput.channels * sourcePort.channels || outgoing[0].matrix.length !== destinationPort.channels * mixerOutput.channels) {
+    throw new Error("Mixer removal requires valid channel matrices");
+  }
   const composedMatrix = Array.from({ length: destinationPort.channels * sourcePort.channels }, (_, index) => {
     const destinationChannel = Math.floor(index / sourcePort.channels);
     const sourceChannel = index % sourcePort.channels;
