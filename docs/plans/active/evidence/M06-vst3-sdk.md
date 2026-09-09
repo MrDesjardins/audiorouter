@@ -1263,7 +1263,9 @@ was accessed.
 Six user-installed ReaPlugs effect DLLs were copied to the ignored repository
 fixture directory for a read-only compatibility scan. The scanner identified
 all six as x64 but classified them as `unsupportedFormat` with no VST3 class
-IDs. No DLL was loaded or executed, and the files are not part of the source
+IDs. A read-only PE export inspection found `VSTPluginMain` in each binary,
+confirming the legacy VST2 entry-point boundary rather than a VST3 bundle. No
+DLL was loaded or executed, and the files are not part of the source
 tree or release artifacts. This confirms that the built-in DSP path—not a
 VST2/standalone compatibility assumption—is the native basic-transformation
 path. DSP coverage (27) and engine coverage (78) passed with strict Clippy;
