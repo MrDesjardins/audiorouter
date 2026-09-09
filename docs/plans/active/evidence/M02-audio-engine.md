@@ -1215,3 +1215,14 @@ Each wrapper stops/resets its streams, removes temporary binaries, and verifies
 media-device state preservation. This is native shared/event/process-loopback
 evidence only; it does not establish managed-driver callback timing, calibrated
 physical latency, or an actual PID-reuse occurrence.
+
+## Guarded loopback and exclusion requalification (2026-09-08)
+
+The guarded endpoint-loopback signal-path acceptance passed on the explicitly
+named VB-Audio pair with a 500 ms capture and 800 ms tone, producing 72,054
+nonzero payload bytes. The guarded process-exclusion acceptance also passed at
+500 ms with 22,050 capture frames and the disposable controlled child excluded
+from the selected process tree. Both wrappers stop/reset streams, remove
+temporary binaries, and verify unchanged media state. This evidence covers
+selected Windows API/data paths only; it does not establish full cross-process
+isolation, calibrated physical latency, PID reuse, or managed-driver behavior.
