@@ -1676,3 +1676,12 @@ native file identity for every existing slot pair, closing the hard-link alias
 case already covered by the single-stream transport. The plugin-host suite
 passed 64 unit tests, 21 worker-process tests (six fixture-dependent tests
 ignored), doc-tests, formatting, and strict Clippy.
+
+The engine now accepts a caller-owned `RuntimeBusWorkerResult` at that
+generation boundary. `RuntimeBusQuantumIdentity` carries sequence, deadline,
+and frame count; a result with a late/different identity or any missing bus
+clears every destination and reports an explicit silence outcome. A matching
+complete result copies all declared outputs without allocation, locking,
+waiting, or I/O. Engine tests passed 84 cases with formatting and strict
+Clippy. The engine remains independent of plugin-host, so this is the typed
+handoff contract rather than a claim of completed auxiliary effect execution.

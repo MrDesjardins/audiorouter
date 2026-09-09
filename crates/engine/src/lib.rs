@@ -1519,6 +1519,7 @@ impl RuntimeBusLayout {
 pub enum RuntimeBusProcessOutcome {
     Processed,
     SilencedMissingInput,
+    SilencedWorkerResult,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1526,6 +1527,49 @@ pub enum RuntimeBusProcessError {
     InputBusCount,
     OutputBusCount,
     BlockShape,
+    WorkerOutputBusCount,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RuntimeBusQuantumIdentity {
+    pub sequence: u64,
+    pub deadline_tick: u64,
+    pub frame_count: usize,
+}
+
+impl RuntimeBusQuantumIdentity {
+    pub fn new(
+        sequence: u64,
+        deadline_tick: u64,
+        frame_count: usize,
+    ) -> Result<Self, RuntimeBusProcessError> {
+        if sequence == 0 || deadline_tick == 0 || frame_count == 0 {
+            return Err(RuntimeBusProcessError::BlockShape);
+        }
+        Ok(Self {
+            sequence,
+            deadline_tick,
+            frame_count,
+        })
+    }
+}
+
+/// A worker result whose audio storage remains owned by the caller. The
+/// plugin-host validates per-bus coherence before constructing this envelope;
+/// the engine still checks the envelope's shared identity before publication.
+pub struct RuntimeBusWorkerResult<'a> {
+    identity: RuntimeBusQuantumIdentity,
+    outputs: &'a [Option<&'a AudioBlock>],
+}
+
+impl<'a> RuntimeBusWorkerResult<'a> {
+    pub fn new(identity: RuntimeBusQuantumIdentity, outputs: &'a [Option<&'a AudioBlock>]) -> Self {
+        Self { identity, outputs }
+    }
+
+    pub fn identity(&self) -> RuntimeBusQuantumIdentity {
+        self.identity
+    }
 }
 
 /// Graph-owned staging boundary for a prepared multi-bus generation.
@@ -1597,6 +1641,50 @@ impl RuntimeBusGeneration {
             .map_err(|_| RuntimeBusProcessError::BlockShape)?;
         for output in outputs.iter_mut().skip(1) {
             output.clear();
+        }
+        Ok(RuntimeBusProcessOutcome::Processed)
+    }
+
+    /// Accept one complete worker result for the graph's expected quantum.
+    /// A late, missing, or differently identified result fails closed by
+    /// clearing every destination. Shape and cardinality errors are returned
+    /// before any destination is changed; the operation performs no
+    /// allocation, locking, waiting, or I/O.
+    pub fn accept_worker_result(
+        &self,
+        expected: RuntimeBusQuantumIdentity,
+        result: &RuntimeBusWorkerResult<'_>,
+        destinations: &mut [&mut AudioBlock],
+    ) -> Result<RuntimeBusProcessOutcome, RuntimeBusProcessError> {
+        if destinations.len() != self.layout.output_channels.len() {
+            return Err(RuntimeBusProcessError::OutputBusCount);
+        }
+        if result.outputs.len() != self.layout.output_channels.len() {
+            return Err(RuntimeBusProcessError::WorkerOutputBusCount);
+        }
+        for (destination, channels) in destinations.iter().zip(&self.layout.output_channels) {
+            if destination.channels() != *channels || destination.frames() != expected.frame_count {
+                return Err(RuntimeBusProcessError::BlockShape);
+            }
+        }
+        let identity_matches = result.identity == expected;
+        let complete = result.outputs.iter().all(Option::is_some);
+        if !identity_matches || !complete {
+            for destination in destinations.iter_mut() {
+                destination.clear();
+            }
+            return Ok(RuntimeBusProcessOutcome::SilencedWorkerResult);
+        }
+        for index in 0..destinations.len() {
+            let Some(source) = result.outputs[index] else {
+                for destination in destinations.iter_mut() {
+                    destination.clear();
+                }
+                return Ok(RuntimeBusProcessOutcome::SilencedWorkerResult);
+            };
+            destinations[index]
+                .copy_from(source)
+                .map_err(|_| RuntimeBusProcessError::BlockShape)?;
         }
         Ok(RuntimeBusProcessOutcome::Processed)
     }
@@ -5636,6 +5724,60 @@ mod tests {
         assert_eq!(
             RuntimeBusGeneration::prepare(RuntimeGeneration::new(0), layout),
             Err(RuntimeBusLayoutError::InvalidGeneration)
+        );
+    }
+
+    #[test]
+    fn runtime_bus_generation_accepts_only_matching_worker_results() {
+        let layout = RuntimeBusLayout::new(vec![2], vec![2, 1]).unwrap();
+        let generation = RuntimeBusGeneration::prepare(RuntimeGeneration::new(8), layout).unwrap();
+        let identity = RuntimeBusQuantumIdentity::new(4, 100, 4).unwrap();
+        let main = AudioBlock::new(2, 4).unwrap();
+        let side = AudioBlock::new(1, 4).unwrap();
+        let result_outputs = [Some(&main), Some(&side)];
+        let result = RuntimeBusWorkerResult::new(identity, &result_outputs);
+        let mut destination_main = AudioBlock::new(2, 4).unwrap();
+        let mut destination_side = AudioBlock::new(1, 4).unwrap();
+        destination_main.apply_gain(1.0);
+        destination_side.apply_gain(1.0);
+        let mut destinations = [&mut destination_main, &mut destination_side];
+
+        assert_eq!(
+            generation
+                .accept_worker_result(identity, &result, &mut destinations)
+                .unwrap(),
+            RuntimeBusProcessOutcome::Processed
+        );
+
+        destination_main.apply_gain(1.0);
+        destination_side.apply_gain(1.0);
+        let mut destinations = [&mut destination_main, &mut destination_side];
+        let late = RuntimeBusQuantumIdentity::new(3, 99, 4).unwrap();
+        assert_eq!(
+            generation
+                .accept_worker_result(late, &result, &mut destinations)
+                .unwrap(),
+            RuntimeBusProcessOutcome::SilencedWorkerResult
+        );
+        assert!(destination_main
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
+        assert!(destination_side
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
+
+        let missing_outputs = [Some(&main), None];
+        let missing_result = RuntimeBusWorkerResult::new(identity, &missing_outputs);
+        let mut destinations = [&mut destination_main, &mut destination_side];
+        assert_eq!(
+            generation
+                .accept_worker_result(identity, &missing_result, &mut destinations)
+                .unwrap(),
+            RuntimeBusProcessOutcome::SilencedWorkerResult
         );
     }
 
