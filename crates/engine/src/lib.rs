@@ -3004,6 +3004,22 @@ impl RealtimeScheduler {
         Ok(())
     }
 
+    /// Prepare and publish a graph for the endpoint's negotiated rate. The
+    /// rings are recycled only after preparation succeeds, so an invalid rate
+    /// or graph leaves the currently active generation untouched.
+    pub fn activate_session_at_sample_rate(
+        &self,
+        session: &audiorouter_domain::Session,
+        generation: RuntimeGeneration,
+        sample_rate_hz: u32,
+    ) -> Result<(), GraphCompileError> {
+        self.processor
+            .activate_session_at_sample_rate(session, generation, sample_rate_hz)?;
+        self.input.recycle_all();
+        self.output.recycle_all();
+        Ok(())
+    }
+
     /// Remove the active graph and leave subsequent scheduler steps silent.
     pub fn deactivate(&self) {
         self.processor.deactivate();
@@ -5412,6 +5428,36 @@ mod tests {
         assert_eq!(
             processor.process(&mut block).map(RuntimeGeneration::value),
             Some(20)
+        );
+        assert_eq!(block.channel(0).unwrap(), &[0.25; 2]);
+    }
+
+    #[test]
+    fn scheduler_rate_activation_preserves_previous_generation_on_invalid_rate() {
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        scheduler
+            .activate_session_at_sample_rate(&session, RuntimeGeneration::new(30), 44_100)
+            .unwrap();
+        assert!(matches!(
+            scheduler.activate_session_at_sample_rate(
+                &session,
+                RuntimeGeneration::new(31),
+                MAX_GRAPH_SAMPLE_RATE_HZ + 1
+            ),
+            Err(GraphCompileError::InvalidSampleRate)
+        ));
+
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        assert_eq!(
+            scheduler
+                .processor()
+                .process(&mut block)
+                .map(RuntimeGeneration::value),
+            Some(30)
         );
         assert_eq!(block.channel(0).unwrap(), &[0.25; 2]);
     }
