@@ -809,3 +809,10 @@ bands allocate no active filter state. The full domain/engine/control suites,
 formatting, and strict Clippy pass. This is portable DSP evidence; frequency
 response reference vectors, UI curve parity, native callback timing, and
 hardware/release gates remain open.
+
+The DSP crate now exposes the combined response of all enabled parametric bands
+through the same coefficient path used for audio processing. A deterministic
+response vector covers peaking, low/high shelf, low/high pass, and notch shapes;
+29 DSP tests, doc-tests, formatting, and strict Clippy pass. This provides the
+portable response-vector evidence, but no UI curve transport or native timing
+claim is made.

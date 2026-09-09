@@ -41,8 +41,15 @@ release completion.
   with peaking, shelf, pass, and notch filter types; the engine prepares all
   enabled bands, while the legacy one-band fields remain band-0 aliases.
   Domain/engine/control regressions, formatting, and strict Clippy pass. The
-  remaining DSP-02 gates are frequency-response reference vectors, UI curve
-  parity, native callback timing, and hardware/release qualification.
+  remaining DSP-02 gates are backend-derived UI curve delivery, native callback
+  timing, and hardware/release qualification.
+
+- Added the combined `ParametricEq::magnitude_db_at` response boundary and a
+  deterministic six-shape response vector on 2026-09-09. The vector exercises
+  enabled peaking, low/high shelf, low/high pass, and notch bands using the
+  same coefficients as processing; 29 DSP tests, doc-tests, and strict Clippy
+  pass. A backend-derived UI curve contract is still required before the UI
+  can render response data without duplicating DSP math.
 
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor

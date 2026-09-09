@@ -595,6 +595,18 @@ impl ParametricEq {
             band.process_interleaved(samples);
         }
     }
+
+    /// Returns the combined magnitude response of all enabled bands using the
+    /// same coefficient implementation as audio processing.
+    pub fn magnitude_db_at(&self, frequency_hz: f32) -> Result<f32, BiquadError> {
+        self.bands
+            .iter()
+            .flatten()
+            .try_fold(0.0, |magnitude, band| {
+                band.magnitude_db_at(frequency_hz)
+                    .map(|value| magnitude + value)
+            })
+    }
 }
 
 impl Biquad {
@@ -1815,6 +1827,43 @@ mod tests {
             Err(BiquadError::InvalidBand)
         ));
         eq.reset();
+    }
+
+    #[test]
+    fn parametric_eq_response_vector_accumulates_all_enabled_filter_shapes() {
+        let mut bands = [None; 8];
+        for (index, kind) in [
+            FilterKind::Peaking,
+            FilterKind::LowShelf,
+            FilterKind::HighShelf,
+            FilterKind::LowPass,
+            FilterKind::HighPass,
+            FilterKind::Notch,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            bands[index] = Some(BiquadParams {
+                kind,
+                frequency_hz: 100.0 + index as f32 * 900.0,
+                q: 1.0,
+                gain_db: if matches!(
+                    kind,
+                    FilterKind::LowPass | FilterKind::HighPass | FilterKind::Notch
+                ) {
+                    0.0
+                } else {
+                    3.0
+                },
+                sample_rate: 48_000.0,
+            });
+        }
+        let eq = ParametricEq::new(bands, 1).unwrap();
+        assert_eq!(eq.active_bands(), 6);
+        let response = eq.magnitude_db_at(1_000.0).unwrap();
+        assert!(response.is_finite());
+        assert!((response + 21.155151).abs() < 0.001, "response was {response}");
+        assert!(eq.magnitude_db_at(20_000.0).unwrap().is_finite());
     }
 
     #[test]
