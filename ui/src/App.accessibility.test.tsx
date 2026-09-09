@@ -8,6 +8,7 @@ import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from ".
 import { appendDraftConnection, insertDraftMixer } from "./draft";
 import { demoSession } from "./fixtures";
 import { BackendConnectionContext } from "./backendConnectionContext";
+import { GraphList } from "./GraphList";
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
@@ -123,5 +124,15 @@ describe("keyboard connection dialog", () => {
 
     expect(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" })).toHaveProperty("disabled", true);
+  });
+
+  it("keeps topology actions available in the structured list view", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const onRemove = vi.fn();
+    const onToggle = vi.fn();
+    render(<BackendConnectionContext.Provider value={true}><GraphList session={connected} selectedNodeId="mic" onSelect={vi.fn()} onRemoveConnection={onRemove} onToggleConnection={onToggle} /></BackendConnectionContext.Provider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Insert mixer on Microphone to Voice gain" }));
+    expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
   });
 });

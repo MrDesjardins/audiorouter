@@ -18,6 +18,7 @@ import { mergeSessionInventory } from "./sessionInventory";
 import type { Connection } from "@xyflow/react";
 import { DraftConnectionList, decodeTopologyAction } from "./DraftConnectionList";
 import { BackendConnectionContext } from "./backendConnectionContext";
+import { GraphList as NodeList } from "./GraphList";
 
 const defaultBackend = createDisconnectedBackend();
 
@@ -201,7 +202,7 @@ function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean;
   return <article className={`node-card${selected ? " selected" : ""}`} tabIndex={0} aria-label={`${node.name}, ${node.kind}`} aria-current={selected ? "true" : undefined} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); } }}><span className="node-kind">{node.kind}</span><h3>{node.name}</h3><p>{node.ports.length} port{node.ports.length === 1 ? "" : "s"} - {node.enabled ? "enabled" : "disabled"}</p><div className="port-list">{node.ports.map((port) => <span key={port.name} className={`port ${port.direction}`}>{port.direction}: {port.name} - {port.channels}ch</span>)}</div></article>;
 }
 
-function NodeList({ session, selectedNodeId, onSelect, onRemoveConnection, onToggleConnection }: { session: import("@audiorouter/contracts").Session; selectedNodeId: string; onSelect: (id: string) => void; onRemoveConnection: (id: string) => void; onToggleConnection: (id: string, enabled: boolean) => void }) {
+function LegacyNodeList({ session, selectedNodeId, onSelect, onRemoveConnection, onToggleConnection }: { session: import("@audiorouter/contracts").Session; selectedNodeId: string; onSelect: (id: string) => void; onRemoveConnection: (id: string) => void; onToggleConnection: (id: string, enabled: boolean) => void }) {
   const names = new Map(session.nodes.map((node) => [node.id, node.name]));
   return <div className="graph-list" aria-label="Graph nodes and connections"><ol aria-label="Nodes">{session.nodes.map((node) => <li key={node.id}><button type="button" className={node.id === selectedNodeId ? "selected" : ""} aria-current={node.id === selectedNodeId ? "true" : undefined} onClick={() => onSelect(node.id)}>{node.name} <small>{node.kind}, {node.enabled ? "enabled" : "disabled"}</small><span className="list-port-summary">{nodePortLabels(node).join(" · ")}</span></button></li>)}</ol><h3>Connections</h3>{session.edges.length === 0 ? <p className="muted">No committed connections.</p> : <ul aria-label="Connections">{session.edges.map((edge) => <li key={edge.id}><span>{names.get(edge.sourceNode) ?? edge.sourceNode}:{edge.sourcePort} → {names.get(edge.destinationNode) ?? edge.destinationNode}:{edge.destinationPort} <small>{edge.enabled ? "enabled" : "disabled"}</small></span><button type="button" className="secondary" onClick={() => onToggleConnection(edge.id, !edge.enabled)}>{edge.enabled ? "Disable" : "Enable"}</button><button type="button" className="secondary" onClick={() => onRemoveConnection(edge.id)}>Remove</button></li>)}</ul>}</div>;
 }
