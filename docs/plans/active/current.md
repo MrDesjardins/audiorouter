@@ -115,6 +115,19 @@ release completion.
   registration, audio stream, or persistent machine audio configuration
   occurred.
 
+- Requalified the explicitly authorized live M00/M02 paths after the portable
+  telemetry work on 2026-09-09. Native C++ capture/render lifecycle passed for
+  13 capture and 18 render endpoints; Rust process-loopback include/exclude
+  passed with 10,584/11,025 source frames and 11,392/11,904 engine frames; and
+  the Rust adapter smoke passed with 24,000 capture frames and 25,152 silent
+  render frames. The selected VB-Audio route also passed with 24,480 capture,
+  24,448 scheduler, and 23,488 routed frames, zero scheduler XRuns/deadline
+  misses, and bounded processing telemetry. Every wrapper stopped/reset its
+  streams, removed temporary outputs, and observed unchanged media-device
+  state. This proves current shared-mode digital adapter/route behavior; it
+  does not close managed-driver, physical-latency, signing, or native-shell
+  gates.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI
