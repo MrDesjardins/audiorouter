@@ -91,6 +91,12 @@ is implemented, but rights/editor/release qualification remains open.
   the wrapper restored its environment and made no registration or audio
   configuration change.
 
+- Extended the general M06/PLUG-07 VST2 matrix on 2026-09-09: every
+  state-capable candidate now performs a deliberate fail, supervised
+  replacement, opaque-state restore, and finite-output check; state-unsupported
+  candidates retain the clean shutdown path. ReaPlugs and installed x64
+  Pitchproof acceptance passed with environment restoration.
+
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,

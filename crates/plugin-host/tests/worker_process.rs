@@ -812,18 +812,20 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         .describe_editor(Instant::now())
         .expect("describe VST2 editor capability");
     assert!(editor.width <= 4096 && editor.height <= 4096);
-    match worker.save_state(Instant::now()) {
+    let saved_state = match worker.save_state(Instant::now()) {
         Ok(state) => {
             assert!(state.bytes.len() <= 512 * 1024);
             worker
-                .restore_state(state, Instant::now())
+                .restore_state(state.clone(), Instant::now())
                 .expect("restore VST2 state");
+            Some(state)
         }
         Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(message)) => {
             assert!(message.contains("StateUnsupported"));
+            None
         }
         Err(error) => panic!("unexpected VST2 state result: {error:?}"),
-    }
+    };
     let mut samples = vec![0.0; 256];
     samples[2] = 0.1;
     samples[3] = -0.1;
@@ -855,7 +857,33 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         )
         .expect("query VST2 latency");
     assert!(latency.samples <= sample_rate_hz * 10);
-    assert!(worker.shutdown().unwrap().success());
+    if let Some(state) = saved_state {
+        assert_eq!(
+            worker.record_failure(Instant::now()),
+            audiorouter_plugin_host::WorkerState::Failed
+        );
+        let mut replacement = worker
+            .restart_with_state(state.clone(), state.version, Instant::now())
+            .map_err(|(error, _)| error)
+            .expect("restart and restore VST2 state");
+        let restarted = replacement
+            .process(
+                WorkerFrame::new(
+                    2,
+                    worker_clock_tick().saturating_add(10_000),
+                    2,
+                    vec![0.1, -0.1, 0.0, 0.0],
+                )
+                .unwrap(),
+                Vec::new(),
+                Instant::now(),
+            )
+            .expect("process after restored VST2 replacement");
+        assert!(restarted.samples.iter().all(|sample| sample.is_finite()));
+        assert!(replacement.shutdown().unwrap().success());
+    } else {
+        assert!(worker.shutdown().unwrap().success());
+    }
 }
 
 #[cfg(all(windows, feature = "test-fixtures"))]
