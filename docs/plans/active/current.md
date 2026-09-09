@@ -3264,3 +3264,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Requalified ENG-01 contract parity on 2026-09-08 after the VST2 UI wording change: contracts typecheck and the drift checker passed with 61 methods, 17 node kinds, and 7 processors matching the UI/CLI catalogs. The plugin path placeholder now names both `.vst3` and `.dll` candidates. No audio or machine configuration changed.
 - Next M06 task: obtain an additional rights-cleared independent x64 VST2/VST3 fixture or integrate the issuer with an authenticated native shell once a real HWND owner exists; retain fail-closed editor controls and the gated VST2 release boundary.
+
+- Audited the M06/PLUG-04 VST2 editor lifecycle on 2026-09-08: open and close commands both use the bounded worker response deadline; the dedicated UI thread does not join during drop, and a third-party call that does not return remains contained within the disposable worker that the supervisor can reap. No lifecycle defect was found and no native editor call was added. This does not qualify editor-window compatibility.
+- Next M06 task: obtain an additional rights-cleared independent x64 VST2/VST3 fixture or integrate the issuer with an authenticated native shell once a real HWND owner exists; retain fail-closed editor controls and the gated VST2 release boundary.
