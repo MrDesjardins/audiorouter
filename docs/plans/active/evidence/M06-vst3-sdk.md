@@ -52,6 +52,13 @@ VST2 modern/legacy/fault matrix and all other M00-M08 checks. No driver,
 plugin registration, audio stream, signing-mode, or persistent machine audio
 configuration action occurred.
 
+The available native VST2 qualification was also rerun with the installed
+ReaPlugs directory: six local x64 audio effects passed isolated worker
+load/process checks at 44.1, 48, and 96 kHz (18 combinations). The acceptance
+wrapper restored both fixture-related environment variables and did not open
+an audio stream or register plugins. This strengthens PLUG-07 compatibility
+evidence but does not close rights, editor, or release gates.
+
 The guarded M00–M08 chain was requalified at this tip as well. It passed the
 native VS2026/WDK and read-only endpoint checks, portable workspace and UI
 checks, pinned VST3 validator/auxiliary probe, VST2 modern/legacy/fault matrix,
