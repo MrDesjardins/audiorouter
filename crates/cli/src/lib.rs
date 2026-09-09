@@ -3445,6 +3445,24 @@ mod tests {
             denied_generic["result"]["structuredContent"]["error"]["data"]["code"],
             "permissionDenied"
         );
+        let denied_resource = mcp_resource_read(
+            &mut plane,
+            "mcp-test",
+            &audiorouter_control::ClientGrant::with_scopes([]),
+            None,
+            &json!({
+                "id": 16,
+                "params": { "uri": "audiorouter://sessions" }
+            }),
+        );
+        let denied_resource_text = denied_resource["result"]["contents"][0]["text"]
+            .as_str()
+            .unwrap();
+        let denied_resource_payload: Value = serde_json::from_str(denied_resource_text).unwrap();
+        assert_eq!(
+            denied_resource_payload["error"]["data"]["code"],
+            "permissionDenied"
+        );
         let startup = mcp_tool_call(
             &mut plane,
             "mcp-test",
