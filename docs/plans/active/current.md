@@ -12,13 +12,20 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `a28829af` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `fc81df97` (2026-09-09). The guarded M00-M08
 chain passed at its clean parent `eb0ad978`; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
 startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
+
+Next action: qualify the first supplied rights-cleared independent x64 VST2 or
+VST3 effect through the existing contained worker matrix. If none is supplied,
+continue only with portable hardening and preserve the native-shell, production
+driver callback, signing, installer, clean-machine, physical-latency, editor,
+and independent-plugin gates as blocked prerequisites rather than claiming
+release completion.
 
 - Closed an M07/AUTO-01 parity defect on 2026-09-09: the CLI `operation get`
   command no longer sends a null cancellation-only parameter that the shared
