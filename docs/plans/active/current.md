@@ -107,6 +107,11 @@ block are now rejected before a setter call; valid offsets retain the current
 worker's block-boundary automation semantics rather than pretending to be
 sample-accurate.
 
+The worker also exposes a read-only `DescribeEditor` response. ReaComp and
+ReaGate both passed bounded editor-capability/rectangle discovery. No HWND was
+created and no native editor was opened; UI-thread ownership, close/retry
+semantics, and editor isolation remain a separate gate.
+
 The locked all-workspace regression sweep then passed, including control (97),
 domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport
 (19), Windows audio (30), and the remaining package suites. Workspace strict

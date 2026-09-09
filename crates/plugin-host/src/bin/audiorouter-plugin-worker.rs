@@ -233,6 +233,22 @@ fn run() -> Result<(), String> {
                 write_worker_message(&mut writer, &WorkerMessage::Parameters { descriptors })
                     .map_err(|error| format!("parameter description write failed: {error:?}"))?;
             }
+            WorkerMessage::DescribeEditor => {
+                #[cfg(windows)]
+                let descriptor = if let Some(plugin) = vst2_plugin.as_mut() {
+                    plugin
+                        .editor_descriptor()
+                        .map_err(|error| format!("VST2 editor description failed: {error:?}"))?
+                } else {
+                    audiorouter_plugin_host::EditorDescriptor::new(false, 0, 0)
+                        .map_err(|error| format!("editor descriptor invalid: {error:?}"))?
+                };
+                #[cfg(not(windows))]
+                let descriptor = audiorouter_plugin_host::EditorDescriptor::new(false, 0, 0)
+                    .map_err(|error| format!("editor descriptor invalid: {error:?}"))?;
+                write_worker_message(&mut writer, &WorkerMessage::Editor(descriptor))
+                    .map_err(|error| format!("editor description write failed: {error:?}"))?;
+            }
             WorkerMessage::StateRestore { asset } => {
                 #[cfg(windows)]
                 if let Some(plugin) = vst2_plugin.as_mut() {

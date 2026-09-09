@@ -1310,6 +1310,11 @@ block before invoking the plugin setter; in-block VST2 events are applied at
 the worker block boundary. Sample-accurate VST2 automation remains outside
 this adapter evidence.
 
+The worker `DescribeEditor` query passed for ReaComp and ReaGate, including the
+bounded VST2 editor flag and preferred rectangle response. This is discovery
+only: no HWND was supplied, no editor window was opened, and native UI-thread
+containment remains unqualified.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

@@ -100,6 +100,10 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         .describe_parameters(Instant::now())
         .expect("describe VST2 parameters");
     assert!(!descriptors.is_empty());
+    let editor = worker
+        .describe_editor(Instant::now())
+        .expect("describe VST2 editor capability");
+    assert!(editor.width <= 4096 && editor.height <= 4096);
     match worker.save_state(Instant::now()) {
         Ok(state) => {
             assert!(state.bytes.len() <= 512 * 1024);

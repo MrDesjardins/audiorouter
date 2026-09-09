@@ -912,6 +912,7 @@ pub enum WorkerMessageError {
     InvalidFrame(WorkerFrameError),
     InvalidParameter(ParameterEventError),
     InvalidParameterDescriptor(ParameterDescriptorError),
+    InvalidEditor,
     InvalidProtocolVersion,
     InvalidPluginHash,
     InvalidFailureCode,
@@ -1201,6 +1202,26 @@ pub struct ParameterDescriptor {
     pub maximum: f32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct EditorDescriptor {
+    pub has_editor: bool,
+    pub width: u16,
+    pub height: u16,
+}
+
+impl EditorDescriptor {
+    pub fn new(has_editor: bool, width: u16, height: u16) -> Result<Self, WorkerMessageError> {
+        if width > 4096 || height > 4096 || (!has_editor && (width != 0 || height != 0)) {
+            return Err(WorkerMessageError::InvalidEditor);
+        }
+        Ok(Self {
+            has_editor,
+            width,
+            height,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ParameterDescriptorError {
     TooMany,
@@ -1259,9 +1280,11 @@ pub enum WorkerMessage {
     },
     Ready,
     DescribeParameters,
+    DescribeEditor,
     Parameters {
         descriptors: Vec<ParameterDescriptor>,
     },
+    Editor(EditorDescriptor),
     Process {
         frame: WorkerFrame,
         parameters: Vec<ParameterEvent>,
@@ -1387,6 +1410,7 @@ impl WorkerSession {
             WorkerMessageError::InvalidParameterDescriptor(error) => {
                 WorkerSessionError::InvalidParameterDescriptor(error)
             }
+            WorkerMessageError::InvalidEditor => WorkerSessionError::UnexpectedMessage,
             _ => WorkerSessionError::UnexpectedMessage,
         })?;
         match (&self.state, message) {
@@ -1451,7 +1475,10 @@ impl WorkerSession {
                 | WorkerMessage::StateSave
                 | WorkerMessage::StateRestore { .. },
             ) => Ok(None),
-            (WorkerSessionState::Active, WorkerMessage::DescribeParameters) => Ok(None),
+            (
+                WorkerSessionState::Active,
+                WorkerMessage::DescribeParameters | WorkerMessage::DescribeEditor,
+            ) => Ok(None),
             (
                 WorkerSessionState::Active,
                 WorkerMessage::Shutdown | WorkerMessage::Failure { .. },
@@ -2050,6 +2077,24 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    pub fn describe_editor(
+        &mut self,
+        now: Instant,
+    ) -> Result<EditorDescriptor, WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.describe_editor() {
+            Ok(descriptor) => {
+                self.supervisor.heartbeat(now);
+                Ok(descriptor)
+            }
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
     pub fn restore_state_for_version(
         &mut self,
         asset: PluginStateAsset,
@@ -2455,6 +2500,18 @@ impl WorkerProcess {
         }
     }
 
+    pub fn describe_editor(&mut self) -> Result<EditorDescriptor, WorkerProcessError> {
+        self.write(&WorkerMessage::DescribeEditor)
+            .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::Editor(descriptor) => Ok(descriptor),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected editor description response".into(),
+            )),
+        }
+    }
+
     pub fn restore_state_for_version(
         &mut self,
         asset: PluginStateAsset,
@@ -2771,6 +2828,9 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         }
         WorkerMessage::Parameters { descriptors } => {
             validate_parameter_descriptors(descriptors)?;
+        }
+        WorkerMessage::Editor(descriptor) => {
+            EditorDescriptor::new(descriptor.has_editor, descriptor.width, descriptor.height)?;
         }
         _ => {}
     }

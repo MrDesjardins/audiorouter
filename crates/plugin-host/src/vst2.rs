@@ -229,6 +229,8 @@ const EFF_MAINS_CHANGED: i32 = 29;
 #[cfg(windows)]
 const EFF_GET_PARAM_NAME: i32 = 8;
 #[cfg(windows)]
+const EFF_EDIT_GET_RECT: i32 = 13;
+#[cfg(windows)]
 const EFF_GET_CHUNK: i32 = 23;
 #[cfg(windows)]
 const EFF_SET_CHUNK: i32 = 24;
@@ -253,6 +255,7 @@ pub enum Vst2LibraryError {
     InvalidState,
     StateUnsupported,
     StateTooLarge,
+    InvalidEditor,
 }
 
 #[cfg(windows)]
@@ -521,6 +524,40 @@ impl Vst2Library {
         unsafe { (*self.effect).flags & VST2_FLAG_HAS_EDITOR != 0 }
     }
 
+    pub fn editor_descriptor(&mut self) -> Result<crate::EditorDescriptor, Vst2LibraryError> {
+        if !self.has_editor() {
+            return crate::EditorDescriptor::new(false, 0, 0)
+                .map_err(|_| Vst2LibraryError::InvalidEditor);
+        }
+        let mut rect: *mut Vst2EditorRect = ptr::null_mut();
+        // SAFETY: The dispatcher was validated at load. The plugin writes an
+        // optional pointer to its own rectangle, which is copied immediately.
+        let result = unsafe {
+            (*self.effect).dispatcher.expect("validated dispatcher")(
+                self.effect,
+                EFF_EDIT_GET_RECT,
+                0,
+                0,
+                (&mut rect as *mut *mut Vst2EditorRect).cast(),
+                0.0,
+            )
+        };
+        if result == 0 || rect.is_null() {
+            return crate::EditorDescriptor::new(true, 0, 0)
+                .map_err(|_| Vst2LibraryError::InvalidEditor);
+        }
+        // SAFETY: A successful effEditGetRect result points to the plugin's
+        // live ERect for the duration of the synchronous call.
+        let rect = unsafe { *rect };
+        let width = i32::from(rect.right) - i32::from(rect.left);
+        let height = i32::from(rect.bottom) - i32::from(rect.top);
+        if !(1..=4096).contains(&width) || !(1..=4096).contains(&height) {
+            return Err(Vst2LibraryError::InvalidEditor);
+        }
+        crate::EditorDescriptor::new(true, width as u16, height as u16)
+            .map_err(|_| Vst2LibraryError::InvalidEditor)
+    }
+
     pub fn latency(&self, sample_rate_hz: u32) -> Result<crate::WorkerLatency, Vst2LibraryError> {
         // SAFETY: This method is only available for a successfully validated
         // handle, so the initial-delay field is readable for its lifetime.
@@ -577,6 +614,16 @@ impl Vst2Library {
         }
         Ok(())
     }
+}
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Vst2EditorRect {
+    top: i16,
+    left: i16,
+    bottom: i16,
+    right: i16,
 }
 
 #[cfg(windows)]
