@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `064b094e` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `e1b2584e` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -51,6 +51,15 @@ release completion.
   Documentation validation passed with 51 Markdown files and 163 local links.
   The schema regression is pushed at `a6ce827a`; this documentation follow-up
   remains portable and does not change audio or machine configuration.
+
+- Fixed a stale M01 acceptance fixture on 2026-09-09: session start/stop now
+  supply the required idempotency keys after API-07 hardening. M01 acceptance
+  passes, and the complete guarded M00-M08 chain passes at `e1b2584e`, including
+  native toolchain/compile and read-only inventory, disposable SysVAD package
+  qualification, portable milestones, VST3/VST2 matrices, M07, unsigned M08,
+  traceability, and documentation. Temporary outputs were cleaned; no driver
+  installation/loading, signing-mode change, registration, audio stream, or
+  persistent machine audio configuration occurred.
 
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
