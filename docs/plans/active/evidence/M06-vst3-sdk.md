@@ -2089,6 +2089,15 @@ it through the supervised owner, restores the saved chunk through
 `VSTPluginMain` and legacy `main` export fixtures. This extends state evidence
 across process replacement without changing the VST2 single-stream boundary.
 
+The explicitly selected installed Pitchproof x64 VST2 binary was also run
+through the processing matrix at 44.1, 48, and 96 kHz and through both native
+editor containment tests. The editor did not return within the five-second
+bound, so the worker was terminated and reaped; this records a bounded editor
+failure, not successful editor-window support. Its SHA-256 was
+`1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`, and the
+wrapper restored its environment without registration or audio configuration
+changes.
+
 ## Native VST3 replacement state coverage (2026-09-09)
 
 The real AGain single-stream acceptance now saves its opaque state after native

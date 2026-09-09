@@ -83,6 +83,14 @@ is implemented, but rights/editor/release qualification remains open.
   retaining failure for supported x64 regressions. Rights, editor, and release
   gates remain open.
 
+- Requalified installed Pitchproof x64 VST2 containment on 2026-09-09 with
+  SHA-256 `1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`:
+  processing passed at 44.1, 48, and 96 kHz, while both editor-thread tests
+  bounded the non-returning editor at five seconds and reaped the worker.
+  This is contained editor-failure evidence, not native editor compatibility;
+  the wrapper restored its environment and made no registration or audio
+  configuration change.
+
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,
