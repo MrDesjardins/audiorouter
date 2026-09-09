@@ -2993,6 +2993,12 @@ impl RealtimeScheduler {
         &self.processor
     }
 
+    /// Return the negotiated rate of the currently published graph without
+    /// exposing scheduler internals to a native endpoint adapter.
+    pub fn active_sample_rate_hz(&self) -> Option<u32> {
+        self.processor.active_sample_rate_hz()
+    }
+
     /// Publish a prepared graph from the control boundary and recycle queued
     /// input/output from the prior generation. Dropping pending input avoids
     /// applying a replacement graph to audio captured for the old graph; the
@@ -5472,10 +5478,11 @@ mod tests {
             serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
                 .unwrap();
         let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        assert_eq!(scheduler.active_sample_rate_hz(), None);
         scheduler
             .activate_session_at_sample_rate(&session, RuntimeGeneration::new(30), 44_100)
             .unwrap();
-        assert_eq!(scheduler.processor().active_sample_rate_hz(), Some(44_100));
+        assert_eq!(scheduler.active_sample_rate_hz(), Some(44_100));
         assert!(matches!(
             scheduler.activate_session_at_sample_rate(
                 &session,
@@ -5495,7 +5502,9 @@ mod tests {
             Some(30)
         );
         assert_eq!(block.channel(0).unwrap(), &[0.25; 2]);
-        assert_eq!(scheduler.processor().active_sample_rate_hz(), Some(44_100));
+        assert_eq!(scheduler.active_sample_rate_hz(), Some(44_100));
+        scheduler.deactivate();
+        assert_eq!(scheduler.active_sample_rate_hz(), None);
     }
 
     #[test]
