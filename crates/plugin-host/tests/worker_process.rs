@@ -217,6 +217,40 @@ fn verified_worker_rejects_nonfinite_vst2_output() {
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
+#[ignore = "requires a repository-owned crashing or hanging VST2 fixture"]
+fn verified_worker_contains_native_vst2_fault() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 fault acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST2 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST2 fault fixture");
+    let mut worker = SupervisedWorkerProcess::spawn_verified(
+        fixture_worker_path(),
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        Instant::now(),
+    )
+    .expect("spawn VST2 fault worker");
+    let frame = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        vec![0.5, -0.5, 0.0, 0.0],
+    )
+    .unwrap();
+    assert!(worker.process(frame, Vec::new(), Instant::now()).is_err());
+    assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Failed);
+    assert_eq!(worker.failure_diagnostic().unwrap().failure_count, 1);
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
 #[ignore = "requires the repository-owned VST2 chunk-state fixture"]
 fn verified_worker_applies_restored_vst2_chunk_state() {
     let plugin_path = PathBuf::from(

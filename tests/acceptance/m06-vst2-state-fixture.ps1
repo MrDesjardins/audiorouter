@@ -15,6 +15,10 @@ $legacyOutput = Join-Path $outputRoot 'audiorouter-vst2-legacy-main-fixture.dll'
 $legacyObject = Join-Path $outputRoot 'audiorouter-vst2-legacy-main-fixture.obj'
 $invalidOutput = Join-Path $outputRoot 'audiorouter-vst2-nonfinite-fixture.dll'
 $invalidObject = Join-Path $outputRoot 'audiorouter-vst2-nonfinite-fixture.obj'
+$crashOutput = Join-Path $outputRoot 'audiorouter-vst2-crash-fixture.dll'
+$crashObject = Join-Path $outputRoot 'audiorouter-vst2-crash-fixture.obj'
+$hangOutput = Join-Path $outputRoot 'audiorouter-vst2-hang-fixture.dll'
+$hangObject = Join-Path $outputRoot 'audiorouter-vst2-hang-fixture.obj'
 $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
 if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw "vswhere is missing: $vswhere" }
 $installation = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
@@ -45,6 +49,12 @@ if (-not (Test-Path -LiteralPath $legacyOutput -PathType Leaf)) { throw "Legacy-
 & $cl /nologo /LD /O2 /W4 /TC /DVST2_NONFINITE_OUTPUT "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$invalidObject" "/Fe:$invalidOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
 if ($LASTEXITCODE -ne 0) { throw "VST2 non-finite fixture build failed with exit code $LASTEXITCODE" }
 if (-not (Test-Path -LiteralPath $invalidOutput -PathType Leaf)) { throw "Non-finite fixture build produced no DLL: $invalidOutput" }
+& $cl /nologo /LD /O2 /W4 /TC /DVST2_CRASH_OUTPUT "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$crashObject" "/Fe:$crashOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
+if ($LASTEXITCODE -ne 0) { throw "VST2 crash fixture build failed with exit code $LASTEXITCODE" }
+if (-not (Test-Path -LiteralPath $crashOutput -PathType Leaf)) { throw "Crash fixture build produced no DLL: $crashOutput" }
+& $cl /nologo /LD /O2 /W4 /TC /DVST2_HANG_OUTPUT "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$hangObject" "/Fe:$hangOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
+if ($LASTEXITCODE -ne 0) { throw "VST2 hang fixture build failed with exit code $LASTEXITCODE" }
+if (-not (Test-Path -LiteralPath $hangOutput -PathType Leaf)) { throw "Hang fixture build produced no DLL: $hangOutput" }
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 try {
@@ -66,6 +76,12 @@ try {
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
         --ignored --exact verified_worker_rejects_nonfinite_vst2_output --nocapture
     if ($LASTEXITCODE -ne 0) { throw "VST2 non-finite acceptance failed with exit code $LASTEXITCODE" }
+    foreach ($faultOutput in @($crashOutput, $hangOutput)) {
+        $env:AUDIOROUTER_VST2_FIXTURE = $faultOutput
+        & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+            --ignored --exact verified_worker_contains_native_vst2_fault --nocapture
+        if ($LASTEXITCODE -ne 0) { throw "VST2 fault acceptance failed for $faultOutput with exit code $LASTEXITCODE" }
+    }
 } finally {
     if ($null -eq $previousFixture) {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue

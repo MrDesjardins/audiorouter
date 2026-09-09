@@ -106,8 +106,20 @@ static void process_replacing(AEffect *self, const float *const *inputs,
 #ifdef VST2_NONFINITE_OUTPUT
     (void)inputs;
 #endif
+#if defined(VST2_CRASH_OUTPUT) || defined(VST2_HANG_OUTPUT)
+    (void)inputs;
+    (void)outputs;
+#endif
     for (int32_t frame = 0; frame < frames; ++frame) {
-#ifdef VST2_NONFINITE_OUTPUT
+#ifdef VST2_CRASH_OUTPUT
+        (void)frame;
+        *(volatile int *)0 = 1;
+#elif defined(VST2_HANG_OUTPUT)
+        (void)frame;
+        volatile int keep_running = 1;
+        while (keep_running) {
+        }
+#elif defined(VST2_NONFINITE_OUTPUT)
         volatile float zero = 0.0f;
         outputs[0][frame] = 0.0f / zero;
         outputs[1][frame] = 0.0f / zero;

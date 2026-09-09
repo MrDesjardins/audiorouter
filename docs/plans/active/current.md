@@ -111,6 +111,10 @@ The fixture build also emits a deliberate non-finite-output variant. The
 verified worker returns a bounded failure frame and the supervisor records the
 native invalid-sample fault; no NaN/Inf sample is serialized as audio.
 
+The same fixture build emits deliberate processing-crash and processing-hang
+variants. The supervised acceptance confirms both faults are contained and
+reaped within the worker boundary, with no host panic or unbounded wait.
+
 The stronger behavioral round trip initially exposed that `effSetChunk` was
 being called with a hard-coded byte count of one. The adapter now passes the
 bounded chunk length; the fixture test changes its mix parameter, verifies the

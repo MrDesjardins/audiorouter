@@ -1293,6 +1293,11 @@ The fixture build also emits a deliberate non-finite-output variant. Its
 verified worker acceptance receives a bounded `vst2Processing:NonFiniteOutput`
 failure and records the fault without serializing invalid samples.
 
+The native fixture also has deliberate crash and hang variants. Both passed
+the supervised worker acceptance: the worker was contained and reaped within
+the bounded policy, and the host retained a failure record without exposing
+invalid audio.
+
 A focused scanner regression also classifies a minimal x64 PE containing only
 `main` as VST2, preventing the inspection boundary from regressing to the
 preferred export name only.
