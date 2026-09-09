@@ -1226,3 +1226,12 @@ from the selected process tree. Both wrappers stop/reset streams, remove
 temporary binaries, and verify unchanged media state. This evidence covers
 selected Windows API/data paths only; it does not establish full cross-process
 isolation, calibrated physical latency, PID reuse, or managed-driver behavior.
+## Read-only native format inventory requalification (2026-09-08)
+
+The guarded native format inventory passed for 31 endpoints. The observed
+formats included 48 kHz 32-bit extensible mono and stereo, 96 kHz 32-bit mono,
+and 96 kHz 32-bit eight-channel endpoint mix formats. The wrapper only performs
+endpoint activation/metadata inspection, removes its temporary executable, and
+verifies media-device state preservation. This is endpoint-format evidence, not
+evidence of arbitrary format negotiation, managed-driver routing, or physical
+latency.
