@@ -16,6 +16,14 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+The installed ReaPlugs effect DLLs were copied only to the ignored
+`third_party/local-test-fixtures/ReaPlugs` directory for compatibility testing.
+The scanner classified all six x64 binaries as `unsupportedFormat` with no
+VST3 class IDs; none was loaded or executed. Built-in native transformation is
+the supported path: DSP and engine revalidation passed gain/EQ, gate,
+compression, limiting, delay, pitch, metering, finite-sample repair, and
+allocation-free prepared processing.
+
 Closed an M01/SEC-12 transport boundary gap: Windows named-pipe read and write
 loops now validate the byte count returned by Win32 before slicing the
 remaining buffer. Zero-byte results still map to bounded EOF, while
