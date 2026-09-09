@@ -632,6 +632,8 @@ export interface ApplicationErrorData {
   resourceIds: EntityId[];
   retryable: boolean;
   remediation: string;
+  /** Unsigned Windows HRESULT when the failure originated in the audio API. */
+  hresult?: number;
   retryAfterMs?: number;
 }
 

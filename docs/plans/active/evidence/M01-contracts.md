@@ -250,6 +250,14 @@ Application failures now publish stable structured metadata alongside their nume
 
 The contracts package now includes a versioned transport-agnostic `createAudioRouterClient` surface covering all currently implemented methods. It maps method names to typed parameters/results, allocates request IDs, omits absent parameters, and raises `AudioRouterRpcError` with server metadata. `npm run typecheck` passes; native transport wiring remains separate.
 
+## Structured audio error metadata parity (2026-09-09)
+
+`ApplicationErrorData` now includes an optional unsigned `hresult` field for
+Windows audio failures. This preserves the backend's exact OS diagnostic in
+the shared TypeScript client without requiring non-audio errors to invent a
+value. Contracts typecheck and drift validation pass; UI typecheck and all 93
+UI tests also pass.
+
 `system.describe` now advertises state-event categories, the fact that meter events are not replayed, and the event log’s 10,000-event/15-minute retention bounds. A discovery regression confirms these values against the event-log implementation, with control/domain tests, strict Clippy, and contract typecheck green.
 
 The CLI now exposes the generic `api call` path, reading bounded JSON parameters from an absolute file or stdin and routing through the same control dispatcher, with optional SQLite-backed state and JSON-RPC response envelopes. The source compiles and passes strict Clippy; the rebuilt CLI test executable was blocked by Windows Application Control (OS error 4551), so no runtime CLI result is claimed for this slice.
