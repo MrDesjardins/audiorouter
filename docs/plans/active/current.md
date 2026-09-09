@@ -1000,8 +1000,7 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `fe7ba8eb`, with the subsequent
-plan-only evidence commit `ea7ad9aa` now pushed on `main`. The guarded
+The latest validated implementation head is `96b5ba1b` on `main`. The guarded
 M00–M08 safe-chain evidence at that head is recorded above and in [M08 release
 evidence](evidence/M08-release.md). The current head includes the Windows x64
 VST2 modern/legacy worker boundary, negotiated-rate built-in graph activation,
