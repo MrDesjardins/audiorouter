@@ -48,6 +48,10 @@ release completion.
   compatibility `supportedVst2X64Gated`, matching the PE and SHA-256 evidence;
   vendor, version, and class IDs were unavailable. The inspector did not load
   or execute plugin code, and no machine or audio state changed.
+- Re-ran the focused CLI regression `cargo test -p audiorouter-cli
+  plugin_scan_cli -- --nocapture` on 2026-09-09; the invalid-candidate
+  visibility test passed. This confirms the bounded scan/inspection boundary
+  remains test-covered without loading arbitrary plugin code.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
