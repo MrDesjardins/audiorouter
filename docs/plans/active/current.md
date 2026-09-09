@@ -86,6 +86,14 @@ release completion.
   local links. No audio device, driver, registration, or machine configuration
   action occurred.
 
+- Closed the AUTO-07 MCP naming gap on 2026-09-09: added compatibility-focused
+  `control_recorder`, `plan_virtual_device_change`, and
+  `apply_virtual_device_change` tools, preserving the existing authorized
+  backend dispatch and conditional recorder frame validation. MCP discovery now
+  exposes 43 tools; CLI/control tests, MCP stdio/pipe interoperability, strict
+  Clippy, formatting, and diff checks pass. No audio or machine configuration
+  changed.
+
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
   ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and

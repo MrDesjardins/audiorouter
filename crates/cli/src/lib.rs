@@ -1,5 +1,7 @@
 //! Offline M01 CLI command surface.
 
+#![recursion_limit = "256"]
+
 use audiorouter_control::{ClientGrant, ControlPlane};
 use audiorouter_domain::{inspect_routes, validate_session, EntityId, PermissionScope};
 use audiorouter_storage::Storage;
@@ -1920,6 +1922,8 @@ fn mcp_tools() -> Value {
         { "name": "list_virtual_devices", "description": "List managed virtual bus desired state without activating endpoints. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "plan_virtual_device", "description": "Validate a managed virtual bus lifecycle operation without applying it.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "plan_virtual_device_change", "description": "Validate a managed virtual bus lifecycle operation without applying it; compatibility name for the focused virtual-device planner.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
+        { "name": "apply_virtual_device_change", "description": "Apply a validated managed virtual bus lifecycle plan; compatibility name for the focused virtual-device applier.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_processors", "description": "List built-in DSP processor metadata and explicit availability without changing audio state.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
@@ -1936,6 +1940,7 @@ fn mcp_tools() -> Value {
         { "name": "resume_recorder", "description": "Resume a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "split_recorder", "description": "Split a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "stop_recorder", "description": "Stop a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "control_recorder", "description": "Control one recorder through the authorized lifecycle API; arm omits frame and other actions require it, all require an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "action": { "enum": ["arm", "start", "pause", "resume", "split", "stop"] }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "action", "idempotencyKey"], "additionalProperties": false } },
         { "name": "get_recording", "description": "Read one persisted recording metadata resource without reading audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "get_recording_recovery", "description": "Read a validated recorder recovery checkpoint without audio content; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "preview_recording", "description": "Inspect recording file metadata without decoding audio; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
@@ -1982,6 +1987,8 @@ fn mcp_tool_call(
         "list_virtual_devices" => ("virtualDevices.list", Some(arguments)),
         "plan_virtual_device" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
+        "plan_virtual_device_change" => ("virtualDevices.plan", Some(arguments)),
+        "apply_virtual_device_change" => ("virtualDevices.apply", Some(arguments)),
         "list_applications" => ("apps.list", None),
         "list_processors" => ("processors.list", None),
         "get_session" => ("sessions.get", Some(arguments)),
@@ -1998,6 +2005,35 @@ fn mcp_tool_call(
         "resume_recorder" => ("recorders.resume", Some(arguments)),
         "split_recorder" => ("recorders.split", Some(arguments)),
         "stop_recorder" => ("recorders.stop", Some(arguments)),
+        "control_recorder" => {
+            let action = arguments["action"].as_str().unwrap_or_default();
+            if !matches!(
+                action,
+                "arm" | "start" | "pause" | "resume" | "split" | "stop"
+            ) {
+                return mcp_tool_error(
+                    id,
+                    "control_recorder action must be arm, start, pause, resume, split, or stop",
+                );
+            }
+            let mut params = json!({
+                "sessionId": arguments["sessionId"],
+                "idempotencyKey": arguments["idempotencyKey"]
+            });
+            if let Some(frame) = arguments.get("frame") {
+                params["frame"] = frame.clone();
+            }
+            let method = format!("recorders.{action}");
+            return mcp_dispatch_tool(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                id,
+                &method,
+                Some(params),
+            );
+        }
         "get_recording" => ("recordings.get", Some(arguments)),
         "get_recording_recovery" => ("recordings.recovery", Some(arguments)),
         "preview_recording" => ("recordings.preview", Some(arguments)),
@@ -3422,7 +3458,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 40);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 43);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()
@@ -3499,6 +3535,15 @@ mod tests {
             (
                 "apply_graph_change",
                 json!(["planId", "baseRevision", "idempotencyKey"]),
+            ),
+            ("plan_virtual_device_change", json!(["operation"])),
+            (
+                "apply_virtual_device_change",
+                json!(["planId", "idempotencyKey"]),
+            ),
+            (
+                "control_recorder",
+                json!(["sessionId", "action", "idempotencyKey"]),
             ),
         ] {
             let tool = tools
