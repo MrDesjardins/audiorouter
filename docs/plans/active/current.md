@@ -65,6 +65,18 @@ is implemented, but rights/editor/release qualification remains open.
   passed; no audio device or machine configuration was accessed.
 
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
+  `38141ef1` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
+  read-only endpoint inventory, disposable pinned SysVAD x64 qualification,
+  portable/UI suites, native VST3 state/multi-bus/async acceptance, modern/
+  legacy/fault VST2 fixtures, M07, unsigned M08 artifacts, 159 traceability
+  mappings, and documentation validation (51 Markdown files/163 local links)
+  passed. Temporary checkouts/artifacts were cleaned; no driver installation or
+  loading, signing-mode change, plugin/startup registration, audio stream, or
+  persistent machine audio configuration occurred. Production callback,
+  signing, installer, clean-machine, physical-latency, manual UI, and
+  rights-cleared independent-plugin gates remain open.
+
+- Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,
   M01/M04/M05, native VST3 including validated state restoration, modern/
