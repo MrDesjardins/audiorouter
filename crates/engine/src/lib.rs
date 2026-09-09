@@ -1552,6 +1552,10 @@ impl RuntimeBusQuantumIdentity {
             frame_count,
         })
     }
+
+    fn is_valid(self) -> bool {
+        self.sequence != 0 && self.deadline_tick != 0 && self.frame_count != 0
+    }
 }
 
 /// A worker result whose audio storage remains owned by the caller. The
@@ -1662,9 +1666,19 @@ impl RuntimeBusGeneration {
         if result.outputs.len() != self.layout.output_channels.len() {
             return Err(RuntimeBusProcessError::WorkerOutputBusCount);
         }
+        if !expected.is_valid() || !result.identity.is_valid() {
+            return Err(RuntimeBusProcessError::BlockShape);
+        }
         for (destination, channels) in destinations.iter().zip(&self.layout.output_channels) {
             if destination.channels() != *channels || destination.frames() != expected.frame_count {
                 return Err(RuntimeBusProcessError::BlockShape);
+            }
+        }
+        for (source, channels) in result.outputs.iter().zip(&self.layout.output_channels) {
+            if let Some(source) = source {
+                if source.channels() != *channels || source.frames() != expected.frame_count {
+                    return Err(RuntimeBusProcessError::BlockShape);
+                }
             }
         }
         let identity_matches = result.identity == expected;
@@ -5748,6 +5762,28 @@ mod tests {
                 .unwrap(),
             RuntimeBusProcessOutcome::Processed
         );
+
+        let wrong_shape = AudioBlock::new(2, 4).unwrap();
+        let malformed_outputs = [Some(&main), Some(&wrong_shape)];
+        let malformed = RuntimeBusWorkerResult::new(identity, &malformed_outputs);
+        destination_main.channel_mut(0).unwrap().fill(0.7);
+        destination_main.channel_mut(1).unwrap().fill(0.7);
+        destination_side.channel_mut(0).unwrap().fill(0.8);
+        let mut destinations = [&mut destination_main, &mut destination_side];
+        assert_eq!(
+            generation.accept_worker_result(identity, &malformed, &mut destinations),
+            Err(RuntimeBusProcessError::BlockShape)
+        );
+        assert!(destination_main
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.7));
+        assert!(destination_side
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.8));
 
         destination_main.apply_gain(1.0);
         destination_side.apply_gain(1.0);

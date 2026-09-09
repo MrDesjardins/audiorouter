@@ -1686,6 +1686,12 @@ waiting, or I/O. Engine tests passed 84 cases with formatting and strict
 Clippy. The engine remains independent of plugin-host, so this is the typed
 handoff contract rather than a claim of completed auxiliary effect execution.
 
+The result boundary was hardened after review found that source shapes were
+not all checked before copying. `RuntimeBusGeneration::accept_worker_result`
+now validates every present source bus before mutating any destination; the
+regression proves a malformed later bus leaves earlier destinations unchanged.
+Engine tests remain at 84 cases with formatting and strict Clippy passing.
+
 `plugin-host` now depends one-way on `engine` and exposes
 `stage_engine_worker_result`. It copies validated `WorkerAudioBusFrames` into
 caller-prepared `AudioBlock` storage and caller-prepared reference slots,
