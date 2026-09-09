@@ -86,6 +86,16 @@ release completion.
   passed. The runner removed 13 run-owned temporary children. No driver was
   installed or loaded, no plugin/startup registration occurred, and no audio
   stream or persistent machine audio configuration changed.
+- Re-ran the complete elevated guarded acceptance chain again on 2026-09-09
+  after the native loader qualification. It passed the current VS/WDK
+  discovery, 31-endpoint inventory, disposable SysVAD package/signability
+  checks, portable M01/M04/M05, VST3 SDK/worker, repository VST2 modern/legacy/
+  state/fault fixtures, M07, unsigned M08, traceability, and documentation
+  stages. Its cleanup removed 13 temporary children. The first non-elevated
+  attempt stopped at read-only `Get-PnpDevice` access denial; the elevated
+  rerun is the authoritative result. No driver or plugin was installed,
+  registered, or loaded, and no audio or persistent machine configuration
+  changed.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
