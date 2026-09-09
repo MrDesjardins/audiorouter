@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `4fec8c35` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `285363dc` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -99,6 +99,13 @@ release completion.
   verifies the canonical `armed` result, in addition to checking all three
   compatibility-tool schemas. Focused CLI/MCP tests, strict Clippy, formatting,
   and diff checks pass; no audio stream or machine configuration changed.
+
+- Closed the AUTO-07 MCP annotation gap on 2026-09-09: every focused tool now
+  publishes machine-readable `readOnlyHint`, `destructiveHint`, and
+  `idempotentHint` metadata derived from its actual boundary. Read-only,
+  planning, destructive recording/virtual-device, external, and generic
+  dispatch cases are covered by regression assertions and real MCP
+  interoperability. No audio or machine configuration changed.
 
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified

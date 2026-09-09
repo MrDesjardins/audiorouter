@@ -1910,8 +1910,47 @@ fn mcp_error(id: Option<Value>, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 
+fn mcp_tool_annotations(name: &str) -> Value {
+    let read_only = matches!(
+        name,
+        "describe_capabilities"
+            | "get_startup"
+            | "list_devices"
+            | "list_plugins"
+            | "list_virtual_devices"
+            | "list_applications"
+            | "list_processors"
+            | "get_session"
+            | "export_session"
+            | "plan_session_import"
+            | "inspect_routes"
+            | "get_operation"
+            | "list_recordings"
+            | "get_recording"
+            | "get_recording_recovery"
+            | "preview_recording"
+            | "plan_graph_change"
+            | "plan_startup"
+            | "plan_virtual_device"
+            | "plan_virtual_device_change"
+    );
+    let destructive = matches!(
+        name,
+        "remove_recording_entry"
+            | "recycle_recording"
+            | "apply_virtual_device"
+            | "apply_virtual_device_change"
+    );
+    let idempotent = !matches!(name, "reveal_recording" | "call_api");
+    json!({
+        "readOnlyHint": read_only,
+        "destructiveHint": destructive,
+        "idempotentHint": idempotent
+    })
+}
+
 fn mcp_tools() -> Value {
-    json!([
+    let mut tools = json!([
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "plan_startup", "description": "Preview a sign-in startup policy without applying OS registration; requires session-control scope.", "inputSchema": { "type": "object", "properties": { "enabled": { "type": "boolean" } }, "required": ["enabled"], "additionalProperties": false } },
@@ -1955,7 +1994,15 @@ fn mcp_tools() -> Value {
         { "name": "apply_graph_change", "description": "Commit a previously planned graph change with stale-plan and idempotency checks.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string" } }, "required": ["planId", "baseRevision", "idempotencyKey"], "additionalProperties": false } },
         { "name": "control_session", "description": "Start or stop one session through the authorized lifecycle API with an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "action": { "enum": ["start", "stop"] }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "action", "idempotencyKey"], "additionalProperties": false } },
         { "name": "call_api", "description": "Call one validated permitted AudioRouter API method.", "inputSchema": { "type": "object", "properties": { "method": { "type": "string" }, "params": { "type": ["object", "null"] } }, "required": ["method"], "additionalProperties": false } }
-    ])
+    ]);
+    for tool in tools.as_array_mut().expect("MCP tool catalog is an array") {
+        let name = tool["name"]
+            .as_str()
+            .expect("MCP tool names are strings")
+            .to_owned();
+        tool["annotations"] = mcp_tool_annotations(&name);
+    }
+    tools
 }
 
 fn mcp_resources() -> Value {
@@ -3513,6 +3560,30 @@ mod tests {
             cancel_operation["inputSchema"]["required"],
             json!(["operationId", "idempotencyKey"])
         );
+        for (name, read_only, destructive, idempotent) in [
+            ("get_session", true, false, true),
+            ("plan_graph_change", true, false, true),
+            ("apply_graph_change", false, false, true),
+            ("remove_recording_entry", false, true, true),
+            ("reveal_recording", false, false, false),
+            ("call_api", false, false, false),
+        ] {
+            let tool = tools
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .unwrap();
+            assert_eq!(
+                tool["annotations"],
+                json!({
+                    "readOnlyHint": read_only,
+                    "destructiveHint": destructive,
+                    "idempotentHint": idempotent
+                }),
+                "{name} annotations"
+            );
+        }
         for (name, required) in [
             ("apply_startup", json!(["planId", "idempotencyKey"])),
             ("retry_plugins", json!(["directory", "idempotencyKey"])),
