@@ -35,6 +35,17 @@ driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
 
+- Requalified the authorized Rust process-loopback adapter on 2026-09-09:
+  include mode converted 4,410 source frames at 44.1 kHz into 4,736 engine
+  frames at 48 kHz across 37 scheduler quanta; exclude mode converted 3,969
+  source frames into 4,224 engine frames across 33 quanta. Both modes reported
+  zero rejected packets, xruns, and queue overruns, with bounded resampling
+  and generation-1 scheduling. Streams stopped/reset and media state remained
+  unchanged.
+- Next safe task: continue with remaining physical-latency and native adapter
+  evidence while retaining production driver, signing, installer, shell/HWND,
+  accessibility, and independent-vendor blockers.
+
 - Completed UI-02 multi-selection state propagation on 2026-09-09. React Flow
   drag selection now updates the application selection set, visibly marks every
   selected node, reports the count through an accessible live status, and keeps
