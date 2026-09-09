@@ -27,6 +27,13 @@ driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
 
+- Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
+  read-only file inventory: the available candidates remain the six qualified
+  ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and
+  ReaPlugs utility/MIDI/streaming DLLs. No VST3 bundle or independent second
+  vendor audio-effect binary is present. No plugin was copied, registered,
+  loaded, or modified, and no audio or machine configuration changed.
+
 - Closed an M07/AUTO-01 parity defect on 2026-09-09: the CLI `operation get`
   command no longer sends a null cancellation-only parameter that the shared
   dispatcher rejects, cancellation help documents its optional idempotency
