@@ -1,5 +1,18 @@
 # M06 VST3 SDK boundary
 
+## 2026-09-09 - Deadline-bounded missing-result containment
+
+The typed multi-bus worker client now limits response waiting to the quantum's
+declared deadline, capped by the existing five-second IPC bound. A controlled
+feature-gated worker that accepts a quantum and then emits no result returned a
+bounded `WorkerMessageError::Io` at the 100 ms deadline; the worker was then
+dropped and terminated by the test. The supervised expired-quantum regression
+also remains fail-closed and records the worker failure. The feature-enabled
+`worker_process` suite passed 26 tests with six expected fixture-dependent
+skips; strict Clippy, formatting, and diff checks passed. This is containment
+evidence only: no production VST3 worker, realtime callback, plugin
+registration, audio stream, or machine audio configuration was used.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with

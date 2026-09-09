@@ -3140,13 +3140,32 @@ impl WorkerProcess {
         plugin_sha256: &str,
         layout: &WorkerAudioBusLayout,
     ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_multi_bus_fixture_mode(executable, plugin_sha256, layout, None)
+    }
+
+    /// Spawn a controlled multi-bus fixture mode. The only supported mode is
+    /// the deliberate `hang`, used to verify bounded missing-result handling.
+    #[cfg(feature = "test-fixtures")]
+    pub fn spawn_multi_bus_fixture_mode(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        layout: &WorkerAudioBusLayout,
+        mode: Option<&str>,
+    ) -> Result<Self, WorkerProcessError> {
+        if let Some(mode) = mode {
+            if mode != "hang" {
+                return Err(WorkerProcessError::Protocol(
+                    "invalid multi-bus worker fixture mode".into(),
+                ));
+            }
+        }
         Self::spawn_inner(
             executable,
             plugin_sha256,
             layout.input_buses().first().copied().unwrap_or(0),
             DEFAULT_WORKER_SAMPLE_RATE_HZ,
             None,
-            None,
+            mode,
             None,
             Some(layout),
         )
@@ -3594,6 +3613,7 @@ impl WorkerProcess {
         let layout = self.bus_layout.clone().ok_or_else(|| {
             WorkerProcessError::Protocol("multi-bus transport was not configured".into())
         })?;
+        let deadline_tick = frames.deadline_tick();
         let inputs = layout
             .input_frames(frames.frames().to_vec())
             .map_err(|error| {
@@ -3605,7 +3625,10 @@ impl WorkerProcess {
             parameters,
         })
         .map_err(WorkerProcessError::Message)?;
-        match self.read().map_err(WorkerProcessError::Message)? {
+        match self
+            .read_until_deadline(deadline_tick)
+            .map_err(WorkerProcessError::Message)?
+        {
             WorkerMessage::ProcessedBuses {
                 layout: actual_layout,
                 frames,
@@ -3672,6 +3695,20 @@ impl WorkerProcess {
 
     fn read(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
         receive_worker_message(&self.reader, WORKER_RESPONSE_TIMEOUT)
+    }
+
+    fn read_until_deadline(
+        &mut self,
+        deadline_tick: u64,
+    ) -> Result<WorkerMessage, WorkerMessageError> {
+        let now_tick = worker_clock_tick();
+        if deadline_tick <= now_tick {
+            return Err(WorkerMessageError::Io(
+                "worker response deadline expired".into(),
+            ));
+        }
+        let remaining = Duration::from_millis(deadline_tick - now_tick);
+        receive_worker_message(&self.reader, remaining.min(WORKER_RESPONSE_TIMEOUT))
     }
 
     fn take_shared_transport(&mut self) -> Option<SharedAudioTransport> {

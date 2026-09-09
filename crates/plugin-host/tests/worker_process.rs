@@ -252,6 +252,31 @@ fn typed_multi_bus_worker_process_client_round_trips_buses() {
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn typed_multi_bus_worker_client_bounds_a_missing_result() {
+    let hash = "a".repeat(64);
+    let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    let mut worker = WorkerProcess::spawn_multi_bus_fixture_mode(
+        fixture_worker_path(),
+        &hash,
+        &layout,
+        Some("hang"),
+    )
+    .expect("spawn hanging multi-bus worker fixture");
+    let deadline = worker_clock_tick().saturating_add(100);
+    let frames = layout
+        .input_frames(vec![
+            WorkerFrame::new(12, deadline, 2, vec![0.1, 0.2]).unwrap(),
+            WorkerFrame::new(12, deadline, 1, vec![0.3]).unwrap(),
+        ])
+        .unwrap();
+    let started = Instant::now();
+    assert!(worker.process_buses(frames, Vec::new()).is_err());
+    assert!(started.elapsed() < Duration::from_secs(2));
+    drop(worker);
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn supervised_multi_bus_worker_restarts_with_same_layout_and_ledger() {
     let hash = "c".repeat(64);
     let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
@@ -337,8 +362,7 @@ fn supervised_multi_bus_worker_fails_closed_on_expired_quantum() {
         .expect_err("expired quantum must fail closed");
     assert!(matches!(
         error,
-        audiorouter_plugin_host::WorkerProcessError::Protocol(code)
-            if code.starts_with("multiBusIdentity:")
+        audiorouter_plugin_host::WorkerProcessError::Message(_)
     ));
     assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Failed);
     let diagnostic = worker.failure_diagnostic().unwrap();

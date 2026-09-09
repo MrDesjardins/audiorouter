@@ -44,13 +44,14 @@ fn run() -> Result<(), String> {
         channels,
         sample_rate_hz,
         shared_paths,
-        _fixture_mode,
+        fixture_mode,
         plugin_path,
         multi_bus_layout,
     ) = parse_arguments()?;
     if let Some(layout) = multi_bus_layout {
-        return run_multi_bus(plugin_sha256, layout);
+        return run_multi_bus(plugin_sha256, layout, fixture_mode.as_deref());
     }
+    let _fixture_mode = fixture_mode;
     #[cfg(windows)]
     let mut vst2_plugin = plugin_path
         .clone()
@@ -405,7 +406,11 @@ fn run() -> Result<(), String> {
     }
 }
 
-fn run_multi_bus(plugin_sha256: String, layout: WorkerAudioBusLayout) -> Result<(), String> {
+fn run_multi_bus(
+    plugin_sha256: String,
+    layout: WorkerAudioBusLayout,
+    fixture_mode: Option<&str>,
+) -> Result<(), String> {
     if layout.input_buses() != layout.output_buses() {
         return Err("multi-bus fixture requires symmetric input/output buses".into());
     }
@@ -427,6 +432,12 @@ fn run_multi_bus(plugin_sha256: String, layout: WorkerAudioBusLayout) -> Result<
         .map_err(|error| format!("multi-bus ready read failed: {error:?}"))?;
     if ready != WorkerMessage::Ready {
         return Err("multi-bus worker requires Ready after HelloBuses".into());
+    }
+    #[cfg(feature = "test-fixtures")]
+    if fixture_mode == Some("hang") {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        }
     }
     loop {
         let message = read_worker_message(&mut reader)
