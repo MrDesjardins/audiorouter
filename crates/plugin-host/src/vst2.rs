@@ -1,8 +1,8 @@
-//! VST2 ABI declarations and non-executing effect-header validation.
+//! VST2 ABI declarations and the contained Windows worker adapter.
 //!
-//! This module deliberately does not load a DLL, call `VSTPluginMain`, or
-//! dereference an `AEffect`. The eventual Windows worker adapter must perform
-//! those operations only after identity verification and worker containment.
+//! Portable declarations remain non-executing. The Windows implementation
+//! loads only an already-verified x64 DLL inside the disposable worker and
+//! owns all `AEffect` access for its lifetime.
 
 use std::ffi::c_void;
 #[cfg(windows)]

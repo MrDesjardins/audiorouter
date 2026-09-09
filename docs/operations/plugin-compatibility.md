@@ -42,7 +42,8 @@ ReaPlugs worker matrix for bounded load, processing, parameters, latency, state
 capability, editor capability discovery, and shutdown. This is fixture evidence
 only: native editor window open/close, rights review, and release qualification
 remain open. The repository-owned fixture additionally qualifies opaque
-chunk-state save/restore and the legacy `main` export through the worker. The host library now also has a
+chunk-state save/restore and the legacy `main` export through the worker. The
+host library now also has a
 control-plane `EditorLifecycle` policy that separates editor open/close/failure
 and deliberate retry from the processing generation. It does not create native
 windows or claim editor compatibility; those remain a Windows/UI acceptance

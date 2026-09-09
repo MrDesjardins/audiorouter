@@ -175,7 +175,7 @@ Rollback is limited to reverting the adapter/tests/docs and removing ignored
 fixture copies; no plugin registration, driver, stream, default endpoint, or
 machine audio setting may change.
 
-Added the non-executing VST2 ABI contract at
+Added the portable VST2 ABI contract and Windows worker adapter at
 `crates/plugin-host/src/vst2.rs`: the VST 2.4 `AEffect` C layout, entry-point
 and callback signatures, replacing-process requirement, and bounded
 mono/stereo/parameter validation are covered by two focused tests. No unsafe
