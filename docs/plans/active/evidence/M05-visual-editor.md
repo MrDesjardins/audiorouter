@@ -756,3 +756,13 @@ rejects malformed or non-advancing cursors, and stops after a 10,000-page
 safety ceiling. The UI suite passed 91 tests, TypeScript
 typecheck passed, and an elevated temporary Vite production build completed.
 No audio endpoint or machine configuration was accessed.
+## Verified application identity presentation (2026-09-08)
+
+The UI now includes a read-only verified executable-path panel backed by the
+authoritative `ApplicationInfo.executablePath` field. It shows PID/path pairs
+only when the backend supplied a verified path and otherwise reports the
+unavailable state; it exposes no process binding or mutation action. The
+dedicated component regression covers both states. UI typecheck, 15 Vitest
+files/93 tests, and a temporary production build passed. This is display and
+discovery evidence only; durable process capture still requires the managed
+native owner.
