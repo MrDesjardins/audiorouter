@@ -1359,6 +1359,15 @@ same ignored worker acceptance once per local DLL and restores the caller's
 fixture environment variable. It does not register plugins, open audio
 devices, or include the ignored binaries in source or release artifacts.
 
+The repository-owned `tests/fixtures/vst2-state-fixture.c` provides a minimal
+stereo VST2 effect with one bounded parameter and `effFlagsProgramChunks`.
+`tests/acceptance/m06-vst2-state-fixture.ps1` compiled it as an ignored x64 DLL
+with the installed VS2026 toolchain and the verified worker test passed its
+load, parameter, finite-processing, editor-capability, latency, opaque
+state-save/restore, and shutdown checks. This is chunk-state contract evidence
+without using a third-party binary for that capability; native editor
+open/close and full rights/release review remain open.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

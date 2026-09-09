@@ -75,6 +75,12 @@ VST2 DLL independently through the verified worker test. It requires Windows,
 restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value, and changes no
 plugin registration or audio configuration.
 
+Added the repository-owned source fixture `tests/fixtures/vst2-state-fixture.c`
+and `tests/acceptance/m06-vst2-state-fixture.ps1`. The installed VS2026 x64
+compiler built its ignored DLL, which passed the verified worker acceptance
+with opaque VST2 program-chunk save/restore. This supplies chunk-state evidence
+without redistributing a third-party binary.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

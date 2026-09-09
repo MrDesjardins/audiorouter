@@ -110,5 +110,15 @@ worker test and restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value.
 The fixture directory is local-only and is not part of source or release
 artifacts.
 
+Chunk-state coverage can be run with the repository-owned fixture:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-state-fixture.ps1
+```
+
+The script compiles an ignored x64 VST2 DLL with `effFlagsProgramChunks`, runs
+the verified worker acceptance, and leaves no registered plugin or system
+audio changes.
+
 See [SDK setup](sdk-setup.md) and [release notes](release-notes.md) for the
 toolchain and current qualification boundaries.
