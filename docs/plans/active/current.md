@@ -176,13 +176,13 @@ documentation validation passed. The ignored native editor timeout probe and
 six-binary VST2 processing matrix were also rerun separately. No driver,
 plugin registration, audio stream, or machine audio configuration was changed.
 
-Ordered next tasks: (1) complete explicit parent/window authorization for the
-worker-owned native editor path; (2)
-qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)
-complete per-binary quarantine diagnostics and add invalid-sample/layout
-regressions;
-(4) keep VST2 user-facing availability gated until the compatibility and rights
-matrix is complete.
+Ordered next tasks: (1) integrate an explicitly authorized control-plane/UI
+parent-window token with the worker-owned native editor path; (2) obtain an
+additional legally usable independent VST2 fixture for compatibility and
+chunk-state evidence; (3) keep VST2 user-facing availability gated until the
+rights, editor, compatibility, and release matrix is complete. Invalid-output,
+layout, crash/hang, and bounded per-binary failure-diagnostic regressions are
+implemented and requalified below.
 Rollback is limited to reverting the adapter/tests/docs and removing ignored
 fixture copies; no plugin registration, driver, stream, default endpoint, or
 machine audio setting may change.
@@ -3219,3 +3219,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Requalified the locked workspace at `b571e24` on 2026-09-08 after journal hardening: all workspace unit/integration tests and doc-tests passed, and strict workspace Clippy passed with `-D warnings`. No driver, signing mode, plugin/startup registration, or machine audio configuration changed.
 - Next M02/M03/ARCH-05 task: connect the complete bounded telemetry report to the managed endpoint-owned production scheduler after driver lifecycle exists.
+
+- Requalified the complete locked workspace after the native VST2 invalid-output, layout, crash, hang, legacy-entry-point, state, and editor-containment changes on 2026-09-08: `cargo test --workspace --locked` passed all workspace unit/integration tests and doc-tests; strict workspace Clippy passed with `-D warnings`; formatting, diff checks, and documentation validation passed (51 Markdown files, 160 local links). This is portable/repository evidence plus previously recorded opt-in native worker probes; it does not close the native editor authorization, independent-rights, production-driver, signing, installer, or clean-machine gates. No driver, plugin registration, audio stream, or machine audio configuration was changed.
+- Next M06 task: integrate an explicitly authorized control-plane/UI parent-window token with the worker-owned editor path, or record that integration as externally blocked; continue VST2 rights and independent-fixture qualification before any user-facing release claim.
