@@ -1862,7 +1862,10 @@ mod tests {
         assert_eq!(eq.active_bands(), 6);
         let response = eq.magnitude_db_at(1_000.0).unwrap();
         assert!(response.is_finite());
-        assert!((response + 21.155151).abs() < 0.001, "response was {response}");
+        assert!(
+            (response + 21.155151).abs() < 0.001,
+            "response was {response}"
+        );
         assert!(eq.magnitude_db_at(20_000.0).unwrap().is_finite());
     }
 
