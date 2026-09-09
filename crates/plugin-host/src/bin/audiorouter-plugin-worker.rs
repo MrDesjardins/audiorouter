@@ -4,7 +4,7 @@ use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
     read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
-    SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession,
+    SharedAudioLayout, SharedAudioTransport, WorkerAudioBusLayout, WorkerMessage, WorkerSession,
     DEFAULT_WORKER_SAMPLE_RATE_HZ, MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ,
     WORKER_PROTOCOL_VERSION,
 };
@@ -25,6 +25,7 @@ type WorkerArguments = (
     Option<(PathBuf, PathBuf)>,
     Option<String>,
     Option<PathBuf>,
+    Option<WorkerAudioBusLayout>,
 );
 
 fn main() -> ExitCode {
@@ -38,8 +39,18 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let (plugin_sha256, channels, sample_rate_hz, shared_paths, _fixture_mode, plugin_path) =
-        parse_arguments()?;
+    let (
+        plugin_sha256,
+        channels,
+        sample_rate_hz,
+        shared_paths,
+        _fixture_mode,
+        plugin_path,
+        multi_bus_layout,
+    ) = parse_arguments()?;
+    if let Some(layout) = multi_bus_layout {
+        return run_multi_bus(plugin_sha256, layout);
+    }
     #[cfg(windows)]
     let mut vst2_plugin = plugin_path
         .clone()
@@ -394,6 +405,67 @@ fn run() -> Result<(), String> {
     }
 }
 
+fn run_multi_bus(plugin_sha256: String, layout: WorkerAudioBusLayout) -> Result<(), String> {
+    if layout.input_buses() != layout.output_buses() {
+        return Err("multi-bus fixture requires symmetric input/output buses".into());
+    }
+    let stdin = io::stdin();
+    let stdout = io::stdout();
+    let mut reader = BufReader::new(stdin.lock());
+    let mut writer = BufWriter::new(stdout.lock());
+    write_worker_message(
+        &mut writer,
+        &WorkerMessage::HelloBuses {
+            protocol_version: WORKER_PROTOCOL_VERSION,
+            plugin_sha256,
+            layout: layout.clone(),
+        },
+    )
+    .map_err(|error| format!("multi-bus hello write failed: {error:?}"))?;
+    let ready = read_worker_message(&mut reader)
+        .map_err(|error| format!("multi-bus ready read failed: {error:?}"))?;
+    if ready != WorkerMessage::Ready {
+        return Err("multi-bus worker requires Ready after HelloBuses".into());
+    }
+    loop {
+        let message = read_worker_message(&mut reader)
+            .map_err(|error| format!("multi-bus message read failed: {error:?}"))?;
+        match message {
+            WorkerMessage::ProcessBuses {
+                layout: message_layout,
+                frames,
+                parameters,
+            } if message_layout == layout => {
+                if !parameters.is_empty() {
+                    return Err("multi-bus echo fixture does not accept parameters".into());
+                }
+                let frames = layout
+                    .input_frames(frames)
+                    .map_err(|error| format!("multi-bus input rejected: {error:?}"))?;
+                write_worker_message(
+                    &mut writer,
+                    &WorkerMessage::ProcessedBuses {
+                        layout: layout.clone(),
+                        frames: frames.frames().to_vec(),
+                    },
+                )
+                .map_err(|error| format!("multi-bus response write failed: {error:?}"))?;
+            }
+            WorkerMessage::Shutdown => return Ok(()),
+            _ => {
+                write_worker_message(
+                    &mut writer,
+                    &WorkerMessage::Failure {
+                        code: "multiBusUnexpectedMessage".into(),
+                    },
+                )
+                .map_err(|error| format!("multi-bus failure write failed: {error:?}"))?;
+                return Err("multi-bus worker rejected message".into());
+            }
+        }
+    }
+}
+
 fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut arguments = std::env::args().skip(1);
     let mut hash = None;
@@ -402,6 +474,8 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut input_path = None;
     let mut output_path = None;
     let mut plugin_path = None;
+    let mut input_buses = None;
+    let mut output_buses = None;
     #[cfg(feature = "test-fixtures")]
     let mut fixture_mode = None;
     #[cfg(not(feature = "test-fixtures"))]
@@ -435,6 +509,8 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
                         "--plugin-path requires a value".to_string()
                     })?));
             }
+            "--input-buses" => input_buses = arguments.next(),
+            "--output-buses" => output_buses = arguments.next(),
             "--fixture-mode" => {
                 #[cfg(feature = "test-fixtures")]
                 {
@@ -467,6 +543,32 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     if !(MIN_WORKER_SAMPLE_RATE_HZ..=MAX_WORKER_SAMPLE_RATE_HZ).contains(&sample_rate_hz) {
         return Err("--sample-rate must be between 8000 and 192000 Hz".into());
     }
+    let multi_bus_layout = match (input_buses, output_buses) {
+        (Some(input), Some(output)) => {
+            if plugin_path.is_some() || input_path.is_some() || output_path.is_some() {
+                return Err("multi-bus mode cannot use plugin or shared paths".into());
+            }
+            let parse_buses = |value: String| -> Result<Vec<u16>, String> {
+                let buses = value
+                    .split(',')
+                    .map(|bus| {
+                        bus.parse::<u16>()
+                            .map_err(|_| "bus channels must be 1 or 2".to_string())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if buses.is_empty() {
+                    return Err("bus list must not be empty".into());
+                }
+                Ok(buses)
+            };
+            Some(
+                WorkerAudioBusLayout::new(&parse_buses(input)?, &parse_buses(output)?)
+                    .map_err(|error| format!("invalid multi-bus layout: {error:?}"))?,
+            )
+        }
+        (None, None) => None,
+        _ => return Err("--input-buses and --output-buses must be supplied together".into()),
+    };
     match (input_path, output_path) {
         (Some(input), Some(output)) => Ok((
             hash,
@@ -475,6 +577,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             Some((input, output)),
             fixture_mode,
             plugin_path,
+            multi_bus_layout,
         )),
         (None, None) => Ok((
             hash,
@@ -483,6 +586,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             None,
             fixture_mode,
             plugin_path,
+            multi_bus_layout,
         )),
         _ => Err("--input-path and --output-path must be supplied together".into()),
     }

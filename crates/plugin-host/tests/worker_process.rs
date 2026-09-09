@@ -4,11 +4,15 @@ use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
     PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
-    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    WorkerAudioBusLayout, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::{MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ};
+#[cfg(feature = "test-fixtures")]
+use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
+#[cfg(feature = "test-fixtures")]
+use std::process::{Command, Stdio};
 #[cfg(feature = "test-fixtures")]
 use std::time::Duration;
 use std::time::Instant;
@@ -102,6 +106,71 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
         decode_worker_message(&encoded).unwrap(),
         WorkerMessage::Ready
     );
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
+    let hash = "e".repeat(64);
+    let mut child = Command::new(fixture_worker_path())
+        .args([
+            "--plugin-sha256",
+            &hash,
+            "--channels",
+            "2",
+            "--input-buses",
+            "2,1",
+            "--output-buses",
+            "2,1",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn multi-bus fixture worker");
+    let stdin = child.stdin.take().expect("multi-bus worker stdin");
+    let stdout = child.stdout.take().expect("multi-bus worker stdout");
+    let mut writer = BufWriter::new(stdin);
+    let mut reader = BufReader::new(stdout);
+
+    let hello = audiorouter_plugin_host::read_worker_message(&mut reader).unwrap();
+    let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    assert_eq!(
+        hello,
+        WorkerMessage::HelloBuses {
+            protocol_version: audiorouter_plugin_host::WORKER_PROTOCOL_VERSION,
+            plugin_sha256: hash,
+            layout: layout.clone(),
+        }
+    );
+    audiorouter_plugin_host::write_worker_message(&mut writer, &WorkerMessage::Ready).unwrap();
+
+    let frames = layout
+        .input_frames(vec![
+            WorkerFrame::new(7, 100, 2, vec![0.1, 0.2, 0.3, 0.4]).unwrap(),
+            WorkerFrame::new(7, 100, 1, vec![0.5, 0.6]).unwrap(),
+        ])
+        .unwrap();
+    audiorouter_plugin_host::write_worker_message(
+        &mut writer,
+        &WorkerMessage::ProcessBuses {
+            layout: layout.clone(),
+            frames: frames.frames().to_vec(),
+            parameters: Vec::new(),
+        },
+    )
+    .unwrap();
+    let response = audiorouter_plugin_host::read_worker_message(&mut reader).unwrap();
+    assert_eq!(
+        response,
+        WorkerMessage::ProcessedBuses {
+            layout: layout.clone(),
+            frames: frames.frames().to_vec(),
+        }
+    );
+    audiorouter_plugin_host::write_worker_message(&mut writer, &WorkerMessage::Shutdown).unwrap();
+    drop(writer);
+    assert!(child.wait().unwrap().success());
 }
 
 #[cfg(feature = "test-fixtures")]
