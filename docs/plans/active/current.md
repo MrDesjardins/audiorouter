@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `cffefb8e` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `266310ac` (2026-09-09). The guarded M00-M08
 chain passed at its clean parent `eb0ad978`; the focused native auxiliary-bus
 transformation regression and all-features plugin-host checks pass at this
 checkpoint. The repository is clean; no driver or
