@@ -65,6 +65,12 @@ Rollback is limited to reverting the adapter/tests/docs and removing ignored
 fixture copies; no plugin registration, driver, stream, default endpoint, or
 machine audio setting may change.
 
+Added the non-executing VST2 ABI contract at
+`crates/plugin-host/src/vst2.rs`: the VST 2.4 `AEffect` C layout, entry-point
+and callback signatures, replacing-process requirement, and bounded
+mono/stereo/parameter validation are covered by two focused tests. No unsafe
+block, DLL load, callback invocation, or machine-state operation was added.
+
 The worker supervisor now returns the explicit `Vst2AdapterUnavailable` error
 for an identified x64 VST2 binary and remains stopped. This prevents a newly
 recognized legacy DLL from crossing the runtime boundary accidentally while

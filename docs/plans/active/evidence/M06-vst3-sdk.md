@@ -1258,6 +1258,15 @@ inventory bound exists. A 501-state regression passed with 69 storage tests,
 handling only; no plugin was executed and no audio or machine configuration
 was accessed.
 
+## VST2 ABI contract (2026-09-08)
+
+Added a portable, non-executing VST2 ABI contract containing the VST 2.4
+`AEffect` layout, `VSTPluginMain`/callback signatures, and validation for the
+magic, required callbacks, replacing processor, bounded mono/stereo channels,
+and parameter count. Two focused ABI tests passed. This does not load or call
+any DLL; the Windows worker adapter must still own the lifetime and enforce the
+callback/audio-buffer policy before runtime support can be enabled.
+
 ## ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export
