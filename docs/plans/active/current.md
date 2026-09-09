@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `e1b2584e` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `4fec8c35` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -79,6 +79,12 @@ release completion.
   keys for session, graph, route, watch, and export commands. Documentation
   validation passed with 51 Markdown files and 163 local links; no runtime or
   machine configuration changed.
+
+- Rechecked the current pushed automation/documentation head `4fec8c35` on
+  2026-09-09: the M07 headless acceptance remains green after the CLI contract
+  fixes, and documentation validation passes with 51 Markdown files and 163
+  local links. No audio device, driver, registration, or machine configuration
+  action occurred.
 
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
