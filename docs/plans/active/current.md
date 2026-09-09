@@ -67,6 +67,13 @@ release completion.
   formatter. UI typecheck, 98 tests, and diff checks pass; native endpoint and
   manual shell acceptance remain open.
 
+- Completed the broader UI structured-error audit on 2026-09-09. Recorder
+  controls, virtual-device operations, session lifecycle, privacy/recovery
+  actions, recording file actions, and catalog/inventory refreshes now retain
+  typed backend diagnostics through the shared formatter. UI typecheck, 98
+  tests, documentation validation, and diff checks pass; native shell/manual
+  accessibility acceptance remains open.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;
