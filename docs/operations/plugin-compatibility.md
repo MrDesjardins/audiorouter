@@ -24,6 +24,18 @@ plugin is compatible with a realtime AudioRouter route. Some fixture classes
 reject processor activation with `E_NOTIMPL`; that result is surfaced as a
 plugin-specific incompatibility rather than converted into success.
 
+## Second-vendor probe
+
+The official SDK `advanced-techniques-tutorial` was built as a disposable x64
+VST3 bundle using Visual Studio 2026. Steinberg's validator reported 47 passed
+and 0 failed tests, and identified the vendor as Steinberg Media Technologies,
+but AudioRouter's offline loader rejected processor activation with
+`0x80004001` (`E_NOTIMPL`). It is therefore recorded as an unsupported fixture,
+not as a second-vendor compatibility pass. The sibling data-exchange tutorial
+could not be built from the pinned checkout because its Windows source refers
+to an unavailable `FDebugPrint` symbol. Both builds were disposable; no system
+plugin link, plugin registration, or audio configuration was changed.
+
 ## Inspection and execution boundary
 
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,

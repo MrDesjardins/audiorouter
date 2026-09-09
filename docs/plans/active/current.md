@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `7c7ad229` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `84aefb05` (2026-09-09). The guarded M00-M08
 chain, all-features workspace tests, strict all-features Clippy, UI checks,
 legacy VST2 fixture coverage, and documentation validation pass at the
 preceding implementation checkpoints. The repository is clean; no driver or
@@ -34,6 +34,8 @@ is implemented, but rights/editor/release qualification remains open.
 - Next M07 task: retain this envelope across any future remote transport implementation and continue native-gated work only when its prerequisites become available.
 - Documented M07/API-09 discovery-error behavior on 2026-09-09 in the API reference and headless runbook: CLI/MCP consumers are directed to stable codes, optional unsigned HRESULTs, retryability, and remediation, with `deviceInUse` explicitly distinguished from `invalidArgument`. Documentation validation passed with 51 Markdown files and 162 local links; no runtime or machine configuration changed.
 - Next M07 task: retain the documented error contract while any future remote transport is added; continue native-gated work only when prerequisites become available.
+- Probed the pinned SDK's second-vendor advanced-techniques tutorial on 2026-09-09: the disposable x64 Steinberg bundle passed the official validator (47/47) but AudioRouter activation returned `0x80004001` (`E_NOTIMPL`); the sibling data-exchange tutorial was not buildable because its Windows source references missing `FDebugPrint`. Both results are recorded as unsupported fixture evidence, with no system link, registration, plugin install, or audio configuration change. The multi-vendor M06 gate remains open.
+- Next M06 task: qualify a supplied rights-cleared independent x64 VST2/VST3 fixture through the existing worker matrix; retain the unsupported second-vendor probe and gated release boundary.
 - Completed M07/API-09 MCP discovery-error parity on 2026-09-09: MCP tool results now retain structured backend error data in both `structuredContent` and the textual JSON content, including category, HRESULT, retryability, and remediation. CLI tests (28), MCP interoperability tests (2), doc-tests, strict Clippy, formatting, and diff checks passed; no audio or machine configuration changed.
 - Next M07 task: retain this error envelope across any future remote transport implementation and continue native-gated work only when its prerequisites become available.
 - Hardened M01/API-09 CLI discovery parity on 2026-09-09: `devices list`, `apps list`, and `applications list` now preserve the complete JSON-RPC error envelope, including structured audio category, HRESULT, retryability, and remediation, instead of silently returning an empty array on failure. Successful legacy array responses remain unchanged. CLI tests (27), doc-tests, strict Clippy, formatting, and diff checks passed; no audio or machine configuration changed.
