@@ -2466,6 +2466,14 @@ impl SupervisedWorkerProcess {
         mut supervisor: WorkerSupervisor,
         now: Instant,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        if identity.format == PluginFormat::Vst2 {
+            return Err((
+                WorkerProcessError::Protocol(
+                    "VST2 workers support only the single-stream protocol".into(),
+                ),
+                supervisor,
+            ));
+        }
         let executable = match validate_worker_executable(executable.as_ref()) {
             Ok(path) => path,
             Err(error) => {
@@ -5441,6 +5449,35 @@ mod tests {
             );
             assert_eq!(supervisor.state(), WorkerState::Stopped);
         }
+    }
+
+    #[test]
+    fn multi_bus_owner_rejects_the_legacy_vst2_boundary() {
+        let identity = PluginIdentity {
+            path: PathBuf::from("legacy.dll"),
+            binary_path: PathBuf::from("legacy.dll"),
+            format: PluginFormat::Vst2,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "0".repeat(64),
+            metadata: Default::default(),
+        };
+        let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+        let result = SupervisedWorkerProcess::spawn_multi_bus(
+            std::env::current_exe().unwrap(),
+            &identity,
+            &layout,
+            Instant::now(),
+        );
+        let error = match result {
+            Ok(_) => panic!("VST2 must remain single-stream"),
+            Err(error) => error,
+        };
+        assert!(matches!(
+            error,
+            WorkerProcessError::Protocol(message)
+                if message == "VST2 workers support only the single-stream protocol"
+        ));
     }
 
     #[test]

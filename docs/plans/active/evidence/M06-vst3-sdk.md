@@ -25,6 +25,17 @@ available to a future native VST3 backend, but the current executable's
 multi-bus path remains an echo implementation and is not native plugin
 execution or realtime graph evidence.
 
+## VST2 single-stream enforcement (2026-09-09)
+
+The supervised multi-bus constructor now rejects a `PluginFormat::Vst2`
+identity before executable validation or process launch. This prevents the
+legacy VST2 adapter from being flattened into or accidentally presented as an
+auxiliary-bus worker. The focused plugin-host library tests passed 67/67 in
+both default and all-features builds, worker-process tests passed 13 default
+and 29 all-features cases with six expected fixture skips, and strict Clippy
+passed in both modes. VST2 native processing remains the existing bounded
+single-stream `processReplacing` path.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's
