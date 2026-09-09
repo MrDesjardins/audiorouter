@@ -37,6 +37,14 @@ release completion.
   is compatibility evidence for PLUG-07, not rights, editor, latency, or
   release qualification.
 
+- Completed a direct recheck of the remaining local ReaPlugs audio effects on
+  2026-09-09: ReaFIR and ReaXComp each loaded and processed at 44.1, 48, and
+  96 kHz through the contained VST2 worker (six additional real-plugin cases
+  passed). Together with the preceding four-effect run, all 18 combinations
+  in the documented six-effect matrix passed. Process-local environment
+  overrides were restored and no plugin registration or machine audio change
+  occurred; rights, editor, physical-latency, and release gates remain open.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures

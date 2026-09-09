@@ -153,6 +153,9 @@ The check used process-local environment overrides and restored the prior
 values afterward; it did not copy or register the DLLs or change machine audio
 state. These results remain local compatibility evidence and do not establish
 third-party rights, editor support, physical latency, or release qualification.
+The remaining local ReaFIR and ReaXComp DLLs were then rechecked through the
+same path at all three rates (six more cases), completing the 18-case
+six-effect matrix.
 
 Run the reproducible local qualification with:
 
