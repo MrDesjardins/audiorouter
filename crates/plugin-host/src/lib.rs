@@ -1315,10 +1315,10 @@ pub struct WorkerFrame {
 /// Bounded control-plane description of an effect's audio bus topology.
 ///
 /// Bus zero on each side is the main bus; later input buses are auxiliary
-/// inputs such as side-chains. This describes capability only. The current
-/// single-frame worker wire format still carries one primary stream, so a
-/// layout with auxiliary buses must not be passed to that format until the
-/// graph and shared-memory transport gain corresponding ownership semantics.
+/// inputs such as side-chains. Single-stream workers continue to use the
+/// `WorkerFrame` protocol, while multi-bus workers use the separately
+/// negotiated `WorkerAudioBusFrames` protocol. Auxiliary layouts must never be
+/// flattened into the legacy single-stream format.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct WorkerAudioBusLayout {
     input_channels: Vec<u16>,
