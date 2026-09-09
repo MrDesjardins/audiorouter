@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `ef14ed7d` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `d71c3152` (2026-09-09). The guarded M00-M08
 chain, all-features workspace tests, strict all-features Clippy, UI checks,
 legacy VST2 fixture coverage, and documentation validation pass at the
 preceding implementation checkpoints. The repository is clean; no driver or
@@ -26,6 +26,8 @@ is implemented, but rights/editor/release qualification remains open.
 - Next M01/API-09 task: carry the same structured error presentation to any future native-shell status surface without weakening the disconnected preview behavior.
 - Extended the M05 status refresh path on 2026-09-09: `SnapshotCache` now preserves structured RPC audio category, HRESULT, remediation, and retryability when a connected snapshot fails, with an `accessDenied` regression covering `0x80070005`. UI typecheck and all 96 UI tests passed; disconnected preview behavior remains unchanged and no machine configuration changed.
 - Next M05/M00 task: retain structured status diagnostics while integrating the authenticated native-shell transport and managed endpoint callback; those native gates remain externally blocked.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at pushed head `d71c3152` on 2026-09-09: VS2026/WDK discovery and native compile, read-only 31-endpoint format inventory, disposable pinned SysVAD x64 package/API/signability qualification, M01/M04/M05, pinned VST3 SDK/validator, repository VST2 modern/legacy/fault fixtures, M07, unsigned M08 artifacts, 159 normative mappings, and documentation validation (51 Markdown files/162 local links) passed. The run left 23 direct repository-named temporary SQLite fixtures; exact validated cleanup removed all 23 and a follow-up scan found zero. No driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred.
+- Next M06 task: qualify a supplied rights-cleared independent x64 VST2/VST3 fixture or integrate the authenticated native-shell HWND owner when available; retain the gated VST2 rights/editor/release boundary.
 
 - Requalified the guarded M00–M08 acceptance chain again on 2026-09-08 at pushed head `4475a5d0`: native toolchain/SysVAD qualification, portable tests, UI, VST3/VST2 matrices, M07, unsigned release artifacts, traceability, and documentation all passed. Disposable outputs were cleaned and no driver, signing, registration, stream, or machine audio configuration was changed.
 - Next M02/M03/M06 task: retain the validated boundary while awaiting the production managed-driver callback, physical latency setup, independent plugin rights/fixture evidence, and authenticated native-shell HWND owner.
