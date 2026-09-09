@@ -23,6 +23,17 @@ over-reported counts return a protocol error instead of panicking the control
 server. Transport tests (19), strict Clippy, and formatting pass; no audio or
 machine configuration was accessed.
 
+Requalified the complete guarded M00-M08 safe acceptance chain at pushed head
+`cf0c54a1`: installed VS/WDK compatibility, native compile and 34-endpoint
+format inventory, disposable pinned SysVAD x64 compile/package/API checks,
+portable milestone suites, UI, pinned VST3 SDK/validator/offline loader,
+headless control, unsigned release preparation, 158-ID traceability, and
+documentation validation all passed. Temporary outputs and the disposable
+reference checkout were removed. No driver was installed or loaded, no
+signing mode or registration changed, and no machine audio configuration was
+modified. Native production-driver ownership, callback deadline, physical
+latency, signing, installer, and manual UI gates remain open.
+
 ## Durable graph-plan persistence atomicity (2026-09-08)
 
 Closed an M01/GRAPH-03 persistence consistency gap: if durable graph-plan
