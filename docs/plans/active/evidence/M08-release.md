@@ -1,5 +1,16 @@
 # M08 release evidence
 
+## 2026-09-08 - Full guarded chain at identity API head
+
+The complete `safe-all.ps1` chain passed at pushed head `4475a5d0`: VS/WDK
+discovery and native compile, read-only 31-endpoint inventory, disposable
+SysVAD x64 package/API qualification, portable milestone suites, UI, VST3
+SDK/validator, modern/legacy/fault VST2 fixtures, M07, unsigned M08 artifact
+verification, 159 traceability mappings, and documentation validation (51
+files/161 links). Temporary outputs/checkouts were cleaned. No driver was
+installed or loaded, and no signing mode, registration, stream, or machine
+audio configuration changed.
+
 ## 2026-09-08 - Full guarded chain at executable-identity head
 
 The complete `safe-all.ps1` chain passed at pushed head `4475a5d0`: VS/WDK
