@@ -100,4 +100,18 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect" }));
     expect(onRemove).toHaveBeenCalledWith(removeMixerActionId("mixer-1"));
   });
+
+  it("executes mixer topology previews through the connected App draft boundary", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Keyboard connection dialog" }));
+    const dialog = await screen.findByRole("dialog", { name: "Keyboard connection" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard source output port" }), { target: { value: "mic::out" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Insert mixer" })[0]);
+    expect(screen.getByText("Mixer inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect" }));
+    expect(screen.getByText("Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing.")).toBeTruthy();
+  });
 });
