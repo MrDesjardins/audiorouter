@@ -142,6 +142,13 @@ release completion.
   absolute DLL path and the compatibility runbook provides a ReaComp example,
   preventing accidental qualification of an unrelated or stale installation.
 
+- Completed the exact-binary record for the installed ReaPlugs matrix on
+  2026-09-09: all nine DLL sizes and SHA-256 fingerprints are now documented,
+  with seven passed and two explicitly rejected. Embedded file-version fields
+  were absent for every binary, so hashes and sizes are retained as the local
+  reproducible identifiers; no third-party rights or redistribution claim is
+  inferred.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,

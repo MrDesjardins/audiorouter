@@ -176,6 +176,24 @@ state behavior does not fit the bounded audio-effect acceptance; they were
 not treated as successful effects. This result is compatibility evidence only
 and does not grant rights or broaden the supported VST2 boundary.
 
+The exact installed binary fingerprints from that qualification are:
+
+| Binary | Size | SHA-256 | Result |
+| --- | ---: | --- | --- |
+| `reacomp-standalone.dll` | 191,488 | `4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0` | passed |
+| `readelay-standalone.dll` | 185,344 | `76df762bb1ed2a53e33a00c54eaabc209d5c4d482c55caa89f403832fca265a7` | passed |
+| `reaeq-standalone.dll` | 296,960 | `c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d` | passed |
+| `reafir_standalone.dll` | 306,688 | `2c81826880d47a3fd0fe48ae37385c1945f1f109564588cf5a09491d01b3665e` | passed |
+| `reagate-standalone.dll` | 180,736 | `36cde76c3dbd1d79275c5e52a7120c3ccb1e21ae144cfd5f0e70a0f939e29998` | passed |
+| `reastream-standalone.dll` | 191,488 | `57c43a7a3f7fb7df14ccd7a4af77f9e475f98fe681486dcd290b23983099c5f6` | passed |
+| `reaxcomp-standalone.dll` | 303,104 | `a01e15b9a23eff54b8025d75edf44b26b9311e12de72a7c04cd0ca82752dbb70` | passed |
+| `reacontrolmidi-standalone.dll` | 247,808 | `0fb6cf94df57eca771efdcef76c2ca8ca24332fce64b71d2340f0b7faea1ed6e` | rejected |
+| `reajs.dll` | 1,043,456 | `600223acd0337c494a0bc2fb2a399f5ba477c6c0886e9c1e2c1f7475810fcf72` | rejected |
+
+These binaries contain no readable embedded file-version metadata, so the
+SHA-256 fingerprints and file sizes are the reproducible exact-version
+identifiers for this local installation.
+
 Run the reproducible local qualification with:
 
 ```powershell
