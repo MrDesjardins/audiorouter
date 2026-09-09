@@ -68,6 +68,13 @@ two-input/one-output side-chain path passed at 44.1, 48, and 96 kHz with finite
 output and successful graph-result staging. This remains worker/fixture
 evidence, not production-driver or physical-latency evidence.
 
+The native worker also answers generic parameter discovery from the VST3 edit
+controller with bounded titles, normalized defaults, and a maximum of 64
+descriptors. `DescribeEditor` returns an explicit no-editor descriptor, while
+editor open/close requests return `editorUnavailable` and leave processing
+alive. This is the fail-closed behavior required until an authenticated native
+shell supplies an owner HWND; it is not native editor compatibility evidence.
+
 ## Inspection and execution boundary
 
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,
@@ -132,8 +139,9 @@ Worker parameter descriptors are bounded to 256 entries and 128-byte titles;
 IDs must be unique and normalized defaults/ranges must be finite and within
 `0..=1`. The disposable worker reports an empty catalog in its ordinary mode
 and a two-entry `test-fixtures` catalog for process-level wire regression.
-Native plugin parameter mapping remains separate and is not implied by the
-fixture.
+The native VST3 worker reports the plugin controller's bounded catalog (up to
+64 entries in that worker) and keeps generic parameter editing available even
+when a native editor is unavailable.
 
 The opt-in `test-fixtures` Cargo feature adds deterministic worker modes for
 crash, hang, malformed output, a non-empty parameter catalog, and bounded

@@ -22,3 +22,10 @@ and `StateRestore`; state is exchanged as a versioned byte asset with a
 SHA-256 digest. Native process buffers and the framed protocol are currently
 worker-thread implementation details, not proof of realtime graph scheduling
 or physical-latency performance.
+
+The worker answers `DescribeParameters` from the VST3 edit controller with a
+bounded normalized descriptor catalog. Native editor requests are deliberately
+fail-closed: `DescribeEditor` reports no editor and `EditorOpen`/`EditorClose`
+return `editorUnavailable` until an authenticated desktop shell provides an
+owner HWND. Those responses do not stop processing, and generic parameter
+control remains available.
