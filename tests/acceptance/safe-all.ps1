@@ -26,10 +26,11 @@ foreach ($step in $steps) {
     # Invoke checked-in scripts in this runner so their cleanup/final status
     # remains attached to the acceptance process. Nested PowerShell runners
     # can outlive the parent and hide a failed or incomplete terminal result.
+    # Do not inspect LASTEXITCODE here: acceptance steps may intentionally run
+    # negative child-process cases and leave that sentinel nonzero after
+    # successfully validating the expected rejection. Each step owns its
+    # native-command checks and throws on an actual failure.
     & $step.Script
-    if ($LASTEXITCODE -ne 0) {
-        throw "$($step.Name) failed with exit code $LASTEXITCODE"
-    }
 }
 
 Write-Output 'Safe acceptance chain passed.'
