@@ -129,6 +129,16 @@ release completion.
   does not close managed-driver, physical-latency, signing, or native-shell
   gates.
 
+- Extended the authorized native signal-path evidence on 2026-09-09 using the
+  existing VB-Audio endpoints: event-driven capture/render passed with 24,000
+  capture and 28,800 render frames; native digital tone loopback captured
+  67,438 nonzero payload bytes; and bounded impulse correlation detected 99 of
+  100 impulses with zero p95 spacing error and an estimated 50.19 ms onset.
+  Each run stopped/reset/released its streams, removed temporary files, and
+  observed unchanged media-device state. The onset estimate is not physical
+  acoustic latency evidence; managed-driver, signing, and native-shell gates
+  remain open.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI
