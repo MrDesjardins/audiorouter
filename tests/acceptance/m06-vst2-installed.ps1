@@ -16,13 +16,18 @@ Write-Output "Running installed VST2 worker acceptance: $PluginPath"
 Write-Output "SHA-256: $hash"
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
+$previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
 try {
     $env:AUDIOROUTER_VST2_FIXTURE = $PluginPath
-    & cargo test -p audiorouter-plugin-host --test worker_process `
-        --features test-fixtures --locked -- `
-        --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
-    if ($LASTEXITCODE -ne 0) {
-        throw "Installed VST2 worker acceptance failed with exit code $LASTEXITCODE"
+    foreach ($sampleRate in @(44100, 48000, 96000)) {
+        $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
+        Write-Output "Running installed VST2 processing acceptance at ${sampleRate} Hz"
+        & cargo test -p audiorouter-plugin-host --test worker_process `
+            --features test-fixtures --locked -- `
+            --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
+        if ($LASTEXITCODE -ne 0) {
+            throw "Installed VST2 worker acceptance failed at ${sampleRate} Hz with exit code $LASTEXITCODE"
+        }
     }
     & cargo test -p audiorouter-plugin-host --test worker_process `
         --features test-fixtures --locked -- `
@@ -42,6 +47,11 @@ try {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue
     } else {
         $env:AUDIOROUTER_VST2_FIXTURE = $previousFixture
+    }
+    if ($null -eq $previousSampleRate) {
+        Remove-Item Env:AUDIOROUTER_VST2_SAMPLE_RATE -ErrorAction SilentlyContinue
+    } else {
+        $env:AUDIOROUTER_VST2_SAMPLE_RATE = $previousSampleRate
     }
 }
 
