@@ -59,6 +59,14 @@ release completion.
   renderer still needs to consume this contract; native callback and release
   gates remain separate.
 
+- Completed the first UI consumer on 2026-09-09. The selected-node processor
+  catalog now renders a backend-derived logarithmic 20 Hz–20 kHz response SVG
+  for parametric EQ, with loading, disconnected, and failure-safe states. It
+  translates the existing eight-band/legacy band-0 draft fields into the typed
+  response request and never computes filter coefficients in TypeScript. UI
+  typecheck, 97 tests, and a disposable production build passed; the locked
+  existing `ui/dist` output was not changed.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI
