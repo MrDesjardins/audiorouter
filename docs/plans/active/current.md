@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at checkpoint `1504700b`; later
+The latest clean full M00-M08 acceptance passed at checkpoint `6d8e6ad2`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -75,6 +75,15 @@ release completion.
   the catalog discloses the 5 ms default as 240 samples at 48 kHz. Focused DSP
   and engine tests cover ceiling, finite repair, latency, and reset behavior.
   True-peak protection remains explicitly unsupported.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `6d8e6ad2` on 2026-09-09. M00 toolchain/native format inventory
+  and disposable SysVAD, M01, M04 (30 DSP/30 recording tests), M05 UI,
+  M06 VST3/VST2, M07, unsigned M08 preparation, traceability, and
+  documentation all passed. Temporary outputs were cleaned; driver
+  installation/loading, signing-mode changes, plugin/startup registration,
+  audio streams, and persistent machine audio configuration remained out of
+  scope.
 
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor

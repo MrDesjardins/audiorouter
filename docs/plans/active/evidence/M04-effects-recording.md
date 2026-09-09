@@ -1,5 +1,12 @@
 # M04 effects and recording evidence
 
+## 2026-09-09 limiter requalification
+
+The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30
+DSP tests and 30 recording tests, including the stateful limiter's bounded
+lookahead/release regression; no audio device or persistent machine
+configuration was changed.
+
 ## 2026-09-06 — Named conservative voice presets
 
 Added `VoiceChainPresetId` and `voice_chain_preset` to the DSP boundary. The
