@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `63f5cc3a` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `2844d5f4` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -73,6 +73,16 @@ release completion.
   integer-Hz negotiated contract, in addition to the 8–192 kHz range. Focused
   VST2 tests, strict Clippy, formatting, and diff checks pass; no plugin or
   machine configuration changed.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `2844d5f4` on 2026-09-09 after the VST2 ABI hardening: VS2026 /
+  MSVC / SDK / WDK discovery, read-only 31-endpoint inventory, disposable
+  pinned SysVAD x64 compile/package/API/signability, M01/M04/M05, VST3 SDK and
+  native worker paths, modern/legacy/fault VST2 fixtures, M07, unsigned M08
+  preparation, 159 traceability mappings, and documentation all passed.
+  Temporary outputs were cleaned; no driver installation/loading,
+  signing-mode change, plugin/startup registration, audio stream, or persistent
+  machine audio configuration occurred.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `2844d5f4` on 2026-09-09 after the VST2 ABI hardening: VS2026 /
