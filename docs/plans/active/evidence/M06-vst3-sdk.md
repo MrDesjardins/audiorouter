@@ -1441,6 +1441,11 @@ That focused regression also supplies invalid-layout evidence: a native output
 channel with a frame count different from the input is rejected before the
 plugin callback is invoked.
 
+`WorkerFailureDiagnostic` now also reports whether the latest failure was an
+immediate worker fault or a heartbeat timeout. Focused supervisor regressions
+cover both categories while retaining the verified plugin identity and
+quarantine count.
+
 The complete locked workspace regression then passed: workspace tests and
 doc-tests, strict Clippy, formatting, diff checks, and documentation
 validation. The VST2-specific package suite passed 54 unit tests and 20

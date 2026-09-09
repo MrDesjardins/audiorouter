@@ -1051,12 +1051,19 @@ pub enum WorkerStartError {
     AlreadyRunning,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerFailureReason {
+    Immediate,
+    HeartbeatTimeout,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkerSupervisor {
     state: WorkerState,
     last_heartbeat: Option<Instant>,
     failures: FailureLedger,
     identity: Option<Box<PluginIdentity>>,
+    last_failure: Option<WorkerFailureReason>,
 }
 
 /// Stable per-binary failure context exposed to the owning control plane.
@@ -1068,6 +1075,7 @@ pub struct WorkerFailureDiagnostic {
     pub identity: PluginIdentity,
     pub failure_count: u32,
     pub quarantined: bool,
+    pub last_failure: Option<WorkerFailureReason>,
 }
 
 impl WorkerSupervisor {
@@ -1077,6 +1085,7 @@ impl WorkerSupervisor {
             last_heartbeat: None,
             failures: FailureLedger::new(),
             identity: None,
+            last_failure: None,
         }
     }
 
@@ -1096,6 +1105,7 @@ impl WorkerSupervisor {
                 identity,
                 failure_count: self.failures.failures(),
                 quarantined: self.failures.quarantined(),
+                last_failure: self.last_failure,
             })
     }
 
@@ -1150,6 +1160,7 @@ impl WorkerSupervisor {
     pub fn record_failure(&mut self, now: Instant) -> WorkerState {
         if self.state == WorkerState::Running {
             self.failures.record_failure_at(now);
+            self.last_failure = Some(WorkerFailureReason::Immediate);
             self.state = if self.failures.quarantined() {
                 WorkerState::Quarantined
             } else {
@@ -1167,6 +1178,7 @@ impl WorkerSupervisor {
                 .is_some_and(|last| now.saturating_duration_since(last) > WORKER_HEARTBEAT_TIMEOUT)
         {
             self.failures.record_failure_at(now);
+            self.last_failure = Some(WorkerFailureReason::HeartbeatTimeout);
             self.state = if self.failures.quarantined() {
                 WorkerState::Quarantined
             } else {
@@ -4083,6 +4095,10 @@ mod tests {
             supervisor.poll(now + WORKER_HEARTBEAT_TIMEOUT + Duration::from_millis(1)),
             WorkerState::Failed
         );
+        assert_eq!(
+            supervisor.failure_diagnostic().unwrap().last_failure,
+            Some(WorkerFailureReason::HeartbeatTimeout)
+        );
         assert!(!supervisor.heartbeat(now));
         supervisor.deliberate_retry();
         assert_eq!(supervisor.state(), WorkerState::Stopped);
@@ -4191,6 +4207,10 @@ mod tests {
         assert_eq!(diagnostic.identity, identity);
         assert_eq!(diagnostic.failure_count, 1);
         assert!(!diagnostic.quarantined);
+        assert_eq!(
+            diagnostic.last_failure,
+            Some(WorkerFailureReason::Immediate)
+        );
     }
 
     #[test]

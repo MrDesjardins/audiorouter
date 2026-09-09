@@ -78,6 +78,11 @@ check remains as defense in depth before framing.
 The same boundary regression verifies a mismatched output frame layout is
 rejected as `InvalidPath` before the native process callback is entered.
 
+Per-binary worker diagnostics now retain a stable last-failure category
+(`Immediate` or `HeartbeatTimeout`) alongside verified identity, count, and
+quarantine state. Regressions cover both categories without exposing paths or
+audio data.
+
 Added `tests/acceptance/m06-vst2-reaplugs.ps1` to rerun every ignored local
 VST2 DLL independently through the verified worker test. It requires Windows,
 restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value, and changes no
