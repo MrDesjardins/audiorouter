@@ -1754,3 +1754,12 @@ that the expired-quantum path remains a bounded worker failure. The
 feature-enabled worker-process suite passed 22 tests with six expected
 fixture-dependent tests ignored; no realtime callback or machine audio path
 was used.
+
+The plugin-host API now exposes a fixture-gated `WorkerProcess` multi-bus
+client. It launches the separately negotiated bus worker, validates the exact
+`HelloBuses` layout, exchanges a complete `ProcessBuses` quantum, validates
+the `ProcessedBuses` output, and performs bounded shutdown. A Windows
+feature-enabled process regression passed 23 tests with six expected
+fixture-dependent tests ignored; ordinary single-stream constructors remain
+unchanged. This is a production-shaped process-owner contract, not yet the
+production VST3 plugin worker or realtime scheduling path.

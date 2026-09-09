@@ -231,6 +231,27 @@ fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn typed_multi_bus_worker_process_client_round_trips_buses() {
+    let hash = "b".repeat(64);
+    let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    let mut worker = WorkerProcess::spawn_multi_bus_fixture(fixture_worker_path(), &hash, &layout)
+        .expect("spawn typed multi-bus worker client");
+    let deadline = worker_clock_tick().saturating_add(10_000);
+    let frames = layout
+        .input_frames(vec![
+            WorkerFrame::new(11, deadline, 2, vec![0.1, 0.2]).unwrap(),
+            WorkerFrame::new(11, deadline, 1, vec![0.3]).unwrap(),
+        ])
+        .unwrap();
+    let processed = worker
+        .process_buses(frames.clone(), Vec::new())
+        .expect("round trip typed multi-bus quantum");
+    assert_eq!(processed.frames(), frames.frames());
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn disposable_worker_rejects_invalid_sample_rate_before_spawn() {
     for sample_rate_hz in [MIN_WORKER_SAMPLE_RATE_HZ - 1, MAX_WORKER_SAMPLE_RATE_HZ + 1] {
         assert!(matches!(

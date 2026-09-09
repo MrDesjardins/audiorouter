@@ -2299,6 +2299,7 @@ pub struct WorkerProcess {
     reader: Receiver<Result<WorkerMessage, WorkerMessageError>>,
     channels: u16,
     shared: Option<SharedAudioTransport>,
+    bus_layout: Option<WorkerAudioBusLayout>,
 }
 
 /// A worker process coupled to the bounded lifecycle policy. Successful
@@ -2941,6 +2942,7 @@ impl WorkerProcess {
             None,
             None,
             None,
+            None,
         )
     }
 
@@ -2976,6 +2978,7 @@ impl WorkerProcess {
             None,
             None,
             Some(plugin_path.as_ref()),
+            None,
         )
     }
 
@@ -3027,6 +3030,28 @@ impl WorkerProcess {
             None,
             Some(mode),
             None,
+            None,
+        )
+    }
+
+    /// Spawn the separately negotiated multi-bus protocol fixture. This is
+    /// intentionally fixture-gated until a production worker can load a
+    /// rights-cleared effect with a genuine auxiliary-bus layout.
+    #[cfg(feature = "test-fixtures")]
+    pub fn spawn_multi_bus_fixture(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        layout: &WorkerAudioBusLayout,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            layout.input_buses().first().copied().unwrap_or(0),
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            None,
+            None,
+            None,
+            Some(layout),
         )
     }
 
@@ -3058,6 +3083,7 @@ impl WorkerProcess {
             channels,
             sample_rate_hz,
             Some(transport),
+            None,
             None,
             None,
         )
@@ -3098,6 +3124,7 @@ impl WorkerProcess {
             Some(transport),
             None,
             Some(plugin_path.as_ref()),
+            None,
         )
     }
 
@@ -3114,6 +3141,10 @@ impl WorkerProcess {
         ))
     }
 
+    // The arguments are deliberately kept explicit because each optional
+    // launch capability is independently constrained and forwarded to the
+    // worker; this private constructor is not part of the public API.
+    #[allow(clippy::too_many_arguments)]
     fn spawn_inner(
         executable: impl AsRef<Path>,
         plugin_sha256: &str,
@@ -3122,6 +3153,7 @@ impl WorkerProcess {
         mut shared: Option<SharedAudioTransport>,
         fixture_mode: Option<&str>,
         plugin_path: Option<&Path>,
+        bus_layout: Option<&WorkerAudioBusLayout>,
     ) -> Result<Self, WorkerProcessError> {
         let executable =
             validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
@@ -3149,6 +3181,27 @@ impl WorkerProcess {
         ]);
         if let Some(plugin_path) = plugin_path {
             command.args(["--plugin-path", &plugin_path.to_string_lossy()]);
+        }
+        let input_buses = bus_layout.map(|layout| {
+            layout
+                .input_buses()
+                .iter()
+                .map(u16::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        });
+        let output_buses = bus_layout.map(|layout| {
+            layout
+                .output_buses()
+                .iter()
+                .map(u16::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        });
+        if let (Some(input_buses), Some(output_buses)) =
+            (input_buses.as_deref(), output_buses.as_deref())
+        {
+            command.args(["--input-buses", input_buses, "--output-buses", output_buses]);
         }
         if let Some(mode) = fixture_mode {
             command.args(["--fixture-mode", mode]);
@@ -3206,14 +3259,28 @@ impl WorkerProcess {
             reader,
             channels,
             shared: shared.take(),
+            bus_layout: bus_layout.cloned(),
         };
         let hello = process.read().map_err(WorkerProcessError::Message)?;
-        match hello {
-            WorkerMessage::Hello {
-                protocol_version,
-                plugin_sha256: actual,
-                channels: actual_channels,
-            } if protocol_version == WORKER_PROTOCOL_VERSION
+        match (process.bus_layout.as_ref(), hello) {
+            (
+                Some(expected),
+                WorkerMessage::HelloBuses {
+                    protocol_version,
+                    plugin_sha256: actual,
+                    layout,
+                },
+            ) if protocol_version == WORKER_PROTOCOL_VERSION
+                && actual == plugin_sha256
+                && layout == *expected => {}
+            (
+                None,
+                WorkerMessage::Hello {
+                    protocol_version,
+                    plugin_sha256: actual,
+                    channels: actual_channels,
+                },
+            ) if protocol_version == WORKER_PROTOCOL_VERSION
                 && actual == plugin_sha256
                 && actual_channels == channels => {}
             _ => {
@@ -3414,6 +3481,43 @@ impl WorkerProcess {
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected process response".into(),
+            )),
+        }
+    }
+
+    /// Exchange one complete multi-bus quantum with the fixture worker. The
+    /// caller owns the frame set and receives validated output frames; a
+    /// single-stream worker cannot enter this method accidentally.
+    #[cfg(feature = "test-fixtures")]
+    pub fn process_buses(
+        &mut self,
+        frames: WorkerAudioBusFrames,
+        parameters: Vec<ParameterEvent>,
+    ) -> Result<WorkerAudioBusFrames, WorkerProcessError> {
+        let layout = self.bus_layout.clone().ok_or_else(|| {
+            WorkerProcessError::Protocol("multi-bus transport was not configured".into())
+        })?;
+        let inputs = layout
+            .input_frames(frames.frames().to_vec())
+            .map_err(|error| {
+                WorkerProcessError::Protocol(format!("input buses rejected: {error:?}"))
+            })?;
+        self.write(&WorkerMessage::ProcessBuses {
+            layout: layout.clone(),
+            frames: inputs.frames().to_vec(),
+            parameters,
+        })
+        .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::ProcessedBuses {
+                layout: actual_layout,
+                frames,
+            } if actual_layout == layout => layout.output_frames(frames).map_err(|error| {
+                WorkerProcessError::Protocol(format!("output buses rejected: {error:?}"))
+            }),
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected multi-bus process response".into(),
             )),
         }
     }
