@@ -83,6 +83,10 @@ Per-binary worker diagnostics now retain a stable last-failure category
 quarantine state. Regressions cover both categories without exposing paths or
 audio data.
 
+`SupervisedWorkerProcess` now exposes that bounded diagnostic snapshot to its
+owning control plane, so recovery code can report the verified binary and
+failure category without consuming or reconstructing process internals.
+
 Added `tests/acceptance/m06-vst2-reaplugs.ps1` to rerun every ignored local
 VST2 DLL independently through the verified worker test. It requires Windows,
 restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value, and changes no

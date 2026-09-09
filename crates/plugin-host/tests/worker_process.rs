@@ -720,6 +720,10 @@ fn supervised_worker_fails_closed_after_heartbeat_timeout() {
         ),
         audiorouter_plugin_host::WorkerState::Failed
     );
+    assert_eq!(
+        worker.failure_diagnostic().unwrap().last_failure,
+        Some(audiorouter_plugin_host::WorkerFailureReason::HeartbeatTimeout)
+    );
     let frame =
         WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 1, vec![0.5]).unwrap();
     let error = worker

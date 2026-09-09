@@ -1446,6 +1446,10 @@ immediate worker fault or a heartbeat timeout. Focused supervisor regressions
 cover both categories while retaining the verified plugin identity and
 quarantine count.
 
+The supervised wrapper now forwards this diagnostic snapshot directly to its
+owner, and the process-level heartbeat regression verifies the timeout reason
+through that public boundary.
+
 The complete locked workspace regression then passed: workspace tests and
 doc-tests, strict Clippy, formatting, diff checks, and documentation
 validation. The VST2-specific package suite passed 54 unit tests and 20

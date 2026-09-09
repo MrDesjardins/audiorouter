@@ -2221,6 +2221,13 @@ impl SupervisedWorkerProcess {
         self.process.shutdown()
     }
 
+    /// Return a bounded, per-binary diagnostic snapshot for the owning
+    /// control plane without exposing worker audio or retaining process paths
+    /// beyond the verified identity already held by the supervisor.
+    pub fn failure_diagnostic(&self) -> Option<WorkerFailureDiagnostic> {
+        self.supervisor.failure_diagnostic()
+    }
+
     pub fn shutdown_with_timeout(
         self,
         timeout: Duration,
