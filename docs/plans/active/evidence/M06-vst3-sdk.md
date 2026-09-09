@@ -2103,8 +2103,10 @@ open.
 The first attempt exposed that the native worker had no state-message branch:
 the Rust client correctly sent `StateSave`, while the worker treated it as an
 invalid process request and closed its pipe. The fix adds a bounded local
-`IBStream`, component `getState`/`setState` calls, CNG SHA-256 calculation, and
-`StateSave`/`StateRestore` JSON framing. The corrected native M06 acceptance
+`IBStream`, component and edit-controller `getState`/`setState` calls, a
+versioned envelope for both streams, CNG SHA-256 calculation, and
+`StateSave`/`StateRestore` JSON framing. Component-only assets remain accepted
+for compatibility. The corrected native M06 acceptance
 passed AGain state restoration across replacement; the generated executable and
 object were removed afterward. This is worker-process evidence only, not
 realtime callback or physical-latency qualification.

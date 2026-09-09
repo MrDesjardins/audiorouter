@@ -4,6 +4,7 @@
 #include <bcrypt.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -587,12 +588,23 @@ public:
     }
 
     std::vector<uint8_t> save_state() {
-        StateStream stream;
-        require_result("VST3 getState", component_->getState(&stream));
-        const auto& state = stream.bytes();
-        if (state.empty() || state.size() > kMaxStateBytes) {
-            throw protocol_error("VST3 state is empty or exceeds the bounded contract");
+        StateStream component_stream;
+        StateStream controller_stream;
+        require_result("VST3 component getState", component_->getState(&component_stream));
+        require_result("VST3 controller getState", controller_->getState(&controller_stream));
+        const auto& component_state = component_stream.bytes();
+        const auto& controller_state = controller_stream.bytes();
+        if (component_state.size() > UINT32_MAX || controller_state.size() > UINT32_MAX ||
+            component_state.size() + controller_state.size() + 16 > kMaxStateBytes) {
+            throw protocol_error("VST3 state exceeds the bounded contract");
         }
+        std::vector<uint8_t> state;
+        state.reserve(16 + component_state.size() + controller_state.size());
+        state.insert(state.end(), {'A', 'R', 'S', 'T', '1', 0, 0, 0});
+        append_u32(state, static_cast<uint32_t>(component_state.size()));
+        append_u32(state, static_cast<uint32_t>(controller_state.size()));
+        state.insert(state.end(), component_state.begin(), component_state.end());
+        state.insert(state.end(), controller_state.begin(), controller_state.end());
         return state;
     }
 
@@ -600,9 +612,28 @@ public:
         if (bytes.empty() || bytes.size() > kMaxStateBytes) {
             throw protocol_error("VST3 state is empty or exceeds the bounded contract");
         }
-        auto copy = bytes;
-        StateStream stream(copy.data(), copy.size());
-        require_result("VST3 setState", component_->setState(&stream));
+        std::vector<uint8_t> component_state;
+        std::vector<uint8_t> controller_state;
+        if (bytes.size() >= 16 && std::equal(bytes.begin(), bytes.begin() + 8,
+                                             std::array<uint8_t, 8>{'A', 'R', 'S', 'T', '1', 0, 0, 0}.begin())) {
+            const auto component_size = read_u32(bytes, 8);
+            const auto controller_size = read_u32(bytes, 12);
+            if (component_size > kMaxStateBytes || controller_size > kMaxStateBytes ||
+                static_cast<std::size_t>(component_size) + controller_size + 16 != bytes.size()) {
+                throw protocol_error("VST3 state envelope is malformed");
+            }
+            component_state.assign(bytes.begin() + 16, bytes.begin() + 16 + component_size);
+            controller_state.assign(bytes.begin() + 16 + component_size, bytes.end());
+        } else {
+            component_state = bytes;
+        }
+        if (component_state.empty()) throw protocol_error("VST3 component state is empty");
+        StateStream component_stream(component_state.data(), component_state.size());
+        require_result("VST3 component setState", component_->setState(&component_stream));
+        if (!controller_state.empty()) {
+            StateStream controller_stream(controller_state.data(), controller_state.size());
+            require_result("VST3 controller setState", controller_->setState(&controller_stream));
+        }
     }
 
     std::vector<float> process(const std::vector<float>& samples, uint16_t channels,
@@ -693,6 +724,20 @@ public:
     }
 
 private:
+    static void append_u32(std::vector<uint8_t>& output, uint32_t value) {
+        output.push_back(static_cast<uint8_t>(value & 0xff));
+        output.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+        output.push_back(static_cast<uint8_t>((value >> 16) & 0xff));
+        output.push_back(static_cast<uint8_t>((value >> 24) & 0xff));
+    }
+
+    static uint32_t read_u32(const std::vector<uint8_t>& input, std::size_t offset) {
+        return static_cast<uint32_t>(input[offset]) |
+               (static_cast<uint32_t>(input[offset + 1]) << 8) |
+               (static_cast<uint32_t>(input[offset + 2]) << 16) |
+               (static_cast<uint32_t>(input[offset + 3]) << 24);
+    }
+
     void process_segment(const std::vector<std::vector<float>>& input,
                          std::vector<std::vector<float>>& output, uint16_t channels,
                          std::size_t start, std::size_t end,

@@ -58,6 +58,12 @@ is implemented, but rights/editor/release qualification remains open.
   checks. No plugin registration, audio stream, or machine configuration was
   used.
 
+- Extended the native state asset on 2026-09-09 to preserve both VST3 component
+  and edit-controller streams in a bounded worker-owned envelope, while
+  retaining component-only restore compatibility. AGain native acceptance,
+  asynchronous/multi-bus coverage, strict Clippy, formatting, and docs checks
+  passed; no audio device or machine configuration was accessed.
+
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,
