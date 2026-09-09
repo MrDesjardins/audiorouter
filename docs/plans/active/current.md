@@ -796,6 +796,19 @@ release completion.
   qualification while retaining production driver, signing, installer,
   shell/HWND, manual accessibility, and independent-vendor blockers.
 
+- Rechecked the explicit differing-rate M02 route on 2026-09-09 using the
+  available 48 kHz stereo capture and 96 kHz eight-channel render endpoints.
+  The adapter rejected the route at its intentional mono/stereo frame boundary
+  with `adapter_route_error=audio frame size was invalid`; the route script
+  cleaned up successfully. Inventory also shows the only 96 kHz mono capture
+  candidate failing initialization with `E_INVALIDARG`. This is reproducible
+  endpoint-capability evidence, not a product failure or a passed resampler
+  gate; a valid differing-rate mono/stereo pair remains required.
+- Next safe task: continue with physical-latency or other independently
+  observable gates while retaining the differing-rate, production driver,
+  signing, installer, shell/HWND, accessibility, and independent-vendor
+  blockers.
+
 - Completed the API reference parity pass on 2026-09-09: every documented
   mutating recorder, startup, plugin-retry, virtual-device, import, graph,
   session-lifecycle, and recording operation now states its idempotency-key
