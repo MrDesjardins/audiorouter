@@ -51,6 +51,14 @@ release completion.
   pass. A backend-derived UI curve contract is still required before the UI
   can render response data without duplicating DSP math.
 
+- Added `processors.response` on 2026-09-09 as the backend-derived UI curve
+  transport. It accepts bounded sample-rate, eight-band, and 256-frequency
+  inputs and evaluates the shared DSP coefficient path without touching graph,
+  audio, plugin, or machine state. Control regression coverage confirms the
+  response shape, a peaking response, and empty-frequency rejection. The UI
+  renderer still needs to consume this contract; native callback and release
+  gates remain separate.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI

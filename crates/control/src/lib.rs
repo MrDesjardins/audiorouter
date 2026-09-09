@@ -41,6 +41,8 @@ const MAX_GRAPH_AFFECTED_DESTINATIONS: usize = audiorouter_domain::MAX_NODES_PER
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
+const MAX_RESPONSE_BANDS: usize = 8;
+const MAX_RESPONSE_FREQUENCIES: usize = 256;
 const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 /// Maximum number of distinct plugin scan roots retained for `plugins.list`.
 const MAX_PLUGIN_INVENTORY_ROOTS: usize = 64;
@@ -285,6 +287,7 @@ fn method_description(name: &str) -> &'static str {
         "nodes.describe" => "Describe node types, availability, and realtime cost.",
         "presets.list" => "List explainable built-in processing presets.",
         "processors.list" => "List built-in DSP processor metadata and availability.",
+        "processors.response" => "Evaluate a bounded parametric-EQ magnitude response using the DSP coefficient path.",
         "sessions.get" => "Return one session resource by opaque identifier.",
         "sessions.export" => "Export one persisted canonical session document without changing state.",
         "sessions.importPlan" => "Validate a stopped session import without persisting it.",
@@ -600,6 +603,22 @@ fn method_input_schema(name: &str) -> Value {
                 }
             }),
             &["planId", "baseRevision", "idempotencyKey"],
+        ),
+        "processors.response" => object_schema(
+            json!({
+                "sampleRateHz": { "type": "number", "minimum": 8000, "maximum": 192000 },
+                "bands": { "type": "array", "maxItems": MAX_RESPONSE_BANDS, "items": {
+                    "type": "object", "properties": {
+                        "enabled": { "type": "boolean" },
+                        "type": { "enum": ["peaking", "lowShelf", "highShelf", "lowPass", "highPass", "notch"] },
+                        "frequencyHz": { "type": "number", "minimum": 20, "maximum": 20000 },
+                        "q": { "type": "number", "minimum": 0.1, "maximum": 20 },
+                        "gainDb": { "type": "number", "minimum": -24, "maximum": 24 }
+                    }, "required": ["type", "frequencyHz", "q", "gainDb"], "additionalProperties": false
+                }},
+                "frequenciesHz": { "type": "array", "minItems": 1, "maxItems": MAX_RESPONSE_FREQUENCIES, "items": { "type": "number", "minimum": 1, "maximum": 96000 } }
+            }),
+            &["sampleRateHz", "bands", "frequenciesHz"],
         ),
         _ => object_schema(json!({}), &[]),
     }
@@ -1281,6 +1300,13 @@ fn method_output_schema(name: &str) -> Value {
             "type": "array",
             "maxItems": MAX_PROCESSOR_CATALOG_ITEMS,
             "items": processor_item_schema()
+        }),
+        "processors.response" => json!({
+            "type": "object",
+            "properties": {
+                "frequenciesHz": { "type": "array", "minItems": 1, "maxItems": MAX_RESPONSE_FREQUENCIES, "items": { "type": "number" } },
+                "magnitudeDb": { "type": "array", "minItems": 1, "maxItems": MAX_RESPONSE_FREQUENCIES, "items": { "type": "number" } }
+            }, "required": ["frequenciesHz", "magnitudeDb"], "additionalProperties": false
         }),
         "clients.list" => json!({
             "type": "array",
@@ -3463,6 +3489,7 @@ impl ControlPlane {
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
                     "presets.list" => Ok(self.describe()["presets"].clone()),
                     "processors.list" => Ok(self.describe()["processors"].clone()),
+                    "processors.response" => self.dispatch_processors_response(request.params),
                     "sessions.get" => self.dispatch_session_get(request.params),
                     "sessions.export" => self.dispatch_session_export(request.params),
                     "sessions.importPlan" => self.dispatch_session_import_plan(request.params),
@@ -5560,6 +5587,88 @@ impl ControlPlane {
         self.application_snapshot = Some((Instant::now(), snapshot.clone()));
         Ok(snapshot)
     }
+
+    fn dispatch_processors_response(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("response parameters are required".into())
+        })?;
+        let sample_rate = params["sampleRateHz"]
+            .as_f64()
+            .ok_or_else(|| ControlError::InvalidRequest("sampleRateHz is required".into()))?
+            as f32;
+        let frequencies = params["frequenciesHz"]
+            .as_array()
+            .ok_or_else(|| ControlError::InvalidRequest("frequenciesHz is required".into()))?;
+        if frequencies.is_empty() || frequencies.len() > MAX_RESPONSE_FREQUENCIES {
+            return Err(ControlError::InvalidRequest(
+                "frequenciesHz count is outside the bounded response limit".into(),
+            ));
+        }
+        let mut bands = [None; 8];
+        let band_values = params["bands"]
+            .as_array()
+            .ok_or_else(|| ControlError::InvalidRequest("bands is required".into()))?;
+        if band_values.len() > MAX_RESPONSE_BANDS {
+            return Err(ControlError::InvalidRequest(
+                "too many response bands".into(),
+            ));
+        }
+        for (index, band) in band_values.iter().enumerate() {
+            if band.get("enabled").and_then(Value::as_bool) == Some(false) {
+                continue;
+            }
+            let kind = match band["type"].as_str() {
+                Some("peaking") => audiorouter_dsp::FilterKind::Peaking,
+                Some("lowShelf") => audiorouter_dsp::FilterKind::LowShelf,
+                Some("highShelf") => audiorouter_dsp::FilterKind::HighShelf,
+                Some("lowPass") => audiorouter_dsp::FilterKind::LowPass,
+                Some("highPass") => audiorouter_dsp::FilterKind::HighPass,
+                Some("notch") => audiorouter_dsp::FilterKind::Notch,
+                _ => {
+                    return Err(ControlError::InvalidRequest(format!(
+                        "invalid response band {index} type"
+                    )))
+                }
+            };
+            let number = |name: &str| {
+                band[name]
+                    .as_f64()
+                    .map(|value| value as f32)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(format!(
+                            "response band {index} {name} is required"
+                        ))
+                    })
+            };
+            bands[index] = Some(audiorouter_dsp::BiquadParams {
+                kind,
+                frequency_hz: number("frequencyHz")?,
+                q: number("q")?,
+                gain_db: number("gainDb")?,
+                sample_rate,
+            });
+        }
+        let eq = audiorouter_dsp::ParametricEq::new(bands, 1).map_err(|error| {
+            ControlError::InvalidRequest(format!("invalid response EQ: {error:?}"))
+        })?;
+        let frequencies = frequencies
+            .iter()
+            .map(|value| {
+                value.as_f64().map(|value| value as f32).ok_or_else(|| {
+                    ControlError::InvalidRequest("frequenciesHz must contain numbers".into())
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let magnitude_db = frequencies
+            .iter()
+            .map(|frequency| {
+                eq.magnitude_db_at(*frequency).map_err(|error| {
+                    ControlError::InvalidRequest(format!("invalid response frequency: {error:?}"))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(json!({ "frequenciesHz": frequencies, "magnitudeDb": magnitude_db }))
+    }
 }
 
 fn session_id_from_params(params: Option<Value>) -> Result<EntityId, ControlError> {
@@ -5748,6 +5857,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
         | "applications.list" | "nodes.types" | "nodes.describe" | "presets.list"
         | "processors.list" | "clients.list" => &[],
+        "processors.response" => &["sampleRateHz", "bands", "frequenciesHz"],
         _ => return Ok(()),
     };
     if let Some(field) = object
@@ -10087,5 +10197,29 @@ mod tests {
             params: Some(json!({"session": duplicate_candidate})),
         });
         assert!(duplicate.error.is_some());
+    }
+
+    #[test]
+    fn processors_response_uses_bounded_shared_eq_coefficients() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "processors.response".into(),
+            params: Some(json!({
+                "sampleRateHz": 48_000.0,
+                "bands": [{"enabled": true, "type": "peaking", "frequencyHz": 1000.0, "q": 1.0, "gainDb": 6.0}],
+                "frequenciesHz": [100.0, 1000.0, 10_000.0]
+            })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["frequenciesHz"], json!([100.0, 1000.0, 10000.0]));
+        assert_eq!(result["magnitudeDb"].as_array().unwrap().len(), 3);
+        assert!(result["magnitudeDb"][1].as_f64().unwrap() > 5.0);
+        let invalid = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(), id: Some(json!(2)), method: "processors.response".into(),
+            params: Some(json!({"sampleRateHz": 48_000.0, "bands": [], "frequenciesHz": []})),
+        });
+        assert!(invalid.error.is_some());
     }
 }

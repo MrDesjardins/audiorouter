@@ -691,6 +691,7 @@ export type ImplementedMethod =
   | "nodes.describe"
   | "presets.list"
   | "processors.list"
+  | "processors.response"
   | "sessions.get"
   | "sessions.export"
   | "sessions.importPlan"
@@ -764,6 +765,17 @@ export type MethodParams = {
   "nodes.describe": undefined;
   "presets.list": undefined;
   "processors.list": undefined;
+  "processors.response": {
+    sampleRateHz: number;
+    bands: Array<{
+      enabled?: boolean;
+      type: "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "notch";
+      frequencyHz: number;
+      q: number;
+      gainDb: number;
+    }>;
+    frequenciesHz: number[];
+  };
   "sessions.get": { sessionId: EntityId };
   "sessions.export": { sessionId: EntityId };
   "sessions.importPlan": { session: Session };
@@ -843,6 +855,7 @@ export type MethodResult = {
   "nodes.describe": DiscoveryDocument["nodeTypes"];
   "presets.list": DiscoveryDocument["presets"];
   "processors.list": DiscoveryDocument["processors"];
+  "processors.response": { frequenciesHz: number[]; magnitudeDb: number[] };
   "sessions.get": Session;
   "sessions.export": Session;
   "sessions.importPlan": { planId: EntityId; expiresInMs: number; session: Session };

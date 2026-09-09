@@ -64,6 +64,7 @@ after the initial 47-method reference.
 | `nodes.describe` | `read` | read-only |
 | `presets.list` | `read` | read-only |
 | `processors.list` | `read` | read-only |
+| `processors.response` | `read` | read-only |
 | `routes.inspect` | `read` | read-only |
 | `graph.history` | `read` | read-only |
 | `graph.undoPlan` | `graphWrite` | plan-only |
@@ -127,6 +128,13 @@ the declared 1,024-sample pitch warmup and configured built-in delay at the
 48 kHz portable graph baseline.
 The UI displays these parameter types and ranges as read-only metadata; it does
 not imply that an unavailable processor can be activated.
+
+`processors.response` is a bounded, read-only EQ preview contract. It accepts a
+sample rate, up to eight enabled/disabled parametric bands, and up to 256
+frequencies, then returns one magnitude value per frequency. The calculation
+uses the same Rust biquad coefficients as the audio processor; clients must
+not duplicate coefficient math. This endpoint has no audio, graph, plugin, or
+machine-configuration side effects.
 
 The built-in preset catalog is exposed by `presets.list`. Each entry includes a
 stable numeric `version` alongside its ID, name, and explanation. It currently includes
