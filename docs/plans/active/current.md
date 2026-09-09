@@ -77,6 +77,15 @@ release completion.
   component state restoration, and processed a finite 64-frame offline block
   for `mda Ambience`. The loader created no audio device or editor and did not
   modify machine configuration; generated outputs were removed afterward.
+- Re-ran the complete elevated `tests/acceptance/safe-all.ps1` chain on
+  2026-09-09 at the current head. Toolchain discovery, native compile and
+  31-endpoint format inventory, disposable SysVAD x64 compile/package/API and
+  signability checks, M01/M04/M05, pinned VST3 SDK/validator/loader and native
+  worker, repository VST2 modern/legacy/state/fault fixtures, M07, unsigned
+  M08 artifacts, 159 traceability mappings, and documentation validation all
+  passed. The runner removed 13 run-owned temporary children. No driver was
+  installed or loaded, no plugin/startup registration occurred, and no audio
+  stream or persistent machine audio configuration changed.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
