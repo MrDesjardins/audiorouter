@@ -22,12 +22,29 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
+The active branch is currently pushed through `f43354df`; later commits after
+the last full M00-M08 run are contained worker/control-boundary and evidence
+updates. The repository remains clean, and the M07 headless acceptance has
+passed at this line without audio, driver, registration, signing, or machine
+configuration changes.
+
 Next action: qualify the first supplied rights-cleared independent x64 VST2 or
 VST3 effect through the existing contained worker matrix. If none is supplied,
 continue only with portable hardening and preserve the native-shell, production
 driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
+
+- Requalified M07 headless behavior on 2026-09-09: 29 CLI tests, 2 MCP stdio
+  interoperability tests, 99 control tests, 67 plugin-host tests, doc-tests,
+  strict all-features Clippy, M01 CLI parity, and diff checks passed. The run
+  exercised recovery, startup plans, privacy mute, recording checkpoints,
+  permissions, idempotency, paging, MCP dispatch, and persisted operations.
+  No audio device, driver, plugin registration, signing, or machine audio
+  configuration was changed.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; otherwise retain the explicit native driver, signing,
+  installer, shell/HWND, physical-latency, and independent-plugin gates.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `f6ec7a1c` on 2026-09-09. VS2026/WDK discovery and native compile,
