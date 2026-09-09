@@ -2,6 +2,12 @@
 
 Milestone ownership: M04 required built-in voice chain; M06 pitch and isolated VST3, with an explicitly gated legacy VST2 extension; M08 signal/compatibility evidence.
 
+Stateful built-in stages are prepared for the negotiated graph sample rate
+before publication. The engine's compatibility wrapper retains a 48 kHz
+default, while endpoint-aware callers use the bounded 8–192 kHz compilation
+boundary so filter, dynamics, delay, and pitch time constants are not silently
+calculated at a different rate.
+
 ## Requirements
 
 - **DSP-01 — Core controls.** Every processor shall expose typed parameters, units, defaults, valid ranges, versioned presets, reset, bypass, mute where appropriate, meters, latency, and failure behavior through the node registry/API. Built-ins are usable without external plugins. Displayed values must match effective backend values.

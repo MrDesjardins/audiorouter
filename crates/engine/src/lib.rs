@@ -7,6 +7,8 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
+pub const MIN_GRAPH_SAMPLE_RATE_HZ: u32 = 8_000;
+pub const MAX_GRAPH_SAMPLE_RATE_HZ: u32 = 192_000;
 pub const PROCESSING_QUANTUM_FRAMES: usize = 128;
 pub const MAX_CHANNELS: usize = 2;
 /// Maximum number of preallocated audio blocks owned by one queue or pool.
@@ -2004,6 +2006,7 @@ impl CallbackMetrics {
 pub enum GraphCompileError {
     InvalidGraph(Vec<audiorouter_domain::ValidationError>),
     UnsupportedTopology,
+    InvalidSampleRate,
 }
 
 /// Prepare the currently supported processing subset of a validated domain
@@ -2016,9 +2019,23 @@ pub fn compile_session(
     session: &audiorouter_domain::Session,
     generation: RuntimeGeneration,
 ) -> Result<RuntimeGraph, GraphCompileError> {
+    compile_session_at_sample_rate(session, generation, INTERNAL_SAMPLE_RATE_HZ)
+}
+
+/// Prepare a graph for the endpoint's negotiated sample rate. The rate is a
+/// construction-time property: every stateful built-in stage must be created
+/// with the same rate before the graph is published to the callback boundary.
+pub fn compile_session_at_sample_rate(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+    sample_rate_hz: u32,
+) -> Result<RuntimeGraph, GraphCompileError> {
     use audiorouter_domain::{validate_session, NodeKind};
     use std::collections::{HashMap, VecDeque};
 
+    if !(MIN_GRAPH_SAMPLE_RATE_HZ..=MAX_GRAPH_SAMPLE_RATE_HZ).contains(&sample_rate_hz) {
+        return Err(GraphCompileError::InvalidSampleRate);
+    }
     validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
     let enabled_edges = session
         .edges
@@ -2241,7 +2258,7 @@ pub fn compile_session(
                     frequency_hz,
                     q,
                     gain_db,
-                    sample_rate: 48_000.0,
+                    sample_rate: sample_rate_hz as f32,
                 };
                 let left = audiorouter_dsp::ParametricEq::new(
                     [Some(params), None, None, None, None, None, None, None],
@@ -2303,7 +2320,7 @@ pub fn compile_session(
                     release_ms,
                     knee_db: 0.0,
                     makeup_db,
-                    sample_rate: 48_000.0,
+                    sample_rate: sample_rate_hz as f32,
                 };
                 let left = audiorouter_dsp::Compressor::new(params, 1)
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
@@ -2355,7 +2372,7 @@ pub fn compile_session(
                     attack_ms,
                     hold_ms: 150.0,
                     release_ms,
-                    sample_rate: 48_000.0,
+                    sample_rate: sample_rate_hz as f32,
                 };
                 let left = audiorouter_dsp::Gate::new(params, 1)
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
@@ -2396,7 +2413,7 @@ pub fn compile_session(
                     .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
                     .map(|port| usize::from(port.channels))
                     .unwrap_or(1);
-                let left = audiorouter_dsp::DelayLine::new(1_000.0, 48_000.0, 1)
+                let left = audiorouter_dsp::DelayLine::new(1_000.0, sample_rate_hz as f32, 1)
                     .and_then(|mut delay| {
                         delay.set_delay_ms(delay_ms)?;
                         Ok(delay)
@@ -2404,7 +2421,7 @@ pub fn compile_session(
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = if input_channels == 2 {
                     Some(
-                        audiorouter_dsp::DelayLine::new(1_000.0, 48_000.0, 1)
+                        audiorouter_dsp::DelayLine::new(1_000.0, sample_rate_hz as f32, 1)
                             .and_then(|mut delay| {
                                 delay.set_delay_ms(delay_ms)?;
                                 Ok(delay)
@@ -2432,11 +2449,11 @@ pub fn compile_session(
                     .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
                     .map(|port| usize::from(port.channels))
                     .unwrap_or(1);
-                let left = audiorouter_dsp::GraphicEq::new(gains, 48_000.0, 1)
+                let left = audiorouter_dsp::GraphicEq::new(gains, sample_rate_hz as f32, 1)
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = if input_channels == 2 {
                     Some(
-                        audiorouter_dsp::GraphicEq::new(gains, 48_000.0, 1)
+                        audiorouter_dsp::GraphicEq::new(gains, sample_rate_hz as f32, 1)
                             .map_err(|_| GraphCompileError::UnsupportedTopology)?,
                     )
                 } else {
@@ -2467,7 +2484,7 @@ pub fn compile_session(
                 let params = audiorouter_dsp::PitchShiftParams {
                     semitones,
                     cents,
-                    sample_rate: 48_000.0,
+                    sample_rate: sample_rate_hz as f32,
                     channels: 1,
                     bypass: false,
                 };
@@ -2779,6 +2796,20 @@ impl RuntimeProcessor {
         generation: RuntimeGeneration,
     ) -> Result<(), GraphCompileError> {
         let graph = compile_session(session, generation)?;
+        self.publish(graph);
+        Ok(())
+    }
+
+    /// Compile and atomically activate a session for an explicitly negotiated
+    /// endpoint rate. Preparation remains off the callback thread; the
+    /// published graph owns state initialized for this exact rate.
+    pub fn activate_session_at_sample_rate(
+        &self,
+        session: &audiorouter_domain::Session,
+        generation: RuntimeGeneration,
+        sample_rate_hz: u32,
+    ) -> Result<(), GraphCompileError> {
+        let graph = compile_session_at_sample_rate(session, generation, sample_rate_hz)?;
         self.publish(graph);
         Ok(())
     }
@@ -4697,6 +4728,80 @@ mod tests {
         graph.process(&mut block);
         assert!(block.all_finite());
         assert_ne!(block.channel(0).unwrap(), before.as_slice());
+    }
+
+    #[test]
+    fn compiler_initializes_stateful_builtins_for_requested_sample_rate() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+        let mut parameters = serde_json::Map::new();
+        parameters.insert("frequencyHz".into(), serde_json::json!(10_000.0));
+        parameters.insert("q".into(), serde_json::json!(1.0));
+        parameters.insert("gainDb".into(), serde_json::json!(12.0));
+        let session = Session {
+            id: EntityId::new("sample-rate-session"),
+            name: "sample-rate-processing".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: EntityId::new("parametric-eq"),
+                kind: NodeKind::ParametricEq,
+                type_version: 1,
+                name: "Parametric EQ".into(),
+                enabled: true,
+                bypass: false,
+                parameters,
+                ports: vec![],
+            }],
+            edges: vec![],
+        };
+        let graph_44 =
+            compile_session_at_sample_rate(&session, RuntimeGeneration::new(44), 44_100).unwrap();
+        let graph_48 = compile_session_at_sample_rate(
+            &session,
+            RuntimeGeneration::new(48),
+            INTERNAL_SAMPLE_RATE_HZ,
+        )
+        .unwrap();
+        let mut block_44 = AudioBlock::new(1, 128).unwrap();
+        let mut block_48 = AudioBlock::new(1, 128).unwrap();
+        block_44.channel_mut(0).unwrap()[0] = 1.0;
+        block_48.channel_mut(0).unwrap()[0] = 1.0;
+        graph_44.process(&mut block_44);
+        graph_48.process(&mut block_48);
+        assert!(block_44.all_finite() && block_48.all_finite());
+        assert_ne!(block_44.channel(0).unwrap(), block_48.channel(0).unwrap());
+    }
+
+    #[test]
+    fn compiler_rejects_sample_rates_outside_the_bounded_graph_contract() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+        let session = Session {
+            id: EntityId::new("sample-rate-boundary"),
+            name: "sample-rate-boundary".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: EntityId::new("gain"),
+                kind: NodeKind::Gain,
+                type_version: 1,
+                name: "Gain".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![],
+            }],
+            edges: vec![],
+        };
+        for sample_rate_hz in [MIN_GRAPH_SAMPLE_RATE_HZ - 1, MAX_GRAPH_SAMPLE_RATE_HZ + 1] {
+            assert!(matches!(
+                compile_session_at_sample_rate(
+                    &session,
+                    RuntimeGeneration::new(49),
+                    sample_rate_hz
+                ),
+                Err(GraphCompileError::InvalidSampleRate)
+            ));
+        }
     }
 
     #[test]
