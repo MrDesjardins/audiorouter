@@ -516,7 +516,10 @@ fn inspect_binary_with_control(
     if architecture != PeArchitecture::X64 {
         return Err(InspectionError::UnsupportedArchitecture);
     }
-    if format == PluginFormat::Unknown && pe_export_exists(&bytes, b"VSTPluginMain") == Some(true) {
+    if format == PluginFormat::Unknown
+        && (pe_export_exists(&bytes, b"VSTPluginMain") == Some(true)
+            || pe_export_exists(&bytes, b"main") == Some(true))
+    {
         format = PluginFormat::Vst2;
     }
     let digest = Sha256::digest(&bytes);

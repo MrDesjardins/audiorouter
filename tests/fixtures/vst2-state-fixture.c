@@ -121,7 +121,11 @@ static float get_parameter(AEffect *self, int32_t index) {
     return index == 0 ? mix : 0.0f;
 }
 
+#ifdef LEGACY_VST2_MAIN
+__declspec(dllexport) AEffect *main(audio_master_callback callback) {
+#else
 __declspec(dllexport) AEffect *VSTPluginMain(audio_master_callback callback) {
+#endif
     (void)callback;
     clear_bytes(&effect, sizeof(effect));
     effect.magic = 0x56737450;

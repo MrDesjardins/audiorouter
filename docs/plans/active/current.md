@@ -18,10 +18,10 @@ the user's audio configuration and do not install drivers or alter defaults.
 
 The installed ReaPlugs effect DLLs were copied only to the ignored
 `third_party/local-test-fixtures/ReaPlugs` directory for compatibility testing.
-The scanner now identifies all six x64 binaries as `vst2` by their read-only
-PE export while retaining `unsupportedFormat` compatibility and no VST3 class
-IDs. This confirms the legacy VST2 entry-point boundary; none was loaded or
-executed. Built-in native transformation is the supported path: DSP and engine
+The scanner identifies x64 binaries as `vst2` by either established read-only
+PE export (`VSTPluginMain` or legacy `main`) while retaining `unsupportedFormat`
+compatibility and no VST3 class IDs. This confirms the legacy VST2 entry-point
+boundary; scanning itself loads no plugin code. Built-in native transformation is the supported path: DSP and engine
 revalidation passed gain/EQ, gate,
 compression, limiting, delay, pitch, metering, finite-sample repair, and
 allocation-free prepared processing.
@@ -97,6 +97,11 @@ and `tests/acceptance/m06-vst2-state-fixture.ps1`. The installed VS2026 x64
 compiler built its ignored DLL, which passed the verified worker acceptance
 with opaque VST2 program-chunk save/restore. This supplies chunk-state evidence
 without redistributing a third-party binary.
+
+The same source fixture can now be built with a legacy `main` export. The
+state-fixture acceptance compiles that ignored x64 DLL and runs the verified
+worker load/process test against it, providing runtime evidence for the
+fallback entry point without adding a third-party binary.
 
 The stronger behavioral round trip initially exposed that `effSetChunk` was
 being called with a hard-coded byte count of one. The adapter now passes the
@@ -184,8 +189,8 @@ effect/library on drop. Unsafe FFI invariants are documented.
 The loader now accepts both established VST2 export spellings,
 `VSTPluginMain` and legacy `main`, while retaining the same x64 identity,
 header-validation, and disposable-worker gates. The existing ReaPlugs matrix
-continues to use `VSTPluginMain`; a `main`-export fixture is still needed for
-runtime qualification of the fallback.
+continues to use `VSTPluginMain`; the repository-owned `main`-export fixture
+now supplies runtime fallback qualification.
 
 The worker supervisor now passes only verified x64 VST2 identities to the
 contained worker. Plugin-host tests (50), worker-process tests (13), and strict

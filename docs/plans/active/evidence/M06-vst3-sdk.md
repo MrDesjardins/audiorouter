@@ -1277,7 +1277,18 @@ The loader accepts both established VST2 export spellings: preferred
 `VSTPluginMain` and legacy `main`. The fallback uses the same ABI signature and
 does not relax x64 identity verification, header validation, worker
 containment, or cleanup. The existing ReaPlugs fixtures all use
-`VSTPluginMain`; runtime evidence for a `main`-only binary remains open.
+`VSTPluginMain`; the scanner also recognizes a `main`-only binary as VST2
+without loading it.
+
+The repository-owned acceptance builds a second ignored x64 fixture with only
+the legacy `main` export and successfully loads/processes it through the
+verified worker. This is runtime fallback evidence, not third-party
+compatibility evidence.
+
+The repository-owned fixture build now emits a second ignored DLL with only
+the legacy `main` export and runs the verified worker processing acceptance
+against it. This supplies runtime fallback evidence while preserving the same
+x64 identity and disposable-worker boundary.
 
 ## VST2 worker integration and fixture matrix (2026-09-08)
 
