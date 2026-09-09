@@ -135,6 +135,13 @@ is implemented, but rights/editor/release qualification remains open.
   tests, 30 worker-process tests, strict Clippy, formatting, and diff checks.
   Worker-thread staging is proven; native callback timing, soak, and physical
   latency remain unqualified.
+- Extended the native VST3 acceptance through `SupervisedBusWorkerLoop` on
+  2026-09-09: the real AGain `[stereo, mono]` side-chain worker now receives
+  graph-scheduled blocks and bounded normalized gain automation off the
+  callback, then publishes finite transformed output back to the scheduler.
+  The opt-in Windows acceptance passed with clean shutdown and restored its
+  environment. Native callback timing, long-run soak, and physical latency
+  remain unqualified.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain from
   clean pushed head `f9636235` on 2026-09-09 after the scheduler change. The
   installed VS2026/WDK native checks, disposable SysVAD qualification, M01,
@@ -184,10 +191,10 @@ is implemented, but rights/editor/release qualification remains open.
 - Requalified the locked all-features workspace after the latency-accounting change on 2026-09-09: all crate unit/integration tests and doc-tests passed, including engine (84), plugin-host (66), worker-process (29 plus six expected skips), control (98), domain (58), DSP (28), recording (30), storage (80), transport (19), Windows audio (33), CLI (28), and MCP interoperability (2). Formatting, strict all-features Clippy, and diff checks passed; no audio, driver, registration, signing, or machine configuration action occurred.
 - Corrected the current M06 compatibility documentation on 2026-09-09: AGain's two-input/one-output side-chain class is now described as passing the explicit offline `--multi-bus` probe, while the default single-bus probe and supervised realtime multi-bus worker remain gated. Documentation validation (51 Markdown files/163 local links) passed.
 - Requalified the available native VST2 fixtures on 2026-09-09 with `m06-vst2-reaplugs.ps1`: all six local ReaPlugs effects passed isolated worker load/process checks at 44.1, 48, and 96 kHz (18 combinations). The wrapper restored both `AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE`; no plugin registration, audio stream, or machine configuration changed. Rights/editor/release qualification remains gated.
-- Next M06/PLUG-03 task: exercise the asynchronous owner with the native VST3
-  auxiliary-bus worker and bounded late/failure recovery; retain the existing
-  VST2 single-stream worker path and fail closed until callback timing and
-  physical-latency evidence exists.
+- Next M06/PLUG-03 task: add bounded late, crash, and restart recovery around
+  the asynchronous native worker owner; retain the existing VST2 single-stream
+  worker path and fail closed until callback timing and physical-latency
+  evidence exists.
 - Requalified the guarded `tests/acceptance/safe-all.ps1` chain on 2026-09-09 at the supervised multi-bus handoff checkpoint: VS2026/WDK discovery and native compile, read-only 31-endpoint inventory, disposable pinned SysVAD x64 package/API/signability qualification, M01/M04/M05, VST3 validators and AGain auxiliary-bus probe, VST2 modern/legacy/fault fixtures, M07, unsigned M08 artifacts, 159 mappings, and documentation validation (51 Markdown files/163 local links) passed. The follow-up strict all-features and no-feature workspace Clippy checks also passed after removing test-only build warnings. No driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred.
 
 - Requalified the complete guarded M00–M08 `safe-all.ps1` chain at pushed head `4475a5d0` on 2026-09-08: VS/WDK discovery/native compile, read-only 31-endpoint inventory, disposable SysVAD x64 package/API qualification, portable milestone checks, VST3 SDK/validator, modern/legacy/fault VST2 fixtures, M07, unsigned M08 artifacts, 159 traceability mappings, and documentation validation (51 files/161 links) passed. Temporary outputs/checkouts were cleaned; no driver installation/loading, signing-mode change, plugin/startup registration, stream, or machine audio configuration occurred. Production driver/signing, installer, clean-machine, physical-latency, and manual UI gates remain open.

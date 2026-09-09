@@ -2014,6 +2014,13 @@ fixture regression passed with clean shutdown and output publication. This is
 worker-thread scheduling evidence; native callback timing, soak, and physical
 latency remain open.
 
+The same asynchronous path was then run with the native AGain side-chain
+worker. A bounded normalized gain event was delivered on the owner thread, and
+the `[stereo, mono]` input produced finite output different from the main input
+through the graph scheduler. The opt-in Windows acceptance passed and restored
+its environment. Crash/restart recovery, callback timing, soak, and physical
+latency remain open.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
 commit `eb0ad978` with this native worker acceptance included. Native
 toolchain/endpoint checks, disposable SysVAD qualification, portable/UI

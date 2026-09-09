@@ -1519,6 +1519,7 @@ pub fn stage_engine_worker_result<'a>(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerLoopError {
     ThreadStart,
+    InvalidParameters,
 }
 
 /// Owns one supervised multi-bus worker on a non-callback thread and bridges
@@ -1537,6 +1538,26 @@ impl SupervisedBusWorkerLoop {
         worker: SupervisedWorkerProcess,
         scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
     ) -> Result<Self, WorkerLoopError> {
+        Self::spawn_with_parameters(worker, scheduler, Vec::new())
+    }
+
+    /// Spawn the owner with a bounded control-plane parameter template. The
+    /// template is cloned only on the owner thread for each quantum; callback
+    /// callers still submit audio through the preallocated scheduler alone.
+    pub fn spawn_with_parameters(
+        worker: SupervisedWorkerProcess,
+        scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
+        parameters: Vec<ParameterEvent>,
+    ) -> Result<Self, WorkerLoopError> {
+        if parameters.len() > MAX_PARAMETER_EVENTS
+            || parameters.iter().any(|event| {
+                !event.normalized_value.is_finite()
+                    || !(0.0..=1.0).contains(&event.normalized_value)
+                    || event.sample_offset >= MAX_WORKER_FRAMES
+            })
+        {
+            return Err(WorkerLoopError::InvalidParameters);
+        }
         let input_layout = WorkerAudioBusLayout::new(
             &scheduler
                 .input_layout()
@@ -1568,6 +1589,7 @@ impl SupervisedBusWorkerLoop {
                     output_layout,
                     thread_stop,
                     thread_failed,
+                    parameters,
                 );
             })
             .map_err(|_| WorkerLoopError::ThreadStart)?;
@@ -1611,6 +1633,7 @@ fn run_supervised_bus_worker(
     output_layout: WorkerAudioBusLayout,
     stop: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
+    parameters: Vec<ParameterEvent>,
 ) {
     while !stop.load(Ordering::Acquire) {
         let Some(handle) = scheduler.try_take_input() else {
@@ -1649,7 +1672,8 @@ fn run_supervised_bus_worker(
             failed.store(true, Ordering::Release);
             break;
         };
-        let processed = match worker.process_buses(input_frames, Vec::new(), Instant::now()) {
+        let processed = match worker.process_buses(input_frames, parameters.clone(), Instant::now())
+        {
             Ok(processed) => processed,
             Err(_) => {
                 failed.store(true, Ordering::Release);

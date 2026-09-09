@@ -800,6 +800,91 @@ fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
+#[ignore = "requires the repository-local native VST3 worker and AGain side-chain bundle"]
+fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_FIXTURE")
+            .expect("set AUDIOROUTER_VST3_FIXTURE for native VST3 acceptance"),
+    );
+    let worker_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER")
+            .expect("set AUDIOROUTER_VST3_NATIVE_WORKER for native VST3 acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST3 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST3 fixture without loading it");
+    let worker_layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+    let scheduler = Arc::new(
+        audiorouter_engine::RuntimeBusScheduler::new(
+            1,
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            4,
+        )
+        .unwrap(),
+    );
+    let worker = SupervisedWorkerProcess::spawn_verified_native_vst3_multi_bus(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        &worker_layout,
+        Instant::now(),
+    )
+    .expect("launch native VST3 asynchronous worker");
+    let loop_owner = SupervisedBusWorkerLoop::spawn_with_parameters(
+        worker,
+        Arc::clone(&scheduler),
+        vec![ParameterEvent::new(0, 0.75, 0).unwrap()],
+    )
+    .expect("start native VST3 asynchronous owner");
+    let generation = audiorouter_engine::RuntimeGeneration::new(13);
+    let identity = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        7,
+        worker_clock_tick().saturating_add(10_000),
+        4,
+    )
+    .unwrap();
+    let mut main = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    main.channel_mut(0).unwrap().fill(0.1);
+    main.channel_mut(1).unwrap().fill(-0.1);
+    let sidechain = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
+    scheduler
+        .try_submit_inputs(generation, identity, &[&main, &sidechain])
+        .expect("submit native VST3 graph quantum");
+    for _ in 0..500 {
+        if scheduler.output_ready() != 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(!loop_owner.has_failed());
+    let mut output = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    let mut destinations = [&mut output];
+    assert_eq!(
+        scheduler
+            .try_publish_output(generation, identity, &mut destinations)
+            .expect("publish native VST3 graph output"),
+        audiorouter_engine::RuntimeBusProcessOutcome::Processed
+    );
+    assert!(output
+        .channel(0)
+        .unwrap()
+        .iter()
+        .all(|sample| sample.is_finite()));
+    assert!(output
+        .channel(0)
+        .unwrap()
+        .iter()
+        .zip([0.1; 4])
+        .any(|(actual, input)| (actual - input).abs() > 1.0e-5));
+    assert!(loop_owner.stop());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
 #[ignore = "requires the repository-owned non-finite VST2 fixture"]
 fn verified_worker_rejects_nonfinite_vst2_output() {
     let plugin_path = PathBuf::from(
