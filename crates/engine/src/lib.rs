@@ -2309,40 +2309,57 @@ pub fn histogram_upper_bound_ns<const N: usize>(
 pub struct BlockMeterSnapshot {
     pub peak_abs: f32,
     pub clipped_samples: u64,
+    pub channel_peak_abs: [f32; MAX_CHANNELS],
+    pub channel_rms: [f32; MAX_CHANNELS],
+    pub channel_clipped_samples: [u64; MAX_CHANNELS],
 }
 
 /// Lock-free peak/clipping meter for a prepared node boundary. The maximum
 /// uses the monotonic positive-f32 bit representation, so observation never
 /// takes a mutex or allocates.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct BlockMeter {
     peak_bits: std::sync::atomic::AtomicU32,
     clipped_samples: AtomicU64,
+    channel_peak_bits: [std::sync::atomic::AtomicU32; MAX_CHANNELS],
+    channel_rms_bits: [std::sync::atomic::AtomicU32; MAX_CHANNELS],
+    channel_clipped_samples: [AtomicU64; MAX_CHANNELS],
+}
+
+impl Default for BlockMeter {
+    fn default() -> Self {
+        Self {
+            peak_bits: std::sync::atomic::AtomicU32::new(0),
+            clipped_samples: AtomicU64::new(0),
+            channel_peak_bits: std::array::from_fn(|_| std::sync::atomic::AtomicU32::new(0)),
+            channel_rms_bits: std::array::from_fn(|_| std::sync::atomic::AtomicU32::new(0)),
+            channel_clipped_samples: std::array::from_fn(|_| AtomicU64::new(0)),
+        }
+    }
 }
 
 impl BlockMeter {
     pub fn observe(&self, block: &AudioBlock) {
         let peak = block.peak_abs();
-        let mut current = self.peak_bits.load(Ordering::Relaxed);
-        while peak.to_bits() > current {
-            match self.peak_bits.compare_exchange_weak(
-                current,
-                peak.to_bits(),
-                Ordering::Relaxed,
-                Ordering::Relaxed,
-            ) {
-                Ok(_) => break,
-                Err(observed) => current = observed,
+        update_atomic_peak(&self.peak_bits, peak);
+        let mut clipped = 0;
+        for channel in 0..block.channels() {
+            if let Some(channel_peak) = block.channel_peak_abs(channel) {
+                update_atomic_peak(&self.channel_peak_bits[channel], channel_peak);
             }
+            if let Some(channel_rms) = block.channel_rms(channel) {
+                self.channel_rms_bits[channel].store(channel_rms.to_bits(), Ordering::Relaxed);
+            }
+            let channel_clipped = block
+                .channel(channel)
+                .into_iter()
+                .flatten()
+                .filter(|sample| sample.is_finite() && sample.abs() > 1.0)
+                .count() as u64;
+            self.channel_clipped_samples[channel].fetch_add(channel_clipped, Ordering::Relaxed);
+            clipped += channel_clipped;
         }
-        self.clipped_samples.fetch_add(
-            block
-                .samples
-                .iter()
-                .filter(|sample| sample.abs() > 1.0)
-                .count() as u64,
-            Ordering::Relaxed,
-        );
+        self.clipped_samples.fetch_add(clipped, Ordering::Relaxed);
     }
 
     pub fn peak_abs(&self) -> f32 {
@@ -2357,12 +2374,41 @@ impl BlockMeter {
         BlockMeterSnapshot {
             peak_abs: self.peak_abs(),
             clipped_samples: self.clipped_samples(),
+            channel_peak_abs: std::array::from_fn(|channel| {
+                f32::from_bits(self.channel_peak_bits[channel].load(Ordering::Relaxed))
+            }),
+            channel_rms: std::array::from_fn(|channel| {
+                f32::from_bits(self.channel_rms_bits[channel].load(Ordering::Relaxed))
+            }),
+            channel_clipped_samples: std::array::from_fn(|channel| {
+                self.channel_clipped_samples[channel].load(Ordering::Relaxed)
+            }),
         }
     }
 
     pub fn reset(&self) {
         self.peak_bits.store(0, Ordering::Relaxed);
         self.clipped_samples.store(0, Ordering::Relaxed);
+        for channel in 0..MAX_CHANNELS {
+            self.channel_peak_bits[channel].store(0, Ordering::Relaxed);
+            self.channel_rms_bits[channel].store(0, Ordering::Relaxed);
+            self.channel_clipped_samples[channel].store(0, Ordering::Relaxed);
+        }
+    }
+}
+
+fn update_atomic_peak(target: &std::sync::atomic::AtomicU32, peak: f32) {
+    let mut current = target.load(Ordering::Relaxed);
+    while peak.to_bits() > current {
+        match target.compare_exchange_weak(
+            current,
+            peak.to_bits(),
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => break,
+            Err(observed) => current = observed,
+        }
     }
 }
 
@@ -4964,6 +5010,22 @@ mod tests {
     }
 
     #[test]
+    fn block_meter_exposes_per_channel_peak_rms_and_clipping() {
+        let meter = BlockMeter::default();
+        let mut block = AudioBlock::new(2, 2).unwrap();
+        block.channel_mut(0).unwrap().copy_from_slice(&[0.5, -0.5]);
+        block.channel_mut(1).unwrap().copy_from_slice(&[2.0, -0.25]);
+        meter.observe(&block);
+
+        let snapshot = meter.snapshot();
+        assert_eq!(snapshot.channel_peak_abs, [0.5, 2.0]);
+        assert!((snapshot.channel_rms[0] - 0.5).abs() < f32::EPSILON);
+        assert!((snapshot.channel_rms[1] - 1.4252192).abs() < 0.000001);
+        assert_eq!(snapshot.channel_clipped_samples, [0, 1]);
+        assert_eq!(snapshot.clipped_samples, 1);
+    }
+
+    #[test]
     fn non_finite_gain_is_safe_silence() {
         let mut block = AudioBlock::new(1, 2).unwrap();
         block.channel_mut(0).unwrap().fill(1.0);
@@ -5963,13 +6025,12 @@ mod tests {
         assert_eq!(graph.meter(0).unwrap().clipped_samples(), 1);
         assert_eq!(graph.meter(1).unwrap().peak_abs(), 3.0);
         assert_eq!(graph.meter(1).unwrap().clipped_samples(), 1);
-        assert_eq!(
-            graph.meter_snapshot(1),
-            Some(BlockMeterSnapshot {
-                peak_abs: 3.0,
-                clipped_samples: 1,
-            })
-        );
+        let snapshot = graph.meter_snapshot(1).unwrap();
+        assert_eq!(snapshot.peak_abs, 3.0);
+        assert_eq!(snapshot.clipped_samples, 1);
+        assert_eq!(snapshot.channel_peak_abs, [3.0, 0.0]);
+        assert!((snapshot.channel_rms[0] - 2.236068).abs() < 0.000001);
+        assert_eq!(snapshot.channel_clipped_samples, [1, 0]);
         graph.reset_meters();
         assert_eq!(graph.meter_snapshot(0).unwrap().peak_abs, 0.0);
         assert_eq!(graph.meter_snapshot(1).unwrap().clipped_samples, 0);
@@ -6051,6 +6112,9 @@ mod tests {
             Some(BlockMeterSnapshot {
                 peak_abs: 1.0,
                 clipped_samples: 0,
+                channel_peak_abs: [1.0, 0.0],
+                channel_rms: [1.0, 0.0],
+                channel_clipped_samples: [0, 0],
             })
         );
         assert_eq!(processor.meter_snapshot(1), None);

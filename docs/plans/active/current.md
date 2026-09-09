@@ -12,7 +12,8 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at checkpoint `6d8e6ad2`; later
+The latest clean full M00-M08 acceptance passed at checkpoint `6d8e6ad2`; the
+latest portable metering checkpoint is `3bbdc754`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -75,6 +76,14 @@ release completion.
   the catalog discloses the 5 ms default as 240 samples at 48 kHz. Focused DSP
   and engine tests cover ceiling, finite repair, latency, and reset behavior.
   True-peak protection remains explicitly unsupported.
+
+- Closed the portable runtime portion of DSP-07 on 2026-09-09. Prepared graph
+  meters now retain per-channel peak, RMS, and clipping counters alongside the
+  aggregate compatibility fields, with a documented zero floor for silence.
+  The callback updates fixed-size atomics only; activation reset clears all
+  channels. Engine regression coverage verifies stereo separation, RMS, and
+  clipping. Gate-state and processor-specific gain-reduction telemetry remain
+  separate follow-up API work; this does not advance native or release gates.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `6d8e6ad2` on 2026-09-09. M00 toolchain/native format inventory

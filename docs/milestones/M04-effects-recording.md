@@ -9,7 +9,7 @@ Status: portable DSP/recording foundation implemented; M03-dependent live accept
 ## Ordered implementation
 
 1. Specify DSP transfer functions, detector modes, parameter units/ranges, ramps, bypass/failure behavior, and latency in registry schemas and reference vectors.
-2. Implement graphic/parametric EQ, gate/expander, compressor/makeup gain, sample-peak limiter, delay, and useful meters/presets. Keep pitch and VST hosting for M06.
+2. Implement graphic/parametric EQ, gate/expander, compressor/makeup gain, sample-peak limiter, delay, and useful meters/presets. Prepared runtime meters expose per-channel peak, RMS, and clipping counters with a finite silence floor. Keep pitch and VST hosting for M06.
 3. Implement mixer path compensation and protected voice-sink failure propagation. Prove branch-specific processing does not alter sibling routes.
 4. Implement bounded recorder queues/workers, WAV/FLAC formats, dither/conversion, frame clocks, arming, independent control, and gap/split metadata.
 5. Implement safe naming/roots, partial-file checkpoints/recovery, file library API, metadata, preview, remove-entry, and separately authorized recycle. No audio files are uploaded or committed as incidental test artifacts.
