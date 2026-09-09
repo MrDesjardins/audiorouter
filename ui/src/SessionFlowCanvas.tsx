@@ -18,6 +18,7 @@ import { nodePortLabels, relatedNodeIds } from "./graphView";
 type SessionFlowCanvasProps = {
   session: Session;
   selectedNodeId: string;
+  selectedNodeIds?: string[];
   onSelect: (id: string) => void;
   onSelectMany?: (ids: string[]) => void;
   onConnect: (connection: Connection) => void;
@@ -31,7 +32,7 @@ function positionFor(index: number) {
   };
 }
 
-export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onSelectMany, onConnect }: SessionFlowCanvasProps) {
+export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [selectedNodeId], onSelect, onSelectMany, onConnect }: SessionFlowCanvasProps) {
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
   const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey));
   useEffect(() => { setPositions(readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey)); }, [layoutKey]);
@@ -59,7 +60,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onSelectM
     draggable: true,
     selectable: true,
     style: {
-      border: node.id === selectedNodeId ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
+      border: selectedNodeIds.includes(node.id) ? "2px solid var(--accent, #65d1b5)" : "1px solid var(--line, #40536b)",
       borderRadius: 10,
       background: "var(--panel, #162132)",
       color: "var(--text, #edf4ff)",
@@ -79,7 +80,7 @@ export function SessionFlowCanvas({ session, selectedNodeId, onSelect, onSelectM
 
   return (
     <div className="session-flow-canvas" aria-label="Signal-flow graph">
-      <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); setPositions({}); }}>Reset layout</button></div>
+      <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); setPositions({}); }}>Reset layout</button></div>
       <ReactFlow
         nodes={nodes}
         edges={edges}

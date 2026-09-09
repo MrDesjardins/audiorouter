@@ -35,6 +35,20 @@ driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
 
+- Completed UI-02 multi-selection state propagation on 2026-09-09. React Flow
+  drag selection now updates the application selection set, visibly marks every
+  selected node, reports the count through an accessible live status, and keeps
+  the primary inspector selection synchronized. Disconnected mode remains
+  presentation-only. UI typecheck, all 111 UI tests, and the production Vite
+  build (210 modules in a disposable output directory) passed. The normal
+  `ui/dist` output was locked by an existing process, so it was not overwritten;
+  the temporary build output was removed and no audio or machine configuration
+  changed.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; retain the native driver callback, signing, installer,
+  shell/HWND, physical-latency, manual accessibility, and independent-plugin
+  gates.
+
 - Requalified M07 headless behavior on 2026-09-09: 29 CLI tests, 2 MCP stdio
   interoperability tests, 99 control tests, 67 plugin-host tests, doc-tests,
   strict all-features Clippy, M01 CLI parity, and diff checks passed. The run
