@@ -53,6 +53,9 @@ Single-stream processing, finite transformed output, state save, supervised
 failure/restart, state restoration, and shutdown passed at 48 kHz. This adds
 native multi-vendor processing/state evidence; native editor qualification,
 additional mda classes, and the complete M06 acceptance gate remain open.
+The native single-stream probe now accepts an explicit bounded sample-rate
+override, allowing this same test to be repeated at 44.1, 48, and 96 kHz
+without changing the production graph or device configuration.
 
 ## Inspection and execution boundary
 

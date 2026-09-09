@@ -898,6 +898,14 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
         std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER")
             .expect("set AUDIOROUTER_VST3_NATIVE_WORKER for native VST3 acceptance"),
     );
+    let sample_rate_hz = std::env::var("AUDIOROUTER_VST3_SAMPLE_RATE")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .expect("valid AUDIOROUTER_VST3_SAMPLE_RATE")
+        })
+        .unwrap_or(48_000);
     let root = plugin_path
         .parent()
         .expect("VST3 fixture parent")
@@ -911,7 +919,7 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
         &identity,
         std::slice::from_ref(&root),
         2,
-        48_000,
+        sample_rate_hz,
         Instant::now(),
     )
     .expect("launch native VST3 worker");

@@ -37,6 +37,17 @@ release completion.
   multi-vendor processing/state evidence only; editor, additional-class, and
   full M06 acceptance gates remain open.
 
+- Generalized the native single-stream VST3 worker regression on 2026-09-09 to
+  accept the bounded `AUDIOROUTER_VST3_SAMPLE_RATE` override, preserving the
+  48 kHz default. This enables reproducible mda/AGain rate-matrix runs without
+  changing production audio settings.
+
+- Requalified the mda native VST3 worker at 44.1/48/96 kHz on 2026-09-09 using
+  the new rate override. All three isolated processing/state/restart runs
+  passed; plugin-host all-features validation also passed (67 unit tests, 35
+  worker-process tests with 9 fixture-dependent ignores, doc-tests, and strict
+  Clippy). Temporary worker outputs and environment overrides were restored.
+
 - Closed a DSP-01/03 contract drift on 2026-09-09. The compressor's supported
   knee control and the gate's supported hysteresis, ratio, and hold controls are
   now accepted by domain validation, described by both node and processor API
