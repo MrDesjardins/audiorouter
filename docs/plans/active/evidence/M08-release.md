@@ -878,6 +878,21 @@ M07, unsigned M08 artifacts, traceability, and documentation validation.
 Temporary outputs/checkouts were removed. Production driver, signing,
 installer, hardware, and manual UI gates remain open.
 
+## 2026-09-08 - Safe acceptance after VST2 editor containment (`0873a9dd`)
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the current
+working head after the installed x64 VST2 processing and editor-containment
+changes. It passed VS/WDK discovery, native compile, read-only 34-endpoint
+format inventory, disposable pinned SysVAD x64 compile/package/API
+qualification, M01 CLI, M04 DSP/recording, M05 UI (typecheck, 91 tests, and
+temporary production build), M06 SDK/VST3, M07 headless, unsigned M08
+artifacts, 159 normative traceability mappings, and documentation validation
+(51 Markdown files, 161 local links). Temporary outputs/checkouts were
+removed. No driver was installed or loaded, and no signing mode,
+plugin/startup registration, stream, or machine audio configuration changed.
+This remains preparation evidence, not signed release, production-driver,
+installer, clean-machine, physical-latency, or manual-UI evidence.
+
 ## Safe chain after scheduler lifecycle fix (2026-09-08)
 
 At pushed tip `76e3852`, the elevated `tests/acceptance/safe-all.ps1` chain
