@@ -1289,6 +1289,10 @@ The same legacy-main fixture passes the chunk-state behavioral round trip, so
 the fallback is verified for stateful processing rather than only loading and
 finite audio output.
 
+The fixture build also emits a deliberate non-finite-output variant. Its
+verified worker acceptance receives a bounded `vst2Processing:NonFiniteOutput`
+failure and records the fault without serializing invalid samples.
+
 A focused scanner regression also classifies a minimal x64 PE containing only
 `main` as VST2, preventing the inspection boundary from regressing to the
 preferred export name only.

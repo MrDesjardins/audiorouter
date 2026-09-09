@@ -103,9 +103,18 @@ static intptr_t dispatch(AEffect *self, int32_t opcode, int32_t index,
 static void process_replacing(AEffect *self, const float *const *inputs,
                               float **outputs, int32_t frames) {
     (void)self;
+#ifdef VST2_NONFINITE_OUTPUT
+    (void)inputs;
+#endif
     for (int32_t frame = 0; frame < frames; ++frame) {
+#ifdef VST2_NONFINITE_OUTPUT
+        volatile float zero = 0.0f;
+        outputs[0][frame] = 0.0f / zero;
+        outputs[1][frame] = 0.0f / zero;
+#else
         outputs[0][frame] = inputs[0][frame] * mix;
         outputs[1][frame] = inputs[1][frame] * mix;
+#endif
     }
 }
 

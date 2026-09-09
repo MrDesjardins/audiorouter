@@ -107,6 +107,10 @@ The legacy `main` fixture also runs the opaque chunk-state save/restore
 acceptance, confirming that the fallback covers stateful processing as well as
 basic audio transformation.
 
+The fixture build also emits a deliberate non-finite-output variant. The
+verified worker returns a bounded failure frame and the supervisor records the
+native invalid-sample fault; no NaN/Inf sample is serialized as audio.
+
 The stronger behavioral round trip initially exposed that `effSetChunk` was
 being called with a hard-coded byte count of one. The adapter now passes the
 bounded chunk length; the fixture test changes its mix parameter, verifies the

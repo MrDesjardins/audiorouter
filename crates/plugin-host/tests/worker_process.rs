@@ -170,6 +170,53 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
+#[ignore = "requires the repository-owned non-finite VST2 fixture"]
+fn verified_worker_rejects_nonfinite_vst2_output() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 invalid-output acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST2 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST2 invalid-output fixture");
+    let mut worker = SupervisedWorkerProcess::spawn_verified(
+        fixture_worker_path(),
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        Instant::now(),
+    )
+    .expect("spawn VST2 invalid-output worker");
+    let frame = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        vec![0.5, -0.5, 0.0, 0.0],
+    )
+    .unwrap();
+    let error = worker
+        .process(frame, Vec::new(), Instant::now())
+        .unwrap_err();
+    assert!(
+        matches!(
+            &error,
+            audiorouter_plugin_host::WorkerProcessError::Protocol(message)
+                if message.contains("vst2Processing") && message.contains("NonFiniteOutput")
+        ),
+        "unexpected non-finite VST2 error: {error:?}"
+    );
+    assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Failed);
+    assert_eq!(
+        worker.failure_diagnostic().unwrap().last_failure,
+        Some(audiorouter_plugin_host::WorkerFailureReason::Immediate)
+    );
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
 #[ignore = "requires the repository-owned VST2 chunk-state fixture"]
 fn verified_worker_applies_restored_vst2_chunk_state() {
     let plugin_path = PathBuf::from(

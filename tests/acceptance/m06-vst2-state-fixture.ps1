@@ -13,6 +13,8 @@ $output = Join-Path $outputRoot 'audiorouter-vst2-state-fixture.dll'
 $object = Join-Path $outputRoot 'audiorouter-vst2-state-fixture.obj'
 $legacyOutput = Join-Path $outputRoot 'audiorouter-vst2-legacy-main-fixture.dll'
 $legacyObject = Join-Path $outputRoot 'audiorouter-vst2-legacy-main-fixture.obj'
+$invalidOutput = Join-Path $outputRoot 'audiorouter-vst2-nonfinite-fixture.dll'
+$invalidObject = Join-Path $outputRoot 'audiorouter-vst2-nonfinite-fixture.obj'
 $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
 if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw "vswhere is missing: $vswhere" }
 $installation = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
@@ -40,6 +42,9 @@ if (-not (Test-Path -LiteralPath $output -PathType Leaf)) { throw "Fixture build
 & $cl /nologo /LD /O2 /W4 /TC /DLEGACY_VST2_MAIN "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$legacyObject" "/Fe:$legacyOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
 if ($LASTEXITCODE -ne 0) { throw "VST2 legacy-main fixture build failed with exit code $LASTEXITCODE" }
 if (-not (Test-Path -LiteralPath $legacyOutput -PathType Leaf)) { throw "Legacy-main fixture build produced no DLL: $legacyOutput" }
+& $cl /nologo /LD /O2 /W4 /TC /DVST2_NONFINITE_OUTPUT "/I$vcInclude" "/I$kitRoot\ucrt" "/I$kitRoot\shared" "/I$kitRoot\um" $source "/Fo:$invalidObject" "/Fe:$invalidOutput" /link "/LIBPATH:$vcLib" "/LIBPATH:$kitLib" "/LIBPATH:$ucrtLib"
+if ($LASTEXITCODE -ne 0) { throw "VST2 non-finite fixture build failed with exit code $LASTEXITCODE" }
+if (-not (Test-Path -LiteralPath $invalidOutput -PathType Leaf)) { throw "Non-finite fixture build produced no DLL: $invalidOutput" }
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 try {
@@ -57,6 +62,10 @@ try {
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
         --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
     if ($LASTEXITCODE -ne 0) { throw "VST2 legacy-main state acceptance failed with exit code $LASTEXITCODE" }
+    $env:AUDIOROUTER_VST2_FIXTURE = $invalidOutput
+    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+        --ignored --exact verified_worker_rejects_nonfinite_vst2_output --nocapture
+    if ($LASTEXITCODE -ne 0) { throw "VST2 non-finite acceptance failed with exit code $LASTEXITCODE" }
 } finally {
     if ($null -eq $previousFixture) {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue

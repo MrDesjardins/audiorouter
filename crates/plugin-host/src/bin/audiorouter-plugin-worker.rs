@@ -167,8 +167,17 @@ fn run() -> Result<(), String> {
                 }
                 #[cfg(windows)]
                 if let Some(plugin) = vst2_plugin.as_mut() {
-                    process_vst2_frame(plugin, &mut frame, &parameters)
-                        .map_err(|error| format!("VST2 processing failed: {error}"))?;
+                    if let Err(error) = process_vst2_frame(plugin, &mut frame, &parameters) {
+                        let failure = format!("vst2Processing:{error}");
+                        write_worker_message(
+                            &mut writer,
+                            &WorkerMessage::Failure { code: failure },
+                        )
+                        .map_err(|write_error| {
+                            format!("VST2 failure write failed: {write_error:?}")
+                        })?;
+                        return Err(format!("VST2 processing failed: {error}"));
+                    }
                 }
                 #[cfg(feature = "test-fixtures")]
                 if _fixture_mode.as_deref() == Some("invalid-output") {
