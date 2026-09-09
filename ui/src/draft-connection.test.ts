@@ -63,6 +63,13 @@ describe("appendDraftConnection", () => {
     expect(inserted.edges.at(-1)?.matrix).toEqual([1, 0]);
   });
 
+  it("preserves a custom matrix on the downstream preview edge", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const custom = { ...connected, edges: connected.edges.map((edge) => ({ ...edge, matrix: [0.5] })) };
+    const inserted = insertDraftMixer(custom, "edge-1");
+    expect(inserted.edges.at(-1)?.matrix).toEqual([0.5]);
+  });
+
   it("refuses to remove a mixer with ambiguous topology", () => {
     const mixer = appendLibraryNode(demoSession, "mixer");
     expect(() => removeSinglePathDraftMixer(mixer, "mixer-1")).toThrow("exactly one incoming and one outgoing");
