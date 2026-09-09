@@ -1728,6 +1728,22 @@ impl WorkerLatency {
     pub fn milliseconds(self) -> f32 {
         self.samples as f32 * 1_000.0 / self.sample_rate_hz as f32
     }
+
+    /// Return the total path latency after adding a caller-owned worker
+    /// pipeline delay. The worker delay is deliberately supplied by the graph
+    /// scheduler because it depends on its fixed queue/ring topology; this
+    /// method only applies the same bounded latency contract as a plugin
+    /// report and never guesses a hardware or physical delay.
+    pub fn total_samples_with_pipeline(
+        self,
+        pipeline_samples: u32,
+    ) -> Result<u32, WorkerMessageError> {
+        let total = self
+            .samples
+            .checked_add(pipeline_samples)
+            .ok_or(WorkerMessageError::InvalidLatency)?;
+        Self::new(total, self.sample_rate_hz).map(|latency| latency.samples)
+    }
 }
 
 /// Stateful handshake and frame gate for one disposable worker instance.
@@ -6144,6 +6160,15 @@ mod tests {
     fn worker_latency_reports_bounded_sample_rate_and_dynamic_updates() {
         let first = WorkerLatency::new(240, 48_000).unwrap();
         assert!((first.milliseconds() - 5.0).abs() < f32::EPSILON);
+        assert_eq!(first.total_samples_with_pipeline(480), Ok(720));
+        assert_eq!(
+            first.total_samples_with_pipeline(480_000),
+            Err(WorkerMessageError::InvalidLatency)
+        );
+        assert_eq!(
+            first.total_samples_with_pipeline(u32::MAX),
+            Err(WorkerMessageError::InvalidLatency)
+        );
         let encoded = encode_worker_message(&WorkerMessage::Latency(first)).unwrap();
         assert_eq!(
             decode_worker_message(&encoded).unwrap(),

@@ -59,6 +59,13 @@ M07, unsigned M08 preparation, 159 requirement mappings, and 51-file/163-link
 documentation validation. This does not close the production VST3 worker or
 realtime-driver gates.
 
+`WorkerLatency::total_samples_with_pipeline` now provides the bounded accounting
+seam for combining plugin-declared latency with a graph scheduler's fixed worker
+pipeline delay. Tests cover normal addition, overflow, and the ten-second cap;
+the helper does not infer physical or device latency. Plugin-host unit tests
+(66), feature-enabled worker-process tests (29 with six expected fixture skips),
+and strict Clippy passed.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with
