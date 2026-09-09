@@ -19,6 +19,14 @@ object, logs, and child processes. These results provide current shared/event
 capture, render, signal-path, and process-loopback evidence; they do not close
 managed-driver, calibrated physical-latency, or signing gates.
 
+The same run also passed the 1,000-impulse digital correlation check with all
+1,000 groups detected, zero p95 spacing error in frames, and an estimated
+55.75 ms digital onset. The Rust process-loopback adapter passed both include
+and exclude modes at 44.1 kHz source to 48 kHz engine conversion: 93 and 89
+quantum blocks respectively, with zero rejected packets, scheduler XRuns, or
+input/output queue overruns and underruns. The onset remains uncalibrated and
+does not represent the required physical acoustic latency measurement.
+
 ## 2026-09-08 - Independent process metadata retention
 
 The Windows inventory now retains an executable path even when the separate

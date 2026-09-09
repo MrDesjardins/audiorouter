@@ -75,6 +75,14 @@ release completion.
   CAP-01/02/05/06 evidence but does not claim managed-driver routing,
   calibrated physical latency, or signing completion.
 
+- Extended M00 live evidence on 2026-09-09 with 1,000-impulse digital
+  correlation: all groups were detected with zero p95 spacing error and a
+  55.75 ms estimated digital onset. The Rust process-loopback adapter also
+  passed include/exclude conversion from 44.1 kHz to 48 kHz with 93/89
+  scheduler quanta, zero rejected packets, XRuns, and queue overruns or
+  underruns. These are repeatable data-path measurements; the onset is not
+  calibrated physical latency and no persistent audio configuration changed.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
