@@ -41,12 +41,27 @@ function Invoke-Probe([string[]]$Arguments) {
     $ErrorActionPreference = $savedErrorActionPreference
     [pscustomobject]@{ Output = $result; ExitCode = $exitCode }
 }
+function Start-ProbeProcess([string[]]$Arguments) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $output
+    $startInfo.Arguments = $Arguments -join ' '
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) { $process.Dispose(); throw "failed to start native probe: $($Arguments -join ' ')" }
+    return $process
+}
 
 if (Test-Path -LiteralPath $object) {
     throw "refusing virtual loopback acceptance because generated object already exists: $object"
 }
 
 $before = Get-MediaSnapshot
+$captureProcess = $null
+$toneProcess = $null
 try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Output $output
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output -PathType Leaf)) {
@@ -69,34 +84,35 @@ try {
     $renderIndex = [int]$renderMatch.Groups[1].Value
     $captureIndex = [int]$captureMatch.Groups[1].Value
 
-    $capture = Start-Process -FilePath $output `
-        -ArgumentList @('capture', $captureIndex, $CaptureDurationMilliseconds) `
-        -RedirectStandardOutput $captureLog `
-        -RedirectStandardError "$captureLog.err" -PassThru
+    $captureProcess = Start-ProbeProcess @('capture', $captureIndex, $CaptureDurationMilliseconds)
     Start-Sleep -Milliseconds 150
-    $tone = Start-Process -FilePath $output `
-        -ArgumentList @('tone', $ToneDurationMilliseconds, $renderIndex) `
-        -RedirectStandardOutput $toneLog `
-        -RedirectStandardError "$toneLog.err" -PassThru
-    Wait-Process -Id $capture.Id
-    Wait-Process -Id $tone.Id
+    $toneProcess = Start-ProbeProcess @('tone', $ToneDurationMilliseconds, $renderIndex)
+    $captureProcess.WaitForExit(); $toneProcess.WaitForExit()
+    $captureExitCode = $captureProcess.ExitCode
+    $toneExitCode = $toneProcess.ExitCode
+    $captureText = $captureProcess.StandardOutput.ReadToEnd()
+    $captureError = $captureProcess.StandardError.ReadToEnd()
+    $toneText = $toneProcess.StandardOutput.ReadToEnd()
+    $toneError = $toneProcess.StandardError.ReadToEnd()
+    [IO.File]::WriteAllText($captureLog, $captureText)
+    [IO.File]::WriteAllText("$captureLog.err", $captureError)
+    [IO.File]::WriteAllText($toneLog, $toneText)
+    [IO.File]::WriteAllText("$toneLog.err", $toneError)
 
-    $captureText = Get-Content -LiteralPath $captureLog -Raw
-    $toneText = Get-Content -LiteralPath $toneLog -Raw
-    if ($captureText -notmatch 'capture_start=0x0' -or
+    if ($captureExitCode -ne 0 -or $captureText -notmatch 'capture_start=0x0' -or
         $captureText -notmatch 'capture_stop=0x0' -or
         $captureText -notmatch 'capture_reset=0x0') {
-        throw "signal-path capture lifecycle failed`n$captureText"
+        throw "signal-path capture lifecycle failed (exit_code=$captureExitCode)`n$captureText`n$captureError"
     }
     $nonzeroMatch = [regex]::Match($captureText, 'capture_nonzero_bytes=(\d+)')
     if (-not $nonzeroMatch.Success -or [int64]$nonzeroMatch.Groups[1].Value -le 0) {
         throw "signal-path capture contained no nonzero payload bytes`n$captureText"
     }
-    if ($toneText -notmatch 'render_start=0x0' -or
+    if ($toneExitCode -ne 0 -or $toneText -notmatch 'render_start=0x0' -or
         $toneText -notmatch 'render_stop=0x0' -or
         $toneText -notmatch 'render_reset=0x0' -or
         $toneText -notmatch 'render_tone_written=1') {
-        throw "signal-path tone lifecycle failed`n$toneText"
+        throw "signal-path tone lifecycle failed (exit_code=$toneExitCode)`n$toneText`n$toneError"
     }
 
     $after = Get-MediaSnapshot
@@ -109,6 +125,12 @@ try {
     Write-Output 'Scope: explicitly selected existing endpoints only; defaults, volume, mute, privacy, drivers, signing, and startup configuration unchanged.'
 }
 finally {
+    foreach ($process in @($captureProcess, $toneProcess)) {
+        if ($null -ne $process) {
+            if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+            $process.Dispose()
+        }
+    }
     $cleanupPaths = @($output, $temporaryObject, $captureLog, "$captureLog.err", $toneLog, "$toneLog.err", $object)
     for ($attempt = 0; $attempt -lt 5; $attempt++) {
         Remove-Item -LiteralPath $cleanupPaths -Force -ErrorAction SilentlyContinue

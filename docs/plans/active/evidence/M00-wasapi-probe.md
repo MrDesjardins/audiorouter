@@ -42,6 +42,16 @@ teardown, temporary cleanup, and media-state preservation passed. This improves
 harness failure detection only and does not convert the uncalibrated onset into
 physical-latency evidence.
 
+## 2026-09-08 - Endpoint-loopback child supervision hardening
+
+The endpoint-loopback acceptance now launches its concurrent capture and tone
+children through directly owned `.NET Process` instances, validates both exit
+codes, collects bounded redirected output, and kills/reaps any still-running
+child during cleanup. The live 500 ms capture/800 ms tone requalification
+passed with 75,432 nonzero payload bytes; streams were cleaned up and media
+state was unchanged. This hardens failure detection only and does not establish
+calibrated physical latency or managed-driver routing.
+
 ## 2026-09-08 - Current process restart identity requalification
 
 `cargo test -p audiorouter-windows-audio --locked -- --nocapture` passed all
