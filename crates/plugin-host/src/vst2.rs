@@ -345,7 +345,7 @@ mod opcode_tests {
         library.set_processing_format(48_000.0, 256).unwrap();
 
         assert!(matches!(
-            library.open_editor(1),
+            library.open_editor(1, std::process::id()),
             Err(Vst2LibraryError::InvalidEditor)
         ));
         assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 7);
@@ -746,10 +746,16 @@ impl Vst2Library {
     /// invoked only on the worker's dedicated Windows UI thread; this method
     /// does not create a window, validate cross-process authorization, or run a
     /// message pump.
-    pub fn open_editor(&mut self, parent_window: usize) -> Result<(), Vst2LibraryError> {
+    pub fn open_editor(
+        &mut self,
+        parent_window: usize,
+        owner_process_id: u32,
+    ) -> Result<(), Vst2LibraryError> {
         if !self.has_editor()
             || parent_window == 0
+            || owner_process_id == 0
             || !is_window_handle(parent_window)
+            || window_owner_process_id(parent_window) != Some(owner_process_id)
             || self.editor_open
         {
             return Err(Vst2LibraryError::InvalidEditor);
@@ -933,6 +939,7 @@ unsafe extern "C" fn host_callback(
 #[link(name = "user32")]
 unsafe extern "system" {
     fn IsWindow(window: *mut c_void) -> i32;
+    fn GetWindowThreadProcessId(window: *mut c_void, process_id: *mut u32) -> u32;
     fn PeekMessageW(
         message: *mut NativeMessage,
         window: *mut c_void,
@@ -952,8 +959,17 @@ fn is_window_handle(window: usize) -> bool {
 }
 
 #[cfg(windows)]
+fn window_owner_process_id(window: usize) -> Option<u32> {
+    let mut process_id = 0;
+    // SAFETY: The HWND is only queried; the output points to a local scalar
+    // that remains valid for the synchronous Win32 call.
+    let thread_id = unsafe { GetWindowThreadProcessId(window as *mut c_void, &mut process_id) };
+    (thread_id != 0 && process_id != 0).then_some(process_id)
+}
+
+#[cfg(windows)]
 enum EditorThreadCommand {
-    Open(usize, Sender<Result<(), String>>),
+    Open(usize, u32, String, Sender<Result<(), String>>),
     Close(Sender<Result<(), String>>),
     Shutdown,
 }
@@ -987,10 +1003,20 @@ impl Vst2EditorThread {
         })
     }
 
-    pub fn open(&self, parent_window: usize) -> Result<(), String> {
+    pub fn open(
+        &self,
+        parent_window: usize,
+        owner_process_id: u32,
+        authorization_token: &str,
+    ) -> Result<(), String> {
         let (response, receiver) = mpsc::channel();
         self.commands
-            .send(EditorThreadCommand::Open(parent_window, response))
+            .send(EditorThreadCommand::Open(
+                parent_window,
+                owner_process_id,
+                authorization_token.to_owned(),
+                response,
+            ))
             .map_err(|_| "editor UI thread stopped".to_string())?;
         receiver
             .recv_timeout(crate::WORKER_RESPONSE_TIMEOUT)
@@ -1021,8 +1047,12 @@ fn editor_thread_main(path: std::path::PathBuf, receiver: Receiver<EditorThreadC
     loop {
         pump_editor_messages();
         match receiver.recv_timeout(Duration::from_millis(10)) {
-            Ok(EditorThreadCommand::Open(parent, response)) => {
-                let result = if !is_window_handle(parent) {
+            Ok(EditorThreadCommand::Open(parent, owner_pid, token, response)) => {
+                let result = if token.is_empty() {
+                    Err("editor authorization token is missing".to_string())
+                } else if !is_window_handle(parent)
+                    || window_owner_process_id(parent) != Some(owner_pid)
+                {
                     Err("parent window is not valid".to_string())
                 } else {
                     let plugin = match plugin.as_mut() {
@@ -1033,7 +1063,7 @@ fn editor_thread_main(path: std::path::PathBuf, receiver: Receiver<EditorThreadC
                     };
                     plugin.and_then(|plugin| {
                         plugin
-                            .open_editor(parent)
+                            .open_editor(parent, owner_pid)
                             .map_err(|error| format!("VST2 editor open failed: {error:?}"))
                     })
                 };

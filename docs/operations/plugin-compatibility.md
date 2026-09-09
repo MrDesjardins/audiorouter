@@ -49,6 +49,13 @@ and deliberate retry from the processing generation. It does not create native
 windows or claim editor compatibility; those remain a Windows/UI acceptance
 gate.
 
+Editor-open requests now carry a bounded opaque authorization token and the
+expected owner process ID with the parent HWND. The worker rejects missing or
+oversized authorization data, and the Windows editor thread verifies that the
+live HWND still belongs to that process before dispatching `effEditOpen`.
+Issuing the token remains a control-plane/native-shell responsibility and is
+not yet wired to the preview WebView, so editor controls remain gated.
+
 Worker sessions retain the latest validated plugin latency. A plugin may report
 a changed bounded sample count at the negotiated sample rate; changing the
 sample rate is rejected and cannot overwrite the prior value. This protects

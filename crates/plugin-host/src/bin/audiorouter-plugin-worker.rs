@@ -265,12 +265,18 @@ fn run() -> Result<(), String> {
                 write_worker_message(&mut writer, &WorkerMessage::Editor(descriptor))
                     .map_err(|error| format!("editor description write failed: {error:?}"))?;
             }
-            WorkerMessage::EditorOpen { parent_window } => {
+            WorkerMessage::EditorOpen {
+                parent_window,
+                parent_process_id,
+                authorization_token,
+            } => {
                 #[cfg(windows)]
                 let result = match vst2_editor.as_ref() {
                     Some(editor) => usize::try_from(parent_window)
                         .map_err(|_| "invalid parent window".to_string())
-                        .and_then(|parent| editor.open(parent)),
+                        .and_then(|parent| {
+                            editor.open(parent, parent_process_id, &authorization_token)
+                        }),
                     None => Err("editorUnavailable".to_string()),
                 };
                 #[cfg(not(windows))]

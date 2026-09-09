@@ -2,9 +2,9 @@
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
-    PeArchitecture, PluginFormat, PluginIdentity, PluginStateAsset, SharedAudioLayout,
-    SharedAudioTransport, SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage,
-    WorkerProcess,
+    EditorParentAuthorization, PeArchitecture, PluginFormat, PluginIdentity, PluginStateAsset,
+    SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess, WorkerFrame, WorkerLatency,
+    WorkerMessage, WorkerProcess,
 };
 use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
@@ -69,8 +69,10 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
         });
     let mut worker = WorkerProcess::spawn(worker_path, &hash, 2).expect("spawn worker client");
     assert!(worker.describe_parameters().unwrap().is_empty());
+    let authorization =
+        EditorParentAuthorization::new(1, std::process::id(), "test-token".into()).unwrap();
     assert!(matches!(
-        worker.open_editor(1),
+        worker.open_editor(&authorization),
         Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(
             code
         )) if code == "editorUnavailable"
@@ -359,7 +361,20 @@ fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
     };
     assert!(!parent.is_null(), "hidden editor parent creation failed");
     let editor = Vst2EditorThread::spawn(&plugin_path).expect("spawn VST2 editor thread");
-    let result = editor.open(parent as usize).and_then(|_| editor.close());
+    let wrong_owner = editor.open(
+        parent as usize,
+        std::process::id().saturating_add(1),
+        "acceptance-token",
+    );
+    assert!(
+        wrong_owner
+            .as_ref()
+            .is_err_and(|error| error.contains("not valid")),
+        "an HWND bound to another owner process must be rejected: {wrong_owner:?}"
+    );
+    let result = editor
+        .open(parent as usize, std::process::id(), "acceptance-token")
+        .and_then(|_| editor.close());
     drop(editor);
     // SAFETY: The handle was returned by CreateWindowExW and is no longer
     // needed after the editor has closed.
@@ -416,7 +431,13 @@ fn supervised_vst2_editor_timeout_kills_the_worker_and_records_failure() {
         Instant::now(),
     )
     .expect("spawn VST2 worker");
-    let result = worker.open_editor(parent as u64, Instant::now());
+    let authorization = audiorouter_plugin_host::EditorParentAuthorization::new(
+        parent as u64,
+        std::process::id(),
+        "acceptance-token".into(),
+    )
+    .expect("editor authorization");
+    let result = worker.open_editor(&authorization, Instant::now());
     // SAFETY: The handle was returned by CreateWindowExW and the worker has
     // been terminated before the parent is destroyed.
     unsafe { assert_ne!(DestroyWindow(parent), 0) };

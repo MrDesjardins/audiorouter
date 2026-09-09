@@ -988,6 +988,48 @@ pub enum EditorError {
     RetryRequired,
 }
 
+/// A control-plane-issued authorization for attaching a native plugin editor
+/// to a caller-owned window. The token is intentionally opaque to the worker;
+/// the authenticated control transport is responsible for issuing it, while
+/// the worker additionally verifies that the HWND still belongs to the bound
+/// owner process before invoking native plugin code.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EditorParentAuthorization {
+    parent_window: u64,
+    owner_process_id: u32,
+    token: String,
+}
+
+impl EditorParentAuthorization {
+    pub fn new(
+        parent_window: u64,
+        owner_process_id: u32,
+        token: String,
+    ) -> Result<Self, WorkerMessageError> {
+        if parent_window == 0
+            || usize::try_from(parent_window).is_err()
+            || owner_process_id == 0
+            || token.is_empty()
+            || token.len() > MAX_WORKER_FAILURE_CODE_BYTES
+        {
+            return Err(WorkerMessageError::InvalidEditor);
+        }
+        Ok(Self {
+            parent_window,
+            owner_process_id,
+            token,
+        })
+    }
+
+    pub fn parent_window(&self) -> u64 {
+        self.parent_window
+    }
+
+    pub fn owner_process_id(&self) -> u32 {
+        self.owner_process_id
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EditorLifecycle {
     state: EditorState,
@@ -1330,6 +1372,8 @@ pub enum WorkerMessage {
     DescribeEditor,
     EditorOpen {
         parent_window: u64,
+        parent_process_id: u32,
+        authorization_token: String,
     },
     EditorClose,
     Parameters {
@@ -2156,11 +2200,11 @@ impl SupervisedWorkerProcess {
 
     pub fn open_editor(
         &mut self,
-        parent_window: u64,
+        authorization: &EditorParentAuthorization,
         now: Instant,
     ) -> Result<(), WorkerProcessError> {
         self.ensure_running()?;
-        match self.process.open_editor(parent_window) {
+        match self.process.open_editor(authorization) {
             Ok(()) => {
                 self.supervisor.heartbeat(now);
                 Ok(())
@@ -2614,13 +2658,20 @@ impl WorkerProcess {
         }
     }
 
-    pub fn open_editor(&mut self, parent_window: u64) -> Result<(), WorkerProcessError> {
-        self.write(&WorkerMessage::EditorOpen { parent_window })
-            .map_err(WorkerProcessError::Message)?;
+    pub fn open_editor(
+        &mut self,
+        authorization: &EditorParentAuthorization,
+    ) -> Result<(), WorkerProcessError> {
+        self.write(&WorkerMessage::EditorOpen {
+            parent_window: authorization.parent_window,
+            parent_process_id: authorization.owner_process_id,
+            authorization_token: authorization.token.clone(),
+        })
+        .map_err(WorkerProcessError::Message)?;
         match self.read().map_err(WorkerProcessError::Message)? {
             WorkerMessage::EditorOpened {
                 parent_window: actual,
-            } if actual == parent_window => Ok(()),
+            } if actual == authorization.parent_window => Ok(()),
             WorkerMessage::Failure { code } if code == "editorUnavailable" => {
                 Err(WorkerProcessError::UnsupportedFeature(code))
             }
@@ -2966,8 +3017,19 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         WorkerMessage::Editor(descriptor) => {
             EditorDescriptor::new(descriptor.has_editor, descriptor.width, descriptor.height)?;
         }
-        WorkerMessage::EditorOpen { parent_window }
-        | WorkerMessage::EditorOpened { parent_window }
+        WorkerMessage::EditorOpen {
+            parent_window,
+            parent_process_id,
+            authorization_token,
+        } if *parent_window == 0
+            || usize::try_from(*parent_window).is_err()
+            || *parent_process_id == 0
+            || authorization_token.is_empty()
+            || authorization_token.len() > MAX_WORKER_FAILURE_CODE_BYTES =>
+        {
+            return Err(WorkerMessageError::InvalidEditor);
+        }
+        WorkerMessage::EditorOpened { parent_window }
             if *parent_window == 0 || usize::try_from(*parent_window).is_err() =>
         {
             return Err(WorkerMessageError::InvalidEditor);
@@ -4501,6 +4563,43 @@ mod tests {
                 WorkerFrameError::InvalidChannels
             ))
         ));
+    }
+
+    #[test]
+    fn editor_parent_authorization_is_bounded_and_bound_to_owner() {
+        let authorization =
+            EditorParentAuthorization::new(0x1234, 42, "ui-capability".into()).unwrap();
+        assert_eq!(authorization.parent_window(), 0x1234);
+        assert_eq!(authorization.owner_process_id(), 42);
+
+        assert!(matches!(
+            EditorParentAuthorization::new(0, 42, "token".into()),
+            Err(WorkerMessageError::InvalidEditor)
+        ));
+        assert!(matches!(
+            EditorParentAuthorization::new(0x1234, 0, "token".into()),
+            Err(WorkerMessageError::InvalidEditor)
+        ));
+        assert!(matches!(
+            EditorParentAuthorization::new(0x1234, 42, String::new()),
+            Err(WorkerMessageError::InvalidEditor)
+        ));
+        assert!(matches!(
+            EditorParentAuthorization::new(
+                0x1234,
+                42,
+                "x".repeat(MAX_WORKER_FAILURE_CODE_BYTES + 1),
+            ),
+            Err(WorkerMessageError::InvalidEditor)
+        ));
+
+        let message = WorkerMessage::EditorOpen {
+            parent_window: authorization.parent_window,
+            parent_process_id: authorization.owner_process_id,
+            authorization_token: authorization.token,
+        };
+        let encoded = encode_worker_message(&message).unwrap();
+        assert_eq!(decode_worker_message(&encoded).unwrap(), message);
     }
 
     #[test]
