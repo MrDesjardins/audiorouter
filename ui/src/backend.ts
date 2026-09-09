@@ -57,6 +57,11 @@ export function formatUiError(error: unknown, fallback: string): string {
   return `${error.message} [${code}${hresultText}] ${remediation}${retryText}`;
 }
 
+/** Identifies a graph conflict without guessing from localized text. */
+export function isRevisionConflict(error: unknown): boolean {
+  return error instanceof AudioRouterRpcError && error.data?.code === "revisionConflict";
+}
+
 export type UiBackendSnapshot = {
   status: StatusSnapshot;
   session: Session;

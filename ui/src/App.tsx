@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Node, RouteInspection } from "@audiorouter/contracts";
 import { SessionFlowCanvas } from "./SessionFlowCanvas";
-import { createDisconnectedBackend, formatUiError, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
+import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceInfo } from "@audiorouter/contracts";
 import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, removeDraftConnection, removeDraftNode, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type LibraryNodeKind } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
@@ -363,7 +363,13 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
       const result = await backend.commitGraph(plan.planId, plan.baseRevision, operation);
       setActionMessage(`Committed revision ${result.revision}. Reconnect to refresh the authoritative view.`);
-    } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to apply graph changes."); }
+    } catch (error) {
+      if (isRevisionConflict(error)) {
+        setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null);
+        void snapshotCache.refresh(backend).then(setSnapshotState);
+        setActionMessage(`${formatUiError(error, "Graph changed elsewhere.")} The authoritative session was refreshed; review the draft again.`);
+      } else setActionMessage(formatUiError(error, "Unable to apply graph changes."));
+    }
   };
   const commitAcknowledgedPlan = async () => {
     if (!pendingOperation || acknowledgedWarnings.size !== pendingWarnings.length) return;
@@ -372,7 +378,13 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const result = await applyGraphDraft(backend, draft, pendingOperation, [...acknowledgedWarnings]);
       setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null);
       setActionMessage(`Committed revision ${result.revision}. Reconnect to refresh the authoritative view.`);
-    } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to commit acknowledged changes."); }
+    } catch (error) {
+      if (isRevisionConflict(error)) {
+        setPendingWarnings([]); setAcknowledgedWarnings(new Set()); setPendingOperation(null);
+        void snapshotCache.refresh(backend).then(setSnapshotState);
+        setActionMessage(`${formatUiError(error, "Graph changed elsewhere.")} The authoritative session was refreshed; review the draft again.`);
+      } else setActionMessage(formatUiError(error, "Unable to commit acknowledged changes."));
+    }
   };
   const inspectRoute = async () => { setActionMessage("Inspecting route..."); try { setRouteInspection(await backend.inspectRoute(selectedNode.id)); setActionMessage("Route inspection refreshed from the backend."); } catch (error) { setRouteInspection(null); setActionMessage(error instanceof Error ? error.message : "Unable to inspect route."); } };
   const previewRecording = async (recordingId: string) => { setPreviewMessage("Inspecting recording..."); try { const result = await backend.previewRecording(recordingId); setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`); } catch (error) { setPreviewMessage(error instanceof Error ? error.message : "Recording preview unavailable."); } };

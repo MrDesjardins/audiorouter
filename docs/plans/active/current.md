@@ -46,6 +46,14 @@ release completion.
   denied. The repository remained clean and no runtime or machine audio
   configuration was changed.
 
+- Closed a UI-07 stale-graph feedback gap on 2026-09-09. Graph planning and
+  acknowledged commit failures now preserve structured backend remediation,
+  recognize the typed `revisionConflict` code, refresh the authoritative
+  session snapshot, discard stale warning state, and ask the operator to review
+  the draft again; errors are never resolved by retrying a stale plan. UI
+  typecheck and 98 tests pass. Native shell/manual conflict and accessibility
+  acceptance remain open.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;

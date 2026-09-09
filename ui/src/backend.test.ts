@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, formatUiError, SnapshotCache, type UiBackend } from "./backend";
+import { createDisconnectedBackend, createLiveBackend, createLiveBackendFromTransport, formatUiError, isRevisionConflict, SnapshotCache, type UiBackend } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
 import { applyGraphDraft, describeDraftChanges, setNodeDraftFlag, setNodeDraftParameter } from "./draft";
@@ -45,6 +45,23 @@ describe("UI error formatting", () => {
 
   it("uses the fallback for non-error failures", () => {
     expect(formatUiError("bad failure", "Inventory unavailable")).toBe("Inventory unavailable");
+  });
+
+  it("recognizes revision conflicts from structured error data", () => {
+    const error = new AudioRouterRpcError({
+      code: -32010,
+      message: "The graph revision changed.",
+      data: {
+        code: "revisionConflict",
+        fieldPath: null,
+        resourceIds: ["session"],
+        retryable: true,
+        remediation: "Refresh the session and review the draft.",
+      },
+    });
+    expect(isRevisionConflict(error)).toBe(true);
+    expect(formatUiError(error, "Graph update failed")).toContain("[revisionConflict]");
+    expect(isRevisionConflict(new Error("revisionConflict"))).toBe(false);
   });
 });
 
