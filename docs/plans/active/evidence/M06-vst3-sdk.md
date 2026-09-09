@@ -1285,6 +1285,10 @@ the legacy `main` export and successfully loads/processes it through the
 verified worker. This is runtime fallback evidence, not third-party
 compatibility evidence.
 
+A focused scanner regression also classifies a minimal x64 PE containing only
+`main` as VST2, preventing the inspection boundary from regressing to the
+preferred export name only.
+
 ## VST2 worker integration and fixture matrix (2026-09-08)
 
 The verified identity path now passes the canonical VST2 binary path to the

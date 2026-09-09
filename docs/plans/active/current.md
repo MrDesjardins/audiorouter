@@ -192,6 +192,10 @@ header-validation, and disposable-worker gates. The existing ReaPlugs matrix
 continues to use `VSTPluginMain`; the repository-owned `main`-export fixture
 now supplies runtime fallback qualification.
 
+The scanner has a focused synthetic x64-PE regression proving a `main`-only
+export is classified as VST2, keeping inspection and loading entry-point
+support aligned.
+
 The worker supervisor now passes only verified x64 VST2 identities to the
 contained worker. Plugin-host tests (50), worker-process tests (13), and strict
 Clippy passed.

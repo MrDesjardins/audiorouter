@@ -3716,6 +3716,29 @@ mod tests {
         bytes
     }
 
+    fn pe_x64_with_export(name: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![0; 0x600];
+        bytes[0..2].copy_from_slice(b"MZ");
+        bytes[0x3c..0x40].copy_from_slice(&(0x80u32).to_le_bytes());
+        bytes[0x80..0x84].copy_from_slice(b"PE\0\0");
+        bytes[0x84..0x86].copy_from_slice(&0x8664u16.to_le_bytes());
+        bytes[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
+        bytes[0x94..0x96].copy_from_slice(&0xf0u16.to_le_bytes());
+        bytes[0x98..0x9a].copy_from_slice(&0x20bu16.to_le_bytes());
+        bytes[0x108..0x10c].copy_from_slice(&0x1000u32.to_le_bytes());
+        let section = 0x188;
+        bytes[section + 8..section + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[section + 12..section + 16].copy_from_slice(&0x1000u32.to_le_bytes());
+        bytes[section + 16..section + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[section + 20..section + 24].copy_from_slice(&0x400u32.to_le_bytes());
+        bytes[0x400 + 24..0x400 + 28].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x400 + 32..0x400 + 36].copy_from_slice(&0x1040u32.to_le_bytes());
+        bytes[0x440..0x444].copy_from_slice(&0x1050u32.to_le_bytes());
+        bytes[0x450..0x450 + name.len()].copy_from_slice(name);
+        bytes[0x450 + name.len()] = 0;
+        bytes
+    }
+
     #[test]
     fn inspects_x64_vst3_and_fingerprints_it() {
         let root = temp_root();
@@ -3788,6 +3811,17 @@ mod tests {
         );
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(outside.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn classifies_legacy_main_export_as_vst2() {
+        let root = temp_root();
+        let path = root.join("legacy-main.dll");
+        fs::write(&path, pe_x64_with_export(b"main")).unwrap();
+        let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.format, PluginFormat::Vst2);
+        assert_eq!(identity.architecture, PeArchitecture::X64);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
