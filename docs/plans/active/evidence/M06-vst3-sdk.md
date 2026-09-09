@@ -1662,3 +1662,17 @@ single-stream `WorkerSession` behavior is unchanged. A handshake regression
 passed with the plugin-host suite at 63 tests, alongside 21 worker-process
 tests, doc-tests, formatting, and strict Clippy. Fixed shared-memory bus-slot
 ownership and actual side-chain scheduling remain open.
+
+`RuntimeBusLayout` and `RuntimeBusGeneration` add the graph-owned staging
+boundary without importing worker implementation types into the engine. A
+nonzero generation binds the bounded mono/stereo layout; processing validates
+caller-owned blocks without allocation, passes through only the main bus, and
+silences every output when the required main input is absent. Engine tests
+passed 83 cases with formatting and strict Clippy. Auxiliary effect execution
+and sequence/deadline result handoff remain open by design.
+
+The multi-bus transport `open` path also now compares canonical paths and
+native file identity for every existing slot pair, closing the hard-link alias
+case already covered by the single-stream transport. The plugin-host suite
+passed 64 unit tests, 21 worker-process tests (six fixture-dependent tests
+ignored), doc-tests, formatting, and strict Clippy.

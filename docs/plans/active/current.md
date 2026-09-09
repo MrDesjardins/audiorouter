@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `d0200577` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `86b1905d` (2026-09-09). The guarded M00-M08
 chain, all-features workspace tests, strict all-features Clippy, UI checks,
 legacy VST2 fixture coverage, and documentation validation pass at the
 preceding implementation checkpoints. The repository is clean; no driver or
@@ -48,6 +48,8 @@ is implemented, but rights/editor/release qualification remains open.
 - Next M06/PLUG-03 task: connect multi-bus transport to a graph-owned processing generation with bounded late/missing-bus silence policy; preserve the single-stream worker compatibility path.
 - Added the M06/PLUG-03 graph-owned staging boundary on 2026-09-09: `RuntimeBusLayout` and `RuntimeBusGeneration` in the engine bind bounded mono/stereo bus shapes to a nonzero generation, validate caller-owned blocks without realtime allocation, pass through only the main bus, and silence every output when the required main input is missing. Engine tests (83), formatting, and strict Clippy passed. Auxiliary effect execution remains intentionally open; the existing single-stream worker compatibility path is unchanged and no audio or machine configuration changed.
 - Next M06/PLUG-03 task: replace the staging pass-through with an explicitly owned worker result handoff that carries sequence/deadline identity into the graph generation, while retaining fail-closed protected-path silence and the single-stream compatibility path.
+- Hardened M06/PLUG-03 shared bus opening on 2026-09-09: existing multi-bus slots are now checked pairwise by canonical path and native file identity, so hard-link aliases cannot make two logical buses share one backing slot. Plugin-host tests (64), worker-process tests (21), doc-tests, formatting, and strict Clippy passed. No plugin registration, audio stream, or machine configuration changed.
+- Next M06/PLUG-03 task: implement the explicitly owned worker-result handoff carrying sequence/deadline identity into `RuntimeBusGeneration`; preserve fail-closed protected-path silence and backward-compatible single-stream workers.
 - Requalified the pushed head on 2026-09-09 with `cargo test --workspace --all-features --locked`: all workspace unit/integration tests and doc-tests passed, including 57 plugin-host tests, 27 VST2 worker-process tests (with six fixture-dependent tests ignored by default), and 33 Windows-audio tests. `cargo fmt --all -- --check`, strict all-features Clippy, and `git diff --check` also passed. No plugin registration, audio stream, driver action, or machine configuration changed.
 - Next M06/M00 task: continue with rights-cleared independent plugin and production native-driver evidence when available; portable and repository-local qualification remains green.
 - Hardened M01/API-09 CLI discovery failures on 2026-09-09: the devices and application list adapters now preserve the complete JSON-RPC error envelope instead of converting backend failures to empty arrays; successful legacy array responses remain unchanged. CLI tests (27), doc-tests, strict Clippy, formatting, and diff checks passed. No audio or machine configuration changed.

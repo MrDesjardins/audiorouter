@@ -4235,6 +4235,7 @@ impl SharedAudioBusTransport {
         layout: WorkerAudioBusLayout,
     ) -> Result<Self, SharedAudioBusError> {
         validate_bus_paths(input_paths, output_paths)?;
+        validate_existing_bus_aliases(input_paths, output_paths)?;
         if input_paths.len() != layout.input_buses().len() {
             return Err(SharedAudioBusError::InvalidLayout(
                 WorkerAudioBusLayoutError::MissingMainInput,
@@ -4332,6 +4333,36 @@ fn validate_bus_paths(
         })
     {
         return Err(SharedAudioBusError::AliasedPaths);
+    }
+    Ok(())
+}
+
+fn validate_existing_bus_aliases(
+    input_paths: &[PathBuf],
+    output_paths: &[PathBuf],
+) -> Result<(), SharedAudioBusError> {
+    let paths: Vec<&Path> = input_paths
+        .iter()
+        .chain(output_paths.iter())
+        .map(PathBuf::as_path)
+        .collect();
+    for (index, left) in paths.iter().enumerate() {
+        for right in paths.iter().skip(index + 1) {
+            if !left.exists() || !right.exists() {
+                continue;
+            }
+            let left_canonical = fs::canonicalize(left).map_err(|error| {
+                SharedAudioBusError::Shared(SharedAudioError::Io(error.to_string()))
+            })?;
+            let right_canonical = fs::canonicalize(right).map_err(|error| {
+                SharedAudioBusError::Shared(SharedAudioError::Io(error.to_string()))
+            })?;
+            if left_canonical == right_canonical
+                || same_file_identity(left, right).map_err(SharedAudioBusError::Shared)?
+            {
+                return Err(SharedAudioBusError::AliasedPaths);
+            }
+        }
     }
     Ok(())
 }
@@ -5882,9 +5913,17 @@ mod tests {
 
         let aliased = vec![root.join("alias")];
         assert!(matches!(
-            SharedAudioBusTransport::create(&aliased, &aliased, layout),
+            SharedAudioBusTransport::create(&aliased, &aliased, layout.clone()),
             Err(SharedAudioBusError::AliasedPaths)
         ));
+        let hard_link = root.join("input-alias");
+        fs::hard_link(&input_paths[0], &hard_link).unwrap();
+        let aliased_inputs = vec![input_paths[0].clone(), hard_link.clone()];
+        assert!(matches!(
+            SharedAudioBusTransport::open(&aliased_inputs, &output_paths, layout.clone()),
+            Err(SharedAudioBusError::AliasedPaths)
+        ));
+        fs::remove_file(hard_link).unwrap();
         drop(worker);
         drop(host);
         for path in input_paths.iter().chain(output_paths.iter()) {
