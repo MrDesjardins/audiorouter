@@ -2035,6 +2035,16 @@ verified bundle path rather than falling back to the generic echo worker. The
 focused native acceptance passed; automatic restart policy, quarantine
 integration, callback timing, soak, and physical latency remain open.
 
+The asynchronous owner now accepts a caller-selected finite restart budget,
+bounded to two replacements and defaulting to zero. A replacement is attempted
+only after the supervised process reports failure and is created through the
+existing `restart` path, preserving plugin identity and the failure ledger;
+exhaustion or quarantine leaves the owner failed and the graph scheduler's
+missing result fail-closed. The all-features plugin-host suite passed 67
+library and 32 worker-process tests (nine expected skips), strict Clippy and
+formatting passed, and the native M06 acceptance passed. Repeated native fault
+soak, callback timing, and physical latency remain open.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
 commit `eb0ad978` with this native worker acceptance included. Native
 toolchain/endpoint checks, disposable SysVAD qualification, portable/UI

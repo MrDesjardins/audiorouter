@@ -388,6 +388,47 @@ fn supervised_bus_worker_loop_bridges_bounded_scheduler_without_callback_waits()
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn supervised_bus_worker_loop_rejects_an_unbounded_restart_policy() {
+    let hash = "c".repeat(64);
+    let worker_layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let scheduler = Arc::new(
+        audiorouter_engine::RuntimeBusScheduler::new(
+            1,
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            4,
+        )
+        .unwrap(),
+    );
+    let worker = SupervisedWorkerProcess::spawn_multi_bus_fixture(
+        fixture_worker_path(),
+        &identity,
+        &worker_layout,
+        Instant::now(),
+    )
+    .unwrap();
+    assert!(matches!(
+        SupervisedBusWorkerLoop::spawn_with_restart_policy(
+            worker,
+            scheduler,
+            Vec::new(),
+            audiorouter_plugin_host::MAX_AUTOMATIC_WORKER_RESTARTS + 1,
+        ),
+        Err(audiorouter_plugin_host::WorkerLoopError::InvalidRestartPolicy)
+    ));
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn supervised_bus_worker_loop_silences_after_a_bounded_worker_failure() {
     let hash = "b".repeat(64);
     let worker_layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
@@ -925,7 +966,7 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
         )
         .unwrap(),
     );
-    let worker = SupervisedWorkerProcess::spawn_verified_native_vst3_multi_bus(
+    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_multi_bus(
         worker_path,
         &identity,
         std::slice::from_ref(&root),
@@ -933,10 +974,15 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
         Instant::now(),
     )
     .expect("launch native VST3 asynchronous worker");
-    let loop_owner = SupervisedBusWorkerLoop::spawn_with_parameters(
+    assert_eq!(
+        worker.record_failure(Instant::now()),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let loop_owner = SupervisedBusWorkerLoop::spawn_with_restart_policy(
         worker,
         Arc::clone(&scheduler),
         vec![ParameterEvent::new(0, 0.75, 0).unwrap()],
+        1,
     )
     .expect("start native VST3 asynchronous owner");
     let generation = audiorouter_engine::RuntimeGeneration::new(13);
@@ -952,7 +998,23 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
     let sidechain = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
     scheduler
         .try_submit_inputs(generation, identity, &[&main, &sidechain])
-        .expect("submit native VST3 graph quantum");
+        .expect("submit native VST3 recovery quantum");
+    for _ in 0..500 {
+        if scheduler.input_ready() == 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(!loop_owner.has_failed());
+    let identity = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        8,
+        worker_clock_tick().saturating_add(10_000),
+        4,
+    )
+    .unwrap();
+    scheduler
+        .try_submit_inputs(generation, identity, &[&main, &sidechain])
+        .expect("submit native VST3 graph quantum after recovery");
     for _ in 0..500 {
         if scheduler.output_ready() != 0 {
             break;

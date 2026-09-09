@@ -44,9 +44,11 @@ verified single-stream `Process` path and the bounded auxiliary-bus
 `HelloBuses`/`ProcessBuses` path: it loads the supplied x64 bundle in its own
 process and forwards bounded parameter events through
 `IAudioProcessor::process`. The pinned AGain side-chain class is verified as
-`[stereo, mono]` input to stereo output. Realtime graph scheduling,
-restart/quarantine soak, physical-latency measurement, and independent
-rights-cleared plugin qualification remain release gates. No worker may
+`[stereo, mono]` input to stereo output. The asynchronous owner exposes an
+explicit finite automatic-restart budget and delegates each replacement to
+the supervisor's failure ledger; the default budget is zero. Realtime graph
+callback timing, restart/quarantine soak, physical-latency measurement, and
+independent rights-cleared plugin qualification remain release gates. No worker may
 flatten an auxiliary bus into the VST2 stream or expose a stale protected path.
 
 ## Initial parameter contract

@@ -37,6 +37,7 @@ pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
 pub const MAX_PARAMETER_EVENTS: usize = 128;
+pub const MAX_AUTOMATIC_WORKER_RESTARTS: u32 = 2;
 pub const MAX_PARAMETER_DESCRIPTORS: usize = 256;
 pub const MAX_PARAMETER_TITLE_BYTES: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
@@ -1520,6 +1521,7 @@ pub fn stage_engine_worker_result<'a>(
 pub enum WorkerLoopError {
     ThreadStart,
     InvalidParameters,
+    InvalidRestartPolicy,
 }
 
 /// Owns one supervised multi-bus worker on a non-callback thread and bridges
@@ -1538,7 +1540,7 @@ impl SupervisedBusWorkerLoop {
         worker: SupervisedWorkerProcess,
         scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
     ) -> Result<Self, WorkerLoopError> {
-        Self::spawn_with_parameters(worker, scheduler, Vec::new())
+        Self::spawn_with_restart_policy(worker, scheduler, Vec::new(), 0)
     }
 
     /// Spawn the owner with a bounded control-plane parameter template. The
@@ -1549,6 +1551,23 @@ impl SupervisedBusWorkerLoop {
         scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
         parameters: Vec<ParameterEvent>,
     ) -> Result<Self, WorkerLoopError> {
+        Self::spawn_with_restart_policy(worker, scheduler, parameters, 0)
+    }
+
+    /// Spawn the owner with an explicit bounded automatic replacement budget.
+    /// A zero budget preserves fail-closed behavior without replacement. Any
+    /// replacement is attempted only after the worker has entered its
+    /// supervised failed state; quarantine and the failure ledger remain
+    /// authoritative, and retries never occur on the callback-facing side.
+    pub fn spawn_with_restart_policy(
+        worker: SupervisedWorkerProcess,
+        scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
+        parameters: Vec<ParameterEvent>,
+        max_restarts: u32,
+    ) -> Result<Self, WorkerLoopError> {
+        if max_restarts > MAX_AUTOMATIC_WORKER_RESTARTS {
+            return Err(WorkerLoopError::InvalidRestartPolicy);
+        }
         if parameters.len() > MAX_PARAMETER_EVENTS
             || parameters.iter().any(|event| {
                 !event.normalized_value.is_finite()
@@ -1590,6 +1609,7 @@ impl SupervisedBusWorkerLoop {
                     thread_stop,
                     thread_failed,
                     parameters,
+                    max_restarts,
                 );
             })
             .map_err(|_| WorkerLoopError::ThreadStart)?;
@@ -1626,6 +1646,7 @@ impl Drop for SupervisedBusWorkerLoop {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_supervised_bus_worker(
     mut worker: SupervisedWorkerProcess,
     scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
@@ -1634,7 +1655,9 @@ fn run_supervised_bus_worker(
     stop: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
     parameters: Vec<ParameterEvent>,
+    max_restarts: u32,
 ) {
+    let mut restart_count = 0;
     while !stop.load(Ordering::Acquire) {
         let Some(handle) = scheduler.try_take_input() else {
             std::thread::yield_now();
@@ -1665,37 +1688,65 @@ fn run_supervised_bus_worker(
         }
         scheduler.recycle_input(handle);
         if conversion_failed {
-            failed.store(true, Ordering::Release);
-            break;
+            worker.record_failure(Instant::now());
+            let Some(replacement) =
+                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
+            else {
+                break;
+            };
+            worker = replacement;
+            continue;
         }
         let Ok(input_frames) = input_layout.input_frames(input_frames) else {
-            failed.store(true, Ordering::Release);
-            break;
+            worker.record_failure(Instant::now());
+            let Some(replacement) =
+                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
+            else {
+                break;
+            };
+            worker = replacement;
+            continue;
         };
         let processed = match worker.process_buses(input_frames, parameters.clone(), Instant::now())
         {
             Ok(processed) => processed,
             Err(_) => {
-                failed.store(true, Ordering::Release);
-                break;
+                let Some(replacement) = recover_supervised_bus_worker(
+                    worker,
+                    &mut restart_count,
+                    max_restarts,
+                    &failed,
+                ) else {
+                    break;
+                };
+                worker = replacement;
+                continue;
             }
         };
         let mut output_blocks = Vec::with_capacity(processed.frames().len());
+        let mut output_conversion_failed = false;
         for frame in processed.frames() {
             let Ok(mut block) =
                 audiorouter_engine::AudioBlock::new(frame.channels as usize, frame.frame_count())
             else {
-                failed.store(true, Ordering::Release);
+                output_conversion_failed = true;
                 break;
             };
             if block.copy_from_interleaved(&frame.samples).is_err() {
-                failed.store(true, Ordering::Release);
+                output_conversion_failed = true;
                 break;
             }
             output_blocks.push(block);
         }
-        if output_blocks.len() != processed.frames().len() {
-            break;
+        if output_conversion_failed || output_blocks.len() != processed.frames().len() {
+            worker.record_failure(Instant::now());
+            let Some(replacement) =
+                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
+            else {
+                break;
+            };
+            worker = replacement;
+            continue;
         }
         let output_refs = output_blocks.iter().collect::<Vec<_>>();
         if output_layout.output_buses().len() != processed.frames().len()
@@ -1705,18 +1756,54 @@ fn run_supervised_bus_worker(
                 .zip(processed.frames())
                 .any(|(channels, frame)| *channels != frame.channels)
         {
-            failed.store(true, Ordering::Release);
-            break;
+            worker.record_failure(Instant::now());
+            let Some(replacement) =
+                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
+            else {
+                break;
+            };
+            worker = replacement;
+            continue;
         }
         if scheduler
             .try_submit_outputs(generation, identity, &output_refs)
             .is_err()
         {
-            failed.store(true, Ordering::Release);
-            break;
+            worker.record_failure(Instant::now());
+            let Some(replacement) =
+                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
+            else {
+                break;
+            };
+            worker = replacement;
         }
     }
-    let _ = worker.shutdown();
+    // Dropping the active worker performs the bounded child termination on
+    // this owner thread. Recovery branches consume the old worker when they
+    // either replace it or reach a terminal policy state.
+}
+
+fn recover_supervised_bus_worker(
+    worker: SupervisedWorkerProcess,
+    restart_count: &mut u32,
+    max_restarts: u32,
+    failed: &AtomicBool,
+) -> Option<SupervisedWorkerProcess> {
+    if *restart_count >= max_restarts {
+        failed.store(true, Ordering::Release);
+        let _ = worker.shutdown();
+        return None;
+    }
+    match worker.restart(Instant::now()) {
+        Ok(replacement) => {
+            *restart_count = restart_count.saturating_add(1);
+            Some(replacement)
+        }
+        Err((_error, _supervisor)) => {
+            failed.store(true, Ordering::Release);
+            None
+        }
+    }
 }
 
 fn validate_audio_buses(
