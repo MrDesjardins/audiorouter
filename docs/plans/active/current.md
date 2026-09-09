@@ -35,6 +35,36 @@ stopped/reset and endpoint/media/configuration snapshots were unchanged. This
 is shared-mode built-in DSP evidence, not managed-driver callback or physical
 latency evidence.
 
+## Approved legacy VST2 extension (2026-09-08)
+
+The user explicitly authorized adding legacy VST2 binaries to the goal. This is
+an M06 extension to the original VST3-only baseline, not a claim that the
+current host already supports VST2. Requirement scope is `PLUG-01` through
+`PLUG-07`, `SEC-07`, and `SEC-12`: user-installed native x64 VST2 audio effects
+only, discovered by explicit scan and hosted behind the existing disposable
+worker boundary. x86 bridging, instruments/MIDI, Audio Units, scripts,
+redistribution, auto-download, and protected-voice dry fallback remain out of
+scope.
+
+The six copied ReaPlugs fixtures expose `VSTPluginMain`, but the current scanner
+correctly reports them as unsupported because the VST2 adapter and safe runtime
+boundary do not exist yet. They remain ignored, disposable local fixtures and
+were not loaded, registered, or executed. Before implementation can be called
+compatible, the plan requires: an ABI/ownership adapter; bounded scan and
+worker loading; crash/hang/invalid-sample/layout/editor/state/latency tests; a
+multi-binary fixture matrix; and a documented review of rights to host and
+redistribute test artifacts. The built-in DSP chain remains the supported native
+transformation path while this gate is open.
+
+Ordered next tasks: (1) define VST2 identity and entry-point inspection without
+executing DLLs; (2) implement the smallest x64 effect adapter in the isolated
+worker with callback-safe fixed buffers; (3) qualify ReaPlugs and at least one
+additional legally usable fixture when available; (4) record evidence and
+update the compatibility matrix before enabling any user-facing capability.
+Rollback is limited to reverting the adapter/tests/docs and removing ignored
+fixture copies; no plugin registration, driver, stream, default endpoint, or
+machine audio setting may change.
+
 Closed an M01/SEC-12 transport boundary gap: Windows named-pipe read and write
 loops now validate the byte count returned by Win32 before slicing the
 remaining buffer. Zero-byte results still map to bounded EOF, while

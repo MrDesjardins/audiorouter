@@ -1340,7 +1340,7 @@ impl DelayLine {
         if !max_delay_ms.is_finite() || max_delay_ms < 0.0 {
             return Err(DelayError::NonFiniteParameter);
         }
-        if !sample_rate.is_finite() || sample_rate <= 0.0 {
+        if !sample_rate.is_finite() || !(1.0..=192_000.0).contains(&sample_rate) {
             return Err(DelayError::InvalidSampleRate);
         }
         if channels == 0 || channels > 2 {
@@ -2103,6 +2103,14 @@ mod tests {
         delay.set_delay_ms(0.0).unwrap();
         delay.process_interleaved(&mut zero_delay);
         assert_eq!(zero_delay, [4.0, 5.0]);
+    }
+
+    #[test]
+    fn delay_line_rejects_sample_rates_that_could_overflow_storage() {
+        assert!(matches!(
+            DelayLine::new(1_000.0, f32::MAX, 1),
+            Err(DelayError::InvalidSampleRate)
+        ));
     }
 
     #[test]

@@ -38,6 +38,7 @@ The ranges below include every normative ID; each milestone must attach evidence
 | DSP-01–05, DSP-07–09 | M04 | UC-02, transfer-function vectors |
 | DSP-06, PLUG-01–06 | M06 | UC-02/06, pitch/worker/format evidence |
 | REC-01–08, REC-10–12 | M04/M05 | UC-08, frame/file/path tests |
+| PLUG-07 | M06 extension/M08 | Native x64 VST2 adapter, worker containment, rights, compatibility, and failure evidence |
 | REC-09 | M04/M07 | UC-08, crash/disk-failure recovery |
 | UI-01–14 | M05/M07 | UC-01–10, keyboard/Narrator/usability |
 | API-01–07, API-09–12 | M01, each feature extension | UC-07/10, protocol/parity tests |
@@ -73,6 +74,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-10 | Protected voice paths silence on effect failure | Baseline; deliberate user bypass is a separate action |
 | DEC-11 | SQLite + versioned portable bundle | Baseline; journal/import safety tested before recovery claims |
 | DEC-12 | Mono/stereo, eight buses, sequential milestones | Scope baseline to prioritize common routing workflows |
+| DEC-13 | Legacy VST2 is an explicitly approved, gated M06 extension | User approved planning on 2026-09-08; the original V1 baseline remains VST3 plus built-ins, while actual ABI, rights, worker, and compatibility evidence remain required |
 
 ## Risk and dependency register
 

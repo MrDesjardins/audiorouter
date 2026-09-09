@@ -771,6 +771,15 @@ library inspection. Formatting, strict package Clippy, and `git diff --check`
 also passed. This is portable DSP/recording evidence; native realtime recorder
 integration, endpoint ownership, and W1 hardware timing remain open.
 
+## Delay storage bound hardening (2026-09-08)
+
+`DelayLine::new` now rejects sample rates outside the supported 1–192 kHz
+contract before converting the bounded delay size to storage units. This keeps
+otherwise valid-looking finite inputs from requesting impractically large
+allocations. The regression for an oversized sample rate passed; the DSP suite
+passed 28 tests and strict package Clippy completed. This is portable safety
+evidence only; it does not change native endpoint configuration.
+
 ## Processor catalog stale-availability cleanup (2026-09-08)
 
 Removed an unused control-plane availability value that still referenced the

@@ -1,6 +1,6 @@
 # 07 — Built-in processors and plugin hosting
 
-Milestone ownership: M04 required built-in voice chain; M06 pitch and isolated VST3; M08 signal/compatibility evidence.
+Milestone ownership: M04 required built-in voice chain; M06 pitch and isolated VST3, with an explicitly gated legacy VST2 extension; M08 signal/compatibility evidence.
 
 ## Requirements
 
@@ -19,6 +19,7 @@ Milestone ownership: M04 required built-in voice chain; M06 pitch and isolated V
 - **PLUG-04 — State and UI.** Persist opaque plugin state as versioned binary assets with size limits and hashes; expose automatable parameters through typed descriptors. Native plugin editors may open in worker-owned Windows windows. Opening/closing an editor must not restart processing or prevent CLI control. Generic parameter editing remains available without a native editor.
 - **PLUG-05 — Failure.** Detect crash, hang, invalid samples, bus-layout changes, or unsupported latency changes. Quarantine a repeatedly failing plugin, show its identity, and require deliberate retry after three failures within ten minutes. Do not restart-loop forever or automatically send dry microphone audio to a protected sink.
 - **PLUG-06 — Compatibility and licenses.** Pin the actual VST3 SDK license/version and retain required notices. Record a tested plugin list with exact binaries/versions and parameter/state/editor results. User-installed plugins are not redistributed by default. VST3 licensing does not confer VST2 rights; review any proposed legacy hosting separately.
+- **PLUG-07 — Legacy VST2 extension.** The approved M06 extension may host user-installed native x64 VST2 audio-effect DLLs after a separate ABI adapter, rights review, and the same worker containment, failure, state, editor, latency, and compatibility evidence required for VST3. ReaPlugs are valid inspection fixtures because their binaries expose the VST2 `VSTPluginMain` boundary, but inspection does not imply load or processing support. This extension does not include x86 bridging, instruments/MIDI, Audio Units, arbitrary scripting, redistribution, auto-download, or weakening the protected-voice failure policy. It is not release-qualified until the acceptance matrix is complete.
 
 ## Initial parameter contract
 
