@@ -149,6 +149,11 @@ release completion.
   reproducible identifiers; no third-party rights or redistribution claim is
   inferred.
 
+- Hardened the DSP-07 meter dB projection on 2026-09-09: non-finite read-side
+  values now fail closed to the documented -120 dB floor, with regression
+  coverage for NaN and positive infinity. The realtime path remains unchanged;
+  all 89 engine tests and strict engine Clippy pass.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,

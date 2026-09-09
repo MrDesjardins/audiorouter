@@ -2442,6 +2442,7 @@ fn update_atomic_peak(target: &std::sync::atomic::AtomicU32, peak: f32) {
 }
 
 fn meter_db(value: f32) -> f32 {
+    let value = if value.is_finite() { value } else { 0.0 };
     20.0 * value.max(1.0e-6).log10()
 }
 
@@ -5071,6 +5072,8 @@ mod tests {
 
     #[test]
     fn block_meter_tracks_peak_and_clipping_until_reset() {
+        assert_eq!(meter_db(f32::NAN), -120.0);
+        assert_eq!(meter_db(f32::INFINITY), -120.0);
         let meter = BlockMeter::default();
         let mut block = AudioBlock::new(1, 3).unwrap();
         block
