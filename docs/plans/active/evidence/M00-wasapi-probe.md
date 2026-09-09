@@ -1,5 +1,14 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Rust application identity inventory
+
+The read-only CLI application inventory completed successfully through the
+Rust control path: 443 application records were returned, including 195
+records with a verified full executable path and creation timestamp; 13 had
+observed audio sessions. The remaining path/creation gaps reflect denied or
+transient limited process inspection and remain unavailable rather than being
+guessed. No audio stream, plugin, or machine configuration action occurred.
+
 ## 2026-09-08 - Executable identity strengthening
 
 Application discovery now retains a bounded, read-only full executable path
