@@ -1000,18 +1000,21 @@ full OS filesystem/network sandboxing.
 
 ## Current actionable handoff (2026-09-08)
 
-The latest validated implementation head is `4d9ce1f4` (the source-tested
-parent of this documentation-only update), with the latest
-safe-chain evidence recorded in [M08 release evidence](evidence/M08-release.md)
-and subsequent M06 plugin-host boundary regressions validated by focused tests.
-The latest pushed plan/evidence tip is the current `main` branch head; its
-adapter liveness/recovery and safe-chain evidence are recorded above. Its
-event-replay cursor,
-Windows SDK/toolchain, and SDK-installer provenance checks are recorded above.
+The latest validated implementation head is `fe7ba8eb`, with the subsequent
+plan-only evidence commit `ea7ad9aa` now pushed on `main`. The guarded
+M00–M08 safe-chain evidence at that head is recorded above and in [M08 release
+evidence](evidence/M08-release.md). The current head includes the Windows x64
+VST2 modern/legacy worker boundary, negotiated-rate built-in graph activation,
+and rate-aware adapter deadline reporting; the complete chain requalified
+after those changes. Its event-replay cursor, Windows SDK/toolchain, and
+SDK-installer provenance checks are recorded above.
 The read-only M06 fixture inventory found no additional system/user VST3
 bundles, so the loader matrix now covers six effects across two vendors. The
 official ChowMatrix validator still has two fixture-specific failures, and
-worker/editor containment remains explicitly open.
+worker/editor containment remains explicitly open. Remaining release gates
+include production-driver ownership/signing, native-shell HWND authorization,
+independent rights-cleared plugin coverage, installer/clean-machine evidence,
+physical latency, and manual UI acceptance.
 Safe portable and
 adapter work through the PCM16 quantum bridge, event-driven process-loopback,
 bounded scheduler integration, explicit 44.1 kHz-to-48 kHz conversion,
