@@ -177,9 +177,15 @@ mono/stereo/parameter validation are covered by two focused tests. No unsafe
 block, DLL load, callback invocation, or machine-state operation was added.
 
 The same module contains a Windows-only RAII loader used by the worker: it
-resolves only `VSTPluginMain`, validates the returned header, sets bounded
+resolves `VSTPluginMain` with legacy `main` fallback, validates the returned header, sets bounded
 format values, processes caller-owned fixed blocks, and closes the
 effect/library on drop. Unsafe FFI invariants are documented.
+
+The loader now accepts both established VST2 export spellings,
+`VSTPluginMain` and legacy `main`, while retaining the same x64 identity,
+header-validation, and disposable-worker gates. The existing ReaPlugs matrix
+continues to use `VSTPluginMain`; a `main`-export fixture is still needed for
+runtime qualification of the fallback.
 
 The worker supervisor now passes only verified x64 VST2 identities to the
 contained worker. Plugin-host tests (50), worker-process tests (13), and strict

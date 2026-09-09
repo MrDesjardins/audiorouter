@@ -436,7 +436,7 @@ pub struct Vst2Library {
 #[cfg(windows)]
 impl Vst2Library {
     /// Load one already-verified native x64 VST2 DLL. This function executes
-    /// the DLL's loader and `VSTPluginMain`; callers must invoke it only from
+    /// the DLL's loader and VST2 entry point; callers must invoke it only from
     /// the disposable worker after identity and job-sandbox setup.
     pub fn load(path: &Path) -> Result<Self, Vst2LibraryError> {
         if !path.is_absolute() || !path.is_file() {
@@ -453,10 +453,12 @@ impl Vst2Library {
         if module.is_null() {
             return Err(Vst2LibraryError::LoadLibrary(last_error()));
         }
-        // SAFETY: `VSTPluginMain` is converted only after GetProcAddress
-        // returns a non-null address. The VST2 ABI defines this exact C
-        // calling convention and signature for the exported entry point.
-        let Some(entry) = (unsafe { get_proc_address(module, c"VSTPluginMain".as_ptr()) })
+        // SAFETY: Both names are established VST2 entry-point spellings and
+        // are converted only after GetProcAddress returns a non-null address.
+        // The VST2 ABI defines the same C calling convention for each.
+        let entry_address = unsafe { get_proc_address(module, c"VSTPluginMain".as_ptr()) }
+            .or_else(|| unsafe { get_proc_address(module, c"main".as_ptr()) });
+        let Some(entry) = entry_address
             .map(|address| unsafe { std::mem::transmute::<*mut c_void, Vst2PluginMain>(address) })
         else {
             // SAFETY: `module` is the valid handle returned above and has not

@@ -1273,6 +1273,12 @@ invariants, and deterministic cleanup. Package compilation and strict Clippy
 pass. It remains deliberately disconnected from worker startup; no third-party
 DLL was loaded or called by this change.
 
+The loader accepts both established VST2 export spellings: preferred
+`VSTPluginMain` and legacy `main`. The fallback uses the same ABI signature and
+does not relax x64 identity verification, header validation, worker
+containment, or cleanup. The existing ReaPlugs fixtures all use
+`VSTPluginMain`; runtime evidence for a `main`-only binary remains open.
+
 ## VST2 worker integration and fixture matrix (2026-09-08)
 
 The verified identity path now passes the canonical VST2 binary path to the
