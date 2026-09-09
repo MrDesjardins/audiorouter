@@ -27,6 +27,18 @@ calculated at a different rate.
 - **PLUG-06 — Compatibility and licenses.** Pin the actual VST3 SDK license/version and retain required notices. Record a tested plugin list with exact binaries/versions and parameter/state/editor results. User-installed plugins are not redistributed by default. VST3 licensing does not confer VST2 rights; review any proposed legacy hosting separately.
 - **PLUG-07 — Legacy VST2 extension.** The approved M06 extension may host user-installed native x64 VST2 audio-effect DLLs after a separate ABI adapter, rights review, and the same worker containment, failure, state, editor, latency, and compatibility evidence required for VST3. Established `VSTPluginMain` and legacy `main` exports are recognized; ReaPlugs remain local qualification fixtures, not redistributed dependencies. This extension does not include x86 bridging, instruments/MIDI, Audio Units, arbitrary scripting, redistribution, auto-download, or weakening the protected-voice failure policy. It is not release-qualified until the acceptance matrix is complete.
 
+## Current multi-bus execution boundary
+
+The repository now contains the bounded bus layout, coherent frame, shared-slot,
+graph-generation, engine-result, and separately negotiated echo-worker
+contracts described by PLUG-03. The production VST2 worker remains a
+single-stream `processReplacing` path because VST2 does not provide the
+auxiliary-bus contract required here. The echo worker is protocol evidence
+only; auxiliary effect execution, supervised multi-bus restart/quarantine, and
+rights-cleared multi-bus plugin qualification remain release gates. No worker
+may flatten an auxiliary bus into the VST2 stream or expose a stale protected
+path.
+
 ## Initial parameter contract
 
 These ranges are product decisions, subject to signal tests; defaults are normative unless M04 records a justified revision.
