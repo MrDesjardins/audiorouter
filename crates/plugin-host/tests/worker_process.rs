@@ -919,14 +919,17 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
         .iter()
         .zip(input_samples)
         .any(|(output, input)| (output - input).abs() > 1.0e-5));
+    let saved_state = worker
+        .save_state(Instant::now())
+        .expect("save native VST3 state before replacement");
     assert_eq!(
         worker.record_failure(Instant::now()),
         audiorouter_plugin_host::WorkerState::Failed
     );
     let mut worker = worker
-        .restart(Instant::now())
+        .restart_with_state(saved_state.clone(), saved_state.version, Instant::now())
         .map_err(|(error, _)| error)
-        .expect("restart native VST3 worker with the verified plugin path");
+        .expect("restart native VST3 worker and restore state");
     let restarted = WorkerFrame::new(
         2,
         worker_clock_tick().saturating_add(10_000),
@@ -935,20 +938,17 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
     )
     .expect("native VST3 restarted frame");
     let restarted_output = worker
-        .process(
-            restarted,
-            vec![ParameterEvent {
-                parameter_id: 0,
-                normalized_value: 0.75,
-                sample_offset: 0,
-            }],
-            Instant::now(),
-        )
+        .process(restarted, Vec::new(), Instant::now())
         .expect("native VST3 restarted processing");
     assert!(restarted_output
         .samples
         .iter()
         .all(|sample| sample.is_finite()));
+    assert!(restarted_output
+        .samples
+        .iter()
+        .zip([0.1, -0.1, 0.0, 0.0])
+        .any(|(output, input)| (output - input).abs() > 1.0e-5));
     assert!(worker
         .shutdown()
         .expect("reap native VST3 worker")

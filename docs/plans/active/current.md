@@ -43,6 +43,21 @@ is implemented, but rights/editor/release qualification remains open.
   single-stream; rights, editor, latency, and release qualification remain
   gated.
 
+- Extended native M06/PLUG-04 evidence on 2026-09-09: the real AGain VST3
+  single-stream acceptance now saves opaque plugin state, deliberately fails
+  the worker, restores that state during verified replacement, and confirms
+  finite transformed output without re-sending automation. Native editor,
+  callback-timing, soak, physical-latency, and independent-plugin gates remain
+  open.
+
+- Fixed the native M06/PLUG-04 state boundary on 2026-09-09 after acceptance
+  exposed an EOF: the Windows worker now handles bounded `StateSave` and
+  `StateRestore` messages with a local `IBStream`, CNG SHA-256 metadata, and
+  size limits. The real AGain replacement-state acceptance passed, along with
+  native single-/multi-bus, asynchronous, failure, timing, Clippy, and docs
+  checks. No plugin registration, audio stream, or machine configuration was
+  used.
+
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,

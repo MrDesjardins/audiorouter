@@ -1,6 +1,7 @@
 #define NOMINMAX
 
 #include <windows.h>
+#include <bcrypt.h>
 
 #include <algorithm>
 #include <cctype>
@@ -22,6 +23,7 @@
 #include <vector>
 
 #include "pluginterfaces/base/ipluginbase.h"
+#include "pluginterfaces/base/ibstream.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
@@ -34,6 +36,7 @@ using GetPluginFactoryProc = IPluginFactory* (PLUGIN_API*)();
 constexpr std::size_t kMaxMessageBytes = 4 * 1024 * 1024;
 constexpr std::size_t kMaxFrames = 4096;
 constexpr std::size_t kMaxParameters = 64;
+constexpr std::size_t kMaxStateBytes = 16 * 1024 * 1024;
 constexpr uint16_t kProtocolVersion = 1;
 
 static std::runtime_error protocol_error(const std::string& message) {
@@ -157,6 +160,84 @@ static std::vector<float> parse_samples(const std::string& json) {
 }
 
 static uint64_t required_uint_field(const std::string& json, const std::string& key);
+static std::string quote_json(const std::string& value);
+
+static std::string parse_string_field(const std::string& json, const std::string& key) {
+    auto position = find_required(json, key);
+    if (position >= json.size() || json[position] != '"') throw protocol_error("expected string");
+    ++position;
+    std::string value;
+    while (position < json.size() && json[position] != '"') {
+        if (json[position] == '\\' || static_cast<unsigned char>(json[position]) < 0x20) {
+            throw protocol_error("unsupported string escape");
+        }
+        value.push_back(json[position++]);
+    }
+    if (position >= json.size()) throw protocol_error("unterminated string");
+    return value;
+}
+
+static std::vector<uint8_t> parse_bytes(const std::string& json) {
+    auto position = find_required(json, "\"bytes\":[");
+    std::vector<uint8_t> bytes;
+    while (position < json.size() && json[position] != ']') {
+        const auto value = parse_uint(json, position);
+        if (value > 255 || bytes.size() >= kMaxStateBytes) {
+            throw protocol_error("state bytes exceed the bounded contract");
+        }
+        bytes.push_back(static_cast<uint8_t>(value));
+        while (position < json.size() && (json[position] == ' ' || json[position] == ',')) ++position;
+    }
+    if (position >= json.size() || bytes.empty()) throw protocol_error("state bytes are empty or malformed");
+    return bytes;
+}
+
+static std::string sha256_hex(const uint8_t* bytes, std::size_t size) {
+    BCRYPT_ALG_HANDLE algorithm = nullptr;
+    BCRYPT_HASH_HANDLE hash = nullptr;
+    DWORD object_size = 0;
+    DWORD result_size = 0;
+    DWORD hash_size = 0;
+    std::vector<uint8_t> object;
+    std::vector<uint8_t> digest;
+    auto cleanup = [&]() {
+        if (hash) BCryptDestroyHash(hash);
+        if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
+    };
+    if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) != 0 ||
+        BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&object_size),
+                          sizeof(object_size), &result_size, 0) != 0 ||
+        BCryptGetProperty(algorithm, BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hash_size),
+                          sizeof(hash_size), &result_size, 0) != 0) {
+        cleanup();
+        throw std::runtime_error("SHA-256 provider setup failed");
+    }
+    object.resize(object_size);
+    digest.resize(hash_size);
+    if (BCryptCreateHash(algorithm, &hash, object.data(), object_size, nullptr, 0, 0) != 0 ||
+        (size != 0 && BCryptHashData(hash, const_cast<PUCHAR>(bytes), static_cast<ULONG>(size), 0) != 0) ||
+        BCryptFinishHash(hash, digest.data(), hash_size, 0) != 0) {
+        cleanup();
+        throw std::runtime_error("SHA-256 computation failed");
+    }
+    cleanup();
+    std::ostringstream result;
+    result << std::hex << std::setfill('0');
+    for (const auto byte : digest) result << std::setw(2) << static_cast<unsigned int>(byte);
+    return result.str();
+}
+
+static std::string state_message(uint32_t version, const std::vector<uint8_t>& bytes) {
+    std::ostringstream output;
+    output << "{\"type\":\"State\",\"payload\":{\"asset\":{\"version\":"
+           << version << ",\"bytes\":[";
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        if (index) output << ',';
+        output << static_cast<unsigned int>(bytes[index]);
+    }
+    output << "],\"sha256\":" << quote_json(sha256_hex(bytes.data(), bytes.size())) << "}}}";
+    return output.str();
+}
 
 struct BusFrame {
     uint64_t sequence;
@@ -339,6 +420,65 @@ static void require_result(const char* operation, tresult result) {
     throw std::runtime_error(message.str());
 }
 
+class StateStream final : public IBStream {
+public:
+    StateStream() = default;
+    StateStream(const uint8_t* data, std::size_t size) : bytes_(data, data + size) {}
+
+    tresult PLUGIN_API queryInterface(const TUID, void** object) override {
+        if (object) *object = nullptr;
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+
+    tresult PLUGIN_API read(void* data, int32 count, int32* read_count = nullptr) override {
+        if (count < 0 || (!data && count != 0)) return kInvalidArgument;
+        const auto available = bytes_.size() > cursor_ ? bytes_.size() - cursor_ : 0;
+        const auto amount = std::min<std::size_t>(available, static_cast<std::size_t>(count));
+        if (amount) std::memcpy(data, bytes_.data() + cursor_, amount);
+        cursor_ += amount;
+        if (read_count) *read_count = static_cast<int32>(amount);
+        return amount == static_cast<std::size_t>(count) ? kResultOk : kResultFalse;
+    }
+
+    tresult PLUGIN_API write(void* data, int32 count, int32* written_count = nullptr) override {
+        if (count < 0 || (!data && count != 0)) return kInvalidArgument;
+        const auto amount = static_cast<std::size_t>(count);
+        if (cursor_ > kMaxStateBytes || amount > kMaxStateBytes - cursor_) return kOutOfMemory;
+        if (cursor_ + amount > bytes_.size()) bytes_.resize(cursor_ + amount);
+        if (amount) std::memcpy(bytes_.data() + cursor_, data, amount);
+        cursor_ += amount;
+        if (written_count) *written_count = count;
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API seek(int64 offset, int32 mode, int64* result = nullptr) override {
+        int64 base = 0;
+        if (mode == kIBSeekCur) base = static_cast<int64>(cursor_);
+        else if (mode == kIBSeekEnd) base = static_cast<int64>(bytes_.size());
+        else if (mode != kIBSeekSet) return kInvalidArgument;
+        if (offset < -base || base + offset < 0 || base + offset > static_cast<int64>(kMaxStateBytes)) {
+            return kInvalidArgument;
+        }
+        cursor_ = static_cast<std::size_t>(base + offset);
+        if (result) *result = static_cast<int64>(cursor_);
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API tell(int64* position) override {
+        if (!position) return kInvalidArgument;
+        *position = static_cast<int64>(cursor_);
+        return kResultOk;
+    }
+
+    const std::vector<uint8_t>& bytes() const { return bytes_; }
+
+private:
+    std::vector<uint8_t> bytes_;
+    std::size_t cursor_ = 0;
+};
+
 class Vst3Effect final {
 public:
     Vst3Effect(const fs::path& supplied, double sample_rate,
@@ -444,6 +584,25 @@ public:
         }
         if (factory_) factory_->release();
         if (module_) FreeLibrary(module_);
+    }
+
+    std::vector<uint8_t> save_state() {
+        StateStream stream;
+        require_result("VST3 getState", component_->getState(&stream));
+        const auto& state = stream.bytes();
+        if (state.empty() || state.size() > kMaxStateBytes) {
+            throw protocol_error("VST3 state is empty or exceeds the bounded contract");
+        }
+        return state;
+    }
+
+    void restore_state(const std::vector<uint8_t>& bytes) {
+        if (bytes.empty() || bytes.size() > kMaxStateBytes) {
+            throw protocol_error("VST3 state is empty or exceeds the bounded contract");
+        }
+        auto copy = bytes;
+        StateStream stream(copy.data(), copy.size());
+        require_result("VST3 setState", component_->setState(&stream));
     }
 
     std::vector<float> process(const std::vector<float>& samples, uint16_t channels,
@@ -790,6 +949,20 @@ int wmain(int argc, wchar_t** argv) {
             const auto payload = read_frame();
             const std::string json(payload.begin(), payload.end());
             if (json == "{\"type\":\"Shutdown\"}") return 0;
+            if (json.find("\"type\":\"StateSave\"") != std::string::npos) {
+                write_frame(state_message(1, effect.save_state()));
+                continue;
+            }
+            if (json.find("\"type\":\"StateRestore\"") != std::string::npos) {
+                const auto version = required_uint_field(json, "\"version\":");
+                if (version == 0 || version > std::numeric_limits<uint32_t>::max()) {
+                    throw protocol_error("state version is outside the bounded contract");
+                }
+                const auto bytes = parse_bytes(json);
+                effect.restore_state(bytes);
+                write_frame(state_message(static_cast<uint32_t>(version), bytes));
+                continue;
+            }
             const auto events = parse_parameters(json);
             if (multi_bus) {
                 if (json.find("\"type\":\"ProcessBuses\"") == std::string::npos) {

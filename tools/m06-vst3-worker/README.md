@@ -17,5 +17,8 @@ The worker accepts either one mono/stereo input and output bus through
 `ProcessBuses` (up to four buses and eight aggregate channels per direction).
 Bus counts and per-bus channel counts must match the plugin exactly; auxiliary
 buses are never flattened into the main stream. Native process buffers and the
-framed protocol are currently worker-thread implementation details, not proof
-of realtime graph scheduling or physical-latency performance.
+framed protocol also supports bounded VST3 component state through `StateSave`
+and `StateRestore`; state is exchanged as a versioned byte asset with a
+SHA-256 digest. Native process buffers and the framed protocol are currently
+worker-thread implementation details, not proof of realtime graph scheduling
+or physical-latency performance.

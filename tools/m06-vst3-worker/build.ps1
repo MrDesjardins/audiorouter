@@ -27,5 +27,5 @@ $object = Join-Path $PSScriptRoot 'm06-vst3-worker.obj'
 foreach ($path in @($cl, "$sdkInclude/pluginterfaces/base/ipluginbase.h", "$include/um/Windows.h")) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required native toolchain path is missing: $path" }
 }
-& $cl /nologo /EHsc /std:c++20 "/I$vcInclude" "/I$sdkInclude" "/I$include/shared" "/I$include/um" "/I$include/ucrt" $source /Fo:$object /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib
+& $cl /nologo /EHsc /std:c++20 "/I$vcInclude" "/I$sdkInclude" "/I$include/shared" "/I$include/um" "/I$include/ucrt" $source /Fo:$object /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib bcrypt.lib
 if ($LASTEXITCODE -ne 0) { throw "VST3 worker build failed with exit code $LASTEXITCODE" }

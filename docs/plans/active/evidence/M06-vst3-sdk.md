@@ -2089,6 +2089,26 @@ it through the supervised owner, restores the saved chunk through
 `VSTPluginMain` and legacy `main` export fixtures. This extends state evidence
 across process replacement without changing the VST2 single-stream boundary.
 
+## Native VST3 replacement state coverage (2026-09-09)
+
+The real AGain single-stream acceptance now saves its opaque state after native
+parameter automation, deliberately marks the supervised worker failed, and
+uses `restart_with_state` to restore the saved asset before processing the next
+frame. The replacement produced finite transformed output without a second
+automation event, proving native state continuity across the verified worker
+boundary. This remains offline worker-process evidence; native editor,
+realtime callback, soak, physical-latency, and independent-plugin gates remain
+open.
+
+The first attempt exposed that the native worker had no state-message branch:
+the Rust client correctly sent `StateSave`, while the worker treated it as an
+invalid process request and closed its pipe. The fix adds a bounded local
+`IBStream`, component `getState`/`setState` calls, CNG SHA-256 calculation, and
+`StateSave`/`StateRestore` JSON framing. The corrected native M06 acceptance
+passed AGain state restoration across replacement; the generated executable and
+object were removed afterward. This is worker-process evidence only, not
+realtime callback or physical-latency qualification.
+
 ## VST2 intra-block parameter timing (2026-09-09)
 
 The native x64 VST2 worker now sorts validated parameter events and splits each
