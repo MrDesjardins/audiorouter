@@ -1282,7 +1282,7 @@ fn verified_worker_applies_restored_vst2_chunk_state() {
     assert!((changed.samples[0] - 0.25).abs() < f32::EPSILON);
 
     worker
-        .restore_state(saved, Instant::now())
+        .restore_state(saved.clone(), Instant::now())
         .expect("restore VST2 chunk state");
     let restored = worker
         .process(
@@ -1298,7 +1298,28 @@ fn verified_worker_applies_restored_vst2_chunk_state() {
         )
         .expect("process restored VST2 state");
     assert!((restored.samples[0] - 0.5).abs() < f32::EPSILON);
-    assert!(worker.shutdown().unwrap().success());
+    assert_eq!(
+        worker.record_failure(Instant::now()),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let mut replacement = worker
+        .restart_with_state(saved.clone(), saved.version, Instant::now())
+        .expect("restart and restore VST2 chunk state");
+    let restarted = replacement
+        .process(
+            WorkerFrame::new(
+                3,
+                worker_clock_tick().saturating_add(10_000),
+                2,
+                vec![1.0, -1.0, 0.0, 0.0],
+            )
+            .unwrap(),
+            Vec::new(),
+            Instant::now(),
+        )
+        .expect("process after restored VST2 worker replacement");
+    assert!((restarted.samples[0] - 0.5).abs() < f32::EPSILON);
+    assert!(replacement.shutdown().unwrap().success());
 }
 
 #[cfg(all(windows, feature = "test-fixtures"))]

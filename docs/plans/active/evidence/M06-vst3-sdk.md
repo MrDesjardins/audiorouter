@@ -2081,6 +2081,14 @@ traceability mappings, and documentation checks all passed. Realtime graph
 scheduling, physical-latency, production signing, and release-rights gates
 remain open.
 
+## VST2 replacement state coverage (2026-09-09)
+
+The VST2 state-fixture acceptance now deliberately fails each worker, replaces
+it through the supervised owner, restores the saved chunk through
+`restart_with_state`, and verifies the restored parameter for both the modern
+`VSTPluginMain` and legacy `main` export fixtures. This extends state evidence
+across process replacement without changing the VST2 single-stream boundary.
+
 ## VST2 intra-block parameter timing (2026-09-09)
 
 The native x64 VST2 worker now sorts validated parameter events and splits each
