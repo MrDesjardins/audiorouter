@@ -1285,11 +1285,6 @@ the legacy `main` export and successfully loads/processes it through the
 verified worker. This is runtime fallback evidence, not third-party
 compatibility evidence.
 
-The repository-owned fixture build now emits a second ignored DLL with only
-the legacy `main` export and runs the verified worker processing acceptance
-against it. This supplies runtime fallback evidence while preserving the same
-x64 identity and disposable-worker boundary.
-
 ## VST2 worker integration and fixture matrix (2026-09-08)
 
 The verified identity path now passes the canonical VST2 binary path to the
