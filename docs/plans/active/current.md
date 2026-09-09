@@ -35,6 +35,19 @@ driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
 
+- Performed read-only identity inspection of the installed Pitchproof x64 DLL
+  on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
+  eight sections, SHA-256
+  `1974A3033B53AE72DA5F419A9F37056D44C1610591BFD11A615ACE0C448CF050`.
+  Execution through the native worker was deliberately not attempted because
+  arbitrary installed DLL execution cannot be made safe by rollback alone.
+  This is identity evidence only and does not qualify Pitchproof or close the
+  independent-vendor plugin gate.
+- Next safe task: continue with rights-cleared fixtures or portable/native
+  gates whose execution boundary is already authorized; retain independent
+  plugin execution, production driver, signing, installer, shell/HWND,
+  physical-latency, and manual accessibility blockers.
+
 - Requalified the authorized Rust process-loopback adapter on 2026-09-09:
   include mode converted 4,410 source frames at 44.1 kHz into 4,736 engine
   frames at 48 kHz across 37 scheduler quanta; exclude mode converted 3,969
