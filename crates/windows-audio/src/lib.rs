@@ -335,6 +335,21 @@ pub enum AudioFailureKind {
 }
 
 impl AudioFailureKind {
+    /// Stable machine-readable category for control-plane and CLI consumers.
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::InvalidArgument => "invalidArgument",
+            Self::AccessDenied => "accessDenied",
+            Self::DeviceInUse => "deviceInUse",
+            Self::ExclusiveModeOnly => "exclusiveModeOnly",
+            Self::DeviceInvalidated => "deviceInvalidated",
+            Self::UnsupportedFormat => "unsupportedFormat",
+            Self::ServiceUnavailable => "serviceUnavailable",
+            Self::BufferConstraint => "bufferConstraint",
+            Self::Other => "other",
+        }
+    }
+
     /// Whether retrying after a transient system change is meaningful.
     pub fn is_retryable(self) -> bool {
         matches!(
@@ -2473,6 +2488,16 @@ mod tests {
         assert!(should_retry_capture_initialization(&invalid_argument));
         assert!(!should_retry_capture_initialization(&device_in_use));
         assert!(!should_retry_capture_initialization(&access_denied));
+    }
+
+    #[test]
+    fn audio_failure_codes_are_stable_and_distinguish_contention() {
+        assert_eq!(AudioFailureKind::InvalidArgument.code(), "invalidArgument");
+        assert_eq!(AudioFailureKind::DeviceInUse.code(), "deviceInUse");
+        assert_ne!(
+            AudioFailureKind::InvalidArgument.code(),
+            AudioFailureKind::DeviceInUse.code()
+        );
     }
 
     #[test]

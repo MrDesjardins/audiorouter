@@ -1892,12 +1892,29 @@ fn session_item_schema() -> Value {
 #[derive(Debug, Eq, PartialEq)]
 pub enum ControlError {
     InvalidRequest(String),
+    Audio {
+        code: &'static str,
+        hresult: u32,
+        retryable: bool,
+        remediation: &'static str,
+        message: String,
+    },
     PluginScan(audiorouter_plugin_host::ScanError),
     IdempotencyConflict,
     Store(audiorouter_domain::StoreError),
     Json(String),
     Storage(String),
     CorruptDatabase(String),
+}
+
+fn audio_control_error(error: audiorouter_windows_audio::AudioError) -> ControlError {
+    ControlError::Audio {
+        code: error.kind().code(),
+        hresult: error.hresult(),
+        retryable: error.is_retryable(),
+        remediation: error.remediation(),
+        message: error.to_string(),
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -4963,14 +4980,12 @@ impl ControlPlane {
                 "limit must be between 1 and 500".into(),
             ));
         }
-        let endpoints = audiorouter_windows_audio::enumerate_active_endpoints()
-            .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+        let endpoints =
+            audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
         let mut devices = endpoints
             .into_iter()
             .map(|endpoint| {
-                let bytes_per_frame = endpoint
-                    .bytes_per_frame()
-                    .map_err(|error| ControlError::InvalidRequest(error.to_string()))?;
+                let bytes_per_frame = endpoint.bytes_per_frame().map_err(audio_control_error)?;
                 Ok(json!({
                     "id": endpoint.id,
                     "direction": match endpoint.direction {
@@ -5834,12 +5849,31 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::Json(_) => "internalError",
         ControlError::IdempotencyConflict => "idempotencyConflict",
         ControlError::InvalidRequest(_) => "invalidRequest",
+        ControlError::Audio { code, .. } => code,
         ControlError::PluginScan(error) => error.code(),
     };
-    let message = format!("{error:?}");
+    let message = match &error {
+        ControlError::Audio { message, .. } => message.clone(),
+        _ => format!("{error:?}"),
+    };
+    let audio_details = match &error {
+        ControlError::Audio {
+            hresult,
+            retryable,
+            remediation,
+            ..
+        } => Some((*hresult, *retryable, *remediation)),
+        _ => None,
+    };
     let mut response = JsonRpcResponse::failure(id, -32000, message);
     if let Some(error) = response.error.as_mut() {
-        error.data = Some(application_error_data(code));
+        let mut data = application_error_data(code);
+        if let Some((hresult, retryable, remediation)) = audio_details {
+            data["hresult"] = json!(hresult);
+            data["retryable"] = json!(retryable);
+            data["remediation"] = json!(remediation);
+        }
+        error.data = Some(data);
     }
     response
 }
@@ -9742,6 +9776,31 @@ mod tests {
         let data = error.data.unwrap();
         assert_eq!(data["code"], "corruptDatabase");
         assert_eq!(data["retryable"], false);
+    }
+
+    #[test]
+    fn audio_error_response_preserves_hresult_and_contention_guidance() {
+        let response = application_error_response(
+            Some(json!(1)),
+            ControlError::Audio {
+                code: "deviceInUse",
+                hresult: 0x8889_000A,
+                retryable: true,
+                remediation:
+                    "identify the owning stream, select another endpoint, or close it and retry",
+                message: "audio endpoint is busy".into(),
+            },
+        );
+        let error = response.error.unwrap();
+        assert_eq!(error.message, "audio endpoint is busy");
+        let data = error.data.unwrap();
+        assert_eq!(data["code"], "deviceInUse");
+        assert_eq!(data["hresult"], 0x8889_000A_u32);
+        assert_eq!(data["retryable"], true);
+        assert_eq!(
+            data["remediation"],
+            "identify the owning stream, select another endpoint, or close it and retry"
+        );
     }
 
     #[test]
