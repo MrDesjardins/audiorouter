@@ -218,7 +218,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-
   -PluginPath 'C:\Program Files\VSTPlugins\ReaPlugs\reacomp-standalone.dll'
 ```
 
-The wrapper prints the binary SHA-256, restores any pre-existing
+The wrapper prints the binary SHA-256, verifies the selected DLL's size and
+SHA-256 are unchanged after worker execution, restores any pre-existing
 `AUDIOROUTER_VST2_FIXTURE` value, and never changes audio configuration. Its
 processing and editor-containment checks both pass for the current fixture:
 the editor enters `effEditOpen` but does not return within five seconds, so

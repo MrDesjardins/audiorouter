@@ -154,6 +154,11 @@ release completion.
   coverage for NaN and positive infinity. The realtime path remains unchanged;
   all 89 engine tests and strict engine Clippy pass.
 
+- Hardened `m06-vst2-installed.ps1` on 2026-09-09 with a post-run size and
+  SHA-256 equality check for the explicitly selected DLL. This extends the
+  contained-worker evidence to verify that plugin execution did not mutate its
+  binary; explicit ReaComp processing/editor containment still passes.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,

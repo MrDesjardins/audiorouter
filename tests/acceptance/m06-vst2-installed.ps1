@@ -14,6 +14,8 @@ if (-not (Test-Path -LiteralPath $PluginPath -PathType Leaf)) {
     throw "Installed VST2 fixture was not found: $PluginPath"
 }
 
+$initialFile = Get-Item -LiteralPath $PluginPath
+$initialSize = $initialFile.Length
 $hash = (Get-FileHash -LiteralPath $PluginPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Output "Running installed VST2 worker acceptance: $PluginPath"
 Write-Output "SHA-256: $hash"
@@ -44,7 +46,12 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Installed VST2 supervised editor containment failed with exit code $LASTEXITCODE"
     }
-    Write-Output 'Installed VST2 worker acceptance passed.'
+    $finalFile = Get-Item -LiteralPath $PluginPath
+    $finalHash = (Get-FileHash -LiteralPath $PluginPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($finalFile.Length -ne $initialSize -or $finalHash -ne $hash) {
+        throw "Selected VST2 binary changed during acceptance: $PluginPath"
+    }
+    Write-Output 'Installed VST2 worker acceptance passed; binary fingerprint unchanged.'
 } finally {
     if ($null -eq $previousFixture) {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue
@@ -58,4 +65,4 @@ try {
     }
 }
 
-Write-Output 'Scope: one explicitly selected user-installed VST2 DLL; no copy, registration, or audio configuration changes.'
+Write-Output 'Scope: one explicitly selected user-installed VST2 DLL; binary fingerprint is checked before/after, with no copy, registration, or audio configuration changes.'
