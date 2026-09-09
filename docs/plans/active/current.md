@@ -80,6 +80,12 @@ release completion.
   presentation path in `App.tsx`. UI typecheck and 98 tests pass; native
   shell/manual accessibility acceptance remains open.
 
+- Revalidated the UI production artifact path on 2026-09-09 after the
+  structured-error changes. TypeScript compilation and Vite production output
+  passed into a validated temporary directory containing the expected
+  `index.html` and asset files; the locked repository `ui/dist` output was not
+  changed, and the temporary directory was removed.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;
