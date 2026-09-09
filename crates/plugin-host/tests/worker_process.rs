@@ -172,6 +172,56 @@ fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
     audiorouter_plugin_host::write_worker_message(&mut writer, &WorkerMessage::Shutdown).unwrap();
     drop(writer);
     assert!(child.wait().unwrap().success());
+
+    let expired_hash = "f".repeat(64);
+    let mut expired_child = Command::new(fixture_worker_path())
+        .args([
+            "--plugin-sha256",
+            &expired_hash,
+            "--channels",
+            "2",
+            "--input-buses",
+            "2,1",
+            "--output-buses",
+            "2,1",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn expired multi-bus fixture worker");
+    let expired_stdin = expired_child.stdin.take().expect("expired worker stdin");
+    let expired_stdout = expired_child.stdout.take().expect("expired worker stdout");
+    let mut expired_writer = BufWriter::new(expired_stdin);
+    let mut expired_reader = BufReader::new(expired_stdout);
+    assert!(matches!(
+        audiorouter_plugin_host::read_worker_message(&mut expired_reader).unwrap(),
+        WorkerMessage::HelloBuses { .. }
+    ));
+    audiorouter_plugin_host::write_worker_message(&mut expired_writer, &WorkerMessage::Ready)
+        .unwrap();
+    let expired_layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    let expired_frames = expired_layout
+        .input_frames(vec![
+            WorkerFrame::new(1, 0, 2, vec![0.0, 0.0]).unwrap(),
+            WorkerFrame::new(1, 0, 1, vec![0.0]).unwrap(),
+        ])
+        .unwrap();
+    audiorouter_plugin_host::write_worker_message(
+        &mut expired_writer,
+        &WorkerMessage::ProcessBuses {
+            layout: expired_layout,
+            frames: expired_frames.frames().to_vec(),
+            parameters: Vec::new(),
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        audiorouter_plugin_host::read_worker_message(&mut expired_reader).unwrap(),
+        WorkerMessage::Failure { code } if code.starts_with("multiBusIdentity:")
+    ));
+    drop(expired_writer);
+    assert!(!expired_child.wait().unwrap().success());
 }
 
 #[cfg(feature = "test-fixtures")]

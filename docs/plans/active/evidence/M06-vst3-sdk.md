@@ -1713,3 +1713,9 @@ execution evidence only; it does not load VST2 or claim auxiliary effect
 processing. The fixture now applies the same monotonic sequence and deadline
 guard as the single-stream worker before echoing a result. The production VST2
 path remains single-stream.
+
+The process regression also sends an expired multi-bus quantum. The fixture
+returns a bounded `Failure` with a `multiBusIdentity` code and exits
+non-successfully rather than producing stale audio. This verifies the worker
+side of the late-result fail-closed boundary; supervised restart/quarantine
+policy and a real auxiliary-bus effect remain separate gates.

@@ -443,15 +443,24 @@ fn run_multi_bus(plugin_sha256: String, layout: WorkerAudioBusLayout) -> Result<
                 let frames = layout
                     .input_frames(frames)
                     .map_err(|error| format!("multi-bus input rejected: {error:?}"))?;
-                frame_guard
-                    .accept(
-                        frames
-                            .frames()
-                            .first()
-                            .ok_or_else(|| "multi-bus input has no main bus".to_string())?,
-                        worker_clock_tick(),
+                if let Err(error) = frame_guard.accept(
+                    frames
+                        .frames()
+                        .first()
+                        .ok_or_else(|| "multi-bus input has no main bus".to_string())?,
+                    worker_clock_tick(),
+                ) {
+                    write_worker_message(
+                        &mut writer,
+                        &WorkerMessage::Failure {
+                            code: format!("multiBusIdentity:{error:?}"),
+                        },
                     )
-                    .map_err(|error| format!("multi-bus identity rejected: {error:?}"))?;
+                    .map_err(|write_error| {
+                        format!("multi-bus identity failure write failed: {write_error:?}")
+                    })?;
+                    return Err(format!("multi-bus identity rejected: {error:?}"));
+                }
                 write_worker_message(
                     &mut writer,
                     &WorkerMessage::ProcessedBuses {
