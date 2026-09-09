@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `fc81df97` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `61f474b9` (2026-09-09). The guarded M00-M08
 chain passed at its clean parent `eb0ad978`; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -52,6 +52,13 @@ release completion.
   ReaStream) and explicitly rejected ReaControlMIDI and ReaJS; default mode
   still fails fast on candidate regressions. Environment variables were
   restored and no plugin registration or audio configuration changed.
+
+- Requalified the default repository VST2 matrix after the mixed-directory
+  hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
+  at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown
+  files and 163 local links. The default wrapper remains fail-fast; the
+  explicit skip mode is required only for mixed directories containing
+  incompatible utility/MIDI candidates.
 
 - Closed an M07/AUTO-01 parity defect on 2026-09-09: the CLI `operation get`
   command no longer sends a null cancellation-only parameter that the shared
