@@ -19,23 +19,32 @@ if ($fixtures.Count -eq 0) {
 }
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
+$previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
 try {
     foreach ($fixture in $fixtures) {
         $env:AUDIOROUTER_VST2_FIXTURE = $fixture.FullName
-        Write-Output "Running VST2 worker acceptance: $($fixture.Name)"
-        & cargo test -p audiorouter-plugin-host --test worker_process `
-            --features test-fixtures --locked -- `
-            --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
-        if ($LASTEXITCODE -ne 0) {
-            throw "VST2 worker acceptance failed for $($fixture.Name) with exit code $LASTEXITCODE"
+        foreach ($sampleRate in @(44100, 48000, 96000)) {
+            $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
+            Write-Output "Running VST2 worker acceptance: $($fixture.Name) at ${sampleRate} Hz"
+            & cargo test -p audiorouter-plugin-host --test worker_process `
+                --features test-fixtures --locked -- `
+                --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
+            if ($LASTEXITCODE -ne 0) {
+                throw "VST2 worker acceptance failed for $($fixture.Name) at ${sampleRate} Hz with exit code $LASTEXITCODE"
+            }
         }
     }
-    Write-Output "M06 VST2 acceptance passed for $($fixtures.Count) local fixtures."
+    Write-Output "M06 VST2 acceptance passed for $($fixtures.Count) local fixtures at 44.1, 48, and 96 kHz."
 } finally {
     if ($null -eq $previousFixture) {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue
     } else {
         $env:AUDIOROUTER_VST2_FIXTURE = $previousFixture
+    }
+    if ($null -eq $previousSampleRate) {
+        Remove-Item Env:AUDIOROUTER_VST2_SAMPLE_RATE -ErrorAction SilentlyContinue
+    } else {
+        $env:AUDIOROUTER_VST2_SAMPLE_RATE = $previousSampleRate
     }
 }
 
