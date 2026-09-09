@@ -3572,8 +3572,11 @@ impl SupervisedWorkerProcess {
         expected_version: u32,
         now: Instant,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        if let Err(error) = asset.verify_for_restore(expected_version) {
+            return Err((WorkerProcessError::State(error), self.into_supervisor()));
+        }
         let mut replacement = self.restart(now)?;
-        match replacement.restore_state_for_version(asset, expected_version, now) {
+        match replacement.restore_state(asset, now) {
             Ok(()) => Ok(replacement),
             Err(error) => {
                 let supervisor = replacement.into_supervisor();

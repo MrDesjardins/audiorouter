@@ -2106,7 +2106,9 @@ caller-owned `PluginStateAsset` only after version, size, and hash validation.
 If restoration fails, the replacement supervisor is returned so failure and
 quarantine accounting is not silently discarded. The fixture regression seeded
 opaque bytes, deliberately failed the worker, restarted it with version 7, and
-verified that the exact bytes could be saved again. The all-features host suite
+verified that the exact bytes could be saved again. A companion regression
+confirmed that an invalid version is rejected before replacement spawn and
+preserves the existing failed supervisor ledger. The all-features host suite
 passed 67 library and 34 worker tests with nine expected fixture-dependent
 skips; strict Clippy and documentation validation passed. This is fixture and
 control-plane evidence only; native third-party state/editor, callback-timing,

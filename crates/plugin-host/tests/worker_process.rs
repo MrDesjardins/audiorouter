@@ -1968,6 +1968,47 @@ fn supervised_worker_restart_restores_validated_state() {
     assert!(replacement.shutdown().unwrap().success());
 }
 
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn supervised_worker_restart_rejects_invalid_state_before_replacement() {
+    let identity = PluginIdentity {
+        path: PathBuf::from("state.vst3"),
+        binary_path: PathBuf::from("state.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: "e".repeat(64),
+        metadata: Default::default(),
+    };
+    let start = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn_fixture(
+        fixture_worker_path(),
+        &identity,
+        1,
+        "latency",
+        start,
+    )
+    .expect("spawn state fixture worker");
+    let asset = PluginStateAsset::new(7, vec![4, 3, 2, 1]).unwrap();
+    assert_eq!(
+        worker.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let (error, supervisor) = match worker.restart_with_state(asset, 8, start) {
+        Ok(_) => panic!("invalid state version must not spawn a replacement"),
+        Err(result) => result,
+    };
+    assert!(matches!(
+        error,
+        audiorouter_plugin_host::WorkerProcessError::State(_)
+    ));
+    assert_eq!(
+        supervisor.state(),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    assert_eq!(supervisor.failure_count(), 1);
+}
+
 #[test]
 fn disposable_worker_process_round_trips_shared_audio_frames() {
     let hash = "e".repeat(64);

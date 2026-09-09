@@ -29,6 +29,13 @@ is implemented, but rights/editor/release qualification remains open.
   skips, strict Clippy, and documentation validation passed. Native third-party
   state/editor, callback-timing, soak, and physical-latency gates remain open.
 
+- Hardened that M06/PLUG-04 boundary on 2026-09-09: `restart_with_state`
+  validates the opaque asset before spawning a replacement, and returns the
+  existing failed supervisor unchanged when the version, size, or integrity
+  check rejects it. The focused feature-enabled regression passed for both
+  valid restoration and invalid-version fail-closed behavior; formatting,
+  strict plugin-host Clippy, and diff checks passed.
+
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,
