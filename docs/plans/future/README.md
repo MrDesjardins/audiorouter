@@ -4,7 +4,7 @@ These ideas are recorded for later prioritization. They are not authorized imple
 
 | Candidate | User value | Reconsider only when |
 | --- | --- | --- |
-| VST2/ReaPlugs legacy hosting or migration | Reuse exact existing effects | Promoted to the active M06 extension plan; actual formats, hosting/redistribution rights, maintenance, adapter feasibility, and safe worker evidence remain required |
+| VST2/ReaPlugs legacy hosting or migration | Reuse exact existing effects | The gated M06 extension is implemented for user-installed x64 audio effects; rights, editor compatibility, independent coverage, maintenance, and release qualification remain required |
 | Native ARM64 Windows | Support ARM laptops | Driver, plugin architecture, shell, and hardware test matrix funded; still Windows-only |
 | 8–64 channel virtual devices | DAW/multitrack studio routing | Stereo workflows stable and receiving-app/channel/driver constraints tested |
 | ASIO and exclusive-mode options | Lower latency on selected interfaces | Shared-mode targets met and ownership conflicts/driver licensing addressed |
