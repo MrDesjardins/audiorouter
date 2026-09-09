@@ -112,6 +112,17 @@ release completion.
   concrete portable hardening; retain all native production and independent-
   vendor qualification blockers.
 
+- Closed the portable workspace test evidence gap on 2026-09-09 with
+  independently observable locked package runs: engine (89), recording (30),
+  storage (80), Windows audio (33), protocol (6), and transport (19) tests all
+  passed with exit code 0. Together with the independently verified CLI (29),
+  MCP (2), control (99), domain (59), DSP (30), plugin-host (67), and worker
+  process (13) suites, the current portable evidence covers 556 passing tests.
+  No audio stream, driver, signing, or machine configuration action occurred.
+- Next safe task: continue with any remaining independently observable plan
+  gate; native production, signing, installer, shell/HWND, physical-latency,
+  manual accessibility, and independent-vendor plugin gates remain open.
+
 - Requalified the focused M05 UI acceptance at the current head on 2026-09-09:
   TypeScript typecheck, all 16 UI test files/111 tests, and the temporary
   production Vite bundle (210 modules, three output files) passed. The runner
