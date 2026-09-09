@@ -1421,6 +1421,11 @@ window. This is a third-party editor-hosting compatibility blocker, not an
 audio-device-use or endpoint-configuration failure; no persistent audio state
 was changed.
 
+The supervised-worker acceptance also passed against the ReaComp fixture: the
+editor timeout terminated the contained worker and preserved a single failure
+in the supervisor ledger. This confirms native editor hangs remain bounded at
+the process boundary rather than becoming an audio-host hang.
+
 The native processing boundary now independently rejects non-finite output
 before returning from `process_replacing`; a focused Windows regression uses a
 synthetic callback that writes NaN and verifies `NonFiniteOutput`. The worker's

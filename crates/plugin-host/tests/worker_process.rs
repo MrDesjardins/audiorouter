@@ -285,6 +285,60 @@ fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
     );
 }
 
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires an editor-capable local VST2 DLL and a Windows desktop"]
+fn supervised_vst2_editor_timeout_kills_the_worker_and_records_failure() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 editor acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST2 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST2 fixture before spawning");
+    let parent_class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+    let parent_title: Vec<u16> = "AudioRouter VST2 worker acceptance\0"
+        .encode_utf16()
+        .collect();
+    // SAFETY: The class/title buffers are NUL-terminated and live through the
+    // synchronous Win32 call. A zero style keeps this parent hidden.
+    let parent = unsafe {
+        CreateWindowExW(
+            0,
+            parent_class.as_ptr(),
+            parent_title.as_ptr(),
+            0,
+            0,
+            0,
+            1,
+            1,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    assert!(!parent.is_null(), "hidden editor parent creation failed");
+    let mut worker = SupervisedWorkerProcess::spawn_verified(
+        fixture_worker_path(),
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        Instant::now(),
+    )
+    .expect("spawn VST2 worker");
+    let result = worker.open_editor(parent as u64, Instant::now());
+    // SAFETY: The handle was returned by CreateWindowExW and the worker has
+    // been terminated before the parent is destroyed.
+    unsafe { assert_ne!(DestroyWindow(parent), 0) };
+    assert!(result.is_err(), "a nonreturning editor must fail closed");
+    assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Failed);
+    assert_eq!(worker.into_supervisor().failure_count(), 1);
+}
+
 #[cfg(feature = "test-fixtures")]
 #[test]
 fn disposable_worker_process_round_trips_non_empty_parameter_descriptors() {
