@@ -197,6 +197,12 @@ is implemented, but rights/editor/release qualification remains open.
   per-quantum staging/worker round trip stayed below 100 ms in the guarded
   run. This is a short deterministic worker-thread bound, not realtime
   callback, eight-hour soak, or physical-latency evidence.
+- Requalified the legacy x64 VST2 extension on 2026-09-09 with the supplied
+  local ReaPlugs directory: all six audio effects passed isolated worker
+  load/process checks at 44.1, 48, and 96 kHz (18 runs), including the existing
+  offset-automation coverage. The wrapper restored both VST2 environment
+  variables; no plugin registration, audio stream, or machine configuration
+  changed. Rights, editor, and release qualification remain gated.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain from
   clean pushed head `f9636235` on 2026-09-09 after the scheduler change. The
   installed VS2026/WDK native checks, disposable SysVAD qualification, M01,

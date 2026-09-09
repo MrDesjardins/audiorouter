@@ -2059,6 +2059,12 @@ trip stayed below 100 ms in the guarded run. This is short worker-thread
 evidence only; it does not qualify the realtime callback, an eight-hour W2
 soak, or physical latency.
 
+The guarded ReaPlugs VST2 matrix was also rerun after the worker changes. All
+six supplied x64 effects passed isolated processing at 44.1, 48, and 96 kHz
+(18 runs), and the wrapper restored `AUDIOROUTER_VST2_FIXTURE` and
+`AUDIOROUTER_VST2_SAMPLE_RATE`. This remains local compatibility evidence;
+rights, native editor, and release gates remain open.
+
 The guarded `tests/acceptance/safe-all.ps1` chain was rerun after this policy
 change and passed its native toolchain/endpoint and disposable SysVAD checks,
 portable M01/M04/M05/M07 checks, native VST3 and available VST2 fixture
