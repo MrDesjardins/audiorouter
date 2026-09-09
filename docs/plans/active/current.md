@@ -43,6 +43,11 @@ release completion.
   arbitrary installed DLL execution cannot be made safe by rollback alone.
   This is identity evidence only and does not qualify Pitchproof or close the
   independent-vendor plugin gate.
+- Ran the repository `plugins inspect --path` command against that same file on
+  2026-09-09. The read-only inspector classified it as VST2 x64 with
+  compatibility `supportedVst2X64Gated`, matching the PE and SHA-256 evidence;
+  vendor, version, and class IDs were unavailable. The inspector did not load
+  or execute plugin code, and no machine or audio state changed.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
