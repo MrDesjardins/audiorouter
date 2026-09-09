@@ -59,7 +59,7 @@ after the initial 47-method reference.
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating |
 | `apps.list` | `read` | read-only |
-| `applications.list` | `read` | read-only |
+| `applications.list` | `read` | read-only; returns bounded process identity, including nullable executable path and creation timestamp |
 | `nodes.types` | `read` | read-only |
 | `nodes.describe` | `read` | read-only |
 | `presets.list` | `read` | read-only |
