@@ -1,10 +1,12 @@
 #[cfg(all(windows, feature = "test-fixtures"))]
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
+#[cfg(feature = "test-fixtures")]
+use audiorouter_plugin_host::WorkerAudioBusLayout;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
     PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
-    WorkerAudioBusLayout, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::{MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ};
