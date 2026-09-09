@@ -2008,6 +2008,8 @@ fn mcp_tools() -> Value {
 fn mcp_resources() -> Value {
     json!([
         { "uri": "audiorouter://capabilities", "name": "AudioRouter capabilities", "description": "Current backend capabilities, method schemas, and limits.", "mimeType": "application/json" },
+        { "uri": "audiorouter://nodes", "name": "Node schemas", "description": "Current bounded node types and parameter schemas.", "mimeType": "application/json" },
+        { "uri": "audiorouter://sessions", "name": "Session snapshots", "description": "Current bounded session snapshots without audio payloads.", "mimeType": "application/json" },
         { "uri": "audiorouter://diagnostics", "name": "Redacted diagnostics", "description": "Current redacted backend diagnostic snapshot.", "mimeType": "application/json" },
         { "uri": "audiorouter://workflow/headless", "name": "Headless workflow", "description": "Safe plan, apply, confirmation, and recovery guidance.", "mimeType": "text/plain" }
     ])
@@ -2129,11 +2131,16 @@ fn mcp_resource_read(
     let id = message.get("id").cloned();
     let uri = message["params"]["uri"].as_str().unwrap_or_default();
     let (mime_type, text) = match uri {
-        "audiorouter://capabilities" | "audiorouter://diagnostics" => {
-            let method = if uri.ends_with("capabilities") {
-                "system.describe"
-            } else {
-                "system.diagnostics"
+        "audiorouter://capabilities"
+        | "audiorouter://diagnostics"
+        | "audiorouter://nodes"
+        | "audiorouter://sessions" => {
+            let (method, params) = match uri {
+                "audiorouter://capabilities" => ("system.describe", None),
+                "audiorouter://diagnostics" => ("system.diagnostics", None),
+                "audiorouter://nodes" => ("nodes.describe", None),
+                "audiorouter://sessions" => ("sessions.list", Some(json!({ "limit": 500 }))),
+                _ => unreachable!(),
             };
             let payload = match mcp_api_value(
                 plane,
@@ -2142,7 +2149,7 @@ fn mcp_resource_read(
                 pipe_name,
                 Some(json!(1)),
                 method,
-                None,
+                params,
             ) {
                 Ok(payload) => payload,
                 Err(error) => return mcp_error(id, -32003, &error),
@@ -3660,7 +3667,7 @@ mod tests {
             recycle_recording["inputSchema"]["required"],
             json!(["recordingId"])
         );
-        assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
+        assert_eq!(mcp_resources().as_array().unwrap().len(), 5);
         let denied = mcp_tool_call(
             &mut plane,
             "mcp-test",

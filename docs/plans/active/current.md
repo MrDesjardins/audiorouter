@@ -107,6 +107,14 @@ release completion.
   dispatch cases are covered by regression assertions and real MCP
   interoperability. No audio or machine configuration changed.
 
+- Closed the AUTO-08 MCP resource gap on 2026-09-09: MCP now exposes bounded
+  `audiorouter://nodes` and `audiorouter://sessions` read resources backed by
+  `nodes.describe` and `sessions.list`, while retaining capabilities,
+  diagnostics, and workflow resources. Resource discovery and reads are covered
+  through the real stdio/pipe interoperability tests; CLI tests (29), strict
+  Clippy, formatting, and diff checks pass. No audio or machine configuration
+  changed.
+
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
   ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and

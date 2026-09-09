@@ -145,7 +145,37 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     );
     assert_eq!(
         resources["result"]["resources"].as_array().unwrap().len(),
-        3
+        5
+    );
+
+    let nodes = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 31,
+            "method": "resources/read",
+            "params": { "uri": "audiorouter://nodes" }
+        }),
+    );
+    assert_eq!(
+        nodes["result"]["contents"][0]["mimeType"],
+        "application/json"
+    );
+
+    let sessions = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 32,
+            "method": "resources/read",
+            "params": { "uri": "audiorouter://sessions" }
+        }),
+    );
+    assert_eq!(
+        sessions["result"]["contents"][0]["mimeType"],
+        "application/json"
     );
 
     let diagnostics = send(
