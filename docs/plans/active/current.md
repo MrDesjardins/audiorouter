@@ -71,6 +71,12 @@ release completion.
   `6F5E44D1408AA05C8070A8ABD6398FAE9A742D1B8E57B413E77550E893A722AF`.
   Generated binaries/objects were removed after verification; nothing was
   installed, registered, loaded, or persisted on the machine.
+- Ran the freshly rebuilt native VST3 loader against the pinned repository mda
+  bundle on 2026-09-09. It enumerated 68 factory classes, discovered five
+  bounded parameter descriptors, verified one automation event and 180-byte
+  component state restoration, and processed a finite 64-frame offline block
+  for `mda Ambience`. The loader created no audio device or editor and did not
+  modify machine configuration; generated outputs were removed afterward.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
