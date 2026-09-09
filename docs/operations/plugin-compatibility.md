@@ -192,6 +192,14 @@ is VST2. Reproduce that bounded worker check with:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-installed.ps1
 ```
 
+The installed wrapper requires an explicit DLL path; it intentionally has no
+machine-specific default. For example, select a ReaPlugs effect with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-installed.ps1 `
+  -PluginPath 'C:\Program Files\VSTPlugins\ReaPlugs\reacomp-standalone.dll'
+```
+
 The wrapper prints the binary SHA-256, restores any pre-existing
 `AUDIOROUTER_VST2_FIXTURE` value, and never changes audio configuration. Its
 processing and editor-containment checks both pass for the current fixture:

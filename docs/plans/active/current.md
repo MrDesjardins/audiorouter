@@ -137,6 +137,11 @@ release completion.
   for incompatibility with the bounded audio-effect/state contract. No plugin
   registration, copy, audio stream, or machine configuration occurred.
 
+- Hardened the installed VST2 acceptance wrapper on 2026-09-09 by removing its
+  machine-specific Pitchproof default. It now requires an explicitly selected
+  absolute DLL path and the compatibility runbook provides a ReaComp example,
+  preventing accidental qualification of an unrelated or stale installation.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,

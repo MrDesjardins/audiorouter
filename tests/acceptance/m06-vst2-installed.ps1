@@ -1,9 +1,12 @@
 param(
-    [string]$PluginPath = 'C:\Program Files\Common Files\VST3\Pitchproof\pitchproof-x64.dll'
+    [string]$PluginPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
+if ([string]::IsNullOrWhiteSpace($PluginPath)) {
+    throw 'PluginPath is required; pass one explicitly selected absolute x64 VST2 DLL path.'
+}
 if (-not [System.IO.Path]::IsPathRooted($PluginPath)) {
     throw "PluginPath must be an absolute path: $PluginPath"
 }
