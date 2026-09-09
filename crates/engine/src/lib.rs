@@ -2760,46 +2760,74 @@ pub fn compile_session_at_sample_rate(
                 stages.push(ProcessingStage::Mute { muted });
             }
             NodeKind::ParametricEq => {
-                let frequency_hz = node
-                    .parameters
-                    .get("frequencyHz")
-                    .and_then(|value| value.as_f64())
-                    .unwrap_or(1_000.0) as f32;
-                let q = node
-                    .parameters
-                    .get("q")
-                    .and_then(|value| value.as_f64())
-                    .unwrap_or(1.0) as f32;
-                let gain_db = node
-                    .parameters
-                    .get("gainDb")
-                    .and_then(|value| value.as_f64())
-                    .unwrap_or(0.0) as f32;
                 let input_channels = node
                     .ports
                     .iter()
                     .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
                     .map(|port| usize::from(port.channels))
                     .unwrap_or(1);
-                let params = audiorouter_dsp::BiquadParams {
-                    kind: audiorouter_dsp::FilterKind::Peaking,
-                    frequency_hz,
-                    q,
-                    gain_db,
-                    sample_rate: sample_rate_hz as f32,
-                };
-                let left = audiorouter_dsp::ParametricEq::new(
-                    [Some(params), None, None, None, None, None, None, None],
-                    1,
-                )
-                .map_err(|_| GraphCompileError::UnsupportedTopology)?;
+                let bands = std::array::from_fn(|index| {
+                    let enabled_name = format!("band{index}Enabled");
+                    let has_indexed_parameters = node
+                        .parameters
+                        .keys()
+                        .any(|name| name.starts_with(&format!("band{index}")));
+                    let enabled = node
+                        .parameters
+                        .get(&enabled_name)
+                        .and_then(|value| value.as_bool())
+                        .unwrap_or(if index == 0 && !has_indexed_parameters {
+                            node.parameters.contains_key("frequencyHz")
+                                || node.parameters.contains_key("q")
+                                || node.parameters.contains_key("gainDb")
+                        } else {
+                            false
+                        });
+                    if !enabled {
+                        return None;
+                    }
+                    let type_name = node
+                        .parameters
+                        .get(&format!("band{index}Type"))
+                        .and_then(|value| value.as_str())
+                        .unwrap_or("peaking");
+                    let kind = match type_name {
+                        "lowShelf" => audiorouter_dsp::FilterKind::LowShelf,
+                        "highShelf" => audiorouter_dsp::FilterKind::HighShelf,
+                        "lowPass" => audiorouter_dsp::FilterKind::LowPass,
+                        "highPass" => audiorouter_dsp::FilterKind::HighPass,
+                        "notch" => audiorouter_dsp::FilterKind::Notch,
+                        _ => audiorouter_dsp::FilterKind::Peaking,
+                    };
+                    let number = |indexed_name: String, legacy_name: &str, default: f64| {
+                        node.parameters
+                            .get(&indexed_name)
+                            .or_else(|| {
+                                (index == 0)
+                                    .then(|| node.parameters.get(legacy_name))
+                                    .flatten()
+                            })
+                            .and_then(|value| value.as_f64())
+                            .unwrap_or(default) as f32
+                    };
+                    Some(audiorouter_dsp::BiquadParams {
+                        kind,
+                        frequency_hz: number(
+                            format!("band{index}FrequencyHz"),
+                            "frequencyHz",
+                            1_000.0,
+                        ),
+                        q: number(format!("band{index}Q"), "q", 1.0),
+                        gain_db: number(format!("band{index}GainDb"), "gainDb", 0.0),
+                        sample_rate: sample_rate_hz as f32,
+                    })
+                });
+                let left = audiorouter_dsp::ParametricEq::new(bands, 1)
+                    .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = if input_channels == 2 {
                     Some(
-                        audiorouter_dsp::ParametricEq::new(
-                            [Some(params), None, None, None, None, None, None, None],
-                            1,
-                        )
-                        .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                        audiorouter_dsp::ParametricEq::new(bands, 1)
+                            .map_err(|_| GraphCompileError::UnsupportedTopology)?,
                     )
                 } else {
                     None
@@ -5374,6 +5402,59 @@ mod tests {
         graph_48.process(&mut block_48);
         assert!(block_44.all_finite() && block_48.all_finite());
         assert_ne!(block_44.channel(0).unwrap(), block_48.channel(0).unwrap());
+    }
+
+    #[test]
+    fn compiler_prepares_all_eight_parametric_eq_bands_and_filter_types() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+        let mut parameters = serde_json::Map::new();
+        let types = [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "notch",
+            "peaking",
+            "notch",
+        ];
+        for (index, kind) in types.into_iter().enumerate() {
+            parameters.insert(format!("band{index}Enabled"), serde_json::json!(true));
+            parameters.insert(format!("band{index}Type"), serde_json::json!(kind));
+            parameters.insert(
+                format!("band{index}FrequencyHz"),
+                serde_json::json!(100.0 + index as f64 * 500.0),
+            );
+            parameters.insert(format!("band{index}Q"), serde_json::json!(1.0));
+            parameters.insert(
+                format!("band{index}GainDb"),
+                serde_json::json!(if index == 0 { 6.0 } else { 0.0 }),
+            );
+        }
+        let session = Session {
+            id: EntityId::new("eight-band-session"),
+            name: "eight-band-parametric-eq".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: EntityId::new("parametric-eq"),
+                kind: NodeKind::ParametricEq,
+                type_version: 1,
+                name: "Parametric EQ".into(),
+                enabled: true,
+                bypass: false,
+                parameters,
+                ports: vec![],
+            }],
+            edges: vec![],
+        };
+        let graph =
+            compile_session_at_sample_rate(&session, RuntimeGeneration::new(80), 48_000).unwrap();
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        graph.process(&mut block);
+        assert!(block.all_finite());
+        assert_ne!(block.channel(0).unwrap(), &[0.25; 128]);
     }
 
     #[test]

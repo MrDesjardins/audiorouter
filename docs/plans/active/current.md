@@ -36,12 +36,13 @@ release completion.
   contract evidence and does not advance the separate native, plugin-rights, or
   release gates.
 
-- Identified the next portable DSP-02 gap on 2026-09-09: the current
-  `parametric-eq@1` implementation and API remain a one-band peaking stage,
-  while the stable processing specification requires eight independently
-  configurable bands and additional filter types. This is recorded as the next
-  implementation task; no completion claim is made for DSP-02 beyond the
-  existing one-band evidence.
+- Closed the portable graph portion of the DSP-02 gap on 2026-09-09. The
+  `parametric-eq@1` API now exposes eight bounded, independently enabled bands
+  with peaking, shelf, pass, and notch filter types; the engine prepares all
+  enabled bands, while the legacy one-band fields remain band-0 aliases.
+  Domain/engine/control regressions, formatting, and strict Clippy pass. The
+  remaining DSP-02 gates are frequency-response reference vectors, UI curve
+  parity, native callback timing, and hardware/release qualification.
 
 - Ran the existing contained-worker acceptance against four user-supplied local
   ReaPlugs x64 VST2 effects on 2026-09-09: ReaComp, ReaEQ, ReaDelay, and ReaGate

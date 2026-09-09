@@ -2770,11 +2770,7 @@ impl ControlPlane {
                 "type": "boolean",
                 "default": false
             }]),
-            audiorouter_domain::NodeKind::ParametricEq => json!([
-                { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 1000.0 },
-                { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 },
-                { "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }
-            ]),
+            audiorouter_domain::NodeKind::ParametricEq => Self::parametric_eq_parameters(),
             audiorouter_domain::NodeKind::Compressor => json!([
                 { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -60.0, "maximum": 0.0, "default": -18.0 },
                 { "name": "ratio", "type": "number", "minimum": 1.0, "maximum": 20.0, "default": 3.0 },
@@ -2812,6 +2808,24 @@ impl ControlPlane {
         }
     }
 
+    fn parametric_eq_parameters() -> Value {
+        let mut parameters = vec![
+            json!({ "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 1000.0 }),
+            json!({ "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 }),
+            json!({ "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }),
+        ];
+        for index in 0..8 {
+            parameters.extend([
+                json!({ "name": format!("band{index}Enabled"), "type": "boolean", "default": false }),
+                json!({ "name": format!("band{index}Type"), "type": "string", "enum": ["peaking", "lowShelf", "highShelf", "lowPass", "highPass", "notch"], "default": "peaking" }),
+                json!({ "name": format!("band{index}FrequencyHz"), "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 1000.0 }),
+                json!({ "name": format!("band{index}Q"), "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 }),
+                json!({ "name": format!("band{index}GainDb"), "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }),
+            ]);
+        }
+        Value::Array(parameters)
+    }
+
     fn processor_catalog() -> Value {
         let available = json!({ "status": "available" });
         json!([
@@ -2823,11 +2837,7 @@ impl ControlPlane {
             {
                 "id": "parametricEq", "version": 1, "category": "equalizer",
                 "availability": available, "latencySamples": 0,
-                "parameters": [
-                    { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 20.0, "maximum": 20000.0, "default": 1000.0 },
-                    { "name": "q", "type": "number", "minimum": 0.1, "maximum": 20.0, "default": 1.0 },
-                    { "name": "gainDb", "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 24.0, "default": 0.0 }
-                ]
+                "parameters": Self::parametric_eq_parameters()
             },
             {
                 "id": "gate", "version": 1, "category": "dynamics",
@@ -6737,7 +6747,10 @@ mod tests {
         assert_eq!(session_schema["properties"]["edges"]["maxItems"], 128);
         let node_schema = &session_schema["properties"]["nodes"]["items"];
         assert_eq!(node_schema["properties"]["ports"]["maxItems"], 16);
-        assert_eq!(node_schema["properties"]["parameters"]["maxProperties"], 32);
+        assert_eq!(
+            node_schema["properties"]["parameters"]["maxProperties"],
+            audiorouter_domain::MAX_PARAMETERS_PER_NODE
+        );
         assert_eq!(
             node_schema["properties"]["parameters"]["propertyNames"]["maxLength"],
             128

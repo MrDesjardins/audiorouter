@@ -12,6 +12,19 @@ export const GAIN_MAX_DB = 24;
 
 export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
 
+const parametricEqDefaults: Record<string, boolean | number | string> = {
+  frequencyHz: 1000,
+  q: 1,
+  gainDb: 0,
+};
+for (let index = 0; index < 8; index += 1) {
+  parametricEqDefaults[`band${index}Enabled`] = false;
+  parametricEqDefaults[`band${index}Type`] = "peaking";
+  parametricEqDefaults[`band${index}FrequencyHz`] = 1000;
+  parametricEqDefaults[`band${index}Q`] = 1;
+  parametricEqDefaults[`band${index}GainDb`] = 0;
+}
+
 const libraryNodeDefinitions: Record<LibraryNodeKind, {
   name: string;
   parameters: Record<string, boolean | number | string>;
@@ -48,7 +61,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   },
   parametricEq: {
     name: "Parametric EQ",
-    parameters: { frequencyHz: 1000, q: 1, gainDb: 0 },
+    parameters: parametricEqDefaults,
     ports: [
       { name: "in", direction: "input", channels: 1 },
       { name: "out", direction: "output", channels: 1 },
@@ -56,7 +69,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   },
   compressor: {
     name: "Compressor",
-    parameters: { thresholdDb: -18, ratio: 3, attackMs: 10, releaseMs: 150, makeupDb: 0 },
+    parameters: { thresholdDb: -18, ratio: 3, attackMs: 10, releaseMs: 150, kneeDb: 6, makeupDb: 0 },
     ports: [
       { name: "in", direction: "input", channels: 1 },
       { name: "out", direction: "output", channels: 1 },
@@ -64,7 +77,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   },
   gate: {
     name: "Gate",
-    parameters: { thresholdDb: -45, rangeDb: 60, attackMs: 5, releaseMs: 150 },
+    parameters: { thresholdDb: -45, rangeDb: 60, hysteresisDb: 3, ratio: 4, attackMs: 5, holdMs: 50, releaseMs: 150 },
     ports: [
       { name: "in", direction: "input", channels: 1 },
       { name: "out", direction: "output", channels: 1 },

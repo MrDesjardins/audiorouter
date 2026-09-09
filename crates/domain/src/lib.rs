@@ -35,7 +35,7 @@ pub const MAX_PORTS_PER_NODE: usize = 16;
 pub const MAX_CHANNEL_MATRIX_COEFFICIENTS: usize = 4;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
-pub const MAX_PARAMETERS_PER_NODE: usize = 32;
+pub const MAX_PARAMETERS_PER_NODE: usize = 64;
 pub const MAX_PARAMETER_NAME_BYTES: usize = 128;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
@@ -133,6 +133,41 @@ pub struct NodeTypeSpec {
     pub availability: CapabilityAvailability,
     pub realtime_cost_class: &'static str,
     pub latency_samples: u32,
+}
+
+fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> bool {
+    let Some(suffix) = name.strip_prefix("band") else {
+        return false;
+    };
+    let Some(parameter_start) = suffix.find(|character: char| !character.is_ascii_digit()) else {
+        return false;
+    };
+    let (index, parameter) = suffix.split_at(parameter_start);
+    let Ok(index) = index.parse::<usize>() else {
+        return false;
+    };
+    if index >= 8 {
+        return false;
+    }
+    match parameter {
+        "Enabled" => value.is_boolean(),
+        "Type" => value.as_str().is_some_and(|kind| {
+            matches!(
+                kind,
+                "peaking" | "lowShelf" | "highShelf" | "lowPass" | "highPass" | "notch"
+            )
+        }),
+        "FrequencyHz" => value.as_f64().is_some_and(|frequency| {
+            frequency.is_finite() && (20.0..=20_000.0).contains(&frequency)
+        }),
+        "Q" => value
+            .as_f64()
+            .is_some_and(|q| q.is_finite() && (0.1..=20.0).contains(&q)),
+        "GainDb" => value
+            .as_f64()
+            .is_some_and(|gain| gain.is_finite() && (-24.0..=24.0).contains(&gain)),
+        _ => false,
+    }
 }
 
 pub fn node_registry() -> [NodeTypeSpec; 17] {
@@ -1169,6 +1204,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::ParametricEq, "gainDb") => value
                     .as_f64()
                     .is_some_and(|gain| gain.is_finite() && (-24.0..=24.0).contains(&gain)),
+                (NodeKind::ParametricEq, name) if name.starts_with("band") => {
+                    valid_parametric_band_parameter(name, value)
+                }
                 (NodeKind::Compressor, "thresholdDb") => value.as_f64().is_some_and(|threshold| {
                     threshold.is_finite() && (-60.0..=0.0).contains(&threshold)
                 }),
@@ -2452,6 +2490,23 @@ mod tests {
             .unwrap_err()
             .iter()
             .any(|error| matches!(error, ValidationError::InvalidParameter { path } if path == "nodes[0].parameters.holdMs")));
+
+        let mut eq = node("eq", NodeKind::ParametricEq, PortDirection::Input);
+        eq.parameters
+            .insert("band7Type".into(), serde_json::json!("notch"));
+        eq.parameters
+            .insert("band7Enabled".into(), serde_json::json!(true));
+        assert!(
+            validate_session(&session(vec![eq.clone()], vec![])).is_ok(),
+            "valid EQ parameters rejected: {:?}",
+            validate_session(&session(vec![eq.clone()], vec![]))
+        );
+        eq.parameters
+            .insert("band7Type".into(), serde_json::json!("unsupported"));
+        assert!(validate_session(&session(vec![eq], vec![]))
+            .unwrap_err()
+            .iter()
+            .any(|error| matches!(error, ValidationError::InvalidParameter { path } if path == "nodes[0].parameters.band7Type")));
     }
 
     #[test]

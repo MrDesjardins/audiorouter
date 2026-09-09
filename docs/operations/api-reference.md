@@ -105,7 +105,7 @@ The current node catalog is available through `nodes.describe` and contains:
 | `gain@1` | available | `gainDb`, from -60 to +24 dB |
 | `mute@1` | available | `muted`, boolean |
 | `meter@1` | available | Bounded per-node telemetry boundary |
-| `parametric-eq@1` | available | One-band peaking EQ stage; 48 kHz graph baseline |
+| `parametric-eq@1` | available | Eight independently enabled bands; peaking, shelf, pass, and notch filters |
 | `compressor@1` | available | Stereo-capable dynamics stage; 48 kHz graph baseline |
 | `gate@1` | available | Downward gate/expander stage; 48 kHz graph baseline |
 | `limiter@1` | available | Sample-peak ceiling stage; -12 to 0 dBFS |
@@ -115,7 +115,8 @@ The current node catalog is available through `nodes.describe` and contains:
 
 The separately reported `processors` catalog in `system.describe` documents the
 implemented DSP primitives and their typed parameter ranges. `parametricEq` is
-available as the corresponding one-band graph node, and `compressor` is
+available as the corresponding eight-band graph node (legacy `frequencyHz`,
+`q`, and `gainDb` fields remain as band-0 compatibility aliases), and `compressor` is
 available as graph dynamics nodes, `delay` is available as a preallocated graph
 time stage, `graphicEq` is available as a fixed ten-band graph EQ, and `pitch`
 is available as a fixed-quantum streaming graph stage. Pitch reset/reconnect

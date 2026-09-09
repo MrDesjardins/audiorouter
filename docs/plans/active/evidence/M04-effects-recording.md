@@ -797,3 +797,15 @@ pagination error. Single-record lookup uses a direct identity query and remains
 available for larger libraries. A 501-record regression passed alongside 68
 storage tests, 87 control tests, strict Clippy, formatting, and diff checks.
 No recording files, audio endpoints, or machine configuration were accessed.
+## 2026-09-09 — Eight-band parametric EQ contract
+
+The portable graph now exposes all eight fixed-capacity parametric-EQ bands.
+Each band supports explicit enable state, peaking/low-shelf/high-shelf/
+low-pass/high-pass/notch selection, frequency, Q, and gain. The prior
+`frequencyHz`, `q`, and `gainDb` fields remain accepted as band-0 compatibility
+aliases. Domain validation, control discovery, and engine compilation share the
+same bounded ranges; enabled bands are prepared before publication and disabled
+bands allocate no active filter state. The full domain/engine/control suites,
+formatting, and strict Clippy pass. This is portable DSP evidence; frequency
+response reference vectors, UI curve parity, native callback timing, and
+hardware/release gates remain open.

@@ -75,7 +75,7 @@ describe("appendLibraryNode", () => {
         : node),
     };
     const reset = resetNodeDraftParameters(changed, "parametricEq-1");
-    expect(reset.nodes.at(-1)?.parameters).toEqual({ frequencyHz: 1000, q: 1, gainDb: 0 });
+    expect(reset.nodes.at(-1)?.parameters).toEqual(expect.objectContaining({ frequencyHz: 1000, q: 1, gainDb: 0, band7Enabled: false, band7Type: "peaking" }));
     expect(reset.edges).toEqual(demoSession.edges);
   });
 
