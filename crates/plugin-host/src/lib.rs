@@ -955,7 +955,11 @@ pub enum WorkerSessionError {
     InvalidLatency,
     InvalidState,
     InvalidParameterDescriptor(ParameterDescriptorError),
+    InvalidParameter(ParameterEventError),
     InvalidEditor,
+    InvalidBusLayout(WorkerAudioBusLayoutError),
+    InvalidBusFrames(WorkerAudioBusFramesError),
+    BusLayoutMismatch,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1590,6 +1594,11 @@ pub enum WorkerMessage {
         plugin_sha256: String,
         channels: u16,
     },
+    HelloBuses {
+        protocol_version: u16,
+        plugin_sha256: String,
+        layout: WorkerAudioBusLayout,
+    },
     Ready,
     DescribeParameters,
     DescribeEditor,
@@ -2066,6 +2075,107 @@ unsafe fn assign_process_to_job_object(
 #[cfg(windows)]
 unsafe fn close_handle(handle: *mut std::ffi::c_void) {
     let _ = CloseHandle(handle);
+}
+
+/// Stateful handshake for the multi-bus protocol. It is deliberately
+/// separate from `WorkerSession`: existing workers negotiate one stream, and
+/// cannot be upgraded by merely sending a different message. The session
+/// validates one complete input quantum per declared bus before handing it to
+/// a future worker implementation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerBusSession {
+    expected_plugin_sha256: String,
+    layout: WorkerAudioBusLayout,
+    state: WorkerSessionState,
+    frame_guard: WorkerFrameGuard,
+}
+
+impl WorkerBusSession {
+    pub fn new(
+        expected_plugin_sha256: impl Into<String>,
+        layout: WorkerAudioBusLayout,
+    ) -> Result<Self, WorkerSessionError> {
+        let expected_plugin_sha256 = expected_plugin_sha256.into();
+        if !is_sha256(&expected_plugin_sha256) {
+            return Err(WorkerSessionError::InvalidExpectedHash);
+        }
+        Ok(Self {
+            expected_plugin_sha256,
+            layout,
+            state: WorkerSessionState::AwaitingHello,
+            frame_guard: WorkerFrameGuard::new(),
+        })
+    }
+
+    pub fn state(&self) -> WorkerSessionState {
+        self.state
+    }
+
+    pub fn layout(&self) -> &WorkerAudioBusLayout {
+        &self.layout
+    }
+
+    pub fn accept(
+        &mut self,
+        message: &WorkerMessage,
+        now_tick: u64,
+    ) -> Result<Option<WorkerAudioBusFrames>, WorkerSessionError> {
+        validate_worker_message(message).map_err(|error| match error {
+            WorkerMessageError::InvalidBusLayout(error) => {
+                WorkerSessionError::InvalidBusLayout(error)
+            }
+            WorkerMessageError::InvalidBusFrames(error) => {
+                WorkerSessionError::InvalidBusFrames(error)
+            }
+            WorkerMessageError::InvalidParameter(error) => {
+                WorkerSessionError::InvalidParameter(error)
+            }
+            WorkerMessageError::InvalidFrame(error) => WorkerSessionError::Frame(error),
+            _ => WorkerSessionError::UnexpectedMessage,
+        })?;
+        match (&self.state, message) {
+            (
+                WorkerSessionState::AwaitingHello,
+                WorkerMessage::HelloBuses {
+                    plugin_sha256,
+                    layout,
+                    ..
+                },
+            ) if plugin_sha256 == &self.expected_plugin_sha256 && layout == &self.layout => {
+                self.state = WorkerSessionState::AwaitingReady;
+                Ok(None)
+            }
+            (WorkerSessionState::AwaitingHello, WorkerMessage::HelloBuses { .. }) => {
+                Err(WorkerSessionError::IdentityMismatch)
+            }
+            (WorkerSessionState::AwaitingReady, WorkerMessage::Ready) => {
+                self.state = WorkerSessionState::Active;
+                Ok(None)
+            }
+            (WorkerSessionState::Active, WorkerMessage::ProcessBuses { layout, frames, .. })
+                if layout == &self.layout =>
+            {
+                let frames = self
+                    .layout
+                    .input_frames(frames.clone())
+                    .map_err(WorkerSessionError::InvalidBusFrames)?;
+                self.frame_guard
+                    .accept(
+                        frames
+                            .frames()
+                            .first()
+                            .expect("layout requires a main input bus"),
+                        now_tick,
+                    )
+                    .map_err(WorkerSessionError::Frame)?;
+                Ok(Some(frames))
+            }
+            (WorkerSessionState::Active, WorkerMessage::ProcessBuses { .. }) => {
+                Err(WorkerSessionError::BusLayoutMismatch)
+            }
+            _ => Err(WorkerSessionError::UnexpectedMessage),
+        }
+    }
 }
 
 /// Control-plane client for one disposable worker process. This owns the
@@ -3404,6 +3514,20 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                     WorkerFrameError::InvalidChannels,
                 ));
             }
+        }
+        WorkerMessage::HelloBuses {
+            protocol_version,
+            plugin_sha256,
+            layout,
+        } => {
+            if *protocol_version != WORKER_PROTOCOL_VERSION {
+                return Err(WorkerMessageError::InvalidProtocolVersion);
+            }
+            if !is_sha256(plugin_sha256) {
+                return Err(WorkerMessageError::InvalidPluginHash);
+            }
+            WorkerAudioBusLayout::new(layout.input_buses(), layout.output_buses())
+                .map_err(WorkerMessageError::InvalidBusLayout)?;
         }
         WorkerMessage::Process { frame, parameters } => {
             WorkerFrame::new(
@@ -5072,6 +5196,37 @@ mod tests {
                 WorkerAudioBusFramesError::IdentityMismatch
             ))
         );
+    }
+
+    #[test]
+    fn multi_bus_session_binds_layout_and_accepts_one_coherent_quantum() {
+        let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+        let mut session = WorkerBusSession::new("a".repeat(64), layout.clone()).unwrap();
+        let hello = WorkerMessage::HelloBuses {
+            protocol_version: WORKER_PROTOCOL_VERSION,
+            plugin_sha256: "a".repeat(64),
+            layout: layout.clone(),
+        };
+        assert_eq!(session.accept(&hello, 0).unwrap(), None);
+        assert_eq!(session.state(), WorkerSessionState::AwaitingReady);
+        assert_eq!(session.accept(&WorkerMessage::Ready, 0).unwrap(), None);
+        let frames = session
+            .accept(
+                &WorkerMessage::ProcessBuses {
+                    layout,
+                    frames: vec![
+                        WorkerFrame::new(1, 100, 2, vec![0.0, 0.1]).unwrap(),
+                        WorkerFrame::new(1, 100, 1, vec![0.2]).unwrap(),
+                    ],
+                    parameters: Vec::new(),
+                },
+                0,
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(frames.sequence(), 1);
+        assert_eq!(frames.frame_count(), 1);
+        assert_eq!(session.state(), WorkerSessionState::Active);
     }
 
     #[test]

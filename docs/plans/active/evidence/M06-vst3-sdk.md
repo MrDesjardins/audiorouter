@@ -1644,3 +1644,12 @@ main-plus-side-chain request and response and rejects a misaligned request.
 The current worker session and shared-memory runtime remain single-stream, so
 these messages are a transport contract only and do not enable side-chain
 execution.
+
+`WorkerBusSession` now provides the matching state boundary for the new
+messages. It binds the expected plugin fingerprint and exact bus layout during
+`HelloBuses`/`Ready`, then accepts a `ProcessBuses` request only when every
+declared input bus is coherent and within the frame deadline. Existing
+single-stream `WorkerSession` behavior is unchanged. A handshake regression
+passed with the plugin-host suite at 63 tests, alongside 21 worker-process
+tests, doc-tests, formatting, and strict Clippy. Fixed shared-memory bus-slot
+ownership and actual side-chain scheduling remain open.
