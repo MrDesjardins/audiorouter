@@ -7,6 +7,7 @@ import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
 import { demoSession } from "./fixtures";
+import { BackendConnectionContext } from "./backendConnectionContext";
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
@@ -93,7 +94,7 @@ describe("keyboard connection dialog", () => {
     const inserted = insertDraftMixer(connected, "edge-1");
     const onRemove = vi.fn();
     const onToggle = vi.fn();
-    render(<DraftConnectionList session={inserted} onRemove={onRemove} onToggle={onToggle} />);
+    render(<BackendConnectionContext.Provider value={true}><DraftConnectionList session={inserted} onRemove={onRemove} onToggle={onToggle} /></BackendConnectionContext.Provider>);
 
     fireEvent.click(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]);
     expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
@@ -113,5 +114,14 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByText("Mixer inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" }));
     expect(screen.getByText("Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing.")).toBeTruthy();
+  });
+
+  it("disables topology mutations when no backend connection context exists", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const inserted = insertDraftMixer(connected, "edge-1");
+    render(<DraftConnectionList session={inserted} onRemove={vi.fn()} onToggle={vi.fn()} />);
+
+    expect(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" })).toHaveProperty("disabled", true);
   });
 });

@@ -17,6 +17,7 @@ import { processorAvailabilityText, processorLatencyText, processorParameterErro
 import { mergeSessionInventory } from "./sessionInventory";
 import type { Connection } from "@xyflow/react";
 import { DraftConnectionList, decodeTopologyAction } from "./DraftConnectionList";
+import { BackendConnectionContext } from "./backendConnectionContext";
 
 const defaultBackend = createDisconnectedBackend();
 
@@ -41,6 +42,11 @@ function StartupPanel({ backend }: { backend: UiBackend }) {
     catch (error) { setMessage(formatUiError(error, "Startup apply unavailable.")); }
   };
   return <section className="panel startup-panel" aria-labelledby="startup-heading"><div className="section-heading"><div><p className="eyebrow">Background lifecycle</p><h2 id="startup-heading">Start at sign-in</h2></div><button type="button" className="secondary" onClick={refresh}>Refresh</button></div><p className="muted">{status?.reason ?? "Loading startup capability..."}</p><label>Desired policy<select aria-label="Desired sign-in startup policy" value={enabled ? "enabled" : "disabled"} onChange={(event) => { setEnabled(event.target.value === "enabled"); setPlan(null); }} disabled={!backend.connected}><option value="disabled">Disabled</option><option value="enabled">Enabled</option></select></label><div className="actions"><button type="button" className="secondary" onClick={() => void createPlan()} disabled={!backend.connected}>Plan startup policy</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()}>Apply planned policy</button>}</div>{message && <p className="muted" role="status">{message}</p>}<p className="muted">Registration is currently unavailable in this build. Planning and applying only exercise the authorized backend boundary; they do not register Windows startup.</p></section>;
+}
+
+export function App({ backend }: { backend?: UiBackend } = {}) {
+  const resolvedBackend = backend ?? defaultBackend;
+  return <BackendConnectionContext.Provider value={resolvedBackend.connected}><AppContent backend={resolvedBackend} /></BackendConnectionContext.Provider>;
 }
 
 function ProcessorCatalog({ processors, error, node, backend }: { processors: ProcessorDescriptor[] | null; error: string | null; node: Node; backend: UiBackend }) {
@@ -205,7 +211,7 @@ function LegacyDraftConnectionList({ session, onRemove, onToggle }: { session: i
   return <section className="draft-connections" aria-labelledby="draft-connections-heading"><h3 id="draft-connections-heading">Draft connections</h3>{session.edges.length === 0 ? <p className="muted">No draft connections.</p> : <ul aria-label="Draft connections">{session.edges.map((edge) => <li key={edge.id}><span>{names.get(edge.sourceNode) ?? edge.sourceNode}:{edge.sourcePort} → {names.get(edge.destinationNode) ?? edge.destinationNode}:{edge.destinationPort} <small>{edge.enabled ? "enabled" : "disabled"}</small></span><button type="button" className="secondary" onClick={() => onToggle(edge.id, !edge.enabled)}>{edge.enabled ? "Disable" : "Enable"}</button><button type="button" className="secondary" onClick={() => onRemove(edge.id)}>Remove</button></li>)}</ul>}</section>;
 }
 
-export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) {
+function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) {
   const [snapshotCache] = useState(() => new SnapshotCache());
   const [snapshotState, setSnapshotState] = useState(snapshotCache.current());
   const [selectedSessionId, setSelectedSessionId] = useState(demoSession.id);
