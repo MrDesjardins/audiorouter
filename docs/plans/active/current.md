@@ -44,6 +44,14 @@ release completion.
   formatting, and diff checks passed. No audio or machine configuration
   changed.
 
+- Completed the API reference parity pass on 2026-09-09: every documented
+  mutating recorder, startup, plugin-retry, virtual-device, import, graph,
+  session-lifecycle, and recording operation now states its idempotency-key
+  requirement, with confirmed recycle explicitly distinguished from preview.
+  Documentation validation passed with 51 Markdown files and 163 local links.
+  The schema regression is pushed at `a6ce827a`; this documentation follow-up
+  remains portable and does not change audio or machine configuration.
+
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
   ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and

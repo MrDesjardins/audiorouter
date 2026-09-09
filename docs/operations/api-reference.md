@@ -31,12 +31,12 @@ after the initial 47-method reference.
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
 | `recordings.list` | `record` | read-only |
-| `recorders.arm` | `record` | mutating |
-| `recorders.start` | `record` | mutating |
-| `recorders.pause` | `record` | mutating |
-| `recorders.resume` | `record` | mutating |
-| `recorders.split` | `record` | mutating |
-| `recorders.stop` | `record` | mutating |
+| `recorders.arm` | `record` | mutating; requires an idempotency key |
+| `recorders.start` | `record` | mutating; requires an idempotency key |
+| `recorders.pause` | `record` | mutating; requires an idempotency key |
+| `recorders.resume` | `record` | mutating; requires an idempotency key |
+| `recorders.split` | `record` | mutating; requires an idempotency key |
+| `recorders.stop` | `record` | mutating; requires an idempotency key |
 | `recordings.get` | `record` | read-only |
 | `recordings.recovery` | `record` | read-only |
 | `recordings.reveal` | `record` | external operation |
@@ -49,15 +49,15 @@ after the initial 47-method reference.
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
 | `startup.get` | `read` | read-only |
 | `startup.plan` | `sessionControl` | plan-only |
-| `startup.apply` | `sessionControl` | mutating |
+| `startup.apply` | `sessionControl` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `plugins.scan` | `pluginScan` | read-only |
 | `plugins.list` | `pluginScan` | read-only |
-| `plugins.retry` | `pluginScan` | mutating |
+| `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
 | `plugins.inspect` | `pluginScan` | read-only |
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
-| `virtualDevices.apply` | `deviceAdministration` | mutating |
+| `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |
 | `apps.list` | `read` | read-only |
 | `applications.list` | `read` | read-only; returns bounded process identity, including nullable executable path and creation timestamp |
 | `nodes.types` | `read` | read-only |
@@ -71,17 +71,17 @@ after the initial 47-method reference.
 | `sessions.get` | `read` | read-only |
 | `sessions.export` | `read` | read-only |
 | `sessions.importPlan` | `graphWrite` | plan-only |
-| `sessions.importCommit` | `graphWrite` | mutating |
+| `sessions.importCommit` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.list` | `read` | read-only |
 | `sessions.create` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.duplicate` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
 | `graph.plan` | `graphWrite` | plan-only |
-| `graph.commit` | `graphWrite` | mutating |
-| `session.start` | `sessionControl` | external operation |
-| `sessions.start` | `sessionControl` | external operation |
-| `session.stop` | `sessionControl` | external operation |
-| `sessions.stop` | `sessionControl` | external operation |
+| `graph.commit` | `graphWrite` | mutating; requires an idempotency key |
+| `session.start` | `sessionControl` | external operation; requires an idempotency key |
+| `sessions.start` | `sessionControl` | external operation; requires an idempotency key |
+| `session.stop` | `sessionControl` | external operation; requires an idempotency key |
+| `sessions.stop` | `sessionControl` | external operation; requires an idempotency key |
 
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls
