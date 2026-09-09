@@ -130,6 +130,10 @@ implemented and qualified; it is not a failed installation.
 The UI can inspect the disconnected/demo state, edit a local draft, inspect
 routes, and display device/application/recording metadata when connected to a
 backend. Draft changes are not committed until an authorized plan/apply flow.
+If another client changes the session before commit, the UI reports the typed
+revision conflict and structured remediation, refreshes the authoritative
+session, and clears the stale warning/commit state. Review the refreshed draft
+before planning again; it never retries the old plan automatically.
 The [headless runbook](headless-runbook.md) documents the local MCP stdio
 adapter, optional authenticated named-pipe proxy, backups, imports, exports,
 and recovery boundaries.
