@@ -1976,3 +1976,12 @@ finite output sample differed from the 0.25 probe input. This supplements
 parameter-interface evidence with a real repository-local sound-transformation
 check; it is still offline evidence and does not claim supervised realtime
 hosting. Generated native artifacts were removed after the run.
+
+## VST2 intra-block parameter timing (2026-09-09)
+
+The native x64 VST2 worker now sorts validated parameter events and splits each
+block at event offsets, applying changes between `processReplacing` segments.
+This prevents a nonzero sample offset from being silently moved to the block
+boundary. The ReaPlugs acceptance matrix exercises offsets 0 and 64 in a
+128-frame block for all six local effects at 44.1, 48, and 96 kHz (18 isolated
+worker runs); finite output passed and the fixture environment was restored.

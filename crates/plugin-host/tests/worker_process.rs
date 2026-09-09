@@ -556,11 +556,18 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
     let processed = worker
         .process(
             frame,
-            vec![audiorouter_plugin_host::ParameterEvent {
-                parameter_id: descriptors[0].parameter_id,
-                normalized_value: descriptors[0].default_value,
-                sample_offset: 0,
-            }],
+            vec![
+                audiorouter_plugin_host::ParameterEvent {
+                    parameter_id: descriptors[0].parameter_id,
+                    normalized_value: descriptors[0].default_value,
+                    sample_offset: 0,
+                },
+                audiorouter_plugin_host::ParameterEvent {
+                    parameter_id: descriptors[0].parameter_id,
+                    normalized_value: descriptors[0].default_value,
+                    sample_offset: 64,
+                },
+            ],
             Instant::now(),
         )
         .expect("VST2 worker processing");

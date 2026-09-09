@@ -48,4 +48,4 @@ try {
     }
 }
 
-Write-Output 'Scope: ignored local VST2 fixtures and disposable worker processes; no plugin registration or audio configuration changes.'
+Write-Output 'Scope: ignored local VST2 fixtures and disposable worker processes, including intra-block parameter-offset coverage; no plugin registration or audio configuration changes.'

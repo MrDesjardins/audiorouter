@@ -651,28 +651,63 @@ fn process_vst2_frame(
     for (index, sample) in frame.samples.iter().copied().enumerate() {
         input_channels[index % channels][index / channels] = sample;
     }
-    let inputs: Vec<&[f32]> = input_channels.iter().map(Vec::as_slice).collect();
-    let mut outputs: Vec<&mut [f32]> = output_channels.iter_mut().map(Vec::as_mut_slice).collect();
     plugin
         .set_processing_format(
             sample_rate_hz as f32,
             i32::try_from(frames).map_err(|_| "frame count overflow")?,
         )
         .map_err(|error| format!("format setup failed: {error:?}"))?;
-    for event in parameters {
+    let mut ordered_events = parameters.to_vec();
+    ordered_events.sort_by_key(|event| event.sample_offset);
+    for event in &ordered_events {
         if event.sample_offset >= frames {
             return Err(format!(
                 "parameter sample offset {} exceeds block length {frames}",
                 event.sample_offset
             ));
         }
-        plugin
-            .set_parameter(event.parameter_id, event.normalized_value)
-            .map_err(|error| format!("parameter update failed: {error:?}"))?;
     }
-    plugin
-        .process_replacing(&inputs, &mut outputs)
-        .map_err(|error| format!("process callback failed: {error:?}"))?;
+    let mut segment_start = 0;
+    let mut event_index = 0;
+    while event_index < ordered_events.len() {
+        let offset = ordered_events[event_index].sample_offset;
+        if offset > segment_start {
+            let inputs: Vec<&[f32]> = input_channels
+                .iter()
+                .map(|channel| &channel[segment_start..offset])
+                .collect();
+            let mut outputs: Vec<&mut [f32]> = output_channels
+                .iter_mut()
+                .map(|channel| &mut channel[segment_start..offset])
+                .collect();
+            plugin
+                .process_replacing(&inputs, &mut outputs)
+                .map_err(|error| format!("process callback failed: {error:?}"))?;
+        }
+        while event_index < ordered_events.len()
+            && ordered_events[event_index].sample_offset == offset
+        {
+            let event = &ordered_events[event_index];
+            plugin
+                .set_parameter(event.parameter_id, event.normalized_value)
+                .map_err(|error| format!("parameter update failed: {error:?}"))?;
+            event_index += 1;
+        }
+        segment_start = offset;
+    }
+    if segment_start < frames {
+        let inputs: Vec<&[f32]> = input_channels
+            .iter()
+            .map(|channel| &channel[segment_start..frames])
+            .collect();
+        let mut outputs: Vec<&mut [f32]> = output_channels
+            .iter_mut()
+            .map(|channel| &mut channel[segment_start..frames])
+            .collect();
+        plugin
+            .process_replacing(&inputs, &mut outputs)
+            .map_err(|error| format!("process callback failed: {error:?}"))?;
+    }
     if output_channels
         .iter()
         .flat_map(|channel| channel.iter())
