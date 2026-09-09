@@ -52,6 +52,12 @@ release completion.
   plugin_scan_cli -- --nocapture` on 2026-09-09; the invalid-candidate
   visibility test passed. This confirms the bounded scan/inspection boundary
   remains test-covered without loading arbitrary plugin code.
+- Re-ran the complete plugin-host qualification at the current head on
+  2026-09-09: 67 library tests and 13 worker-process tests passed. Coverage
+  includes VST2/VST3 identity and layout boundaries, worker containment,
+  identity revalidation, state integrity, latency, editor lifecycle,
+  protected-path failure policy, and shared-bus transport. No arbitrary
+  installed plugin was loaded and no machine or audio configuration changed.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
