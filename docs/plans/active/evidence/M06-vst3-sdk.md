@@ -1552,3 +1552,17 @@ The wrappers restored both VST2 environment variables and did not copy,
 register, or alter plugins or audio configuration. This is compatibility and
 containment evidence only; rights, successful editor integration, and release
 qualification remain open.
+## Installed plugin inventory follow-up (2026-09-08)
+
+A read-only inventory of the available Windows plugin locations found the six
+ReaPlugs effect binaries already used by the local VST2 matrix and the
+installed Pitchproof x64 VST2 binary. The remaining ReaPlugs DLLs are
+standalone/MIDI/JS assets rather than an additional rights-cleared native
+audio-effect vendor fixture; the x86 Pitchproof sibling remains an explicit
+negative control. No second-vendor VST2/VST3 fixture was available for this
+run, and no plugin was copied, registered, loaded, or modified.
+
+This confirms that the next independent-fixture gate depends on a user-supplied
+rights-cleared x64 VST2 or VST3 binary. Until then, the existing worker,
+failure-containment, and multi-rate evidence remains valid but cannot be
+promoted to broad compatibility or release qualification.
