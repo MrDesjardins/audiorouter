@@ -16,6 +16,7 @@ use audiorouter_windows_audio::{
     ProcessLoopbackCapture, ProcessLoopbackMode, SharedCapture, SharedRender,
 };
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 use windows::core::Result;
 use windows::core::{implement, Interface};
 use windows::Win32::Media::Audio::{
@@ -35,6 +36,12 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemAlloc, CoTaskMemFree, CoUninitialize, BLOB,
     CLSCTX_ALL, COINIT_MULTITHREADED,
 };
+
+fn graph_quantum_duration(sample_rate_hz: u32, frames: u64) -> Duration {
+    let rate = u64::from(sample_rate_hz).max(1);
+    let nanos = frames.saturating_mul(1_000_000_000).div_ceil(rate);
+    Duration::from_nanos(nanos)
+}
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::System::Variant::VT_BLOB;
 
@@ -429,8 +436,9 @@ fn adapter_smoke(
                         let processed_generation = scheduler
                             .process_once_with_deadline(
                                 std::time::Instant::now()
-                                    .checked_add(std::time::Duration::from_nanos(
-                                        (128_u64 * 1_000_000_000) / 48_000,
+                                    .checked_add(graph_quantum_duration(
+                                        capture_info.sample_rate_hz,
+                                        128,
                                     ))
                                     .unwrap_or_else(std::time::Instant::now),
                             )
@@ -1085,5 +1093,21 @@ mod tests {
         assert_eq!(map_route_sample(0.25, None, 1, 2, 0), 0.25);
         assert_eq!(map_route_sample(0.25, None, 1, 2, 1), 0.25);
         assert_eq!(map_route_sample(0.25, Some(0.75), 2, 2, 1), 0.75);
+    }
+
+    #[test]
+    fn graph_quantum_deadline_uses_the_negotiated_rate() {
+        assert_eq!(
+            super::graph_quantum_duration(48_000, 128),
+            std::time::Duration::from_nanos(2_666_667)
+        );
+        assert_eq!(
+            super::graph_quantum_duration(44_100, 128),
+            std::time::Duration::from_nanos(2_902_495)
+        );
+        assert!(
+            super::graph_quantum_duration(44_100, 128)
+                > super::graph_quantum_duration(48_000, 128)
+        );
     }
 }
