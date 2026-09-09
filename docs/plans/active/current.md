@@ -3255,3 +3255,6 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 - Corrected the M05 plugin-scan UI wording on 2026-09-08: the discovery panel now names both VST3 and gated VST2 support and its empty state includes all DLL candidates, matching the backend identity contract without implying execution or release qualification. UI typecheck and all 91 Vitest tests passed; no audio or machine configuration was accessed.
 - Next M06 task: obtain an additional rights-cleared independent x64 VST2 fixture or integrate the issuer with an authenticated native shell once a real HWND owner exists; retain fail-closed editor controls and the gated VST2 release boundary.
+
+- Synchronized the M06/PLUG-07 delivery documentation on 2026-09-08: the milestone, delivery risk register, and development release notes now distinguish the verified Windows x64 VST2 worker/ABI fixture boundary from release qualification, rights, editor, x86, redistribution, and third-party compatibility gates. Documentation validation remains required; no code, plugin registration, audio stream, or machine configuration changed.
+- Next M06 task: obtain an additional rights-cleared independent x64 VST2 fixture or integrate the issuer with an authenticated native shell once a real HWND owner exists; retain fail-closed editor controls and the gated VST2 release boundary.

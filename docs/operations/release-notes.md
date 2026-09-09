@@ -25,6 +25,10 @@ release and must not be presented as an installable Windows audio product.
   manifest, then removes the temporary output.
 - VST3 SDK acceptance passes 51 SDK self-tests, 1,598 official validator tests
   with 0 failures, and the offline native mda fixture loader.
+- A Windows-only, gated native x64 VST2 adapter is verified with repository-owned
+  `VSTPluginMain` and legacy `main` fixtures, including chunk-state restoration,
+  invalid-output rejection, crash containment, and hang reaping. This does not
+  grant redistribution rights or make the VST2 extension release-qualified.
 - The native WASAPI probes qualify shared capture across 13 endpoints,
   process-loopback include/exclude and controlled attribution, silent render
   lifecycle, and endpoint timing baselines. The guarded production Rust adapter
@@ -47,7 +51,8 @@ release and must not be presented as an installable Windows audio product.
   clean-machine qualification, or Secure Boot/Memory Integrity driver result.
 - Plugin discovery and worker protocol protections are implemented, but full
   filesystem/network OS sandboxing, arbitrary plugin execution, and a broad
-  third-party compatibility matrix remain open.
+  third-party compatibility matrix remain open. The VST2 editor, rights, and
+  release-qualification gates also remain open.
 - Sign-in startup, tray/background lifecycle, and manual accessibility and
   first-time-user qualification remain open.
 

@@ -84,7 +84,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | Driver bugs/security weakness | System instability or cross-user audio leak | Dedicated test systems, small interface, verifier/security tests, signed rollback; M03/M08 |
 | Process capture misses protected/complex apps | Capture scope differs from expectation | Capability errors and virtual-output alternative; M00/M02/M08 |
 | Desktop loopback captures own monitor | Feedback or duplicate audio | Explicit desktop bus plus global topology validation; M03 |
-| Existing ReaPlugs is unsupported format | User's exact plugin chain cannot migrate directly | Built-ins + tested VST3 alternatives, explicit legacy gap; M06 |
+| Existing ReaPlugs may be legacy VST2 with incomplete rights/editor evidence | User's exact plugin chain may not migrate directly or be release-qualified | Built-ins plus gated x64 VST2 worker qualification; explicit rights, editor, compatibility, and release gates; M06/M08 |
 | Device clocks drift | Growing latency, clicks, underruns | Bounded asynchronous resampling and 8-hour tests; M02 |
 | Plugin worker latency/instability | Delayed or interrupted voice | Per-instance containment, measured latency, protected failure policy; M06 |
 | Unavailable Windows hardware here | Cannot verify platform requirements | Record blocked test evidence; never substitute Linux mocks; M00 onward |
