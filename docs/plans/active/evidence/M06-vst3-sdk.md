@@ -1304,6 +1304,12 @@ The ReaComp run now also reports its bounded `AEffect::initial_delay` through
 the worker latency response and passes the existing latency bound. Native
 editor containment remains open; no editor window was opened.
 
+ReaGate independently passed the same opt-in worker acceptance. The worker
+rejects a VST2 parameter event whose sample offset is outside the current
+block before invoking the plugin setter; in-block VST2 events are applied at
+the worker block boundary. Sample-accurate VST2 automation remains outside
+this adapter evidence.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

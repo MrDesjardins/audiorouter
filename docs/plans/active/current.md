@@ -101,6 +101,12 @@ an explicit `UnsupportedFeature` without killing the worker; plugin editor
 ownership remains a separate qualification task. The same run now returns the
 plugin's bounded `AEffect::initial_delay` through the worker latency contract.
 
+ReaGate also passes the opt-in descriptor, parameter, state-capability,
+processing, and latency acceptance. VST2 parameter offsets outside the current
+block are now rejected before a setter call; valid offsets retain the current
+worker's block-boundary automation semantics rather than pretending to be
+sample-accurate.
+
 The locked all-workspace regression sweep then passed, including control (97),
 domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport
 (19), Windows audio (30), and the remaining package suites. Workspace strict

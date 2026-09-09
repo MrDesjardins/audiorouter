@@ -20,6 +20,8 @@ pub const VST2_EFFECT_MAGIC: i32 = 0x5673_7450;
 pub const VST2_FLAG_CAN_REPLACING: i32 = 1 << 4;
 /// `effFlagsProgramChunks`: the plugin exposes opaque chunk state.
 pub const VST2_FLAG_PROGRAM_CHUNKS: i32 = 1 << 5;
+/// `effFlagsHasEditor`: the plugin exposes a native editor.
+pub const VST2_FLAG_HAS_EDITOR: i32 = 1 << 2;
 pub const VST2_MAX_AUDIO_CHANNELS: i32 = 2;
 pub const VST2_MAX_INPUT_CHANNELS: i32 = 4;
 pub const VST2_MAX_PARAMETERS: i32 = 256;
@@ -511,6 +513,12 @@ impl Vst2Library {
         // SAFETY: This method is only available for a successfully validated
         // handle, so the flags field is readable for its lifetime.
         unsafe { (*self.effect).flags & VST2_FLAG_PROGRAM_CHUNKS != 0 }
+    }
+
+    pub fn has_editor(&self) -> bool {
+        // SAFETY: This method is only available for a successfully validated
+        // handle, so the flags field is readable for its lifetime.
+        unsafe { (*self.effect).flags & VST2_FLAG_HAS_EDITOR != 0 }
     }
 
     pub fn latency(&self, sample_rate_hz: u32) -> Result<crate::WorkerLatency, Vst2LibraryError> {

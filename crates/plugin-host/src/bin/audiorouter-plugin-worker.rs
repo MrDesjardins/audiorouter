@@ -401,6 +401,12 @@ fn process_vst2_frame(
     let inputs: Vec<&[f32]> = input_channels.iter().map(Vec::as_slice).collect();
     let mut outputs: Vec<&mut [f32]> = output_channels.iter_mut().map(Vec::as_mut_slice).collect();
     for event in parameters {
+        if event.sample_offset >= frames {
+            return Err(format!(
+                "parameter sample offset {} exceeds block length {frames}",
+                event.sample_offset
+            ));
+        }
         plugin
             .set_parameter(event.parameter_id, event.normalized_value)
             .map_err(|error| format!("parameter update failed: {error:?}"))?;
