@@ -20,6 +20,16 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
+- Requalified the full guarded M00-M08 chain from clean pushed head
+  `88481216` on 2026-09-09 after native restart-path coverage: VS2026/MSVC/
+  SDK/WDK discovery and compile, read-only 31-endpoint inventory, disposable
+  SysVAD x64 qualification, M01/M04/M05/M06/M07, native VST3 single-/multi-bus
+  processing, available VST2 fixtures, unsigned M08 artifacts, 159
+  traceability mappings, and documentation validation (51 Markdown files/163
+  local links) passed. Temporary outputs were cleaned; no driver installation
+  or loading, signing-mode change, plugin/startup registration, audio stream,
+  or persistent machine audio configuration occurred.
+
 - Hardened the M06/PLUG-03 graph staging boundary on 2026-09-09: runtime
   multi-bus processing now rejects mixed quantum frame counts across any
   declared input or output bus before mutating destinations. The focused
