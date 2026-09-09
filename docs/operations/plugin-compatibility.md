@@ -18,11 +18,19 @@ built and checked with the installed Visual Studio 2026 toolchain:
   component state.
 - Additional offline loader checks passed for `mda BeatBox`, `mda Combo`, and
   `mda Delay`.
+- The canonical Steinberg `AGain` sample was built from the same pinned SDK;
+  the official validator reported 94 passed and 0 failed, and AudioRouter's
+  offline loader passed its main stereo effect class with finite processing,
+  bounded parameter automation, and state round-trip. Its side-chain class
+  remains outside this one-input/one-output probe because it exposes a
+  different bus layout.
 
 These are offline fixture results, not proof that every class or third-party
 plugin is compatible with a realtime AudioRouter route. Some fixture classes
-reject processor activation with `E_NOTIMPL`; that result is surfaced as a
-plugin-specific incompatibility rather than converted into success.
+may return `E_NOTIMPL` from the optional VST3 processing lifecycle hook; the
+loader tolerates only that specific result and still requires successful
+processing, finite output, parameter checks, and state round-trip. Other
+activation failures remain plugin-specific incompatibilities.
 
 ## Second-vendor probe
 

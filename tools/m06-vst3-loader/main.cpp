@@ -156,6 +156,17 @@ static void require_result(const char* operation, tresult result) {
     throw std::runtime_error(message.str());
 }
 
+static void require_processing_result(const char* operation, tresult result) {
+    // VST3 permits a processor to leave this optional lifecycle hook at the
+    // SDK default. The pinned Steinberg AGain sample does so and still
+    // processes valid audio; kNotImplemented must not be treated as failed
+    // activation, while all other failures remain fatal.
+    if (result == kResultOk || result == kNotImplemented) {
+        return;
+    }
+    require_result(operation, result);
+}
+
 int wmain(int argc, wchar_t** argv) {
     if (argc != 2 && argc != 4) {
         std::wcerr << L"usage: m06-vst3-loader <plugin.vst3|binary> [--class-index <n>]\n";
@@ -280,7 +291,7 @@ int wmain(int argc, wchar_t** argv) {
                 require_result("setupProcessing", processor->setupProcessing(setup));
                 require_result("component activation", component->setActive(true));
                 component_active = true;
-                require_result("processor activation", processor->setProcessing(true));
+                require_processing_result("processor activation", processor->setProcessing(true));
                 processor_active = true;
                 float input[2][64]{};
                 float output[2][64]{};

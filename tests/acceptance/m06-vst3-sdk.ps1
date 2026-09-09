@@ -9,6 +9,7 @@ $sdkRoot = Join-Path $repositoryRoot 'third_party\vst3sdk'
 $cmake = Join-Path $repositoryRoot 'third_party\cmake-4.4.0\bin\cmake.exe'
 $buildRoot = Join-Path $repositoryRoot 'third_party\vst3sdk-build'
 $bundle = Join-Path $buildRoot 'VST3\Release\mda-vst3.vst3'
+$againBundle = Join-Path $buildRoot 'VST3\Release\again.vst3'
 $validator = Join-Path $buildRoot 'bin\Release\validator.exe'
 $loaderScript = Join-Path $repositoryRoot 'tools\m06-vst3-loader\build.ps1'
 $loader = Join-Path $repositoryRoot 'tools\m06-vst3-loader\m06-vst3-loader.exe'
@@ -56,13 +57,17 @@ try {
                 '-DSMTG_CREATE_PLUGIN_LINK=0'
             )
         }
-        Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'mda-vst3')
+        Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'mda-vst3', '--parallel', '4')
+        Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'again', '--parallel', '4')
     }
     Require-File $validator 'built VST3 validator'
     Require-File (Join-Path $bundle 'Contents\x86_64-win\mda-vst3.vst3') 'built mda VST3 binary'
+    Require-File (Join-Path $againBundle 'Contents\x86_64-win\again.vst3') 'built AGain VST3 binary'
 
     Invoke-Native $validator @($bundle)
+    Invoke-Native $validator @($againBundle)
     Invoke-Native 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $loaderScript)
+    Invoke-Native $loader @($againBundle, '--class-index', '0')
     $defaultLoaderOutput = Invoke-NativeCapture $loader @($bundle)
     if (-not (($defaultLoaderOutput -join "`n") -match 'parameter_descriptors=\d+')) {
         throw 'offline loader did not report a bounded parameter descriptor catalog'
@@ -71,7 +76,7 @@ try {
     foreach ($classIndex in $matrixClasses) {
         Invoke-Native $loader @($bundle, '--class-index', "$classIndex")
     }
-    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, offline loader, and five-class mda matrix.'
+    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, offline loader, AGain main class, and five-class mda matrix.'
 } finally {
     foreach ($generated in @($loader, $loaderObject)) {
         if (Test-Path -LiteralPath $generated) {
