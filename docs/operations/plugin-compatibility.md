@@ -121,6 +121,11 @@ The wrapper prints the binary SHA-256, restores any pre-existing
 Qualification remains fixture-specific and does not establish rights to
 redistribute the installed binary.
 
+The sibling `pitchproof.dll` from the same installation is an x86 binary and
+was rejected by read-only inspection as `unsupportedArchitecture`; it was not
+loaded. This negative control confirms that the x64 VST2 gate does not bridge
+or execute x86 plugins.
+
 The bounded native-editor probe can be repeated with:
 
 ```powershell
