@@ -335,6 +335,24 @@ fn typed_multi_bus_worker_preserves_main_output_for_asymmetric_layout() {
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn multi_bus_worker_rejects_undeclared_input_for_output_bus() {
+    let hash = "7".repeat(64);
+    let layout = WorkerAudioBusLayout::new(&[2], &[2, 1]).unwrap();
+    let error = match WorkerProcess::spawn_multi_bus_fixture(fixture_worker_path(), &hash, &layout)
+    {
+        Ok(_) => panic!("worker must reject an output bus without a source input"),
+        Err(error) => error,
+    };
+    assert!(matches!(
+        error,
+        audiorouter_plugin_host::WorkerProcessError::Message(_)
+            | audiorouter_plugin_host::WorkerProcessError::Protocol(_)
+            | audiorouter_plugin_host::WorkerProcessError::Spawn(_)
+    ));
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn typed_multi_bus_worker_client_bounds_a_missing_result() {
     let hash = "a".repeat(64);
     let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();

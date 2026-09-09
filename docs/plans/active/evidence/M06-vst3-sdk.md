@@ -28,6 +28,11 @@ expected fixture-dependent skips; strict feature-enabled and default workspace
 Clippy passed. This does not claim that the fixture executes a native VST3
 processor.
 
+Startup validation also rejects a multi-bus layout whose output side has more
+buses than the available input side, preventing the fixture from inventing
+audio. The feature-enabled worker-process suite passed 29 tests with six
+expected fixture-dependent skips, and documentation validation passed.
+
 The guarded `safe-all.ps1` chain was requalified after this handoff work:
 VS2026/WDK/native compile, read-only 31-endpoint inventory, disposable SysVAD
 package/API/signability checks, M01/M04/M05, VST3 validators and auxiliary
