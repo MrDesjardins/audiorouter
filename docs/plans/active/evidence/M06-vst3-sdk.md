@@ -1765,6 +1765,14 @@ expected fixture-dependent tests ignored. This is supervised fixture evidence;
 the production VST3 plugin loader and realtime graph scheduler remain separate
 gates.
 
+After the supervised multi-bus lifecycle change, `cargo test --workspace
+--all-features --locked` passed all workspace unit/integration tests and
+doc-tests, including 84 engine, 98 control, 33 Windows-audio, and 30
+feature-enabled plugin-host worker-process cases (six fixture-dependent tests
+ignored). Strict all-target Clippy with `-D warnings`, formatting, and diff
+checks also passed. No native driver or machine audio configuration action was
+performed.
+
 The plugin-host API now exposes a fixture-gated `WorkerProcess` multi-bus
 client. It launches the separately negotiated bus worker, validates the exact
 `HelloBuses` layout, exchanges a complete `ProcessBuses` quantum, validates
