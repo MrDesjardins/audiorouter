@@ -338,12 +338,12 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied();
     if !matches!(action, Some("get" | "cancel")) {
         return Err(CliError::InvalidArguments(
-            "usage: operation get <operation-id> --database <path> | operation cancel <operation-id> --database <path> [--idempotency-key KEY]".into(),
+            "usage: operation get <operation-id> --database <path> | operation cancel <operation-id> --database <path> --idempotency-key KEY".into(),
         ));
     }
     let operation_id = positional(args, 2, "operation id")?;
     let idempotency_key = if action == Some("cancel") {
-        optional_option_value(args, "--idempotency-key")?
+        Some(option_value(args, "--idempotency-key")?)
     } else {
         None
     };
@@ -1591,7 +1591,7 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
-        json!("operation get <operation-id> --database <path> | operation cancel <operation-id> --database <path> [--idempotency-key KEY]"),
+        json!("operation get <operation-id> --database <path> | operation cancel <operation-id> --database <path> --idempotency-key KEY"),
     );
     value["commands"]
         .as_array_mut()
@@ -1917,7 +1917,7 @@ fn mcp_tools() -> Value {
         { "name": "commit_session_import", "description": "Commit a previously validated stopped session import.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
-        { "name": "cancel_operation", "description": "Request cancellation with an optional idempotency key; completed operations are never undone.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["operationId"], "additionalProperties": false } },
+        { "name": "cancel_operation", "description": "Request cancellation with an idempotency key; completed operations are never undone.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["operationId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content; requires recording scope. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] }, "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "arm_recorder", "description": "Arm a session recorder at the control boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "start_recorder", "description": "Start a recorder at an explicit frame boundary; requires recording scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame"], "additionalProperties": false } },
@@ -3409,6 +3409,10 @@ mod tests {
         assert_eq!(
             cancel_operation["inputSchema"]["properties"]["idempotencyKey"]["minLength"],
             1
+        );
+        assert_eq!(
+            cancel_operation["inputSchema"]["required"],
+            json!(["operationId", "idempotencyKey"])
         );
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(

@@ -53,6 +53,13 @@ release completion.
   still fails fast on candidate regressions. Environment variables were
   restored and no plugin registration or audio configuration changed.
 
+- Closed the API-07 cancellation-key gap on 2026-09-09: the backend schema and
+  dispatcher, CLI convenience command, and MCP `cancel_operation` tool now
+  require a non-empty idempotency key. Missing keys return JSON-RPC invalid
+  params, successful cancellation outcomes are durably journaled and replayed
+  by the scoped key, and completed operations remain non-undoable. Focused CLI
+  and control tests (129 total) plus all-target/all-features Clippy pass.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown

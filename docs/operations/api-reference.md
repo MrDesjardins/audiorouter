@@ -29,7 +29,7 @@ after the initial 47-method reference.
 | `clients.authorize` | `deviceAdministration` | mutating |
 | `clients.revoke` | `deviceAdministration` | mutating |
 | `operations.get` | `read` | read-only |
-| `operations.cancel` | `sessionControl` | mutating |
+| `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
 | `recordings.list` | `record` | read-only |
 | `recorders.arm` | `record` | mutating |
 | `recorders.start` | `record` | mutating |

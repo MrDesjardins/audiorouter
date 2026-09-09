@@ -358,7 +358,7 @@ fn method_input_schema(name: &str) -> Value {
                 "operationId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["operationId"],
+            &["operationId", "idempotencyKey"],
         ),
         "recordings.list" => object_schema(
             json!({
@@ -2573,21 +2573,18 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("operationId is required".into()))?;
-        let operation = params
+        let idempotency_key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
-            .map(|key| {
-                let request = json!({ "operationId": operation_id });
-                (
-                    self.scoped_idempotency_key("operations.cancel", key),
-                    Self::request_hash(&request),
-                )
-            });
-        if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
-                return Ok(previous);
-            }
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let request = json!({ "operationId": operation_id });
+        let operation = (
+            self.scoped_idempotency_key("operations.cancel", idempotency_key),
+            Self::request_hash(&request),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
         }
         let lookup_keys = self.operation_lookup_keys(operation_id);
         let exists = if let Some(storage) = &self.storage {
@@ -2614,9 +2611,7 @@ impl ControlPlane {
             "cancelled": false,
             "reason": "alreadyCompleted"
         });
-        if let Some((key, hash)) = operation {
-            self.journal_idempotent_result(&key, "operations.cancel", &hash, &result)?;
-        }
+        self.journal_idempotent_result(&operation.0, "operations.cancel", &operation.1, &result)?;
         Ok(result)
     }
 
@@ -9380,11 +9375,21 @@ mod tests {
         candidate.name = "cancel-check".into();
         let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
         plane.commit_graph(&plan, 0, "cancel-check-key").unwrap();
+        let missing_key = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(15)),
+            method: "operations.cancel".into(),
+            params: Some(json!({ "operationId": "cancel-check-key" })),
+        });
+        assert_eq!(missing_key.error.unwrap().code, -32602);
         let response = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(16)),
             method: "operations.cancel".into(),
-            params: Some(json!({ "operationId": "cancel-check-key" })),
+            params: Some(json!({
+                "operationId": "cancel-check-key",
+                "idempotencyKey": "cancel-request-key"
+            })),
         });
         let result = response.result.unwrap();
         assert_eq!(result["status"], "completed");
