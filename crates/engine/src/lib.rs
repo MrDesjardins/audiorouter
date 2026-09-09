@@ -1451,6 +1451,157 @@ impl RuntimeGeneration {
     }
 }
 
+/// Maximum number of mono/stereo buses that a graph-owned worker boundary may
+/// stage in one direction. The plugin-host wire contract uses the same
+/// bounded shape, but the engine deliberately owns its own type so the
+/// realtime graph does not depend on worker implementation details.
+pub const MAX_RUNTIME_AUDIO_BUSES: usize = 4;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RuntimeBusLayoutError {
+    MissingMainBus,
+    TooManyBuses,
+    InvalidChannels,
+    AggregateChannelLimit,
+    InvalidGeneration,
+}
+
+/// A prepared, immutable bus shape owned by one runtime generation.
+/// Construction and replacement happen on the control thread; processing only
+/// inspects the already-validated vectors supplied by the caller.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RuntimeBusLayout {
+    input_channels: Vec<usize>,
+    output_channels: Vec<usize>,
+}
+
+impl RuntimeBusLayout {
+    pub fn new(
+        input_channels: Vec<usize>,
+        output_channels: Vec<usize>,
+    ) -> Result<Self, RuntimeBusLayoutError> {
+        if input_channels.is_empty() || output_channels.is_empty() {
+            return Err(RuntimeBusLayoutError::MissingMainBus);
+        }
+        if input_channels.len() > MAX_RUNTIME_AUDIO_BUSES
+            || output_channels.len() > MAX_RUNTIME_AUDIO_BUSES
+        {
+            return Err(RuntimeBusLayoutError::TooManyBuses);
+        }
+        if input_channels
+            .iter()
+            .chain(&output_channels)
+            .any(|channels| !(*channels == 1 || *channels == MAX_CHANNELS))
+        {
+            return Err(RuntimeBusLayoutError::InvalidChannels);
+        }
+        if input_channels.iter().sum::<usize>() > MAX_RUNTIME_AUDIO_BUSES * MAX_CHANNELS
+            || output_channels.iter().sum::<usize>() > MAX_RUNTIME_AUDIO_BUSES * MAX_CHANNELS
+        {
+            return Err(RuntimeBusLayoutError::AggregateChannelLimit);
+        }
+        Ok(Self {
+            input_channels,
+            output_channels,
+        })
+    }
+
+    pub fn input_channels(&self) -> &[usize] {
+        &self.input_channels
+    }
+
+    pub fn output_channels(&self) -> &[usize] {
+        &self.output_channels
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RuntimeBusProcessOutcome {
+    Processed,
+    SilencedMissingInput,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RuntimeBusProcessError {
+    InputBusCount,
+    OutputBusCount,
+    BlockShape,
+}
+
+/// Graph-owned staging boundary for a prepared multi-bus generation.
+///
+/// This is intentionally a conservative first runtime integration: the main
+/// bus is passed through and auxiliary buses are validated and retained as
+/// graph-owned inputs, while auxiliary effect execution remains owned by the
+/// worker milestone. Missing input is converted to silence on every output,
+/// including the protected main path. No allocation, lock, wait, or I/O is
+/// performed by `process`.
+#[derive(Debug, Eq, PartialEq)]
+pub struct RuntimeBusGeneration {
+    generation: RuntimeGeneration,
+    layout: RuntimeBusLayout,
+}
+
+impl RuntimeBusGeneration {
+    pub fn prepare(
+        generation: RuntimeGeneration,
+        layout: RuntimeBusLayout,
+    ) -> Result<Self, RuntimeBusLayoutError> {
+        if generation.value() == 0 {
+            return Err(RuntimeBusLayoutError::InvalidGeneration);
+        }
+        Ok(Self { generation, layout })
+    }
+
+    pub fn generation(&self) -> RuntimeGeneration {
+        self.generation
+    }
+
+    pub fn layout(&self) -> &RuntimeBusLayout {
+        &self.layout
+    }
+
+    pub fn process(
+        &self,
+        inputs: &[Option<&AudioBlock>],
+        outputs: &mut [&mut AudioBlock],
+    ) -> Result<RuntimeBusProcessOutcome, RuntimeBusProcessError> {
+        if inputs.len() != self.layout.input_channels.len() {
+            return Err(RuntimeBusProcessError::InputBusCount);
+        }
+        if outputs.len() != self.layout.output_channels.len() {
+            return Err(RuntimeBusProcessError::OutputBusCount);
+        }
+        for (index, block) in inputs
+            .iter()
+            .enumerate()
+            .filter_map(|(index, block)| block.as_ref().map(|block| (index, *block)))
+        {
+            if block.channels() != self.layout.input_channels[index] || block.frames() == 0 {
+                return Err(RuntimeBusProcessError::BlockShape);
+            }
+        }
+        for (block, channels) in outputs.iter().zip(&self.layout.output_channels) {
+            if block.channels() != *channels || block.frames() == 0 {
+                return Err(RuntimeBusProcessError::BlockShape);
+            }
+        }
+        let Some(main_input) = inputs[0] else {
+            for output in outputs.iter_mut() {
+                output.clear();
+            }
+            return Ok(RuntimeBusProcessOutcome::SilencedMissingInput);
+        };
+        outputs[0]
+            .copy_from(main_input)
+            .map_err(|_| RuntimeBusProcessError::BlockShape)?;
+        for output in outputs.iter_mut().skip(1) {
+            output.clear();
+        }
+        Ok(RuntimeBusProcessOutcome::Processed)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DriftController {
     nominal_ratio: f64,
@@ -5421,6 +5572,71 @@ mod tests {
         assert_eq!(block.channel(0).unwrap(), &[0.5; 2]);
         assert_eq!(processor.process_queued(&queue, &mut block).unwrap(), None);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn runtime_bus_generation_binds_shape_and_fails_closed_on_missing_main() {
+        let layout = RuntimeBusLayout::new(vec![2, 1], vec![2, 1]).unwrap();
+        let generation = RuntimeBusGeneration::prepare(RuntimeGeneration::new(7), layout).unwrap();
+        let input_main = AudioBlock::new(2, 4).unwrap();
+        let input_sidechain = AudioBlock::new(1, 4).unwrap();
+        let mut output_main = AudioBlock::new(2, 4).unwrap();
+        let mut output_sidechain = AudioBlock::new(1, 4).unwrap();
+        output_main.apply_gain(1.0);
+        output_sidechain.apply_gain(1.0);
+        let mut outputs = [&mut output_main, &mut output_sidechain];
+
+        assert_eq!(
+            generation
+                .process(&[Some(&input_main), Some(&input_sidechain)], &mut outputs,)
+                .unwrap(),
+            RuntimeBusProcessOutcome::Processed
+        );
+        assert!(output_main
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
+        assert!(output_sidechain
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
+
+        output_main.apply_gain(1.0);
+        output_sidechain.apply_gain(1.0);
+        let mut outputs = [&mut output_main, &mut output_sidechain];
+        assert_eq!(
+            generation.process(&[None, Some(&input_sidechain)], &mut outputs),
+            Ok(RuntimeBusProcessOutcome::SilencedMissingInput)
+        );
+        assert!(output_main
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
+        assert!(output_sidechain
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
+    }
+
+    #[test]
+    fn runtime_bus_layout_rejects_unbounded_shapes_and_zero_generation() {
+        assert_eq!(
+            RuntimeBusLayout::new(vec![2, 2, 2, 2, 1], vec![2]),
+            Err(RuntimeBusLayoutError::TooManyBuses)
+        );
+        assert_eq!(
+            RuntimeBusLayout::new(vec![3], vec![2]),
+            Err(RuntimeBusLayoutError::InvalidChannels)
+        );
+        let layout = RuntimeBusLayout::new(vec![2], vec![2]).unwrap();
+        assert_eq!(
+            RuntimeBusGeneration::prepare(RuntimeGeneration::new(0), layout),
+            Err(RuntimeBusLayoutError::InvalidGeneration)
+        );
     }
 
     #[test]
