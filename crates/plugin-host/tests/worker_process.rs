@@ -923,6 +923,25 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
         Instant::now(),
     )
     .expect("launch native VST3 worker");
+    let editor = worker
+        .describe_editor(Instant::now())
+        .expect("native VST3 editor description response");
+    assert!(!editor.has_editor);
+    assert_eq!(editor.width, 0);
+    assert_eq!(editor.height, 0);
+    let authorization = EditorParentAuthorizationIssuer::from_key([7; 32])
+        .issue(1, std::process::id())
+        .expect("native VST3 editor authorization fixture");
+    assert!(matches!(
+        worker.open_editor(&authorization, Instant::now()),
+        Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(code))
+            if code == "editorUnavailable"
+    ));
+    assert!(matches!(
+        worker.close_editor(Instant::now()),
+        Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(code))
+            if code == "editorUnavailable"
+    ));
     let mut samples = vec![0.0; 256];
     samples[2] = 0.1;
     samples[3] = -0.1;

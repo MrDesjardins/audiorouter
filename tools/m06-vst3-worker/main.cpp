@@ -867,6 +867,15 @@ static std::string processed_message(uint64_t sequence, uint64_t deadline, uint1
     return output.str();
 }
 
+// The native VST3 worker currently has no authenticated desktop-shell owner.
+// Keep editor requests a bounded, explicit unsupported response instead of
+// letting them fall through to audio-message parsing and killing processing.
+static constexpr const char* kEditorUnavailableMessage =
+    "{\"type\":\"Failure\",\"payload\":{\"code\":\"editorUnavailable\"}}";
+
+static constexpr const char* kNoEditorMessage =
+    "{\"type\":\"Editor\",\"payload\":{\"has_editor\":false,\"width\":0,\"height\":0}}";
+
 static void append_bus_list(std::ostringstream& output, const std::vector<uint16_t>& buses) {
     output << '[';
     for (std::size_t index = 0; index < buses.size(); ++index) {
@@ -994,6 +1003,15 @@ int wmain(int argc, wchar_t** argv) {
             const auto payload = read_frame();
             const std::string json(payload.begin(), payload.end());
             if (json == "{\"type\":\"Shutdown\"}") return 0;
+            if (json == "{\"type\":\"DescribeEditor\"}") {
+                write_frame(kNoEditorMessage);
+                continue;
+            }
+            if (json.find("\"type\":\"EditorOpen\"") != std::string::npos ||
+                json == "{\"type\":\"EditorClose\"}") {
+                write_frame(kEditorUnavailableMessage);
+                continue;
+            }
             if (json.find("\"type\":\"StateSave\"") != std::string::npos) {
                 write_frame(state_message(1, effect.save_state()));
                 continue;
