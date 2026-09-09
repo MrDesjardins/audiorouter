@@ -49,8 +49,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\safe-all.
 ```
 
 This includes native compile and read-only format checks, disposable SysVAD
-reference qualification, M01/M04/M05/M06/M07/M08 acceptance, and documentation
-validation. It deliberately excludes all live-audio wrappers.
+reference qualification, M01/M04/M05/M06/M07/M08 acceptance, the repository-
+owned x64 VST2 state/legacy-entry-point fixture, and documentation validation.
+It deliberately excludes all live-audio wrappers and third-party plugin
+fixtures.
+
+The repository-owned VST2 fixture can also be qualified directly. It compiles
+ignored x64 DLLs for the modern `VSTPluginMain` and legacy `main` exports, then
+checks chunk state plus contained invalid-output, crash, and hang behavior:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-state-fixture.ps1
+```
+
+This does not register a plugin or alter audio configuration. User-installed
+VST2 fixtures remain opt-in and are not redistributed.
 
 For an explicitly authorized native adapter smoke on a Windows host, use:
 

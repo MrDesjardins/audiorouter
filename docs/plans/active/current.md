@@ -38,8 +38,8 @@ latency evidence.
 ## Approved legacy VST2 extension (2026-09-08)
 
 The user explicitly authorized adding legacy VST2 binaries to the goal. This is
-an M06 extension to the original VST3-only baseline, not a claim that the
-current host already supports VST2. Requirement scope is `PLUG-01` through
+an M06 extension to the original VST3-only baseline; the current host now has
+a Windows-only, gated VST2 adapter and worker path. Requirement scope is `PLUG-01` through
 `PLUG-07`, `SEC-07`, and `SEC-12`: user-installed native x64 VST2 audio effects
 only, discovered by explicit scan and hosted behind the existing disposable
 worker boundary. x86 bridging, instruments/MIDI, Audio Units, scripts,
