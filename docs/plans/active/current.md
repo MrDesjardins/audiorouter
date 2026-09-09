@@ -104,6 +104,10 @@ not called by the worker yet: the API documents that only a future dedicated
 Windows UI thread may invoke them, and parent-window authorization/message-pump
 ownership remain required before exposing editor controls.
 
+Editor opens now reject zero or stale parent handles through a read-only
+`IsWindow` check before calling plugin code; explicit control-plane
+authorization and dedicated UI-thread/message-pump ownership remain required.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

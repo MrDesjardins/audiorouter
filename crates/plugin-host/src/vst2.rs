@@ -320,11 +320,11 @@ mod opcode_tests {
         library.set_processing_format(48_000.0, 128).unwrap();
         library.set_processing_format(48_000.0, 256).unwrap();
 
-        library.open_editor(1).unwrap();
-        library.idle_editor().unwrap();
-        library.close_editor().unwrap();
-
-        assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 10);
+        assert!(matches!(
+            library.open_editor(1),
+            Err(Vst2LibraryError::InvalidEditor)
+        ));
+        assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 7);
         assert!(matches!(
             library.close_editor(),
             Err(Vst2LibraryError::InvalidEditor)
@@ -668,7 +668,11 @@ impl Vst2Library {
     /// does not create a window, validate cross-process authorization, or run a
     /// message pump.
     pub fn open_editor(&mut self, parent_window: usize) -> Result<(), Vst2LibraryError> {
-        if !self.has_editor() || parent_window == 0 || self.editor_open {
+        if !self.has_editor()
+            || parent_window == 0
+            || !is_window_handle(parent_window)
+            || self.editor_open
+        {
             return Err(Vst2LibraryError::InvalidEditor);
         }
         // SAFETY: The effect is valid for this library lifetime, and the
@@ -837,6 +841,19 @@ unsafe extern "C" fn host_callback(
         AUDIO_MASTER_GET_BLOCK_SIZE => 128,
         _ => 0,
     }
+}
+
+#[cfg(windows)]
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn IsWindow(window: *mut c_void) -> i32;
+}
+
+#[cfg(windows)]
+fn is_window_handle(window: usize) -> bool {
+    // SAFETY: IsWindow accepts an arbitrary HWND value and only queries
+    // whether it currently identifies a window; it does not retain it.
+    unsafe { IsWindow(window as *mut c_void) != 0 }
 }
 
 #[cfg(windows)]

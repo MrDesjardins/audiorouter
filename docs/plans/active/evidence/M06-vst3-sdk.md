@@ -1390,6 +1390,10 @@ primitives with one-editor-at-a-time state and close-before-effect teardown.
 Focused Windows tests lock the VST2 editor opcodes and lifecycle state. No
 editor window was created by this change; dedicated UI-thread ownership and
 explicit parent authorization remain the integration gate.
+Parent handles are now checked with Windows `IsWindow` before editor dispatch,
+so an arbitrary nonzero integer cannot reach a plugin. This remains only a
+primitive-level guard; cross-process authorization and the dedicated UI thread
+are still required for actual editor integration.
 
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
