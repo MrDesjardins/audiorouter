@@ -1627,3 +1627,11 @@ unbounded/invalid shapes, and preservation of the current single-stream
 boundary. The plugin-host suite passed 60 unit tests, 21 worker-process tests,
 doc-tests, formatting, and strict Clippy. Actual side-chain transport and
 graph ownership remain intentionally open.
+
+`WorkerAudioBusFrames` extends that boundary with one validated quantum per
+declared bus. It rejects missing or extra buses, channel mismatches, unequal
+frame counts, and mixed sequence/deadline identities before a future
+multi-bus worker message can be serialized. The plugin-host suite passed 61
+unit tests, 21 worker-process tests, doc-tests, formatting, and strict Clippy.
+The current runtime and single-stream wire path are unchanged; actual
+side-chain scheduling and shared-memory ownership remain open.

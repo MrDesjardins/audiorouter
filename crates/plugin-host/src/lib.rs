@@ -1328,6 +1328,14 @@ pub enum WorkerAudioBusLayoutError {
     TooManyOutputChannels,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerAudioBusFramesError {
+    WrongBusCount,
+    ChannelMismatch,
+    FrameCountMismatch,
+    IdentityMismatch,
+}
+
 impl WorkerAudioBusLayout {
     pub fn new(
         input_channels: &[u16],
@@ -1377,6 +1385,72 @@ impl WorkerAudioBusLayout {
             .iter()
             .map(|channels| *channels as usize)
             .sum()
+    }
+
+    pub fn input_frames(
+        &self,
+        frames: Vec<WorkerFrame>,
+    ) -> Result<WorkerAudioBusFrames, WorkerAudioBusFramesError> {
+        WorkerAudioBusFrames::new(&self.input_channels, frames)
+    }
+
+    pub fn output_frames(
+        &self,
+        frames: Vec<WorkerFrame>,
+    ) -> Result<WorkerAudioBusFrames, WorkerAudioBusFramesError> {
+        WorkerAudioBusFrames::new(&self.output_channels, frames)
+    }
+}
+
+/// A validated set of one processing quantum for all buses on one side of a
+/// plugin. Every bus shares the same sequence, deadline, and frame count;
+/// this prevents an auxiliary input from being paired with a different
+/// realtime quantum. Construction is control/worker-boundary work and is not
+/// intended for the audio callback.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorkerAudioBusFrames {
+    frames: Vec<WorkerFrame>,
+}
+
+impl WorkerAudioBusFrames {
+    fn new(
+        expected_channels: &[u16],
+        frames: Vec<WorkerFrame>,
+    ) -> Result<Self, WorkerAudioBusFramesError> {
+        if frames.len() != expected_channels.len() {
+            return Err(WorkerAudioBusFramesError::WrongBusCount);
+        }
+        let Some(first) = frames.first() else {
+            return Err(WorkerAudioBusFramesError::WrongBusCount);
+        };
+        for (index, frame) in frames.iter().enumerate() {
+            if frame.channels != expected_channels[index] {
+                return Err(WorkerAudioBusFramesError::ChannelMismatch);
+            }
+            if frame.frame_count() != first.frame_count() {
+                return Err(WorkerAudioBusFramesError::FrameCountMismatch);
+            }
+            if frame.sequence != first.sequence || frame.deadline_tick != first.deadline_tick {
+                return Err(WorkerAudioBusFramesError::IdentityMismatch);
+            }
+        }
+        Ok(Self { frames })
+    }
+
+    pub fn frames(&self) -> &[WorkerFrame] {
+        &self.frames
+    }
+
+    pub fn frame_count(&self) -> usize {
+        self.frames[0].frame_count()
+    }
+
+    pub fn sequence(&self) -> u64 {
+        self.frames[0].sequence
+    }
+
+    pub fn deadline_tick(&self) -> u64 {
+        self.frames[0].deadline_tick
     }
 }
 
@@ -5387,5 +5461,39 @@ mod tests {
         assert!(!layout.has_sidechain());
         let frame = WorkerFrame::new(1, 2, 2, vec![0.0, 0.25]).unwrap();
         assert_eq!(frame.channels, layout.input_buses()[0]);
+    }
+
+    #[test]
+    fn worker_audio_bus_frames_require_matching_quantum_identity_and_shape() {
+        let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+        let frames = layout
+            .input_frames(vec![
+                WorkerFrame::new(7, 99, 2, vec![0.0, 0.25, 0.5, 0.75]).unwrap(),
+                WorkerFrame::new(7, 99, 1, vec![0.1, 0.2]).unwrap(),
+            ])
+            .unwrap();
+        assert_eq!(frames.sequence(), 7);
+        assert_eq!(frames.deadline_tick(), 99);
+        assert_eq!(frames.frame_count(), 2);
+        assert_eq!(frames.frames().len(), 2);
+
+        assert_eq!(
+            layout.input_frames(vec![WorkerFrame::new(7, 99, 2, vec![0.0, 0.25]).unwrap()]),
+            Err(WorkerAudioBusFramesError::WrongBusCount)
+        );
+        assert_eq!(
+            layout.input_frames(vec![
+                WorkerFrame::new(7, 99, 2, vec![0.0, 0.25, 0.5, 0.75]).unwrap(),
+                WorkerFrame::new(7, 99, 1, vec![0.1]).unwrap(),
+            ]),
+            Err(WorkerAudioBusFramesError::FrameCountMismatch)
+        );
+        assert_eq!(
+            layout.input_frames(vec![
+                WorkerFrame::new(7, 99, 2, vec![0.0, 0.25, 0.5, 0.75]).unwrap(),
+                WorkerFrame::new(8, 99, 1, vec![0.1, 0.2]).unwrap(),
+            ]),
+            Err(WorkerAudioBusFramesError::IdentityMismatch)
+        );
     }
 }
