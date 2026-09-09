@@ -203,7 +203,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-
 
 The script compiles ignored x64 VST2 DLLs with `effFlagsProgramChunks`, plus a
 `main`-only variant, and runs the verified worker acceptance for both. It
-leaves no registered plugin or system audio changes.
+Processing and chunk-state restoration are covered at 44.1, 48, and 96 kHz;
+the same run retains non-finite-output rejection and crash/hang containment.
+It leaves no registered plugin or system audio changes.
 
 See [SDK setup](sdk-setup.md) and [release notes](release-notes.md) for the
 toolchain and current qualification boundaries.

@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `99a9e7a0` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `93bbb3c6` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -41,6 +41,12 @@ release completion.
   both `AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE`. The
   expanded matrix passed using ignored disposable DLLs; no plugin registration,
   audio stream, or machine configuration changed.
+
+- Synchronized the operator compatibility guide on 2026-09-09 with the
+  expanded PLUG-07 matrix: it now states that both VST2 entry-point fixtures
+  cover processing and chunk-state restoration at 44.1, 48, and 96 kHz, while
+  retaining the non-finite and crash/hang containment boundaries. Documentation
+  validation passed; no plugin or machine configuration changed.
 
 - Requalified the locked workspace and guarded M00-M08 chain at pushed head
   `4dc9b67a` on 2026-09-09: workspace tests/doc-tests, strict all-target
