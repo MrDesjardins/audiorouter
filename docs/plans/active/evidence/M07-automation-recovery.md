@@ -279,7 +279,7 @@ The CLI/control tests pass and strict Clippy passes. This is a foundation slice:
 
 ## 2026-09-06 â€” MCP resource discovery
 
-Added `resources/list` and `resources/read` for `audiorouter://capabilities`, `audiorouter://diagnostics`, and `audiorouter://workflow/headless`. Capabilities and diagnostics are fetched through the enrolled client's authorized control dispatcher; workflow guidance is static and explicitly says imports do not arm recorders or install drivers. The adapter still emits only newline-delimited JSON-RPC on stdout. CLI tests pass 7 cases with strict Clippy.
+Added `resources/list` and `resources/read` for `audiorouter://capabilities`, `audiorouter://nodes`, `audiorouter://sessions`, `audiorouter://diagnostics`, and `audiorouter://workflow/headless`. Capabilities, node schemas, session snapshots, and diagnostics are fetched through the enrolled client's authorized control dispatcher; workflow guidance is static and explicitly says imports do not arm recorders or install drivers. The adapter still emits only newline-delimited JSON-RPC on stdout. Current CLI/MCP interoperability tests cover these resources with strict Clippy.
 
 ## 2026-09-06 — MCP backend pipe proxy
 
@@ -473,7 +473,7 @@ Added a process-level MCP stdio interoperability regression. It creates a
 temporary SQLite enrollment for an observer client, launches the built
 audiorouter-cli binary, exchanges initialize, notifications/initialized,
 tools/list, and resources/list over newline-delimited JSON-RPC, verifies the
-pinned protocol and 22 tools/3 resources, then closes stdin and confirms clean
+pinned protocol and the current discovered tool/resource catalog, then closes stdin and confirms clean
 server exit. The test passes with strict CLI Clippy; no audio device or machine
 configuration is accessed.
 

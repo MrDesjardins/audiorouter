@@ -112,6 +112,12 @@ audiorouter mcp serve --client-id enrolled-client --database C:\path\audiorouter
 
 Use `--pipe \\.\pipe\AudioRouter` when a running backend exposes that local named pipe. MCP stdout is reserved for newline-delimited JSON-RPC; diagnostics belong on stderr. The adapter exposes read tools/resources and forwards API calls through enrolled permissions. It does not accept remote HTTP connections or stream raw audio to tools.
 
+The resource catalog includes capabilities, node schemas, bounded session
+snapshots, redacted diagnostics, and headless workflow guidance. Focused tools
+publish read-only, destructive, and idempotency hints, but the backend remains
+the authority for permission and mutation checks. Confirmed recording recycle
+is destructive; preview is read-only.
+
 Device and application discovery failures retain their structured JSON-RPC error
 data through the CLI and MCP boundaries. Inspect `data.code`, `data.hresult`,
 `data.retryable`, and `data.remediation`; in particular, `deviceInUse` is a

@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `285363dc` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `9c0b0f26` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -114,6 +114,12 @@ release completion.
   through the real stdio/pipe interoperability tests; CLI tests (29), strict
   Clippy, formatting, and diff checks pass. No audio or machine configuration
   changed.
+
+- Reconciled M07 evidence and operator guidance on 2026-09-09: historical
+  references no longer claim the obsolete 22-tool/3-resource catalog, and the
+  runbook documents node schemas, session snapshots, and MCP side-effect hints.
+  Documentation validation passes with 51 Markdown files and 163 local links;
+  no runtime or machine configuration changed.
 
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
