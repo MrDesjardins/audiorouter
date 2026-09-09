@@ -66,6 +66,11 @@ the helper does not infer physical or device latency. Plugin-host unit tests
 (66), feature-enabled worker-process tests (29 with six expected fixture skips),
 and strict Clippy passed.
 
+The locked all-features workspace requalification also passed: all unit,
+integration, and doc-tests across the workspace were green, including the
+engine, plugin-host, worker-process, control, transport, and Windows-audio
+coverage. Formatting, strict Clippy, and diff checks passed as well.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with
