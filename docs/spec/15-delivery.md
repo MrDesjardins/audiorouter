@@ -69,7 +69,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-05 | Per-user background engine, sign-in startup | Baseline; separate user capture from privileged driver lifecycle |
 | DEC-06 | 48 kHz float32, initial 128-frame quantum | Retained as the graph baseline; native endpoint formats and process-loopback evidence exist, but physical latency/quantum measurements are still required before making the quantum final |
 | DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Project-owned SysVAD-derived prototype selected for technical evaluation; production package, adaptation, target-machine validation, and signing remain release blockers |
-| DEC-08 | VST3 x64 plus built-ins; legacy plugin support deferred | Baseline; actual binary/SDK compatibility must be verified |
+| DEC-08 | VST3 x64 plus built-ins; gated legacy VST2 x64 extension | Baseline release path remains VST3 plus built-ins; the explicitly approved PLUG-07 extension adds contained x64 VST2 effects only after ABI, rights, worker, editor, compatibility, and release evidence is complete |
 | DEC-09 | Explicit virtual desktop render route; capture-only app sources | Baseline; automatic capture-and-mute not assumed |
 | DEC-10 | Protected voice paths silence on effect failure | Baseline; deliberate user bypass is a separate action |
 | DEC-11 | SQLite + versioned portable bundle | Baseline; journal/import safety tested before recovery claims |
