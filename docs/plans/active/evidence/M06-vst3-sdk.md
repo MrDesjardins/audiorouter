@@ -41,6 +41,11 @@ traceability, and 51-file/163-link documentation validation passed. Strict
 all-features and no-feature workspace Clippy also passed after test-only
 symbols were correctly feature-gated.
 
+The subsequent asymmetric-output regression also passed in the focused suite:
+an output layout larger than the input layout is rejected during worker startup
+instead of synthesizing an audio bus. The feature-enabled worker-process suite
+remained at 29 passing tests with six expected fixture-dependent skips.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with
