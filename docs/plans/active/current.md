@@ -102,6 +102,16 @@ release completion.
   clean-machine, driver, shell/HWND, physical-latency, accessibility, and
   independent-vendor plugin evidence exists.
 
+- Revalidated documentation gates on 2026-09-09: M08 traceability covered all
+  159 normative requirement IDs, and documentation validation passed for 51
+  Markdown files with 163 local links. A full workspace test rerun reached the
+  later target stages but its final exit summary was not observable through the
+  execution wrapper, so it is intentionally not recorded as a complete pass.
+  No audio, driver, signing, or machine configuration action occurred.
+- Next safe task: continue with independently observable package gates or
+  concrete portable hardening; retain all native production and independent-
+  vendor qualification blockers.
+
 - Requalified the focused M05 UI acceptance at the current head on 2026-09-09:
   TypeScript typecheck, all 16 UI test files/111 tests, and the temporary
   production Vite bundle (210 modules, three output files) passed. The runner
