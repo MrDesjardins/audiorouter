@@ -209,6 +209,7 @@ pub fn node_registry() -> [NodeTypeSpec; 17] {
         },
         latency_samples: match kind {
             NodeKind::Pitch => 1_024,
+            NodeKind::Limiter => 240,
             _ => 0,
         },
     })
@@ -1254,6 +1255,12 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Limiter, "ceilingDb") => value
                     .as_f64()
                     .is_some_and(|ceiling| ceiling.is_finite() && (-12.0..=0.0).contains(&ceiling)),
+                (NodeKind::Limiter, "lookaheadMs") => value.as_f64().is_some_and(|lookahead| {
+                    lookahead.is_finite() && (0.0..=10.0).contains(&lookahead)
+                }),
+                (NodeKind::Limiter, "releaseMs") => value.as_f64().is_some_and(|release| {
+                    release.is_finite() && (10.0..=1_000.0).contains(&release)
+                }),
                 (NodeKind::Delay, "delayMs") => value
                     .as_f64()
                     .is_some_and(|delay| delay.is_finite() && (0.0..=1_000.0).contains(&delay)),

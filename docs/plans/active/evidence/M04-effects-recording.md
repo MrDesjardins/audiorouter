@@ -387,9 +387,10 @@ transfer vectors remain open.
 
 The DSP crate now provides a conservative sample-peak `PeakLimiter` and a
 bounded interleaved `DelayLine`. The limiter clamps every emitted finite sample
-to its declared ceiling and explicitly makes no true-peak or lookahead claim.
+to its declared ceiling and makes no true-peak claim. It now preallocates
+per-channel lookahead storage and applies bounded exponential release.
 The delay allocates its fixed ring at construction, bounds changes to the
-declared maximum, preserves channel order, and supports reset. Ten DSP tests
+declared maximum, preserves channel order, and supports reset. Thirty DSP tests
 cover ceiling enforcement, finite repair, delay timing, bounds, and reset.
 Graph/API integration for the limiter and delay, de-clicked automation, and
 measured transfer vectors remain open.

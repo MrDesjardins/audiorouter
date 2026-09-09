@@ -67,6 +67,15 @@ release completion.
   typecheck, 97 tests, and a disposable production build passed; the locked
   existing `ui/dist` output was not changed.
 
+- Closed the portable DSP-04 limiter contract gap on 2026-09-09. Limiter
+  parameters now include bounded 0–10 ms lookahead and 10–1,000 ms release;
+  the DSP preallocates per-channel delay storage, applies immediate limiting,
+  and releases gain exponentially. The engine constructs it at the negotiated
+  sample rate behind a realtime try-lock, reset clears delay/gain state, and
+  the catalog discloses the 5 ms default as 240 samples at 48 kHz. Focused DSP
+  and engine tests cover ceiling, finite repair, latency, and reset behavior.
+  True-peak protection remains explicitly unsupported.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI

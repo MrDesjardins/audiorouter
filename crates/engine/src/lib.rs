@@ -2074,7 +2074,7 @@ pub enum ProcessingStage {
         right: Option<Box<std::sync::Mutex<audiorouter_dsp::Gate>>>,
     },
     Limiter {
-        limiter: audiorouter_dsp::PeakLimiter,
+        limiter: Box<std::sync::Mutex<audiorouter_dsp::PeakLimiter>>,
     },
     Delay {
         left: Box<std::sync::Mutex<audiorouter_dsp::DelayLine>>,
@@ -2966,16 +2966,38 @@ pub fn compile_session_at_sample_rate(
                 });
             }
             NodeKind::Limiter => {
+                let input_channels = node
+                    .ports
+                    .iter()
+                    .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                    .map(|port| port.channels as usize)
+                    .unwrap_or(1);
                 let ceiling_db = node
                     .parameters
                     .get("ceilingDb")
                     .and_then(|value| value.as_f64())
                     .unwrap_or(-1.0) as f32;
-                let limiter = audiorouter_dsp::PeakLimiter::new(audiorouter_dsp::LimiterParams {
-                    ceiling_db,
-                })
+                let limiter = audiorouter_dsp::PeakLimiter::new_at_sample_rate(
+                    audiorouter_dsp::LimiterParams {
+                        ceiling_db,
+                        lookahead_ms: node
+                            .parameters
+                            .get("lookaheadMs")
+                            .and_then(|value| value.as_f64())
+                            .unwrap_or(5.0) as f32,
+                        release_ms: node
+                            .parameters
+                            .get("releaseMs")
+                            .and_then(|value| value.as_f64())
+                            .unwrap_or(100.0) as f32,
+                    },
+                    sample_rate_hz as f32,
+                    input_channels,
+                )
                 .map_err(|_| GraphCompileError::UnsupportedTopology)?;
-                stages.push(ProcessingStage::Limiter { limiter });
+                stages.push(ProcessingStage::Limiter {
+                    limiter: Box::new(std::sync::Mutex::new(limiter)),
+                });
             }
             NodeKind::Delay => {
                 let delay_ms = node
@@ -3854,9 +3876,13 @@ impl RuntimeGraph {
                     }
                 }
                 ProcessingStage::Limiter { limiter } => {
+                    let Ok(mut limiter) = limiter.try_lock() else {
+                        block.clear();
+                        continue;
+                    };
                     for channel in 0..block.channels() {
                         if let Some(samples) = block.channel_mut(channel) {
-                            limiter.process_interleaved(samples);
+                            limiter.process_channel(channel, samples);
                         }
                     }
                 }
@@ -5284,7 +5310,11 @@ mod tests {
             compressor: None,
             delay_max_ms: None,
             delay_ms: 0.0,
-            limiter: audiorouter_dsp::LimiterParams { ceiling_db: -1.0 },
+            limiter: audiorouter_dsp::LimiterParams {
+                ceiling_db: -1.0,
+                lookahead_ms: 0.0,
+                release_ms: 100.0,
+            },
         };
         let mut processor = VoiceChainBlockProcessor::new(config, 2, 4).unwrap();
         let mut block = AudioBlock::new(2, 4).unwrap();

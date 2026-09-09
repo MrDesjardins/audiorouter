@@ -875,6 +875,8 @@ fn gate_target_gain_db(level_db: f32, params: GateParams, open: bool) -> f32 {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LimiterParams {
     pub ceiling_db: f32,
+    pub lookahead_ms: f32,
+    pub release_ms: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1100,23 +1102,59 @@ fn db_floor(value: f32) -> f32 {
     20.0 * value.max(1.0e-6).log10()
 }
 
-/// A sample-peak safety limiter. It deliberately makes no true-peak or
-/// lookahead claim; the ceiling is enforced on every emitted sample.
-#[derive(Clone, Copy, Debug)]
+/// A bounded sample-peak limiter with construction-time lookahead storage.
+/// Attack is immediate; release follows a finite exponential envelope. It
+/// makes no true-peak/inter-sample claim.
+#[derive(Clone, Debug)]
 pub struct PeakLimiter {
     ceiling_linear: f32,
+    lookahead_frames: usize,
+    release_coefficient: f32,
+    sample_rate: f32,
+    channels: usize,
+    delay: Vec<Vec<f32>>,
+    cursor: Vec<usize>,
+    gain: f32,
 }
 
 impl PeakLimiter {
     pub fn new(params: LimiterParams) -> Result<Self, BiquadError> {
+        Self::new_at_sample_rate(params, 48_000.0, 1)
+    }
+
+    pub fn new_at_sample_rate(
+        params: LimiterParams,
+        sample_rate: f32,
+        channels: usize,
+    ) -> Result<Self, BiquadError> {
         if !params.ceiling_db.is_finite() {
             return Err(BiquadError::NonFiniteParameter);
         }
         if !(-12.0..=0.0).contains(&params.ceiling_db) {
             return Err(BiquadError::InvalidQ);
         }
+        if !sample_rate.is_finite()
+            || !(8_000.0..=192_000.0).contains(&sample_rate)
+            || channels == 0
+            || channels > 2
+            || !params.lookahead_ms.is_finite()
+            || !params.release_ms.is_finite()
+            || !(0.0..=10.0).contains(&params.lookahead_ms)
+            || !(10.0..=1_000.0).contains(&params.release_ms)
+        {
+            return Err(BiquadError::InvalidQ);
+        }
+        let lookahead_frames = (params.lookahead_ms * 0.001 * sample_rate).round() as usize;
+        let release_coefficient = (-1.0 / (params.release_ms * 0.001 * sample_rate)).exp();
         Ok(Self {
             ceiling_linear: 10.0_f32.powf(params.ceiling_db / 20.0),
+            lookahead_frames,
+            release_coefficient,
+            sample_rate,
+            channels,
+            delay: vec![vec![0.0; lookahead_frames + 1]; channels],
+            cursor: vec![0; channels],
+            gain: 1.0,
         })
     }
 
@@ -1124,11 +1162,66 @@ impl PeakLimiter {
         20.0 * self.ceiling_linear.log10()
     }
 
-    pub fn process_interleaved(&self, samples: &mut [f32]) {
-        for sample in samples {
-            let input = if sample.is_finite() { *sample } else { 0.0 };
-            *sample = input.clamp(-self.ceiling_linear, self.ceiling_linear);
+    pub fn lookahead_frames(&self) -> usize {
+        self.lookahead_frames
+    }
+
+    pub fn release_ms(&self) -> f32 {
+        -1.0 / self.release_coefficient.ln() / self.sample_rate * 1_000.0
+    }
+
+    pub fn reset(&mut self) {
+        for delay in &mut self.delay {
+            delay.fill(0.0);
         }
+        self.cursor.fill(0);
+        self.gain = 1.0;
+    }
+
+    pub fn process_interleaved(&mut self, samples: &mut [f32]) {
+        if self.channels == 0 {
+            return;
+        }
+        for values in samples.chunks_exact_mut(self.channels) {
+            for (channel, sample) in values.iter_mut().enumerate() {
+                *sample = self.process_one(channel, *sample);
+            }
+        }
+    }
+
+    pub fn process_channel(&mut self, channel: usize, samples: &mut [f32]) {
+        for sample in samples {
+            *sample = self.process_one(channel, *sample);
+        }
+    }
+
+    fn process_one(&mut self, channel: usize, sample: f32) -> f32 {
+        let Some(delay) = self.delay.get_mut(channel) else {
+            return 0.0;
+        };
+        let cursor = &mut self.cursor[channel];
+        let input = if sample.is_finite() { sample } else { 0.0 };
+        let desired_gain = if input.abs() > self.ceiling_linear {
+            self.ceiling_linear / input.abs()
+        } else {
+            1.0
+        };
+        self.gain = self.gain.min(desired_gain);
+        if desired_gain >= self.gain {
+            self.gain += (1.0 - self.gain) * (1.0 - self.release_coefficient);
+        }
+        let output = if self.lookahead_frames == 0 {
+            input
+        } else {
+            let output = delay[*cursor];
+            delay[*cursor] = input;
+            output
+        };
+        let output = (output * self.gain).clamp(-self.ceiling_linear, self.ceiling_linear);
+        if self.lookahead_frames != 0 {
+            *cursor = (*cursor + 1) % delay.len();
+        }
+        output
     }
 }
 
@@ -1236,7 +1329,11 @@ pub fn voice_chain_preset(id: VoiceChainPresetId, sample_rate: f32) -> VoiceChai
         compressor,
         delay_max_ms: None,
         delay_ms: 0.0,
-        limiter: LimiterParams { ceiling_db: -1.0 },
+        limiter: LimiterParams {
+            ceiling_db: -1.0,
+            lookahead_ms: 5.0,
+            release_ms: 100.0,
+        },
     }
 }
 
@@ -1304,7 +1401,7 @@ impl VoiceChain {
             gate,
             compressor,
             delay,
-            limiter: PeakLimiter::new(config.limiter)?,
+            limiter: PeakLimiter::new_at_sample_rate(config.limiter, config.sample_rate, channels)?,
             meter: WindowedSignalMeter::new_default(channels, config.sample_rate)?,
         })
     }
@@ -1343,6 +1440,7 @@ impl VoiceChain {
         if let Some(delay) = &mut self.delay {
             delay.reset();
         }
+        self.limiter.reset();
         self.meter.reset();
     }
 }
@@ -2013,12 +2111,41 @@ mod tests {
 
     #[test]
     fn peak_limiter_enforces_declared_sample_ceiling_and_repairs_nonfinite() {
-        let limiter = PeakLimiter::new(LimiterParams { ceiling_db: -1.0 }).unwrap();
+        let mut limiter = PeakLimiter::new(LimiterParams {
+            ceiling_db: -1.0,
+            lookahead_ms: 0.0,
+            release_ms: 100.0,
+        })
+        .unwrap();
         let mut samples = [2.0, -2.0, f32::NAN, f32::INFINITY];
         limiter.process_interleaved(&mut samples);
         let ceiling = 10.0_f32.powf(-1.0 / 20.0);
         assert_eq!(samples, [ceiling, -ceiling, 0.0, 0.0]);
         assert!((limiter.ceiling_db() + 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn peak_limiter_applies_bounded_lookahead_and_release_without_allocating() {
+        let mut limiter = PeakLimiter::new_at_sample_rate(
+            LimiterParams {
+                ceiling_db: -1.0,
+                lookahead_ms: 5.0,
+                release_ms: 100.0,
+            },
+            48_000.0,
+            2,
+        )
+        .unwrap();
+        assert_eq!(limiter.lookahead_frames(), 240);
+        assert!((limiter.release_ms() - 100.0).abs() < 0.01);
+        let mut first = vec![2.0; 240];
+        limiter.process_channel(0, &mut first);
+        assert!(first.iter().all(|sample| *sample == 0.0));
+        let mut tail = vec![0.0; 241];
+        limiter.process_channel(0, &mut tail);
+        let ceiling = 10.0_f32.powf(-1.0 / 20.0);
+        assert!(tail[0].abs() <= ceiling);
+        assert!(tail.iter().all(|sample| sample.is_finite()));
     }
 
     #[test]
@@ -2096,7 +2223,11 @@ mod tests {
                 }),
                 delay_max_ms: Some(5.0),
                 delay_ms: 0.0,
-                limiter: LimiterParams { ceiling_db: -1.0 },
+                limiter: LimiterParams {
+                    ceiling_db: -1.0,
+                    lookahead_ms: 5.0,
+                    release_ms: 100.0,
+                },
             },
             1,
         )

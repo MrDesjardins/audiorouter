@@ -85,7 +85,7 @@ const libraryNodeDefinitions: Record<LibraryNodeKind, {
   },
   limiter: {
     name: "Limiter",
-    parameters: { ceilingDb: -1 },
+    parameters: { ceilingDb: -1, lookaheadMs: 5, releaseMs: 100 },
     ports: [
       { name: "in", direction: "input", channels: 1 },
       { name: "out", direction: "output", channels: 1 },

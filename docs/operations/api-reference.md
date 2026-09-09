@@ -109,7 +109,7 @@ The current node catalog is available through `nodes.describe` and contains:
 | `parametric-eq@1` | available | Eight independently enabled bands; peaking, shelf, pass, and notch filters |
 | `compressor@1` | available | Stereo-capable dynamics stage; 48 kHz graph baseline |
 | `gate@1` | available | Downward gate/expander stage; 48 kHz graph baseline |
-| `limiter@1` | available | Sample-peak ceiling stage; -12 to 0 dBFS |
+| `limiter@1` | available | Sample-peak ceiling stage; -12 to 0 dBFS; bounded 0–10 ms lookahead and 10–1,000 ms release |
 | `delay@1` | available | Preallocated delay stage; 0 to 1,000 ms |
 | `graphic-eq@1` | available | Fixed ten-band EQ; `band0Db`–`band9Db`, -18 to +18 dB |
 | `pitch@1` | available | Fixed 128-frame streaming pitch stage; 1,024 estimated latency samples; semitones -12 to +12 and cents -100 to +100 |
@@ -125,7 +125,9 @@ semantics and measured realtime quality remain qualification items.
 The pitch entry reports its 1,024-sample algorithmic latency.
 Route inspection paths also report accumulated `latencySamples`; this includes
 the declared 1,024-sample pitch warmup and configured built-in delay at the
-48 kHz portable graph baseline.
+48 kHz portable graph baseline. The default limiter lookahead contributes 240
+samples at that baseline; changing lookahead or sample rate changes the
+effective latency and must be included by callers when budgeting the route.
 The UI displays these parameter types and ranges as read-only metadata; it does
 not imply that an unavailable processor can be activated.
 
