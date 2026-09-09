@@ -1000,8 +1000,38 @@ pub struct EditorParentAuthorization {
     token: String,
 }
 
+/// Trusted owner for native-editor parent capabilities. The key must be held
+/// by the authenticated control plane/native shell; it is never sent to the
+/// worker or included in diagnostics. A caller can persist the key in its
+/// OS-protected credential store and issue UI capabilities from it once a
+/// native shell owns an HWND.
+pub struct EditorParentAuthorizationIssuer {
+    key: [u8; 32],
+}
+
+impl EditorParentAuthorizationIssuer {
+    pub fn from_key(key: [u8; 32]) -> Self {
+        Self { key }
+    }
+
+    pub fn issue(
+        &self,
+        parent_window: u64,
+        owner_process_id: u32,
+    ) -> Result<EditorParentAuthorization, WorkerMessageError> {
+        let mut digest = Sha256::new();
+        digest.update(b"audiorouter/editor-parent/v1");
+        digest.update(self.key);
+        digest.update(parent_window.to_le_bytes());
+        digest.update(owner_process_id.to_le_bytes());
+        let digest = digest.finalize();
+        let token = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        EditorParentAuthorization::from_parts(parent_window, owner_process_id, token)
+    }
+}
+
 impl EditorParentAuthorization {
-    pub fn new(
+    fn from_parts(
         parent_window: u64,
         owner_process_id: u32,
         token: String,
@@ -4567,29 +4597,24 @@ mod tests {
 
     #[test]
     fn editor_parent_authorization_is_bounded_and_bound_to_owner() {
-        let authorization =
-            EditorParentAuthorization::new(0x1234, 42, "ui-capability".into()).unwrap();
+        let issuer = EditorParentAuthorizationIssuer::from_key([9; 32]);
+        let authorization = issuer.issue(0x1234, 42).unwrap();
         assert_eq!(authorization.parent_window(), 0x1234);
         assert_eq!(authorization.owner_process_id(), 42);
+        assert_ne!(
+            authorization.token,
+            EditorParentAuthorizationIssuer::from_key([8; 32])
+                .issue(0x1234, 42)
+                .unwrap()
+                .token
+        );
 
         assert!(matches!(
-            EditorParentAuthorization::new(0, 42, "token".into()),
+            issuer.issue(0, 42),
             Err(WorkerMessageError::InvalidEditor)
         ));
         assert!(matches!(
-            EditorParentAuthorization::new(0x1234, 0, "token".into()),
-            Err(WorkerMessageError::InvalidEditor)
-        ));
-        assert!(matches!(
-            EditorParentAuthorization::new(0x1234, 42, String::new()),
-            Err(WorkerMessageError::InvalidEditor)
-        ));
-        assert!(matches!(
-            EditorParentAuthorization::new(
-                0x1234,
-                42,
-                "x".repeat(MAX_WORKER_FAILURE_CODE_BYTES + 1),
-            ),
+            issuer.issue(0x1234, 0),
             Err(WorkerMessageError::InvalidEditor)
         ));
 

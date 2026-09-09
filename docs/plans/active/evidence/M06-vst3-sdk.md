@@ -1442,9 +1442,10 @@ The editor-open wire contract now carries a bounded opaque authorization token
 and expected owner PID with the parent HWND. The worker rejects malformed
 authorization data, and the Windows editor thread checks the live HWND owner
 PID before entering `effEditOpen`; a focused native regression rejects a
-mismatched owner before plugin dispatch. Token issuance remains the
-authenticated native-shell/control-plane responsibility and is not exposed by
-the preview WebView.
+mismatched owner before plugin dispatch. `EditorParentAuthorizationIssuer`
+derives the opaque token from a control-plane-held key, HWND, and owner PID;
+key storage and native-shell issuance are not exposed by the preview WebView
+and remain the integration gate.
 
 ## Native editor probe and ABI correction (2026-09-08)
 

@@ -2,9 +2,9 @@
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
-    EditorParentAuthorization, PeArchitecture, PluginFormat, PluginIdentity, PluginStateAsset,
-    SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess, WorkerFrame, WorkerLatency,
-    WorkerMessage, WorkerProcess,
+    EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
+    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
+    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
@@ -69,8 +69,9 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
         });
     let mut worker = WorkerProcess::spawn(worker_path, &hash, 2).expect("spawn worker client");
     assert!(worker.describe_parameters().unwrap().is_empty());
-    let authorization =
-        EditorParentAuthorization::new(1, std::process::id(), "test-token".into()).unwrap();
+    let authorization = EditorParentAuthorizationIssuer::from_key([7; 32])
+        .issue(1, std::process::id())
+        .unwrap();
     assert!(matches!(
         worker.open_editor(&authorization),
         Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(
@@ -431,12 +432,9 @@ fn supervised_vst2_editor_timeout_kills_the_worker_and_records_failure() {
         Instant::now(),
     )
     .expect("spawn VST2 worker");
-    let authorization = audiorouter_plugin_host::EditorParentAuthorization::new(
-        parent as u64,
-        std::process::id(),
-        "acceptance-token".into(),
-    )
-    .expect("editor authorization");
+    let authorization = audiorouter_plugin_host::EditorParentAuthorizationIssuer::from_key([7; 32])
+        .issue(parent as u64, std::process::id())
+        .expect("editor authorization");
     let result = worker.open_editor(&authorization, Instant::now());
     // SAFETY: The handle was returned by CreateWindowExW and the worker has
     // been terminated before the parent is destroyed.
