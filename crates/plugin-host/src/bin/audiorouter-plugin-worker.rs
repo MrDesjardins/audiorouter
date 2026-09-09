@@ -4,9 +4,9 @@ use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
     read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
-    SharedAudioLayout, SharedAudioTransport, WorkerAudioBusLayout, WorkerMessage, WorkerSession,
-    DEFAULT_WORKER_SAMPLE_RATE_HZ, MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ,
-    WORKER_PROTOCOL_VERSION,
+    SharedAudioLayout, SharedAudioTransport, WorkerAudioBusLayout, WorkerFrameGuard, WorkerMessage,
+    WorkerSession, DEFAULT_WORKER_SAMPLE_RATE_HZ, MAX_WORKER_SAMPLE_RATE_HZ,
+    MIN_WORKER_SAMPLE_RATE_HZ, WORKER_PROTOCOL_VERSION,
 };
 #[cfg(feature = "test-fixtures")]
 use std::io::Write;
@@ -413,6 +413,7 @@ fn run_multi_bus(plugin_sha256: String, layout: WorkerAudioBusLayout) -> Result<
     let stdout = io::stdout();
     let mut reader = BufReader::new(stdin.lock());
     let mut writer = BufWriter::new(stdout.lock());
+    let mut frame_guard = WorkerFrameGuard::new();
     write_worker_message(
         &mut writer,
         &WorkerMessage::HelloBuses {
@@ -442,6 +443,15 @@ fn run_multi_bus(plugin_sha256: String, layout: WorkerAudioBusLayout) -> Result<
                 let frames = layout
                     .input_frames(frames)
                     .map_err(|error| format!("multi-bus input rejected: {error:?}"))?;
+                frame_guard
+                    .accept(
+                        frames
+                            .frames()
+                            .first()
+                            .ok_or_else(|| "multi-bus input has no main bus".to_string())?,
+                        worker_clock_tick(),
+                    )
+                    .map_err(|error| format!("multi-bus identity rejected: {error:?}"))?;
                 write_worker_message(
                     &mut writer,
                     &WorkerMessage::ProcessedBuses {

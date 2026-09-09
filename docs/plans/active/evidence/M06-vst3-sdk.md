@@ -1710,4 +1710,6 @@ regression exercised the actual framed stdin/stdout executable path, including
 main-plus-auxiliary identity preservation and clean shutdown: 22 worker-process
 tests passed and six fixture-dependent tests were ignored. This is protocol
 execution evidence only; it does not load VST2 or claim auxiliary effect
-processing. The production VST2 path remains single-stream.
+processing. The fixture now applies the same monotonic sequence and deadline
+guard as the single-stream worker before echoing a result. The production VST2
+path remains single-stream.

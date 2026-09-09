@@ -145,10 +145,11 @@ fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
     );
     audiorouter_plugin_host::write_worker_message(&mut writer, &WorkerMessage::Ready).unwrap();
 
+    let deadline = worker_clock_tick().saturating_add(10_000);
     let frames = layout
         .input_frames(vec![
-            WorkerFrame::new(7, 100, 2, vec![0.1, 0.2, 0.3, 0.4]).unwrap(),
-            WorkerFrame::new(7, 100, 1, vec![0.5, 0.6]).unwrap(),
+            WorkerFrame::new(7, deadline, 2, vec![0.1, 0.2, 0.3, 0.4]).unwrap(),
+            WorkerFrame::new(7, deadline, 1, vec![0.5, 0.6]).unwrap(),
         ])
         .unwrap();
     audiorouter_plugin_host::write_worker_message(
