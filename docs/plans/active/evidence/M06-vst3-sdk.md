@@ -1773,6 +1773,16 @@ ignored). Strict all-target Clippy with `-D warnings`, formatting, and diff
 checks also passed. No native driver or machine audio configuration action was
 performed.
 
+The complete guarded `tests/acceptance/safe-all.ps1` chain was requalified at
+the supervised-worker implementation head on 2026-09-09. VS2026/MSVC/SDK/WDK
+discovery and native compile, read-only 31-endpoint inventory, disposable
+pinned SysVAD x64 package/API/signability checks, M01/M04/M05, VST3 validators
+and auxiliary-bus probe, VST2 modern/legacy/fault fixtures, M07, unsigned M08
+artifacts, 159 traceability mappings, and documentation validation (51 files,
+163 links) all passed. Temporary checkouts and artifacts were cleaned; no
+driver, signing, plugin registration, audio stream, or persistent machine
+configuration action occurred.
+
 The plugin-host API now exposes a fixture-gated `WorkerProcess` multi-bus
 client. It launches the separately negotiated bus worker, validates the exact
 `HelloBuses` layout, exchanges a complete `ProcessBuses` quantum, validates
