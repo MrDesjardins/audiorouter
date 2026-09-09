@@ -44,6 +44,13 @@ release completion.
   remaining DSP-02 gates are frequency-response reference vectors, UI curve
   parity, native callback timing, and hardware/release qualification.
 
+- Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
+  metadata now carries enumerated filter choices, and the processor editor
+  renders them as bounded selects instead of dropping string parameters. UI
+  typecheck, 97 UI tests, and an elevated disposable production build passed;
+  the repository's existing `ui/dist` output was left untouched after its
+  Windows file lock caused the default build cleanup to return `EPERM`.
+
 - Ran the existing contained-worker acceptance against four user-supplied local
   ReaPlugs x64 VST2 effects on 2026-09-09: ReaComp, ReaEQ, ReaDelay, and ReaGate
   each loaded and processed through the native VST2 adapter at 44.1, 48, and
