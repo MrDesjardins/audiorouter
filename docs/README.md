@@ -56,7 +56,8 @@ conditions without claiming a releasable installer.
 The [privacy and permissions guide](operations/privacy-permissions.md) explains
 the local trust boundary, grant scopes, recording/capture limits, and safe
 diagnostics handling. The [plugin compatibility snapshot](operations/plugin-compatibility.md)
-records the verified local VST3 fixture and the remaining execution limits.
+records the verified local VST3 fixture, gated x64 VST2 observations, and the
+remaining execution limits.
 
 ## Plans versus specifications
 
