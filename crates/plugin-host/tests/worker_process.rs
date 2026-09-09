@@ -4,7 +4,8 @@ use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
     PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
-    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess, MAX_WORKER_SAMPLE_RATE_HZ,
+    MIN_WORKER_SAMPLE_RATE_HZ,
 };
 use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
@@ -100,6 +101,23 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
         decode_worker_message(&encoded).unwrap(),
         WorkerMessage::Ready
     );
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn disposable_worker_rejects_invalid_sample_rate_before_spawn() {
+    for sample_rate_hz in [MIN_WORKER_SAMPLE_RATE_HZ - 1, MAX_WORKER_SAMPLE_RATE_HZ + 1] {
+        assert!(matches!(
+            WorkerProcess::spawn_with_sample_rate(
+                fixture_worker_path(),
+                &"d".repeat(64),
+                2,
+                sample_rate_hz,
+            ),
+            Err(audiorouter_plugin_host::WorkerProcessError::Protocol(message))
+                if message == "invalid sample rate"
+        ));
+    }
 }
 
 #[cfg(all(windows, feature = "test-fixtures"))]
