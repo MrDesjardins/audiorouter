@@ -42,6 +42,15 @@ teardown, temporary cleanup, and media-state preservation passed. This improves
 harness failure detection only and does not convert the uncalibrated onset into
 physical-latency evidence.
 
+## 2026-09-08 - Hardened long impulse requalification
+
+The directly owned `.NET Process` version of the guarded impulse wrapper passed
+the 1,000-impulse case with all 1,000 groups detected, zero p95 spacing error,
+and an estimated onset of 59.63 ms. Both native children returned exit code 0;
+stream teardown, temporary cleanup, and media-state preservation passed. This
+is the strongest current digital-correlation observation, but its onset is not
+calibrated acoustic latency and does not close managed-driver qualification.
+
 ## 2026-09-08 - Endpoint-loopback child supervision hardening
 
 The endpoint-loopback acceptance now launches its concurrent capture and tone
