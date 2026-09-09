@@ -67,6 +67,12 @@ release completion.
   CLI/control/transport tests (148 total) and formatting pass. Existing
   authorization, privacy, and safe-mode behavior remains unchanged.
 
+- Closed the enrollment key-contract gap on 2026-09-09: clients.authorize and
+  clients.revoke now require bounded non-empty idempotency keys in their input
+  schemas and dispatchers, and journal/replay outcomes by scoped key. The
+  existing control/CLI focused suites pass after updating enrollment fixtures;
+  no authorization scope or enrolled-client state was changed by validation.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown

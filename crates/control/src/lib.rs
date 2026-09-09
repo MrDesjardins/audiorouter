@@ -340,14 +340,14 @@ fn method_input_schema(name: &str) -> Value {
                 "role": { "enum": ["observer", "editor", "operator"] },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["clientId", "role"],
+            &["clientId", "role", "idempotencyKey"],
         ),
         "clients.revoke" => object_schema(
             json!({
                 "clientId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["clientId"],
+            &["clientId", "idempotencyKey"],
         ),
         "operations.get" => object_schema(
             json!({ "operationId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
@@ -2452,27 +2452,21 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("role is required".into()))?;
         let role = role_from_name(role_name_value)
             .ok_or_else(|| ControlError::InvalidRequest("unknown client role".into()))?;
-        let operation = params
+        let idempotency_key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
-            .map(|key| {
-                let request = json!({ "clientId": client_id, "role": role_name_value });
-                (
-                    self.scoped_idempotency_key("clients.authorize", key),
-                    Self::request_hash(&request),
-                )
-            });
-        if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
-                return Ok(previous);
-            }
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("clients.authorize", idempotency_key),
+            Self::request_hash(&json!({ "clientId": client_id, "role": role_name_value })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
         }
         self.enroll_client(client_id, role)?;
         let result = json!({ "clientId": client_id, "role": role_name_value, "revoked": false });
-        if let Some((key, hash)) = operation {
-            self.journal_idempotent_result(&key, "clients.authorize", &hash, &result)?;
-        }
+        self.journal_idempotent_result(&operation.0, "clients.authorize", &operation.1, &result)?;
         Ok(result)
     }
 
@@ -2484,27 +2478,21 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("clientId is required".into()))?;
-        let operation = params
+        let idempotency_key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
-            .map(|key| {
-                let request = json!({ "clientId": client_id });
-                (
-                    self.scoped_idempotency_key("clients.revoke", key),
-                    Self::request_hash(&request),
-                )
-            });
-        if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
-                return Ok(previous);
-            }
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("clients.revoke", idempotency_key),
+            Self::request_hash(&json!({ "clientId": client_id })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
         }
         let changed = self.revoke_client(client_id)?;
         let result = json!({ "clientId": client_id, "revoked": true, "changed": changed });
-        if let Some((key, hash)) = operation {
-            self.journal_idempotent_result(&key, "clients.revoke", &hash, &result)?;
-        }
+        self.journal_idempotent_result(&operation.0, "clients.revoke", &operation.1, &result)?;
         Ok(result)
     }
 
@@ -8257,7 +8245,11 @@ mod tests {
                 jsonrpc: "2.0".into(),
                 id: Some(json!(10)),
                 method: "clients.authorize".into(),
-                params: Some(json!({ "clientId": "desktop", "role": "editor" })),
+                params: Some(json!({
+                    "clientId": "desktop",
+                    "role": "editor",
+                    "idempotencyKey": "authorize-desktop-1"
+                })),
             },
             &grant,
         );
@@ -8274,7 +8266,10 @@ mod tests {
                 jsonrpc: "2.0".into(),
                 id: Some(json!(12)),
                 method: "clients.revoke".into(),
-                params: Some(json!({ "clientId": "desktop" })),
+                params: Some(json!({
+                    "clientId": "desktop",
+                    "idempotencyKey": "revoke-desktop-1"
+                })),
             },
             &grant,
         );
