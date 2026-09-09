@@ -27,6 +27,15 @@ quantum blocks respectively, with zero rejected packets, scheduler XRuns, or
 input/output queue overruns and underruns. The onset remains uncalibrated and
 does not represent the required physical acoustic latency measurement.
 
+The M02 Rust adapter smoke and explicit route probes also passed on the
+selected VB-Audio pair. At 48 kHz with the 128-frame graph quantum, the smoke
+path processed 191 graph blocks and 24,448 scheduler frames; the route path
+processed 187 blocks and routed 23,520 frames. Both reported zero scheduler
+XRuns, input/output overruns, deadline misses, and deadline lateness. The
+reported processing-time maxima were 25,100 ns and 38,800 ns respectively;
+these are user-mode scheduler observations, not callback or physical-latency
+release evidence.
+
 ## 2026-09-08 - Independent process metadata retention
 
 The Windows inventory now retains an executable path even when the separate

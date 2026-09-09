@@ -83,6 +83,15 @@ release completion.
   underruns. These are repeatable data-path measurements; the onset is not
   calibrated physical latency and no persistent audio configuration changed.
 
+- Requalified the M02 Rust adapter and explicit built-in route on 2026-09-09.
+  At 48 kHz and 128-frame quanta, the smoke path processed 191 graph blocks
+  and 24,448 scheduler frames; the routed path processed 187 blocks and
+  delivered 23,520 routed frames. Both reported zero XRuns, queue
+  overruns/underruns, deadline misses, and deadline lateness. Processing-time
+  maxima were 25,100 ns and 38,800 ns. This is current user-mode built-in DSP
+  and scheduler evidence only; managed-driver callback and physical-latency
+  gates remain open.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
