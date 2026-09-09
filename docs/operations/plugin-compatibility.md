@@ -57,6 +57,13 @@ The native single-stream probe now accepts an explicit bounded sample-rate
 override, allowing this same test to be repeated at 44.1, 48, and 96 kHz
 without changing the production graph or device configuration.
 
+The Steinberg AGain bundle was requalified through that native worker matrix on
+2026-09-09 at 44.1, 48, and 96 kHz. Its x64 binary is 4,990,976 bytes with
+SHA-256 `7dabe7771290361b418bc2aa4ae6246c8660ca09baa63aea61f41e27026fa8a6`;
+processing, finite output, state save, supervised restart/restoration, and
+shutdown passed at each rate. Native editor support and the complete M06
+acceptance gate remain open.
+
 ## Inspection and execution boundary
 
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,

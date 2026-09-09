@@ -48,6 +48,14 @@ release completion.
   worker-process tests with 9 fixture-dependent ignores, doc-tests, and strict
   Clippy). Temporary worker outputs and environment overrides were restored.
 
+- Requalified the Steinberg AGain native VST3 worker at 44.1/48/96 kHz on
+  2026-09-09 using the same explicit-rate seam. Its x64 binary is 4,990,976
+  bytes with SHA-256
+  `7dabe7771290361b418bc2aa4ae6246c8660ca09baa63aea61f41e27026fa8a6`;
+  processing, finite output, state save, supervised restart/restoration, and
+  shutdown passed at each rate. Native editor and complete M06 gates remain
+  open.
+
 - Closed a DSP-01/03 contract drift on 2026-09-09. The compressor's supported
   knee control and the gate's supported hysteresis, ratio, and hold controls are
   now accepted by domain validation, described by both node and processor API
