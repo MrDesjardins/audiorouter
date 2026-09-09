@@ -54,6 +54,8 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- 2026-09-08 - Plugin directory names are not format evidence. Evidence: [active M06 plan](docs/plans/active/current.md). Scope: Windows plugin inspection and execution gates. Consequence: classify binaries from verified PE architecture and format exports/metadata; an x64 VST2 DLL in a VST3-named directory may be tested only through the VST2 gate, while its x86 sibling must remain rejected.
+
 - 2026-09-07 - Bound decoded control values before dispatch. Evidence: [M07 automation and recovery evidence](docs/plans/active/evidence/M07-automation-recovery.md). Scope: JSON-RPC control adapters. Consequence: framed byte limits must be complemented by shared nesting and string/key budgets before method-specific handlers run.
 
 - 2026-09-07 — Bound constructor capacity before allocation. Evidence: [M06 plugin evidence](docs/plans/active/evidence/M06-vst3-sdk.md). Scope: worker-side queues. Consequence: public bounded-queue constructors must clamp caller capacity before reserving storage, including hostile or accidental `usize::MAX` requests.
