@@ -96,13 +96,25 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         Instant::now(),
     )
     .expect("load VST2 fixture in the isolated worker");
+    let descriptors = worker
+        .describe_parameters(Instant::now())
+        .expect("describe VST2 parameters");
+    assert!(!descriptors.is_empty());
     let mut samples = vec![0.0; 256];
     samples[2] = 0.1;
     samples[3] = -0.1;
     let frame =
         WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 2, samples).unwrap();
     let processed = worker
-        .process(frame, Vec::new(), Instant::now())
+        .process(
+            frame,
+            vec![audiorouter_plugin_host::ParameterEvent {
+                parameter_id: descriptors[0].parameter_id,
+                normalized_value: descriptors[0].default_value,
+                sample_offset: 0,
+            }],
+            Instant::now(),
+        )
         .expect("VST2 worker processing");
     assert!(processed.samples.iter().all(|sample| sample.is_finite()));
     assert!(worker.shutdown().unwrap().success());

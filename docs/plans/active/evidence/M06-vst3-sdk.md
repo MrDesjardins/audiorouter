@@ -1293,6 +1293,11 @@ non-responsive under the five-second worker deadline with both short and
 128-frame blocks, while ReaComp passed with a 128-frame block. This preserves
 the distinction between a qualified fixture and an explicit unsupported one.
 
+The ReaComp run additionally requested its parameter descriptors and applied a
+bounded event for the first returned parameter before processing. This passed
+through the worker protocol and VST2 setter; state chunk translation, native
+editor containment, and plugin-reported latency are not yet qualified.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

@@ -160,10 +160,9 @@ fn run() -> Result<(), String> {
                 }
                 #[cfg(windows)]
                 if let Some(plugin) = vst2_plugin.as_mut() {
-                    process_vst2_frame(plugin, &mut frame)
+                    process_vst2_frame(plugin, &mut frame, &parameters)
                         .map_err(|error| format!("VST2 processing failed: {error}"))?;
                 }
-                let _ = parameters;
                 #[cfg(feature = "test-fixtures")]
                 if _fixture_mode.as_deref() == Some("invalid-output") {
                     let payload = br#"{"Processed":{"frame":{"sequence":1,"deadline_tick":1,"channels":1,"samples":[null]}}}"#;
@@ -192,19 +191,37 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("latency write failed: {error:?}"))?;
             }
             WorkerMessage::DescribeParameters => {
-                #[cfg(feature = "test-fixtures")]
-                let descriptors = if _fixture_mode.as_deref() == Some("descriptors") {
-                    vec![
-                        ParameterDescriptor::new(1, "Mix", 0.5, 0.0, 1.0)
-                            .map_err(|error| format!("fixture descriptor invalid: {error:?}"))?,
-                        ParameterDescriptor::new(2, "Output", 0.0, 0.0, 1.0)
-                            .map_err(|error| format!("fixture descriptor invalid: {error:?}"))?,
-                    ]
-                } else {
-                    Vec::new()
+                let fixture_descriptors = {
+                    #[cfg(feature = "test-fixtures")]
+                    {
+                        if _fixture_mode.as_deref() == Some("descriptors") {
+                            vec![
+                                ParameterDescriptor::new(1, "Mix", 0.5, 0.0, 1.0).map_err(
+                                    |error| format!("fixture descriptor invalid: {error:?}"),
+                                )?,
+                                ParameterDescriptor::new(2, "Output", 0.0, 0.0, 1.0).map_err(
+                                    |error| format!("fixture descriptor invalid: {error:?}"),
+                                )?,
+                            ]
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                    #[cfg(not(feature = "test-fixtures"))]
+                    {
+                        Vec::new()
+                    }
                 };
-                #[cfg(not(feature = "test-fixtures"))]
-                let descriptors = Vec::new();
+                #[cfg(windows)]
+                let descriptors = if let Some(plugin) = vst2_plugin.as_mut() {
+                    plugin
+                        .parameter_descriptors()
+                        .map_err(|error| format!("VST2 parameter description failed: {error:?}"))?
+                } else {
+                    fixture_descriptors
+                };
+                #[cfg(not(windows))]
+                let descriptors = fixture_descriptors;
                 write_worker_message(&mut writer, &WorkerMessage::Parameters { descriptors })
                     .map_err(|error| format!("parameter description write failed: {error:?}"))?;
             }
@@ -318,6 +335,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
 fn process_vst2_frame(
     plugin: &mut Vst2Library,
     frame: &mut audiorouter_plugin_host::WorkerFrame,
+    parameters: &[audiorouter_plugin_host::ParameterEvent],
 ) -> Result<(), String> {
     let channels = usize::from(frame.channels);
     let frames = frame.samples.len() / channels;
@@ -334,6 +352,11 @@ fn process_vst2_frame(
     }
     let inputs: Vec<&[f32]> = input_channels.iter().map(Vec::as_slice).collect();
     let mut outputs: Vec<&mut [f32]> = output_channels.iter_mut().map(Vec::as_mut_slice).collect();
+    for event in parameters {
+        plugin
+            .set_parameter(event.parameter_id, event.normalized_value)
+            .map_err(|error| format!("parameter update failed: {error:?}"))?;
+    }
     plugin
         .set_processing_format(
             48_000.0,

@@ -221,6 +221,8 @@ const EFF_SET_SAMPLE_RATE: i32 = 24;
 #[cfg(windows)]
 const EFF_MAINS_CHANGED: i32 = 29;
 #[cfg(windows)]
+const EFF_GET_PARAM_NAME: i32 = 8;
+#[cfg(windows)]
 const AUDIO_MASTER_VERSION: i32 = 1;
 #[cfg(windows)]
 const AUDIO_MASTER_GET_SAMPLE_RATE: i32 = 10;
@@ -235,6 +237,7 @@ pub enum Vst2LibraryError {
     MissingEntryPoint,
     NullEffect,
     InvalidEffect(Vst2HeaderError),
+    InvalidParameter,
 }
 
 #[cfg(windows)]
@@ -352,6 +355,85 @@ impl Vst2Library {
         // SAFETY: This method is only available for a successfully validated
         // handle, whose channel count is bounded by validate_audio_effect.
         unsafe { (*self.effect).num_outputs as usize }
+    }
+
+    pub fn parameter_count(&self) -> usize {
+        // SAFETY: This method is only available for a successfully validated
+        // handle, whose parameter count is bounded by validate_audio_effect.
+        unsafe { (*self.effect).num_parameters as usize }
+    }
+
+    pub fn set_parameter(&mut self, parameter_id: u32, value: f32) -> Result<(), Vst2LibraryError> {
+        if !value.is_finite()
+            || !(0.0..=1.0).contains(&value)
+            || usize::try_from(parameter_id)
+                .ok()
+                .filter(|id| *id < self.parameter_count())
+                .is_none()
+        {
+            return Err(Vst2LibraryError::InvalidParameter);
+        }
+        // SAFETY: The setter and effect pointer were validated at load; this
+        // control operation runs on the worker thread before processing.
+        unsafe {
+            (*self.effect)
+                .set_parameter
+                .expect("validated parameter setter")(
+                self.effect, parameter_id as i32, value
+            );
+        }
+        Ok(())
+    }
+
+    pub fn parameter_descriptors(
+        &mut self,
+    ) -> Result<Vec<crate::ParameterDescriptor>, Vst2LibraryError> {
+        let count = self.parameter_count();
+        let mut descriptors = Vec::with_capacity(count);
+        for parameter_id in 0..count {
+            let mut title = [0_u8; 64];
+            // SAFETY: The dispatcher was validated at load; the buffer is
+            // caller-owned and bounded to the VST2 parameter-name contract.
+            unsafe {
+                (*self.effect).dispatcher.expect("validated dispatcher")(
+                    self.effect,
+                    EFF_GET_PARAM_NAME,
+                    parameter_id as i32,
+                    0,
+                    title.as_mut_ptr().cast(),
+                    0.0,
+                );
+            }
+            let title_end = title
+                .iter()
+                .position(|byte| *byte == 0)
+                .unwrap_or(title.len());
+            let title = String::from_utf8_lossy(&title[..title_end]);
+            let title = if title.trim().is_empty() {
+                format!("Parameter {parameter_id}")
+            } else {
+                title.into_owned()
+            };
+            // SAFETY: The getter was validated at load and receives a bounded
+            // parameter index from the plugin's own count.
+            let default = unsafe {
+                ((*self.effect)
+                    .get_parameter
+                    .expect("validated parameter getter"))(
+                    self.effect, parameter_id as i32
+                )
+            };
+            let default = if default.is_finite() {
+                default.clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            descriptors.push(
+                crate::ParameterDescriptor::new(parameter_id as u32, title, default, 0.0, 1.0)
+                    .map_err(|_| Vst2LibraryError::InvalidParameter)?,
+            );
+        }
+        Ok(descriptors)
     }
 
     /// Process one bounded block on the worker thread. The slices are fixed
