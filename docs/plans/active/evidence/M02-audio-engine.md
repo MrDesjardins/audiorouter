@@ -215,6 +215,17 @@ remained identical. This qualifies bounded adapter-to-engine ownership and
 block processing, not complete graph activation, audible routing, or physical
 latency.
 
+## Rust process-loopback requalification (2026-09-08)
+
+The guarded Rust process-loopback acceptance passed both include and exclude
+modes at 250 ms. Include mode converted 10,584 source frames to 11,392 engine
+frames across 89 scheduler blocks; exclude mode converted 11,025 source frames
+to 11,904 engine frames across 93 blocks. Both runs used the documented 44.1
+kHz source and 48 kHz engine, with zero rejected packets, XRuns, input/output
+overruns, or underruns. The wrapper verified unchanged media state after
+teardown. This is asynchronous process-loopback adapter evidence only; it does
+not establish managed-driver routing, physical latency, or PID reuse.
+
 The packet adaptation was then tightened to carry partial WASAPI packets across
 boundaries in a fixed staging buffer. The latest guarded 300 ms run consumed 30
 packets (14,400 capture frames), processed 14,336 complete 128-frame scheduler
