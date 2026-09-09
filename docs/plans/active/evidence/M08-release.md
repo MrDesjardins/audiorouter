@@ -1005,6 +1005,20 @@ signing-mode change, plugin/startup registration, audio stream, or persistent
 machine audio configuration occurred. This remains guarded preparation rather
 than signed-release or production-driver evidence.
 
+## Complete guarded acceptance at `16aed8a1` (2026-09-09)
+
+The guarded `tests/acceptance/safe-all.ps1` chain passed: VS2026/WDK
+toolchain and native compile, read-only 31-endpoint inventory, disposable
+pinned SysVAD x64 package/API/signability qualification, M01/M04/M05, pinned
+VST3 SDK/validator and VST2 modern/legacy/fault fixtures, M07, unsigned M08
+preparation, 159 normative traceability mappings, and documentation
+validation (51 Markdown files, 161 local links). The 13 direct
+`audiorouter-*` temporary test databases left by the run were removed and a
+follow-up scan found zero matches. No driver installation/loading, signing-mode
+change, plugin/startup registration, audio stream, or persistent machine audio
+configuration occurred. This remains guarded preparation rather than
+signed-release or production-driver evidence.
+
 ## Test-artifact hygiene (2026-09-08)
 
 After the guarded acceptance run, a bounded cleanup removed exactly 6,690
