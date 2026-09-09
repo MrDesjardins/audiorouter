@@ -52,6 +52,11 @@ passed 13 default and 29 all-features cases with six expected fixture skips,
 and strict Clippy passed in both modes. This removes a protocol-level blocker
 for a future VST3 backend without claiming native parameter automation.
 
+The locked all-features workspace was then requalified successfully, including
+all crate integration tests and doc-tests. This confirms the normal-build
+parameter API did not alter the existing VST2 single-stream or native-gated
+boundaries.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's
