@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `93cbc988` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `cb0dc9bd` (2026-09-09). The guarded M00-M08
 chain, all-features workspace tests, strict all-features Clippy, UI checks,
 legacy VST2 fixture coverage, and documentation validation pass at the
 preceding implementation checkpoints. The repository is clean; no driver or
@@ -30,6 +30,8 @@ is implemented, but rights/editor/release qualification remains open.
 - Next M06 task: qualify a supplied rights-cleared independent x64 VST2/VST3 fixture or integrate the authenticated native-shell HWND owner when available; retain the gated VST2 rights/editor/release boundary.
 - Improved M06 VST3 lifecycle compatibility on 2026-09-09: the offline loader now accepts only `kNotImplemented` from `setProcessing`, matching the pinned SDK's base implementation while retaining fatal handling for every other result. Built-in SDK `AGain` passed the official validator (94/94) and AudioRouter's main stereo class probe; its side-chain class was correctly excluded by the one-input/one-output fixture boundary. The existing mda validator and five-class loader matrix also passed. No system plugin link, registration, audio stream, or machine configuration changed.
 - Next M06 task: qualify a rights-cleared independent non-SDK x64 VST3/VST2 fixture and extend bus-layout coverage before treating vendor/editor/latency compatibility as release evidence.
+- Read-only M06 fixture inventory on 2026-09-09 found no independent VST3 bundle under the checked machine roots (`C:\Program Files\Common Files\VST3`, `C:\Program Files\VST3`, and `C:\Program Files\VSTPlugins`); only the already-qualified Pitchproof VST2 binary and ReaPlugs VST2 DLLs were present. No plugin was loaded, registered, copied, or executed, and audio configuration was unchanged.
+- Next M06 task: qualify the first user-supplied rights-cleared independent x64 VST3 fixture when available; until then retain AGain plus mda as repository-local SDK evidence and keep vendor/editor/latency/release claims gated.
 - Hardened M01/API-09 CLI discovery failures on 2026-09-09: the devices and application list adapters now preserve the complete JSON-RPC error envelope instead of converting backend failures to empty arrays; successful legacy array responses remain unchanged. CLI tests (27), doc-tests, strict Clippy, formatting, and diff checks passed. No audio or machine configuration changed.
 - Next M07 task: retain structured discovery errors through the MCP result wrapper and authenticated remote transport; no additional native or plugin authority is inferred.
 - Added M07/API-09 MCP stdio transport regression on 2026-09-09: an intentionally invalid bounded `list_devices` request crossed the real CLI MCP process boundary and retained its MCP error envelope in both structured and textual JSON views. The two MCP interoperability tests, CLI tests (28), doc-tests, strict Clippy, formatting, and diff checks passed; no audio or machine configuration changed.
