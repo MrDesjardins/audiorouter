@@ -2074,6 +2074,11 @@ fn mcp_dispatch_tool(
         Ok(payload) => payload,
         Err(error) => return mcp_error(id, -32003, &error),
     };
+    mcp_tool_result(id, payload)
+}
+
+/// Wrap a JSON-RPC payload without dropping structured backend error data.
+fn mcp_tool_result(id: Option<Value>, payload: Value) -> Value {
     let is_error = payload.get("error").is_some();
     json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": serde_json::to_string(&payload).unwrap_or_else(|_| "{}".into()) }], "isError": is_error, "structuredContent": payload } })
 }
@@ -2163,6 +2168,33 @@ mod tests {
         assert_eq!(value["error"]["data"]["code"], "deviceInUse");
         assert_eq!(value["error"]["data"]["hresult"], 0x8889000A_u32);
         assert_eq!(value["error"]["data"]["retryable"], true);
+    }
+
+    #[test]
+    fn mcp_discovery_errors_keep_structured_data_in_both_views() {
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "id": 7,
+            "error": {
+                "code": -32010,
+                "message": "Windows audio endpoint enumeration failed.",
+                "data": {
+                    "code": "deviceInUse",
+                    "hresult": 0x8889000A_u32,
+                    "retryable": true,
+                    "remediation": "Retry after the owning stream releases the endpoint."
+                }
+            }
+        });
+        let value = mcp_tool_result(Some(json!(7)), payload);
+        assert_eq!(value["result"]["isError"], true);
+        assert_eq!(
+            value["result"]["structuredContent"]["error"]["data"]["code"],
+            "deviceInUse"
+        );
+        let text = value["result"]["content"][0]["text"].as_str().unwrap();
+        let text_payload: Value = serde_json::from_str(text).unwrap();
+        assert_eq!(text_payload["error"]["data"]["hresult"], 0x8889000A_u32);
     }
 
     #[test]
