@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `fbda664a` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `70b5b7a1` (2026-09-09). The guarded M00-M08
 chain, all-features workspace tests, strict all-features Clippy, UI checks,
 legacy VST2 fixture coverage, and documentation validation pass at this
 checkpoint. The repository is clean; no driver or
