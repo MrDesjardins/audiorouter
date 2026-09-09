@@ -2543,6 +2543,7 @@ pub struct SupervisedWorkerProcess {
     sample_rate_hz: u32,
     shared_transport: bool,
     bus_layout: Option<WorkerAudioBusLayout>,
+    plugin_path: Option<PathBuf>,
 }
 
 impl SupervisedWorkerProcess {
@@ -2666,6 +2667,7 @@ impl SupervisedWorkerProcess {
             sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
             bus_layout: None,
+            plugin_path: None,
         })
     }
 
@@ -2757,6 +2759,7 @@ impl SupervisedWorkerProcess {
             sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
             bus_layout: Some(layout.clone()),
+            plugin_path: None,
         })
     }
 
@@ -2809,6 +2812,7 @@ impl SupervisedWorkerProcess {
                 sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
                 shared_transport: false,
                 bus_layout: Some(layout.clone()),
+                plugin_path: plugin_path.map(Path::to_path_buf),
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -2889,6 +2893,7 @@ impl SupervisedWorkerProcess {
                 sample_rate_hz,
                 shared_transport: false,
                 bus_layout: None,
+                plugin_path: plugin_path.map(Path::to_path_buf),
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -2987,6 +2992,7 @@ impl SupervisedWorkerProcess {
                 sample_rate_hz,
                 shared_transport: true,
                 bus_layout: None,
+                plugin_path: None,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -3277,6 +3283,7 @@ impl SupervisedWorkerProcess {
             sample_rate_hz: _sample_rate_hz,
             shared_transport: _shared_transport,
             bus_layout: _bus_layout,
+            plugin_path: _plugin_path,
         } = self;
         supervisor
     }
@@ -3295,6 +3302,7 @@ impl SupervisedWorkerProcess {
             sample_rate_hz,
             shared_transport,
             bus_layout,
+            plugin_path,
         } = self;
         let state = supervisor.state();
         if state == WorkerState::Running {
@@ -3309,7 +3317,12 @@ impl SupervisedWorkerProcess {
         drop(process);
         if let Some(layout) = bus_layout {
             return Self::spawn_multi_bus_with_supervisor(
-                executable, &identity, &layout, supervisor, now, None,
+                executable,
+                &identity,
+                &layout,
+                supervisor,
+                now,
+                plugin_path.as_deref(),
             );
         }
         if shared_transport {
@@ -3338,7 +3351,7 @@ impl SupervisedWorkerProcess {
                 supervisor,
                 now,
                 sample_rate_hz,
-                None,
+                plugin_path.as_deref(),
             )
         }
     }

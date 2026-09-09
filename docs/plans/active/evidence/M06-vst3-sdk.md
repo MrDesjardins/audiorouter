@@ -2027,6 +2027,14 @@ missing output was converted to scheduler silence. The regression completed in
 120 ms. Deliberate restart/quarantine integration and native callback timing
 remain open.
 
+The native single-stream acceptance also records deliberate replacement: after
+the first AGain worker produced finite transformed output, the test marked the
+worker failed, restarted it through `SupervisedWorkerProcess::restart`, and
+processed another transformed frame. The replacement retained the exact
+verified bundle path rather than falling back to the generic echo worker. The
+focused native acceptance passed; automatic restart policy, quarantine
+integration, callback timing, soak, and physical latency remain open.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
 commit `eb0ad978` with this native worker acceptance included. Native
 toolchain/endpoint checks, disposable SysVAD qualification, portable/UI

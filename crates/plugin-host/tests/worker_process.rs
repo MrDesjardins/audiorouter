@@ -782,6 +782,36 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
         .iter()
         .zip(input_samples)
         .any(|(output, input)| (output - input).abs() > 1.0e-5));
+    assert_eq!(
+        worker.record_failure(Instant::now()),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let mut worker = worker
+        .restart(Instant::now())
+        .map_err(|(error, _)| error)
+        .expect("restart native VST3 worker with the verified plugin path");
+    let restarted = WorkerFrame::new(
+        2,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        vec![0.1, -0.1, 0.0, 0.0],
+    )
+    .expect("native VST3 restarted frame");
+    let restarted_output = worker
+        .process(
+            restarted,
+            vec![ParameterEvent {
+                parameter_id: 0,
+                normalized_value: 0.75,
+                sample_offset: 0,
+            }],
+            Instant::now(),
+        )
+        .expect("native VST3 restarted processing");
+    assert!(restarted_output
+        .samples
+        .iter()
+        .all(|sample| sample.is_finite()));
     assert!(worker
         .shutdown()
         .expect("reap native VST3 worker")
