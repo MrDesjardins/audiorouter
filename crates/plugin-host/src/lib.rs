@@ -924,6 +924,8 @@ pub enum WorkerMessageError {
     LengthMismatch { declared: usize, actual: usize },
     Json(String),
     InvalidFrame(WorkerFrameError),
+    InvalidBusLayout(WorkerAudioBusLayoutError),
+    InvalidBusFrames(WorkerAudioBusFramesError),
     InvalidParameter(ParameterEventError),
     InvalidParameterDescriptor(ParameterDescriptorError),
     InvalidEditor,
@@ -1330,6 +1332,7 @@ pub enum WorkerAudioBusLayoutError {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerAudioBusFramesError {
+    InvalidFrame(WorkerFrameError),
     WrongBusCount,
     ChannelMismatch,
     FrameCountMismatch,
@@ -1424,6 +1427,13 @@ impl WorkerAudioBusFrames {
             return Err(WorkerAudioBusFramesError::WrongBusCount);
         };
         for (index, frame) in frames.iter().enumerate() {
+            WorkerFrame::new(
+                frame.sequence,
+                frame.deadline_tick,
+                frame.channels,
+                frame.samples.clone(),
+            )
+            .map_err(WorkerAudioBusFramesError::InvalidFrame)?;
             if frame.channels != expected_channels[index] {
                 return Err(WorkerAudioBusFramesError::ChannelMismatch);
             }
@@ -1601,6 +1611,11 @@ pub enum WorkerMessage {
         frame: WorkerFrame,
         parameters: Vec<ParameterEvent>,
     },
+    ProcessBuses {
+        layout: WorkerAudioBusLayout,
+        frames: Vec<WorkerFrame>,
+        parameters: Vec<ParameterEvent>,
+    },
     ProcessShared {
         sequence: u64,
         deadline_tick: u64,
@@ -1610,6 +1625,10 @@ pub enum WorkerMessage {
     },
     Processed {
         frame: WorkerFrame,
+    },
+    ProcessedBuses {
+        layout: WorkerAudioBusLayout,
+        frames: Vec<WorkerFrame>,
     },
     ProcessedShared {
         sequence: u64,
@@ -3401,6 +3420,23 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
             }
             validate_parameters_for_frame(parameters, frame.frame_count())?;
         }
+        WorkerMessage::ProcessBuses {
+            layout,
+            frames,
+            parameters,
+        } => {
+            let layout = WorkerAudioBusLayout::new(layout.input_buses(), layout.output_buses())
+                .map_err(WorkerMessageError::InvalidBusLayout)?;
+            let frames = layout
+                .input_frames(frames.clone())
+                .map_err(WorkerMessageError::InvalidBusFrames)?;
+            if parameters.len() > MAX_PARAMETER_EVENTS {
+                return Err(WorkerMessageError::InvalidParameter(
+                    ParameterEventError::OffsetOutOfRange,
+                ));
+            }
+            validate_parameters_for_frame(parameters, frames.frame_count())?;
+        }
         WorkerMessage::ProcessShared {
             sequence,
             deadline_tick,
@@ -3419,6 +3455,13 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                 frame.samples.clone(),
             )
             .map_err(WorkerMessageError::InvalidFrame)?;
+        }
+        WorkerMessage::ProcessedBuses { layout, frames } => {
+            let layout = WorkerAudioBusLayout::new(layout.input_buses(), layout.output_buses())
+                .map_err(WorkerMessageError::InvalidBusLayout)?;
+            layout
+                .output_frames(frames.clone())
+                .map_err(WorkerMessageError::InvalidBusFrames)?;
         }
         WorkerMessage::ProcessedShared {
             sequence,
@@ -4990,6 +5033,45 @@ mod tests {
                 WorkerFrameError::InvalidChannels
             ))
         ));
+    }
+
+    #[test]
+    fn multi_bus_worker_messages_round_trip_and_reject_misaligned_buses() {
+        let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+        let message = WorkerMessage::ProcessBuses {
+            layout: layout.clone(),
+            frames: vec![
+                WorkerFrame::new(7, 100, 2, vec![0.25, -0.25, 0.0, 0.1]).unwrap(),
+                WorkerFrame::new(7, 100, 1, vec![0.5, 0.6]).unwrap(),
+            ],
+            parameters: vec![ParameterEvent::new(3, 0.75, 1).unwrap()],
+        };
+        let encoded = encode_worker_message(&message).unwrap();
+        assert_eq!(decode_worker_message(&encoded).unwrap(), message);
+
+        let processed = WorkerMessage::ProcessedBuses {
+            layout,
+            frames: vec![WorkerFrame::new(7, 100, 2, vec![0.1, 0.2, 0.3, 0.4]).unwrap()],
+        };
+        assert_eq!(
+            decode_worker_message(&encode_worker_message(&processed).unwrap()).unwrap(),
+            processed
+        );
+
+        let misaligned = WorkerMessage::ProcessBuses {
+            layout: WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap(),
+            frames: vec![
+                WorkerFrame::new(7, 100, 2, vec![0.0, 0.0, 0.0, 0.0]).unwrap(),
+                WorkerFrame::new(8, 100, 1, vec![0.0, 0.0]).unwrap(),
+            ],
+            parameters: Vec::new(),
+        };
+        assert_eq!(
+            encode_worker_message(&misaligned),
+            Err(WorkerMessageError::InvalidBusFrames(
+                WorkerAudioBusFramesError::IdentityMismatch
+            ))
+        );
     }
 
     #[test]

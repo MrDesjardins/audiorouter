@@ -1635,3 +1635,12 @@ multi-bus worker message can be serialized. The plugin-host suite passed 61
 unit tests, 21 worker-process tests, doc-tests, formatting, and strict Clippy.
 The current runtime and single-stream wire path are unchanged; actual
 side-chain scheduling and shared-memory ownership remain open.
+
+The worker protocol now carries bounded `ProcessBuses` and `ProcessedBuses`
+message shapes. Encode/decode validation rechecks the serialized bus layout,
+requires one valid frame per declared bus, and rejects mismatched channels,
+quantum sizes, or sequence/deadline identity. A regression round-trips a
+main-plus-side-chain request and response and rejects a misaligned request.
+The current worker session and shared-memory runtime remain single-stream, so
+these messages are a transport contract only and do not enable side-chain
+execution.
