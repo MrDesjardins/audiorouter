@@ -12,10 +12,10 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `f98bb208` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `e3112702` (2026-09-09). The guarded M00-M08
 chain passed at its clean parent `eb0ad978`; the focused native auxiliary-bus
-transformation regression and all-features plugin-host checks pass at this
-checkpoint. The repository is clean; no driver or
+transformation and validated state-restoration regressions and all-features
+plugin-host checks pass at this checkpoint. The repository is clean; no driver or
 startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
