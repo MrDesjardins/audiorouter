@@ -57,21 +57,28 @@ if ($LASTEXITCODE -ne 0) { throw "VST2 hang fixture build failed with exit code 
 if (-not (Test-Path -LiteralPath $hangOutput -PathType Leaf)) { throw "Hang fixture build produced no DLL: $hangOutput" }
 
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
+$previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
 try {
     $env:AUDIOROUTER_VST2_FIXTURE = $output
-    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
-        --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
-    if ($LASTEXITCODE -ne 0) { throw "VST2 state fixture acceptance failed with exit code $LASTEXITCODE" }
-    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
-        --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
-    if ($LASTEXITCODE -ne 0) { throw "VST2 state round-trip acceptance failed with exit code $LASTEXITCODE" }
+    foreach ($sampleRate in @(44100, 48000, 96000)) {
+        $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
+        & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+            --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
+        if ($LASTEXITCODE -ne 0) { throw "VST2 state fixture acceptance failed at ${sampleRate} Hz with exit code $LASTEXITCODE" }
+        & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+            --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
+        if ($LASTEXITCODE -ne 0) { throw "VST2 state round-trip acceptance failed at ${sampleRate} Hz with exit code $LASTEXITCODE" }
+    }
     $env:AUDIOROUTER_VST2_FIXTURE = $legacyOutput
-    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
-        --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
-    if ($LASTEXITCODE -ne 0) { throw "VST2 legacy-main acceptance failed with exit code $LASTEXITCODE" }
-    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
-        --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
-    if ($LASTEXITCODE -ne 0) { throw "VST2 legacy-main state acceptance failed with exit code $LASTEXITCODE" }
+    foreach ($sampleRate in @(44100, 48000, 96000)) {
+        $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
+        & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+            --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
+        if ($LASTEXITCODE -ne 0) { throw "VST2 legacy-main acceptance failed at ${sampleRate} Hz with exit code $LASTEXITCODE" }
+        & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
+            --ignored --exact verified_worker_applies_restored_vst2_chunk_state --nocapture
+        if ($LASTEXITCODE -ne 0) { throw "VST2 legacy-main state acceptance failed at ${sampleRate} Hz with exit code $LASTEXITCODE" }
+    }
     $env:AUDIOROUTER_VST2_FIXTURE = $invalidOutput
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- `
         --ignored --exact verified_worker_rejects_nonfinite_vst2_output --nocapture
@@ -88,6 +95,11 @@ try {
     } else {
         $env:AUDIOROUTER_VST2_FIXTURE = $previousFixture
     }
+    if ($null -eq $previousSampleRate) {
+        Remove-Item Env:AUDIOROUTER_VST2_SAMPLE_RATE -ErrorAction SilentlyContinue
+    } else {
+        $env:AUDIOROUTER_VST2_SAMPLE_RATE = $previousSampleRate
+    }
 }
-Write-Output 'M06 VST2 chunk-state and legacy-main fixture acceptance passed.'
+Write-Output 'M06 VST2 chunk-state and legacy-main fixture acceptance passed at 44.1, 48, and 96 kHz.'
 Write-Output 'Scope: repository-owned ignored DLLs and disposable workers; no plugin registration or audio configuration changes.'

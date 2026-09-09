@@ -1273,11 +1273,20 @@ fn verified_worker_applies_restored_vst2_chunk_state() {
     let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
         .expect("inspect VST2 state fixture without loading it");
     let worker_path = fixture_worker_path();
-    let mut worker = SupervisedWorkerProcess::spawn_verified(
+    let sample_rate_hz = std::env::var("AUDIOROUTER_VST2_SAMPLE_RATE")
+        .ok()
+        .map(|value| {
+            value
+                .parse::<u32>()
+                .expect("valid AUDIOROUTER_VST2_SAMPLE_RATE")
+        })
+        .unwrap_or(44_100);
+    let mut worker = SupervisedWorkerProcess::spawn_verified_with_sample_rate(
         worker_path,
         &identity,
         std::slice::from_ref(&root),
         2,
+        sample_rate_hz,
         Instant::now(),
     )
     .expect("load VST2 state fixture in the isolated worker");
