@@ -21,17 +21,44 @@ $steps = @(
     @{ Name = 'Documentation'; Script = Join-Path $acceptanceRoot 'docs.ps1' }
 )
 
-foreach ($step in $steps) {
-    Write-Output "--- $($step.Name) ---"
-    # Invoke checked-in scripts in this runner so their cleanup/final status
-    # remains attached to the acceptance process. Nested PowerShell runners
-    # can outlive the parent and hide a failed or incomplete terminal result.
-    # Do not inspect LASTEXITCODE here: acceptance steps may intentionally run
-    # negative child-process cases and leave that sentinel nonzero after
-    # successfully validating the expected rejection. Each step owns its
-    # native-command checks and throws on an actual failure.
-    & $step.Script
+$tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+$initialTempChildren = @{}
+foreach ($child in Get-ChildItem -LiteralPath $tempRoot -Force) {
+    if ($child.Name.StartsWith('audiorouter-', [StringComparison]::OrdinalIgnoreCase)) {
+        $initialTempChildren[$child.Name] = $true
+    }
 }
 
-Write-Output 'Safe acceptance chain passed.'
-Write-Output 'Scope: compile/portable/SDK/reference-driver qualification only; live audio, driver installation, signing-mode changes, plugin registration, startup registration, and machine audio configuration are excluded.'
+try {
+    foreach ($step in $steps) {
+        Write-Output "--- $($step.Name) ---"
+        # Invoke checked-in scripts in this runner so their cleanup/final status
+        # remains attached to the acceptance process. Nested PowerShell runners
+        # can outlive the parent and hide a failed or incomplete terminal result.
+        # Do not inspect LASTEXITCODE here: acceptance steps may intentionally run
+        # negative child-process cases and leave that sentinel nonzero after
+        # successfully validating the expected rejection. Each step owns its
+        # native-command checks and throws on an actual failure.
+        & $step.Script
+    }
+
+    Write-Output 'Safe acceptance chain passed.'
+    Write-Output 'Scope: compile/portable/SDK/reference-driver qualification only; live audio, driver installation, signing-mode changes, plugin registration, startup registration, and machine audio configuration are excluded.'
+} finally {
+    $newTempChildren = @(Get-ChildItem -LiteralPath $tempRoot -Force | Where-Object {
+        $_.Name.StartsWith('audiorouter-', [StringComparison]::OrdinalIgnoreCase) -and
+        -not $initialTempChildren.ContainsKey($_.Name)
+    })
+    foreach ($child in $newTempChildren) {
+        $resolved = [IO.Path]::GetFullPath($child.FullName)
+        $parent = [IO.Path]::GetDirectoryName($resolved)
+        if ($parent.TrimEnd('\') -ne $tempRoot -or
+            -not $resolved.StartsWith($tempRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing unexpected acceptance cleanup target: $resolved"
+        }
+    }
+    foreach ($child in $newTempChildren) {
+        Remove-Item -LiteralPath $child.FullName -Recurse -Force
+    }
+    Write-Output "Acceptance cleanup removed $($newTempChildren.Count) run-owned temp children."
+}
