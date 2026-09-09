@@ -683,6 +683,7 @@ fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
         vec![0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     )
     .expect("native VST3 main bus frame");
+    let main_samples = main.samples.clone();
     let sidechain = WorkerFrame::new(1, main.deadline_tick, 1, vec![0.2, 0.0, 0.0, 0.0])
         .expect("native VST3 side-chain frame");
     let inputs = layout
@@ -696,6 +697,11 @@ fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
         .samples
         .iter()
         .all(|sample| sample.is_finite()));
+    assert!(processed.frames()[0]
+        .samples
+        .iter()
+        .zip(main_samples)
+        .any(|(output, input)| (output - input).abs() > 1.0e-5));
     assert!(worker
         .shutdown()
         .expect("reap native VST3 multi-bus worker")

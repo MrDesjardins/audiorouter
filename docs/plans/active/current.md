@@ -111,6 +111,10 @@ is implemented, but rights/editor/release qualification remains open.
   passed through the supervised Rust owner with finite output and clean
   shutdown. This is native worker-process evidence; realtime graph scheduling,
   soak/physical latency, and independent rights-cleared plugin gates remain open.
+- Strengthened the native auxiliary-bus regression on 2026-09-09: AGain's
+  supervised `[stereo, mono]` path must produce finite output that differs from
+  the main input, proving a real native transformation rather than a worker
+  echo. The focused acceptance passed and restored its fixture environment.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   the native VST3 worker integration on 2026-09-09. The chain passed native
   toolchain/endpoint checks, disposable pinned SysVAD x64 qualification, M01,
