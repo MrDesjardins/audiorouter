@@ -36,6 +36,12 @@ and 29 all-features cases with six expected fixture skips, and strict Clippy
 passed in both modes. VST2 native processing remains the existing bounded
 single-stream `processReplacing` path.
 
+The same rule is enforced at the supervised multi-bus process-owner launch
+boundary, where a VST2 identity is rejected before executable validation or
+spawn with `VST2 workers support only the single-stream protocol`. This closes
+the format confusion path introduced when multi-bus ownership became available
+in normal builds.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's
