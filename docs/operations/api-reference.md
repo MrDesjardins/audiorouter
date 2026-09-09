@@ -26,8 +26,8 @@ after the initial 47-method reference.
 | `status.get` | `read` | read-only |
 | `system.diagnostics` | `read` | read-only |
 | `clients.list` | `read` | read-only |
-| `clients.authorize` | `deviceAdministration` | mutating |
-| `clients.revoke` | `deviceAdministration` | mutating |
+| `clients.authorize` | `deviceAdministration` | mutating; requires an idempotency key |
+| `clients.revoke` | `deviceAdministration` | mutating; requires an idempotency key |
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
 | `recordings.list` | `record` | read-only |
@@ -41,10 +41,10 @@ after the initial 47-method reference.
 | `recordings.recovery` | `record` | read-only |
 | `recordings.reveal` | `record` | external operation |
 | `recordings.preview` | `record` | read-only |
-| `recordings.setMetadata` | `record` | mutating |
-| `recordings.rename` | `record` | external operation |
-| `recordings.removeEntry` | `record` | mutating |
-| `recordings.recycle` | `record` | external operation |
+| `recordings.setMetadata` | `record` | mutating; requires an idempotency key |
+| `recordings.rename` | `record` | external operation; requires an idempotency key |
+| `recordings.removeEntry` | `record` | mutating; requires an idempotency key |
+| `recordings.recycle` | `record` | preview is read-only; confirmed recycling requires an idempotency key |
 | `safety.setPrivacyMute` | `capture` | mutating; requires an idempotency key |
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
 | `startup.get` | `read` | read-only |
@@ -73,9 +73,9 @@ after the initial 47-method reference.
 | `sessions.importPlan` | `graphWrite` | plan-only |
 | `sessions.importCommit` | `graphWrite` | mutating |
 | `sessions.list` | `read` | read-only |
-| `sessions.create` | `graphWrite` | mutating |
-| `sessions.duplicate` | `graphWrite` | mutating |
-| `sessions.delete` | `graphWrite` | mutating |
+| `sessions.create` | `graphWrite` | mutating; requires an idempotency key |
+| `sessions.duplicate` | `graphWrite` | mutating; requires an idempotency key |
+| `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
 | `graph.plan` | `graphWrite` | plan-only |
 | `graph.commit` | `graphWrite` | mutating |
 | `session.start` | `sessionControl` | external operation |

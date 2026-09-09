@@ -3453,6 +3453,53 @@ mod tests {
             cancel_operation["inputSchema"]["required"],
             json!(["operationId", "idempotencyKey"])
         );
+        for (name, required) in [
+            ("apply_startup", json!(["planId", "idempotencyKey"])),
+            ("retry_plugins", json!(["directory", "idempotencyKey"])),
+            ("apply_virtual_device", json!(["planId", "idempotencyKey"])),
+            ("commit_session_import", json!(["planId", "idempotencyKey"])),
+            ("arm_recorder", json!(["sessionId", "idempotencyKey"])),
+            (
+                "start_recorder",
+                json!(["sessionId", "frame", "idempotencyKey"]),
+            ),
+            (
+                "set_recording_metadata",
+                json!(["recordingId", "idempotencyKey"]),
+            ),
+            (
+                "rename_recording",
+                json!(["recordingId", "newPath", "idempotencyKey"]),
+            ),
+            (
+                "remove_recording_entry",
+                json!(["recordingId", "idempotencyKey"]),
+            ),
+            ("set_privacy_mute", json!(["muted", "idempotencyKey"])),
+            ("clear_recovery_safe_mode", json!(["idempotencyKey"])),
+            (
+                "control_session",
+                json!(["sessionId", "action", "idempotencyKey"]),
+            ),
+        ] {
+            let tool = tools
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .unwrap_or_else(|| panic!("missing MCP tool {name}"));
+            assert_eq!(tool["inputSchema"]["required"], required, "{name}");
+        }
+        let recycle_recording = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "recycle_recording")
+            .unwrap();
+        assert_eq!(
+            recycle_recording["inputSchema"]["required"],
+            json!(["recordingId"])
+        );
         assert_eq!(mcp_resources().as_array().unwrap().len(), 3);
         let denied = mcp_tool_call(
             &mut plane,
