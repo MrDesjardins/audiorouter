@@ -2429,17 +2429,17 @@ impl SupervisedWorkerProcess {
         })
     }
 
-    /// Spawn a fixture-backed multi-bus worker under the same bounded
+    /// Spawn a separately negotiated multi-bus worker under the same bounded
     /// identity, heartbeat, and quarantine ledger as the single-stream
-    /// worker. Production plugin loading remains intentionally separate.
-    #[cfg(feature = "test-fixtures")]
-    pub fn spawn_multi_bus_fixture(
+    /// worker. The executable owns the native effect implementation; this
+    /// constructor only establishes the process and bus contract.
+    pub fn spawn_multi_bus(
         executable: impl AsRef<Path>,
         identity: &PluginIdentity,
         layout: &WorkerAudioBusLayout,
         now: Instant,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_multi_bus_fixture_with_supervisor(
+        Self::spawn_multi_bus_with_supervisor(
             executable,
             identity,
             layout,
@@ -2450,7 +2450,16 @@ impl SupervisedWorkerProcess {
     }
 
     #[cfg(feature = "test-fixtures")]
-    fn spawn_multi_bus_fixture_with_supervisor(
+    pub fn spawn_multi_bus_fixture(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        layout: &WorkerAudioBusLayout,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_multi_bus(executable, identity, layout, now)
+    }
+
+    fn spawn_multi_bus_with_supervisor(
         executable: impl AsRef<Path>,
         identity: &PluginIdentity,
         layout: &WorkerAudioBusLayout,
@@ -2470,7 +2479,7 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        match WorkerProcess::spawn_multi_bus_fixture(&executable, &identity.sha256, layout) {
+        match WorkerProcess::spawn_multi_bus(&executable, &identity.sha256, layout) {
             Ok(process) => Ok(Self {
                 process,
                 supervisor,
@@ -2732,7 +2741,6 @@ impl SupervisedWorkerProcess {
     /// Process one multi-bus quantum while refreshing supervision only after
     /// a fully validated result is returned. Any protocol or deadline error
     /// terminates the worker and records an immediate failure.
-    #[cfg(feature = "test-fixtures")]
     pub fn process_buses(
         &mut self,
         frames: WorkerAudioBusFrames,
@@ -2977,14 +2985,11 @@ impl SupervisedWorkerProcess {
         }
         let transport = process.take_shared_transport();
         drop(process);
-        #[cfg(feature = "test-fixtures")]
         if let Some(layout) = bus_layout {
-            return Self::spawn_multi_bus_fixture_with_supervisor(
+            return Self::spawn_multi_bus_with_supervisor(
                 executable, &identity, &layout, supervisor, now,
             );
         }
-        #[cfg(not(feature = "test-fixtures"))]
-        let _ = bus_layout;
         if shared_transport {
             let Some(transport) = transport else {
                 return Err((
@@ -3147,16 +3152,24 @@ impl WorkerProcess {
         )
     }
 
-    /// Spawn the separately negotiated multi-bus protocol fixture. This is
-    /// intentionally fixture-gated until a production worker can load a
-    /// rights-cleared effect with a genuine auxiliary-bus layout.
-    #[cfg(feature = "test-fixtures")]
-    pub fn spawn_multi_bus_fixture(
+    /// Spawn the separately negotiated multi-bus worker. The executable is
+    /// responsible for loading the selected native effect; this client
+    /// validates only the process and exact bus-layout handshake.
+    pub fn spawn_multi_bus(
         executable: impl AsRef<Path>,
         plugin_sha256: &str,
         layout: &WorkerAudioBusLayout,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_multi_bus_fixture_mode(executable, plugin_sha256, layout, None)
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            layout.input_buses().first().copied().unwrap_or(0),
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            None,
+            None,
+            None,
+            Some(layout),
+        )
     }
 
     /// Spawn a controlled multi-bus fixture mode. The only supported mode is
@@ -3185,6 +3198,15 @@ impl WorkerProcess {
             None,
             Some(layout),
         )
+    }
+
+    #[cfg(feature = "test-fixtures")]
+    pub fn spawn_multi_bus_fixture(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        layout: &WorkerAudioBusLayout,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_multi_bus_fixture_mode(executable, plugin_sha256, layout, None)
     }
 
     pub fn spawn_shared(
@@ -3620,7 +3642,6 @@ impl WorkerProcess {
     /// Exchange one complete multi-bus quantum with the fixture worker. The
     /// caller owns the frame set and receives validated output frames; a
     /// single-stream worker cannot enter this method accidentally.
-    #[cfg(feature = "test-fixtures")]
     pub fn process_buses(
         &mut self,
         frames: WorkerAudioBusFrames,
@@ -3713,7 +3734,6 @@ impl WorkerProcess {
         receive_worker_message(&self.reader, WORKER_RESPONSE_TIMEOUT)
     }
 
-    #[cfg(feature = "test-fixtures")]
     fn read_until_deadline(
         &mut self,
         deadline_tick: u64,

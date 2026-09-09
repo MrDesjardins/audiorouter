@@ -11,6 +11,20 @@ strict engine Clippy and `git diff --check` also passed. This is portable graph
 contract evidence only; native VST3 worker execution and realtime scheduling
 remain separate gates.
 
+## Normal-build multi-bus owner API (2026-09-09)
+
+The negotiated multi-bus `WorkerProcess` and `SupervisedWorkerProcess` paths
+are now available in normal builds, including bounded deadline reads, result
+validation, heartbeat updates only after success, and layout-preserving
+restart. Fixture-only constructors and controlled hang modes remain gated to
+test builds. `cargo test -p audiorouter-plugin-host --locked` passed 66 library
+tests and 13 default worker-process tests; the all-features run passed 66
+library tests and 29 worker-process tests with six expected fixture skips.
+Strict Clippy passed in both feature modes. This makes the process-owner seam
+available to a future native VST3 backend, but the current executable's
+multi-bus path remains an echo implementation and is not native plugin
+execution or realtime graph evidence.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's
