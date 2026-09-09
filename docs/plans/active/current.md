@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `1fdbf063` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `3e72f378` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -26,6 +26,13 @@ continue only with portable hardening and preserve the native-shell, production
 driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
+
+- Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
+  x64 VST2 extension is implemented through its separate ABI adapter and
+  contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
+  passing. Rights/editor review, sandbox acceptance, callback timing, physical
+  latency, and release qualification remain gated; documentation validation
+  passed and no plugin or machine configuration changed.
 
 - Requalified the locked workspace and guarded M00-M08 chain at pushed head
   `4dc9b67a` on 2026-09-09: workspace tests/doc-tests, strict all-target

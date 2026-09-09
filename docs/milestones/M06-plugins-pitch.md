@@ -5,9 +5,12 @@ a preallocated multi-bus graph staging scheduler, an explicitly bounded
 owner-thread restart policy, and validated opaque-state restoration across
 replacement are implemented and tested; bounded pitch
 streaming with control-plane reset is exposed as a fixed-quantum graph node,
-while callback timing, sandbox acceptance, and physical-latency qualification
-remain open. Prerequisite: M05. Outcome: extensible effects and pitch processing with
-explicit compatibility, latency, and failure containment.
+and the approved PLUG-07 native x64 VST2 extension is implemented through its
+separate ABI adapter and contained worker, including modern and legacy entry
+point fixtures; callback timing, sandbox acceptance, rights/editor review, and
+physical-latency qualification remain open. Prerequisite: M05. Outcome:
+extensible effects and pitch processing with explicit compatibility, latency,
+and failure containment.
 
 ## Read first
 
