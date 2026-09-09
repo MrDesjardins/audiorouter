@@ -115,6 +115,12 @@ is implemented, but rights/editor/release qualification remains open.
   supervised `[stereo, mono]` path must produce finite output that differs from
   the main input, proving a real native transformation rather than a worker
   echo. The focused acceptance passed and restored its fixture environment.
+- Connected the native auxiliary-bus acceptance to the existing graph-owned
+  handoff on 2026-09-09: the supervised AGain result is copied into
+  caller-prepared engine storage and accepted by `RuntimeBusGeneration` with
+  its sequence/deadline identity intact. The focused native worker and
+  all-features plugin-host checks passed. This remains worker-thread staging;
+  realtime callback scheduling and physical latency are not claimed.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   the native VST3 worker integration on 2026-09-09. The chain passed native
   toolchain/endpoint checks, disposable pinned SysVAD x64 qualification, M01,

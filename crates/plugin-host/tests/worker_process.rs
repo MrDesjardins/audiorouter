@@ -702,6 +702,26 @@ fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
         .iter()
         .zip(main_samples)
         .any(|(output, input)| (output - input).abs() > 1.0e-5));
+    let mut staged = [audiorouter_engine::AudioBlock::new(2, 4).unwrap()];
+    let mut references = [None];
+    let engine_result = stage_engine_worker_result(&processed, &mut staged, &mut references)
+        .expect("stage native VST3 output into graph-owned storage");
+    let identity = engine_result.identity();
+    let engine_layout = audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2])
+        .expect("native VST3 graph bus layout");
+    let generation = audiorouter_engine::RuntimeBusGeneration::prepare(
+        audiorouter_engine::RuntimeGeneration::new(1),
+        engine_layout,
+    )
+    .expect("native VST3 graph generation");
+    let mut destination = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    let mut destinations = [&mut destination];
+    assert_eq!(
+        generation
+            .accept_worker_result(identity, &engine_result, &mut destinations)
+            .expect("publish native VST3 output to graph generation"),
+        audiorouter_engine::RuntimeBusProcessOutcome::Processed
+    );
     assert!(worker
         .shutdown()
         .expect("reap native VST3 multi-bus worker")

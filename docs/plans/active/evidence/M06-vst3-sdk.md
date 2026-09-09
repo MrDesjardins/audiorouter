@@ -2001,6 +2001,12 @@ A channel mismatch is rejected before activation. This proves native
 auxiliary-bus worker execution, not realtime graph scheduling, physical-latency
 performance, or release rights.
 
+The same acceptance now stages the native output into caller-prepared engine
+blocks and publishes it through `RuntimeBusGeneration`, preserving the worker
+sequence/deadline identity. This confirms the production-shaped worker-to-graph
+ownership handoff; it does not prove callback scheduling, physical latency, or
+long-run quarantine behavior.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
 commit `eb0ad978` with this native worker acceptance included. Native
 toolchain/endpoint checks, disposable SysVAD qualification, portable/UI
