@@ -1481,10 +1481,29 @@ through that public boundary.
 
 The complete locked workspace regression then passed: workspace tests and
 doc-tests, strict Clippy, formatting, diff checks, and documentation
-validation. The VST2-specific package suite passed 54 unit tests and 20
+validation. The VST2-specific package suite passed 55 unit tests and 20
 worker-process tests; the six-fixture processing matrix passed independently.
 No driver, plugin registration, audio stream, or machine audio configuration
 was changed.
+
+## Installed x64 VST2 fixture and x86 negative control (2026-09-08)
+
+Read-only CLI inspection classified the explicitly selected installed
+`C:\\Program Files\\Common Files\\VST3\\Pitchproof\\pitchproof-x64.dll` as
+an x64 VST2 binary, despite its VST3-named directory. Its 1,077,760-byte
+SHA-256 is
+`1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`.
+The disposable worker acceptance passed parameter/state-capability,
+finite-processing, latency, editor-capability, and shutdown checks against
+the original installed file. The wrapper restores the prior fixture
+environment variable and performs no copy or registration.
+
+The sibling `pitchproof.dll` was rejected by the same read-only inspection as
+`unsupportedArchitecture` and was never loaded. This confirms that the x64
+VST2 gate does not bridge or execute x86 binaries. These results are
+fixture-specific compatibility evidence, not a rights determination or a
+release qualification; native editor-window integration and the broader
+rights/compatibility matrix remain open.
 
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
