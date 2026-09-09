@@ -2045,6 +2045,14 @@ library and 32 worker-process tests (nine expected skips), strict Clippy and
 formatting passed, and the native M06 acceptance passed. Repeated native fault
 soak, callback timing, and physical latency remain open.
 
+The guarded `tests/acceptance/safe-all.ps1` chain was rerun after this policy
+change and passed its native toolchain/endpoint and disposable SysVAD checks,
+portable M01/M04/M05/M07 checks, native VST3 and available VST2 fixture
+coverage, unsigned M08 preparation, 159 requirement mappings, and 51-file/
+163-link documentation validation. Temporary outputs were removed; driver
+installation/loading, signing-mode changes, plugin registration, audio streams,
+and persistent machine audio configuration remained excluded.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
 commit `eb0ad978` with this native worker acceptance included. Native
 toolchain/endpoint checks, disposable SysVAD qualification, portable/UI
