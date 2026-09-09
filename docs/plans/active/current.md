@@ -74,6 +74,12 @@ release completion.
   tests, documentation validation, and diff checks pass; native shell/manual
   accessibility acceptance remains open.
 
+- Finished the UI draft-edit error audit on 2026-09-09. Node/session naming,
+  connection creation/removal/toggling, and node add/remove/duplicate failures
+  now use the same structured formatter, leaving no direct raw `Error.message`
+  presentation path in `App.tsx`. UI typecheck and 98 tests pass; native
+  shell/manual accessibility acceptance remains open.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;
