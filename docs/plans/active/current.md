@@ -20,6 +20,22 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
+- Closed an M07/AUTO-01 parity defect on 2026-09-09: the CLI `operation get`
+  command no longer sends a null cancellation-only parameter that the shared
+  dispatcher rejects, cancellation help documents its optional idempotency
+  key, and backend operation errors are preserved in CLI failures. Added a
+  SQLite-backed get/cancel regression. This does not claim asynchronous
+  cancellation; current operations complete synchronously and cancellation
+  correctly reports `alreadyCompleted` without undoing side effects.
+
+- Plan decision recorded: retain the approved M06/PLUG-07 legacy VST2
+  extension as an explicit gated workstream. Modern `VSTPluginMain` and
+  legacy `main` x64 audio-effect binaries are supported by the contained
+  single-stream worker and repository acceptance fixtures; user-installed
+  ReaPlugs/Pitchproof remain local qualification inputs and are never copied
+  into source control. Rights, independent-vendor coverage, editor success,
+  latency/soak, and release qualification remain prerequisites.
+
 - Added M06/PLUG-04 validated state restoration across deliberate worker
   replacement on 2026-09-09: `restart_with_state` preserves the verified
   plugin path, restores a version/size/hash-checked opaque asset before

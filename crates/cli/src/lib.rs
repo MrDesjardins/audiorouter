@@ -338,7 +338,7 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied();
     if !matches!(action, Some("get" | "cancel")) {
         return Err(CliError::InvalidArguments(
-            "usage: operation <get|cancel> <operation-id> --database <path>".into(),
+            "usage: operation get <operation-id> --database <path> | operation cancel <operation-id> --database <path> [--idempotency-key KEY]".into(),
         ));
     }
     let operation_id = positional(args, 2, "operation id")?;
@@ -356,15 +356,23 @@ fn operation_command(args: &[&str]) -> Result<Value, CliError> {
             } else {
                 "operations.get".into()
             },
-            params: Some(json!({
-                "operationId": operation_id,
-                "idempotencyKey": idempotency_key
-            })),
+            params: Some(if action == Some("cancel") {
+                json!({
+                    "operationId": operation_id,
+                    "idempotencyKey": idempotency_key
+                })
+            } else {
+                json!({ "operationId": operation_id })
+            }),
         },
     );
-    response
-        .result
-        .ok_or_else(|| CliError::InvalidArguments("operation not found".into()))
+    match (response.result, response.error) {
+        (Some(result), _) => Ok(result),
+        (_, Some(error)) => Err(CliError::InvalidArguments(error.message)),
+        _ => Err(CliError::InvalidArguments(
+            "operation returned no result".into(),
+        )),
+    }
 }
 
 fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1583,7 +1591,7 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
-        json!("operation <get|cancel> <operation-id> --database <path>"),
+        json!("operation get <operation-id> --database <path> | operation cancel <operation-id> --database <path> [--idempotency-key KEY]"),
     );
     value["commands"]
         .as_array_mut()
@@ -2142,9 +2150,63 @@ mod tests {
         assert!(help.contains("virtual-devices apply"));
         assert!(help.contains("plugins scan"));
         assert!(help.contains("operation get"));
+        assert!(help.contains("operation cancel"));
         let schema: Value = serde_json::from_str(&run(["schema", "--json"]).unwrap()).unwrap();
         assert_eq!(schema["protocolVersion"]["major"], 1);
         assert_eq!(schema["limits"]["maxVirtualBuses"], 8);
+    }
+
+    #[test]
+    fn operation_cli_keeps_read_parameters_separate_from_cancel_parameters() {
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-cli-operation-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&database);
+        let storage = Storage::open(&database).unwrap();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let mut plane = ControlPlane::with_storage("cli-operation-test", storage);
+        plane.insert_session(session.clone()).unwrap();
+        let mut candidate = session.clone();
+        candidate.name = "cli-operation-change".into();
+        let plan = plane.plan_graph(&session.id, 0, candidate).unwrap();
+        plane.commit_graph(&plan, 0, "cli-operation-id").unwrap();
+        drop(plane);
+
+        let database_arg = database.to_string_lossy().into_owned();
+        let read: Value = serde_json::from_str(
+            &run([
+                "operation",
+                "get",
+                "cli-operation-id",
+                "--database",
+                &database_arg,
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(read["status"], "completed");
+        assert_eq!(read["operationId"], "cli-operation-id");
+
+        let cancelled: Value = serde_json::from_str(
+            &run([
+                "operation",
+                "cancel",
+                "cli-operation-id",
+                "--database",
+                &database_arg,
+                "--idempotency-key",
+                "cli-cancel-id",
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(cancelled["cancelled"], false);
+        let _ = std::fs::remove_file(database);
     }
 
     #[test]
