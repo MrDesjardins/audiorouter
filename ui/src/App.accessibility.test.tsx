@@ -1,9 +1,12 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { createDisconnectedBackend } from "./backend";
+import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
+import { appendDraftConnection, insertDraftMixer } from "./draft";
+import { demoSession } from "./fixtures";
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
@@ -83,5 +86,18 @@ describe("keyboard connection dialog", () => {
       mic: { x: 0, y: 0 },
       voice: { x: 260, y: 0 },
     });
+  });
+
+  it("exposes previewable mixer topology actions from the draft connection list", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const inserted = insertDraftMixer(connected, "edge-1");
+    const onRemove = vi.fn();
+    const onToggle = vi.fn();
+    render(<DraftConnectionList session={inserted} onRemove={onRemove} onToggle={onToggle} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Insert mixer" })[0]);
+    expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect" }));
+    expect(onRemove).toHaveBeenCalledWith(removeMixerActionId("mixer-1"));
   });
 });
