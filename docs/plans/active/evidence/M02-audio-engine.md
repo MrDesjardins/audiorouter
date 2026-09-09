@@ -1158,3 +1158,14 @@ and rejects zero or oversized capacities before allocation. The regression
 covers both invalid boundaries; engine coverage is 77 tests with strict
 Clippy. This is a portable allocation-safety boundary and does not access
 audio devices or machine configuration.
+
+## 2026-09-08 - Native built-in gain transformation
+
+The guarded `m02-rust-adapter-route-live.ps1` wrapper requalified the
+repository's built-in gain graph on explicitly selected VB-Audio endpoints for
+300 ms. The route processed 14,880 captured frames into 116 graph blocks and
+14,304 routed frames, with zero deadline misses and a 32,768 ns p99.9
+processing-time bound. Streams stopped/reset successfully and endpoint,
+media, and persistent configuration snapshots were unchanged. This proves
+native built-in DSP execution through the shared-mode adapter; managed-driver
+callback timing, physical latency, and production signing remain open.

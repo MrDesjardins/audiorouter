@@ -24,6 +24,15 @@ the supported path: DSP and engine revalidation passed gain/EQ, gate,
 compression, limiting, delay, pitch, metering, finite-sample repair, and
 allocation-free prepared processing.
 
+Requalified the native built-in transformation route with the guarded
+`m02-rust-adapter-route-live.ps1` wrapper at 300 ms. AudioRouter applied its
+built-in gain graph between the explicitly selected VB-Audio endpoints and
+processed 14,880 capture frames into 116 graph blocks and 14,304 routed frames,
+with zero deadline misses and a 32,768 ns p99.9 processing bound. Streams were
+stopped/reset and endpoint/media/configuration snapshots were unchanged. This
+is shared-mode built-in DSP evidence, not managed-driver callback or physical
+latency evidence.
+
 Closed an M01/SEC-12 transport boundary gap: Windows named-pipe read and write
 loops now validate the byte count returned by Win32 before slicing the
 remaining buffer. Zero-byte results still map to bounded EOF, while
