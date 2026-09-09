@@ -978,3 +978,16 @@ loaded, signing mode or startup/plugin registration was changed, and machine
 audio configuration remained unchanged. This is not signed release evidence;
 production driver, signing, installer, clean-machine, physical-latency, and
 manual UI gates remain open.
+## Complete guarded acceptance at `e8b8f8cd` (2026-09-08)
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the pushed head:
+toolchain/native compile and read-only endpoint inventory, disposable pinned
+SysVAD x64 package/API/signability qualification, M01/M04/M05, pinned VST3
+SDK/validator and matrix, repository VST2 modern/legacy/fault fixtures, M07,
+unsigned M08 preparation, 159 normative traceability mappings, and
+documentation validation (51 Markdown files, 161 local links). Temporary
+checkouts and outputs were cleaned. No driver was installed or loaded, signing
+mode changed, plugin or startup entry was registered, audio stream was opened,
+or persistent machine audio configuration was altered. This remains guarded
+pre-release evidence; production driver/signing, installer, clean-machine,
+physical-latency, and manual UI gates remain open.
