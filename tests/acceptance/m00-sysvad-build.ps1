@@ -35,7 +35,9 @@ if (-not (Test-Path -LiteralPath $msbuild -PathType Leaf)) {
 
 try {
     Push-Location $root
-    & $msbuild $solution /m /t:Rebuild /p:Configuration=Release /p:Platform=x64 /p:ApiValidator_Enable=true /p:SkipPackageVerification=false /v:minimal
+    # Do not leave reusable MSBuild worker nodes behind after this disposable
+    # acceptance process exits; the checkout is removed immediately afterward.
+    & $msbuild $solution /m /nr:false /t:Rebuild /p:Configuration=Release /p:Platform=x64 /p:ApiValidator_Enable=true /p:SkipPackageVerification=false /v:minimal
     if ($LASTEXITCODE -ne 0) {
         throw "SysVAD x64 validation build failed with exit code $LASTEXITCODE"
     }

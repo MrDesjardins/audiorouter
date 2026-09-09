@@ -83,8 +83,11 @@ try {
                 '-DSMTG_CREATE_PLUGIN_LINK=0'
             )
         }
-        Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'mda-vst3', '--parallel', '4')
-        Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'again', '--parallel', '4')
+        # Forward node-reuse suppression to the Visual Studio generator so
+        # disposable acceptance runs do not strand MSBuild workers after the
+        # CMake child exits.
+        Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'mda-vst3', '--parallel', '4', '--', '/nr:false')
+        Invoke-Native $cmake @('--build', $buildRoot, '--config', 'Release', '--target', 'again', '--parallel', '4', '--', '/nr:false')
     }
     Require-File $validator 'built VST3 validator'
     Require-File (Join-Path $bundle 'Contents\x86_64-win\mda-vst3.vst3') 'built mda VST3 binary'

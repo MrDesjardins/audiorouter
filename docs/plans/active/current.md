@@ -65,6 +65,17 @@ release completion.
   contract is found; retain independent-plugin, native-shell/HWND, production
   driver, signing, installer, clean-machine, and physical-latency gates.
 
+- Fixed disposable native-qualification process leakage on 2026-09-09: the
+  SysVAD MSBuild wrapper and VST3 SDK CMake/Visual Studio acceptance now disable
+  MSBuild node reuse, preventing reusable child nodes from outliving temporary
+  checkouts. Isolated SysVAD qualification and M06 VST3 SDK acceptance both
+  passed, and post-run process checks found no MSBuild/compiler children or
+  temporary SysVAD checkout. No driver was installed or loaded and no audio
+  configuration changed.
+- Next safe task: complete the full guarded M00-M08 chain at this cleanup-fixed
+  head, then retain independent-plugin, native-shell/HWND, production driver,
+  signing, installer, clean-machine, and physical-latency gates.
+
 - Revalidated M08 traceability on 2026-09-09: the delivery map covers all 159
   normative requirement IDs. This is documentation coverage evidence only and
   does not waive implementation, hardware, driver, signing, or release gates.
