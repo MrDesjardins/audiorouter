@@ -123,6 +123,15 @@ release completion.
   gate; native production, signing, installer, shell/HWND, physical-latency,
   manual accessibility, and independent-vendor plugin gates remain open.
 
+- Revalidated strict portable lint on 2026-09-09: `cargo clippy --workspace
+  --all-targets --all-features --locked -- -D warnings` completed successfully
+  with no warnings or errors. No audio, driver, signing, or machine
+  configuration action occurred.
+- Next safe task: continue with the remaining independently observable native
+  qualification gates while retaining production driver, signing, installer,
+  shell/HWND, physical-latency, manual accessibility, and independent-vendor
+  plugin blockers.
+
 - Requalified the focused M05 UI acceptance at the current head on 2026-09-09:
   TypeScript typecheck, all 16 UI test files/111 tests, and the temporary
   production Vite bundle (210 modules, three output files) passed. The runner
