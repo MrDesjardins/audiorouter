@@ -1685,3 +1685,13 @@ complete result copies all declared outputs without allocation, locking,
 waiting, or I/O. Engine tests passed 84 cases with formatting and strict
 Clippy. The engine remains independent of plugin-host, so this is the typed
 handoff contract rather than a claim of completed auxiliary effect execution.
+
+`plugin-host` now depends one-way on `engine` and exposes
+`stage_engine_worker_result`. It copies validated `WorkerAudioBusFrames` into
+caller-prepared `AudioBlock` storage and caller-prepared reference slots,
+constructing the engine identity envelope without allocating at the handoff.
+The integration regression verified sequence/deadline/frame-count preservation
+and successful delivery of main plus auxiliary outputs. Plugin-host passed 65
+unit tests, 21 worker-process tests (six fixture-dependent tests ignored),
+doc-tests, formatting, and strict Clippy. No realtime callback, plugin
+registration, audio stream, or machine configuration was used.

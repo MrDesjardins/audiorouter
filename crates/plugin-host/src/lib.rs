@@ -1468,6 +1468,50 @@ impl WorkerAudioBusFrames {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EngineBusAdapterError {
+    StorageBusCount,
+    ReferenceBusCount,
+    InvalidIdentity,
+    Block(audiorouter_engine::BlockError),
+}
+
+/// Copy a validated worker result into caller-prepared engine blocks and
+/// return an engine-owned result envelope. This adapter is intended for the
+/// worker/control boundary: all storage and reference arrays are supplied by
+/// the caller, and no allocation is performed here or by the resulting engine
+/// generation handoff.
+pub fn stage_engine_worker_result<'a>(
+    frames: &WorkerAudioBusFrames,
+    storage: &'a mut [audiorouter_engine::AudioBlock],
+    references: &'a mut [Option<&'a audiorouter_engine::AudioBlock>],
+) -> Result<audiorouter_engine::RuntimeBusWorkerResult<'a>, EngineBusAdapterError> {
+    if storage.len() != frames.frames.len() {
+        return Err(EngineBusAdapterError::StorageBusCount);
+    }
+    if references.len() != frames.frames.len() {
+        return Err(EngineBusAdapterError::ReferenceBusCount);
+    }
+    let first = &frames.frames[0];
+    let identity = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        first.sequence,
+        first.deadline_tick,
+        first.frame_count(),
+    )
+    .map_err(|_| EngineBusAdapterError::InvalidIdentity)?;
+    for (destination, source) in storage.iter_mut().zip(&frames.frames) {
+        destination
+            .copy_from_interleaved(&source.samples)
+            .map_err(EngineBusAdapterError::Block)?;
+    }
+    for (reference, block) in references.iter_mut().zip(storage.iter()) {
+        *reference = Some(block);
+    }
+    Ok(audiorouter_engine::RuntimeBusWorkerResult::new(
+        identity, references,
+    ))
+}
+
 fn validate_audio_buses(
     channels: &[u16],
     missing_main: WorkerAudioBusLayoutError,
@@ -5940,6 +5984,48 @@ mod tests {
         assert!(layout.has_sidechain());
         assert_eq!(layout.total_input_channels(), 5);
         assert_eq!(layout.total_output_channels(), 2);
+    }
+
+    #[test]
+    fn engine_adapter_stages_validated_bus_result_without_allocating_storage() {
+        let layout = WorkerAudioBusLayout::new(&[2], &[2, 1]).unwrap();
+        let frames = layout
+            .output_frames(vec![
+                WorkerFrame::new(4, 100, 2, vec![0.1; 8]).unwrap(),
+                WorkerFrame::new(4, 100, 1, vec![0.2; 4]).unwrap(),
+            ])
+            .unwrap();
+        let mut storage = [
+            audiorouter_engine::AudioBlock::new(2, 4).unwrap(),
+            audiorouter_engine::AudioBlock::new(1, 4).unwrap(),
+        ];
+        let mut references = [None, None];
+        let result = stage_engine_worker_result(&frames, &mut storage, &mut references).unwrap();
+        assert_eq!(result.identity().sequence, 4);
+        assert_eq!(result.identity().deadline_tick, 100);
+        assert_eq!(result.identity().frame_count, 4);
+
+        let engine_layout = audiorouter_engine::RuntimeBusLayout::new(vec![2], vec![2, 1]).unwrap();
+        let generation = audiorouter_engine::RuntimeBusGeneration::prepare(
+            audiorouter_engine::RuntimeGeneration::new(2),
+            engine_layout,
+        )
+        .unwrap();
+        let identity = result.identity();
+        let mut destination_main = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+        let mut destination_side = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
+        let mut destinations = [&mut destination_main, &mut destination_side];
+        assert_eq!(
+            generation
+                .accept_worker_result(identity, &result, &mut destinations)
+                .unwrap(),
+            audiorouter_engine::RuntimeBusProcessOutcome::Processed
+        );
+        drop(result);
+        assert_eq!(storage[0].channel(0).unwrap()[0], 0.1);
+        assert_eq!(storage[1].channel(0).unwrap()[0], 0.2);
+        assert_eq!(destination_main.channel(0).unwrap()[0], 0.1);
+        assert_eq!(destination_side.channel(0).unwrap()[0], 0.2);
     }
 
     #[test]
