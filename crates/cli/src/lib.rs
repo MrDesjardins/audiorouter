@@ -1305,7 +1305,7 @@ fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
 fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> [--idempotency-key KEY]".into(),
+            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> --idempotency-key KEY".into(),
         )
     })?;
     if !matches!(
@@ -1313,7 +1313,7 @@ fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
         "arm" | "start" | "pause" | "resume" | "split" | "stop"
     ) {
         return Err(CliError::InvalidArguments(
-            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> [--idempotency-key KEY]".into(),
+            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> --idempotency-key KEY".into(),
         ));
     }
     let session_id = args
@@ -1336,15 +1336,13 @@ fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
     }
     let storage = database(args)?;
     let mut plane = ControlPlane::with_storage("cli", storage);
-    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    let idempotency_key = option_value(args, "--idempotency-key")?;
     let method = format!("recorders.{action}");
     let mut params = json!({ "sessionId": session_id });
     if let Some(frame) = frame {
         params["frame"] = json!(frame);
     }
-    if let Some(key) = idempotency_key {
-        params["idempotencyKey"] = json!(key);
-    }
+    params["idempotencyKey"] = json!(idempotency_key);
     plane
         .dispatch(audiorouter_protocol::JsonRpcRequest {
             jsonrpc: "2.0".into(),
@@ -1420,7 +1418,8 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
             .filter(|value| !value.starts_with('-'))
             .ok_or_else(|| {
                 CliError::InvalidArguments(
-                    "usage: session create <document-path> --database <path>".into(),
+                    "usage: session create <document-path> --database <path> --idempotency-key KEY"
+                        .into(),
                 )
             })?;
         let document_path = std::path::Path::new(document_path);
@@ -1455,7 +1454,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
         .filter(|value| !value.starts_with('-'))
         .ok_or_else(|| {
             CliError::InvalidArguments(
-                "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]"
+                "usage: session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID] --idempotency-key KEY"
                     .into(),
             )
         })?;
@@ -1467,7 +1466,7 @@ fn session_command(args: &[&str]) -> Result<Value, CliError> {
             .filter(|value| !value.starts_with('-'))
             .ok_or_else(|| {
                 CliError::InvalidArguments(
-                    "usage: session duplicate <source-session-id> <new-session-id> --database <path>"
+                    "usage: session duplicate <source-session-id> <new-session-id> --database <path> --idempotency-key KEY"
                         .into(),
                 )
             })?;
@@ -1599,20 +1598,20 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         15,
-        json!("recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> [--idempotency-key KEY]"),
+        json!("recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> --idempotency-key KEY"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
         json!("operation get <operation-id> --database <path> | operation cancel <operation-id> --database <path> --idempotency-key KEY"),
     );
-    value["commands"]
-        .as_array_mut()
-        .unwrap()
-        .insert(14, json!("privacy mute <on|off> --database <path>"));
-    value["commands"]
-        .as_array_mut()
-        .unwrap()
-        .insert(15, json!("recovery clear-safe-mode --database <path>"));
+    value["commands"].as_array_mut().unwrap().insert(
+        14,
+        json!("privacy mute <on|off> --database <path> --idempotency-key KEY"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        15,
+        json!("recovery clear-safe-mode --database <path> --idempotency-key KEY"),
+    );
     value
 }
 

@@ -61,6 +61,12 @@ release completion.
   installation/loading, signing-mode change, registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Closed the remaining recorder CLI contract drift on 2026-09-09: recorder
+  lifecycle commands now require and forward a non-empty idempotency key at the
+  CLI boundary, matching backend discovery and MCP schemas. CLI tests (29), MCP
+  interoperability tests (2), strict Clippy, formatting, and diff checks pass;
+  no audio stream or machine configuration changed.
+
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
   ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and
