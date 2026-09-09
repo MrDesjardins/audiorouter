@@ -63,6 +63,14 @@ release completion.
   with 51 Markdown files and 163 local links, while the contract check passed
   with 62 methods, 17 node kinds, and 7 processors. No machine or audio state
   changed.
+- Rebuilt both checked-in native M06 tools on 2026-09-09 with Visual Studio
+  Community 18, MSVC 14.51.36231, and Windows SDK 10.0.28000.0. The worker
+  build produced a 512,000-byte executable with SHA-256
+  `FDCB7EE7FBAACBB14EE7A6454BEDA42F25D5EC1D8BA98030058517829BEA921E`, and
+  the loader produced a 420,864-byte executable with SHA-256
+  `6F5E44D1408AA05C8070A8ABD6398FAE9A742D1B8E57B413E77550E893A722AF`.
+  Generated binaries/objects were removed after verification; nothing was
+  installed, registered, loaded, or persisted on the machine.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
