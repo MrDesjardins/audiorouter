@@ -54,6 +54,8 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- 2026-09-09 - `E_INVALIDARG` is not evidence of an audio-device ownership conflict. Evidence: [M00 WASAPI probe](docs/plans/active/evidence/M00-wasapi-probe.md). Scope: shared WASAPI capture initialization and retry policy. Consequence: retain the exact `E_INVALIDARG` event-to-polling fallback, but preserve `AUDCLNT_E_DEVICE_IN_USE`, access-denied, and other HRESULTs as distinct diagnostics rather than masking them as mode incompatibility.
+
 - 2026-09-08 - Plugin directory names are not format evidence. Evidence: [active M06 plan](docs/plans/active/current.md). Scope: Windows plugin inspection and execution gates. Consequence: classify binaries from verified PE architecture and format exports/metadata; an x64 VST2 DLL in a VST3-named directory may be tested only through the VST2 gate, while its x86 sibling must remain rejected.
 
 - 2026-09-07 - Bound decoded control values before dispatch. Evidence: [M07 automation and recovery evidence](docs/plans/active/evidence/M07-automation-recovery.md). Scope: JSON-RPC control adapters. Consequence: framed byte limits must be complemented by shared nesting and string/key budgets before method-specific handlers run.
