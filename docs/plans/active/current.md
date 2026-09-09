@@ -58,6 +58,11 @@ release completion.
   identity revalidation, state integrity, latency, editor lifecycle,
   protected-path failure policy, and shared-bus transport. No arbitrary
   installed plugin was loaded and no machine or audio configuration changed.
+- Re-ran `node tools/docs/validate.mjs` and
+  `node tools/contracts/check-drift.mjs` on 2026-09-09; documentation passed
+  with 51 Markdown files and 163 local links, while the contract check passed
+  with 62 methods, 17 node kinds, and 7 processors. No machine or audio state
+  changed.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
