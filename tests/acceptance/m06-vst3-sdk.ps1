@@ -93,7 +93,7 @@ try {
     Invoke-Native $validator @($bundle)
     Invoke-Native $validator @($againBundle)
     Invoke-Native 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $loaderScript)
-    Invoke-Native $loader @($againBundle, '--class-index', '0')
+    Invoke-Native $loader @($againBundle, '--class-index', '0', '--parameter-value', '0.75', '--require-output-change')
     Invoke-ExpectedFailure $loader @($againBundle, '--class-index', '2') 'probe requires one input and output bus'
     Invoke-Native $loader @($againBundle, '--class-index', '2', '--multi-bus')
     $defaultLoaderOutput = Invoke-NativeCapture $loader @($bundle)

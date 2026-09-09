@@ -35,3 +35,9 @@ four mono/stereo audio buses per direction. Without that flag, non-single-bus
 effects are rejected. The probe supplies every declared bus to `process`,
 checks every output for finite samples, and does not imply worker or realtime
 multi-bus scheduling.
+
+For a selected effect whose first parameter is expected to alter gain, the
+optional `--parameter-value 0.75 --require-output-change` arguments additionally
+require the processed block to differ from the 0.25 probe input. This is a
+targeted transformation assertion, not a claim that every effect must change
+every input.

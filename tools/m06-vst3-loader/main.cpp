@@ -246,16 +246,36 @@ static void require_processing_result(const char* operation, tresult result) {
 }
 
 int wmain(int argc, wchar_t** argv) {
-    if (argc < 2 || argc > 5) {
-        std::wcerr << L"usage: m06-vst3-loader <plugin.vst3|binary> [--class-index <n>] [--multi-bus]\n";
+    if (argc < 2 || argc > 8) {
+        std::wcerr << L"usage: m06-vst3-loader <plugin.vst3|binary> [--class-index <n>] [--parameter-value <0..1>] [--require-output-change] [--multi-bus]\n";
         return 2;
     }
 
     int32 selected_class_index = -1;
     bool allow_multi_bus = false;
+    bool require_output_change = false;
+    double parameter_value = 0.5;
     for (int argument_index = 2; argument_index < argc; ++argument_index) {
         if (std::wstring(argv[argument_index]) == L"--multi-bus") {
             allow_multi_bus = true;
+            continue;
+        }
+        if (std::wstring(argv[argument_index]) == L"--require-output-change") {
+            require_output_change = true;
+            continue;
+        }
+        if (std::wstring(argv[argument_index]) == L"--parameter-value" &&
+            argument_index + 1 < argc) {
+            try {
+                parameter_value = std::stod(argv[++argument_index]);
+                if (!std::isfinite(parameter_value) || parameter_value < 0.0 ||
+                    parameter_value > 1.0) {
+                    throw std::out_of_range("parameter value");
+                }
+            } catch (const std::exception&) {
+                std::wcerr << L"parameter value must be a finite number from 0 through 1\n";
+                return 2;
+            }
             continue;
         }
         if (std::wstring(argv[argument_index]) != L"--class-index" ||
@@ -413,7 +433,7 @@ int wmain(int argc, wchar_t** argv) {
                     int32 queue_index = -1;
                     auto* queue = parameter_changes.addParameterData(parameter.id, queue_index);
                     if (!queue || queue_index != 0 ||
-                        queue->addPoint(0, 0.5, queue_index) != kResultOk) {
+                        queue->addPoint(0, parameter_value, queue_index) != kResultOk) {
                         throw std::runtime_error("parameter change construction failed");
                     }
                 }
@@ -462,6 +482,22 @@ int wmain(int argc, wchar_t** argv) {
                             throw std::runtime_error("processor produced non-finite output");
                             }
                         }
+                    }
+                }
+                if (require_output_change) {
+                    bool changed = false;
+                    for (const auto& bus : output_storage) {
+                        for (const auto& channel : bus) {
+                            for (const float sample : channel) {
+                                if (std::abs(sample - 0.25f) > 1.0e-5f) {
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                    if (!changed) {
+                        throw std::runtime_error(
+                            "processor output did not differ from the probe input");
                     }
                 }
                 processor->setProcessing(false);

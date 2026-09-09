@@ -1966,3 +1966,13 @@ documentation validation covering 51 Markdown files and 163 local links.
 The wrapper cleaned temporary outputs. It did not install or load a driver,
 register a plugin, change signing mode, open an audio stream, or persist a
 machine audio configuration.
+
+## Native transformation assertion (2026-09-09)
+
+The loader now has an opt-in `--require-output-change` check and a bounded
+`--parameter-value` option. The AGain main-class probe passed with its first
+parameter (`Gain`) set to normalized 0.75 and confirmed that at least one
+finite output sample differed from the 0.25 probe input. This supplements
+parameter-interface evidence with a real repository-local sound-transformation
+check; it is still offline evidence and does not claim supervised realtime
+hosting. Generated native artifacts were removed after the run.
