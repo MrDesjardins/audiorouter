@@ -71,6 +71,13 @@ recognized legacy DLL from crossing the runtime boundary accidentally while
 the adapter is still being developed. Plugin-host tests (48), worker-process
 tests (13), and strict Clippy passed.
 
+The locked all-workspace regression sweep then passed, including control (97),
+domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport
+(19), Windows audio (30), and the remaining package suites. Workspace strict
+Clippy, formatting, documentation validation (51 Markdown files/160 links),
+and `git diff --check` passed. No audio endpoint or machine configuration was
+accessed.
+
 Closed an M01/SEC-12 transport boundary gap: Windows named-pipe read and write
 loops now validate the byte count returned by Win32 before slicing the
 remaining buffer. Zero-byte results still map to bounded EOF, while
