@@ -1489,7 +1489,7 @@ through that public boundary.
 
 The complete locked workspace regression then passed: workspace tests and
 doc-tests, strict Clippy, formatting, diff checks, and documentation
-validation. The VST2-specific package suite passed 55 unit tests and 20
+validation. The VST2-specific package suite passed 56 unit tests and 20
 worker-process tests; the six-fixture processing matrix passed independently.
 No driver, plugin registration, audio stream, or machine audio configuration
 was changed.
