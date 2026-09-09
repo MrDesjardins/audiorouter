@@ -1733,3 +1733,16 @@ late-response rejection. Plugin-host passed 66 unit tests, 13 ordinary
 worker-process tests, doc-tests, formatting, and strict Clippy. This is a
 protocol/session supervision boundary only: it does not claim a real auxiliary
 effect, realtime scheduling, or VST2 side-chain support.
+
+## Native VST3 auxiliary-bus activation (2026-09-09)
+
+The offline loader now has an explicit `--multi-bus` mode. It validates and
+activates every declared mono/stereo audio bus (bounded to four per direction),
+supplies all buffers to `IAudioProcessor::process`, and checks every output for
+finite samples. The default probe still rejects non-single-bus effects. Against
+the pinned SDK's AGain class 2 (`AGain SideChain VST3`), the new mode processed
+a genuine two-input/one-output layout successfully; the single-bus invocation
+continued to fail with the expected layout diagnostic. The M06 acceptance also
+passed the pinned validators, main AGain probe, mda matrix, and documentation
+checks. This is native offline VST3 effect evidence, not worker/realtime
+scheduling or VST2 side-chain evidence.

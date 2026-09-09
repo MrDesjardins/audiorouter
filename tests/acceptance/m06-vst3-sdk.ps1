@@ -95,6 +95,7 @@ try {
     Invoke-Native 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $loaderScript)
     Invoke-Native $loader @($againBundle, '--class-index', '0')
     Invoke-ExpectedFailure $loader @($againBundle, '--class-index', '2') 'probe requires one input and output bus'
+    Invoke-Native $loader @($againBundle, '--class-index', '2', '--multi-bus')
     $defaultLoaderOutput = Invoke-NativeCapture $loader @($bundle)
     if (-not (($defaultLoaderOutput -join "`n") -match 'parameter_descriptors=\d+')) {
         throw 'offline loader did not report a bounded parameter descriptor catalog'
@@ -103,7 +104,7 @@ try {
     foreach ($classIndex in $matrixClasses) {
         Invoke-Native $loader @($bundle, '--class-index', "$classIndex")
     }
-    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, offline loader, AGain main class, explicit side-chain layout rejection, and five-class mda matrix.'
+    Write-Output 'M06 VST3 SDK acceptance passed: pinned checkout, build, validator, offline loader, AGain main and auxiliary-bus classes, explicit single-bus rejection, and five-class mda matrix.'
 } finally {
     foreach ($generated in @($loader, $loaderObject)) {
         if (Test-Path -LiteralPath $generated) {

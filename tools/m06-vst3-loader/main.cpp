@@ -168,19 +168,26 @@ static void require_processing_result(const char* operation, tresult result) {
 }
 
 int wmain(int argc, wchar_t** argv) {
-    if (argc != 2 && argc != 4) {
-        std::wcerr << L"usage: m06-vst3-loader <plugin.vst3|binary> [--class-index <n>]\n";
+    if (argc < 2 || argc > 5) {
+        std::wcerr << L"usage: m06-vst3-loader <plugin.vst3|binary> [--class-index <n>] [--multi-bus]\n";
         return 2;
     }
 
     int32 selected_class_index = -1;
-    if (argc == 4) {
-        if (std::wstring(argv[2]) != L"--class-index") {
+    bool allow_multi_bus = false;
+    for (int argument_index = 2; argument_index < argc; ++argument_index) {
+        if (std::wstring(argv[argument_index]) == L"--multi-bus") {
+            allow_multi_bus = true;
+            continue;
+        }
+        if (std::wstring(argv[argument_index]) != L"--class-index" ||
+            argument_index + 1 >= argc ||
+            std::wstring(argv[argument_index + 1]) == L"--multi-bus") {
             std::wcerr << L"unknown option\n";
             return 2;
         }
         try {
-            const auto parsed = std::stol(argv[3]);
+            const auto parsed = std::stol(argv[++argument_index]);
             if (parsed < 0 || parsed > INT32_MAX) {
                 throw std::out_of_range("class index");
             }
@@ -261,7 +268,8 @@ int wmain(int argc, wchar_t** argv) {
                 component_initialized = true;
                 const auto inputs = component->getBusCount(Vst::kAudio, Vst::kInput);
                 const auto outputs = component->getBusCount(Vst::kAudio, Vst::kOutput);
-                if (inputs != 1 || outputs != 1) {
+                if ((!allow_multi_bus && (inputs != 1 || outputs != 1)) ||
+                    inputs < 1 || inputs > 4 || outputs < 1 || outputs > 4) {
                     throw std::runtime_error("probe requires one input and output bus");
                 }
                 if (component->queryInterface(
@@ -269,20 +277,30 @@ int wmain(int argc, wchar_t** argv) {
                     kResultOk) {
                     throw std::runtime_error("audio processor interface is missing");
                 }
-                Vst::BusInfo input_info{};
-                Vst::BusInfo output_info{};
-                if (component->getBusInfo(Vst::kAudio, Vst::kInput, 0, input_info) != kResultOk ||
-                    component->getBusInfo(Vst::kAudio, Vst::kOutput, 0, output_info) !=
+                std::vector<Vst::BusInfo> input_infos(static_cast<std::size_t>(inputs));
+                std::vector<Vst::BusInfo> output_infos(static_cast<std::size_t>(outputs));
+                for (int32 bus = 0; bus < inputs; ++bus) {
+                    if (component->getBusInfo(Vst::kAudio, Vst::kInput, bus,
+                                              input_infos[static_cast<std::size_t>(bus)]) !=
                         kResultOk ||
-                    input_info.channelCount != output_info.channelCount ||
-                    input_info.channelCount < 1 || input_info.channelCount > 2) {
-                    throw std::runtime_error("unsupported audio bus layout");
+                        input_infos[static_cast<std::size_t>(bus)].channelCount < 1 ||
+                        input_infos[static_cast<std::size_t>(bus)].channelCount > 2) {
+                        throw std::runtime_error("unsupported input audio bus layout");
+                    }
+                    require_result("input audio bus activation",
+                                   component->activateBus(Vst::kAudio, Vst::kInput, bus, true));
                 }
-                const auto channels = input_info.channelCount;
-                require_result("input audio bus activation",
-                               component->activateBus(Vst::kAudio, Vst::kInput, 0, true));
-                require_result("output audio bus activation",
-                               component->activateBus(Vst::kAudio, Vst::kOutput, 0, true));
+                for (int32 bus = 0; bus < outputs; ++bus) {
+                    if (component->getBusInfo(Vst::kAudio, Vst::kOutput, bus,
+                                              output_infos[static_cast<std::size_t>(bus)]) !=
+                        kResultOk ||
+                        output_infos[static_cast<std::size_t>(bus)].channelCount < 1 ||
+                        output_infos[static_cast<std::size_t>(bus)].channelCount > 2) {
+                        throw std::runtime_error("unsupported output audio bus layout");
+                    }
+                    require_result("output audio bus activation",
+                                   component->activateBus(Vst::kAudio, Vst::kOutput, bus, true));
+                }
                 Vst::ProcessSetup setup{};
                 setup.processMode = Vst::kOffline;
                 setup.symbolicSampleSize = Vst::kSample32;
@@ -293,34 +311,49 @@ int wmain(int argc, wchar_t** argv) {
                 component_active = true;
                 require_processing_result("processor activation", processor->setProcessing(true));
                 processor_active = true;
-                float input[2][64]{};
-                float output[2][64]{};
-                for (int channel = 0; channel < channels; ++channel) {
-                    for (int sample = 0; sample < 64; ++sample) {
-                        input[channel][sample] = 0.25f;
+                std::vector<std::vector<std::vector<float>>> input_storage;
+                std::vector<std::vector<std::vector<float>>> output_storage;
+                std::vector<std::vector<Vst::Sample32*>> input_channels;
+                std::vector<std::vector<Vst::Sample32*>> output_channels;
+                std::vector<Vst::AudioBusBuffers> input_buses;
+                std::vector<Vst::AudioBusBuffers> output_buses;
+                for (const auto& info : input_infos) {
+                    input_storage.emplace_back();
+                    input_channels.emplace_back();
+                    for (int32 channel = 0; channel < info.channelCount; ++channel) {
+                        input_storage.back().emplace_back(64, 0.25f);
+                        input_channels.back().push_back(input_storage.back().back().data());
                     }
+                    input_buses.emplace_back();
+                    input_buses.back().numChannels = info.channelCount;
+                    input_buses.back().channelBuffers32 = input_channels.back().data();
                 }
-                Vst::Sample32* input_channels[2] = {input[0], input[1]};
-                Vst::Sample32* output_channels[2] = {output[0], output[1]};
-                Vst::AudioBusBuffers input_bus{};
-                input_bus.numChannels = channels;
-                input_bus.channelBuffers32 = input_channels;
-                Vst::AudioBusBuffers output_bus{};
-                output_bus.numChannels = channels;
-                output_bus.channelBuffers32 = output_channels;
+                for (const auto& info : output_infos) {
+                    output_storage.emplace_back();
+                    output_channels.emplace_back();
+                    for (int32 channel = 0; channel < info.channelCount; ++channel) {
+                        output_storage.back().emplace_back(64, 0.0f);
+                        output_channels.back().push_back(output_storage.back().back().data());
+                    }
+                    output_buses.emplace_back();
+                    output_buses.back().numChannels = info.channelCount;
+                    output_buses.back().channelBuffers32 = output_channels.back().data();
+                }
                 Vst::ProcessData data{};
                 data.processMode = Vst::kOffline;
                 data.symbolicSampleSize = Vst::kSample32;
                 data.numSamples = 64;
-                data.numInputs = 1;
-                data.numOutputs = 1;
-                data.inputs = &input_bus;
-                data.outputs = &output_bus;
+                data.numInputs = inputs;
+                data.numOutputs = outputs;
+                data.inputs = input_buses.data();
+                data.outputs = output_buses.data();
                 require_result("processor process", processor->process(data));
-                for (int channel = 0; channel < channels; ++channel) {
-                    for (float sample : output[channel]) {
-                        if (!std::isfinite(sample)) {
+                for (const auto& bus : output_storage) {
+                    for (const auto& channel : bus) {
+                        for (const float sample : channel) {
+                            if (!std::isfinite(sample)) {
                             throw std::runtime_error("processor produced non-finite output");
+                            }
                         }
                     }
                 }
@@ -388,7 +421,8 @@ int wmain(int argc, wchar_t** argv) {
                 component_initialized = false;
                 component->release();
                 component = nullptr;
-                std::cout << "processed offline block: channels=" << channels
+                std::cout << "processed offline block: input_buses=" << inputs
+                          << " output_buses=" << outputs
                           << " frames=64 finite=true parameters=" << parameter_count
                           << " parameter_descriptors=" << parameter_count
                           << " automation=verified state_bytes=" << state_bytes

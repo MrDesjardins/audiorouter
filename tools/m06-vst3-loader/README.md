@@ -27,4 +27,9 @@ not be committed.
 
 The optional class index makes plugin-specific compatibility results
 reproducible. The class list printed by the probe identifies the selected
-audio-effect index; a controller or missing index fails closed.
+audio-effect index; a controller or missing index fails closed. The optional
+`--multi-bus` flag enables the bounded offline probe for effects exposing up to
+four mono/stereo audio buses per direction. Without that flag, non-single-bus
+effects are rejected. The probe supplies every declared bus to `process`,
+checks every output for finite samples, and does not imply worker or realtime
+multi-bus scheduling.

@@ -31,13 +31,15 @@ calculated at a different rate.
 
 The repository now contains the bounded bus layout, coherent frame, shared-slot,
 graph-generation, engine-result, and separately negotiated echo-worker
-contracts described by PLUG-03. The production VST2 worker remains a
+contracts described by PLUG-03. The native offline VST3 probe also activates
+and processes the pinned SDK's genuine two-input/one-output AGain side-chain
+class when `--multi-bus` is explicitly selected; the default single-bus probe
+continues to reject that layout. The production VST2 worker remains a
 single-stream `processReplacing` path because VST2 does not provide the
-auxiliary-bus contract required here. The echo worker is protocol evidence
-only; auxiliary effect execution, supervised multi-bus restart/quarantine, and
-rights-cleared multi-bus plugin qualification remain release gates. No worker
-may flatten an auxiliary bus into the VST2 stream or expose a stale protected
-path.
+auxiliary-bus contract required here. Worker-side auxiliary effect execution,
+supervised multi-bus restart/quarantine, and independent rights-cleared plugin
+qualification remain release gates. No worker may flatten an auxiliary bus into
+the VST2 stream or expose a stale protected path.
 
 ## Initial parameter contract
 
