@@ -95,6 +95,14 @@ release completion.
   control-plane serialization and bounded telemetry delivery remain separate
   integration work.
 
+- Extended the prepared meter snapshot on 2026-09-09 with finite aggregate and
+  per-channel peak/RMS dB projections while preserving the existing linear and
+  clipping fields. The lock-free callback still performs only fixed-size atomic
+  updates; dB conversion is read-side work and uses a documented -120 dB floor
+  after reset or silence. Engine regressions cover populated values, reset
+  silence, and channel separation. The windowed 300 ms RMS/1 second peak-hold
+  defaults remain in the DSP signal-meter layer.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `6d8e6ad2` on 2026-09-09. M00 toolchain/native format inventory
   and disposable SysVAD, M01, M04 (30 DSP/30 recording tests), M05 UI,

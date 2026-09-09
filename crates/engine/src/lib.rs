@@ -2309,8 +2309,12 @@ pub fn histogram_upper_bound_ns<const N: usize>(
 pub struct BlockMeterSnapshot {
     pub peak_abs: f32,
     pub clipped_samples: u64,
+    pub peak_db: f32,
+    pub rms_db: f32,
     pub channel_peak_abs: [f32; MAX_CHANNELS],
     pub channel_rms: [f32; MAX_CHANNELS],
+    pub channel_peak_db: [f32; MAX_CHANNELS],
+    pub channel_rms_db: [f32; MAX_CHANNELS],
     pub channel_clipped_samples: [u64; MAX_CHANNELS],
 }
 
@@ -2320,12 +2324,15 @@ pub struct ProcessorTelemetry {
     pub gate_open: [bool; MAX_CHANNELS],
 }
 
-/// Lock-free peak/clipping meter for a prepared node boundary. The maximum
-/// uses the monotonic positive-f32 bit representation, so observation never
-/// takes a mutex or allocates.
+/// Lock-free peak/RMS/clipping meter for a prepared node boundary. Peak is a
+/// cumulative hold until reset; RMS is the most recently observed block.
+/// The maximum uses the monotonic positive-f32 bit representation, so
+/// observation never takes a mutex or allocates. dB projections use a -120 dB
+/// floor for silence and remain finite for control-plane consumers.
 #[derive(Debug)]
 pub struct BlockMeter {
     peak_bits: std::sync::atomic::AtomicU32,
+    rms_bits: std::sync::atomic::AtomicU32,
     clipped_samples: AtomicU64,
     channel_peak_bits: [std::sync::atomic::AtomicU32; MAX_CHANNELS],
     channel_rms_bits: [std::sync::atomic::AtomicU32; MAX_CHANNELS],
@@ -2336,6 +2343,7 @@ impl Default for BlockMeter {
     fn default() -> Self {
         Self {
             peak_bits: std::sync::atomic::AtomicU32::new(0),
+            rms_bits: std::sync::atomic::AtomicU32::new(0),
             clipped_samples: AtomicU64::new(0),
             channel_peak_bits: std::array::from_fn(|_| std::sync::atomic::AtomicU32::new(0)),
             channel_rms_bits: std::array::from_fn(|_| std::sync::atomic::AtomicU32::new(0)),
@@ -2348,6 +2356,8 @@ impl BlockMeter {
     pub fn observe(&self, block: &AudioBlock) {
         let peak = block.peak_abs();
         update_atomic_peak(&self.peak_bits, peak);
+        self.rms_bits
+            .store(block.rms().to_bits(), Ordering::Relaxed);
         let mut clipped = 0;
         for channel in 0..block.channels() {
             if let Some(channel_peak) = block.channel_peak_abs(channel) {
@@ -2380,11 +2390,23 @@ impl BlockMeter {
         BlockMeterSnapshot {
             peak_abs: self.peak_abs(),
             clipped_samples: self.clipped_samples(),
+            peak_db: meter_db(self.peak_abs()),
+            rms_db: meter_db(f32::from_bits(self.rms_bits.load(Ordering::Relaxed))),
             channel_peak_abs: std::array::from_fn(|channel| {
                 f32::from_bits(self.channel_peak_bits[channel].load(Ordering::Relaxed))
             }),
             channel_rms: std::array::from_fn(|channel| {
                 f32::from_bits(self.channel_rms_bits[channel].load(Ordering::Relaxed))
+            }),
+            channel_peak_db: std::array::from_fn(|channel| {
+                meter_db(f32::from_bits(
+                    self.channel_peak_bits[channel].load(Ordering::Relaxed),
+                ))
+            }),
+            channel_rms_db: std::array::from_fn(|channel| {
+                meter_db(f32::from_bits(
+                    self.channel_rms_bits[channel].load(Ordering::Relaxed),
+                ))
             }),
             channel_clipped_samples: std::array::from_fn(|channel| {
                 self.channel_clipped_samples[channel].load(Ordering::Relaxed)
@@ -2394,6 +2416,7 @@ impl BlockMeter {
 
     pub fn reset(&self) {
         self.peak_bits.store(0, Ordering::Relaxed);
+        self.rms_bits.store(0, Ordering::Relaxed);
         self.clipped_samples.store(0, Ordering::Relaxed);
         for channel in 0..MAX_CHANNELS {
             self.channel_peak_bits[channel].store(0, Ordering::Relaxed);
@@ -2416,6 +2439,10 @@ fn update_atomic_peak(target: &std::sync::atomic::AtomicU32, peak: f32) {
             Err(observed) => current = observed,
         }
     }
+}
+
+fn meter_db(value: f32) -> f32 {
+    20.0 * value.max(1.0e-6).log10()
 }
 
 impl CallbackMetrics {
@@ -5053,9 +5080,17 @@ mod tests {
         meter.observe(&block);
         assert_eq!(meter.peak_abs(), 1.5);
         assert_eq!(meter.clipped_samples(), 1);
+        let snapshot = meter.snapshot();
+        assert!((snapshot.peak_db - 3.521825).abs() < 0.00001);
+        assert!(snapshot.rms_db.is_finite());
         meter.reset();
         assert_eq!(meter.peak_abs(), 0.0);
         assert_eq!(meter.clipped_samples(), 0);
+        let reset = meter.snapshot();
+        assert_eq!(reset.peak_db, -120.0);
+        assert_eq!(reset.rms_db, -120.0);
+        assert_eq!(reset.channel_peak_db, [-120.0, -120.0]);
+        assert_eq!(reset.channel_rms_db, [-120.0, -120.0]);
     }
 
     #[test]
@@ -5070,6 +5105,12 @@ mod tests {
         assert_eq!(snapshot.channel_peak_abs, [0.5, 2.0]);
         assert!((snapshot.channel_rms[0] - 0.5).abs() < f32::EPSILON);
         assert!((snapshot.channel_rms[1] - 1.4252192).abs() < 0.000001);
+        assert!((snapshot.peak_db - 6.0206).abs() < 0.001);
+        assert!(snapshot.rms_db.is_finite());
+        assert!((snapshot.channel_peak_db[0] - (-6.0206)).abs() < 0.001);
+        assert!((snapshot.channel_peak_db[1] - 6.0206).abs() < 0.001);
+        assert!((snapshot.channel_rms_db[0] - (-6.0206)).abs() < 0.001);
+        assert!((snapshot.channel_rms_db[1] - 3.0776).abs() < 0.001);
         assert_eq!(snapshot.channel_clipped_samples, [0, 1]);
         assert_eq!(snapshot.clipped_samples, 1);
     }
@@ -6202,8 +6243,12 @@ mod tests {
             Some(BlockMeterSnapshot {
                 peak_abs: 1.0,
                 clipped_samples: 0,
+                peak_db: 0.0,
+                rms_db: 0.0,
                 channel_peak_abs: [1.0, 0.0],
                 channel_rms: [1.0, 0.0],
+                channel_peak_db: [0.0, -120.0],
+                channel_rms_db: [0.0, -120.0],
                 channel_clipped_samples: [0, 0],
             })
         );
