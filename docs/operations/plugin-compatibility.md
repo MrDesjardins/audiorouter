@@ -107,6 +107,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst3-
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-reaplugs.ps1
 ```
 
+An explicitly selected installed x64 VST2 effect can be qualified without
+copying or registering it. The current machine also contains Pitchproof under
+the system VST3 directory; inspection confirmed that its `pitchproof-x64.dll`
+is VST2. Reproduce that bounded worker check with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-installed.ps1
+```
+
+The wrapper prints the binary SHA-256, restores any pre-existing
+`AUDIOROUTER_VST2_FIXTURE` value, and never changes audio configuration.
+Qualification remains fixture-specific and does not establish rights to
+redistribute the installed binary.
+
 The bounded native-editor probe can be repeated with:
 
 ```powershell
