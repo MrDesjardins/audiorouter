@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `a860ee69` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `a28829af` (2026-09-09). The guarded M00-M08
 chain passed at its clean parent `eb0ad978`; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -41,6 +41,16 @@ is implemented, but rights/editor/release qualification remains open.
   same bounded string contract as the backend and CLI. Added schema regression
   coverage; MCP stdio interoperability and the full headless suite remain
   green.
+
+- Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
+  `a28829af` on 2026-09-09: VS2026/WDK discovery and native compile, read-only
+  31-endpoint inventory, disposable pinned SysVAD x64 package/API validation,
+  M01/M04/M05, pinned VST3 SDK/native worker and auxiliary-bus checks, modern/
+  legacy/fault VST2 fixtures, M07, unsigned M08 artifacts, 159 normative
+  mappings, and documentation validation (51 Markdown files/163 links) passed.
+  Temporary outputs were cleaned by the guarded harness. No driver
+  installation/loading, signing-mode change, plugin/startup registration,
+  audio stream, or persistent machine audio configuration occurred.
 
 - Added M06/PLUG-04 validated state restoration across deliberate worker
   replacement on 2026-09-09: `restart_with_state` preserves the verified
