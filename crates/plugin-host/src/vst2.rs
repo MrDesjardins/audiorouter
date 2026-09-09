@@ -84,6 +84,22 @@ pub type Vst2HostCallback = unsafe extern "C" fn(
     opt: f32,
 ) -> isize;
 
+#[cfg(windows)]
+struct Vst2HostContext {
+    sample_rate_hz: f32,
+    block_size: i32,
+}
+
+#[cfg(windows)]
+impl Default for Vst2HostContext {
+    fn default() -> Self {
+        Self {
+            sample_rate_hz: 48_000.0,
+            block_size: 128,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Vst2HeaderError {
     InvalidMagic,
@@ -276,6 +292,66 @@ mod opcode_tests {
         assert_eq!(EFF_SET_CHUNK, 24);
     }
 
+    #[test]
+    fn host_callback_reports_the_negotiated_processing_format() {
+        let context = Box::new(Vst2HostContext {
+            sample_rate_hz: 44_100.0,
+            block_size: 512,
+        });
+        let mut effect = Vst2Effect {
+            magic: VST2_EFFECT_MAGIC,
+            dispatcher: None,
+            process: None,
+            set_parameter: None,
+            get_parameter: None,
+            num_programs: 0,
+            num_parameters: 0,
+            num_inputs: 1,
+            num_outputs: 1,
+            flags: VST2_FLAG_CAN_REPLACING,
+            reserved_1: 0,
+            reserved_2: 0,
+            initial_delay: 0,
+            real_quality: 0,
+            off_quality: 0,
+            io_ratio: 1.0,
+            object: ptr::null_mut(),
+            user: (&*context as *const Vst2HostContext) as *mut c_void,
+            unique_id: 0,
+            version: 0,
+            process_replacing: None,
+            future: [0; 56],
+        };
+        let effect = &mut effect as *mut Vst2Effect;
+
+        assert_eq!(
+            unsafe {
+                host_callback(
+                    effect,
+                    AUDIO_MASTER_GET_SAMPLE_RATE,
+                    0,
+                    0,
+                    ptr::null_mut(),
+                    0.0,
+                )
+            },
+            44_100
+        );
+        assert_eq!(
+            unsafe {
+                host_callback(
+                    effect,
+                    AUDIO_MASTER_GET_BLOCK_SIZE,
+                    0,
+                    0,
+                    ptr::null_mut(),
+                    0.0,
+                )
+            },
+            512
+        );
+    }
+
     static DISPATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     unsafe extern "C" fn counting_dispatcher(
@@ -337,6 +413,7 @@ mod opcode_tests {
             effect,
             processing_format: None,
             editor_open: false,
+            host_context: Box::new(Vst2HostContext::default()),
         };
         DISPATCH_COUNT.store(0, Ordering::Relaxed);
 
@@ -388,6 +465,7 @@ mod opcode_tests {
             effect,
             processing_format: None,
             editor_open: false,
+            host_context: Box::new(Vst2HostContext::default()),
         };
         let input = [0.0; 4];
         let mut output = [0.0; 4];
@@ -431,6 +509,9 @@ pub struct Vst2Library {
     effect: *mut Vst2Effect,
     processing_format: Option<(u32, i32)>,
     editor_open: bool,
+    // Declared last so the context outlives the effect/module cleanup. The
+    // VST2 ABI reserves `AEffect::user` for host-owned instance data.
+    host_context: Box<Vst2HostContext>,
 }
 
 #[cfg(windows)]
@@ -483,6 +564,12 @@ impl Vst2Library {
             unsafe { free_library(module) };
             return Err(Vst2LibraryError::InvalidEffect(error));
         }
+        let host_context = Box::new(Vst2HostContext::default());
+        // SAFETY: `host_context` is boxed before the effect is opened and is
+        // retained by this handle until after effClose and module unload.
+        unsafe {
+            (*effect).user = (&*host_context as *const Vst2HostContext) as *mut c_void;
+        }
         // SAFETY: The validated dispatcher is called only during worker setup,
         // never from the realtime engine callback.
         unsafe {
@@ -500,6 +587,7 @@ impl Vst2Library {
             effect,
             processing_format: None,
             editor_open: false,
+            host_context,
         })
     }
 
@@ -518,6 +606,8 @@ impl Vst2Library {
         if self.processing_format == Some((sample_rate_bits, block_size)) {
             return Ok(());
         }
+        self.host_context.sample_rate_hz = sample_rate_hz;
+        self.host_context.block_size = block_size;
         // SAFETY: The effect was validated at load and remains owned by this
         // handle. These setup opcodes run on the worker control thread.
         unsafe {
@@ -920,7 +1010,7 @@ impl Drop for Vst2Library {
 
 #[cfg(windows)]
 unsafe extern "C" fn host_callback(
-    _: *mut Vst2Effect,
+    effect: *mut Vst2Effect,
     opcode: i32,
     _: i32,
     _: isize,
@@ -929,8 +1019,31 @@ unsafe extern "C" fn host_callback(
 ) -> isize {
     match opcode {
         AUDIO_MASTER_VERSION => 2400,
-        AUDIO_MASTER_GET_SAMPLE_RATE => 48_000,
-        AUDIO_MASTER_GET_BLOCK_SIZE => 128,
+        AUDIO_MASTER_GET_SAMPLE_RATE => {
+            // SAFETY: Every effect reaching this callback was initialized by
+            // `Vst2Library::load`, which stores a live `Vst2HostContext` in
+            // AEffect::user for the duration of the module lifetime.
+            unsafe {
+                if effect.is_null() || (*effect).user.is_null() {
+                    48_000
+                } else {
+                    (*((*effect).user as *const Vst2HostContext))
+                        .sample_rate_hz
+                        .round() as isize
+                }
+            }
+        }
+        AUDIO_MASTER_GET_BLOCK_SIZE => {
+            // SAFETY: See the sample-rate branch above; the same host-owned
+            // context supplies the negotiated bounded block size.
+            unsafe {
+                if effect.is_null() || (*effect).user.is_null() {
+                    128
+                } else {
+                    (*((*effect).user as *const Vst2HostContext)).block_size as isize
+                }
+            }
+        }
         _ => 0,
     }
 }

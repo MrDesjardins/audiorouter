@@ -64,6 +64,11 @@ sample rate is rejected and cannot overwrite the prior value. This protects
 control-plane compensation state, but does not substitute for measured
 plugin-added latency or realtime graph evidence.
 
+The VST2 host callback also reports the worker's negotiated sample rate and
+block size to the legacy effect, rather than a fixed host default. This keeps
+the native `effSetSampleRate`/`effSetBlockSize` setup and subsequent host
+queries consistent while retaining the bounded worker boundary.
+
 When a worker rejects a latency update, the process adapter returns the
 worker's structured protocol failure so callers can quarantine or retry it
 according to the normal failure policy.
