@@ -1634,6 +1634,22 @@ impl RuntimeBusGeneration {
                 return Err(RuntimeBusProcessError::BlockShape);
             }
         }
+        // Every declared bus belongs to one exact quantum. Validate this
+        // before touching any destination so a malformed auxiliary frame
+        // cannot leave a partially updated graph generation.
+        let quantum_frames = inputs
+            .iter()
+            .find_map(|block| block.as_ref().map(|block| block.frames()))
+            .or_else(|| outputs.first().map(|block| block.frames()))
+            .ok_or(RuntimeBusProcessError::BlockShape)?;
+        if inputs
+            .iter()
+            .flatten()
+            .any(|block| block.frames() != quantum_frames)
+            || outputs.iter().any(|block| block.frames() != quantum_frames)
+        {
+            return Err(RuntimeBusProcessError::BlockShape);
+        }
         let Some(main_input) = inputs[0] else {
             for output in outputs.iter_mut() {
                 output.clear();
@@ -5722,6 +5738,34 @@ mod tests {
             .unwrap()
             .iter()
             .all(|sample| *sample == 0.0));
+    }
+
+    #[test]
+    fn runtime_bus_generation_rejects_mixed_quantum_sizes_before_mutation() {
+        let layout = RuntimeBusLayout::new(vec![2, 1], vec![2, 1]).unwrap();
+        let generation = RuntimeBusGeneration::prepare(RuntimeGeneration::new(9), layout).unwrap();
+        let main_input = AudioBlock::new(2, 4).unwrap();
+        let short_sidechain = AudioBlock::new(1, 2).unwrap();
+        let mut output_main = AudioBlock::new(2, 4).unwrap();
+        let mut output_sidechain = AudioBlock::new(1, 4).unwrap();
+        output_main.channel_mut(0).unwrap().fill(0.7);
+        output_sidechain.channel_mut(0).unwrap().fill(0.8);
+        let mut outputs = [&mut output_main, &mut output_sidechain];
+
+        assert_eq!(
+            generation.process(&[Some(&main_input), Some(&short_sidechain)], &mut outputs,),
+            Err(RuntimeBusProcessError::BlockShape)
+        );
+        assert!(output_main
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.7));
+        assert!(output_sidechain
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.8));
     }
 
     #[test]

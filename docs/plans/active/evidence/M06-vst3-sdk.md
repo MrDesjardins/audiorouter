@@ -1,5 +1,16 @@
 # M06 VST3 SDK boundary
 
+## Runtime multi-bus quantum-shape hardening (2026-09-09)
+
+`RuntimeBusGeneration::process` now validates that every present input bus and
+every output bus belongs to the same exact frame quantum before mutating any
+destination. A malformed auxiliary bus therefore returns `BlockShape` without
+partially publishing the main or auxiliary output. The focused command
+`cargo test -p audiorouter-engine --all-features --locked` passed 85 tests;
+strict engine Clippy and `git diff --check` also passed. This is portable graph
+contract evidence only; native VST3 worker execution and realtime scheduling
+remain separate gates.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's
