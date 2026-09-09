@@ -592,6 +592,7 @@ export interface EventsSubscribeParams {
 export interface ApplicationInfo {
   processId: number;
   executable: string;
+  executablePath: string | null;
   creationTime100ns: string | null;
   audioActivity: "active" | "inactive" | "none";
   captureCapability: "observed" | "notObserved";

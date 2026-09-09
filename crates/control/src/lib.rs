@@ -1081,6 +1081,7 @@ fn method_output_schema(name: &str) -> Value {
                 "properties": {
                     "processId": { "type": "integer", "minimum": 1 },
                     "executable": { "type": "string", "maxLength": 260 },
+                    "executablePath": { "type": ["string", "null"], "maxLength": 32768 },
                     "creationTime100ns": { "type": ["string", "null"] },
                     "audioActivity": { "enum": ["active", "inactive", "none"] },
                     "captureCapability": { "enum": ["observed", "notObserved"] },
@@ -1097,7 +1098,7 @@ fn method_output_schema(name: &str) -> Value {
                         }
                     }
                 },
-                "required": ["processId", "executable", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "renderSessionCount", "audioDisplayNames"],
+                "required": ["processId", "executable", "executablePath", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "renderSessionCount", "audioDisplayNames"],
                 "additionalProperties": false
             }
         }),
@@ -5485,6 +5486,7 @@ impl ControlPlane {
                 json!({
                     "processId": application.process_id,
                     "executable": application.executable,
+                    "executablePath": application.executable_path,
                     "creationTime100ns": application.creation_time_100ns.map(|value| value.to_string()),
                     "audioActivity": session.map_or("none", |item| if item.active_session_count > 0 { "active" } else { "inactive" }),
                     "captureCapability": session.map_or("notObserved", |item| if item.capture_session_count > 0 { "observed" } else { "notObserved" }),
@@ -7646,6 +7648,10 @@ mod tests {
             260
         );
         assert_eq!(
+            applications["outputSchema"]["items"]["properties"]["executablePath"]["maxLength"],
+            32_768
+        );
+        assert_eq!(
             applications["outputSchema"]["maxItems"],
             audiorouter_windows_audio::MAX_APPLICATIONS
         );
@@ -7816,6 +7822,7 @@ mod tests {
         assert!(applications.as_array().unwrap().iter().all(|application| {
             application.get("processId").is_some()
                 && application.get("executable").is_some()
+                && application.get("executablePath").is_some()
                 && application.get("audioActivity").is_some()
                 && application.get("captureCapability").is_some()
                 && application.get("audioSessionCount").is_some()

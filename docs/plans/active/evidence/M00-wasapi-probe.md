@@ -1,5 +1,18 @@
 # M00 WASAPI probe
 
+## 2026-09-08 - Executable identity strengthening
+
+Application discovery now retains a bounded, read-only full executable path
+when `QueryFullProcessImageNameW` permits limited inspection, alongside the
+basename and Windows creation timestamp. The control contract exposes this as
+nullable `executablePath`; a path-aware restart/bind helper requires the
+observed path and creation identity, preventing same-named binaries in
+different locations from inheriting a binding. The legacy basename helper is
+retained for compatibility, while new persisted selectors can use the full
+identity. Workspace control and Windows-audio tests passed (97 and 32), strict
+Clippy, formatting, and diff checks passed, and no audio or machine
+configuration changed.
+
 ## 2026-09-08 - Capture initialization error-source diagnostics
 
 The capture adapter now labels initialization failures by delivery mode:

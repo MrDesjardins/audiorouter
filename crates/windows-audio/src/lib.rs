@@ -235,6 +235,10 @@ fn saturating_increment(counter: &AtomicU64) {
 pub struct ApplicationInfo {
     pub process_id: u32,
     pub executable: String,
+    /// Verified full executable path when Windows permits limited process
+    /// inspection. This distinguishes same-named binaries in different
+    /// locations without exposing command lines or arbitrary process data.
+    pub executable_path: Option<String>,
     /// Windows process creation time in 100-ns intervals since 1601 UTC.
     /// Combined with PID, this prevents rebinding a reused process ID.
     pub creation_time_100ns: Option<u64>,
@@ -1796,8 +1800,9 @@ pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
 }
 
 /// Enumerate process identities suitable for a later process-loopback binding.
-/// PID, executable name, and an optional creation timestamp are returned;
-/// command lines and full paths are intentionally excluded from this surface.
+/// PID, executable name, verified executable path when available, and an
+/// optional creation timestamp are returned; command lines and other process
+/// details are intentionally excluded from this surface.
 pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
     use windows::Win32::Foundation::{CloseHandle, FILETIME};
     use windows::Win32::System::Diagnostics::ToolHelp::{
@@ -1805,8 +1810,10 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
         TH32CS_SNAPPROCESS,
     };
     use windows::Win32::System::Threading::{
-        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+        PROCESS_QUERY_LIMITED_INFORMATION,
     };
+    use windows_core::PWSTR;
 
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)?;
@@ -1838,6 +1845,16 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                 )
                 .ok()
                 .and_then(|handle| {
+                    let mut path_buffer = vec![0u16; 32_768];
+                    let mut path_length = path_buffer.len() as u32;
+                    let executable_path = QueryFullProcessImageNameW(
+                        handle,
+                        PROCESS_NAME_FORMAT(0),
+                        PWSTR(path_buffer.as_mut_ptr()),
+                        &mut path_length,
+                    )
+                    .ok()
+                    .and_then(|_| String::from_utf16(&path_buffer[..path_length as usize]).ok());
                     let mut creation = FILETIME::default();
                     let mut exit = FILETIME::default();
                     let mut kernel = FILETIME::default();
@@ -1846,13 +1863,19 @@ pub fn enumerate_applications() -> Result<Vec<ApplicationInfo>, AudioError> {
                         GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user);
                     let _ = CloseHandle(handle);
                     result.ok().map(|_| {
-                        (u64::from(creation.dwHighDateTime) << 32)
-                            | u64::from(creation.dwLowDateTime)
+                        (
+                            (u64::from(creation.dwHighDateTime) << 32)
+                                | u64::from(creation.dwLowDateTime),
+                            executable_path,
+                        )
                     })
                 });
+                let (creation_time_100ns, executable_path) = creation_time_100ns
+                    .map_or((None, None), |(creation, path)| (Some(creation), path));
                 applications.push(ApplicationInfo {
                     process_id: entry.th32ProcessID,
                     executable,
+                    executable_path,
                     creation_time_100ns,
                 });
                 if applications.len() >= MAX_APPLICATIONS
@@ -1974,6 +1997,23 @@ pub fn bind_application(
     expected_executable: &str,
     expected_creation_time_100ns: Option<u64>,
 ) -> Result<ApplicationInfo, AudioError> {
+    bind_application_with_path(
+        process_id,
+        expected_executable,
+        None,
+        expected_creation_time_100ns,
+    )
+}
+
+/// Resolve an application using the complete observed executable identity.
+/// Callers that persist a path should use this variant so two same-named
+/// binaries in different locations cannot inherit one another's binding.
+pub fn bind_application_with_path(
+    process_id: u32,
+    expected_executable: &str,
+    expected_executable_path: Option<&str>,
+    expected_creation_time_100ns: Option<u64>,
+) -> Result<ApplicationInfo, AudioError> {
     if expected_creation_time_100ns.is_none() {
         return Err(AudioError::ApplicationIdentityUnavailable { process_id });
     }
@@ -1981,9 +2021,16 @@ pub fn bind_application(
         .into_iter()
         .find(|application| application.process_id == process_id)
         .ok_or(AudioError::ApplicationNotFound { process_id })?;
+    let path_matches = expected_executable_path.map_or(true, |expected| {
+        application
+            .executable_path
+            .as_deref()
+            .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+    });
     if !application
         .executable
         .eq_ignore_ascii_case(expected_executable)
+        || !path_matches
         || application.creation_time_100ns != expected_creation_time_100ns
     {
         return Err(AudioError::ApplicationIdentityChanged { process_id });
@@ -1998,12 +2045,29 @@ pub fn resolve_application_restart(
     applications: &[ApplicationInfo],
     expected_executable: &str,
 ) -> Result<ApplicationInfo, AudioError> {
+    resolve_application_restart_with_path(applications, expected_executable, None)
+}
+
+/// Resolve a persisted restart selector using basename, optional full path,
+/// and creation identity. A supplied path is required to be observed exactly
+/// (case-insensitively) before a candidate can be returned.
+pub fn resolve_application_restart_with_path(
+    applications: &[ApplicationInfo],
+    expected_executable: &str,
+    expected_executable_path: Option<&str>,
+) -> Result<ApplicationInfo, AudioError> {
     let matches = applications
         .iter()
         .filter(|application| {
             application
                 .executable
                 .eq_ignore_ascii_case(expected_executable)
+                && expected_executable_path.map_or(true, |expected| {
+                    application
+                        .executable_path
+                        .as_deref()
+                        .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+                })
         })
         .collect::<Vec<_>>();
     let Some(application) = matches.first() else {
@@ -2468,6 +2532,7 @@ mod tests {
         let candidate = ApplicationInfo {
             process_id: 7,
             executable: "Game.EXE".into(),
+            executable_path: None,
             creation_time_100ns: Some(42),
         };
         assert_eq!(
@@ -2503,6 +2568,39 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn restart_binding_can_require_the_full_executable_path() {
+        let applications = [
+            ApplicationInfo {
+                process_id: 7,
+                executable: "Game.EXE".into(),
+                executable_path: Some(r"C:\Games\Game.EXE".into()),
+                creation_time_100ns: Some(42),
+            },
+            ApplicationInfo {
+                process_id: 8,
+                executable: "game.exe".into(),
+                executable_path: Some(r"C:\Tools\Game.EXE".into()),
+                creation_time_100ns: Some(43),
+            },
+        ];
+        let selected = resolve_application_restart_with_path(
+            &applications,
+            "game.exe",
+            Some(r"c:\games\game.exe"),
+        )
+        .unwrap();
+        assert_eq!(selected.process_id, 7);
+        assert!(matches!(
+            resolve_application_restart_with_path(
+                &applications,
+                "game.exe",
+                Some(r"C:\Unknown\Game.EXE")
+            ),
+            Err(AudioError::ApplicationRestartNotFound { .. })
+        ));
+    }
+
     #[cfg(windows)]
     #[test]
     fn application_binding_requires_the_observed_identity() {
@@ -2512,9 +2610,11 @@ mod tests {
             .into_iter()
             .find(|application| application.process_id == process_id)
             .unwrap();
-        let bound = bind_application(
+        assert!(application.executable_path.is_some());
+        let bound = bind_application_with_path(
             process_id,
             &application.executable.to_ascii_lowercase(),
+            application.executable_path.as_deref(),
             application.creation_time_100ns,
         )
         .unwrap();
@@ -2630,16 +2730,19 @@ mod tests {
             ApplicationInfo {
                 process_id: 20,
                 executable: "zeta.exe".into(),
+                executable_path: None,
                 creation_time_100ns: Some(2),
             },
             ApplicationInfo {
                 process_id: 4,
                 executable: "Audio.exe".into(),
+                executable_path: None,
                 creation_time_100ns: Some(1),
             },
             ApplicationInfo {
                 process_id: 3,
                 executable: "audio.exe".into(),
+                executable_path: None,
                 creation_time_100ns: Some(0),
             },
         ];
