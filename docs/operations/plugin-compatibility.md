@@ -46,6 +46,14 @@ could not be built from the pinned checkout because its Windows source refers
 to an unavailable `FDebugPrint` symbol. Both builds were disposable; no system
 plugin link, plugin registration, or audio configuration was changed.
 
+The repository-local mda VST3 bundle was also probed through the generic native
+AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
+SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`.
+Single-stream processing, finite transformed output, state save, supervised
+failure/restart, state restoration, and shutdown passed at 48 kHz. This adds
+native multi-vendor processing/state evidence; native editor qualification,
+additional mda classes, and the complete M06 acceptance gate remain open.
+
 ## Inspection and execution boundary
 
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,

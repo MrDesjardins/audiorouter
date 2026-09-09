@@ -29,6 +29,14 @@ driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
 
+- Probed the repository-local mda VST3 bundle through the generic native
+  AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
+  SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;
+  single-stream processing, finite transformation, state save, supervised
+  restart/restoration, and shutdown passed at 48 kHz. This is native
+  multi-vendor processing/state evidence only; editor, additional-class, and
+  full M06 acceptance gates remain open.
+
 - Closed a DSP-01/03 contract drift on 2026-09-09. The compressor's supported
   knee control and the gate's supported hysteresis, ratio, and hold controls are
   now accepted by domain validation, described by both node and processor API
