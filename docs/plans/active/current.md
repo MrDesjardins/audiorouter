@@ -76,6 +76,13 @@ is implemented, but rights/editor/release qualification remains open.
   signing, installer, clean-machine, physical-latency, manual UI, and
   rights-cleared independent-plugin gates remain open.
 
+- Qualified the installed x64 Pitchproof VST2 binary on 2026-09-09 at 44.1,
+  48, and 96 kHz through the isolated worker; its sibling `pitchproof.dll`
+  was rejected as x86 before loading. Hardened the VST2 acceptance wrapper to
+  classify mixed directories and report/skip unsupported PE architectures while
+  retaining failure for supported x64 regressions. Rights, editor, and release
+  gates remain open.
+
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,

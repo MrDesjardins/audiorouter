@@ -18,10 +18,39 @@ if ($fixtures.Count -eq 0) {
     throw "No VST2 DLL fixtures found in $fixtureRoot"
 }
 
+function Get-PeMachine([string]$Path) {
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+        return $null
+    }
+    $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
+    if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length -or
+        $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
+        $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) {
+        return $null
+    }
+    return [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+}
+
+$supportedFixtures = @()
+foreach ($fixture in $fixtures) {
+    $machine = Get-PeMachine $fixture.FullName
+    if ($machine -eq 0x8664) {
+        $supportedFixtures += $fixture
+    } elseif ($null -eq $machine) {
+        Write-Output "Skipping $($fixture.Name): invalid or unreadable PE header (unsupported candidate)."
+    } else {
+        Write-Output "Skipping $($fixture.Name): unsupported PE machine 0x$('{0:X4}' -f $machine); x64 VST2 is required."
+    }
+}
+if ($supportedFixtures.Count -eq 0) {
+    throw "No x64 VST2 DLL fixtures found in $fixtureRoot"
+}
+
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 $previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
 try {
-    foreach ($fixture in $fixtures) {
+    foreach ($fixture in $supportedFixtures) {
         $env:AUDIOROUTER_VST2_FIXTURE = $fixture.FullName
         foreach ($sampleRate in @(44100, 48000, 96000)) {
             $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
@@ -34,7 +63,7 @@ try {
             }
         }
     }
-    Write-Output "M06 VST2 acceptance passed for $($fixtures.Count) local fixtures at 44.1, 48, and 96 kHz."
+    Write-Output "M06 VST2 acceptance passed for $($supportedFixtures.Count) x64 local fixtures at 44.1, 48, and 96 kHz."
 } finally {
     if ($null -eq $previousFixture) {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue
