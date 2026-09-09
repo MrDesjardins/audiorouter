@@ -103,6 +103,18 @@ release completion.
   audio streams, and persistent machine audio configuration remained out of
   scope.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
+  processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
+  native format inventory, disposable SysVAD compile/package/API/signability,
+  M01, M04 (30 DSP/30 recording tests), M05 (97 UI tests and temporary build),
+  M06 SDK/native VST3 worker and modern/legacy/fault VST2 fixtures, M07, M08
+  unsigned artifacts, 159 traceability mappings, and documentation validation
+  (51 Markdown files/163 local links) passed. The run emitted only the known
+  disposable SysVAD INF encoding warnings and cleaned its temporary outputs;
+  no driver installation/loading, signing-mode change, plugin/startup
+  registration, audio stream, or persistent machine audio configuration
+  occurred.
+
 - Completed the corresponding UI contract slice on 2026-09-09. Shared discovery
   metadata now carries enumerated filter choices, and the processor editor
   renders them as bounded selects instead of dropping string parameters. UI
