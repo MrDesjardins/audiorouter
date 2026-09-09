@@ -132,6 +132,12 @@ plugin failure; it does not claim successful editor-window compatibility.
 The worker/editor thread remains disposable and the processing path is not
 replaced or reconfigured by this probe.
 
+Requalified the full workspace at this VST2 head: all locked workspace tests
+and doc-tests, strict workspace Clippy, formatting, diff checks, and
+documentation validation passed. The ignored native editor timeout probe and
+six-binary VST2 processing matrix were also rerun separately. No driver,
+plugin registration, audio stream, or machine audio configuration was changed.
+
 Ordered next tasks: (1) complete explicit parent/window authorization for the
 worker-owned native editor path; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

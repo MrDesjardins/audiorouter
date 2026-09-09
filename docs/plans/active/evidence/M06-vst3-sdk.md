@@ -1427,6 +1427,13 @@ synthetic callback that writes NaN and verifies `NonFiniteOutput`. The worker's
 existing pre-framing finite check remains defense in depth, preserving the
 failure/quarantine and protected-voice silence policy.
 
+The complete locked workspace regression then passed: workspace tests and
+doc-tests, strict Clippy, formatting, diff checks, and documentation
+validation. The VST2-specific package suite passed 54 unit tests and 20
+worker-process tests; the six-fixture processing matrix passed independently.
+No driver, plugin registration, audio stream, or machine audio configuration
+was changed.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export
