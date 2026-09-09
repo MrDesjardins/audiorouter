@@ -32,9 +32,24 @@ function Invoke-Probe([string[]]$Arguments) {
     $ErrorActionPreference = $saved
     [pscustomobject]@{ Output = $result; ExitCode = $exitCode }
 }
+function Start-ProbeProcess([string[]]$Arguments) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $output
+    $startInfo.Arguments = $Arguments -join ' '
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) { $process.Dispose(); throw "failed to start native probe: $($Arguments -join ' ')" }
+    return $process
+}
 
 if (Test-Path -LiteralPath $object) { throw "generated object already exists: $object" }
 $before = Get-MediaSnapshot
+$captureProcess = $null
+$impulseProcess = $null
 try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildScript -Output $output
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $output)) { throw 'impulse probe build failed' }
@@ -48,18 +63,24 @@ try {
     $renderIndex = [int]$renderMatch.Groups[1].Value
     $captureIndex = [int]$captureMatch.Groups[1].Value
     $captureDuration = $ImpulseCount * $IntervalMilliseconds + 500
-    $capture = Start-Process -FilePath $output -ArgumentList @('capture-file', $captureIndex, $captureDuration, $raw) `
-        -RedirectStandardOutput $captureLog -RedirectStandardError "$captureLog.err" -PassThru
+    $captureProcess = Start-ProbeProcess @('capture-file', $captureIndex, $captureDuration, $raw)
     Start-Sleep -Milliseconds 150
-    $impulse = Start-Process -FilePath $output -ArgumentList @('impulse', ($ImpulseCount * $IntervalMilliseconds), $renderIndex) `
-        -RedirectStandardOutput $impulseLog -RedirectStandardError "$impulseLog.err" -PassThru
-    $capture.WaitForExit(); $impulse.WaitForExit()
-    $captureText = Get-Content -LiteralPath $captureLog -Raw
-    $impulseText = Get-Content -LiteralPath $impulseLog -Raw
+    $impulseProcess = Start-ProbeProcess @('impulse', ($ImpulseCount * $IntervalMilliseconds), $renderIndex)
+    $captureProcess.WaitForExit(); $impulseProcess.WaitForExit()
+    $captureExitCode = $captureProcess.ExitCode
+    $impulseExitCode = $impulseProcess.ExitCode
+    $captureText = $captureProcess.StandardOutput.ReadToEnd()
+    $captureError = $captureProcess.StandardError.ReadToEnd()
+    $impulseText = $impulseProcess.StandardOutput.ReadToEnd()
+    $impulseError = $impulseProcess.StandardError.ReadToEnd()
+    [IO.File]::WriteAllText($captureLog, $captureText)
+    [IO.File]::WriteAllText("$captureLog.err", $captureError)
+    [IO.File]::WriteAllText($impulseLog, $impulseText)
+    [IO.File]::WriteAllText("$impulseLog.err", $impulseError)
     $after = Get-MediaSnapshot
     if (Compare-Object $before $after) { throw 'media-device identity/state changed during impulse acceptance' }
-    if ($captureText -notmatch 'capture_start=0x0' -or $captureText -notmatch 'capture_stop=0x0' -or $captureText -notmatch 'capture_reset=0x0') { throw "capture lifecycle failed`n$captureText" }
-    if ($impulseText -notmatch 'render_start=0x0' -or $impulseText -notmatch 'render_stop=0x0' -or $impulseText -notmatch 'render_reset=0x0' -or $impulseText -notmatch 'render_impulse_written=1') { throw "impulse lifecycle failed`n$impulseText" }
+    if ($captureExitCode -ne 0 -or $captureText -notmatch 'capture_start=0x0' -or $captureText -notmatch 'capture_stop=0x0' -or $captureText -notmatch 'capture_reset=0x0') { throw "capture lifecycle failed (exit_code=$captureExitCode)`n$captureText`n$captureError" }
+    if ($impulseExitCode -ne 0 -or $impulseText -notmatch 'render_start=0x0' -or $impulseText -notmatch 'render_stop=0x0' -or $impulseText -notmatch 'render_reset=0x0' -or $impulseText -notmatch 'render_impulse_written=1') { throw "impulse lifecycle failed (exit_code=$impulseExitCode)`n$impulseText`n$impulseError" }
 
     $formatMatch = [regex]::Match($captureText, 'rate=(\d+) channels=(\d+) bits=(\d+)')
     if (-not $formatMatch.Success -or [int]$formatMatch.Groups[3].Value -ne 32) { throw 'impulse analyzer requires 32-bit capture' }
@@ -92,6 +113,12 @@ try {
     Write-Output 'Scope: bounded signal correlation only; the estimated onset is not the required acoustic p95 latency gate without calibrated impulse timestamps and a validated physical setup.'
 }
 finally {
+    foreach ($process in @($captureProcess, $impulseProcess)) {
+        if ($null -ne $process) {
+            if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }
+            $process.Dispose()
+        }
+    }
     $cleanupPaths = @($output, $temporaryObject, $raw, $captureLog, "$captureLog.err", $impulseLog, "$impulseLog.err", $object)
     for ($attempt = 0; $attempt -lt 5; $attempt++) {
         Remove-Item -LiteralPath $cleanupPaths -Force -ErrorAction SilentlyContinue

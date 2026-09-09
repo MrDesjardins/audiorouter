@@ -31,6 +31,17 @@ teardown, temporary cleanup, and media-state preservation passed. The onset is
 an uncalibrated digital-correlation estimate, not physical acoustic latency;
 managed-driver callback and production gates remain open.
 
+## 2026-09-08 - Impulse child-process ownership hardening
+
+The impulse acceptance wrapper now launches its concurrent capture and impulse
+children through directly owned `.NET Process` instances. This gives the
+harness reliable exit-code reads, bounded redirected output collection, and
+explicit kill/reap cleanup if setup or analysis fails. The requalified
+100-impulse run detected 95 groups with p95 spacing error of 0 frames; stream
+teardown, temporary cleanup, and media-state preservation passed. This improves
+harness failure detection only and does not convert the uncalibrated onset into
+physical-latency evidence.
+
 ## 2026-09-08 - Current process restart identity requalification
 
 `cargo test -p audiorouter-windows-audio --locked -- --nocapture` passed all
