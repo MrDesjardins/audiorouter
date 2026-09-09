@@ -34,6 +34,16 @@ release completion.
   vendor audio-effect binary is present. No plugin was copied, registered,
   loaded, or modified, and no audio or machine configuration changed.
 
+- Probed the complete installed ReaPlugs directory on 2026-09-09 using the
+  bounded VST2 worker wrapper. The six audio-effect DLLs remain qualified, but
+  `reacontrolmidi-standalone.dll` stopped the state-restore probe with a
+  contained five-second worker timeout; it is therefore not accepted as an
+  audio-effect/state-compatible candidate. The wrapper restored
+  `AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE` to unset after
+  the failure. This exposes a qualification gap for generic mixed VST2
+  directories: utility/MIDI/streaming binaries must be classified or excluded
+  before the audio-effect matrix; no release support is claimed for them.
+
 - Closed an M07/AUTO-01 parity defect on 2026-09-09: the CLI `operation get`
   command no longer sends a null cancellation-only parameter that the shared
   dispatcher rejects, cancellation help documents its optional idempotency
