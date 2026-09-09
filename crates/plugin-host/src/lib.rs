@@ -1313,10 +1313,18 @@ pub enum WorkerMessage {
     Ready,
     DescribeParameters,
     DescribeEditor,
+    EditorOpen {
+        parent_window: u64,
+    },
+    EditorClose,
     Parameters {
         descriptors: Vec<ParameterDescriptor>,
     },
     Editor(EditorDescriptor),
+    EditorOpened {
+        parent_window: u64,
+    },
+    EditorClosed,
     Process {
         frame: WorkerFrame,
         parameters: Vec<ParameterEvent>,
@@ -1510,6 +1518,10 @@ impl WorkerSession {
             (
                 WorkerSessionState::Active,
                 WorkerMessage::DescribeParameters | WorkerMessage::DescribeEditor,
+            ) => Ok(None),
+            (
+                WorkerSessionState::Active,
+                WorkerMessage::EditorOpen { .. } | WorkerMessage::EditorClose,
             ) => Ok(None),
             (
                 WorkerSessionState::Active,
@@ -2127,6 +2139,42 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    pub fn open_editor(
+        &mut self,
+        parent_window: u64,
+        now: Instant,
+    ) -> Result<(), WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.open_editor(parent_window) {
+            Ok(()) => {
+                self.supervisor.heartbeat(now);
+                Ok(())
+            }
+            Err(error) if matches!(error, WorkerProcessError::UnsupportedFeature(_)) => Err(error),
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn close_editor(&mut self, now: Instant) -> Result<(), WorkerProcessError> {
+        self.ensure_running()?;
+        match self.process.close_editor() {
+            Ok(()) => {
+                self.supervisor.heartbeat(now);
+                Ok(())
+            }
+            Err(error) if matches!(error, WorkerProcessError::UnsupportedFeature(_)) => Err(error),
+            Err(error) => {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+                Err(error)
+            }
+        }
+    }
+
     pub fn restore_state_for_version(
         &mut self,
         asset: PluginStateAsset,
@@ -2544,6 +2592,38 @@ impl WorkerProcess {
         }
     }
 
+    pub fn open_editor(&mut self, parent_window: u64) -> Result<(), WorkerProcessError> {
+        self.write(&WorkerMessage::EditorOpen { parent_window })
+            .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::EditorOpened {
+                parent_window: actual,
+            } if actual == parent_window => Ok(()),
+            WorkerMessage::Failure { code } if code == "editorUnavailable" => {
+                Err(WorkerProcessError::UnsupportedFeature(code))
+            }
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected editor open response".into(),
+            )),
+        }
+    }
+
+    pub fn close_editor(&mut self) -> Result<(), WorkerProcessError> {
+        self.write(&WorkerMessage::EditorClose)
+            .map_err(WorkerProcessError::Message)?;
+        match self.read().map_err(WorkerProcessError::Message)? {
+            WorkerMessage::EditorClosed => Ok(()),
+            WorkerMessage::Failure { code } if code == "editorUnavailable" => {
+                Err(WorkerProcessError::UnsupportedFeature(code))
+            }
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            _ => Err(WorkerProcessError::Protocol(
+                "unexpected editor close response".into(),
+            )),
+        }
+    }
+
     pub fn restore_state_for_version(
         &mut self,
         asset: PluginStateAsset,
@@ -2863,6 +2943,12 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         }
         WorkerMessage::Editor(descriptor) => {
             EditorDescriptor::new(descriptor.has_editor, descriptor.width, descriptor.height)?;
+        }
+        WorkerMessage::EditorOpen { parent_window }
+        | WorkerMessage::EditorOpened { parent_window }
+            if *parent_window == 0 || usize::try_from(*parent_window).is_err() =>
+        {
+            return Err(WorkerMessageError::InvalidEditor);
         }
         _ => {}
     }

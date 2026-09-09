@@ -1,5 +1,5 @@
 #[cfg(windows)]
-use audiorouter_plugin_host::vst2::Vst2Library;
+use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
@@ -38,9 +38,16 @@ fn run() -> Result<(), String> {
     let (plugin_sha256, channels, shared_paths, _fixture_mode, plugin_path) = parse_arguments()?;
     #[cfg(windows)]
     let mut vst2_plugin = plugin_path
+        .clone()
         .map(|path| Vst2Library::load(&path))
         .transpose()
         .map_err(|error| format!("VST2 load failed: {error:?}"))?;
+    #[cfg(windows)]
+    let vst2_editor = plugin_path
+        .as_deref()
+        .map(Vst2EditorThread::spawn)
+        .transpose()
+        .map_err(|error| format!("VST2 editor thread failed: {error:?}"))?;
     #[cfg(not(windows))]
     if plugin_path.is_some() {
         return Err("VST2 loading requires Windows".into());
@@ -248,6 +255,49 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("editor descriptor invalid: {error:?}"))?;
                 write_worker_message(&mut writer, &WorkerMessage::Editor(descriptor))
                     .map_err(|error| format!("editor description write failed: {error:?}"))?;
+            }
+            WorkerMessage::EditorOpen { parent_window } => {
+                #[cfg(windows)]
+                let result = match vst2_editor.as_ref() {
+                    Some(editor) => usize::try_from(parent_window)
+                        .map_err(|_| "invalid parent window".to_string())
+                        .and_then(|parent| editor.open(parent)),
+                    None => Err("editorUnavailable".to_string()),
+                };
+                #[cfg(not(windows))]
+                let result: Result<(), String> = Err("editorUnavailable".into());
+                match result {
+                    Ok(()) => write_worker_message(
+                        &mut writer,
+                        &WorkerMessage::EditorOpened { parent_window },
+                    )
+                    .map_err(|error| format!("editor open write failed: {error:?}"))?,
+                    Err(error) => {
+                        write_worker_message(&mut writer, &WorkerMessage::Failure { code: error })
+                            .map_err(|write_error| {
+                            format!("editor failure write failed: {write_error:?}")
+                        })?
+                    }
+                }
+            }
+            WorkerMessage::EditorClose => {
+                #[cfg(windows)]
+                let result = vst2_editor.as_ref().map_or_else(
+                    || Err("editorUnavailable".to_string()),
+                    Vst2EditorThread::close,
+                );
+                #[cfg(not(windows))]
+                let result: Result<(), String> = Err("editorUnavailable".into());
+                match result {
+                    Ok(()) => write_worker_message(&mut writer, &WorkerMessage::EditorClosed)
+                        .map_err(|error| format!("editor close write failed: {error:?}"))?,
+                    Err(error) => {
+                        write_worker_message(&mut writer, &WorkerMessage::Failure { code: error })
+                            .map_err(|write_error| {
+                            format!("editor failure write failed: {write_error:?}")
+                        })?
+                    }
+                }
             }
             WorkerMessage::StateRestore { asset } => {
                 #[cfg(windows)]

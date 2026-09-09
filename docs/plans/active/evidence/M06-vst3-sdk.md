@@ -1401,6 +1401,12 @@ open/close/idle calls away from the processing instance. Package tests and
 strict Clippy pass. It is not wired to worker messages or a parent-window
 authorization token, so no editor window was opened by this change.
 
+The worker protocol now carries bounded editor open/close requests and returns
+`editorUnavailable` as an optional unsupported feature when no VST2 editor
+thread is present. The generic worker regression verifies that this response
+does not terminate the worker or interrupt subsequent processing. Actual
+authorized HWND integration remains open.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

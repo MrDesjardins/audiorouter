@@ -114,6 +114,11 @@ on its own thread. It is not connected to worker messages yet, so it cannot
 alter processing or expose an unauthorized window; the remaining integration
 gate is to pass an explicitly authorized parent from the control plane.
 
+Worker messages now carry bounded `EditorOpen`/`EditorClose` requests and
+explicit opened/closed responses. A worker without a VST2 editor returns
+`editorUnavailable` without being terminated; the generic worker regression
+covers that fail-closed behavior and confirms processing remains available.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)
