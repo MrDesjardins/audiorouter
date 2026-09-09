@@ -76,6 +76,16 @@ release completion.
   head, then retain independent-plugin, native-shell/HWND, production driver,
   signing, installer, clean-machine, and physical-latency gates.
 
+- Hardened M00-M08 acceptance orchestration on 2026-09-09: `safe-all.ps1` now
+  invokes checked-in step scripts in-process, keeping cleanup and failures
+  attached to one runner instead of hiding them behind nested PowerShell
+  children. The isolated SysVAD and M06 SDK gates passed with no residual
+  compiler/build processes or temporary checkout. A full-chain attempt reached
+  later milestones, but its terminal output was lost by the execution wrapper,
+  so it is intentionally not recorded as an end-to-end pass.
+- Next safe task: validate the direct-runner chain through independently
+  observable milestone gates; retain all native production and release blockers.
+
 - Revalidated M08 traceability on 2026-09-09: the delivery map covers all 159
   normative requirement IDs. This is documentation coverage evidence only and
   does not waive implementation, hardware, driver, signing, or release gates.

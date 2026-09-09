@@ -23,7 +23,10 @@ $steps = @(
 
 foreach ($step in $steps) {
     Write-Output "--- $($step.Name) ---"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $step.Script
+    # Invoke checked-in scripts in this runner so their cleanup/final status
+    # remains attached to the acceptance process. Nested PowerShell runners
+    # can outlive the parent and hide a failed or incomplete terminal result.
+    & $step.Script
     if ($LASTEXITCODE -ne 0) {
         throw "$($step.Name) failed with exit code $LASTEXITCODE"
     }
