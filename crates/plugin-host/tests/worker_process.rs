@@ -313,6 +313,28 @@ fn supervised_multi_bus_result_stages_into_engine_generation() {
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn typed_multi_bus_worker_preserves_main_output_for_asymmetric_layout() {
+    let hash = "f".repeat(64);
+    let layout = WorkerAudioBusLayout::new(&[2, 2], &[2]).unwrap();
+    let mut worker = WorkerProcess::spawn_multi_bus_fixture(fixture_worker_path(), &hash, &layout)
+        .expect("spawn asymmetric multi-bus worker client");
+    let deadline = worker_clock_tick().saturating_add(10_000);
+    let frames = layout
+        .input_frames(vec![
+            WorkerFrame::new(32, deadline, 2, vec![0.1, 0.2]).unwrap(),
+            WorkerFrame::new(32, deadline, 2, vec![0.7, 0.8]).unwrap(),
+        ])
+        .unwrap();
+    let processed = worker
+        .process_buses(frames, Vec::new())
+        .expect("process asymmetric multi-bus quantum");
+    assert_eq!(processed.frames().len(), 1);
+    assert_eq!(processed.frames()[0].samples, vec![0.1, 0.2]);
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn typed_multi_bus_worker_client_bounds_a_missing_result() {
     let hash = "a".repeat(64);
     let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();

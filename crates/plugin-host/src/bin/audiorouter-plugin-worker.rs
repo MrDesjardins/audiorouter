@@ -411,8 +411,8 @@ fn run_multi_bus(
     layout: WorkerAudioBusLayout,
     _fixture_mode: Option<&str>,
 ) -> Result<(), String> {
-    if layout.input_buses() != layout.output_buses() {
-        return Err("multi-bus fixture requires symmetric input/output buses".into());
+    if layout.output_buses().len() > layout.input_buses().len() {
+        return Err("multi-bus fixture cannot synthesize missing output buses".into());
     }
     let stdin = io::stdin();
     let stdout = io::stdout();
@@ -472,11 +472,20 @@ fn run_multi_bus(
                     })?;
                     return Err(format!("multi-bus identity rejected: {error:?}"));
                 }
+                let output_frames = frames
+                    .frames()
+                    .iter()
+                    .take(layout.output_buses().len())
+                    .cloned()
+                    .collect();
+                let output_frames = layout
+                    .output_frames(output_frames)
+                    .map_err(|error| format!("multi-bus output rejected: {error:?}"))?;
                 write_worker_message(
                     &mut writer,
                     &WorkerMessage::ProcessedBuses {
                         layout: layout.clone(),
-                        frames: frames.frames().to_vec(),
+                        frames: output_frames.frames().to_vec(),
                     },
                 )
                 .map_err(|error| format!("multi-bus response write failed: {error:?}"))?;

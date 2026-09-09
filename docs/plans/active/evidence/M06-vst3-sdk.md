@@ -20,6 +20,14 @@ worker-process suite then passed 27 tests with six expected fixture-dependent
 skips. This remains an echo-fixture integration check, not production VST3 or
 realtime callback evidence.
 
+The negotiated worker fixture also accepted an asymmetric two-input/one-output
+layout matching the pinned AGain side-chain shape, retained the main input as
+the declared output, and rejected output cardinalities it could not synthesize
+safely. The feature-enabled worker-process suite passed 28 tests with six
+expected fixture-dependent skips; strict feature-enabled and default workspace
+Clippy passed. This does not claim that the fixture executes a native VST3
+processor.
+
 The guarded `safe-all.ps1` chain was requalified after this handoff work:
 VS2026/WDK/native compile, read-only 31-endpoint inventory, disposable SysVAD
 package/API/signability checks, M01/M04/M05, VST3 validators and auxiliary
