@@ -1334,6 +1334,16 @@ explains the prior four failures as an AudioRouter ABI bug, but it is not
 blanket VST2 compatibility. No native editor HWND was created, no audio device
 was opened, and the ignored DLLs were not committed.
 
+## Per-binary worker failure diagnostics (2026-09-08)
+
+`WorkerSupervisor` now retains the verified `PluginIdentity` alongside its
+failure ledger and exposes the identity, failure count, and quarantine state as
+a bounded diagnostic. A regression verifies that the canonical and binary paths
+and SHA-256 fingerprint remain attached after a worker failure. This keeps
+future crash, hang, invalid-sample, and layout reports attributable to the
+exact binary under test; it does not relax quarantine or protected-voice
+silence policy.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

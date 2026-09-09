@@ -47,22 +47,21 @@ redistribution, auto-download, and protected-voice dry fallback remain out of
 scope.
 
 The six copied ReaPlugs fixtures expose `VSTPluginMain`; the scanner identifies
-them as VST2 while retaining unsupported compatibility until the runtime matrix
-is qualified. The adapter now loads and processes compatible effects only
-inside the disposable worker. They remain ignored, disposable local fixtures
-and were not registered. The matrix still requires crash/hang/invalid-sample/
-layout/editor/state/latency tests, a multi-binary fixture matrix, and a
-documented review of rights to host and redistribute test artifacts. The
+them as VST2. The adapter now loads and processes compatible effects only inside
+the disposable worker, and the complete local matrix passes its bounded
+processing/control checks. They remain ignored, disposable local fixtures and
+were not registered. The gate still requires crash/hang/invalid-sample/layout,
+native editor, chunk-state, rights, and release-compatibility evidence. The
 built-in DSP chain remains the supported native transformation path while this
 gate is open.
 
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
-qualify chunk-state and editor behavior with an additional legally usable VST2
-fixture; (3) preserve per-binary quarantine diagnostics and investigate the
-four failing ReaPlugs through bounded host-callback/lifecycle experiments,
-without raising worker deadlines; (4) keep VST2 user-facing availability
-gated until the compatibility and rights matrix is complete.
+qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)
+complete per-binary quarantine diagnostics and add invalid-sample/layout
+regressions;
+(4) keep VST2 user-facing availability gated until the compatibility and rights
+matrix is complete.
 Rollback is limited to reverting the adapter/tests/docs and removing ignored
 fixture copies; no plugin registration, driver, stream, default endpoint, or
 machine audio setting may change.
@@ -128,6 +127,16 @@ process, editor-capability, latency, state behavior, and shutdown acceptance.
 This does not open an editor or qualify chunk-capable state because the current
 fixtures do not provide that evidence; no audio endpoint or machine setting
 was accessed.
+
+## Per-binary quarantine diagnostics (2026-09-08)
+
+`WorkerSupervisor` now retains the verified `PluginIdentity` associated with
+its failure ledger and exposes a bounded `WorkerFailureDiagnostic`. The
+diagnostic includes the canonical path, binary path, format, architecture,
+fingerprint, failure count, and quarantine state, so a replacement cannot be
+mistaken for the binary that failed. A regression verifies identity retention
+across the first failure. This is control-plane metadata only; it does not
+alter restart, quarantine, protected-voice silence, or audio-device behavior.
 
 The locked all-workspace regression sweep then passed, including control (97),
 domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport

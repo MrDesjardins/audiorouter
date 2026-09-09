@@ -1050,6 +1050,18 @@ pub struct WorkerSupervisor {
     state: WorkerState,
     last_heartbeat: Option<Instant>,
     failures: FailureLedger,
+    identity: Option<Box<PluginIdentity>>,
+}
+
+/// Stable per-binary failure context exposed to the owning control plane.
+/// Keeping the verified identity beside the quarantine ledger prevents a
+/// replacement or diagnostic consumer from attributing a failure to a path
+/// that has since been replaced by another binary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct WorkerFailureDiagnostic {
+    pub identity: PluginIdentity,
+    pub failure_count: u32,
+    pub quarantined: bool,
 }
 
 impl WorkerSupervisor {
@@ -1058,6 +1070,7 @@ impl WorkerSupervisor {
             state: WorkerState::Stopped,
             last_heartbeat: None,
             failures: FailureLedger::new(),
+            identity: None,
         }
     }
 
@@ -1067,6 +1080,17 @@ impl WorkerSupervisor {
 
     pub fn failure_count(&self) -> u32 {
         self.failures.failures()
+    }
+
+    pub fn failure_diagnostic(&self) -> Option<WorkerFailureDiagnostic> {
+        self.identity
+            .as_deref()
+            .cloned()
+            .map(|identity| WorkerFailureDiagnostic {
+                identity,
+                failure_count: self.failures.failures(),
+                quarantined: self.failures.quarantined(),
+            })
     }
 
     /// Records lifecycle policy only; process creation belongs to the native worker adapter.
@@ -1100,6 +1124,7 @@ impl WorkerSupervisor {
         {
             return Err(WorkerStartError::UnsupportedPlugin);
         }
+        self.identity = Some(Box::new(identity.clone()));
         self.state = WorkerState::Running;
         self.last_heartbeat = Some(now);
         Ok(())
@@ -4052,6 +4077,28 @@ mod tests {
         assert_eq!(supervisor.record_failure(start), WorkerState::Quarantined);
         supervisor.deliberate_retry();
         assert_eq!(supervisor.state(), WorkerState::Stopped);
+    }
+
+    #[test]
+    fn worker_failure_diagnostic_retains_the_verified_binary_identity() {
+        let identity = PluginIdentity {
+            path: PathBuf::from("C:/plugins/effect.vst3"),
+            binary_path: PathBuf::from("C:/plugins/effect.vst3"),
+            format: PluginFormat::Vst3,
+            architecture: PeArchitecture::X64,
+            file_bytes: 17,
+            sha256: "a".repeat(64),
+            metadata: Default::default(),
+        };
+        let now = Instant::now();
+        let mut supervisor = WorkerSupervisor::new();
+        assert_eq!(supervisor.failure_diagnostic(), None);
+        supervisor.start(&identity, now).unwrap();
+        supervisor.record_failure(now);
+        let diagnostic = supervisor.failure_diagnostic().unwrap();
+        assert_eq!(diagnostic.identity, identity);
+        assert_eq!(diagnostic.failure_count, 1);
+        assert!(!diagnostic.quarantined);
     }
 
     #[test]
