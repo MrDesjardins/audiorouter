@@ -753,6 +753,17 @@ release completion.
   latency evidence while retaining production driver, signing, installer,
   shell/HWND, manual accessibility, and independent-vendor blockers.
 
+- Requalified the authorized bounded M00 virtual-cable signal path on
+  2026-09-09: a 500 ms temporary tone rendered through the selected VB-Audio
+  Cable output, and the paired capture collected 2,078 nonzero bytes during a
+  250 ms capture. The temporary processes, logs, and endpoint state were
+  cleaned up; defaults, volume, mute, privacy, drivers, signing, and startup
+  configuration remained unchanged. Calibrated acoustic/physical latency is
+  still not established by this result.
+- Next safe task: continue with the remaining process-loopback and latency
+  evidence while retaining production driver, signing, installer, shell/HWND,
+  manual accessibility, and independent-vendor blockers.
+
 - Completed the API reference parity pass on 2026-09-09: every documented
   mutating recorder, startup, plugin-retry, virtual-device, import, graph,
   session-lifecycle, and recording operation now states its idempotency-key
