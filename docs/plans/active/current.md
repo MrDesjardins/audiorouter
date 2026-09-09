@@ -65,6 +65,12 @@ Rollback is limited to reverting the adapter/tests/docs and removing ignored
 fixture copies; no plugin registration, driver, stream, default endpoint, or
 machine audio setting may change.
 
+The worker supervisor now returns the explicit `Vst2AdapterUnavailable` error
+for an identified x64 VST2 binary and remains stopped. This prevents a newly
+recognized legacy DLL from crossing the runtime boundary accidentally while
+the adapter is still being developed. Plugin-host tests (48), worker-process
+tests (13), and strict Clippy passed.
+
 Closed an M01/SEC-12 transport boundary gap: Windows named-pipe read and write
 loops now validate the byte count returned by Win32 before slicing the
 remaining buffer. Zero-byte results still map to bounded EOF, while

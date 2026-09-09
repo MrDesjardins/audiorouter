@@ -1268,6 +1268,12 @@ adapter, rights review, and runtime compatibility matrix remain open under
 and strict package Clippy passed. No audio endpoint or machine configuration
 was accessed.
 
+The worker supervisor has an explicit `Vst2AdapterUnavailable` fail-closed
+result for identified x64 VST2 binaries. It does not start a worker or execute
+the DLL until the adapter is implemented and qualified. Plugin-host coverage
+is 48 unit/integration tests plus 13 worker-process tests; strict Clippy and
+formatting passed.
+
 Six user-installed ReaPlugs effect DLLs were copied to the ignored repository
 fixture directory for a read-only compatibility scan. The scanner identified
 all six as x64 but classified them as `unsupportedFormat` with no VST3 class

@@ -1036,6 +1036,7 @@ impl EditorLifecycle {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WorkerStartError {
     UnsupportedPlugin,
+    Vst2AdapterUnavailable,
     Quarantined,
     AlreadyRunning,
 }
@@ -1076,6 +1077,9 @@ impl WorkerSupervisor {
         if self.failures.quarantined() {
             self.state = WorkerState::Quarantined;
             return Err(WorkerStartError::Quarantined);
+        }
+        if identity.format == PluginFormat::Vst2 {
+            return Err(WorkerStartError::Vst2AdapterUnavailable);
         }
         if identity.format != PluginFormat::Vst3 || identity.architecture != PeArchitecture::X64 {
             return Err(WorkerStartError::UnsupportedPlugin);
@@ -3781,6 +3785,25 @@ mod tests {
         );
         assert!(!supervisor.heartbeat(now));
         supervisor.deliberate_retry();
+        assert_eq!(supervisor.state(), WorkerState::Stopped);
+    }
+
+    #[test]
+    fn worker_supervisor_fails_closed_until_the_vst2_adapter_exists() {
+        let identity = PluginIdentity {
+            path: PathBuf::from("legacy.dll"),
+            binary_path: PathBuf::from("legacy.dll"),
+            format: PluginFormat::Vst2,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "0".repeat(64),
+            metadata: Default::default(),
+        };
+        let mut supervisor = WorkerSupervisor::new();
+        assert_eq!(
+            supervisor.start(&identity, Instant::now()),
+            Err(WorkerStartError::Vst2AdapterUnavailable)
+        );
         assert_eq!(supervisor.state(), WorkerState::Stopped);
     }
 
