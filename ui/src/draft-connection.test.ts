@@ -68,6 +68,7 @@ describe("appendDraftConnection", () => {
     const custom = { ...connected, edges: connected.edges.map((edge) => ({ ...edge, matrix: [0.5] })) };
     const inserted = insertDraftMixer(custom, "edge-1");
     expect(inserted.edges.at(-1)?.matrix).toEqual([0.5]);
+    expect(removeSinglePathDraftMixer(inserted, "mixer-1").edges[0].matrix).toEqual([0.5]);
   });
 
   it("refuses to remove a mixer with ambiguous topology", () => {

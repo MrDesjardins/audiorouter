@@ -218,8 +218,25 @@ export function removeSinglePathDraftMixer(session: Session, mixerId: EntityId):
   const incoming = session.edges.filter((edge) => edge.destinationNode === mixerId);
   const outgoing = session.edges.filter((edge) => edge.sourceNode === mixerId);
   if (incoming.length !== 1 || outgoing.length !== 1) throw new Error("Mixer removal requires exactly one incoming and one outgoing connection");
+  const sourceNode = session.nodes.find((node) => node.id === incoming[0].sourceNode);
+  const mixerInput = mixer.ports.find((port) => port.name === incoming[0].destinationPort);
+  const mixerOutput = mixer.ports.find((port) => port.name === outgoing[0].sourcePort);
+  const destinationNode = session.nodes.find((node) => node.id === outgoing[0].destinationNode);
+  const sourcePort = sourceNode?.ports.find((port) => port.name === incoming[0].sourcePort);
+  const destinationPort = destinationNode?.ports.find((port) => port.name === outgoing[0].destinationPort);
+  if (!sourcePort || !mixerInput || !mixerOutput || !destinationPort) throw new Error("Mixer connections reference unknown ports");
+  const composedMatrix = Array.from({ length: destinationPort.channels * sourcePort.channels }, (_, index) => {
+    const destinationChannel = Math.floor(index / sourcePort.channels);
+    const sourceChannel = index % sourcePort.channels;
+    let value = 0;
+    for (let mixerChannel = 0; mixerChannel < mixerInput.channels; mixerChannel += 1) {
+      value += (outgoing[0].matrix[destinationChannel * mixerOutput.channels + mixerChannel] ?? 0) * (incoming[0].matrix[mixerChannel * sourcePort.channels + sourceChannel] ?? 0);
+    }
+    return value;
+  });
   const reduced = removeDraftNode(session, mixerId);
-  return appendDraftConnection(reduced, incoming[0].sourceNode, incoming[0].sourcePort, outgoing[0].destinationNode, outgoing[0].destinationPort);
+  const reconnected = appendDraftConnection(reduced, incoming[0].sourceNode, incoming[0].sourcePort, outgoing[0].destinationNode, outgoing[0].destinationPort);
+  return { ...reconnected, edges: reconnected.edges.map((edge) => edge.sourceNode === incoming[0].sourceNode && edge.destinationNode === outgoing[0].destinationNode ? { ...edge, matrix: composedMatrix } : edge) };
 }
 
 /** Removes one draft edge while leaving the authoritative graph untouched. */
