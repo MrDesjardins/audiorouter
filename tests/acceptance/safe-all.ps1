@@ -13,6 +13,7 @@ $steps = @(
     @{ Name = 'M05 UI'; Script = Join-Path $acceptanceRoot 'm05-ui.ps1' },
     @{ Name = 'M06 SDK installer'; Script = Join-Path $acceptanceRoot 'm06-sdk-installer.ps1' },
     @{ Name = 'M06 VST3 SDK'; Script = Join-Path $acceptanceRoot 'm06-vst3-sdk.ps1' },
+    @{ Name = 'M06 native VST3 worker'; Script = Join-Path $acceptanceRoot 'm06-vst3-worker.ps1' },
     @{ Name = 'M06 VST2 fixture'; Script = Join-Path $acceptanceRoot 'm06-vst2-state-fixture.ps1' },
     @{ Name = 'M07 headless'; Script = Join-Path $acceptanceRoot 'm07-headless.ps1' },
     @{ Name = 'M08 release'; Script = Join-Path $acceptanceRoot 'm08-release.ps1' },

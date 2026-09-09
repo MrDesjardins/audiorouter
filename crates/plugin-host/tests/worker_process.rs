@@ -584,6 +584,73 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
+#[ignore = "requires the repository-local native VST3 worker and AGain bundle"]
+fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_FIXTURE")
+            .expect("set AUDIOROUTER_VST3_FIXTURE for native VST3 acceptance"),
+    );
+    let worker_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER")
+            .expect("set AUDIOROUTER_VST3_NATIVE_WORKER for native VST3 acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST3 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST3 fixture without loading it");
+    assert_eq!(identity.format, PluginFormat::Vst3);
+    assert_eq!(identity.architecture, PeArchitecture::X64);
+    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .expect("launch native VST3 worker");
+    let mut samples = vec![0.0; 256];
+    samples[2] = 0.1;
+    samples[3] = -0.1;
+    samples[130] = 0.1;
+    samples[131] = -0.1;
+    let frame = WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 2, samples)
+        .expect("native VST3 test frame");
+    let input_samples = frame.samples.clone();
+    let processed = worker
+        .process(
+            frame,
+            vec![
+                ParameterEvent {
+                    parameter_id: 0,
+                    normalized_value: 0.75,
+                    sample_offset: 0,
+                },
+                ParameterEvent {
+                    parameter_id: 0,
+                    normalized_value: 0.75,
+                    sample_offset: 64,
+                },
+            ],
+            Instant::now(),
+        )
+        .expect("native VST3 worker processing");
+    assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+    assert!(processed
+        .samples
+        .iter()
+        .zip(input_samples)
+        .any(|(output, input)| (output - input).abs() > 1.0e-5));
+    assert!(worker
+        .shutdown()
+        .expect("reap native VST3 worker")
+        .success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
 #[ignore = "requires the repository-owned non-finite VST2 fixture"]
 fn verified_worker_rejects_nonfinite_vst2_output() {
     let plugin_path = PathBuf::from(

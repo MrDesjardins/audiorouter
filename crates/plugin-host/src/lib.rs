@@ -2349,6 +2349,7 @@ impl SupervisedWorkerProcess {
             supervisor,
             now,
             DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            None,
         )
         .map_err(|(error, _)| error)
     }
@@ -2368,6 +2369,7 @@ impl SupervisedWorkerProcess {
             supervisor,
             now,
             sample_rate_hz,
+            None,
         )
         .map_err(|(error, _)| error)
     }
@@ -2400,6 +2402,33 @@ impl SupervisedWorkerProcess {
             .verify_current(configured_roots)
             .map_err(WorkerProcessError::PluginIdentity)?;
         Self::spawn_with_sample_rate(executable, identity, channels, sample_rate_hz, now)
+    }
+
+    /// Spawn the native single-stream VST3 worker after revalidating the
+    /// scanned bundle. This explicit constructor keeps generic protocol
+    /// workers from receiving an unexpected plugin path.
+    #[cfg(windows)]
+    pub fn spawn_verified_native_vst3_with_sample_rate(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        channels: u16,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        identity
+            .verify_current(configured_roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        Self::spawn_with_supervisor_at_sample_rate(
+            executable,
+            identity,
+            channels,
+            WorkerSupervisor::new(),
+            now,
+            sample_rate_hz,
+            Some(&identity.binary_path),
+        )
+        .map_err(|(error, _)| error)
     }
 
     #[cfg(feature = "test-fixtures")]
@@ -2522,6 +2551,7 @@ impl SupervisedWorkerProcess {
             supervisor,
             now,
             DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            None,
         )
     }
 
@@ -2532,6 +2562,7 @@ impl SupervisedWorkerProcess {
         mut supervisor: WorkerSupervisor,
         now: Instant,
         sample_rate_hz: u32,
+        plugin_path: Option<&Path>,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
         let executable = match validate_worker_executable(executable.as_ref()) {
             Ok(path) => path,
@@ -2549,10 +2580,10 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        let process_result = if identity.format == PluginFormat::Vst2 {
+        let process_result = if identity.format == PluginFormat::Vst2 || plugin_path.is_some() {
             WorkerProcess::spawn_for_plugin_with_sample_rate(
                 &executable,
-                &identity.binary_path,
+                plugin_path.unwrap_or(&identity.binary_path),
                 &identity.sha256,
                 channels,
                 sample_rate_hz,
@@ -3024,6 +3055,7 @@ impl SupervisedWorkerProcess {
                 supervisor,
                 now,
                 sample_rate_hz,
+                None,
             )
         }
     }

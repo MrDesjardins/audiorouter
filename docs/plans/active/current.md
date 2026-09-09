@@ -94,6 +94,15 @@ is implemented, but rights/editor/release qualification remains open.
   opt-in ReaPlugs matrix now exercises offsets 0 and 64 in a 128-frame stereo
   block across all six local fixtures and three sample rates; finite processing
   passed, with environment variables restored and no audio configuration change.
+- Implemented the first production-shaped native VST3 worker on 2026-09-09:
+  `tools/m06-vst3-worker` loads a verified x64 bundle in a separate Windows
+  process, speaks the existing length-prefixed JSON `Hello`/`Ready` and
+  `Process`/`Processed` protocol, applies parameter events at bounded sample
+  offsets (including 0 and 64), and rejects non-single-bus layouts. The supervised Rust launch now
+  forwards the VST3 plugin path; an end-to-end AGain regression passed with
+  finite transformed output and clean shutdown. This is single-stream worker
+  evidence, not realtime graph scheduling, auxiliary-bus execution, or
+  physical-latency evidence.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   the VST2 automation fix on 2026-09-09. VS2026/MSVC/SDK/WDK discovery and
   native compile, read-only 31-endpoint inventory, disposable pinned SysVAD

@@ -1977,6 +1977,18 @@ parameter-interface evidence with a real repository-local sound-transformation
 check; it is still offline evidence and does not claim supervised realtime
 hosting. Generated native artifacts were removed after the run.
 
+## Native single-stream VST3 worker (2026-09-09)
+
+`tools/m06-vst3-worker` now loads a verified x64 VST3 bundle in a separate
+Windows process and speaks the existing length-prefixed JSON worker protocol.
+The supervised Rust launch forwards the plugin path for VST3 identities, and
+the end-to-end AGain regression completes Hello/Ready, sends a normalized
+parameter events at sample offsets 0 and 64, processes a 128-frame stereo block, and
+accepts finite output that differs from the input before bounded shutdown.
+The worker intentionally supports only one input and one output bus; auxiliary
+buses remain on the separately negotiated contract. This is worker-process
+evidence, not realtime graph scheduling or physical-latency evidence.
+
 ## VST2 intra-block parameter timing (2026-09-09)
 
 The native x64 VST2 worker now sorts validated parameter events and splits each

@@ -38,8 +38,11 @@ continues to reject that layout. The production VST2 worker remains a
 single-stream `processReplacing` path because VST2 does not provide the
 auxiliary-bus contract required here. Worker-side auxiliary effect execution,
 supervised multi-bus restart/quarantine, and independent rights-cleared plugin
-qualification remain release gates. No worker may flatten an auxiliary bus into
-the VST2 stream or expose a stale protected path.
+qualification remain release gates. A native Windows VST3 worker now owns the
+verified single-stream `Process` path: it loads the supplied x64 bundle in its
+own process and forwards bounded parameter events through
+`IAudioProcessor::process`. No worker may flatten an auxiliary bus into the
+VST2 stream or expose a stale protected path.
 
 ## Initial parameter contract
 
