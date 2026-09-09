@@ -120,6 +120,16 @@ release completion.
   qualification scripts while retaining production driver, signing, installer,
   shell/HWND, physical-latency, accessibility, and independent-vendor gates.
 
+- Requalified M06 VST3 SDK acceptance on 2026-09-09: the pinned checkout built,
+  validator self-tests passed, offline loader and AGain main/auxiliary-bus
+  classes passed, explicit single-bus rejection passed, and the five-class mda
+  matrix passed. Outputs were repository-local/disposable; no system install,
+  plugin registration, audio stream, or machine configuration changed.
+- Next safe task: continue with remaining independently observable native
+  qualification while retaining production driver, signing, installer,
+  shell/HWND, physical-latency, manual accessibility, and independent-vendor
+  plugin blockers.
+
 - Closed the portable workspace test evidence gap on 2026-09-09 with
   independently observable locked package runs: engine (89), recording (30),
   storage (80), Windows audio (33), protocol (6), and transport (19) tests all
