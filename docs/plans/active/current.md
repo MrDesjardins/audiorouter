@@ -90,6 +90,8 @@ The VST2 adapter now caches the negotiated sample-rate/block-size pair and
 avoids repeating `effSetSampleRate`, `effSetBlockSize`, and mains-on for every
 block. A format change performs a bounded mains-off/reconfigure/mains-on
 transition; normal blocks do not re-enter plugin lifecycle callbacks.
+The Windows dispatcher-count regression covers both the cached repeat and the
+format-change transition.
 
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)

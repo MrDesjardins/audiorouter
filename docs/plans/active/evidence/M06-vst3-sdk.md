@@ -1378,6 +1378,8 @@ the same rate and size no longer invoke setup or mains lifecycle callbacks;
 when a bounded format change is requested, the effect receives one
 mains-off/reconfigure/mains-on transition. This reduces legacy-plugin lifecycle
 reentrancy while keeping all calls on the contained worker thread.
+The Windows unit regression verifies the exact dispatcher-call count for a
+repeated format and one subsequent format change.
 
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 

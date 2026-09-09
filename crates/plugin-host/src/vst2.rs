@@ -246,6 +246,7 @@ const AUDIO_MASTER_GET_BLOCK_SIZE: i32 = 11;
 #[cfg(all(test, windows))]
 mod opcode_tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn uses_vst2_dispatcher_opcodes_for_lifecycle_and_state() {
@@ -255,6 +256,62 @@ mod opcode_tests {
         assert_eq!(EFF_EDIT_GET_RECT, 13);
         assert_eq!(EFF_GET_CHUNK, 23);
         assert_eq!(EFF_SET_CHUNK, 24);
+    }
+
+    static DISPATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    unsafe extern "C" fn counting_dispatcher(
+        _: *mut Vst2Effect,
+        _: i32,
+        _: i32,
+        _: isize,
+        _: *mut c_void,
+        _: f32,
+    ) -> isize {
+        DISPATCH_COUNT.fetch_add(1, Ordering::Relaxed);
+        0
+    }
+
+    #[test]
+    fn processing_format_setup_is_cached_until_the_format_changes() {
+        let effect = Box::new(Vst2Effect {
+            magic: VST2_EFFECT_MAGIC,
+            dispatcher: Some(counting_dispatcher),
+            process: None,
+            set_parameter: None,
+            get_parameter: None,
+            num_programs: 0,
+            num_parameters: 0,
+            num_inputs: 1,
+            num_outputs: 1,
+            flags: 0,
+            reserved_1: 0,
+            reserved_2: 0,
+            initial_delay: 0,
+            real_quality: 0,
+            off_quality: 0,
+            io_ratio: 1.0,
+            object: ptr::null_mut(),
+            user: ptr::null_mut(),
+            unique_id: 0,
+            version: 0,
+            process_replacing: None,
+            future: [0; 56],
+        });
+        let effect = Box::into_raw(effect);
+        let mut library = Vst2Library {
+            module: ptr::null_mut(),
+            effect,
+            processing_format: None,
+        };
+        DISPATCH_COUNT.store(0, Ordering::Relaxed);
+
+        library.set_processing_format(48_000.0, 128).unwrap();
+        library.set_processing_format(48_000.0, 128).unwrap();
+        library.set_processing_format(48_000.0, 256).unwrap();
+
+        assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 7);
+        drop(library);
     }
 }
 
