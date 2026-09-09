@@ -70,6 +70,11 @@ copying it into the framed response. A NaN/Inf result is a contained worker
 failure and therefore follows the existing failure/quarantine policy; it is
 never serialized as audio or allowed onto a protected path.
 
+Added `tests/acceptance/m06-vst2-reaplugs.ps1` to rerun every ignored local
+VST2 DLL independently through the verified worker test. It requires Windows,
+restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value, and changes no
+plugin registration or audio configuration.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

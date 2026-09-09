@@ -1354,6 +1354,11 @@ interleaving it into the protocol frame. The rejection is returned as a worker
 failure so the supervisor can silence protected paths and count the binary
 toward quarantine; no non-finite sample crosses the worker boundary.
 
+The repeatable wrapper `tests/acceptance/m06-vst2-reaplugs.ps1` now runs the
+same ignored worker acceptance once per local DLL and restores the caller's
+fixture environment variable. It does not register plugins, open audio
+devices, or include the ignored binaries in source or release artifacts.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

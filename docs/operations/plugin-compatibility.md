@@ -102,7 +102,13 @@ Run the reproducible local qualification with:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst3-sdk.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-reaplugs.ps1
 ```
+
+The VST2 wrapper runs each ignored DLL independently through the contained
+worker test and restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value.
+The fixture directory is local-only and is not part of source or release
+artifacts.
 
 See [SDK setup](sdk-setup.md) and [release notes](release-notes.md) for the
 toolchain and current qualification boundaries.
