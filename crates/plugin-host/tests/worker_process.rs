@@ -651,6 +651,59 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
+#[ignore = "requires the repository-local native VST3 worker and AGain side-chain bundle"]
+fn verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_FIXTURE")
+            .expect("set AUDIOROUTER_VST3_FIXTURE for native VST3 acceptance"),
+    );
+    let worker_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER")
+            .expect("set AUDIOROUTER_VST3_NATIVE_WORKER for native VST3 acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST3 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST3 fixture without loading it");
+    let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).expect("side-chain layout");
+    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_multi_bus(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        &layout,
+        Instant::now(),
+    )
+    .expect("launch native VST3 multi-bus worker");
+    let main = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        vec![0.1, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    )
+    .expect("native VST3 main bus frame");
+    let sidechain = WorkerFrame::new(1, main.deadline_tick, 1, vec![0.2, 0.0, 0.0, 0.0])
+        .expect("native VST3 side-chain frame");
+    let inputs = layout
+        .input_frames(vec![main, sidechain])
+        .expect("native VST3 input bus set");
+    let processed = worker
+        .process_buses(inputs, Vec::new(), Instant::now())
+        .expect("native VST3 multi-bus processing");
+    assert_eq!(processed.frames().len(), 1);
+    assert!(processed.frames()[0]
+        .samples
+        .iter()
+        .all(|sample| sample.is_finite()));
+    assert!(worker
+        .shutdown()
+        .expect("reap native VST3 multi-bus worker")
+        .success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
 #[ignore = "requires the repository-owned non-finite VST2 fixture"]
 fn verified_worker_rejects_nonfinite_vst2_output() {
     let plugin_path = PathBuf::from(

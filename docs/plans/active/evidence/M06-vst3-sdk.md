@@ -1989,6 +1989,17 @@ The worker intentionally supports only one input and one output bus; auxiliary
 buses remain on the separately negotiated contract. This is worker-process
 evidence, not realtime graph scheduling or physical-latency evidence.
 
+## Native auxiliary-bus VST3 worker (2026-09-09)
+
+The worker now selects a native effect whose initialized bus counts match the
+requested bounded layout, activates each declared bus, and processes the
+existing `HelloBuses`/`ProcessBuses` protocol. The supervised end-to-end test
+uses AGain's actual `[stereo main, mono side-chain]` input layout and stereo
+output: coherent two-bus input reaches `IAudioProcessor::process`, the output
+bus is finite, and the worker shuts down cleanly. A channel mismatch is rejected
+before activation. This proves native auxiliary-bus worker execution, not
+realtime graph scheduling, physical-latency performance, or release rights.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun with this
 native worker acceptance included. Native toolchain/endpoint checks, disposable
 SysVAD qualification, portable/UI milestones, VST3/VST2 fixture coverage, M07,

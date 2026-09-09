@@ -12,8 +12,10 @@ Build it from the repository root after the pinned SDK fixture has been built:
     .\tools\m06-vst3-worker\build.ps1
 
 The generated executable and object file are ignored and must not be committed.
-The worker currently accepts one mono or stereo input/output bus. Auxiliary
-buses must use the separately negotiated multi-bus path and are rejected here;
-they are never flattened into the main stream. Native process buffers and the
+The worker accepts either one mono/stereo input and output bus through
+`Process`, or a bounded auxiliary-bus layout through `HelloBuses` and
+`ProcessBuses` (up to four buses and eight aggregate channels per direction).
+Bus counts and per-bus channel counts must match the plugin exactly; auxiliary
+buses are never flattened into the main stream. Native process buffers and the
 framed protocol are currently worker-thread implementation details, not proof
 of realtime graph scheduling or physical-latency performance.

@@ -1,6 +1,11 @@
 # M06 — Isolated VST3 effects and pitch shift
 
-Status: SDK, DSP, and worker-boundary foundation implemented; bounded pitch streaming with control-plane reset is now exposed as a fixed-quantum graph node, while production plugin execution, sandbox acceptance, and native scheduling remain open. Prerequisite: M05. Outcome: extensible effects and pitch processing with explicit compatibility, latency, and failure containment.
+Status: SDK, DSP, and supervised single-/multi-bus native VST3 worker
+boundaries are implemented and tested; bounded pitch streaming with
+control-plane reset is exposed as a fixed-quantum graph node, while realtime
+graph scheduling, sandbox acceptance, and physical-latency qualification remain
+open. Prerequisite: M05. Outcome: extensible effects and pitch processing with
+explicit compatibility, latency, and failure containment.
 
 ## Read first
 

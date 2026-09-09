@@ -103,6 +103,14 @@ is implemented, but rights/editor/release qualification remains open.
   finite transformed output and clean shutdown. This is single-stream worker
   evidence, not realtime graph scheduling, auxiliary-bus execution, or
   physical-latency evidence.
+- Extended the native VST3 worker to the bounded auxiliary-bus contract on
+  2026-09-09: it selects an effect matching the requested bus counts,
+  activates each declared mono/stereo bus, processes `HelloBuses`/
+  `ProcessBuses`, and preserves coherent per-bus sequence/deadline identity.
+  AGain's genuine `[stereo, mono]` input to stereo output side-chain class
+  passed through the supervised Rust owner with finite output and clean
+  shutdown. This is native worker-process evidence; realtime graph scheduling,
+  soak/physical latency, and independent rights-cleared plugin gates remain open.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   the native VST3 worker integration on 2026-09-09. The chain passed native
   toolchain/endpoint checks, disposable pinned SysVAD x64 qualification, M01,

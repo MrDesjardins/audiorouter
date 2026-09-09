@@ -2474,6 +2474,32 @@ impl SupervisedWorkerProcess {
             layout,
             WorkerSupervisor::new(),
             now,
+            None,
+        )
+        .map_err(|(error, _)| error)
+    }
+
+    /// Spawn the native VST3 auxiliary-bus worker after revalidating the
+    /// bundle. The plugin path is explicit so generic multi-bus fixtures keep
+    /// their existing echo-worker contract.
+    #[cfg(windows)]
+    pub fn spawn_verified_native_vst3_multi_bus(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        layout: &WorkerAudioBusLayout,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        identity
+            .verify_current(configured_roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        Self::spawn_multi_bus_with_supervisor(
+            executable,
+            identity,
+            layout,
+            WorkerSupervisor::new(),
+            now,
+            Some(&identity.binary_path),
         )
         .map_err(|(error, _)| error)
     }
@@ -2494,6 +2520,7 @@ impl SupervisedWorkerProcess {
         layout: &WorkerAudioBusLayout,
         mut supervisor: WorkerSupervisor,
         now: Instant,
+        plugin_path: Option<&Path>,
     ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
         if identity.format == PluginFormat::Vst2 {
             return Err((
@@ -2516,7 +2543,17 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        match WorkerProcess::spawn_multi_bus(&executable, &identity.sha256, layout) {
+        let process = if let Some(plugin_path) = plugin_path {
+            WorkerProcess::spawn_multi_bus_for_plugin(
+                &executable,
+                plugin_path,
+                &identity.sha256,
+                layout,
+            )
+        } else {
+            WorkerProcess::spawn_multi_bus(&executable, &identity.sha256, layout)
+        };
+        match process {
             Ok(process) => Ok(Self {
                 process,
                 supervisor,
@@ -3026,7 +3063,7 @@ impl SupervisedWorkerProcess {
         drop(process);
         if let Some(layout) = bus_layout {
             return Self::spawn_multi_bus_with_supervisor(
-                executable, &identity, &layout, supervisor, now,
+                executable, &identity, &layout, supervisor, now, None,
             );
         }
         if shared_transport {
@@ -3208,6 +3245,28 @@ impl WorkerProcess {
             None,
             None,
             None,
+            Some(layout),
+        )
+    }
+
+    /// Spawn the separately negotiated multi-bus worker with an explicit
+    /// native plugin path. Generic echo workers intentionally use the sibling
+    /// constructor without a plugin path.
+    #[cfg(windows)]
+    pub fn spawn_multi_bus_for_plugin(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        layout: &WorkerAudioBusLayout,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            layout.input_buses().first().copied().unwrap_or(0),
+            DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            None,
+            None,
+            Some(plugin_path.as_ref()),
             Some(layout),
         )
     }

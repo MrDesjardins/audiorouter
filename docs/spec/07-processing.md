@@ -36,13 +36,15 @@ and processes the pinned SDK's genuine two-input/one-output AGain side-chain
 class when `--multi-bus` is explicitly selected; the default single-bus probe
 continues to reject that layout. The production VST2 worker remains a
 single-stream `processReplacing` path because VST2 does not provide the
-auxiliary-bus contract required here. Worker-side auxiliary effect execution,
-supervised multi-bus restart/quarantine, and independent rights-cleared plugin
-qualification remain release gates. A native Windows VST3 worker now owns the
-verified single-stream `Process` path: it loads the supplied x64 bundle in its
-own process and forwards bounded parameter events through
-`IAudioProcessor::process`. No worker may flatten an auxiliary bus into the
-VST2 stream or expose a stale protected path.
+auxiliary-bus contract required here. A native Windows VST3 worker now owns the
+verified single-stream `Process` path and the bounded auxiliary-bus
+`HelloBuses`/`ProcessBuses` path: it loads the supplied x64 bundle in its own
+process and forwards bounded parameter events through
+`IAudioProcessor::process`. The pinned AGain side-chain class is verified as
+`[stereo, mono]` input to stereo output. Realtime graph scheduling,
+restart/quarantine soak, physical-latency measurement, and independent
+rights-cleared plugin qualification remain release gates. No worker may
+flatten an auxiliary bus into the VST2 stream or expose a stale protected path.
 
 ## Initial parameter contract
 
