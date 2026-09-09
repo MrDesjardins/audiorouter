@@ -2007,6 +2007,13 @@ sequence/deadline identity. This confirms the production-shaped worker-to-graph
 ownership handoff; it does not prove callback scheduling, physical latency, or
 long-run quarantine behavior.
 
+The bounded `SupervisedBusWorkerLoop` now exercises that handoff asynchronously
+with the fixture worker: the callback-facing side submits only preallocated
+bus slots, while the owner thread performs IPC and sample conversion. The
+fixture regression passed with clean shutdown and output publication. This is
+worker-thread scheduling evidence; native callback timing, soak, and physical
+latency remain open.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
 commit `eb0ad978` with this native worker acceptance included. Native
 toolchain/endpoint checks, disposable SysVAD qualification, portable/UI

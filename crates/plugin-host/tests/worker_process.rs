@@ -7,8 +7,8 @@ use audiorouter_plugin_host::ParameterEvent;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
-    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
-    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
+    PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedBusWorkerLoop,
+    SupervisedWorkerProcess, WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::{WorkerAudioBusLayout, WorkerBusSession};
@@ -19,6 +19,8 @@ use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
 use std::process::{Command, Stdio};
+#[cfg(feature = "test-fixtures")]
+use std::sync::Arc;
 #[cfg(feature = "test-fixtures")]
 use std::time::Duration;
 use std::time::Instant;
@@ -314,6 +316,72 @@ fn supervised_multi_bus_result_stages_into_engine_generation() {
     assert_eq!(main.channel(0).unwrap(), &[0.1]);
     assert_eq!(sidechain.channel(0).unwrap(), &[0.3]);
     let _ = worker.shutdown();
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn supervised_bus_worker_loop_bridges_bounded_scheduler_without_callback_waits() {
+    let hash = "a".repeat(64);
+    let worker_layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let scheduler = Arc::new(
+        audiorouter_engine::RuntimeBusScheduler::new(
+            1,
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            4,
+        )
+        .unwrap(),
+    );
+    let worker = SupervisedWorkerProcess::spawn_multi_bus_fixture(
+        fixture_worker_path(),
+        &identity,
+        &worker_layout,
+        Instant::now(),
+    )
+    .expect("spawn supervised loop worker");
+    let loop_owner = SupervisedBusWorkerLoop::spawn(worker, Arc::clone(&scheduler)).unwrap();
+    let generation = audiorouter_engine::RuntimeGeneration::new(12);
+    let quantum = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        42,
+        worker_clock_tick().saturating_add(10_000),
+        4,
+    )
+    .unwrap();
+    let mut main = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    main.channel_mut(0).unwrap().fill(0.25);
+    main.channel_mut(1).unwrap().fill(-0.25);
+    let sidechain = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
+    let inputs = [&main, &sidechain];
+    scheduler
+        .try_submit_inputs(generation, quantum, &inputs)
+        .expect("submit callback-owned input quantum");
+
+    for _ in 0..200 {
+        if scheduler.output_ready() != 0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(!loop_owner.has_failed());
+    let mut output = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    let mut destinations = [&mut output];
+    assert_eq!(
+        scheduler
+            .try_publish_output(generation, quantum, &mut destinations)
+            .unwrap(),
+        audiorouter_engine::RuntimeBusProcessOutcome::Processed
+    );
+    assert_eq!(output.channel(0).unwrap(), &[0.25; 4]);
+    assert!(loop_owner.stop());
 }
 
 #[cfg(feature = "test-fixtures")]

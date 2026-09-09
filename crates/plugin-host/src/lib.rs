@@ -20,6 +20,7 @@ use std::sync::{
     mpsc::{self, Receiver},
     Arc,
 };
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod vst2;
@@ -1515,6 +1516,185 @@ pub fn stage_engine_worker_result<'a>(
     ))
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerLoopError {
+    ThreadStart,
+}
+
+/// Owns one supervised multi-bus worker on a non-callback thread and bridges
+/// it to preallocated engine staging slots. The callback-facing scheduler
+/// methods remain nonblocking; all VST serialization, IPC, conversion
+/// allocation, and worker shutdown happen on this owner thread.
+pub struct SupervisedBusWorkerLoop {
+    scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
+    stop: Arc<AtomicBool>,
+    failed: Arc<AtomicBool>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl SupervisedBusWorkerLoop {
+    pub fn spawn(
+        worker: SupervisedWorkerProcess,
+        scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
+    ) -> Result<Self, WorkerLoopError> {
+        let input_layout = WorkerAudioBusLayout::new(
+            &scheduler
+                .input_layout()
+                .input_channels()
+                .iter()
+                .map(|channels| *channels as u16)
+                .collect::<Vec<_>>(),
+            &scheduler
+                .output_layout()
+                .output_channels()
+                .iter()
+                .map(|channels| *channels as u16)
+                .collect::<Vec<_>>(),
+        )
+        .map_err(|_| WorkerLoopError::ThreadStart)?;
+        let output_layout = input_layout.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let failed = Arc::new(AtomicBool::new(false));
+        let thread_stop = Arc::clone(&stop);
+        let thread_failed = Arc::clone(&failed);
+        let thread_scheduler = Arc::clone(&scheduler);
+        let join = std::thread::Builder::new()
+            .name("audiorouter-vst3-bus-worker".into())
+            .spawn(move || {
+                run_supervised_bus_worker(
+                    worker,
+                    thread_scheduler,
+                    input_layout,
+                    output_layout,
+                    thread_stop,
+                    thread_failed,
+                );
+            })
+            .map_err(|_| WorkerLoopError::ThreadStart)?;
+        Ok(Self {
+            scheduler,
+            stop,
+            failed,
+            join: Some(join),
+        })
+    }
+
+    pub fn scheduler(&self) -> &Arc<audiorouter_engine::RuntimeBusScheduler> {
+        &self.scheduler
+    }
+
+    pub fn has_failed(&self) -> bool {
+        self.failed.load(Ordering::Acquire)
+    }
+
+    /// Request termination and join the owner thread. This is a control-plane
+    /// operation; it may wait for the worker's bounded IPC deadline.
+    pub fn stop(mut self) -> bool {
+        self.stop.store(true, Ordering::Release);
+        self.join.take().map_or(true, |join| join.join().is_ok())
+    }
+}
+
+impl Drop for SupervisedBusWorkerLoop {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}
+
+fn run_supervised_bus_worker(
+    mut worker: SupervisedWorkerProcess,
+    scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
+    input_layout: WorkerAudioBusLayout,
+    output_layout: WorkerAudioBusLayout,
+    stop: Arc<AtomicBool>,
+    failed: Arc<AtomicBool>,
+) {
+    while !stop.load(Ordering::Acquire) {
+        let Some(handle) = scheduler.try_take_input() else {
+            std::thread::yield_now();
+            continue;
+        };
+        let generation = handle.generation();
+        let identity = handle.identity();
+        let mut input_frames = Vec::with_capacity(handle.blocks().len());
+        let mut conversion_failed = false;
+        for block in handle.blocks() {
+            let mut samples = vec![0.0; block.channels() * block.frames()];
+            if block.copy_to_interleaved(&mut samples).is_err() {
+                conversion_failed = true;
+                break;
+            }
+            match WorkerFrame::new(
+                identity.sequence,
+                identity.deadline_tick,
+                block.channels() as u16,
+                samples,
+            ) {
+                Ok(frame) => input_frames.push(frame),
+                Err(_) => {
+                    conversion_failed = true;
+                    break;
+                }
+            }
+        }
+        scheduler.recycle_input(handle);
+        if conversion_failed {
+            failed.store(true, Ordering::Release);
+            break;
+        }
+        let Ok(input_frames) = input_layout.input_frames(input_frames) else {
+            failed.store(true, Ordering::Release);
+            break;
+        };
+        let processed = match worker.process_buses(input_frames, Vec::new(), Instant::now()) {
+            Ok(processed) => processed,
+            Err(_) => {
+                failed.store(true, Ordering::Release);
+                break;
+            }
+        };
+        let mut output_blocks = Vec::with_capacity(processed.frames().len());
+        for frame in processed.frames() {
+            let Ok(mut block) =
+                audiorouter_engine::AudioBlock::new(frame.channels as usize, frame.frame_count())
+            else {
+                failed.store(true, Ordering::Release);
+                break;
+            };
+            if block.copy_from_interleaved(&frame.samples).is_err() {
+                failed.store(true, Ordering::Release);
+                break;
+            }
+            output_blocks.push(block);
+        }
+        if output_blocks.len() != processed.frames().len() {
+            break;
+        }
+        let output_refs = output_blocks.iter().collect::<Vec<_>>();
+        if output_layout.output_buses().len() != processed.frames().len()
+            || output_layout
+                .output_buses()
+                .iter()
+                .zip(processed.frames())
+                .any(|(channels, frame)| *channels != frame.channels)
+        {
+            failed.store(true, Ordering::Release);
+            break;
+        }
+        if scheduler
+            .try_submit_outputs(generation, identity, &output_refs)
+            .is_err()
+        {
+            failed.store(true, Ordering::Release);
+            break;
+        }
+    }
+    let _ = worker.shutdown();
+}
+
 fn validate_audio_buses(
     channels: &[u16],
     missing_main: WorkerAudioBusLayoutError,
@@ -1995,6 +2175,13 @@ pub enum WorkerProcessError {
 struct WorkerSandbox {
     handle: *mut std::ffi::c_void,
 }
+
+// SAFETY: the job handle is owned exclusively by the worker-process value and
+// is only closed when that value is dropped. Moving that ownership to the
+// dedicated worker-loop thread does not permit concurrent access to the
+// handle or any borrowed data.
+#[cfg(windows)]
+unsafe impl Send for WorkerSandbox {}
 
 #[cfg(not(windows))]
 struct WorkerSandbox;
