@@ -29,6 +29,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "native VST3 multi-bus worker acceptance failed with exit code $LASTEXITCODE" }
     & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --ignored --exact verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler --nocapture
     if ($LASTEXITCODE -ne 0) { throw "native VST3 asynchronous worker acceptance failed with exit code $LASTEXITCODE" }
+    & cargo test -p audiorouter-plugin-host --test worker_process --features test-fixtures --locked -- --exact supervised_bus_worker_loop_silences_after_a_bounded_worker_failure --nocapture
+    if ($LASTEXITCODE -ne 0) { throw "supervised multi-bus failure recovery acceptance failed with exit code $LASTEXITCODE" }
 } finally {
     if ($null -eq $previousFixture) { Remove-Item Env:AUDIOROUTER_VST3_FIXTURE -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_FIXTURE = $previousFixture }
     if ($null -eq $previousWorker) { Remove-Item Env:AUDIOROUTER_VST3_NATIVE_WORKER -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_NATIVE_WORKER = $previousWorker }

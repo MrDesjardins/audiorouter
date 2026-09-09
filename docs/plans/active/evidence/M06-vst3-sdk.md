@@ -2021,6 +2021,12 @@ through the graph scheduler. The opt-in Windows acceptance passed and restored
 its environment. Crash/restart recovery, callback timing, soak, and physical
 latency remain open.
 
+The owner failure path was also exercised with the controlled hanging worker:
+the quantum deadline terminated the exchange, the owner latched failure, and a
+missing output was converted to scheduler silence. The regression completed in
+120 ms. Deliberate restart/quarantine integration and native callback timing
+remain open.
+
 The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
 commit `eb0ad978` with this native worker acceptance included. Native
 toolchain/endpoint checks, disposable SysVAD qualification, portable/UI

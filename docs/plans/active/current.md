@@ -142,6 +142,11 @@ is implemented, but rights/editor/release qualification remains open.
   The opt-in Windows acceptance passed with clean shutdown and restored its
   environment. Native callback timing, long-run soak, and physical latency
   remain unqualified.
+- Added bounded asynchronous failure recovery on 2026-09-09: a supervised
+  hanging multi-bus worker is reaped at its quantum deadline, latches owner
+  failure, and leaves the callback-facing scheduler with silence instead of a
+  stale result. The focused regression passed in 120 ms; restart policy,
+  callback timing, long-run soak, and physical latency remain open.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain from
   clean pushed head `f9636235` on 2026-09-09 after the scheduler change. The
   installed VS2026/WDK native checks, disposable SysVAD qualification, M01,

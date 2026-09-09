@@ -2725,6 +2725,41 @@ impl SupervisedWorkerProcess {
         Self::spawn_multi_bus(executable, identity, layout, now)
     }
 
+    /// Spawn the controlled hanging multi-bus fixture under supervision. This
+    /// exists only for bounded failure/recovery tests and is not a production
+    /// worker mode.
+    #[cfg(feature = "test-fixtures")]
+    pub fn spawn_multi_bus_fixture_mode(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        layout: &WorkerAudioBusLayout,
+        mode: Option<&str>,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        let executable =
+            validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
+        let mut supervisor = WorkerSupervisor::new();
+        supervisor.start(identity, now).map_err(|error| {
+            WorkerProcessError::Protocol(format!("worker start rejected: {error:?}"))
+        })?;
+        let process = WorkerProcess::spawn_multi_bus_fixture_mode(
+            &executable,
+            &identity.sha256,
+            layout,
+            mode,
+        )?;
+        Ok(Self {
+            process,
+            supervisor,
+            executable,
+            identity: identity.clone(),
+            channels: layout.input_buses().first().copied().unwrap_or(0),
+            sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
+            shared_transport: false,
+            bus_layout: Some(layout.clone()),
+        })
+    }
+
     fn spawn_multi_bus_with_supervisor(
         executable: impl AsRef<Path>,
         identity: &PluginIdentity,

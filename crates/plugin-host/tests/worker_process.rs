@@ -388,6 +388,75 @@ fn supervised_bus_worker_loop_bridges_bounded_scheduler_without_callback_waits()
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn supervised_bus_worker_loop_silences_after_a_bounded_worker_failure() {
+    let hash = "b".repeat(64);
+    let worker_layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+    let identity = PluginIdentity {
+        path: PathBuf::from("hang.vst3"),
+        binary_path: PathBuf::from("hang.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let scheduler = Arc::new(
+        audiorouter_engine::RuntimeBusScheduler::new(
+            1,
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            audiorouter_engine::RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap(),
+            4,
+        )
+        .unwrap(),
+    );
+    let worker = SupervisedWorkerProcess::spawn_multi_bus_fixture_mode(
+        fixture_worker_path(),
+        &identity,
+        &worker_layout,
+        Some("hang"),
+        Instant::now(),
+    )
+    .expect("spawn hanging supervised loop worker");
+    let loop_owner = SupervisedBusWorkerLoop::spawn(worker, Arc::clone(&scheduler)).unwrap();
+    let generation = audiorouter_engine::RuntimeGeneration::new(14);
+    let identity = audiorouter_engine::RuntimeBusQuantumIdentity::new(
+        8,
+        worker_clock_tick().saturating_add(100),
+        4,
+    )
+    .unwrap();
+    let main = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    let sidechain = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
+    scheduler
+        .try_submit_inputs(generation, identity, &[&main, &sidechain])
+        .expect("submit hanging worker quantum");
+    for _ in 0..1_000 {
+        if loop_owner.has_failed() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(loop_owner.has_failed());
+    let mut output = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+    output.channel_mut(0).unwrap().fill(1.0);
+    output.channel_mut(1).unwrap().fill(1.0);
+    let mut destinations = [&mut output];
+    assert_eq!(
+        scheduler
+            .try_publish_output(generation, identity, &mut destinations)
+            .unwrap(),
+        audiorouter_engine::RuntimeBusProcessOutcome::SilencedWorkerResult
+    );
+    assert!(output
+        .channel(0)
+        .unwrap()
+        .iter()
+        .all(|sample| *sample == 0.0));
+    assert!(loop_owner.stop());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn typed_multi_bus_worker_preserves_main_output_for_asymmetric_layout() {
     let hash = "f".repeat(64);
     let layout = WorkerAudioBusLayout::new(&[2, 2], &[2]).unwrap();
