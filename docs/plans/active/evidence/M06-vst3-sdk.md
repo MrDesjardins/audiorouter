@@ -1437,6 +1437,10 @@ synthetic callback that writes NaN and verifies `NonFiniteOutput`. The worker's
 existing pre-framing finite check remains defense in depth, preserving the
 failure/quarantine and protected-voice silence policy.
 
+That focused regression also supplies invalid-layout evidence: a native output
+channel with a frame count different from the input is rejected before the
+plugin callback is invoked.
+
 The complete locked workspace regression then passed: workspace tests and
 doc-tests, strict Clippy, formatting, diff checks, and documentation
 validation. The VST2-specific package suite passed 54 unit tests and 20

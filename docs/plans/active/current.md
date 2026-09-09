@@ -75,6 +75,9 @@ before control returns from the native callback boundary. A focused Windows
 regression injects NaN output and verifies `NonFiniteOutput`; the worker-level
 check remains as defense in depth before framing.
 
+The same boundary regression verifies a mismatched output frame layout is
+rejected as `InvalidPath` before the native process callback is entered.
+
 Added `tests/acceptance/m06-vst2-reaplugs.ps1` to rerun every ignored local
 VST2 DLL independently through the verified worker test. It requires Windows,
 restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value, and changes no

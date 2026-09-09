@@ -398,6 +398,13 @@ mod opcode_tests {
             library.process_replacing(&inputs, &mut outputs),
             Err(Vst2LibraryError::NonFiniteOutput)
         ));
+
+        let mut mismatched_output = [0.0; 3];
+        let mut malformed_outputs = [&mut mismatched_output[..]];
+        assert!(matches!(
+            library.process_replacing(&inputs, &mut malformed_outputs),
+            Err(Vst2LibraryError::InvalidPath)
+        ));
         drop(library);
     }
 }
