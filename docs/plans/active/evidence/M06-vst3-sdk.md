@@ -1295,8 +1295,10 @@ the distinction between a qualified fixture and an explicit unsupported one.
 
 The ReaComp run additionally requested its parameter descriptors and applied a
 bounded event for the first returned parameter before processing. This passed
-through the worker protocol and VST2 setter; state chunk translation, native
-editor containment, and plugin-reported latency are not yet qualified.
+through the worker protocol and VST2 setter. ReaComp advertises no VST2 program
+chunks, so state save returns an explicit `UnsupportedFeature` response and
+the worker remains usable; state chunk translation for chunk-capable plugins,
+native editor containment, and plugin-reported latency are not yet qualified.
 
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 

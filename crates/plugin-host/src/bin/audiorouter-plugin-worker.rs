@@ -226,12 +226,52 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("parameter description write failed: {error:?}"))?;
             }
             WorkerMessage::StateRestore { asset } => {
+                #[cfg(windows)]
+                if let Some(plugin) = vst2_plugin.as_mut() {
+                    if let Err(error) = plugin.restore_state(&asset.bytes) {
+                        write_worker_message(
+                            &mut writer,
+                            &WorkerMessage::Failure {
+                                code: format!("vst2StateRestore:{error:?}"),
+                            },
+                        )
+                        .map_err(|write_error| {
+                            format!("VST2 state failure write failed: {write_error:?}")
+                        })?;
+                        continue;
+                    }
+                }
                 state = Some(asset.clone());
                 write_worker_message(&mut writer, &WorkerMessage::State { asset })
                     .map_err(|error| format!("state restore write failed: {error:?}"))?;
             }
             WorkerMessage::StateSave => {
-                let Some(asset) = state.clone() else {
+                #[cfg(windows)]
+                let plugin_asset = if let Some(plugin) = vst2_plugin.as_mut() {
+                    match plugin.save_state() {
+                        Ok(bytes) => Some(
+                            PluginStateAsset::new(1, bytes)
+                                .map_err(|error| format!("VST2 state asset invalid: {error:?}"))?,
+                        ),
+                        Err(error) => {
+                            write_worker_message(
+                                &mut writer,
+                                &WorkerMessage::Failure {
+                                    code: format!("vst2StateSave:{error:?}"),
+                                },
+                            )
+                            .map_err(|write_error| {
+                                format!("VST2 state failure write failed: {write_error:?}")
+                            })?;
+                            continue;
+                        }
+                    }
+                } else {
+                    None
+                };
+                #[cfg(not(windows))]
+                let plugin_asset = None;
+                let Some(asset) = plugin_asset.or_else(|| state.clone()) else {
                     write_worker_message(
                         &mut writer,
                         &WorkerMessage::Failure {

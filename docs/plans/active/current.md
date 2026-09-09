@@ -96,8 +96,9 @@ block after the lifecycle and sidechain fixes.
 The opt-in ReaComp acceptance now also discovers its VST2 parameter descriptors
 and applies the first descriptor's bounded default-value event before the
 128-frame process call. That parameter/control-plane path passed in the
-contained worker; plugin state, editor ownership, and latency reporting remain
-separate qualification tasks.
+contained worker. Its VST2 flags report no program chunks, so state save returns
+an explicit `UnsupportedFeature` without killing the worker; plugin editor
+ownership and latency reporting remain separate qualification tasks.
 
 The locked all-workspace regression sweep then passed, including control (97),
 domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport

@@ -1547,6 +1547,7 @@ pub enum WorkerProcessError {
     Spawn(String),
     Message(WorkerMessageError),
     Protocol(String),
+    UnsupportedFeature(String),
     PluginIdentity(IdentityVerificationError),
     State(StateError),
     /// The bounded failure policy has latched quarantine; replacement is not
@@ -2021,6 +2022,9 @@ impl SupervisedWorkerProcess {
                 Ok(())
             }
             Err(error) => {
+                if matches!(error, WorkerProcessError::UnsupportedFeature(_)) {
+                    return Err(error);
+                }
                 terminate_child(&mut self.process.child);
                 self.supervisor.record_failure(now);
                 Err(error)
@@ -2066,6 +2070,9 @@ impl SupervisedWorkerProcess {
                 Ok(asset)
             }
             Err(error) => {
+                if matches!(error, WorkerProcessError::UnsupportedFeature(_)) {
+                    return Err(error);
+                }
                 terminate_child(&mut self.process.child);
                 self.supervisor.record_failure(now);
                 Err(error)
@@ -2409,6 +2416,9 @@ impl WorkerProcess {
                         WorkerProcessError::Protocol(format!("output read failed: {error:?}"))
                     })
             }
+            WorkerMessage::Failure { code } if code.contains("StateUnsupported") => {
+                Err(WorkerProcessError::UnsupportedFeature(code))
+            }
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected shared process response".into(),
@@ -2423,6 +2433,9 @@ impl WorkerProcess {
         .map_err(WorkerProcessError::Message)?;
         match self.read().map_err(WorkerProcessError::Message)? {
             WorkerMessage::State { asset: actual } if actual == asset => Ok(()),
+            WorkerMessage::Failure { code } if code.contains("StateUnsupported") => {
+                Err(WorkerProcessError::UnsupportedFeature(code))
+            }
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected state restore response".into(),
@@ -2458,6 +2471,9 @@ impl WorkerProcess {
             .map_err(WorkerProcessError::Message)?;
         match self.read().map_err(WorkerProcessError::Message)? {
             WorkerMessage::State { asset } => Ok(asset),
+            WorkerMessage::Failure { code } if code.contains("StateUnsupported") => {
+                Err(WorkerProcessError::UnsupportedFeature(code))
+            }
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected state save response".into(),

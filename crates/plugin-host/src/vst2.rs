@@ -11,11 +11,15 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 #[cfg(windows)]
 use std::ptr;
+#[cfg(windows)]
+use std::slice;
 
 /// The VST2 `AEffect` magic (`'VstP'`) in little-endian form.
 pub const VST2_EFFECT_MAGIC: i32 = 0x5673_7450;
 /// `effFlagsCanReplacing`: the effect accepts the replacing process callback.
 pub const VST2_FLAG_CAN_REPLACING: i32 = 1 << 4;
+/// `effFlagsProgramChunks`: the plugin exposes opaque chunk state.
+pub const VST2_FLAG_PROGRAM_CHUNKS: i32 = 1 << 5;
 pub const VST2_MAX_AUDIO_CHANNELS: i32 = 2;
 pub const VST2_MAX_INPUT_CHANNELS: i32 = 4;
 pub const VST2_MAX_PARAMETERS: i32 = 256;
@@ -223,6 +227,12 @@ const EFF_MAINS_CHANGED: i32 = 29;
 #[cfg(windows)]
 const EFF_GET_PARAM_NAME: i32 = 8;
 #[cfg(windows)]
+const EFF_GET_CHUNK: i32 = 23;
+#[cfg(windows)]
+const EFF_SET_CHUNK: i32 = 24;
+#[cfg(windows)]
+const MAX_VST2_STATE_BYTES: usize = 512 * 1024;
+#[cfg(windows)]
 const AUDIO_MASTER_VERSION: i32 = 1;
 #[cfg(windows)]
 const AUDIO_MASTER_GET_SAMPLE_RATE: i32 = 10;
@@ -238,6 +248,9 @@ pub enum Vst2LibraryError {
     NullEffect,
     InvalidEffect(Vst2HeaderError),
     InvalidParameter,
+    InvalidState,
+    StateUnsupported,
+    StateTooLarge,
 }
 
 #[cfg(windows)]
@@ -434,6 +447,70 @@ impl Vst2Library {
             );
         }
         Ok(descriptors)
+    }
+
+    pub fn save_state(&mut self) -> Result<Vec<u8>, Vst2LibraryError> {
+        if !self.supports_state() {
+            return Err(Vst2LibraryError::StateUnsupported);
+        }
+        let mut data: *mut c_void = ptr::null_mut();
+        // SAFETY: The dispatcher was validated at load. VST2 writes a pointer
+        // to plugin-owned state and returns its byte count; we copy it before
+        // returning, so no plugin allocation crosses the worker boundary.
+        let size = unsafe {
+            (*self.effect).dispatcher.expect("validated dispatcher")(
+                self.effect,
+                EFF_GET_CHUNK,
+                0,
+                1,
+                (&mut data as *mut *mut c_void).cast(),
+                0.0,
+            )
+        };
+        if !(0..=MAX_VST2_STATE_BYTES as isize).contains(&size) || (size > 0 && data.is_null()) {
+            return Err(if size > MAX_VST2_STATE_BYTES as isize {
+                Vst2LibraryError::StateTooLarge
+            } else {
+                Vst2LibraryError::InvalidState
+            });
+        }
+        if size == 0 {
+            return Ok(Vec::new());
+        }
+        // SAFETY: The plugin reported a positive bounded byte count and a
+        // non-null pointer valid for the returned chunk during this copy.
+        Ok(unsafe { slice::from_raw_parts(data.cast::<u8>(), size as usize) }.to_vec())
+    }
+
+    pub fn restore_state(&mut self, bytes: &[u8]) -> Result<(), Vst2LibraryError> {
+        if !self.supports_state() {
+            return Err(Vst2LibraryError::StateUnsupported);
+        }
+        if bytes.len() > MAX_VST2_STATE_BYTES {
+            return Err(Vst2LibraryError::StateTooLarge);
+        }
+        // SAFETY: The dispatcher was validated at load. The byte slice remains
+        // alive for the synchronous call and VST2 consumes it during the call.
+        let result = unsafe {
+            (*self.effect).dispatcher.expect("validated dispatcher")(
+                self.effect,
+                EFF_SET_CHUNK,
+                0,
+                1,
+                bytes.as_ptr().cast_mut().cast(),
+                0.0,
+            )
+        };
+        if result < 0 {
+            return Err(Vst2LibraryError::InvalidState);
+        }
+        Ok(())
+    }
+
+    pub fn supports_state(&self) -> bool {
+        // SAFETY: This method is only available for a successfully validated
+        // handle, so the flags field is readable for its lifetime.
+        unsafe { (*self.effect).flags & VST2_FLAG_PROGRAM_CHUNKS != 0 }
     }
 
     /// Process one bounded block on the worker thread. The slices are fixed

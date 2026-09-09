@@ -100,6 +100,18 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         .describe_parameters(Instant::now())
         .expect("describe VST2 parameters");
     assert!(!descriptors.is_empty());
+    match worker.save_state(Instant::now()) {
+        Ok(state) => {
+            assert!(state.bytes.len() <= 512 * 1024);
+            worker
+                .restore_state(state, Instant::now())
+                .expect("restore VST2 state");
+        }
+        Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(message)) => {
+            assert!(message.contains("StateUnsupported"));
+        }
+        Err(error) => panic!("unexpected VST2 state result: {error:?}"),
+    }
     let mut samples = vec![0.0; 256];
     samples[2] = 0.1;
     samples[3] = -0.1;
