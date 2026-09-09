@@ -5,7 +5,8 @@ use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
     read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
     SharedAudioLayout, SharedAudioTransport, WorkerMessage, WorkerSession,
-    DEFAULT_WORKER_SAMPLE_RATE_HZ, WORKER_PROTOCOL_VERSION,
+    DEFAULT_WORKER_SAMPLE_RATE_HZ, MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ,
+    WORKER_PROTOCOL_VERSION,
 };
 #[cfg(feature = "test-fixtures")]
 use std::io::Write;
@@ -463,7 +464,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
         return Err("--channels must be 1 or 2".into());
     }
     let sample_rate_hz = sample_rate_hz.unwrap_or(DEFAULT_WORKER_SAMPLE_RATE_HZ);
-    if !(8_000..=192_000).contains(&sample_rate_hz) {
+    if !(MIN_WORKER_SAMPLE_RATE_HZ..=MAX_WORKER_SAMPLE_RATE_HZ).contains(&sample_rate_hz) {
         return Err("--sample-rate must be between 8000 and 192000 Hz".into());
     }
     match (input_path, output_path) {

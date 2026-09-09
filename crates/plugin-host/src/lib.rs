@@ -42,6 +42,8 @@ pub const MAX_WORKER_STATE_BYTES: usize = 512 * 1024;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
 pub const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+pub const MIN_WORKER_SAMPLE_RATE_HZ: u32 = 8_000;
+pub const MAX_WORKER_SAMPLE_RATE_HZ: u32 = 192_000;
 pub const DEFAULT_WORKER_SAMPLE_RATE_HZ: u32 = 48_000;
 
 /// Milliseconds since the Unix epoch used for cross-process frame deadlines.
@@ -1457,7 +1459,7 @@ pub struct WorkerLatency {
 
 impl WorkerLatency {
     pub fn new(samples: u32, sample_rate_hz: u32) -> Result<Self, WorkerMessageError> {
-        if !(8_000..=192_000).contains(&sample_rate_hz)
+        if !(MIN_WORKER_SAMPLE_RATE_HZ..=MAX_WORKER_SAMPLE_RATE_HZ).contains(&sample_rate_hz)
             || samples > sample_rate_hz.saturating_mul(MAX_WORKER_LATENCY_MS) / 1_000
         {
             return Err(WorkerMessageError::InvalidLatency);
@@ -2709,7 +2711,7 @@ impl WorkerProcess {
         if !matches!(channels, 1 | 2) {
             return Err(WorkerProcessError::Protocol("invalid channel count".into()));
         }
-        if !(8_000..=192_000).contains(&sample_rate_hz) {
+        if !(MIN_WORKER_SAMPLE_RATE_HZ..=MAX_WORKER_SAMPLE_RATE_HZ).contains(&sample_rate_hz) {
             return Err(WorkerProcessError::Protocol("invalid sample rate".into()));
         }
         let mut command = Command::new(&executable);
@@ -5095,6 +5097,16 @@ mod tests {
         );
         assert_eq!(
             WorkerLatency::new(480_001, 48_000),
+            Err(WorkerMessageError::InvalidLatency)
+        );
+        assert!(WorkerLatency::new(1, MIN_WORKER_SAMPLE_RATE_HZ).is_ok());
+        assert!(WorkerLatency::new(1, MAX_WORKER_SAMPLE_RATE_HZ).is_ok());
+        assert_eq!(
+            WorkerLatency::new(1, MIN_WORKER_SAMPLE_RATE_HZ - 1),
+            Err(WorkerMessageError::InvalidLatency)
+        );
+        assert_eq!(
+            WorkerLatency::new(1, MAX_WORKER_SAMPLE_RATE_HZ + 1),
             Err(WorkerMessageError::InvalidLatency)
         );
     }
