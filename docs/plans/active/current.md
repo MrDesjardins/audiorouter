@@ -56,11 +56,12 @@ documented review of rights to host and redistribute test artifacts. The
 built-in DSP chain remains the supported native transformation path while this
 gate is open.
 
-Ordered next tasks: (1) define VST2 identity and entry-point inspection without
-executing DLLs; (2) implement the smallest x64 effect adapter in the isolated
-worker with callback-safe fixed buffers; (3) qualify ReaPlugs and at least one
-additional legally usable fixture when available; (4) record evidence and
-update the compatibility matrix before enabling any user-facing capability.
+Ordered next tasks: (1) preserve per-binary quarantine and diagnostics for the
+four failing ReaPlugs; (2) determine whether their failures require additional
+VST2 host callbacks/lifecycle support or are genuine incompatibilities, without
+raising worker deadlines; (3) qualify at least one additional legally usable
+VST2 fixture when available; (4) add parameter/state/editor/latency evidence
+for the two passing effects before enabling any user-facing capability.
 Rollback is limited to reverting the adapter/tests/docs and removing ignored
 fixture copies; no plugin registration, driver, stream, default endpoint, or
 machine audio setting may change.
