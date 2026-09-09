@@ -774,6 +774,17 @@ release completion.
   adapter evidence while retaining production driver, signing, installer,
   shell/HWND, manual accessibility, and independent-vendor blockers.
 
+- Requalified the bounded M00 impulse path on 2026-09-09. A 20-impulse
+  exploratory run correctly failed its 90% detection criterion after 17 groups
+  (a useful sensitivity result, not a waived failure). The intended 100-
+  impulse run then passed with 97 detected groups, zero p95 spacing error
+  frames, and a 69.56 ms estimated onset. Temporary capture/raw/log files and
+  endpoint state were cleaned up. This remains signal-correlation evidence;
+  calibrated physical acoustic p95 latency is still open.
+- Next safe task: continue with the remaining latency/adapter evidence while
+  retaining production driver, signing, installer, shell/HWND, accessibility,
+  and independent-vendor plugin blockers.
+
 - Completed the API reference parity pass on 2026-09-09: every documented
   mutating recorder, startup, plugin-retry, virtual-device, import, graph,
   session-lifecycle, and recording operation now states its idempotency-key
