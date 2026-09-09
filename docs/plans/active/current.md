@@ -104,6 +104,15 @@ is implemented, but rights/editor/release qualification remains open.
   evidence, not realtime graph scheduling, auxiliary-bus execution, or
   physical-latency evidence.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
+  the native VST3 worker integration on 2026-09-09. The chain passed native
+  toolchain/endpoint checks, disposable pinned SysVAD x64 qualification, M01,
+  M04, M05, pinned VST3 validator and native worker probes, VST2
+  modern/legacy/state/fault fixtures, M07, unsigned M08 preparation, 159
+  traceability mappings, and documentation validation (51 Markdown files/163
+  local links). Temporary outputs were cleaned; no driver installation/loading,
+  plugin registration, audio stream, signing-mode change, or persistent
+  machine audio configuration occurred.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   the VST2 automation fix on 2026-09-09. VS2026/MSVC/SDK/WDK discovery and
   native compile, read-only 31-endpoint inventory, disposable pinned SysVAD
   x64 qualification, M01/M04/M05, VST3 validators and transformation probes,

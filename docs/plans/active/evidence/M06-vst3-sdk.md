@@ -1989,6 +1989,13 @@ The worker intentionally supports only one input and one output bus; auxiliary
 buses remain on the separately negotiated contract. This is worker-process
 evidence, not realtime graph scheduling or physical-latency evidence.
 
+The full guarded `tests/acceptance/safe-all.ps1` chain was rerun with this
+native worker acceptance included. Native toolchain/endpoint checks, disposable
+SysVAD qualification, portable/UI milestones, VST3/VST2 fixture coverage, M07,
+unsigned M08 preparation, 159 traceability mappings, and documentation checks
+all passed. This remains single-stream worker evidence; auxiliary-bus native
+execution, realtime graph scheduling, and physical-latency gates remain open.
+
 ## VST2 intra-block parameter timing (2026-09-09)
 
 The native x64 VST2 worker now sorts validated parameter events and splits each
