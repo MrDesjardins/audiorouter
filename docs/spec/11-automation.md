@@ -26,13 +26,13 @@ audiorouter status --json
 audiorouter schema --json
 audiorouter devices list --json
 audiorouter apps list --json
-audiorouter session create --name "Gaming" --json
-audiorouter graph plan --session <session-id> --base-revision 0 --file .\gaming-graph.json --json
-audiorouter graph apply --plan <plan-id> --idempotency-key <unique-key> --json
-audiorouter session start --id <session-id> --idempotency-key <unique-key> --json
-audiorouter routes inspect --session <session-id> --destination <voice-node-id> --json
-audiorouter watch --session <session-id> --events state,meters --json
-audiorouter session export --id <session-id> --output .\gaming.audiorouter --json
+audiorouter session create C:\path\gaming-session.json --database C:\path\audiorouter.sqlite --idempotency-key create-gaming --json
+audiorouter graph plan <session-id> --base-revision 0 --file C:\path\gaming-graph.json --output C:\path\gaming.plan.json --database C:\path\audiorouter.sqlite --json
+audiorouter graph apply C:\path\gaming.plan.json --idempotency-key apply-gaming --database C:\path\audiorouter.sqlite --json
+audiorouter session start <session-id> --database C:\path\audiorouter.sqlite --idempotency-key start-gaming --json
+audiorouter routes inspect <session-id> <voice-node-id> --database C:\path\audiorouter.sqlite --json
+audiorouter watch <session-id> --database C:\path\audiorouter.sqlite --after 0 --limit 100 --category graph.committed --json
+audiorouter export <session-id> --database C:\path\audiorouter.sqlite --json
 ```
 
 Separate device provisioning happens before graph planning if buses do not exist. Commands requiring paths accept `--file` and stdin with explicit length limits. Do not require credentials in command arguments or include them in command examples.

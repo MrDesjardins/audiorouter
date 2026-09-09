@@ -73,6 +73,13 @@ release completion.
   plugin registration, startup registration, or machine configuration action
   occurred.
 
+- Corrected stale AUTO-03/AUTO-05 command examples on 2026-09-09: the
+  automation specification now uses the implemented positional arguments,
+  absolute paths, database options, graph-plan output, and required mutation
+  keys for session, graph, route, watch, and export commands. Documentation
+  validation passed with 51 Markdown files and 163 local links; no runtime or
+  machine configuration changed.
+
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
   ReaPlugs x64 audio effects, Pitchproof x64 plus its rejected x86 sibling, and
