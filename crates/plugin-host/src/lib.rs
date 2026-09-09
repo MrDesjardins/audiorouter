@@ -29,6 +29,8 @@ pub const MAX_PLUGIN_METADATA_BYTES: u64 = 1024 * 1024;
 pub const MAX_FAILURES_BEFORE_QUARANTINE: u32 = 3;
 pub const FAILURE_WINDOW: Duration = Duration::from_secs(10 * 60);
 pub const MAX_WORKER_FRAMES: usize = 2048;
+pub const MAX_WORKER_AUDIO_BUSES: usize = 4;
+pub const MAX_WORKER_AUDIO_CHANNELS: usize = 8;
 pub const MAX_SCAN_CANDIDATES: usize = 256;
 pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
@@ -1299,6 +1301,110 @@ pub struct WorkerFrame {
     pub deadline_tick: u64,
     pub channels: u16,
     pub samples: Vec<f32>,
+}
+
+/// Bounded control-plane description of an effect's audio bus topology.
+///
+/// Bus zero on each side is the main bus; later input buses are auxiliary
+/// inputs such as side-chains. This describes capability only. The current
+/// single-frame worker wire format still carries one primary stream, so a
+/// layout with auxiliary buses must not be passed to that format until the
+/// graph and shared-memory transport gain corresponding ownership semantics.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WorkerAudioBusLayout {
+    input_channels: Vec<u16>,
+    output_channels: Vec<u16>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkerAudioBusLayoutError {
+    MissingMainInput,
+    MissingMainOutput,
+    TooManyInputBuses,
+    TooManyOutputBuses,
+    InvalidInputChannels,
+    InvalidOutputChannels,
+    TooManyInputChannels,
+    TooManyOutputChannels,
+}
+
+impl WorkerAudioBusLayout {
+    pub fn new(
+        input_channels: &[u16],
+        output_channels: &[u16],
+    ) -> Result<Self, WorkerAudioBusLayoutError> {
+        validate_audio_buses(
+            input_channels,
+            WorkerAudioBusLayoutError::MissingMainInput,
+            WorkerAudioBusLayoutError::TooManyInputBuses,
+            WorkerAudioBusLayoutError::InvalidInputChannels,
+            WorkerAudioBusLayoutError::TooManyInputChannels,
+        )?;
+        validate_audio_buses(
+            output_channels,
+            WorkerAudioBusLayoutError::MissingMainOutput,
+            WorkerAudioBusLayoutError::TooManyOutputBuses,
+            WorkerAudioBusLayoutError::InvalidOutputChannels,
+            WorkerAudioBusLayoutError::TooManyOutputChannels,
+        )?;
+        Ok(Self {
+            input_channels: input_channels.to_vec(),
+            output_channels: output_channels.to_vec(),
+        })
+    }
+
+    pub fn input_buses(&self) -> &[u16] {
+        &self.input_channels
+    }
+
+    pub fn output_buses(&self) -> &[u16] {
+        &self.output_channels
+    }
+
+    pub fn has_sidechain(&self) -> bool {
+        self.input_channels.len() > 1
+    }
+
+    pub fn total_input_channels(&self) -> usize {
+        self.input_channels
+            .iter()
+            .map(|channels| *channels as usize)
+            .sum()
+    }
+
+    pub fn total_output_channels(&self) -> usize {
+        self.output_channels
+            .iter()
+            .map(|channels| *channels as usize)
+            .sum()
+    }
+}
+
+fn validate_audio_buses(
+    channels: &[u16],
+    missing_main: WorkerAudioBusLayoutError,
+    too_many_buses: WorkerAudioBusLayoutError,
+    invalid_channels: WorkerAudioBusLayoutError,
+    too_many_channels: WorkerAudioBusLayoutError,
+) -> Result<(), WorkerAudioBusLayoutError> {
+    if channels.is_empty() {
+        return Err(missing_main);
+    }
+    if channels.len() > MAX_WORKER_AUDIO_BUSES {
+        return Err(too_many_buses);
+    }
+    if channels.iter().any(|channels| !matches!(channels, 1 | 2)) {
+        return Err(invalid_channels);
+    }
+    if channels
+        .iter()
+        .map(|channels| *channels as usize)
+        .sum::<usize>()
+        > MAX_WORKER_AUDIO_CHANNELS
+    {
+        return Err(too_many_channels);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -5239,5 +5345,47 @@ mod tests {
         drop(host);
         fs::remove_file(input_path).unwrap();
         fs::remove_file(output_path).unwrap();
+    }
+
+    #[test]
+    fn worker_audio_bus_layout_accepts_bounded_main_and_sidechain_buses() {
+        let layout = WorkerAudioBusLayout::new(&[2, 1, 2], &[2]).unwrap();
+        assert_eq!(layout.input_buses(), &[2, 1, 2]);
+        assert_eq!(layout.output_buses(), &[2]);
+        assert!(layout.has_sidechain());
+        assert_eq!(layout.total_input_channels(), 5);
+        assert_eq!(layout.total_output_channels(), 2);
+    }
+
+    #[test]
+    fn worker_audio_bus_layout_rejects_unbounded_or_invalid_shapes() {
+        assert_eq!(
+            WorkerAudioBusLayout::new(&[], &[2]),
+            Err(WorkerAudioBusLayoutError::MissingMainInput)
+        );
+        assert_eq!(
+            WorkerAudioBusLayout::new(&[2], &[]),
+            Err(WorkerAudioBusLayoutError::MissingMainOutput)
+        );
+        assert_eq!(
+            WorkerAudioBusLayout::new(&[2, 2, 2, 2, 1], &[2]),
+            Err(WorkerAudioBusLayoutError::TooManyInputBuses)
+        );
+        assert_eq!(
+            WorkerAudioBusLayout::new(&[3], &[2]),
+            Err(WorkerAudioBusLayoutError::InvalidInputChannels)
+        );
+        assert_eq!(
+            WorkerAudioBusLayout::new(&[2, 2, 2, 2], &[2, 2, 2, 2, 1]),
+            Err(WorkerAudioBusLayoutError::TooManyOutputBuses)
+        );
+    }
+
+    #[test]
+    fn worker_audio_bus_layout_preserves_single_stream_boundary() {
+        let layout = WorkerAudioBusLayout::new(&[2], &[2]).unwrap();
+        assert!(!layout.has_sidechain());
+        let frame = WorkerFrame::new(1, 2, 2, vec![0.0, 0.25]).unwrap();
+        assert_eq!(frame.channels, layout.input_buses()[0]);
     }
 }

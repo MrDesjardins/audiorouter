@@ -1615,3 +1615,15 @@ passed with exit code 0: both official validators, AGain main-class processing,
 the specific one-input/one-output rejection, and the five-class mda matrix all
 passed. Generated loader outputs were removed; no system plugin link,
 registration, audio stream, or machine configuration was changed.
+
+## Bounded multi-bus control-plane contract (2026-09-09)
+
+`WorkerAudioBusLayout` now records a bounded effect topology without changing
+the existing single-stream worker wire format. It requires a main input and
+output, permits at most four buses per direction, limits each bus to mono or
+stereo, and caps aggregate channels at eight per direction. Three plugin-host
+regressions cover a valid main-plus-side-chain layout, missing-main and
+unbounded/invalid shapes, and preservation of the current single-stream
+boundary. The plugin-host suite passed 60 unit tests, 21 worker-process tests,
+doc-tests, formatting, and strict Clippy. Actual side-chain transport and
+graph ownership remain intentionally open.
