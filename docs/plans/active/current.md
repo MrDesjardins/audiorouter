@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at checkpoint `6d8e6ad2`; the
+The latest clean full M00-M08 acceptance passed at pushed head `f6ec7a1c`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -28,6 +28,17 @@ continue only with portable hardening and preserve the native-shell, production
 driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `f6ec7a1c` on 2026-09-09. VS2026/WDK discovery and native compile,
+  read-only 31-endpoint inventory, disposable SysVAD x64 compile/package/API/
+  signability qualification, M01/M04/M05, pinned VST3 SDK/validator and native
+  AGain single-/multi-bus workers, repository VST2 modern/legacy/state/fault
+  fixtures at 44.1/48/96 kHz, M07, unsigned M08 preparation, 159 traceability
+  mappings, and documentation validation (51 Markdown files/163 local links)
+  passed. Temporary outputs and environment overrides were restored; no driver
+  installation/loading, signing-mode change, plugin/startup registration, audio
+  stream, or persistent machine audio configuration occurred.
 
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
