@@ -2314,6 +2314,12 @@ pub struct BlockMeterSnapshot {
     pub channel_clipped_samples: [u64; MAX_CHANNELS],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProcessorTelemetry {
+    pub gain_reduction_db: [f32; MAX_CHANNELS],
+    pub gate_open: [bool; MAX_CHANNELS],
+}
+
 /// Lock-free peak/clipping meter for a prepared node boundary. The maximum
 /// uses the monotonic positive-f32 bit representation, so observation never
 /// takes a mutex or allocates.
@@ -3488,6 +3494,15 @@ impl RuntimeProcessor {
             .and_then(|graph| graph.meter_snapshot(index))
     }
 
+    /// Read non-blocking processor state from the currently published graph.
+    /// The index is the prepared processing-stage index. `None` means the
+    /// stage is not a dynamics processor or is busy on the realtime callback.
+    pub fn processor_telemetry(&self, index: usize) -> Option<ProcessorTelemetry> {
+        self.publication
+            .load()
+            .and_then(|graph| graph.processor_telemetry(index))
+    }
+
     /// Return the negotiated rate of the currently published graph. This is
     /// a control/diagnostics read of immutable graph metadata; `None` means
     /// the processor has not been activated.
@@ -3815,6 +3830,40 @@ impl RuntimeGraph {
 
     pub fn meter_snapshot(&self, index: usize) -> Option<BlockMeterSnapshot> {
         self.meter(index).map(BlockMeter::snapshot)
+    }
+
+    /// Read dynamics state without waiting for a callback-owned processor
+    /// lock. This is intentionally a best-effort diagnostics read.
+    pub fn processor_telemetry(&self, index: usize) -> Option<ProcessorTelemetry> {
+        let stage = self.stages.get(index)?;
+        let mut telemetry = ProcessorTelemetry {
+            gain_reduction_db: [0.0; MAX_CHANNELS],
+            gate_open: [false; MAX_CHANNELS],
+        };
+        match stage {
+            ProcessingStage::Compressor { left, right } => {
+                telemetry.gain_reduction_db[0] = left.try_lock().ok()?.gain_reduction_db();
+                if let Some(right) = right {
+                    telemetry.gain_reduction_db[1] = right.try_lock().ok()?.gain_reduction_db();
+                }
+            }
+            ProcessingStage::Gate { left, right } => {
+                let left = left.try_lock().ok()?;
+                telemetry.gain_reduction_db[0] = left.gain_reduction_db();
+                telemetry.gate_open[0] = left.is_open();
+                if let Some(right) = right {
+                    let right = right.try_lock().ok()?;
+                    telemetry.gain_reduction_db[1] = right.gain_reduction_db();
+                    telemetry.gate_open[1] = right.is_open();
+                }
+            }
+            ProcessingStage::Limiter { limiter } => {
+                telemetry.gain_reduction_db[0] = limiter.try_lock().ok()?.gain_reduction_db();
+                telemetry.gain_reduction_db[1] = telemetry.gain_reduction_db[0];
+            }
+            _ => return None,
+        }
+        Some(telemetry)
     }
 
     /// Clear all prepared node meters at an activation boundary. This is
@@ -5300,6 +5349,7 @@ mod tests {
         let mut block = AudioBlock::new(1, 128).unwrap();
         block.channel_mut(0).unwrap().fill(1.0);
         for _ in 0..64 {
+            block.channel_mut(0).unwrap().fill(1.0);
             graph.process(&mut block);
         }
         assert!(block.all_finite());
@@ -5308,6 +5358,46 @@ mod tests {
             .unwrap()
             .iter()
             .all(|sample| sample.abs() < 1.0));
+        let telemetry = graph.processor_telemetry(0).unwrap();
+        assert!(telemetry.gain_reduction_db[0] > 0.0);
+        assert!(!telemetry.gate_open[0]);
+        assert_eq!(graph.processor_telemetry(1), None);
+    }
+
+    #[test]
+    fn prepared_gate_stage_exposes_state_and_reduction_without_waiting() {
+        let gate = audiorouter_dsp::Gate::new(
+            audiorouter_dsp::GateParams {
+                threshold_db: -45.0,
+                hysteresis_db: 3.0,
+                ratio: 4.0,
+                range_db: 60.0,
+                attack_ms: 5.0,
+                hold_ms: 0.0,
+                release_ms: 150.0,
+                sample_rate: 48_000.0,
+            },
+            1,
+        )
+        .unwrap();
+        let graph = RuntimeGraph::prepare(
+            RuntimeGeneration::new(12),
+            vec![ProcessingStage::Gate {
+                left: Box::new(std::sync::Mutex::new(gate)),
+                right: None,
+            }],
+        );
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.001);
+        graph.process(&mut block);
+        let quiet = graph.processor_telemetry(0).unwrap();
+        assert!(!quiet.gate_open[0]);
+        assert!(quiet.gain_reduction_db[0] > 0.0);
+
+        block.channel_mut(0).unwrap().fill(1.0);
+        graph.process(&mut block);
+        let loud = graph.processor_telemetry(0).unwrap();
+        assert!(loud.gate_open[0]);
     }
 
     #[test]

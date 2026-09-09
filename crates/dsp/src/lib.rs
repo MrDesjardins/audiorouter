@@ -783,6 +783,11 @@ impl Gate {
         self.open
     }
 
+    /// Current attenuation reported as a positive dB reduction value.
+    pub fn gain_reduction_db(&self) -> f32 {
+        (-self.gain_db).max(0.0)
+    }
+
     pub fn reset(&mut self) {
         self.gain_db = -self.params.range_db;
         self.open = false;
@@ -1168,6 +1173,11 @@ impl PeakLimiter {
 
     pub fn release_ms(&self) -> f32 {
         -1.0 / self.release_coefficient.ln() / self.sample_rate * 1_000.0
+    }
+
+    /// Current sample-peak gain reduction, reported as a positive dB value.
+    pub fn gain_reduction_db(&self) -> f32 {
+        (-20.0 * self.gain.max(1.0e-6).log10()).max(0.0)
     }
 
     pub fn reset(&mut self) {

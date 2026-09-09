@@ -57,6 +57,13 @@ callback timing, restart/quarantine soak, physical-latency measurement, and
 independent rights-cleared plugin qualification remain release gates. No worker may
 flatten an auxiliary bus into the VST2 stream or expose a stale protected path.
 
+Prepared portable engine graphs expose best-effort processor telemetry through
+their read-only diagnostics boundary. Compressor and limiter values report
+positive current gain reduction in dB; gate values report positive attenuation
+and open/closed state per channel. A callback-owned state lock is never waited
+on by a telemetry reader, so a busy read returns unavailable and the audio path
+continues unchanged.
+
 ## Initial parameter contract
 
 These ranges are product decisions, subject to signal tests; defaults are normative unless M04 records a justified revision.

@@ -85,6 +85,15 @@ release completion.
   clipping. Gate-state and processor-specific gain-reduction telemetry remain
   separate follow-up API work; this does not advance native or release gates.
 
+- Closed the engine-side portion of that DSP-07 follow-up on 2026-09-09.
+  `RuntimeGraph::processor_telemetry` and `RuntimeProcessor::processor_telemetry`
+  now provide best-effort, non-blocking dynamics reads: compressor/limiter
+  reduction and gate reduction/open state are exposed per channel. A busy
+  callback-owned state lock returns no sample rather than making the control
+  plane wait. Engine tests cover compressor reduction and gate transitions;
+  control-plane serialization and bounded telemetry delivery remain separate
+  integration work.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `6d8e6ad2` on 2026-09-09. M00 toolchain/native format inventory
   and disposable SysVAD, M01, M04 (30 DSP/30 recording tests), M05 UI,
