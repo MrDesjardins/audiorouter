@@ -46,6 +46,16 @@ release completion.
   contract is found; otherwise retain the explicit native driver, signing,
   installer, shell/HWND, physical-latency, and independent-plugin gates.
 
+- Hardened M06/PLUG-04 generic VST3 controls on 2026-09-09: the native worker
+  now rejects duplicate controller parameter IDs before emitting its bounded
+  descriptor response, matching the wire-contract uniqueness invariant. The
+  native VST3 acceptance passed with descriptor uniqueness, fail-closed editor
+  requests, and continued processing; plugin-host tests (67), formatting, and
+  diff checks also passed. No audio or machine configuration changed.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; retain independent-plugin, native-shell/HWND, production
+  driver, signing, installer, and physical-latency gates.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `f6ec7a1c` on 2026-09-09. VS2026/WDK discovery and native compile,
   read-only 31-endpoint inventory, disposable SysVAD x64 compile/package/API/

@@ -21,6 +21,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "pluginterfaces/base/ipluginbase.h"
@@ -873,10 +874,14 @@ static std::string parameter_descriptors_message(Vst::IEditController* controlle
         throw protocol_error("VST3 parameter descriptor count exceeds the bounded contract");
     }
     std::ostringstream output;
+    std::unordered_set<Vst::ParamID> parameter_ids;
     output << "{\"type\":\"Parameters\",\"payload\":{\"descriptors\":[";
     for (int32 index = 0; index < count; ++index) {
         Vst::ParameterInfo info{};
         require_result("VST3 parameter info", controller->getParameterInfo(index, info));
+        if (!parameter_ids.insert(info.id).second) {
+            throw protocol_error("VST3 parameter IDs are not unique");
+        }
         if (!std::isfinite(info.defaultNormalizedValue) ||
             info.defaultNormalizedValue < 0.0 || info.defaultNormalizedValue > 1.0) {
             throw protocol_error("VST3 parameter default is outside the normalized contract");
