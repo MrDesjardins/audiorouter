@@ -45,13 +45,18 @@ function ProcessorCatalog({ processors, error }: { processors: ProcessorDescript
   return <section className="panel processor-catalog" aria-labelledby="processor-catalog-heading"><div className="section-heading"><div><p className="eyebrow">DSP catalog</p><h2 id="processor-catalog-heading">Built-in processors</h2></div><span className="badge">{processors?.length ?? 0}</span></div>{error ? <p className="muted" role="status">Processor catalog unavailable: {error}</p> : processors === null ? <p className="muted">Connect to the backend to load the authoritative processor catalog.</p> : processors.length === 0 ? <p className="muted">No built-in processors are advertised.</p> : <ul aria-label="Built-in processor catalog">{processors.map((processor) => <li key={`${processor.id}@${processor.version}`}><strong>{processor.id}</strong> <small>{processor.category} · {processorAvailabilityText(processor)} · {processorLatencyText(processor)}</small><br /><small>Parameters: {processorParametersText(processor)}</small></li>)}</ul>}<p className="muted">This catalog is read-only. Unavailable processors cannot be added or activated.</p></section>;
 }
 
-function ProcessorParameterEditor({ node, processors, connected, onChange }: { node: Node; processors: ProcessorDescriptor[] | null; connected: boolean; onChange: (name: string, value: boolean | number) => void }) {
+function ProcessorParameterEditor({ node, processors, connected, onChange }: { node: Node; processors: ProcessorDescriptor[] | null; connected: boolean; onChange: (name: string, value: boolean | number | string) => void }) {
   const descriptor = processors?.find((processor) => processor.id === node.kind);
   if (!descriptor || descriptor.parameters.length === 0) return null;
   return <>{descriptor.parameters.map((parameter) => {
     const value = node.parameters[parameter.name];
     if (parameter.type === "boolean") {
       return <label key={parameter.name}>{parameter.name}<input type="checkbox" checked={value === true} disabled={!connected} onChange={(event) => onChange(parameter.name, event.target.checked)} /></label>;
+    }
+    if (parameter.type === "string" && parameter.enum) {
+      const fallback = typeof parameter.default === "string" && parameter.enum.includes(parameter.default) ? parameter.default : parameter.enum[0];
+      const stringValue = typeof value === "string" && parameter.enum.includes(value) ? value : fallback;
+      return <label key={parameter.name}>{parameter.name}<select value={stringValue} disabled={!connected} onChange={(event) => onChange(parameter.name, event.target.value)}>{parameter.enum.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>;
     }
     if (parameter.type !== "number") return null;
     const fallback = typeof parameter.default === "number" ? parameter.default : 0;
@@ -313,7 +318,7 @@ export function App({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const redoDraft = () => { const transition = redoDraftHistory(draftHistory, draft); if (transition.current === draft) return; setDraftHistory(transition.history); setDraft(transition.current); setActionMessage("Redid the draft change."); };
   const changeNodeFlag = (flag: "enabled" | "bypass", value: boolean) => { recordDraftChange(setNodeDraftFlag(draft, selectedNode.id, flag, value)); setActionMessage("Draft updated. Review and plan the changes before committing."); };
   const changeNodeName = (name: string) => { try { recordDraftChange(setNodeDraftName(draft, selectedNode.id, name)); setActionMessage("Node name draft updated. Review and plan the changes before committing."); } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to rename node."); } };
-  const changeNodeParameter = (name: string, value: boolean | number) => { const error = processorParameterError(processors, selectedNode.kind, name, value); if (error) { setActionMessage(`Draft rejected: ${error}.`); return; } recordDraftChange(setNodeDraftParameter(draft, selectedNode.id, name, value)); setActionMessage("Draft updated. Review and plan the changes before committing."); };
+  const changeNodeParameter = (name: string, value: boolean | number | string) => { const error = processorParameterError(processors, selectedNode.kind, name, value); if (error) { setActionMessage(`Draft rejected: ${error}.`); return; } recordDraftChange(setNodeDraftParameter(draft, selectedNode.id, name, value)); setActionMessage("Draft updated. Review and plan the changes before committing."); };
   const resetNodeParameters = () => { recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id)); setActionMessage("Processor parameters reset in the draft. Review and plan the changes before committing."); };
   const changeSessionName = (name: string) => { try { recordDraftChange(setSessionDraftName(draft, name)); setActionMessage("Session name draft updated. Review and plan the change before committing."); } catch (error) { setActionMessage(error instanceof Error ? error.message : "Unable to rename session."); } };
   const planChanges = async () => {

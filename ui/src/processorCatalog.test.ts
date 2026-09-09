@@ -28,6 +28,13 @@ describe("processor catalog presentation", () => {
     expect(processorParametersText(pitch)).toBe("no parameters");
   });
 
+  it("validates and presents enumerated string parameters", () => {
+    const descriptor = { ...pitch, parameters: [{ name: "filter", type: "string", enum: ["peaking", "notch"] }] };
+    expect(processorParameterError([descriptor], "pitch", "filter", "notch")).toBeNull();
+    expect(processorParameterError([descriptor], "pitch", "filter", "lowPass")).toContain("advertised");
+    expect(processorParametersText(descriptor)).toContain("peaking/notch");
+  });
+
   it("validates inspector values against the authoritative descriptor", () => {
     const descriptor = { ...pitch, parameters: [{ name: "semitones", type: "number", minimum: -12, maximum: 12, default: 0 }] };
     expect(processorParameterError([descriptor], "pitch", "semitones", 12.1)).toContain("at most 12");

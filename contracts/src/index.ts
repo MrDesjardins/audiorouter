@@ -312,6 +312,7 @@ export interface DiscoveryDocument {
       unit?: string;
       minimum?: number;
       maximum?: number;
+      enum?: string[];
       default?: boolean | number | string;
     }>;
   }>;
@@ -327,6 +328,7 @@ export interface DiscoveryDocument {
       unit?: string;
       minimum?: number;
       maximum?: number;
+      enum?: string[];
       default?: boolean | number | string;
     }>;
   }>;

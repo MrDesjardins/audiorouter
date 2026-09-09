@@ -6,7 +6,7 @@ export function processorParameterError(
   processors: ProcessorDescriptor[] | null,
   nodeKind: string,
   name: string,
-  value: boolean | number,
+  value: boolean | number | string,
 ): string | null {
   const parameter = processors?.find((processor) => processor.id === nodeKind)?.parameters
     .find((candidate) => candidate.name === name);
@@ -17,6 +17,8 @@ export function processorParameterError(
     if (parameter.maximum !== undefined && value > parameter.maximum) return `${name} must be at most ${parameter.maximum}`;
   } else if (parameter.type === "boolean" && typeof value !== "boolean") {
     return `${name} must be boolean`;
+  } else if (parameter.type === "string" && (!parameter.enum || typeof value !== "string" || !parameter.enum.includes(value))) {
+    return `${name} must be one of the advertised values`;
   }
   return null;
 }
@@ -38,6 +40,7 @@ export function processorParametersText(processor: ProcessorDescriptor): string 
       ? `, ${parameter.minimum}..${parameter.maximum}`
       : "";
     const unit = parameter.unit ? ` ${parameter.unit}` : "";
-    return `${parameter.name}: ${parameter.type}${unit}${range}`;
+    const choices = parameter.enum ? ` (${parameter.enum.join("/")})` : "";
+    return `${parameter.name}: ${parameter.type}${unit}${range}${choices}`;
   }).join("; ");
 }
