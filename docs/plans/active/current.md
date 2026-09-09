@@ -86,6 +86,12 @@ release completion.
   formatting, and diff checks remain the validation target; no audio stream was
   opened.
 
+- Closed the recording-library key-contract gap on 2026-09-09: metadata update,
+  rename, and remove-entry schemas, CLI commands, MCP tools, and dispatchers
+  now require bounded non-empty idempotency keys and preserve durable replay.
+  Read-only get/preview behavior remains keyless; the confirmed recycle path is
+  intentionally tracked as a separate platform-dependent mutation slice.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown

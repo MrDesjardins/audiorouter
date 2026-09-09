@@ -425,7 +425,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "recordings.get" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
-            &["recordingId"],
+            &["recordingId", "idempotencyKey"],
         ),
         "recordings.recovery" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
@@ -447,7 +447,7 @@ fn method_input_schema(name: &str) -> Value {
                 "comment": { "type": ["string", "null"], "maxLength": 256 },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["recordingId"],
+            &["recordingId", "idempotencyKey"],
         ),
         "recordings.rename" => object_schema(
             json!({
@@ -455,7 +455,7 @@ fn method_input_schema(name: &str) -> Value {
                 "newPath": { "type": "string", "minLength": 1 },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["recordingId", "newPath"],
+            &["recordingId", "newPath", "idempotencyKey"],
         ),
         "safety.setPrivacyMute" => object_schema(
             json!({
@@ -479,7 +479,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "recordings.removeEntry" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
-            &["recordingId"],
+            &["recordingId", "idempotencyKey"],
         ),
         "recordings.recycle" => object_schema(
             json!({
@@ -4521,6 +4521,11 @@ impl ControlPlane {
     ) -> Result<Value, ControlError> {
         let params =
             params.ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let recording_id = params
             .get("recordingId")
             .and_then(Value::as_str)
@@ -4593,6 +4598,11 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("newPath is required".into()))?;
+        params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let operation = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
@@ -4643,18 +4653,21 @@ impl ControlPlane {
     }
 
     fn dispatch_recording_remove(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("recordingId and idempotencyKey are required".into())
+        })?;
         let recording_id = params
-            .as_ref()
-            .and_then(|params| {
-                params
-                    .get("recordingId")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
-            })
+            .get("recordingId")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
             .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
+        params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let operation = params
-            .as_ref()
-            .and_then(|params| params.get("idempotencyKey"))
+            .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .map(|key| {
@@ -8915,7 +8928,11 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(10)),
             method: "recordings.setMetadata".into(),
-            params: Some(json!({ "recordingId": "recording-edit", "title": "Edited" })),
+            params: Some(json!({
+                "recordingId": "recording-edit",
+                "title": "Edited",
+                "idempotencyKey": "metadata-edit-1"
+            })),
         };
         assert!(plane
             .dispatch_authorized(request.clone(), &ClientGrant::read_only())
@@ -8978,7 +8995,10 @@ mod tests {
                 jsonrpc: "2.0".into(),
                 id: Some(json!(11)),
                 method: "recordings.removeEntry".into(),
-                params: Some(json!({ "recordingId": "recording-edit" })),
+                params: Some(json!({
+                    "recordingId": "recording-edit",
+                    "idempotencyKey": "remove-recording-edit"
+                })),
             },
             &ClientGrant::with_scopes([PermissionScope::Record]),
         );
@@ -8995,7 +9015,7 @@ mod tests {
                 jsonrpc: "2.0".into(),
                 id: Some(json!(13)),
                 method: "events.subscribe".into(),
-                params: Some(json!({ "afterSequence": 2, "sessionId": "session" })),
+                params: Some(json!({ "afterSequence": 1, "sessionId": "session" })),
             })
             .result
             .unwrap();
