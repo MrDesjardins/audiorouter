@@ -331,7 +331,10 @@ impl PluginIdentity {
     pub fn compatibility(&self) -> PluginCompatibility {
         if self.format == PluginFormat::Vst3 && self.architecture == PeArchitecture::X64 {
             PluginCompatibility::SupportedVst3X64
-        } else if self.format == PluginFormat::Vst2 && self.architecture == PeArchitecture::X64 {
+        } else if cfg!(windows)
+            && self.format == PluginFormat::Vst2
+            && self.architecture == PeArchitecture::X64
+        {
             PluginCompatibility::SupportedVst2X64Gated
         } else {
             PluginCompatibility::UnsupportedFormat
@@ -4235,9 +4238,15 @@ mod tests {
             PluginCompatibility::SupportedVst3X64
         );
         identity.format = PluginFormat::Vst2;
+        #[cfg(windows)]
         assert_eq!(
             identity.compatibility(),
             PluginCompatibility::SupportedVst2X64Gated
+        );
+        #[cfg(not(windows))]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::UnsupportedFormat
         );
         identity.architecture = PeArchitecture::X86;
         assert_eq!(

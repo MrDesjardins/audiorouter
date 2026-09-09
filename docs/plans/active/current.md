@@ -60,6 +60,11 @@ The public identity contract now distinguishes `supportedVst2X64Gated` from
 boundary accurately without making the VST2 extension release-qualified or
 enabling it in a route without the remaining gates.
 
+The gated VST2 status is Windows-only, matching the worker adapter: a
+non-Windows discovery build reports the format as unsupported rather than
+advertising a capability it cannot launch. Platform-specific regression
+coverage protects both branches.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

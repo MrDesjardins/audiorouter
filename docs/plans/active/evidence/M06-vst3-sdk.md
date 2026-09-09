@@ -1344,6 +1344,11 @@ future crash, hang, invalid-sample, and layout reports attributable to the
 exact binary under test; it does not relax quarantine or protected-voice
 silence policy.
 
+The public `supportedVst2X64Gated` compatibility result is also guarded by the
+Windows target. Non-Windows discovery remains `unsupportedFormat`, matching the
+platform-specific worker-start boundary; the plugin-host regression covers
+both target branches.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export
