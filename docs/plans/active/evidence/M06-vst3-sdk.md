@@ -52,6 +52,13 @@ VST2 modern/legacy/fault matrix and all other M00-M08 checks. No driver,
 plugin registration, audio stream, signing-mode, or persistent machine audio
 configuration action occurred.
 
+The guarded M00–M08 chain was requalified at this tip as well. It passed the
+native VS2026/WDK and read-only endpoint checks, portable workspace and UI
+checks, pinned VST3 validator/auxiliary probe, VST2 modern/legacy/fault matrix,
+M07, unsigned M08 preparation, 159 requirement mappings, and 51-file/163-link
+documentation validation. This does not close the production VST3 worker or
+realtime-driver gates.
+
 ## 2026-09-08 - Feature-enabled worker containment qualification
 
 The opt-in `test-fixtures` worker suite passed with
