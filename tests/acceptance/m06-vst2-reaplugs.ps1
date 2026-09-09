@@ -19,17 +19,24 @@ if ($fixtures.Count -eq 0) {
 }
 
 function Get-PeMachine([string]$Path) {
-    $bytes = [System.IO.File]::ReadAllBytes($Path)
-    if ($bytes.Length -lt 64 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
-        return $null
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        if ($stream.Length -lt 64) { return $null }
+        $dos = [byte[]]::new(64)
+        if ($stream.Read($dos, 0, $dos.Length) -ne $dos.Length -or
+            $dos[0] -ne 0x4d -or $dos[1] -ne 0x5a) { return $null }
+        $peOffset = [BitConverter]::ToInt32($dos, 0x3c)
+        if ($peOffset -lt 0 -or $peOffset + 6 -gt $stream.Length) { return $null }
+        $stream.Position = $peOffset
+        $pe = [byte[]]::new(6)
+        if ($stream.Read($pe, 0, $pe.Length) -ne $pe.Length -or
+            $pe[0] -ne 0x50 -or $pe[1] -ne 0x45 -or $pe[2] -ne 0 -or $pe[3] -ne 0) {
+            return $null
+        }
+        return [BitConverter]::ToUInt16($pe, 4)
+    } finally {
+        $stream.Dispose()
     }
-    $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
-    if ($peOffset -lt 0 -or $peOffset + 6 -gt $bytes.Length -or
-        $bytes[$peOffset] -ne 0x50 -or $bytes[$peOffset + 1] -ne 0x45 -or
-        $bytes[$peOffset + 2] -ne 0 -or $bytes[$peOffset + 3] -ne 0) {
-        return $null
-    }
-    return [BitConverter]::ToUInt16($bytes, $peOffset + 4)
 }
 
 $supportedFixtures = @()
