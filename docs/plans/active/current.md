@@ -108,6 +108,12 @@ release completion.
   the OS temp root and removed, and a follow-up scan found zero matches. No
   driver, plugin registration, audio stream, or persistent machine audio
   configuration changed.
+- Re-ran `cargo test --workspace --locked --all-features` on 2026-09-09;
+  578 tests passed, 9 expected fixture-dependent tests remained ignored, and
+  every workspace doc-test target completed. The run created 16 direct
+  `audiorouter-*` temporary children; validated cleanup removed all of them
+  and a follow-up scan found zero matches. No plugin, driver, audio stream,
+  or persistent machine configuration was touched.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
