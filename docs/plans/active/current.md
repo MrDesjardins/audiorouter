@@ -201,12 +201,13 @@ is implemented, but rights/editor/release qualification remains open.
   acceptance passed after this regression, including native single-stream
   recovery. Automatic policy is now bounded and fail-closed; native fault soak,
   callback timing, and physical latency remain open.
-- Added a bounded repeated-quantum owner regression on 2026-09-09: 64
+- Added a bounded repeated-quantum owner regression on 2026-09-09: 4,096
   consecutive `[stereo, mono]` fixture quanta crossed the preallocated graph
   scheduler and returned finite output without worker failure; the measured
   per-quantum staging/worker round trip stayed below 100 ms in the guarded
   run. This is a short deterministic worker-thread bound, not realtime
-  callback, eight-hour soak, or physical-latency evidence.
+  callback, eight-hour soak, or physical-latency evidence. This advances the
+  short-run M06 worker-soak evidence without claiming the NFR-11 W2 gate.
 - Requalified the legacy x64 VST2 extension on 2026-09-09 with the supplied
   local ReaPlugs directory: all six audio effects passed isolated worker
   load/process checks at 44.1, 48, and 96 kHz (18 runs), including the existing

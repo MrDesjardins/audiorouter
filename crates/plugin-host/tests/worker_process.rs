@@ -464,7 +464,7 @@ fn supervised_bus_worker_loop_keeps_repeated_quanta_bounded() {
     main.channel_mut(1).unwrap().fill(-0.125);
     let sidechain = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
     let mut maximum_elapsed = Duration::ZERO;
-    for sequence in 1..=64 {
+    for sequence in 1..=4_096 {
         let identity = audiorouter_engine::RuntimeBusQuantumIdentity::new(
             sequence,
             worker_clock_tick().saturating_add(10_000),

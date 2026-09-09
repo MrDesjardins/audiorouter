@@ -2052,11 +2052,11 @@ existing three-failure quarantine threshold. The owner exposed terminal
 failure, and the final missing result was published as scheduler silence. This
 is deterministic containment evidence, not a native third-party fault soak.
 
-The owner timing regression then crossed 64 consecutive `[stereo, mono]`
+The owner timing regression then crossed 4,096 consecutive `[stereo, mono]`
 fixture quanta through the fixed two-slot scheduler. Every output was finite,
 the worker remained healthy, and the measured per-quantum staging/worker round
 trip stayed below 100 ms in the guarded run. This is short worker-thread
-evidence only; it does not qualify the realtime callback, an eight-hour W2
+evidence only; it does not qualify the realtime callback, the NFR-11 eight-hour W2
 soak, or physical latency.
 
 The guarded ReaPlugs VST2 matrix was also rerun after the worker changes. All
