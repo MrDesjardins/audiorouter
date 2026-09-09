@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `fd01a9ee` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `05bf0eb8` (2026-09-09). The guarded M00-M08
 chain, all-features workspace tests, strict all-features Clippy, UI checks,
 legacy VST2 fixture coverage, and documentation validation pass at the
 preceding implementation checkpoints. The repository is clean; no driver or
@@ -28,6 +28,8 @@ is implemented, but rights/editor/release qualification remains open.
 - Next M05/M00 task: retain structured status diagnostics while integrating the authenticated native-shell transport and managed endpoint callback; those native gates remain externally blocked.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at pushed head `d71c3152` on 2026-09-09: VS2026/WDK discovery and native compile, read-only 31-endpoint format inventory, disposable pinned SysVAD x64 package/API/signability qualification, M01/M04/M05, pinned VST3 SDK/validator, repository VST2 modern/legacy/fault fixtures, M07, unsigned M08 artifacts, 159 normative mappings, and documentation validation (51 Markdown files/162 local links) passed. The run left 23 direct repository-named temporary SQLite fixtures; exact validated cleanup removed all 23 and a follow-up scan found zero. No driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred.
 - Next M06 task: qualify a supplied rights-cleared independent x64 VST2/VST3 fixture or integrate the authenticated native-shell HWND owner when available; retain the gated VST2 rights/editor/release boundary.
+- Hardened M01/API-09 CLI discovery failures on 2026-09-09: the devices and application list adapters now preserve the complete JSON-RPC error envelope instead of converting backend failures to empty arrays; successful legacy array responses remain unchanged. CLI tests (27), doc-tests, strict Clippy, formatting, and diff checks passed. No audio or machine configuration changed.
+- Next M07 task: retain structured discovery errors through the MCP result wrapper and authenticated remote transport; no additional native or plugin authority is inferred.
 - Hardened M01/API-09 CLI discovery parity on 2026-09-09: `devices list`, `apps list`, and `applications list` now preserve the complete JSON-RPC error envelope, including structured audio category, HRESULT, retryability, and remediation, instead of silently returning an empty array on failure. Successful legacy array responses remain unchanged. CLI tests (27), doc-tests, strict Clippy, formatting, and diff checks passed; no audio or machine configuration changed.
 - Next M01/M07 task: carry the same structured discovery-error envelope through any future remote CLI/MCP presentation while retaining the authenticated transport boundary.
 
