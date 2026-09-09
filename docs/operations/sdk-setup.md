@@ -33,7 +33,12 @@ CMake cache under `third_party/vst3sdk-build`. If CMake is not on PATH, use the
 ignored `third_party/cmake-4.4.0/bin/cmake.exe` cache already provisioned for
 the repository. The official validator and the sample `mda-vst3` bundle have
 been run successfully. AudioRouter supports the
-VST3 x64 boundary; VST2 and x86 plugins are not part of this setup.
+VST3 x64 boundary; VST2 and x86 plugins are not part of the VST3 SDK setup.
+Legacy VST2 does not use the VST3 SDK: the separately gated Windows x64 VST2
+adapter loads explicitly selected user-installed DLLs through the worker
+boundary. Its fixture and compatibility checks are documented in
+`plugin-compatibility.md`; no VST2 SDK, plugin download, registration, or
+redistribution is part of this setup.
 
 ## Windows SDK and WDK
 
