@@ -27,7 +27,7 @@ pub const VST2_FLAG_CAN_REPLACING: i32 = 1 << 4;
 /// `effFlagsProgramChunks`: the plugin exposes opaque chunk state.
 pub const VST2_FLAG_PROGRAM_CHUNKS: i32 = 1 << 5;
 /// `effFlagsHasEditor`: the plugin exposes a native editor.
-pub const VST2_FLAG_HAS_EDITOR: i32 = 1 << 2;
+pub const VST2_FLAG_HAS_EDITOR: i32 = 1 << 0;
 pub const VST2_MAX_AUDIO_CHANNELS: i32 = 2;
 pub const VST2_MAX_INPUT_CHANNELS: i32 = 4;
 pub const VST2_MAX_PARAMETERS: i32 = 256;
@@ -262,6 +262,9 @@ mod opcode_tests {
 
     #[test]
     fn uses_vst2_dispatcher_opcodes_for_lifecycle_and_state() {
+        assert_eq!(VST2_FLAG_HAS_EDITOR, 1);
+        assert_eq!(VST2_FLAG_CAN_REPLACING, 1 << 4);
+        assert_eq!(VST2_FLAG_PROGRAM_CHUNKS, 1 << 5);
         assert_eq!(EFF_SET_SAMPLE_RATE, 10);
         assert_eq!(EFF_SET_BLOCK_SIZE, 11);
         assert_eq!(EFF_MAINS_CHANGED, 12);

@@ -1,3 +1,5 @@
+#[cfg(all(windows, feature = "test-fixtures"))]
+use audiorouter_plugin_host::vst2::Vst2EditorThread;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     PeArchitecture, PluginFormat, PluginIdentity, PluginStateAsset, SharedAudioLayout,
@@ -8,6 +10,26 @@ use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
 use std::time::Duration;
 use std::time::Instant;
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn CreateWindowExW(
+        extended_style: u32,
+        class_name: *const u16,
+        window_name: *const u16,
+        style: u32,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        parent: *mut std::ffi::c_void,
+        menu: *mut std::ffi::c_void,
+        instance: *mut std::ffi::c_void,
+        parameter: *mut std::ffi::c_void,
+    ) -> *mut std::ffi::c_void;
+    fn DestroyWindow(window: *mut std::ffi::c_void) -> i32;
+}
 
 #[cfg(feature = "test-fixtures")]
 fn fixture_worker_path() -> String {
@@ -219,6 +241,48 @@ fn verified_worker_applies_restored_vst2_chunk_state() {
         .expect("process restored VST2 state");
     assert!((restored.samples[0] - 0.5).abs() < f32::EPSILON);
     assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires an editor-capable local VST2 DLL and a Windows desktop"]
+fn dedicated_vst2_editor_thread_bounds_a_nonreturning_native_editor() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 editor acceptance"),
+    );
+    let parent_class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+    let parent_title: Vec<u16> = "AudioRouter VST2 acceptance\0".encode_utf16().collect();
+    // SAFETY: The class/title buffers are NUL-terminated and live through the
+    // synchronous Win32 call. A zero style keeps this parent hidden.
+    let parent = unsafe {
+        CreateWindowExW(
+            0,
+            parent_class.as_ptr(),
+            parent_title.as_ptr(),
+            0,
+            0,
+            0,
+            1,
+            1,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    assert!(!parent.is_null(), "hidden editor parent creation failed");
+    let editor = Vst2EditorThread::spawn(&plugin_path).expect("spawn VST2 editor thread");
+    let result = editor.open(parent as usize).and_then(|_| editor.close());
+    drop(editor);
+    // SAFETY: The handle was returned by CreateWindowExW and is no longer
+    // needed after the editor has closed.
+    unsafe { assert_ne!(DestroyWindow(parent), 0) };
+    let error = result.expect_err("the ReaPlugs editor must remain bounded");
+    assert!(
+        error.contains("timed out"),
+        "unexpected editor result: {error}"
+    );
 }
 
 #[cfg(feature = "test-fixtures")]

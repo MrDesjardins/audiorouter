@@ -1407,6 +1407,18 @@ thread is present. The generic worker regression verifies that this response
 does not terminate the worker or interrupt subsequent processing. Actual
 authorized HWND integration remains open.
 
+## Native editor probe and ABI correction (2026-09-08)
+
+The VST2 editor capability flag was corrected from bit 2 to the VST2 ABI's bit
+0, with a Windows regression locking the flag values and dispatcher opcodes.
+The correction made all six local ReaPlugs report editor capability. A hidden
+parent probe then showed that each binary entered `effEditOpen` but failed to
+return within the five-second dedicated-thread bound. The ignored acceptance
+test records that bounded timeout and does not claim a successful native editor
+window. This is a third-party editor-hosting compatibility blocker, not an
+audio-device-use or endpoint-configuration failure; no persistent audio state
+was changed.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

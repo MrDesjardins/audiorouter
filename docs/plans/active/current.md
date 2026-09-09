@@ -119,6 +119,15 @@ explicit opened/closed responses. A worker without a VST2 editor returns
 `editorUnavailable` without being terminated; the generic worker regression
 covers that fail-closed behavior and confirms processing remains available.
 
+The first native ReaPlugs editor probe exposed and fixed an ABI defect in the
+editor capability flag: `effFlagsHasEditor` is bit 0, not bit 2. After that
+fix, all six local binaries entered native editor dispatch but did not return
+within the five-second UI-thread bound when attached to the synthetic hidden
+parent. The ignored Windows acceptance now records this as a bounded native
+plugin failure; it does not claim successful editor-window compatibility.
+The worker/editor thread remains disposable and the processing path is not
+replaced or reconfigured by this probe.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)
