@@ -1201,3 +1201,17 @@ wrapper verifies media-state preservation and does not change defaults or
 persistent audio configuration. This is bounded digital signal correlation,
 not calibrated acoustic p95 latency, independent-clock evidence, managed-driver
 callback timing, or production-driver qualification.
+
+## Guarded native lifecycle and attribution requalification (2026-09-08)
+
+The guarded native lifecycle wrapper passed all 13 capture and 18 render
+endpoints at a 100 ms duration; one render endpoint reported the expected
+ownership conflict and satisfied the wrapper's explicit conflict criteria. The
+event-driven wrapper then passed the selected VB-Audio pair at 200 ms with
+10,080 capture frames and 14,400 submitted render frames. Finally, the
+controlled process-attribution wrapper passed at 500 ms with 21,609 capture
+frames and 77,823 nonzero bytes from the selected disposable child process.
+Each wrapper stops/resets its streams, removes temporary binaries, and verifies
+media-device state preservation. This is native shared/event/process-loopback
+evidence only; it does not establish managed-driver callback timing, calibrated
+physical latency, or an actual PID-reuse occurrence.
