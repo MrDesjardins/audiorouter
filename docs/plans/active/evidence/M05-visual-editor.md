@@ -1,5 +1,12 @@
 # M05 visual editor evidence
 
+## 2026-09-08 - Application contract requalification
+
+After the application inventory gained nullable `executablePath`, the UI
+package passed TypeScript typecheck, all 91 Vitest tests across 14 files, and
+a temporary production build. The temporary output was removed after
+verification; no backend, audio, or machine configuration was changed.
+
 ## Initial React/Vite shell
 
 The new `ui` package is a React/Vite/TypeScript application that consumes the
