@@ -95,9 +95,9 @@ describe("keyboard connection dialog", () => {
     const onToggle = vi.fn();
     render(<DraftConnectionList session={inserted} onRemove={onRemove} onToggle={onToggle} />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Insert mixer" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]);
     expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
-    fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" }));
     expect(onRemove).toHaveBeenCalledWith(removeMixerActionId("mixer-1"));
   });
 
@@ -109,9 +109,9 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Insert mixer" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]);
     expect(screen.getByText("Mixer inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" }));
     expect(screen.getByText("Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing.")).toBeTruthy();
   });
 });

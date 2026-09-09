@@ -26,11 +26,11 @@ export function DraftConnectionList({ session, onRemove, onToggle }: { session: 
       <span>{names.get(edge.sourceNode) ?? edge.sourceNode}:{edge.sourcePort} → {names.get(edge.destinationNode) ?? edge.destinationNode}:{edge.destinationPort} <small>{edge.enabled ? "enabled" : "disabled"}</small></span>
       <button type="button" className="secondary" onClick={() => onToggle(edge.id, !edge.enabled)}>{edge.enabled ? "Disable" : "Enable"}</button>
       <button type="button" className="secondary" onClick={() => onRemove(edge.id)}>Remove</button>
-      <button type="button" className="secondary" onClick={() => onRemove(insertMixerActionId(edge.id))}>Insert mixer</button>
+      <button type="button" className="secondary" aria-label={`Insert mixer on ${names.get(edge.sourceNode) ?? edge.sourceNode} to ${names.get(edge.destinationNode) ?? edge.destinationNode}`} onClick={() => onRemove(insertMixerActionId(edge.id))}>Insert mixer</button>
     </li>)}</ul>}
     {mixers.length > 0 && <div className="mixer-topology-actions" aria-label="Mixer topology actions">{mixers.map((mixer) => <div key={mixer.id}>
       <span>{mixer.name}</span>
-      <button type="button" className="secondary" onClick={() => onRemove(removeMixerActionId(mixer.id))}>Remove and reconnect</button>
+      <button type="button" className="secondary" aria-label={`Remove and reconnect ${mixer.name}`} onClick={() => onRemove(removeMixerActionId(mixer.id))}>Remove and reconnect</button>
     </div>)}</div>}
   </section>;
 }
