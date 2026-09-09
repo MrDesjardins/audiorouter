@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, removeDraftConnection, setDraftConnectionEnabled } from "./draft";
+import { appendDraftConnection, appendLibraryNode, insertDraftMixer, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendDraftConnection", () => {
@@ -38,5 +38,21 @@ describe("appendDraftConnection", () => {
     expect(disabled.edges[0]).toMatchObject({ id: "edge-1", enabled: false, sourceNode: "mic", destinationNode: "voice" });
     expect(disabled.revision).toBe(demoSession.revision);
     expect(() => setDraftConnectionEnabled(disabled, "missing", true)).toThrow("Unknown draft connection");
+  });
+
+  it("inserts and removes a single-path mixer as a previewable topology edit", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const inserted = insertDraftMixer(connected, "edge-1");
+    const mixer = inserted.nodes.find((node) => node.kind === "mixer");
+    expect(mixer).toMatchObject({ id: "mixer-1", name: "Mixer 1" });
+    expect(inserted.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([["mic", "mixer-1"], ["mixer-1", "voice"]]);
+    const restored = removeSinglePathDraftMixer(inserted, "mixer-1");
+    expect(restored.nodes.some((node) => node.id === "mixer-1")).toBe(false);
+    expect(restored.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([["mic", "voice"]]);
+  });
+
+  it("refuses to remove a mixer with ambiguous topology", () => {
+    const mixer = appendLibraryNode(demoSession, "mixer");
+    expect(() => removeSinglePathDraftMixer(mixer, "mixer-1")).toThrow("exactly one incoming and one outgoing");
   });
 });

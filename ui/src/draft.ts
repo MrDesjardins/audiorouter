@@ -194,6 +194,30 @@ export function appendDraftConnection(
   };
 }
 
+/** Inserts a deterministic stereo mixer into one draft edge without committing topology. */
+export function insertDraftMixer(session: Session, edgeId: EntityId): Session {
+  const edge = session.edges.find((candidate) => candidate.id === edgeId);
+  if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
+  const withoutEdge = removeDraftConnection(session, edgeId);
+  const withMixer = appendLibraryNode(withoutEdge, "mixer");
+  const mixer = withMixer.nodes.at(-1);
+  if (!mixer) throw new Error("Unable to create an inserted mixer");
+  const upstream = appendDraftConnection(withMixer, edge.sourceNode, edge.sourcePort, mixer.id, "in");
+  const split = appendDraftConnection(upstream, mixer.id, "out", edge.destinationNode, edge.destinationPort);
+  return { ...split, edges: split.edges.map((candidate) => candidate.sourceNode === mixer.id && candidate.destinationNode === edge.destinationNode ? { ...candidate, matrix: [...edge.matrix] } : candidate) };
+}
+
+/** Removes a mixer only when it has exactly one incoming and one outgoing path. */
+export function removeSinglePathDraftMixer(session: Session, mixerId: EntityId): Session {
+  const mixer = session.nodes.find((node) => node.id === mixerId);
+  if (!mixer || mixer.kind !== "mixer") throw new Error("Choose a mixer node");
+  const incoming = session.edges.filter((edge) => edge.destinationNode === mixerId);
+  const outgoing = session.edges.filter((edge) => edge.sourceNode === mixerId);
+  if (incoming.length !== 1 || outgoing.length !== 1) throw new Error("Mixer removal requires exactly one incoming and one outgoing connection");
+  const reduced = removeDraftNode(session, mixerId);
+  return appendDraftConnection(reduced, incoming[0].sourceNode, incoming[0].sourcePort, outgoing[0].destinationNode, outgoing[0].destinationPort);
+}
+
 /** Removes one draft edge while leaving the authoritative graph untouched. */
 export function removeDraftConnection(session: Session, edgeId: EntityId): Session {
   if (!session.edges.some((edge) => edge.id === edgeId)) throw new Error(`Unknown draft connection: ${edgeId}`);
