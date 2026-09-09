@@ -146,6 +146,12 @@ Pitchproof x64 VST2 binary has passed the same three processing rates.
 These are compatibility observations only: they do not establish licensing
 or redistribution rights, editor compatibility, or release qualification.
 
+A read-only inventory on 2026-09-09 found no additional VST3 bundle in the
+standard installed directories. The only non-ReaPlugs candidate remains the
+previously inspected Pitchproof x64/x86 VST2 pair (the x86 binary remains
+rejected); the independent second-vendor VST3 gate therefore remains awaiting
+an externally supplied fixture.
+
 On 2026-09-09, the same contained-worker processing check was run directly
 against the user-supplied installed ReaComp, ReaEQ, ReaDelay, and ReaGate x64
 VST2 DLLs. All four passed at 44.1, 48, and 96 kHz (12 processing cases).

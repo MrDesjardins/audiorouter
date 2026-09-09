@@ -165,6 +165,12 @@ release completion.
   mutates its binary; the existing worker matrix and environment restoration
   remain unchanged.
 
+- Performed a read-only inventory of standard installed plugin directories on
+  2026-09-09. No additional VST3 bundle was present beyond the known Pitchproof
+  x64/x86 VST2 pair; the ReaPlugs directory remains VST2-only. The independent
+  second-vendor VST3 gate is therefore still externally dependent, and no
+  plugin was loaded, copied, registered, or modified by the inventory.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,
