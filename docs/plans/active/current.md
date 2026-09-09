@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `df3a9c88` (2026-09-09). The guarded M00-M08
+The latest pushed checkpoint is `2aa83044` (2026-09-09). The guarded M00-M08
 chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
@@ -137,6 +137,16 @@ release completion.
   receives the backend's stable `permissionDenied` error instead of a session
   snapshot. Focused CLI/MCP tests, strict Clippy, formatting, and diff checks
   pass; no authorization or machine state changed.
+
+- Requalified the complete guarded M00-M08 acceptance chain at pushed head
+  `2aa83044` on 2026-09-09 with authorized native Windows elevation: VS2026 /
+  MSVC / SDK / WDK discovery, read-only 31-endpoint inventory, disposable
+  pinned SysVAD x64 compile/package/API/signability, M01/M04/M05, VST3 SDK and
+  worker paths, modern/legacy/fault VST2 fixtures, M07, unsigned M08
+  preparation, traceability, and documentation all passed. Temporary outputs
+  were cleaned; no driver installation/loading, signing-mode change,
+  plugin/startup registration, audio stream, or persistent machine audio
+  configuration occurred.
 
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
