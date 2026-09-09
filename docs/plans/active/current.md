@@ -785,6 +785,17 @@ release completion.
   retaining production driver, signing, installer, shell/HWND, accessibility,
   and independent-vendor plugin blockers.
 
+- Requalified the authorized M02 Rust adapter paths on 2026-09-09: the live
+  generation-1 gain graph processed 5,760 capture frames at 48 kHz/128-frame
+  quanta with zero scheduler deadline misses; the selected routed path
+  processed 4,736 routed frames with zero deadline misses. Processing-time and
+  deadline histograms were complete and internally consistent, and stream
+  cleanup/media-state comparison passed. Defaults, volume, mute, privacy,
+  drivers, signing, and startup configuration remained unchanged.
+- Next safe task: continue with differing-rate/resampler or physical-latency
+  qualification while retaining production driver, signing, installer,
+  shell/HWND, manual accessibility, and independent-vendor blockers.
+
 - Completed the API reference parity pass on 2026-09-09: every documented
   mutating recorder, startup, plugin-retry, virtual-device, import, graph,
   session-lifecycle, and recording operation now states its idempotency-key
