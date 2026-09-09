@@ -42,6 +42,16 @@ spawn with `VST2 workers support only the single-stream protocol`. This closes
 the format confusion path introduced when multi-bus ownership became available
 in normal builds.
 
+## Multi-bus parameter validation plumbing (2026-09-09)
+
+Negotiated multi-bus quanta now validate parameter events against the current
+quantum frame count and accept bounded events through the framed process path.
+The fixture still echoes audio and does not apply events to a native effect.
+Default and all-features plugin-host tests passed 67/67, worker-process tests
+passed 13 default and 29 all-features cases with six expected fixture skips,
+and strict Clippy passed in both modes. This removes a protocol-level blocker
+for a future VST3 backend without claiming native parameter automation.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's

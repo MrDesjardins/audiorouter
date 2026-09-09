@@ -3936,7 +3936,7 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                     ParameterEventError::OffsetOutOfRange,
                 ));
             }
-            validate_parameters_for_frame(parameters, frame.frame_count())?;
+            validate_parameter_events_for_frame(parameters, frame.frame_count())?;
         }
         WorkerMessage::ProcessBuses {
             layout,
@@ -3953,7 +3953,7 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
                     ParameterEventError::OffsetOutOfRange,
                 ));
             }
-            validate_parameters_for_frame(parameters, frames.frame_count())?;
+            validate_parameter_events_for_frame(parameters, frames.frame_count())?;
         }
         WorkerMessage::ProcessShared {
             sequence,
@@ -3963,7 +3963,7 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
             parameters,
         } => {
             validate_shared_frame_shape(*sequence, *deadline_tick, *channels, *frames)?;
-            validate_parameters_for_frame(parameters, *frames as usize)?;
+            validate_parameter_events_for_frame(parameters, *frames as usize)?;
         }
         WorkerMessage::Processed { frame } => {
             WorkerFrame::new(
@@ -4093,7 +4093,7 @@ fn validate_parameters(parameters: &[ParameterEvent]) -> Result<(), WorkerMessag
     Ok(())
 }
 
-fn validate_parameters_for_frame(
+pub fn validate_parameter_events_for_frame(
     parameters: &[ParameterEvent],
     frame_count: usize,
 ) -> Result<(), WorkerMessageError> {

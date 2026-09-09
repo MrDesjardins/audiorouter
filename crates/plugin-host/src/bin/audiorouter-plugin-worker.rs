@@ -3,10 +3,11 @@ use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
-    read_worker_message, worker_clock_tick, write_worker_message, PluginStateAsset,
-    SharedAudioLayout, SharedAudioTransport, WorkerAudioBusLayout, WorkerFrameGuard, WorkerMessage,
-    WorkerSession, DEFAULT_WORKER_SAMPLE_RATE_HZ, MAX_WORKER_SAMPLE_RATE_HZ,
-    MIN_WORKER_SAMPLE_RATE_HZ, WORKER_PROTOCOL_VERSION,
+    read_worker_message, validate_parameter_events_for_frame, worker_clock_tick,
+    write_worker_message, PluginStateAsset, SharedAudioLayout, SharedAudioTransport,
+    WorkerAudioBusLayout, WorkerFrameGuard, WorkerMessage, WorkerSession,
+    DEFAULT_WORKER_SAMPLE_RATE_HZ, MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ,
+    WORKER_PROTOCOL_VERSION,
 };
 #[cfg(feature = "test-fixtures")]
 use std::io::Write;
@@ -448,12 +449,11 @@ fn run_multi_bus(
                 frames,
                 parameters,
             } if message_layout == layout => {
-                if !parameters.is_empty() {
-                    return Err("multi-bus echo fixture does not accept parameters".into());
-                }
                 let frames = layout
                     .input_frames(frames)
                     .map_err(|error| format!("multi-bus input rejected: {error:?}"))?;
+                validate_parameter_events_for_frame(&parameters, frames.frame_count())
+                    .map_err(|error| format!("multi-bus parameters rejected: {error:?}"))?;
                 if let Err(error) = frame_guard.accept(
                     frames
                         .frames()

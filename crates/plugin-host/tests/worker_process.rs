@@ -2,6 +2,8 @@
 use audiorouter_plugin_host::stage_engine_worker_result;
 #[cfg(all(windows, feature = "test-fixtures"))]
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
+#[cfg(feature = "test-fixtures")]
+use audiorouter_plugin_host::ParameterEvent;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
@@ -246,7 +248,10 @@ fn typed_multi_bus_worker_process_client_round_trips_buses() {
         ])
         .unwrap();
     let processed = worker
-        .process_buses(frames.clone(), Vec::new())
+        .process_buses(
+            frames.clone(),
+            vec![ParameterEvent::new(7, 0.5, 0).unwrap()],
+        )
         .expect("round trip typed multi-bus quantum");
     assert_eq!(processed.frames(), frames.frames());
     assert!(worker.shutdown().unwrap().success());
