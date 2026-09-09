@@ -40,6 +40,12 @@ release completion.
   installation/loading, signing-mode change, plugin/startup registration, audio
   stream, or persistent machine audio configuration occurred.
 
+- Requalified the locked all-features workspace after that acceptance run on
+  2026-09-09: all workspace unit/integration tests and doc-tests passed,
+  including the expected fixture-dependent skips, and strict all-target Clippy passed with warnings
+  denied. The repository remained clean and no runtime or machine audio
+  configuration was changed.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;
