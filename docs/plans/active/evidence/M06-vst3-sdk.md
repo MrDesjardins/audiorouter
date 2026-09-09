@@ -2045,6 +2045,13 @@ library and 32 worker-process tests (nine expected skips), strict Clippy and
 formatting passed, and the native M06 acceptance passed. Repeated native fault
 soak, callback timing, and physical latency remain open.
 
+The controlled hanging multi-bus fixture then submitted three sequential
+quanta through the one-slot scheduler. Two bounded owner-thread replacements
+were attempted with the fixture mode preserved; the third failure reached the
+existing three-failure quarantine threshold. The owner exposed terminal
+failure, and the final missing result was published as scheduler silence. This
+is deterministic containment evidence, not a native third-party fault soak.
+
 The guarded `tests/acceptance/safe-all.ps1` chain was rerun after this policy
 change and passed its native toolchain/endpoint and disposable SysVAD checks,
 portable M01/M04/M05/M07 checks, native VST3 and available VST2 fixture

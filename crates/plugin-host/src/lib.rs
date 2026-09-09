@@ -1532,6 +1532,7 @@ pub struct SupervisedBusWorkerLoop {
     scheduler: Arc<audiorouter_engine::RuntimeBusScheduler>,
     stop: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
+    quarantined: Arc<AtomicBool>,
     join: Option<JoinHandle<()>>,
 }
 
@@ -1595,8 +1596,10 @@ impl SupervisedBusWorkerLoop {
         let output_layout = input_layout.clone();
         let stop = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
+        let quarantined = Arc::new(AtomicBool::new(false));
         let thread_stop = Arc::clone(&stop);
         let thread_failed = Arc::clone(&failed);
+        let thread_quarantined = Arc::clone(&quarantined);
         let thread_scheduler = Arc::clone(&scheduler);
         let join = std::thread::Builder::new()
             .name("audiorouter-vst3-bus-worker".into())
@@ -1608,6 +1611,7 @@ impl SupervisedBusWorkerLoop {
                     output_layout,
                     thread_stop,
                     thread_failed,
+                    thread_quarantined,
                     parameters,
                     max_restarts,
                 );
@@ -1617,6 +1621,7 @@ impl SupervisedBusWorkerLoop {
             scheduler,
             stop,
             failed,
+            quarantined,
             join: Some(join),
         })
     }
@@ -1627,6 +1632,10 @@ impl SupervisedBusWorkerLoop {
 
     pub fn has_failed(&self) -> bool {
         self.failed.load(Ordering::Acquire)
+    }
+
+    pub fn is_quarantined(&self) -> bool {
+        self.quarantined.load(Ordering::Acquire)
     }
 
     /// Request termination and join the owner thread. This is a control-plane
@@ -1654,6 +1663,7 @@ fn run_supervised_bus_worker(
     output_layout: WorkerAudioBusLayout,
     stop: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
+    quarantined: Arc<AtomicBool>,
     parameters: Vec<ParameterEvent>,
     max_restarts: u32,
 ) {
@@ -1689,9 +1699,13 @@ fn run_supervised_bus_worker(
         scheduler.recycle_input(handle);
         if conversion_failed {
             worker.record_failure(Instant::now());
-            let Some(replacement) =
-                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
-            else {
+            let Some(replacement) = recover_supervised_bus_worker(
+                worker,
+                &mut restart_count,
+                max_restarts,
+                &failed,
+                &quarantined,
+            ) else {
                 break;
             };
             worker = replacement;
@@ -1699,9 +1713,13 @@ fn run_supervised_bus_worker(
         }
         let Ok(input_frames) = input_layout.input_frames(input_frames) else {
             worker.record_failure(Instant::now());
-            let Some(replacement) =
-                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
-            else {
+            let Some(replacement) = recover_supervised_bus_worker(
+                worker,
+                &mut restart_count,
+                max_restarts,
+                &failed,
+                &quarantined,
+            ) else {
                 break;
             };
             worker = replacement;
@@ -1716,6 +1734,7 @@ fn run_supervised_bus_worker(
                     &mut restart_count,
                     max_restarts,
                     &failed,
+                    &quarantined,
                 ) else {
                     break;
                 };
@@ -1740,9 +1759,13 @@ fn run_supervised_bus_worker(
         }
         if output_conversion_failed || output_blocks.len() != processed.frames().len() {
             worker.record_failure(Instant::now());
-            let Some(replacement) =
-                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
-            else {
+            let Some(replacement) = recover_supervised_bus_worker(
+                worker,
+                &mut restart_count,
+                max_restarts,
+                &failed,
+                &quarantined,
+            ) else {
                 break;
             };
             worker = replacement;
@@ -1757,9 +1780,13 @@ fn run_supervised_bus_worker(
                 .any(|(channels, frame)| *channels != frame.channels)
         {
             worker.record_failure(Instant::now());
-            let Some(replacement) =
-                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
-            else {
+            let Some(replacement) = recover_supervised_bus_worker(
+                worker,
+                &mut restart_count,
+                max_restarts,
+                &failed,
+                &quarantined,
+            ) else {
                 break;
             };
             worker = replacement;
@@ -1770,9 +1797,13 @@ fn run_supervised_bus_worker(
             .is_err()
         {
             worker.record_failure(Instant::now());
-            let Some(replacement) =
-                recover_supervised_bus_worker(worker, &mut restart_count, max_restarts, &failed)
-            else {
+            let Some(replacement) = recover_supervised_bus_worker(
+                worker,
+                &mut restart_count,
+                max_restarts,
+                &failed,
+                &quarantined,
+            ) else {
                 break;
             };
             worker = replacement;
@@ -1788,8 +1819,12 @@ fn recover_supervised_bus_worker(
     restart_count: &mut u32,
     max_restarts: u32,
     failed: &AtomicBool,
+    quarantined: &AtomicBool,
 ) -> Option<SupervisedWorkerProcess> {
     if *restart_count >= max_restarts {
+        if worker.state() == WorkerState::Quarantined {
+            quarantined.store(true, Ordering::Release);
+        }
         failed.store(true, Ordering::Release);
         let _ = worker.shutdown();
         return None;
@@ -1799,7 +1834,10 @@ fn recover_supervised_bus_worker(
             *restart_count = restart_count.saturating_add(1);
             Some(replacement)
         }
-        Err((_error, _supervisor)) => {
+        Err((_error, supervisor)) => {
+            if supervisor.state() == WorkerState::Quarantined {
+                quarantined.store(true, Ordering::Release);
+            }
             failed.store(true, Ordering::Release);
             None
         }
@@ -2631,6 +2669,8 @@ pub struct SupervisedWorkerProcess {
     shared_transport: bool,
     bus_layout: Option<WorkerAudioBusLayout>,
     plugin_path: Option<PathBuf>,
+    #[cfg(feature = "test-fixtures")]
+    fixture_mode: Option<String>,
 }
 
 impl SupervisedWorkerProcess {
@@ -2755,7 +2795,62 @@ impl SupervisedWorkerProcess {
             shared_transport: false,
             bus_layout: None,
             plugin_path: None,
+            fixture_mode: Some(mode.to_owned()),
         })
+    }
+
+    #[cfg(feature = "test-fixtures")]
+    fn spawn_fixture_with_supervisor(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        channels: u16,
+        layout: Option<&WorkerAudioBusLayout>,
+        mode: &str,
+        mut supervisor: WorkerSupervisor,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let executable = match validate_worker_executable(executable.as_ref()) {
+            Ok(path) => path,
+            Err(error) => {
+                supervisor.record_failure(now);
+                return Err((WorkerProcessError::Spawn(error), supervisor));
+            }
+        };
+        if let Err(error) = supervisor.start(identity, now) {
+            return Err((
+                WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
+                supervisor,
+            ));
+        }
+        let process = match layout {
+            Some(layout) => WorkerProcess::spawn_multi_bus_fixture_mode(
+                &executable,
+                &identity.sha256,
+                layout,
+                Some(mode),
+            ),
+            None => WorkerProcess::spawn_fixture(&executable, &identity.sha256, channels, mode),
+        };
+        match process {
+            Ok(process) => Ok(Self {
+                process,
+                supervisor,
+                executable,
+                identity: identity.clone(),
+                channels: layout
+                    .and_then(|layout| layout.input_buses().first().copied())
+                    .unwrap_or(channels),
+                sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
+                shared_transport: false,
+                bus_layout: layout.cloned(),
+                plugin_path: None,
+                fixture_mode: Some(mode.to_owned()),
+            }),
+            Err(error) => {
+                supervisor.record_failure(now);
+                Err((error, supervisor))
+            }
+        }
     }
 
     /// Spawn a separately negotiated multi-bus worker under the same bounded
@@ -2847,6 +2942,7 @@ impl SupervisedWorkerProcess {
             shared_transport: false,
             bus_layout: Some(layout.clone()),
             plugin_path: None,
+            fixture_mode: Some(mode.unwrap_or("echo").to_owned()),
         })
     }
 
@@ -2900,6 +2996,8 @@ impl SupervisedWorkerProcess {
                 shared_transport: false,
                 bus_layout: Some(layout.clone()),
                 plugin_path: plugin_path.map(Path::to_path_buf),
+                #[cfg(feature = "test-fixtures")]
+                fixture_mode: None,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -2981,6 +3079,8 @@ impl SupervisedWorkerProcess {
                 shared_transport: false,
                 bus_layout: None,
                 plugin_path: plugin_path.map(Path::to_path_buf),
+                #[cfg(feature = "test-fixtures")]
+                fixture_mode: None,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -3080,6 +3180,8 @@ impl SupervisedWorkerProcess {
                 shared_transport: true,
                 bus_layout: None,
                 plugin_path: None,
+                #[cfg(feature = "test-fixtures")]
+                fixture_mode: None,
             }),
             Err(error) => {
                 supervisor.record_failure(now);
@@ -3371,6 +3473,8 @@ impl SupervisedWorkerProcess {
             shared_transport: _shared_transport,
             bus_layout: _bus_layout,
             plugin_path: _plugin_path,
+            #[cfg(feature = "test-fixtures")]
+                fixture_mode: _fixture_mode,
         } = self;
         supervisor
     }
@@ -3390,6 +3494,8 @@ impl SupervisedWorkerProcess {
             shared_transport,
             bus_layout,
             plugin_path,
+            #[cfg(feature = "test-fixtures")]
+            fixture_mode,
         } = self;
         let state = supervisor.state();
         if state == WorkerState::Running {
@@ -3402,6 +3508,18 @@ impl SupervisedWorkerProcess {
         }
         let transport = process.take_shared_transport();
         drop(process);
+        #[cfg(feature = "test-fixtures")]
+        if let Some(mode) = fixture_mode.as_deref() {
+            return Self::spawn_fixture_with_supervisor(
+                executable,
+                &identity,
+                channels,
+                bus_layout.as_ref(),
+                mode,
+                supervisor,
+                now,
+            );
+        }
         if let Some(layout) = bus_layout {
             return Self::spawn_multi_bus_with_supervisor(
                 executable,
