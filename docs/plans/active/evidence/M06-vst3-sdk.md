@@ -2097,3 +2097,17 @@ M07, unsigned M08 preparation, 159 traceability mappings, and documentation
 validation all passed. No driver installation/loading, plugin registration,
 audio stream, signing-mode change, or persistent machine audio configuration
 was performed.
+
+## Validated state restoration across worker replacement (2026-09-09)
+
+`SupervisedWorkerProcess::restart_with_state` now provides a control-plane
+replacement operation that preserves the verified plugin path, then restores a
+caller-owned `PluginStateAsset` only after version, size, and hash validation.
+If restoration fails, the replacement supervisor is returned so failure and
+quarantine accounting is not silently discarded. The fixture regression seeded
+opaque bytes, deliberately failed the worker, restarted it with version 7, and
+verified that the exact bytes could be saved again. The all-features host suite
+passed 67 library and 34 worker tests with nine expected fixture-dependent
+skips; strict Clippy and documentation validation passed. This is fixture and
+control-plane evidence only; native third-party state/editor, callback-timing,
+and physical-latency gates remain open.

@@ -29,6 +29,12 @@ calculated at a different rate.
 
 ## Current multi-bus execution boundary
 
+Opaque state replacement boundary: a deliberate worker replacement may restore
+only a caller-owned state asset after the existing version, size, and integrity
+checks succeed. A restore failure remains visible to the control plane so the
+normal failure and quarantine policy can be applied; state is never silently
+dropped or replaced with unverified bytes.
+
 The repository now contains the bounded bus layout, coherent frame, shared-slot,
 graph-generation, engine-result, and separately negotiated echo-worker
 contracts described by PLUG-03. A preallocated `RuntimeBusScheduler` now

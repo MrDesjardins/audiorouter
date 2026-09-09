@@ -3561,6 +3561,27 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    /// Replace a failed worker and restore a caller-owned, integrity-checked
+    /// state asset before returning it to the control plane. State validation
+    /// occurs before the replacement receives the asset; a restore failure is
+    /// returned with the replacement supervisor so callers can apply the same
+    /// failure/quarantine policy without silently dropping the ledger.
+    pub fn restart_with_state(
+        self,
+        asset: PluginStateAsset,
+        expected_version: u32,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let mut replacement = self.restart(now)?;
+        match replacement.restore_state_for_version(asset, expected_version, now) {
+            Ok(()) => Ok(replacement),
+            Err(error) => {
+                let supervisor = replacement.into_supervisor();
+                Err((error, supervisor))
+            }
+        }
+    }
+
     fn ensure_running(&self) -> Result<(), WorkerProcessError> {
         if self.supervisor.state() == WorkerState::Running {
             Ok(())

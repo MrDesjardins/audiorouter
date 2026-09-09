@@ -1931,6 +1931,43 @@ fn supervised_worker_replacement_preserves_quarantine_history() {
     );
 }
 
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn supervised_worker_restart_restores_validated_state() {
+    let hash = "e".repeat(64);
+    let identity = PluginIdentity {
+        path: PathBuf::from("state.vst3"),
+        binary_path: PathBuf::from("state.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let start = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn_fixture(
+        fixture_worker_path(),
+        &identity,
+        1,
+        "latency",
+        start,
+    )
+    .expect("spawn state fixture worker");
+    let asset = PluginStateAsset::new(7, vec![4, 3, 2, 1]).unwrap();
+    worker
+        .restore_state(asset.clone(), start)
+        .expect("seed opaque state");
+    assert_eq!(
+        worker.record_failure(start),
+        audiorouter_plugin_host::WorkerState::Failed
+    );
+    let mut replacement = worker
+        .restart_with_state(asset.clone(), 7, start)
+        .expect("restart and restore opaque state");
+    assert_eq!(replacement.save_state(start).unwrap(), asset);
+    assert!(replacement.shutdown().unwrap().success());
+}
+
 #[test]
 fn disposable_worker_process_round_trips_shared_audio_frames() {
     let hash = "e".repeat(64);
