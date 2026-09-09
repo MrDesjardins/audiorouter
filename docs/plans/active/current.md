@@ -56,12 +56,13 @@ documented review of rights to host and redistribute test artifacts. The
 built-in DSP chain remains the supported native transformation path while this
 gate is open.
 
-Ordered next tasks: (1) preserve per-binary quarantine and diagnostics for the
-four failing ReaPlugs; (2) determine whether their failures require additional
-VST2 host callbacks/lifecycle support or are genuine incompatibilities, without
-raising worker deadlines; (3) qualify at least one additional legally usable
-VST2 fixture when available; (4) add parameter/state/editor/latency evidence
-for the two passing effects before enabling any user-facing capability.
+Ordered next tasks: (1) implement actual native editor open/close only behind a
+worker-owned Windows UI thread and explicit parent/window authorization; (2)
+qualify chunk-state and editor behavior with an additional legally usable VST2
+fixture; (3) preserve per-binary quarantine diagnostics and investigate the
+four failing ReaPlugs through bounded host-callback/lifecycle experiments,
+without raising worker deadlines; (4) keep VST2 user-facing availability
+gated until the compatibility and rights matrix is complete.
 Rollback is limited to reverting the adapter/tests/docs and removing ignored
 fixture copies; no plugin registration, driver, stream, default endpoint, or
 machine audio setting may change.

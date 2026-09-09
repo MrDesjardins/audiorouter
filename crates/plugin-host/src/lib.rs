@@ -939,6 +939,7 @@ pub enum WorkerSessionError {
     InvalidLatency,
     InvalidState,
     InvalidParameterDescriptor(ParameterDescriptorError),
+    InvalidEditor,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1410,7 +1411,7 @@ impl WorkerSession {
             WorkerMessageError::InvalidParameterDescriptor(error) => {
                 WorkerSessionError::InvalidParameterDescriptor(error)
             }
-            WorkerMessageError::InvalidEditor => WorkerSessionError::UnexpectedMessage,
+            WorkerMessageError::InvalidEditor => WorkerSessionError::InvalidEditor,
             _ => WorkerSessionError::UnexpectedMessage,
         })?;
         match (&self.state, message) {
