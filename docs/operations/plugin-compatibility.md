@@ -160,6 +160,14 @@ The canonical `m06-vst2-reaplugs.ps1` wrapper was subsequently run over the
 same ignored directory; its x64 classifier and per-candidate worker loop also
 passed all 18 cases, including intra-block parameter-offset coverage.
 
+On 2026-09-09, the installed ReaComp binary was independently requalified with
+`m06-vst2-installed.ps1`. SHA-256 was
+`4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`; worker
+processing passed at 44.1, 48, and 96 kHz, and both bounded editor-containment
+tests passed. This is a stronger binary-specific compatibility observation,
+but remains local evidence and does not establish redistribution rights or
+successful native editor support.
+
 Run the reproducible local qualification with:
 
 ```powershell

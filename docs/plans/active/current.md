@@ -121,6 +121,15 @@ release completion.
   installed or loaded, and no plugin registration, audio stream, signing-mode,
   startup, or persistent machine audio configuration action occurred.
 
+- Requalified the user-installed ReaComp VST2 binary on 2026-09-09 through
+  `m06-vst2-installed.ps1`. SHA-256 was
+  `4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`; real
+  worker processing passed at 44.1/48/96 kHz, and the bounded native-editor
+  containment and supervised timeout checks passed. The wrapper used process
+  environment overrides and made no registration, copy, audio, or persistent
+  machine configuration change. This advances local compatibility evidence,
+  not third-party rights or release qualification.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,
