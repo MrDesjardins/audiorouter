@@ -1130,3 +1130,17 @@ successfully. Both streams were stopped/reset and persistent defaults, volume,
 mute, privacy, driver, signing, and startup configuration were unchanged.
 This proves digital signal-path propagation only; calibrated physical latency,
 managed-driver ownership, and production callback timing remain open.
+
+## Native endpoint contention requalification (2026-09-09)
+
+`tests/acceptance/m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`
+completed its bounded lifecycle sweep. All 13 capture endpoints completed
+initialize/start/stop/reset, and all 18 render endpoints were exercised. One
+already-occupied render endpoint followed the expected exact
+`0x8889000A` (`AUDCLNT_E_DEVICE_IN_USE`) branch and still completed item and
+activation cleanup; the remaining endpoints completed the normal lifecycle.
+The media-device snapshot was unchanged and the wrapper removed its temporary
+executable/object. This is evidence for the contention classification and
+cleanup path, not proof of the production managed-driver callback or physical
+latency gate. No defaults, volume, mute, privacy, driver, signing, startup, or
+persistent machine audio setting changed.
