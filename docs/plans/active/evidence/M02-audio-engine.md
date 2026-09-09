@@ -1177,8 +1177,10 @@ route was rerun for 500 ms from the documented 96 kHz mono capture endpoint
 48 kHz stereo render endpoint
 `{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}`. The route passed
 with 48,000 capture frames, 187 graph blocks, 23,936 scheduler frames, and
-23,904 routed frames. Processing p99.9 was 32,768 ns; deadline misses and
-lateness were zero, and the wrapper reported zero scheduler overruns/XRuns.
+23,936 routed frames. Capture rate was 96,000 Hz, render rate was 48,000 Hz,
+the graph quantum was 128 frames, and the computed graph deadline was
+1,333,334 ns. Processing p99.9 was 16,384 ns; deadline misses and lateness
+were zero, and the wrapper reported zero scheduler overruns/XRuns.
 The wrapper verified unchanged endpoint/media state and restored/cleaned all
 temporary resources. This is shared-mode adapter evidence, not managed-driver
 callback, independent-clock, or physical-latency qualification.

@@ -596,10 +596,14 @@ fn adapter_smoke(
                 "adapter smoke scheduler telemetry was invalid",
             )));
         }
+        let graph_deadline_ns = graph_quantum_duration(capture_info.sample_rate_hz, 128).as_nanos();
         println!(
-            "adapter_smoke capture_endpoint={} render_endpoint={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_p999_upper_bound_ns={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={} scheduler_deadline_misses={} scheduler_deadline_lateness_ns_total={} scheduler_deadline_lateness_ns_max={} scheduler_deadline_lateness_p999_upper_bound_ns={} scheduler_deadline_lateness_histogram={}",
+            "adapter_smoke capture_endpoint={} render_endpoint={} capture_rate_hz={} render_rate_hz={} graph_quantum_frames=128 graph_deadline_ns={} capture_packets={} capture_frames={} capture_bytes={} graph_generation={} graph_blocks={} scheduler_frames={} pending_frames={} render_frames={} routed_frames={} route={} resampler_queued_frames={} drift_correction_ppm={:.3} scheduler_processed_quanta={} scheduler_xruns={} scheduler_input_overruns={} scheduler_output_overruns={} scheduler_processing_time_ns_total={} scheduler_processing_time_ns_max={} scheduler_processing_time_p999_upper_bound_ns={} scheduler_processing_time_histogram_samples={} scheduler_processing_time_histogram={} scheduler_deadline_misses={} scheduler_deadline_lateness_ns_total={} scheduler_deadline_lateness_ns_max={} scheduler_deadline_lateness_p999_upper_bound_ns={} scheduler_deadline_lateness_histogram={}",
             capture_info.id,
             render_info.id,
+            capture_info.sample_rate_hz,
+            render_info.sample_rate_hz,
+            graph_deadline_ns,
             capture_packets,
             capture_frames,
             capture_bytes,
