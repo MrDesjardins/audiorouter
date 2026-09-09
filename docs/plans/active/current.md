@@ -137,6 +137,10 @@ nonreturning native editor causes `SupervisedWorkerProcess` to terminate the
 contained worker and record one failure. The host does not wait indefinitely,
 restart automatically, or change the protected-path fallback decision.
 
+Added `tests/acceptance/m06-vst2-editor.ps1`, which repeats both bounded
+editor-containment checks across every ignored ReaPlugs fixture and restores
+the caller's existing fixture environment variable.
+
 Requalified the full workspace at this VST2 head: all locked workspace tests
 and doc-tests, strict workspace Clippy, formatting, diff checks, and
 documentation validation passed. The ignored native editor timeout probe and

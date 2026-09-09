@@ -105,6 +105,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst3-
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-reaplugs.ps1
 ```
 
+The bounded native-editor probe can be repeated with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-editor.ps1
+```
+
+This verifies timeout containment and worker termination for the local
+fixtures; it does not qualify their native editor windows.
+
 The VST2 wrapper runs each ignored DLL independently through the contained
 worker test and restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value.
 The fixture directory is local-only and is not part of source or release

@@ -1426,6 +1426,11 @@ editor timeout terminated the contained worker and preserved a single failure
 in the supervisor ledger. This confirms native editor hangs remain bounded at
 the process boundary rather than becoming an audio-host hang.
 
+The repeatable `tests/acceptance/m06-vst2-editor.ps1` wrapper now runs both
+editor-thread and supervised-worker timeout checks for each local ReaPlugs
+binary, restoring any pre-existing fixture variable. It records containment
+evidence only; native editor-window compatibility remains unqualified.
+
 The native processing boundary now independently rejects non-finite output
 before returning from `process_replacing`; a focused Windows regression uses a
 synthetic callback that writes NaN and verifies `NonFiniteOutput`. The worker's
