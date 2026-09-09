@@ -62,6 +62,7 @@ pub enum PluginFormat {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PluginCompatibility {
     SupportedVst3X64,
+    SupportedVst2X64Gated,
     UnsupportedFormat,
 }
 
@@ -330,6 +331,8 @@ impl PluginIdentity {
     pub fn compatibility(&self) -> PluginCompatibility {
         if self.format == PluginFormat::Vst3 && self.architecture == PeArchitecture::X64 {
             PluginCompatibility::SupportedVst3X64
+        } else if self.format == PluginFormat::Vst2 && self.architecture == PeArchitecture::X64 {
+            PluginCompatibility::SupportedVst2X64Gated
         } else {
             PluginCompatibility::UnsupportedFormat
         }
@@ -4230,6 +4233,16 @@ mod tests {
         assert_eq!(
             identity.compatibility(),
             PluginCompatibility::SupportedVst3X64
+        );
+        identity.format = PluginFormat::Vst2;
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X64Gated
+        );
+        identity.architecture = PeArchitecture::X86;
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::UnsupportedFormat
         );
         identity.format = PluginFormat::Unknown;
         assert_eq!(

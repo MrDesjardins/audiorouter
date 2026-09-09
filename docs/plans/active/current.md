@@ -55,6 +55,11 @@ native editor, chunk-state, rights, and release-compatibility evidence. The
 built-in DSP chain remains the supported native transformation path while this
 gate is open.
 
+The public identity contract now distinguishes `supportedVst2X64Gated` from
+`supportedVst3X64` and `unsupportedFormat`. This reports the approved worker
+boundary accurately without making the VST2 extension release-qualified or
+enabling it in a route without the remaining gates.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

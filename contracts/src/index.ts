@@ -92,7 +92,10 @@ export interface PluginScanEntry {
     vendor: string | null;
     version: string | null;
     classIds: string[];
-    compatibility: "supportedVst3X64" | "unsupportedFormat";
+    compatibility:
+      | "supportedVst3X64"
+      | "supportedVst2X64Gated"
+      | "unsupportedFormat";
   } | null;
   error: string | null;
   errorCode:

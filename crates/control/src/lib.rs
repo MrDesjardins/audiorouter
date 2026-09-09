@@ -1141,7 +1141,7 @@ fn method_output_schema(name: &str) -> Value {
                                     "vendor": { "type": ["string", "null"], "maxLength": 128 },
                                     "version": { "type": ["string", "null"], "maxLength": 128 },
                                     "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                                    "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
+                                    "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat"] }
                                 },
                                 "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                                 "additionalProperties": false
@@ -1173,7 +1173,7 @@ fn method_output_schema(name: &str) -> Value {
                         "vendor": { "type": ["string", "null"], "maxLength": 128 },
                         "version": { "type": ["string", "null"], "maxLength": 128 },
                         "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                        "compatibility": { "enum": ["supportedVst3X64", "unsupportedFormat"] }
+                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat"] }
                     },
                     "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                     "additionalProperties": false
@@ -5053,6 +5053,7 @@ impl ControlPlane {
                     "classIds": identity.metadata.class_ids,
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
                     }
                 }));
@@ -5148,6 +5149,7 @@ impl ControlPlane {
                     "classIds": identity.metadata.class_ids,
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
                     }
                 },
