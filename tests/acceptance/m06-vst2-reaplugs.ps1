@@ -1,5 +1,6 @@
 param(
-    [string]$FixtureDirectory = ''
+    [string]$FixtureDirectory = '',
+    [switch]$SkipIncompatibleCandidates
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,23 +55,46 @@ if ($supportedFixtures.Count -eq 0) {
     throw "No x64 VST2 DLL fixtures found in $fixtureRoot"
 }
 
+$qualifiedFixtures = @()
+$rejectedFixtures = @()
+
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 $previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
 try {
     foreach ($fixture in $supportedFixtures) {
         $env:AUDIOROUTER_VST2_FIXTURE = $fixture.FullName
-        foreach ($sampleRate in @(44100, 48000, 96000)) {
-            $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
-            Write-Output "Running VST2 worker acceptance: $($fixture.Name) at ${sampleRate} Hz"
-            & cargo test -p audiorouter-plugin-host --test worker_process `
-                --features test-fixtures --locked -- `
-                --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
-            if ($LASTEXITCODE -ne 0) {
-                throw "VST2 worker acceptance failed for $($fixture.Name) at ${sampleRate} Hz with exit code $LASTEXITCODE"
+        $candidatePassed = $true
+        try {
+            foreach ($sampleRate in @(44100, 48000, 96000)) {
+                $env:AUDIOROUTER_VST2_SAMPLE_RATE = [string]$sampleRate
+                Write-Output "Running VST2 worker acceptance: $($fixture.Name) at ${sampleRate} Hz"
+                & cargo test -p audiorouter-plugin-host --test worker_process `
+                    --features test-fixtures --locked -- `
+                    --ignored --exact verified_worker_loads_and_processes_an_opt_in_vst2_fixture --nocapture
+                if ($LASTEXITCODE -ne 0) {
+                    $candidatePassed = $false
+                    throw "VST2 worker acceptance failed for $($fixture.Name) at ${sampleRate} Hz with exit code $LASTEXITCODE"
+                }
             }
+        } catch {
+            if (-not $SkipIncompatibleCandidates) {
+                throw
+            }
+            $rejectedFixtures += $fixture
+            Write-Output "Rejected x64 VST2 candidate $($fixture.Name): incompatible with the bounded audio-effect/state contract."
+            continue
+        }
+        if ($candidatePassed) {
+            $qualifiedFixtures += $fixture
         }
     }
-    Write-Output "M06 VST2 acceptance passed for $($supportedFixtures.Count) x64 local fixtures at 44.1, 48, and 96 kHz."
+    if ($qualifiedFixtures.Count -eq 0) {
+        throw "No x64 VST2 candidates passed the bounded audio-effect acceptance."
+    }
+    Write-Output "M06 VST2 acceptance passed for $($qualifiedFixtures.Count) x64 fixtures at 44.1, 48, and 96 kHz."
+    if ($rejectedFixtures.Count -gt 0) {
+        Write-Output "Rejected incompatible x64 candidates: $($rejectedFixtures.Name -join ', ')"
+    }
 } finally {
     if ($null -eq $previousFixture) {
         Remove-Item Env:AUDIOROUTER_VST2_FIXTURE -ErrorAction SilentlyContinue

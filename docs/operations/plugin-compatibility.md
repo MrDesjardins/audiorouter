@@ -186,9 +186,14 @@ This verifies timeout containment and worker termination for the local
 fixtures; it does not qualify their native editor windows.
 
 The VST2 wrapper runs each ignored DLL independently through the contained
-worker test and restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` value.
-The fixture directory is local-only and is not part of source or release
-artifacts.
+worker test and restores any pre-existing `AUDIOROUTER_VST2_FIXTURE` and
+`AUDIOROUTER_VST2_SAMPLE_RATE` values. For a mixed user directory containing
+MIDI, utility, or streaming DLLs, pass
+`-SkipIncompatibleCandidates`; each rejected x64 candidate is reported and the
+remaining audio-effect candidates continue independently. The default mode
+still fails on the first x64 candidate regression, so ordinary acceptance does
+not hide a broken effect. The fixture directory is local-only and is not part
+of source or release artifacts.
 
 Chunk-state coverage can be run with the repository-owned fixture:
 

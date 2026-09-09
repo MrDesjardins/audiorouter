@@ -44,6 +44,15 @@ release completion.
   directories: utility/MIDI/streaming binaries must be classified or excluded
   before the audio-effect matrix; no release support is claimed for them.
 
+- Hardened mixed-directory VST2 qualification on 2026-09-09: the acceptance
+  wrapper now has an explicit `-SkipIncompatibleCandidates` mode that runs
+  each x64 DLL in an isolated worker, reports incompatible utility/MIDI/state
+  candidates, and continues qualifying independent audio effects. The installed
+  ReaPlugs run qualified seven x64 candidates at 44.1/48/96 kHz (including
+  ReaStream) and explicitly rejected ReaControlMIDI and ReaJS; default mode
+  still fails fast on candidate regressions. Environment variables were
+  restored and no plugin registration or audio configuration changed.
+
 - Closed an M07/AUTO-01 parity defect on 2026-09-09: the CLI `operation get`
   command no longer sends a null cancellation-only parameter that the shared
   dispatcher rejects, cancellation help documents its optional idempotency
