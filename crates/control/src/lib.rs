@@ -10217,7 +10217,9 @@ mod tests {
         assert_eq!(result["magnitudeDb"].as_array().unwrap().len(), 3);
         assert!(result["magnitudeDb"][1].as_f64().unwrap() > 5.0);
         let invalid = plane.dispatch(JsonRpcRequest {
-            jsonrpc: "2.0".into(), id: Some(json!(2)), method: "processors.response".into(),
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "processors.response".into(),
             params: Some(json!({"sampleRateHz": 48_000.0, "bands": [], "frequenciesHz": []})),
         });
         assert!(invalid.error.is_some());

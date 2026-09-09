@@ -64,6 +64,7 @@ describe("snapshot cache", () => {
       listApplications: async () => [],
       listDevices: async () => [],
       listProcessors: async () => [],
+      processorResponse: async () => ({ frequenciesHz: [], magnitudeDb: [] }),
       listPresets: async () => { throw new Error("not connected"); },
       scanPlugins: async () => { throw new Error("not connected"); },
       listPlugins: async () => { throw new Error("not connected"); },

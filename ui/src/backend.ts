@@ -38,9 +38,12 @@ import type {
   StatusSnapshot,
   RpcTransport,
 } from "@audiorouter/contracts";
+import type { MethodParams, MethodResult } from "@audiorouter/contracts";
 import { demoSession, demoSessions } from "./fixtures";
 
 export type ApplicationRow = ApplicationInfo;
+export type ProcessorResponseParams = NonNullable<MethodParams["processors.response"]>;
+export type ProcessorResponse = MethodResult["processors.response"];
 
 /** Formats structured backend failures without losing actionable audio guidance. */
 export function formatUiError(error: unknown, fallback: string): string {
@@ -73,6 +76,7 @@ export interface UiBackend {
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(): Promise<DeviceInfo[]>;
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
+  processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
   scanPlugins(directory: string): Promise<PluginScanResult>;
   listPlugins(directory: string): Promise<PluginScanResult>;
@@ -189,6 +193,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async listProcessors() {
       throw new Error("The backend is disconnected; processor catalog is unavailable.");
+    },
+    async processorResponse() {
+      throw new Error("The backend is disconnected; processor response is unavailable.");
     },
     async listPresets() {
       throw new Error("The backend is disconnected; preset catalog is unavailable.");
@@ -395,6 +402,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async listProcessors() {
       return client.request("processors.list", undefined);
+    },
+    async processorResponse(params) {
+      return client.request("processors.response", params);
     },
     async listPresets() {
       return client.request("presets.list", undefined);
