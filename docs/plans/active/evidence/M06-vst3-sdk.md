@@ -1746,3 +1746,11 @@ continued to fail with the expected layout diagnostic. The M06 acceptance also
 passed the pinned validators, main AGain probe, mda matrix, and documentation
 checks. This is native offline VST3 effect evidence, not worker/realtime
 scheduling or VST2 side-chain evidence.
+
+The Windows process regression now drives the same `WorkerBusSession` state
+machine around the framed fixture: it accepts Hello/Ready, records the
+outstanding request, validates the returned `ProcessedBuses`, and verifies
+that the expired-quantum path remains a bounded worker failure. The
+feature-enabled worker-process suite passed 22 tests with six expected
+fixture-dependent tests ignored; no realtime callback or machine audio path
+was used.

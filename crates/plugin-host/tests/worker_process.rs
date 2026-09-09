@@ -1,13 +1,13 @@
 #[cfg(all(windows, feature = "test-fixtures"))]
 use audiorouter_plugin_host::vst2::Vst2EditorThread;
-#[cfg(feature = "test-fixtures")]
-use audiorouter_plugin_host::WorkerAudioBusLayout;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
     PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
     WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
+#[cfg(feature = "test-fixtures")]
+use audiorouter_plugin_host::{WorkerAudioBusLayout, WorkerBusSession};
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::{MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ};
 #[cfg(feature = "test-fixtures")]
@@ -137,15 +137,18 @@ fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
 
     let hello = audiorouter_plugin_host::read_worker_message(&mut reader).unwrap();
     let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    let mut session = WorkerBusSession::new(&hash, layout.clone()).unwrap();
     assert_eq!(
         hello,
         WorkerMessage::HelloBuses {
             protocol_version: audiorouter_plugin_host::WORKER_PROTOCOL_VERSION,
-            plugin_sha256: hash,
+            plugin_sha256: hash.clone(),
             layout: layout.clone(),
         }
     );
+    session.accept(&hello, 0).unwrap();
     audiorouter_plugin_host::write_worker_message(&mut writer, &WorkerMessage::Ready).unwrap();
+    session.accept(&WorkerMessage::Ready, 0).unwrap();
 
     let deadline = worker_clock_tick().saturating_add(10_000);
     let frames = layout
@@ -154,15 +157,13 @@ fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
             WorkerFrame::new(7, deadline, 1, vec![0.5, 0.6]).unwrap(),
         ])
         .unwrap();
-    audiorouter_plugin_host::write_worker_message(
-        &mut writer,
-        &WorkerMessage::ProcessBuses {
-            layout: layout.clone(),
-            frames: frames.frames().to_vec(),
-            parameters: Vec::new(),
-        },
-    )
-    .unwrap();
+    let request = WorkerMessage::ProcessBuses {
+        layout: layout.clone(),
+        frames: frames.frames().to_vec(),
+        parameters: Vec::new(),
+    };
+    session.accept(&request, 0).unwrap();
+    audiorouter_plugin_host::write_worker_message(&mut writer, &request).unwrap();
     let response = audiorouter_plugin_host::read_worker_message(&mut reader).unwrap();
     assert_eq!(
         response,
@@ -171,6 +172,8 @@ fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {
             frames: frames.frames().to_vec(),
         }
     );
+    let processed = session.accept_result(&response).unwrap();
+    assert_eq!(processed.frames(), frames.frames());
     audiorouter_plugin_host::write_worker_message(&mut writer, &WorkerMessage::Shutdown).unwrap();
     drop(writer);
     assert!(child.wait().unwrap().success());
