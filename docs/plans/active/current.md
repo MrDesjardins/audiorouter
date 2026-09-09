@@ -101,6 +101,13 @@ release completion.
   compilation and linting completed successfully. This confirms the portable
   and plugin-host code remains warning-free after the current qualification
   work; no machine or audio configuration changed.
+- Re-ran `cargo test --workspace --locked` on 2026-09-09 at the current head;
+  556 unit/integration tests across all workspace crates and all doc-test
+  targets completed successfully. The run created 80 direct
+  `audiorouter-*` temporary test children; each path was validated beneath
+  the OS temp root and removed, and a follow-up scan found zero matches. No
+  driver, plugin registration, audio stream, or persistent machine audio
+  configuration changed.
 - Next safe task: continue with rights-cleared fixtures or portable/native
   gates whose execution boundary is already authorized; retain independent
   plugin execution, production driver, signing, installer, shell/HWND,
