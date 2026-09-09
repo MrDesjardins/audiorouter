@@ -112,6 +112,15 @@ release completion.
   audio streams, and persistent machine audio configuration remained out of
   scope.
 
+- Requalified the guarded `safe-all.ps1` chain at `20bc70b6` on 2026-09-09
+  after the finite meter dB contract change. Elevated native read-only access
+  was required for the 31-endpoint PnP inventory; all stages then passed,
+  including M04, native VST3 workers, VST2 chunk-state and legacy-main fixture
+  coverage at 44.1/48/96 kHz, M07, M08, 159 requirement mappings, and 51-file
+  documentation validation. Temporary outputs were removed. No driver was
+  installed or loaded, and no plugin registration, audio stream, signing-mode,
+  startup, or persistent machine audio configuration action occurred.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,
