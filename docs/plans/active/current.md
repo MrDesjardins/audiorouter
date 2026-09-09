@@ -49,6 +49,16 @@ release completion.
   shell/HWND, physical-latency, manual accessibility, and independent-plugin
   gates.
 
+- Requalified the focused M05 UI acceptance at the current head on 2026-09-09:
+  TypeScript typecheck, all 16 UI test files/111 tests, and the temporary
+  production Vite bundle (210 modules, three output files) passed. The runner
+  removed its temporary output; no audio, driver, registration, or machine
+  configuration changed.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; retain the native driver callback, signing, installer,
+  shell/HWND, physical-latency, manual accessibility, and independent-plugin
+  gates.
+
 - Requalified M07 headless behavior on 2026-09-09: 29 CLI tests, 2 MCP stdio
   interoperability tests, 99 control tests, 67 plugin-host tests, doc-tests,
   strict all-features Clippy, M01 CLI parity, and diff checks passed. The run
