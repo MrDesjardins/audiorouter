@@ -1190,3 +1190,14 @@ Command:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-rust-adapter-route-live.ps1 -AllowLiveAudio -DurationMilliseconds 500 -CaptureEndpointId '{0.0.1.00000000}.{2b694137-729a-4e08-b290-e891a6bc2487}' -RenderEndpointId '{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}'
 ```
+## Guarded digital impulse correlation (2026-09-08)
+
+The repository's guarded `m00-native-impulse.ps1` acceptance was run with
+`-AllowLiveAudio -ImpulseCount 100` against the explicitly named existing
+VB-Audio virtual-cable render/capture pair. It detected 97 of 100 impulse
+groups, with p95 spacing error of 0 frames and an estimated onset of 72.21 ms.
+The streams were stopped/reset and temporary artifacts were removed; the
+wrapper verifies media-state preservation and does not change defaults or
+persistent audio configuration. This is bounded digital signal correlation,
+not calibrated acoustic p95 latency, independent-clock evidence, managed-driver
+callback timing, or production-driver qualification.
