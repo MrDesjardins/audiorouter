@@ -1719,3 +1719,17 @@ returns a bounded `Failure` with a `multiBusIdentity` code and exits
 non-successfully rather than producing stale audio. This verifies the worker
 side of the late-result fail-closed boundary; supervised restart/quarantine
 policy and a real auxiliary-bus effect remain separate gates.
+
+## Multi-bus session result supervision (2026-09-09)
+
+`WorkerBusSession` now records the exact identity of its outstanding
+`ProcessBuses` quantum. `accept_result` accepts only a matching
+`ProcessedBuses` layout and sequence/deadline/frame-count identity; unsolicited,
+misidentified, and malformed results are rejected before they can reach
+graph-owned storage. `expire_pending_result` drops an overdue pending identity
+so a late response cannot be paired with a newer quantum. A focused regression
+covers result mismatch, duplicate/unsolicited response, deadline expiry, and
+late-response rejection. Plugin-host passed 66 unit tests, 13 ordinary
+worker-process tests, doc-tests, formatting, and strict Clippy. This is a
+protocol/session supervision boundary only: it does not claim a real auxiliary
+effect, realtime scheduling, or VST2 side-chain support.

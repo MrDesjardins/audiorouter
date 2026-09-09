@@ -960,6 +960,9 @@ pub enum WorkerSessionError {
     InvalidBusLayout(WorkerAudioBusLayoutError),
     InvalidBusFrames(WorkerAudioBusFramesError),
     BusLayoutMismatch,
+    NoPendingBusResult,
+    BusResultMismatch,
+    BusResultExpired,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2132,6 +2135,7 @@ pub struct WorkerBusSession {
     layout: WorkerAudioBusLayout,
     state: WorkerSessionState,
     frame_guard: WorkerFrameGuard,
+    pending_result: Option<(u64, u64, usize)>,
 }
 
 impl WorkerBusSession {
@@ -2148,6 +2152,7 @@ impl WorkerBusSession {
             layout,
             state: WorkerSessionState::AwaitingHello,
             frame_guard: WorkerFrameGuard::new(),
+            pending_result: None,
         })
     }
 
@@ -2212,6 +2217,11 @@ impl WorkerBusSession {
                         now_tick,
                     )
                     .map_err(WorkerSessionError::Frame)?;
+                self.pending_result = Some((
+                    frames.sequence(),
+                    frames.deadline_tick(),
+                    frames.frame_count(),
+                ));
                 Ok(Some(frames))
             }
             (WorkerSessionState::Active, WorkerMessage::ProcessBuses { .. }) => {
@@ -2219,6 +2229,63 @@ impl WorkerBusSession {
             }
             _ => Err(WorkerSessionError::UnexpectedMessage),
         }
+    }
+
+    /// Accept the one result corresponding to the outstanding multi-bus
+    /// quantum. A response with no pending request, a different bus layout,
+    /// or a different sequence/deadline/frame identity is rejected before it
+    /// can reach graph-owned output storage. Callers must treat the error as
+    /// a worker failure and fail closed.
+    pub fn accept_result(
+        &mut self,
+        message: &WorkerMessage,
+    ) -> Result<WorkerAudioBusFrames, WorkerSessionError> {
+        validate_worker_message(message).map_err(|error| match error {
+            WorkerMessageError::InvalidBusLayout(error) => {
+                WorkerSessionError::InvalidBusLayout(error)
+            }
+            WorkerMessageError::InvalidBusFrames(error) => {
+                WorkerSessionError::InvalidBusFrames(error)
+            }
+            _ => WorkerSessionError::UnexpectedMessage,
+        })?;
+        let WorkerMessage::ProcessedBuses { layout, frames } = message else {
+            return Err(WorkerSessionError::UnexpectedMessage);
+        };
+        if self.state != WorkerSessionState::Active {
+            return Err(WorkerSessionError::UnexpectedMessage);
+        }
+        let Some((sequence, deadline_tick, frame_count)) = self.pending_result.take() else {
+            return Err(WorkerSessionError::NoPendingBusResult);
+        };
+        if layout != &self.layout {
+            return Err(WorkerSessionError::BusLayoutMismatch);
+        }
+        let frames = self
+            .layout
+            .output_frames(frames.clone())
+            .map_err(WorkerSessionError::InvalidBusFrames)?;
+        if frames.sequence() != sequence
+            || frames.deadline_tick() != deadline_tick
+            || frames.frame_count() != frame_count
+        {
+            return Err(WorkerSessionError::BusResultMismatch);
+        }
+        Ok(frames)
+    }
+
+    /// Expire a missing result once its declared deadline has passed. The
+    /// pending identity is discarded so a late result cannot be paired with
+    /// a newer quantum. Returns `true` when a pending result was expired.
+    pub fn expire_pending_result(&mut self, now_tick: u64) -> bool {
+        let Some((_, deadline_tick, _)) = self.pending_result else {
+            return false;
+        };
+        if deadline_tick >= now_tick {
+            return false;
+        }
+        self.pending_result = None;
+        true
     }
 }
 
@@ -5497,6 +5564,72 @@ mod tests {
         assert_eq!(frames.sequence(), 1);
         assert_eq!(frames.frame_count(), 1);
         assert_eq!(session.state(), WorkerSessionState::Active);
+    }
+
+    #[test]
+    fn multi_bus_session_requires_matching_result_and_expires_missing_work() {
+        let layout = WorkerAudioBusLayout::new(&[2, 1], &[2]).unwrap();
+        let mut session = WorkerBusSession::new("a".repeat(64), layout.clone()).unwrap();
+        session
+            .accept(
+                &WorkerMessage::HelloBuses {
+                    protocol_version: WORKER_PROTOCOL_VERSION,
+                    plugin_sha256: "a".repeat(64),
+                    layout: layout.clone(),
+                },
+                0,
+            )
+            .unwrap();
+        session.accept(&WorkerMessage::Ready, 0).unwrap();
+        session
+            .accept(
+                &WorkerMessage::ProcessBuses {
+                    layout: layout.clone(),
+                    frames: vec![
+                        WorkerFrame::new(4, 100, 2, vec![0.0, 0.1]).unwrap(),
+                        WorkerFrame::new(4, 100, 1, vec![0.2]).unwrap(),
+                    ],
+                    parameters: Vec::new(),
+                },
+                0,
+            )
+            .unwrap();
+
+        let wrong_identity = WorkerMessage::ProcessedBuses {
+            layout: layout.clone(),
+            frames: vec![WorkerFrame::new(5, 100, 2, vec![0.3, 0.4]).unwrap()],
+        };
+        assert_eq!(
+            session.accept_result(&wrong_identity),
+            Err(WorkerSessionError::BusResultMismatch)
+        );
+        assert_eq!(
+            session.accept_result(&wrong_identity),
+            Err(WorkerSessionError::NoPendingBusResult)
+        );
+
+        session
+            .accept(
+                &WorkerMessage::ProcessBuses {
+                    layout: layout.clone(),
+                    frames: vec![
+                        WorkerFrame::new(6, 200, 2, vec![0.0, 0.1]).unwrap(),
+                        WorkerFrame::new(6, 200, 1, vec![0.2]).unwrap(),
+                    ],
+                    parameters: Vec::new(),
+                },
+                0,
+            )
+            .unwrap();
+        assert!(!session.expire_pending_result(200));
+        assert!(session.expire_pending_result(201));
+        assert_eq!(
+            session.accept_result(&WorkerMessage::ProcessedBuses {
+                layout,
+                frames: vec![WorkerFrame::new(6, 200, 2, vec![0.3, 0.4]).unwrap()],
+            }),
+            Err(WorkerSessionError::NoPendingBusResult)
+        );
     }
 
     #[test]
