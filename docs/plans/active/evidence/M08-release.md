@@ -1027,3 +1027,13 @@ prefix. Each target was validated as a direct child under the resolved temp
 root before removal. A follow-up scan found zero matching direct children.
 Repository files, local plugin binaries, drivers, audio streams, and
 persistent machine configuration were not touched.
+
+## All-features requalification after audio diagnostics (2026-09-09)
+
+The locked `cargo test --workspace --all-features` run passed 466
+unit/integration tests and all workspace doc-tests. Strict all-target Clippy,
+formatting, and diff checks also passed after the structured Windows audio
+failure contract was added. The run left 36 direct `audiorouter-*` temporary
+test databases; they were removed after temp-root validation and a follow-up
+scan found zero matches. No driver, plugin/startup registration, audio stream,
+signing-mode, or persistent machine configuration action occurred.
