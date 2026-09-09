@@ -71,6 +71,16 @@ release completion.
   gate while retaining independent-plugin, native driver callback, signing,
   installer, shell/HWND, physical-latency, and manual accessibility blockers.
 
+- Requalified M06 native VST3 worker acceptance on 2026-09-09: isolated AGain
+  single-stream and auxiliary-bus processing, asynchronous graph staging,
+  bounded failure/restart/quarantine recovery, validated state restoration,
+  repeated-quantum timing, finite transformed output, and bounded shutdown all
+  passed. This is repository-local fixture evidence; no plugin registration,
+  audio stream, or machine configuration changed.
+- Next safe task: continue independently observable acceptance gates while
+  retaining the independent-vendor, native driver callback, signing,
+  installer, shell/HWND, physical-latency, and manual accessibility blockers.
+
 - Requalified the focused M05 UI acceptance at the current head on 2026-09-09:
   TypeScript typecheck, all 16 UI test files/111 tests, and the temporary
   production Vite bundle (210 modules, three output files) passed. The runner
