@@ -306,6 +306,49 @@ fn supervised_multi_bus_worker_restarts_with_same_layout_and_ledger() {
 
 #[cfg(feature = "test-fixtures")]
 #[test]
+fn supervised_multi_bus_worker_fails_closed_on_expired_quantum() {
+    let hash = "d".repeat(64);
+    let layout = WorkerAudioBusLayout::new(&[2, 1], &[2, 1]).unwrap();
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: hash,
+        metadata: Default::default(),
+    };
+    let now = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn_multi_bus_fixture(
+        fixture_worker_path(),
+        &identity,
+        &layout,
+        now,
+    )
+    .expect("spawn supervised expired multi-bus worker");
+    let expired = layout
+        .input_frames(vec![
+            WorkerFrame::new(1, 0, 2, vec![0.0, 0.0]).unwrap(),
+            WorkerFrame::new(1, 0, 1, vec![0.0]).unwrap(),
+        ])
+        .unwrap();
+    let error = worker
+        .process_buses(expired, Vec::new(), now)
+        .expect_err("expired quantum must fail closed");
+    assert!(matches!(
+        error,
+        audiorouter_plugin_host::WorkerProcessError::Protocol(code)
+            if code.starts_with("multiBusIdentity:")
+    ));
+    assert_eq!(worker.state(), audiorouter_plugin_host::WorkerState::Failed);
+    let diagnostic = worker.failure_diagnostic().unwrap();
+    assert_eq!(diagnostic.identity.sha256, identity.sha256);
+    assert_eq!(diagnostic.failure_count, 1);
+    let _ = worker.shutdown();
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
 fn disposable_worker_rejects_invalid_sample_rate_before_spawn() {
     for sample_rate_hz in [MIN_WORKER_SAMPLE_RATE_HZ - 1, MAX_WORKER_SAMPLE_RATE_HZ + 1] {
         assert!(matches!(

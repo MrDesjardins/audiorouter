@@ -1783,6 +1783,14 @@ artifacts, 159 traceability mappings, and documentation validation (51 files,
 driver, signing, plugin registration, audio stream, or persistent machine
 configuration action occurred.
 
+The supervised process regression also sends an expired multi-bus quantum
+through the typed owner. The worker returns the bounded `multiBusIdentity`
+failure, the owner transitions to `Failed` and terminates the process, and its
+diagnostic retains the verified plugin hash and one failure count. The
+feature-enabled worker-process suite passed 25 tests with six expected
+fixture-dependent tests ignored. This verifies propagation of deadline failure
+into supervision; it does not claim realtime callback behavior.
+
 The plugin-host API now exposes a fixture-gated `WorkerProcess` multi-bus
 client. It launches the separately negotiated bus worker, validates the exact
 `HelloBuses` layout, exchanges a complete `ProcessBuses` quantum, validates
