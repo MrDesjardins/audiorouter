@@ -61,6 +61,12 @@ release completion.
   graph operations. UI typecheck and 98 tests pass; native shell/manual
   accessibility acceptance remains open.
 
+- Completed the remaining high-value UI action/error paths on 2026-09-09:
+  recorder lifecycle, virtual-device inventory/planning/apply, and the
+  corresponding graph-adjacent refreshes now use the structured backend error
+  formatter. UI typecheck, 98 tests, and diff checks pass; native endpoint and
+  manual shell acceptance remain open.
+
 - Probed the repository-local mda VST3 bundle through the generic native
   AudioRouter worker on 2026-09-09. Its x64 binary is 3,375,616 bytes with
   SHA-256 `727b8396f9092755f18a62d7a9bfec588b7cea5c136cca297a8010aad3fa467f`;
