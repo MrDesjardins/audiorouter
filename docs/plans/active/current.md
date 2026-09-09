@@ -65,6 +65,13 @@ release completion.
   contract is found; retain independent-plugin, native-shell/HWND, production
   driver, signing, installer, clean-machine, and physical-latency gates.
 
+- Revalidated M08 traceability on 2026-09-09: the delivery map covers all 159
+  normative requirement IDs. This is documentation coverage evidence only and
+  does not waive implementation, hardware, driver, signing, or release gates.
+- Next safe task: continue portable hardening only where a concrete uncovered
+  contract is found; retain independent-plugin, native-shell/HWND, production
+  driver, signing, installer, clean-machine, and physical-latency gates.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `f6ec7a1c` on 2026-09-09. VS2026/WDK discovery and native compile,
   read-only 31-endpoint inventory, disposable SysVAD x64 compile/package/API/
