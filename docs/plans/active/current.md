@@ -60,6 +60,13 @@ release completion.
   by the scoped key, and completed operations remain non-undoable. Focused CLI
   and control tests (129 total) plus all-target/all-features Clippy pass.
 
+- Closed the remaining safety/recovery key-contract gap on 2026-09-09:
+  safety.setPrivacyMute and recovery.clearSafeMode now require bounded
+  non-empty idempotency keys in the backend schema, CLI, MCP, and transport
+  paths. Outcomes are durably journaled and replayable by scoped key; focused
+  CLI/control/transport tests (148 total) and formatting pass. Existing
+  authorization, privacy, and safe-mode behavior remains unchanged.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown

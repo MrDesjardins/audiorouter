@@ -561,7 +561,7 @@ fn recordings_command(args: &[&str]) -> Result<Value, CliError> {
 fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
     if args.get(1).copied() != Some("mute") {
         return Err(CliError::InvalidArguments(
-            "usage: privacy mute <on|off> --database <path> [--idempotency-key KEY]".into(),
+            "usage: privacy mute <on|off> --database <path> --idempotency-key KEY".into(),
         ));
     }
     let muted = match args.get(2).copied() {
@@ -569,11 +569,11 @@ fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
         Some("off") => false,
         _ => {
             return Err(CliError::InvalidArguments(
-                "usage: privacy mute <on|off> --database <path> [--idempotency-key KEY]".into(),
+                "usage: privacy mute <on|off> --database <path> --idempotency-key KEY".into(),
             ))
         }
     };
-    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    let idempotency_key = option_value(args, "--idempotency-key")?;
     let mut plane = ControlPlane::with_storage("cli", database(args)?);
     plane
         .dispatch(audiorouter_protocol::JsonRpcRequest {
@@ -592,10 +592,10 @@ fn privacy_command(args: &[&str]) -> Result<Value, CliError> {
 fn recovery_command(args: &[&str]) -> Result<Value, CliError> {
     if args.get(1).copied() != Some("clear-safe-mode") {
         return Err(CliError::InvalidArguments(
-            "usage: recovery clear-safe-mode --database <path> [--idempotency-key KEY]".into(),
+            "usage: recovery clear-safe-mode --database <path> --idempotency-key KEY".into(),
         ));
     }
-    let idempotency_key = optional_option_value(args, "--idempotency-key")?;
+    let idempotency_key = option_value(args, "--idempotency-key")?;
     let response = ControlPlane::with_storage("cli", database(args)?).dispatch(
         audiorouter_protocol::JsonRpcRequest {
             jsonrpc: "2.0".into(),
@@ -1931,8 +1931,8 @@ fn mcp_tools() -> Value {
         { "name": "reveal_recording", "description": "Reveal a recording in the operating system file browser; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "set_recording_metadata", "description": "Update recording metadata without changing its audio or path; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "title": { "type": ["string", "null"], "maxLength": 256 }, "artist": { "type": ["string", "null"], "maxLength": 256 }, "comment": { "type": ["string", "null"], "maxLength": 256 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "rename_recording", "description": "Rename a recording within its approved directory; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "newPath": { "type": "string", "minLength": 1 } }, "required": ["recordingId", "newPath"], "additionalProperties": false } },
-        { "name": "set_privacy_mute", "description": "Latch or clear process-local privacy mute; requires capture scope.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" } }, "required": ["muted"], "additionalProperties": false } },
-        { "name": "clear_recovery_safe_mode", "description": "Clear the latched crash-recovery safe mode after stability is confirmed; requires session-control scope.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "set_privacy_mute", "description": "Latch or clear process-local privacy mute; requires capture scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "muted": { "type": "boolean" }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["muted", "idempotencyKey"], "additionalProperties": false } },
+        { "name": "clear_recovery_safe_mode", "description": "Clear the latched crash-recovery safe mode after stability is confirmed; requires session-control scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["idempotencyKey"], "additionalProperties": false } },
         { "name": "remove_recording_entry", "description": "Remove recording library metadata without deleting the file.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "recycle_recording", "description": "Preview or explicitly recycle a recording through the OS Recycle Bin; requires recording scope.", "inputSchema": { "type": "object", "properties": { "recordingId": { "type": "string", "minLength": 1 }, "confirm": { "type": "boolean" } }, "required": ["recordingId"], "additionalProperties": false } },
         { "name": "plan_graph_change", "description": "Validate and preview a complete graph candidate without committing it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "baseRevision": { "type": "integer", "minimum": 0 }, "candidate": { "type": "object" } }, "required": ["sessionId", "baseRevision", "candidate"], "additionalProperties": false } },
@@ -1994,7 +1994,7 @@ fn mcp_tool_call(
         "set_recording_metadata" => ("recordings.setMetadata", Some(arguments)),
         "rename_recording" => ("recordings.rename", Some(arguments)),
         "set_privacy_mute" => ("safety.setPrivacyMute", Some(arguments)),
-        "clear_recovery_safe_mode" => ("recovery.clearSafeMode", None),
+        "clear_recovery_safe_mode" => ("recovery.clearSafeMode", Some(arguments)),
         "remove_recording_entry" => ("recordings.removeEntry", Some(arguments)),
         "recycle_recording" => ("recordings.recycle", Some(arguments)),
         "plan_graph_change" => ("graph.plan", Some(arguments)),
@@ -2519,7 +2519,17 @@ mod tests {
         assert_eq!(fetched["title"], "Updated title");
         assert_eq!(fetched["path"], "C:\\Audio\\recording.wav");
         let muted: Value = serde_json::from_str(
-            &run(["privacy", "mute", "on", "--database", &database, "--json"]).unwrap(),
+            &run([
+                "privacy",
+                "mute",
+                "on",
+                "--database",
+                &database,
+                "--idempotency-key",
+                "privacy-cli-1",
+                "--json",
+            ])
+            .unwrap(),
         )
         .unwrap();
         assert_eq!(muted["muted"], true);
@@ -3041,6 +3051,8 @@ mod tests {
                 "clear-safe-mode",
                 "--database",
                 &database_arg,
+                "--idempotency-key",
+                "recovery-cli-1",
                 "--json",
             ])
             .unwrap(),
@@ -3369,7 +3381,7 @@ mod tests {
             None,
             &json!({
                 "id": 11,
-                "params": { "name": "clear_recovery_safe_mode", "arguments": {} }
+                "params": { "name": "clear_recovery_safe_mode", "arguments": { "idempotencyKey": "mcp-clear-1" } }
             }),
         );
         assert_eq!(cleared["result"]["isError"], false);
@@ -3380,7 +3392,7 @@ mod tests {
             None,
             &json!({
                 "id": 12,
-                "params": { "name": "clear_recovery_safe_mode", "arguments": {} }
+                "params": { "name": "clear_recovery_safe_mode", "arguments": { "idempotencyKey": "mcp-clear-2" } }
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);

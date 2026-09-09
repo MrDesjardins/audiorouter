@@ -462,11 +462,11 @@ fn method_input_schema(name: &str) -> Value {
                 "muted": { "type": "boolean" },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
-            &["muted"],
+            &["muted", "idempotencyKey"],
         ),
         "recovery.clearSafeMode" => object_schema(
             json!({ "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
-            &[],
+            &["idempotencyKey"],
         ),
         "startup.get" => object_schema(json!({}), &[]),
         "startup.plan" => object_schema(json!({ "enabled": { "type": "boolean" } }), &["enabled"]),
@@ -4776,26 +4776,24 @@ impl ControlPlane {
     }
 
     fn dispatch_privacy_mute(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.unwrap_or_else(|| json!({}));
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("muted and idempotencyKey are required".into())
+        })?;
         let muted = params
             .get("muted")
             .and_then(Value::as_bool)
             .ok_or_else(|| ControlError::InvalidRequest("muted is required".into()))?;
-        let operation = params
+        let idempotency_key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
-            .map(|key| {
-                let request = json!({ "muted": muted });
-                (
-                    self.scoped_idempotency_key("safety.setPrivacyMute", key),
-                    Self::request_hash(&request),
-                )
-            });
-        if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
-                return Ok(previous);
-            }
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("safety.setPrivacyMute", idempotency_key),
+            Self::request_hash(&json!({ "muted": muted })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
         }
         if let Some(storage) = &self.storage {
             storage.save_privacy_mute(muted).map_err(storage_error)?;
@@ -4816,28 +4814,29 @@ impl ControlPlane {
             "persistence": if self.storage.is_some() { "durable" } else { "memory" },
             "audioEffect": "process-local-when-realtime-backend-is-available"
         });
-        if let Some((key, hash)) = operation {
-            self.journal_idempotent_result(&key, "safety.setPrivacyMute", &hash, &result)?;
-        }
+        self.journal_idempotent_result(
+            &operation.0,
+            "safety.setPrivacyMute",
+            &operation.1,
+            &result,
+        )?;
         Ok(result)
     }
 
     fn dispatch_recovery_clear(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
-        let params = params.unwrap_or_else(|| json!({}));
-        let operation = params
+        let params = params
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let idempotency_key = params
             .get("idempotencyKey")
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
-            .map(|key| {
-                (
-                    self.scoped_idempotency_key("recovery.clearSafeMode", key),
-                    Self::request_hash(&json!({ "action": "clear" })),
-                )
-            });
-        if let Some((key, hash)) = &operation {
-            if let Some(previous) = self.lookup_idempotent_result(key, hash)? {
-                return Ok(previous);
-            }
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let operation = (
+            self.scoped_idempotency_key("recovery.clearSafeMode", idempotency_key),
+            Self::request_hash(&json!({ "action": "clear" })),
+        );
+        if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
+            return Ok(previous);
         }
         if let Some(storage) = &self.storage {
             storage.clear_recovery_crashes().map_err(storage_error)?;
@@ -4850,9 +4849,12 @@ impl ControlPlane {
             "recentCrashes": 0,
             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
         });
-        if let Some((key, hash)) = operation {
-            self.journal_idempotent_result(&key, "recovery.clearSafeMode", &hash, &result)?;
-        }
+        self.journal_idempotent_result(
+            &operation.0,
+            "recovery.clearSafeMode",
+            &operation.1,
+            &result,
+        )?;
         Ok(result)
     }
 
@@ -8185,7 +8187,7 @@ mod tests {
             jsonrpc: "2.0".into(),
             id: Some(json!(19)),
             method: "recovery.clearSafeMode".into(),
-            params: None,
+            params: Some(json!({ "idempotencyKey": "recovery-clear-2" })),
         });
         assert_eq!(cleared.result.unwrap()["safeMode"], false);
         let status_after = plane.dispatch(JsonRpcRequest {
@@ -9748,7 +9750,7 @@ mod tests {
                 jsonrpc: "2.0".into(),
                 id: Some(json!(22)),
                 method: "recovery.clearSafeMode".into(),
-                params: None,
+                params: Some(json!({ "idempotencyKey": "recovery-clear-3" })),
             },
             "operator",
             &grant,

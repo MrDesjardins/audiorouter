@@ -1233,7 +1233,8 @@ mod tests {
         let clear = encode_frame(&serde_json::json!({
             "jsonrpc": "2.0",
             "id": 301,
-            "method": "recovery.clearSafeMode"
+            "method": "recovery.clearSafeMode",
+            "params": { "idempotencyKey": "transport-clear-1" }
         }))
         .unwrap();
         let subscribe = encode_frame(&serde_json::json!({

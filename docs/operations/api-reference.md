@@ -45,8 +45,8 @@ after the initial 47-method reference.
 | `recordings.rename` | `record` | external operation |
 | `recordings.removeEntry` | `record` | mutating |
 | `recordings.recycle` | `record` | external operation |
-| `safety.setPrivacyMute` | `capture` | mutating |
-| `recovery.clearSafeMode` | `sessionControl` | mutating |
+| `safety.setPrivacyMute` | `capture` | mutating; requires an idempotency key |
+| `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
 | `startup.get` | `read` | read-only |
 | `startup.plan` | `sessionControl` | plan-only |
 | `startup.apply` | `sessionControl` | mutating |
