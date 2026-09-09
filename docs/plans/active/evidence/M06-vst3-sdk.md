@@ -57,6 +57,18 @@ all crate integration tests and doc-tests. This confirms the normal-build
 parameter API did not alter the existing VST2 single-stream or native-gated
 boundaries.
 
+## Native VST3 parameter-event processing (2026-09-09)
+
+The native loader was rebuilt with VS2026/MSVC 14.51 and Windows SDK
+10.0.28000.0 after adding bounded `IParameterChanges` and
+`IParamValueQueue` host objects. It sends a normalized value of `0.5` at sample
+offset zero for the first exposed controller parameter before processing. The
+mda class-0 probe, AGain main class, and AGain side-chain class-2 probe with
+`--multi-bus` all completed with finite output; the side-chain result reported
+two input buses and one output bus. No audio device was opened and no machine
+configuration changed. This is native offline parameter-delivery evidence, not
+the supervised realtime VST3 worker or graph scheduler.
+
 ## 2026-09-09 - Deadline-bounded missing-result containment
 
 The typed multi-bus worker client now limits response waiting to the quantum's

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <stdexcept>
@@ -18,6 +19,7 @@
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/vsttypes.h"
 
 namespace fs = std::filesystem;
@@ -124,6 +126,82 @@ private:
     uint32 references = 1;
     std::vector<uint8_t> data;
     std::size_t position = 0;
+};
+
+class SingleParameterQueue final : public Vst::IParamValueQueue {
+public:
+    explicit SingleParameterQueue(Vst::ParamID id) : id(id) {}
+
+    tresult PLUGIN_API queryInterface(const TUID, void** object) override {
+        if (object) {
+            *object = nullptr;
+        }
+        return kNoInterface;
+    }
+
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+    Vst::ParamID PLUGIN_API getParameterId() override { return id; }
+    int32 PLUGIN_API getPointCount() override { return has_point ? 1 : 0; }
+
+    tresult PLUGIN_API getPoint(int32 index, int32& sample_offset,
+                                Vst::ParamValue& value) override {
+        if (index != 0 || !has_point) {
+            return kInvalidArgument;
+        }
+        sample_offset = offset;
+        value = normalized_value;
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API addPoint(int32 sample_offset, Vst::ParamValue value,
+                                int32& index) override {
+        if (sample_offset < 0 || !std::isfinite(value) || value < 0.0 || value > 1.0) {
+            return kInvalidArgument;
+        }
+        offset = sample_offset;
+        normalized_value = value;
+        has_point = true;
+        index = 0;
+        return kResultOk;
+    }
+
+private:
+    Vst::ParamID id;
+    int32 offset = 0;
+    Vst::ParamValue normalized_value = 0.0;
+    bool has_point = false;
+};
+
+class SingleParameterChanges final : public Vst::IParameterChanges {
+public:
+    tresult PLUGIN_API queryInterface(const TUID, void** object) override {
+        if (object) {
+            *object = nullptr;
+        }
+        return kNoInterface;
+    }
+
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+    int32 PLUGIN_API getParameterCount() override { return queue ? 1 : 0; }
+
+    Vst::IParamValueQueue* PLUGIN_API getParameterData(int32 index) override {
+        return index == 0 && queue ? &*queue : nullptr;
+    }
+
+    Vst::IParamValueQueue* PLUGIN_API addParameterData(const Vst::ParamID& id,
+                                                       int32& index) override {
+        if (queue) {
+            return nullptr;
+        }
+        queue.emplace(id);
+        index = 0;
+        return &*queue;
+    }
+
+private:
+    std::optional<SingleParameterQueue> queue;
 };
 
 static fs::path resolve_binary(const fs::path& supplied) {
@@ -311,6 +389,34 @@ int wmain(int argc, wchar_t** argv) {
                 component_active = true;
                 require_processing_result("processor activation", processor->setProcessing(true));
                 processor_active = true;
+                TUID controller_id{};
+                if (component->getControllerClassId(controller_id) != kResultOk ||
+                    factory->createInstance(
+                        controller_id, Vst::IEditController_iid,
+                        reinterpret_cast<void**>(&controller)) != kResultOk) {
+                    throw std::runtime_error("controller createInstance failed");
+                }
+                if (controller->initialize(nullptr) != kResultOk) {
+                    throw std::runtime_error("controller initialize failed");
+                }
+                const auto parameter_count = controller->getParameterCount();
+                constexpr int32 max_parameter_descriptors = 256;
+                if (parameter_count < 0 || parameter_count > max_parameter_descriptors) {
+                    throw std::runtime_error("parameter descriptor count exceeds bounded contract");
+                }
+                SingleParameterChanges parameter_changes;
+                if (parameter_count > 0) {
+                    Vst::ParameterInfo parameter{};
+                    if (controller->getParameterInfo(0, parameter) != kResultOk) {
+                        throw std::runtime_error("getParameterInfo failed");
+                    }
+                    int32 queue_index = -1;
+                    auto* queue = parameter_changes.addParameterData(parameter.id, queue_index);
+                    if (!queue || queue_index != 0 ||
+                        queue->addPoint(0, 0.5, queue_index) != kResultOk) {
+                        throw std::runtime_error("parameter change construction failed");
+                    }
+                }
                 std::vector<std::vector<std::vector<float>>> input_storage;
                 std::vector<std::vector<std::vector<float>>> output_storage;
                 std::vector<std::vector<Vst::Sample32*>> input_channels;
@@ -347,6 +453,7 @@ int wmain(int argc, wchar_t** argv) {
                 data.numOutputs = outputs;
                 data.inputs = input_buses.data();
                 data.outputs = output_buses.data();
+                data.inputParameterChanges = parameter_count > 0 ? &parameter_changes : nullptr;
                 require_result("processor process", processor->process(data));
                 for (const auto& bus : output_storage) {
                     for (const auto& channel : bus) {
@@ -371,21 +478,6 @@ int wmain(int argc, wchar_t** argv) {
                 if (state.seek(0, IBStream::kIBSeekSet, nullptr) != kResultOk ||
                     component->setState(&state) != kResultOk) {
                     throw std::runtime_error("component state round trip failed");
-                }
-                TUID controller_id{};
-                if (component->getControllerClassId(controller_id) != kResultOk ||
-                    factory->createInstance(
-                        controller_id, Vst::IEditController_iid,
-                        reinterpret_cast<void**>(&controller)) != kResultOk) {
-                    throw std::runtime_error("controller createInstance failed");
-                }
-                if (controller->initialize(nullptr) != kResultOk) {
-                    throw std::runtime_error("controller initialize failed");
-                }
-                const auto parameter_count = controller->getParameterCount();
-                constexpr int32 max_parameter_descriptors = 256;
-                if (parameter_count < 0 || parameter_count > max_parameter_descriptors) {
-                    throw std::runtime_error("parameter descriptor count exceeds bounded contract");
                 }
                 for (int32 index = 0; index < parameter_count; ++index) {
                     Vst::ParameterInfo parameter{};

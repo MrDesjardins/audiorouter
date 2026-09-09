@@ -4,16 +4,18 @@ This native probe is a non-audio loading gate for the pinned local VST3 SDK.
 It loads one explicit x64 VST3 bundle, calls its GetPluginFactory export,
 enumerates factory class metadata, instantiates and initializes the first audio
 component to inspect its bus counts, then terminates/releases it and unloads
-the module. It also processes one bounded offline stereo block, checks that
-the output is finite, initializes the associated controller, and exercises
-normalized parameter set/readback while restoring the original values. It does
-bounded controller descriptor discovery (parameter ID, ASCII-safe title,
-normalized default, step count, and flags) and rejects catalogs larger than
-the worker contract's 256-entry limit. It does
+the module. It also initializes the associated controller, sends one bounded
+normalized parameter event through `IParameterChanges` during a bounded offline
+process block, checks that the output is finite, and exercises controller
+parameter set/readback while restoring the original values. It does bounded
+controller descriptor discovery (parameter ID, ASCII-safe title, normalized
+default, step count, and flags) and rejects catalogs larger than the worker
+contract's 256-entry limit. It does
 an in-memory component state save/restore, and does not create an editor, open
 an audio device, or alter machine configuration. A valid effect with no
 automatable parameters is accepted; automation checks run when parameters are
-exposed.
+exposed. This is native offline event evidence; it does not imply supervised
+worker or realtime graph scheduling.
 
 Build and run from the repository root:
 
