@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `f6ec7a1c`; the
+The latest clean full M00-M08 acceptance passed at pushed head `16aed8a1`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `697f43c3`; later commits after
+The active branch is currently pushed through `f75a08b9`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -4634,9 +4634,12 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M05/M06 task: retain verified identity as display-only until the authenticated native shell and managed process-capture owner are integrated; continue independent plugin qualification and native gates.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at pushed head `f6b394e2` on 2026-09-08 after the verified application identity UI panel: M00 toolchain/native compile and read-only 31-endpoint inventory, disposable pinned SysVAD x64 package/API/signability qualification, M01/M04, M05 UI (typecheck, 15 files/93 tests, temporary production build), M06 SDK/VST3 and VST2 fixtures, M07, unsigned M08 preparation, 159 normative traceability mappings, and documentation validation (51 Markdown files/161 local links) passed. Temporary outputs/checkouts were removed; no driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred. Production/native release gates remain open.
 - Next M05/M06 task: retain the read-only identity presentation until authenticated native-shell/process-capture integration exists; qualify an independent rights-cleared plugin when supplied and continue the remaining native release gates.
+- Corrected active-plan checkpoint metadata on 2026-09-09: the latest clean full-chain evidence is `16aed8a1`, and the currently pushed branch is `f75a08b9`; later commits are UI accessibility and plan-evidence updates. Documentation validation and the all-features plugin-host suite remain green.
 - Completed M05/UI-11 keyboard connection accessibility hardening on 2026-09-09: added a real keyboard connection dialog using the existing draft/validation path, with labelled source/destination selectors, Escape dismissal, initial focus, and focus restoration to the opener. UI typecheck, 15 test files/98 tests, temporary production build, and diff checks passed. The ordinary `ui` build also reached Vite but could not replace a locked existing `ui/dist` asset (`EPERM`); the identical build succeeded in `.tmp-ui-build`. No audio, plugin, driver, or machine configuration changed.
 - Next M05 task: add focused component coverage for dialog focus/keyboard behavior if the UI test harness gains a DOM renderer; retain the native shell, Narrator/manual, and production audio gates.
 - Follow-up correction on 2026-09-09: the dialog now remains open when validation rejects an incomplete/duplicate connection, so the user can correct the selection without losing context; successful draft insertion closes it and restores focus. UI typecheck, 15 test files/98 tests, and diff checks passed.
+- Rechecked M06/PLUG-07 legacy boundary on 2026-09-09: the contained VST2 adapter still recognizes only the established `VSTPluginMain` and legacy `main` exports after absolute-path/x64 worker launch, validates the `AEffect` header before lifecycle calls, and keeps VST2 on the single-stream `processReplacing` contract. Repository fixtures cover both exports; x86, instruments/MIDI, scripting, redistribution, and auxiliary-bus flattening remain explicitly rejected/out of scope.
+- Next M06 task: qualify a supplied rights-cleared independent x64 VST2/VST3 effect or integrate the authenticated native-shell HWND owner; retain the gated VST2 rights/editor/release boundary.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at pushed head `861d4b51` on 2026-09-09: VS2026/MSVC/Windows SDK/WDK discovery and native compile, read-only 31-endpoint format inventory, disposable pinned SysVAD x64 compile/package/API/signability qualification, M01 CLI, M04 DSP/recording, M05 UI, pinned VST3 SDK/validator and loader matrix, repository modern/legacy/fault VST2 fixtures, M07 headless checks, unsigned M08 artifacts, 159 normative traceability mappings, and documentation validation (51 Markdown files/163 local links) passed. The first guarded attempt exposed strict-Clippy regressions in the newly added multi-bus fixture test; those were corrected in `861d4b51` before this successful rerun. Temporary checkouts/artifacts were cleaned. No driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred. Production driver/signing, installer, clean-machine, physical-latency, manual UI, and rights-cleared independent-plugin gates remain open.
 - Next M06/PLUG-03 task: qualify a rights-cleared effect that genuinely exposes auxiliary buses, then connect it to the bounded worker/graph staging contract; retain VST2 single-stream support and the explicit one-input/one-output VST3 side-chain rejection until that evidence exists.
