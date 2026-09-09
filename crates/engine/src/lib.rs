@@ -2524,7 +2524,11 @@ pub fn compile_session_at_sample_rate(
         }
         previous_node = Some(node_id);
     }
-    Ok(RuntimeGraph::prepare(generation, stages))
+    Ok(RuntimeGraph::prepare_at_sample_rate(
+        generation,
+        stages,
+        sample_rate_hz,
+    ))
 }
 
 /// Compile the supported mixer-convergence topology. This intentionally has a
@@ -2723,6 +2727,7 @@ pub fn compile_fanout_session(
 pub struct RuntimeGraph {
     stages: Vec<ProcessingStage>,
     generation: RuntimeGeneration,
+    sample_rate_hz: u32,
     meters: Vec<BlockMeter>,
 }
 
@@ -2837,6 +2842,13 @@ impl RuntimeProcessor {
         self.publication
             .load()
             .and_then(|graph| graph.meter_snapshot(index))
+    }
+
+    /// Return the negotiated rate of the currently published graph. This is
+    /// a control/diagnostics read of immutable graph metadata; `None` means
+    /// the processor has not been activated.
+    pub fn active_sample_rate_hz(&self) -> Option<u32> {
+        self.publication.load().map(|graph| graph.sample_rate_hz())
     }
 
     /// Process one block and return the active generation. Before a graph is
@@ -3105,6 +3117,18 @@ impl RealtimeScheduler {
 
 impl RuntimeGraph {
     pub fn prepare(generation: RuntimeGeneration, stages: Vec<ProcessingStage>) -> Self {
+        Self::prepare_at_sample_rate(generation, stages, INTERNAL_SAMPLE_RATE_HZ)
+    }
+
+    /// Prepare a graph whose stateful stages were constructed for the
+    /// negotiated endpoint rate. Callers must validate the rate before
+    /// construction; endpoint-aware compilation does so through the bounded
+    /// graph-rate contract.
+    pub fn prepare_at_sample_rate(
+        generation: RuntimeGeneration,
+        stages: Vec<ProcessingStage>,
+        sample_rate_hz: u32,
+    ) -> Self {
         let meter_count = stages
             .iter()
             .filter_map(|stage| match stage {
@@ -3116,12 +3140,20 @@ impl RuntimeGraph {
         Self {
             stages,
             generation,
+            sample_rate_hz,
             meters: (0..meter_count).map(|_| BlockMeter::default()).collect(),
         }
     }
 
     pub fn generation(&self) -> RuntimeGeneration {
         self.generation
+    }
+
+    /// Return the rate used to prepare every stateful stage in this graph.
+    /// This is immutable graph metadata and is safe to read from a retained
+    /// realtime snapshot without consulting control-plane state.
+    pub fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
     }
 
     /// Return the lock-free meter for a prepared Meter node. Meter storage is
@@ -4778,6 +4810,8 @@ mod tests {
             INTERNAL_SAMPLE_RATE_HZ,
         )
         .unwrap();
+        assert_eq!(graph_44.sample_rate_hz(), 44_100);
+        assert_eq!(graph_48.sample_rate_hz(), INTERNAL_SAMPLE_RATE_HZ);
         let mut block_44 = AudioBlock::new(1, 128).unwrap();
         let mut block_48 = AudioBlock::new(1, 128).unwrap();
         block_44.channel_mut(0).unwrap()[0] = 1.0;
@@ -5441,6 +5475,7 @@ mod tests {
         scheduler
             .activate_session_at_sample_rate(&session, RuntimeGeneration::new(30), 44_100)
             .unwrap();
+        assert_eq!(scheduler.processor().active_sample_rate_hz(), Some(44_100));
         assert!(matches!(
             scheduler.activate_session_at_sample_rate(
                 &session,
@@ -5460,6 +5495,7 @@ mod tests {
             Some(30)
         );
         assert_eq!(block.channel(0).unwrap(), &[0.25; 2]);
+        assert_eq!(scheduler.processor().active_sample_rate_hz(), Some(44_100));
     }
 
     #[test]
