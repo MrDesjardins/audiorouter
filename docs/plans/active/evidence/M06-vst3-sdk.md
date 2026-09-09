@@ -1349,6 +1349,11 @@ Windows target. Non-Windows discovery remains `unsupportedFormat`, matching the
 platform-specific worker-start boundary; the plugin-host regression covers
 both target branches.
 
+The worker processing path now rejects any VST2 NaN/Inf output before
+interleaving it into the protocol frame. The rejection is returned as a worker
+failure so the supervisor can silence protected paths and count the binary
+toward quarantine; no non-finite sample crosses the worker boundary.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

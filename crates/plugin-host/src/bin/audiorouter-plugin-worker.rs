@@ -436,6 +436,13 @@ fn process_vst2_frame(
     plugin
         .process_replacing(&inputs, &mut outputs)
         .map_err(|error| format!("process callback failed: {error:?}"))?;
+    if output_channels
+        .iter()
+        .flat_map(|channel| channel.iter())
+        .any(|sample| !sample.is_finite())
+    {
+        return Err("plugin produced a non-finite sample".into());
+    }
     for (index, destination) in frame.samples.iter_mut().enumerate() {
         *destination = output_channels[index % channels][index / channels];
     }
