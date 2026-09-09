@@ -182,6 +182,12 @@ evidence, not successful editor-window support. Qualification remains
 fixture-specific and does not establish rights to redistribute the installed
 binary.
 
+The generic opt-in processing acceptance also attempts optional state
+save/restore for a selected third-party effect. The separate deterministic
+chunk-state regression is intentionally restricted to the repository-owned
+fixture because it asserts that fixture's exact one-parameter transform; it is
+not a generic claim about every VST2 effect's state model.
+
 The sibling `pitchproof.dll` from the same installation is an x86 binary and
 was rejected by read-only inspection as `unsupportedArchitecture`; it was not
 loaded. This negative control confirms that the x64 VST2 gate does not bridge

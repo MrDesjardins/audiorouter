@@ -45,6 +45,15 @@ release completion.
   overrides were restored and no plugin registration or machine audio change
   occurred; rights, editor, physical-latency, and release gates remain open.
 
+- Audited the real-plugin state path on 2026-09-09. The generic opt-in VST2
+  processing acceptance exercises optional state save/restore for third-party
+  effects, while the stricter chunk-state regression intentionally rejects
+  non-repository filenames because it asserts the fixture's exact one-parameter
+  behavior. A direct ReaComp run therefore stopped at that test precondition,
+  not in native loading or processing; no adapter defect was reproduced. A
+  future state qualification should use a behavior-specific independent test
+  rather than weakening the repository fixture's assertions.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
