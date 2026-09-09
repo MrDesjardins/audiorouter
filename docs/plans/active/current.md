@@ -121,6 +121,13 @@ is implemented, but rights/editor/release qualification remains open.
   its sequence/deadline identity intact. The focused native worker and
   all-features plugin-host checks passed. This remains worker-thread staging;
   realtime callback scheduling and physical latency are not claimed.
+- Added the M06/PLUG-03 `RuntimeBusScheduler` staging primitive on 2026-09-09:
+  preallocated input/output quantum slots transfer complete mono/stereo bus
+  sets without waiting or callback allocation, reject queue pressure before
+  partial publication, and silence missing or stale output quanta. Engine
+  tests (86), strict engine Clippy, formatting, and diff checks passed. This
+  is bounded graph staging; a background native worker loop, callback timing,
+  and physical-latency evidence remain open.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   the native VST3 worker integration on 2026-09-09. The chain passed native
   toolchain/endpoint checks, disposable pinned SysVAD x64 qualification, M01,

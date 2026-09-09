@@ -1531,6 +1531,16 @@ pub enum RuntimeBusProcessError {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RuntimeBusSchedulerError {
+    InvalidCapacity,
+    InputBusCount,
+    OutputBusCount,
+    BlockShape,
+    InputQueueFull,
+    OutputQueueFull,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct RuntimeBusQuantumIdentity {
     pub sequence: u64,
     pub deadline_tick: u64,
@@ -1555,6 +1565,255 @@ impl RuntimeBusQuantumIdentity {
 
     fn is_valid(self) -> bool {
         self.sequence != 0 && self.deadline_tick != 0 && self.frame_count != 0
+    }
+}
+
+struct RuntimeBusQuantum {
+    generation: RuntimeGeneration,
+    identity: RuntimeBusQuantumIdentity,
+    blocks: Vec<AudioBlock>,
+}
+
+impl RuntimeBusQuantum {
+    fn new(channels: &[usize], frames: usize) -> Result<Self, RuntimeBusSchedulerError> {
+        let blocks = channels
+            .iter()
+            .map(|channels| AudioBlock::new(*channels, frames))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| RuntimeBusSchedulerError::BlockShape)?;
+        Ok(Self {
+            generation: RuntimeGeneration::new(0),
+            identity: RuntimeBusQuantumIdentity {
+                sequence: 0,
+                deadline_tick: 0,
+                frame_count: 0,
+            },
+            blocks,
+        })
+    }
+
+    fn reset(&mut self, generation: RuntimeGeneration, identity: RuntimeBusQuantumIdentity) {
+        self.generation = generation;
+        self.identity = identity;
+    }
+}
+
+/// Fixed-capacity, nonblocking staging between a graph callback and a worker
+/// owner. All bus quantum storage and queue slots are allocated at
+/// construction. Submission, handoff, and result publication only copy into
+/// caller-owned blocks; they never wait, allocate, or partially publish a
+/// multi-bus quantum.
+pub struct RuntimeBusScheduler {
+    input_layout: RuntimeBusLayout,
+    output_layout: RuntimeBusLayout,
+    input_free: crossbeam_queue::ArrayQueue<RuntimeBusQuantum>,
+    input_ready: crossbeam_queue::ArrayQueue<RuntimeBusQuantum>,
+    output_free: crossbeam_queue::ArrayQueue<RuntimeBusQuantum>,
+    output_ready: crossbeam_queue::ArrayQueue<RuntimeBusQuantum>,
+}
+
+impl RuntimeBusScheduler {
+    pub fn new(
+        capacity: usize,
+        input_layout: RuntimeBusLayout,
+        output_layout: RuntimeBusLayout,
+        frames: usize,
+    ) -> Result<Self, RuntimeBusSchedulerError> {
+        if capacity == 0 || frames == 0 || frames > PROCESSING_QUANTUM_FRAMES {
+            return Err(RuntimeBusSchedulerError::InvalidCapacity);
+        }
+        let input_free = crossbeam_queue::ArrayQueue::new(capacity);
+        let input_ready = crossbeam_queue::ArrayQueue::new(capacity);
+        let output_free = crossbeam_queue::ArrayQueue::new(capacity);
+        let output_ready = crossbeam_queue::ArrayQueue::new(capacity);
+        for _ in 0..capacity {
+            input_free
+                .push(RuntimeBusQuantum::new(
+                    input_layout.input_channels(),
+                    frames,
+                )?)
+                .map_err(|_| RuntimeBusSchedulerError::InvalidCapacity)?;
+            output_free
+                .push(RuntimeBusQuantum::new(
+                    output_layout.output_channels(),
+                    frames,
+                )?)
+                .map_err(|_| RuntimeBusSchedulerError::InvalidCapacity)?;
+        }
+        Ok(Self {
+            input_layout,
+            output_layout,
+            input_free,
+            input_ready,
+            output_free,
+            output_ready,
+        })
+    }
+
+    pub fn input_layout(&self) -> &RuntimeBusLayout {
+        &self.input_layout
+    }
+
+    pub fn output_layout(&self) -> &RuntimeBusLayout {
+        &self.output_layout
+    }
+
+    pub fn input_ready(&self) -> usize {
+        self.input_ready.len()
+    }
+
+    pub fn output_ready(&self) -> usize {
+        self.output_ready.len()
+    }
+
+    /// Copy one complete graph quantum into a free input slot. The caller
+    /// retains all source blocks; a full queue returns the ownership-free
+    /// error without changing any source or destination.
+    pub fn try_submit_inputs(
+        &self,
+        generation: RuntimeGeneration,
+        identity: RuntimeBusQuantumIdentity,
+        inputs: &[&AudioBlock],
+    ) -> Result<(), RuntimeBusSchedulerError> {
+        if inputs.len() != self.input_layout.input_channels().len() {
+            return Err(RuntimeBusSchedulerError::InputBusCount);
+        }
+        if generation.value() == 0 || !identity.is_valid() {
+            return Err(RuntimeBusSchedulerError::BlockShape);
+        }
+        for (block, channels) in inputs.iter().zip(self.input_layout.input_channels()) {
+            if block.channels() != *channels || block.frames() != identity.frame_count {
+                return Err(RuntimeBusSchedulerError::BlockShape);
+            }
+        }
+        let mut slot = self
+            .input_free
+            .pop()
+            .ok_or(RuntimeBusSchedulerError::InputQueueFull)?;
+        for (destination, source) in slot.blocks.iter_mut().zip(inputs) {
+            if destination.copy_from(source).is_err() {
+                let _ = self.input_free.push(slot);
+                return Err(RuntimeBusSchedulerError::BlockShape);
+            }
+        }
+        slot.reset(generation, identity);
+        if self.input_ready.push(slot).is_err() {
+            return Err(RuntimeBusSchedulerError::InputQueueFull);
+        }
+        Ok(())
+    }
+
+    /// Take one complete input quantum for the worker/control owner. The
+    /// worker must return the slot with `recycle_input` after conversion.
+    pub fn try_take_input(&self) -> Option<RuntimeBusQuantumHandle> {
+        self.input_ready.pop().map(RuntimeBusQuantumHandle)
+    }
+
+    pub fn recycle_input(&self, handle: RuntimeBusQuantumHandle) {
+        let _ = self.input_free.push(handle.0);
+    }
+
+    /// Publish a complete worker output quantum from caller-owned blocks.
+    /// This is the worker-side operation; the realtime graph only consumes
+    /// the already staged slot below.
+    pub fn try_submit_outputs(
+        &self,
+        generation: RuntimeGeneration,
+        identity: RuntimeBusQuantumIdentity,
+        outputs: &[&AudioBlock],
+    ) -> Result<(), RuntimeBusSchedulerError> {
+        if outputs.len() != self.output_layout.output_channels().len() {
+            return Err(RuntimeBusSchedulerError::OutputBusCount);
+        }
+        if generation.value() == 0 || !identity.is_valid() {
+            return Err(RuntimeBusSchedulerError::BlockShape);
+        }
+        for (block, channels) in outputs.iter().zip(self.output_layout.output_channels()) {
+            if block.channels() != *channels || block.frames() != identity.frame_count {
+                return Err(RuntimeBusSchedulerError::BlockShape);
+            }
+        }
+        let mut slot = self
+            .output_free
+            .pop()
+            .ok_or(RuntimeBusSchedulerError::OutputQueueFull)?;
+        for (destination, source) in slot.blocks.iter_mut().zip(outputs) {
+            if destination.copy_from(source).is_err() {
+                let _ = self.output_free.push(slot);
+                return Err(RuntimeBusSchedulerError::BlockShape);
+            }
+        }
+        slot.reset(generation, identity);
+        if self.output_ready.push(slot).is_err() {
+            return Err(RuntimeBusSchedulerError::OutputQueueFull);
+        }
+        Ok(())
+    }
+
+    /// Consume the next output without waiting. Missing, stale, or mismatched
+    /// worker output clears every destination and returns a fail-closed
+    /// outcome. Shape errors are reported before any destination changes.
+    pub fn try_publish_output(
+        &self,
+        generation: RuntimeGeneration,
+        expected: RuntimeBusQuantumIdentity,
+        destinations: &mut [&mut AudioBlock],
+    ) -> Result<RuntimeBusProcessOutcome, RuntimeBusSchedulerError> {
+        if destinations.len() != self.output_layout.output_channels().len() {
+            return Err(RuntimeBusSchedulerError::OutputBusCount);
+        }
+        if generation.value() == 0 || !expected.is_valid() {
+            return Err(RuntimeBusSchedulerError::BlockShape);
+        }
+        for (destination, channels) in destinations
+            .iter()
+            .zip(self.output_layout.output_channels())
+        {
+            if destination.channels() != *channels || destination.frames() != expected.frame_count {
+                return Err(RuntimeBusSchedulerError::BlockShape);
+            }
+        }
+        let Some(slot) = self.output_ready.pop() else {
+            for destination in destinations.iter_mut() {
+                destination.clear();
+            }
+            return Ok(RuntimeBusProcessOutcome::SilencedWorkerResult);
+        };
+        let matches = slot.generation == generation && slot.identity == expected;
+        if !matches {
+            for destination in destinations.iter_mut() {
+                destination.clear();
+            }
+            let _ = self.output_free.push(slot);
+            return Ok(RuntimeBusProcessOutcome::SilencedWorkerResult);
+        }
+        for (destination, source) in destinations.iter_mut().zip(&slot.blocks) {
+            if destination.copy_from(source).is_err() {
+                let _ = self.output_free.push(slot);
+                return Err(RuntimeBusSchedulerError::BlockShape);
+            }
+        }
+        let _ = self.output_free.push(slot);
+        Ok(RuntimeBusProcessOutcome::Processed)
+    }
+}
+
+/// Opaque ownership of one preallocated input slot transferred to the worker
+/// side. Its blocks are borrowed only through accessors and must be recycled
+/// after the worker has copied/converted the quantum.
+pub struct RuntimeBusQuantumHandle(RuntimeBusQuantum);
+
+impl RuntimeBusQuantumHandle {
+    pub fn generation(&self) -> RuntimeGeneration {
+        self.0.generation
+    }
+
+    pub fn identity(&self) -> RuntimeBusQuantumIdentity {
+        self.0.identity
+    }
+
+    pub fn blocks(&self) -> &[AudioBlock] {
+        &self.0.blocks
     }
 }
 
@@ -5859,6 +6118,64 @@ mod tests {
                 .unwrap(),
             RuntimeBusProcessOutcome::SilencedWorkerResult
         );
+    }
+
+    #[test]
+    fn runtime_bus_scheduler_keeps_complete_quanta_bounded_and_fail_closed() {
+        let input_layout = RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap();
+        let output_layout = RuntimeBusLayout::new(vec![2, 1], vec![2]).unwrap();
+        let scheduler = RuntimeBusScheduler::new(1, input_layout, output_layout, 4).unwrap();
+        let generation = RuntimeGeneration::new(3);
+        let identity = RuntimeBusQuantumIdentity::new(11, 99, 4).unwrap();
+        let main = AudioBlock::new(2, 4).unwrap();
+        let sidechain = AudioBlock::new(1, 4).unwrap();
+        let inputs = [&main, &sidechain];
+
+        scheduler
+            .try_submit_inputs(generation, identity, &inputs)
+            .unwrap();
+        assert_eq!(scheduler.input_ready(), 1);
+        assert_eq!(
+            scheduler.try_submit_inputs(generation, identity, &inputs),
+            Err(RuntimeBusSchedulerError::InputQueueFull)
+        );
+
+        let input = scheduler.try_take_input().unwrap();
+        assert_eq!(input.generation(), generation);
+        assert_eq!(input.identity(), identity);
+        assert_eq!(input.blocks().len(), 2);
+        scheduler.recycle_input(input);
+
+        let output = AudioBlock::new(2, 4).unwrap();
+        let outputs = [&output];
+        scheduler
+            .try_submit_outputs(generation, identity, &outputs)
+            .unwrap();
+        let mut destination = AudioBlock::new(2, 4).unwrap();
+        destination.channel_mut(0).unwrap().fill(1.0);
+        destination.channel_mut(1).unwrap().fill(1.0);
+        let mut destinations = [&mut destination];
+        assert_eq!(
+            scheduler
+                .try_publish_output(generation, identity, &mut destinations)
+                .unwrap(),
+            RuntimeBusProcessOutcome::Processed
+        );
+
+        destination.channel_mut(0).unwrap().fill(1.0);
+        destination.channel_mut(1).unwrap().fill(1.0);
+        let mut destinations = [&mut destination];
+        assert_eq!(
+            scheduler
+                .try_publish_output(generation, identity, &mut destinations)
+                .unwrap(),
+            RuntimeBusProcessOutcome::SilencedWorkerResult
+        );
+        assert!(destination
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| *sample == 0.0));
     }
 
     #[test]

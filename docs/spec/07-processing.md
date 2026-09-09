@@ -31,7 +31,10 @@ calculated at a different rate.
 
 The repository now contains the bounded bus layout, coherent frame, shared-slot,
 graph-generation, engine-result, and separately negotiated echo-worker
-contracts described by PLUG-03. The native offline VST3 probe also activates
+contracts described by PLUG-03. A preallocated `RuntimeBusScheduler` now
+provides the nonblocking graph-to-worker and worker-to-graph slot boundary for
+complete multi-bus quanta; it is a staging primitive and does not itself run a
+worker or claim callback timing. The native offline VST3 probe also activates
 and processes the pinned SDK's genuine two-input/one-output AGain side-chain
 class when `--multi-bus` is explicitly selected; the default single-bus probe
 continues to reject that layout. The production VST2 worker remains a
