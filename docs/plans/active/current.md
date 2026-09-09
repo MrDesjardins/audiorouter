@@ -97,6 +97,11 @@ is implemented, but rights/editor/release qualification remains open.
   candidates retain the clean shutdown path. ReaPlugs and installed x64
   Pitchproof acceptance passed with environment restoration.
 
+- Hardened the M06 VST2 mixed-directory classifier on 2026-09-09 to read only
+  the bounded DOS/PE headers instead of allocating the entire candidate DLL.
+  The mixed Pitchproof directory still reports the x86 sibling and qualifies
+  the x64 binary at all three rates; the six-ReaPlugs matrix also passed.
+
 - Requalified the guarded M00-M08 `safe-all.ps1` chain at pushed head
   `8335f5a7` on 2026-09-09: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only endpoint inventory, disposable pinned SysVAD x64 qualification,
