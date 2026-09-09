@@ -2000,12 +2000,13 @@ bus is finite, and the worker shuts down cleanly. A channel mismatch is rejected
 before activation. This proves native auxiliary-bus worker execution, not
 realtime graph scheduling, physical-latency performance, or release rights.
 
-The full guarded `tests/acceptance/safe-all.ps1` chain was rerun with this
-native worker acceptance included. Native toolchain/endpoint checks, disposable
-SysVAD qualification, portable/UI milestones, VST3/VST2 fixture coverage, M07,
-unsigned M08 preparation, 159 traceability mappings, and documentation checks
-all passed. This remains single-stream worker evidence; auxiliary-bus native
-execution, realtime graph scheduling, and physical-latency gates remain open.
+The full guarded `tests/acceptance/safe-all.ps1` chain was rerun from clean
+commit `eb0ad978` with this native worker acceptance included. Native
+toolchain/endpoint checks, disposable SysVAD qualification, portable/UI
+milestones, VST3/VST2 fixture coverage, M07, unsigned M08 preparation, 159
+traceability mappings, and documentation checks all passed. Realtime graph
+scheduling, physical-latency, production signing, and release-rights gates
+remain open.
 
 ## VST2 intra-block parameter timing (2026-09-09)
 
