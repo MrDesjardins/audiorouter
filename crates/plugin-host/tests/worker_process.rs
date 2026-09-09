@@ -71,6 +71,45 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
     );
 }
 
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires AUDIOROUTER_VST2_FIXTURE pointing to an approved local VST2 DLL"]
+fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the opt-in VST2 acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST2 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST2 fixture without loading it");
+    assert_eq!(identity.format, PluginFormat::Vst2);
+    assert_eq!(identity.architecture, PeArchitecture::X64);
+    let worker_path = fixture_worker_path();
+    let mut worker = SupervisedWorkerProcess::spawn_verified(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        Instant::now(),
+    )
+    .expect("load VST2 fixture in the isolated worker");
+    let frame = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        2,
+        vec![0.0, 0.0, 0.1, -0.1, 0.2, -0.2, 0.0, 0.0],
+    )
+    .unwrap();
+    let processed = worker
+        .process(frame, Vec::new(), Instant::now())
+        .expect("VST2 worker processing");
+    assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+    assert!(worker.shutdown().unwrap().success());
+}
+
 #[cfg(feature = "test-fixtures")]
 #[test]
 fn disposable_worker_process_round_trips_non_empty_parameter_descriptors() {

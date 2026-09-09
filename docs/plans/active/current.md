@@ -46,15 +46,15 @@ worker boundary. x86 bridging, instruments/MIDI, Audio Units, scripts,
 redistribution, auto-download, and protected-voice dry fallback remain out of
 scope.
 
-The six copied ReaPlugs fixtures expose `VSTPluginMain`, but the current scanner
-correctly reports them as unsupported because the VST2 adapter and safe runtime
-boundary do not exist yet. They remain ignored, disposable local fixtures and
-were not loaded, registered, or executed. Before implementation can be called
-compatible, the plan requires: an ABI/ownership adapter; bounded scan and
-worker loading; crash/hang/invalid-sample/layout/editor/state/latency tests; a
-multi-binary fixture matrix; and a documented review of rights to host and
-redistribute test artifacts. The built-in DSP chain remains the supported native
-transformation path while this gate is open.
+The six copied ReaPlugs fixtures expose `VSTPluginMain`; the scanner identifies
+them as VST2 while retaining unsupported compatibility until the runtime matrix
+is qualified. The adapter now loads and processes compatible effects only
+inside the disposable worker. They remain ignored, disposable local fixtures
+and were not registered. The matrix still requires crash/hang/invalid-sample/
+layout/editor/state/latency tests, a multi-binary fixture matrix, and a
+documented review of rights to host and redistribute test artifacts. The
+built-in DSP chain remains the supported native transformation path while this
+gate is open.
 
 Ordered next tasks: (1) define VST2 identity and entry-point inspection without
 executing DLLs; (2) implement the smallest x64 effect adapter in the isolated
@@ -71,19 +71,20 @@ and callback signatures, replacing-process requirement, and bounded
 mono/stereo/parameter validation are covered by two focused tests. No unsafe
 block, DLL load, callback invocation, or machine-state operation was added.
 
-The same module now contains a Windows-only RAII loader for the eventual
-worker: it resolves only `VSTPluginMain`, validates the returned header, sets
-bounded format values, processes caller-owned fixed blocks, and closes the
-effect/library on drop. Unsafe FFI invariants are documented. It is not yet
-connected to `WorkerProcess`, so no third-party DLL can be loaded by the
-application path; native runtime loading and ReaPlugs processing remain an
-explicit next acceptance gate.
+The same module contains a Windows-only RAII loader used by the worker: it
+resolves only `VSTPluginMain`, validates the returned header, sets bounded
+format values, processes caller-owned fixed blocks, and closes the
+effect/library on drop. Unsafe FFI invariants are documented.
 
-The worker supervisor now returns the explicit `Vst2AdapterUnavailable` error
-for an identified x64 VST2 binary and remains stopped. This prevents a newly
-recognized legacy DLL from crossing the runtime boundary accidentally while
-the adapter is still being developed. Plugin-host tests (48), worker-process
-tests (13), and strict Clippy passed.
+The worker supervisor now passes only verified x64 VST2 identities to the
+contained worker. Plugin-host tests (50), worker-process tests (13), and strict
+Clippy passed.
+
+The opt-in native VST2 matrix loaded and processed ReaComp and ReaGate
+successfully. ReaDelay and ReaXComp exceeded the five-second worker response
+deadline; ReaEQ and ReaFIR terminated the worker during processing. These four
+remain explicit unsupported fixtures for this adapter revision and were
+contained without audio-device access.
 
 The locked all-workspace regression sweep then passed, including control (97),
 domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport

@@ -1081,9 +1081,21 @@ impl WorkerSupervisor {
             return Err(WorkerStartError::Quarantined);
         }
         if identity.format == PluginFormat::Vst2 {
-            return Err(WorkerStartError::Vst2AdapterUnavailable);
+            #[cfg(windows)]
+            {
+                if identity.architecture != PeArchitecture::X64 {
+                    return Err(WorkerStartError::UnsupportedPlugin);
+                }
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = identity;
+                return Err(WorkerStartError::Vst2AdapterUnavailable);
+            }
         }
-        if identity.format != PluginFormat::Vst3 || identity.architecture != PeArchitecture::X64 {
+        if !matches!(identity.format, PluginFormat::Vst3 | PluginFormat::Vst2)
+            || identity.architecture != PeArchitecture::X64
+        {
             return Err(WorkerStartError::UnsupportedPlugin);
         }
         self.state = WorkerState::Running;
@@ -1798,7 +1810,17 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        match WorkerProcess::spawn(&executable, &identity.sha256, channels) {
+        let process_result = if identity.format == PluginFormat::Vst2 {
+            WorkerProcess::spawn_for_plugin(
+                &executable,
+                &identity.binary_path,
+                &identity.sha256,
+                channels,
+            )
+        } else {
+            WorkerProcess::spawn(&executable, &identity.sha256, channels)
+        };
+        match process_result {
             Ok(process) => Ok(Self {
                 process,
                 supervisor,
@@ -1856,7 +1878,18 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        match WorkerProcess::spawn_shared(&executable, &identity.sha256, channels, transport) {
+        let process_result = if identity.format == PluginFormat::Vst2 {
+            WorkerProcess::spawn_shared_for_plugin(
+                &executable,
+                &identity.binary_path,
+                &identity.sha256,
+                channels,
+                transport,
+            )
+        } else {
+            WorkerProcess::spawn_shared(&executable, &identity.sha256, channels, transport)
+        };
+        match process_result {
             Ok(process) => Ok(Self {
                 process,
                 supervisor,
@@ -2125,7 +2158,36 @@ impl WorkerProcess {
         plugin_sha256: &str,
         channels: u16,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_inner(executable, plugin_sha256, channels, None, None)
+        Self::spawn_inner(executable, plugin_sha256, channels, None, None, None)
+    }
+
+    #[cfg(windows)]
+    pub fn spawn_for_plugin(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            channels,
+            None,
+            None,
+            Some(plugin_path.as_ref()),
+        )
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_for_plugin(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: u16,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST2 loading requires Windows".into(),
+        ))
     }
 
     #[cfg(feature = "test-fixtures")]
@@ -2143,7 +2205,7 @@ impl WorkerProcess {
                 "invalid worker fixture mode".into(),
             ));
         }
-        Self::spawn_inner(executable, plugin_sha256, channels, None, Some(mode))
+        Self::spawn_inner(executable, plugin_sha256, channels, None, Some(mode), None)
     }
 
     pub fn spawn_shared(
@@ -2152,7 +2214,45 @@ impl WorkerProcess {
         channels: u16,
         transport: SharedAudioTransport,
     ) -> Result<Self, WorkerProcessError> {
-        Self::spawn_inner(executable, plugin_sha256, channels, Some(transport), None)
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            channels,
+            Some(transport),
+            None,
+            None,
+        )
+    }
+
+    #[cfg(windows)]
+    pub fn spawn_shared_for_plugin(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        transport: SharedAudioTransport,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner(
+            executable,
+            plugin_sha256,
+            channels,
+            Some(transport),
+            None,
+            Some(plugin_path.as_ref()),
+        )
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_shared_for_plugin(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: u16,
+        _: SharedAudioTransport,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST2 loading requires Windows".into(),
+        ))
     }
 
     fn spawn_inner(
@@ -2161,6 +2261,7 @@ impl WorkerProcess {
         channels: u16,
         mut shared: Option<SharedAudioTransport>,
         fixture_mode: Option<&str>,
+        plugin_path: Option<&Path>,
     ) -> Result<Self, WorkerProcessError> {
         let executable =
             validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
@@ -2181,6 +2282,9 @@ impl WorkerProcess {
             "--channels",
             &channels.to_string(),
         ]);
+        if let Some(plugin_path) = plugin_path {
+            command.args(["--plugin-path", &plugin_path.to_string_lossy()]);
+        }
         if let Some(mode) = fixture_mode {
             command.args(["--fixture-mode", mode]);
         }
@@ -3791,7 +3895,7 @@ mod tests {
     }
 
     #[test]
-    fn worker_supervisor_fails_closed_until_the_vst2_adapter_exists() {
+    fn worker_supervisor_uses_the_platform_vst2_boundary() {
         let identity = PluginIdentity {
             path: PathBuf::from("legacy.dll"),
             binary_path: PathBuf::from("legacy.dll"),
@@ -3802,11 +3906,19 @@ mod tests {
             metadata: Default::default(),
         };
         let mut supervisor = WorkerSupervisor::new();
-        assert_eq!(
-            supervisor.start(&identity, Instant::now()),
-            Err(WorkerStartError::Vst2AdapterUnavailable)
-        );
-        assert_eq!(supervisor.state(), WorkerState::Stopped);
+        #[cfg(windows)]
+        {
+            assert_eq!(supervisor.start(&identity, Instant::now()), Ok(()));
+            assert_eq!(supervisor.state(), WorkerState::Running);
+        }
+        #[cfg(not(windows))]
+        {
+            assert_eq!(
+                supervisor.start(&identity, Instant::now()),
+                Err(WorkerStartError::Vst2AdapterUnavailable)
+            );
+            assert_eq!(supervisor.state(), WorkerState::Stopped);
+        }
     }
 
     #[test]

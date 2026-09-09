@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use audiorouter_plugin_host::vst2::Vst2Library;
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterDescriptor;
 use audiorouter_plugin_host::{
@@ -14,7 +16,13 @@ use std::thread;
 #[cfg(feature = "test-fixtures")]
 use std::time::Duration;
 
-type WorkerArguments = (String, u16, Option<(PathBuf, PathBuf)>, Option<String>);
+type WorkerArguments = (
+    String,
+    u16,
+    Option<(PathBuf, PathBuf)>,
+    Option<String>,
+    Option<PathBuf>,
+);
 
 fn main() -> ExitCode {
     match run() {
@@ -27,7 +35,16 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<(), String> {
-    let (plugin_sha256, channels, shared_paths, _fixture_mode) = parse_arguments()?;
+    let (plugin_sha256, channels, shared_paths, _fixture_mode, plugin_path) = parse_arguments()?;
+    #[cfg(windows)]
+    let mut vst2_plugin = plugin_path
+        .map(|path| Vst2Library::load(&path))
+        .transpose()
+        .map_err(|error| format!("VST2 load failed: {error:?}"))?;
+    #[cfg(not(windows))]
+    if plugin_path.is_some() {
+        return Err("VST2 loading requires Windows".into());
+    }
     let mut session = WorkerSession::new(&plugin_sha256, channels)
         .map_err(|error| format!("invalid worker configuration: {error:?}"))?;
     let mut shared = shared_paths
@@ -127,7 +144,10 @@ fn run() -> Result<(), String> {
                 )
                 .map_err(|error| format!("processed shared write failed: {error:?}"))?;
             }
-            WorkerMessage::Process { frame, parameters } => {
+            WorkerMessage::Process {
+                mut frame,
+                parameters,
+            } => {
                 if frame.channels != channels {
                     write_worker_message(
                         &mut writer,
@@ -138,9 +158,11 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("failure write failed: {error:?}"))?;
                     return Err("process frame channel count does not match Hello".into());
                 }
-                // This binary is a protocol fixture, not a plugin host yet.
-                // Echoing validated samples makes the process boundary testable
-                // without executing untrusted plugin code.
+                #[cfg(windows)]
+                if let Some(plugin) = vst2_plugin.as_mut() {
+                    process_vst2_frame(plugin, &mut frame)
+                        .map_err(|error| format!("VST2 processing failed: {error}"))?;
+                }
                 let _ = parameters;
                 #[cfg(feature = "test-fixtures")]
                 if _fixture_mode.as_deref() == Some("invalid-output") {
@@ -226,6 +248,7 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
     let mut channels = None;
     let mut input_path = None;
     let mut output_path = None;
+    let mut plugin_path = None;
     #[cfg(feature = "test-fixtures")]
     let mut fixture_mode = None;
     #[cfg(not(feature = "test-fixtures"))]
@@ -244,6 +267,12 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
             }
             "--input-path" => input_path = arguments.next().map(PathBuf::from),
             "--output-path" => output_path = arguments.next().map(PathBuf::from),
+            "--plugin-path" => {
+                plugin_path =
+                    Some(PathBuf::from(arguments.next().ok_or_else(|| {
+                        "--plugin-path requires a value".to_string()
+                    })?));
+            }
             "--fixture-mode" => {
                 #[cfg(feature = "test-fixtures")]
                 {
@@ -273,8 +302,49 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
         return Err("--channels must be 1 or 2".into());
     }
     match (input_path, output_path) {
-        (Some(input), Some(output)) => Ok((hash, channels, Some((input, output)), fixture_mode)),
-        (None, None) => Ok((hash, channels, None, fixture_mode)),
+        (Some(input), Some(output)) => Ok((
+            hash,
+            channels,
+            Some((input, output)),
+            fixture_mode,
+            plugin_path,
+        )),
+        (None, None) => Ok((hash, channels, None, fixture_mode, plugin_path)),
         _ => Err("--input-path and --output-path must be supplied together".into()),
     }
+}
+
+#[cfg(windows)]
+fn process_vst2_frame(
+    plugin: &mut Vst2Library,
+    frame: &mut audiorouter_plugin_host::WorkerFrame,
+) -> Result<(), String> {
+    let channels = usize::from(frame.channels);
+    let frames = frame.samples.len() / channels;
+    if plugin.output_channels() != channels {
+        return Err(format!(
+            "VST2 output channels {} do not match graph channels {channels}",
+            plugin.output_channels()
+        ));
+    }
+    let mut input_channels = vec![vec![0.0_f32; frames]; plugin.input_channels()];
+    let mut output_channels = vec![vec![0.0_f32; frames]; plugin.output_channels()];
+    for (index, sample) in frame.samples.iter().copied().enumerate() {
+        input_channels[index % channels][index / channels] = sample;
+    }
+    let inputs: Vec<&[f32]> = input_channels.iter().map(Vec::as_slice).collect();
+    let mut outputs: Vec<&mut [f32]> = output_channels.iter_mut().map(Vec::as_mut_slice).collect();
+    plugin
+        .set_processing_format(
+            48_000.0,
+            i32::try_from(frames).map_err(|_| "frame count overflow")?,
+        )
+        .map_err(|error| format!("format setup failed: {error:?}"))?;
+    plugin
+        .process_replacing(&inputs, &mut outputs)
+        .map_err(|error| format!("process callback failed: {error:?}"))?;
+    for (index, destination) in frame.samples.iter_mut().enumerate() {
+        *destination = output_channels[index % channels][index / channels];
+    }
+    Ok(())
 }

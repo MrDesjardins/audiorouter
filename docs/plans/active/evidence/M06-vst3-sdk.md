@@ -1273,7 +1273,21 @@ invariants, and deterministic cleanup. Package compilation and strict Clippy
 pass. It remains deliberately disconnected from worker startup; no third-party
 DLL was loaded or called by this change.
 
-## ReaPlugs compatibility inspection (2026-09-08)
+## VST2 worker integration and fixture matrix (2026-09-08)
+
+The verified identity path now passes the canonical VST2 binary path to the
+Windows job-contained worker. The worker loads `VSTPluginMain`, performs the
+VST2 open/format/mains lifecycle, supplies bounded planar buffers including
+zeroed sidechain inputs, and returns interleaved output to the protocol. The
+opt-in native test passed for `reacomp-standalone.dll` and
+`reagate-standalone.dll`. `readelay-standalone.dll` and
+`reaxcomp-standalone.dll` exceeded the five-second worker response deadline;
+`reaeq-standalone.dll` and `reafir_standalone.dll` terminated the worker during
+processing. The latter four remain unsupported and quarantinable fixtures;
+this is not blanket VST2 compatibility evidence. No audio device or machine
+configuration was accessed, and the ignored fixture DLLs were not committed.
+
+## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export
 `VSTPluginMain`, while retaining `unsupportedFormat` compatibility. This is

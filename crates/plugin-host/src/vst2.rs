@@ -17,6 +17,7 @@ pub const VST2_EFFECT_MAGIC: i32 = 0x5673_7450;
 /// `effFlagsCanReplacing`: the effect accepts the replacing process callback.
 pub const VST2_FLAG_CAN_REPLACING: i32 = 1 << 4;
 pub const VST2_MAX_AUDIO_CHANNELS: i32 = 2;
+pub const VST2_MAX_INPUT_CHANNELS: i32 = 4;
 pub const VST2_MAX_PARAMETERS: i32 = 256;
 
 #[repr(C)]
@@ -78,7 +79,7 @@ pub enum Vst2HeaderError {
     MissingReplacingProcessor,
     MissingParameterSetter,
     MissingParameterGetter,
-    InvalidChannels,
+    InvalidChannels { inputs: i32, outputs: i32 },
     TooManyParameters,
     ReplacingUnsupported,
 }
@@ -103,10 +104,13 @@ impl Vst2Effect {
         if self.get_parameter.is_none() {
             return Err(Vst2HeaderError::MissingParameterGetter);
         }
-        if !(1..=VST2_MAX_AUDIO_CHANNELS).contains(&self.num_inputs)
+        if !(1..=VST2_MAX_INPUT_CHANNELS).contains(&self.num_inputs)
             || !(1..=VST2_MAX_AUDIO_CHANNELS).contains(&self.num_outputs)
         {
-            return Err(Vst2HeaderError::InvalidChannels);
+            return Err(Vst2HeaderError::InvalidChannels {
+                inputs: self.num_inputs,
+                outputs: self.num_outputs,
+            });
         }
         if !(0..=VST2_MAX_PARAMETERS).contains(&self.num_parameters) {
             return Err(Vst2HeaderError::TooManyParameters);
@@ -192,7 +196,10 @@ mod tests {
         effect.num_outputs = 3;
         assert_eq!(
             effect.validate_audio_effect(),
-            Err(Vst2HeaderError::InvalidChannels)
+            Err(Vst2HeaderError::InvalidChannels {
+                inputs: 2,
+                outputs: 3,
+            })
         );
         let mut effect = valid_effect();
         effect.process_replacing = None;
@@ -211,6 +218,8 @@ const EFF_CLOSE: i32 = 1;
 const EFF_SET_BLOCK_SIZE: i32 = 23;
 #[cfg(windows)]
 const EFF_SET_SAMPLE_RATE: i32 = 24;
+#[cfg(windows)]
+const EFF_MAINS_CHANGED: i32 = 29;
 
 #[cfg(windows)]
 #[derive(Debug)]
@@ -322,8 +331,21 @@ impl Vst2Library {
                 ptr::null_mut(),
                 0.0,
             );
+            dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 1, ptr::null_mut(), 0.0);
         }
         Ok(())
+    }
+
+    pub fn input_channels(&self) -> usize {
+        // SAFETY: This method is only available for a successfully validated
+        // handle, whose channel count is bounded by validate_audio_effect.
+        unsafe { (*self.effect).num_inputs as usize }
+    }
+
+    pub fn output_channels(&self) -> usize {
+        // SAFETY: This method is only available for a successfully validated
+        // handle, whose channel count is bounded by validate_audio_effect.
+        unsafe { (*self.effect).num_outputs as usize }
     }
 
     /// Process one bounded block on the worker thread. The slices are fixed
@@ -334,8 +356,8 @@ impl Vst2Library {
         inputs: &[&[f32]],
         outputs: &mut [&mut [f32]],
     ) -> Result<(), Vst2LibraryError> {
-        if inputs.len() != outputs.len()
-            || !(1..=VST2_MAX_AUDIO_CHANNELS as usize).contains(&inputs.len())
+        if !(1..=VST2_MAX_INPUT_CHANNELS as usize).contains(&inputs.len())
+            || !(1..=VST2_MAX_AUDIO_CHANNELS as usize).contains(&outputs.len())
             || inputs.iter().any(|channel| channel.is_empty())
             || inputs
                 .iter()
@@ -346,8 +368,8 @@ impl Vst2Library {
         {
             return Err(Vst2LibraryError::InvalidPath);
         }
-        let mut input_ptrs: [*const f32; VST2_MAX_AUDIO_CHANNELS as usize] =
-            [ptr::null(); VST2_MAX_AUDIO_CHANNELS as usize];
+        let mut input_ptrs: [*const f32; VST2_MAX_INPUT_CHANNELS as usize] =
+            [ptr::null(); VST2_MAX_INPUT_CHANNELS as usize];
         let mut output_ptrs: [*mut f32; VST2_MAX_AUDIO_CHANNELS as usize] =
             [ptr::null_mut(); VST2_MAX_AUDIO_CHANNELS as usize];
         for (index, channel) in inputs.iter().enumerate() {
@@ -381,6 +403,7 @@ impl Drop for Vst2Library {
         unsafe {
             if !self.effect.is_null() {
                 if let Some(dispatcher) = (*self.effect).dispatcher {
+                    dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 0, ptr::null_mut(), 0.0);
                     dispatcher(self.effect, EFF_CLOSE, 0, 0, ptr::null_mut(), 0.0);
                 }
             }
