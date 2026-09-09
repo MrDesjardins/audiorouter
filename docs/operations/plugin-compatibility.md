@@ -168,6 +168,14 @@ tests passed. This is a stronger binary-specific compatibility observation,
 but remains local evidence and does not establish redistribution rights or
 successful native editor support.
 
+The installed-directory wrapper was also run on 2026-09-09 with
+`-SkipIncompatibleCandidates`. Seven x64 binaries passed processing at 44.1,
+48, and 96 kHz: ReaComp, ReaDelay, ReaEQ, ReaFIR, ReaGate, ReaStream, and
+ReaXComp. ReaControlMIDI and ReaJS were reported and rejected because their
+state behavior does not fit the bounded audio-effect acceptance; they were
+not treated as successful effects. This result is compatibility evidence only
+and does not grant rights or broaden the supported VST2 boundary.
+
 Run the reproducible local qualification with:
 
 ```powershell

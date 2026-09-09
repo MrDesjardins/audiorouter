@@ -130,6 +130,13 @@ release completion.
   machine configuration change. This advances local compatibility evidence,
   not third-party rights or release qualification.
 
+- Ran the installed-directory ReaPlugs VST2 wrapper on 2026-09-09 with
+  `-SkipIncompatibleCandidates`. Seven x64 binaries passed all 44.1/48/96 kHz
+  worker cases (ReaComp, ReaDelay, ReaEQ, ReaFIR, ReaGate, ReaStream, and
+  ReaXComp); ReaControlMIDI and ReaJS were isolated and explicitly rejected
+  for incompatibility with the bounded audio-effect/state contract. No plugin
+  registration, copy, audio stream, or machine configuration occurred.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
   processor telemetry at working head `efd5a5f4` on 2026-09-09. M00 toolchain,
   native format inventory, disposable SysVAD compile/package/API/signability,
