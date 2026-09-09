@@ -28,6 +28,20 @@ fn validate_response_count(responses: usize) -> Result<(), TransportError> {
     Ok(())
 }
 
+fn checked_io_count(count: u32, remaining: usize) -> Result<usize, TransportError> {
+    let count = usize::try_from(count)
+        .map_err(|_| TransportError::Protocol("I/O byte count cannot be represented".into()))?;
+    if count == 0 {
+        return Err(TransportError::UnexpectedEof);
+    }
+    if count > remaining {
+        return Err(TransportError::Protocol(
+            "I/O byte count exceeds the remaining buffer".into(),
+        ));
+    }
+    Ok(count)
+}
+
 impl std::fmt::Display for TransportError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
@@ -234,10 +248,8 @@ mod windows_pipe {
         while !output.is_empty() {
             let mut count = 0;
             unsafe { ReadFile(handle, Some(output), Some(&mut count), None) }.map_err(win_error)?;
-            if count == 0 {
-                return Err(TransportError::UnexpectedEof);
-            }
-            output = &mut output[count as usize..];
+            let count = super::checked_io_count(count, output.len())?;
+            output = &mut output[count..];
         }
         Ok(())
     }
@@ -246,10 +258,8 @@ mod windows_pipe {
         while !input.is_empty() {
             let mut count = 0;
             unsafe { WriteFile(handle, Some(input), Some(&mut count), None) }.map_err(win_error)?;
-            if count == 0 {
-                return Err(TransportError::UnexpectedEof);
-            }
-            input = &input[count as usize..];
+            let count = super::checked_io_count(count, input.len())?;
+            input = &input[count..];
         }
         Ok(())
     }
@@ -837,6 +847,18 @@ mod tests {
     use super::*;
     use audiorouter_control::{ClientGrant, ClientRole, ControlPlane};
     use audiorouter_protocol::encode_frame;
+
+    #[test]
+    fn checked_io_count_rejects_zero_and_overreported_bytes() {
+        assert_eq!(checked_io_count(2, 4).unwrap(), 2);
+        assert_eq!(checked_io_count(0, 4), Err(TransportError::UnexpectedEof));
+        assert_eq!(
+            checked_io_count(5, 4),
+            Err(TransportError::Protocol(
+                "I/O byte count exceeds the remaining buffer".into()
+            ))
+        );
+    }
 
     #[test]
     fn rejects_non_pipe_names_without_touching_the_system() {

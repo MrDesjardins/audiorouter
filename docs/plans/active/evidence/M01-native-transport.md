@@ -77,3 +77,13 @@ aligns their ownership behavior with the generic transport server and prevents
 two control backends from claiming the same user pipe concurrently. The native
 transport suite passes 14 tests with strict Clippy. Production daemon restart
 and unbounded subscription lifetime remain separate lifecycle work.
+
+## 2026-09-08 - Win32 partial-I/O count validation
+
+The native named-pipe read and write loops now validate the byte count reported
+by `ReadFile` and `WriteFile` before advancing their slices. A zero count
+remains a bounded unexpected-EOF result; a count larger than the remaining
+buffer becomes a protocol error, preventing a malformed API result from
+causing a panic. Transport coverage passed 19 tests with strict Clippy and
+formatting. This is transport-boundary evidence only: no audio endpoint or
+machine configuration was accessed.

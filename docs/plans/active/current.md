@@ -16,6 +16,13 @@ M00 feasibility began with a read-only inventory and now includes native
 Windows validation from the installed VS/WDK toolchain. All probes preserve
 the user's audio configuration and do not install drivers or alter defaults.
 
+Closed an M01/SEC-12 transport boundary gap: Windows named-pipe read and write
+loops now validate the byte count returned by Win32 before slicing the
+remaining buffer. Zero-byte results still map to bounded EOF, while
+over-reported counts return a protocol error instead of panicking the control
+server. Transport tests (19), strict Clippy, and formatting pass; no audio or
+machine configuration was accessed.
+
 ## Durable graph-plan persistence atomicity (2026-09-08)
 
 Closed an M01/GRAPH-03 persistence consistency gap: if durable graph-plan
