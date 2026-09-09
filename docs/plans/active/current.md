@@ -98,6 +98,12 @@ release completion.
   action decision. Backend, CLI, MCP, focused tests, Clippy, formatting, diff,
   and documentation checks passed; no real recording file was touched.
 
+- Revalidated the complete recording-library key boundary on 2026-09-09:
+  metadata, rename, remove-entry, and confirmed-recycle paths passed 29 CLI,
+  98 control, and 2 MCP tests, strict Clippy, formatting, diff, and
+  documentation checks. Preview/get paths remain read-only; no real recording
+  file or machine audio configuration was accessed.
+
 - Requalified the default repository VST2 matrix after the mixed-directory
   hardening on 2026-09-09: all six checked-in x64 ReaPlugs audio effects passed
   at 44.1, 48, and 96 kHz, and documentation validation passed for 51 Markdown

@@ -425,7 +425,7 @@ fn method_input_schema(name: &str) -> Value {
         ),
         "recordings.get" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
-            &["recordingId", "idempotencyKey"],
+            &["recordingId"],
         ),
         "recordings.recovery" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
