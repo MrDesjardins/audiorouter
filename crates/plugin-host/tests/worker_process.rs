@@ -96,13 +96,11 @@ fn verified_worker_loads_and_processes_an_opt_in_vst2_fixture() {
         Instant::now(),
     )
     .expect("load VST2 fixture in the isolated worker");
-    let frame = WorkerFrame::new(
-        1,
-        worker_clock_tick().saturating_add(10_000),
-        2,
-        vec![0.0, 0.0, 0.1, -0.1, 0.2, -0.2, 0.0, 0.0],
-    )
-    .unwrap();
+    let mut samples = vec![0.0; 256];
+    samples[2] = 0.1;
+    samples[3] = -0.1;
+    let frame =
+        WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 2, samples).unwrap();
     let processed = worker
         .process(frame, Vec::new(), Instant::now())
         .expect("VST2 worker processing");

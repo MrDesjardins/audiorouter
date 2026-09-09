@@ -220,6 +220,12 @@ const EFF_SET_BLOCK_SIZE: i32 = 23;
 const EFF_SET_SAMPLE_RATE: i32 = 24;
 #[cfg(windows)]
 const EFF_MAINS_CHANGED: i32 = 29;
+#[cfg(windows)]
+const AUDIO_MASTER_VERSION: i32 = 1;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_SAMPLE_RATE: i32 = 10;
+#[cfg(windows)]
+const AUDIO_MASTER_GET_BLOCK_SIZE: i32 = 11;
 
 #[cfg(windows)]
 #[derive(Debug)]
@@ -417,13 +423,18 @@ impl Drop for Vst2Library {
 #[cfg(windows)]
 unsafe extern "C" fn host_callback(
     _: *mut Vst2Effect,
-    _: i32,
+    opcode: i32,
     _: i32,
     _: isize,
     _: *mut c_void,
     _: f32,
 ) -> isize {
-    0
+    match opcode {
+        AUDIO_MASTER_VERSION => 2400,
+        AUDIO_MASTER_GET_SAMPLE_RATE => 48_000,
+        AUDIO_MASTER_GET_BLOCK_SIZE => 128,
+        _ => 0,
+    }
 }
 
 #[cfg(windows)]

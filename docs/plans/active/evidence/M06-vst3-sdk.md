@@ -1287,6 +1287,12 @@ processing. The latter four remain unsupported and quarantinable fixtures;
 this is not blanket VST2 compatibility evidence. No audio device or machine
 configuration was accessed, and the ignored fixture DLLs were not committed.
 
+The host callback supplies only bounded VST2 version, sample-rate, and block
+size responses; it performs no blocking or audio-device work. ReaEQ remained
+non-responsive under the five-second worker deadline with both short and
+128-frame blocks, while ReaComp passed with a 128-frame block. This preserves
+the distinction between a qualified fixture and an explicit unsupported one.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

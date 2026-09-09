@@ -87,6 +87,12 @@ deadline; ReaEQ and ReaFIR terminated the worker during processing. These four
 remain explicit unsupported fixtures for this adapter revision and were
 contained without audio-device access.
 
+The worker host callback now answers only bounded version, 48 kHz sample-rate,
+and block-size queries. ReaEQ still exceeded the five-second response deadline
+with both short and 128-frame blocks, so the acceptance criteria were not
+relaxed to hide the incompatibility. ReaComp passed again with a 128-frame
+block after the lifecycle and sidechain fixes.
+
 The locked all-workspace regression sweep then passed, including control (97),
 domain (58), DSP (28), engine (78), plugin-host (48), storage (80), transport
 (19), Windows audio (30), and the remaining package suites. Workspace strict
