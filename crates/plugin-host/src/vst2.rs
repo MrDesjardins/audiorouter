@@ -422,6 +422,10 @@ mod opcode_tests {
             Err(Vst2LibraryError::InvalidPath)
         ));
         assert!(matches!(
+            library.set_processing_format(8_000.5, 128),
+            Err(Vst2LibraryError::InvalidPath)
+        ));
+        assert!(matches!(
             library.set_processing_format(192_001.0, 128),
             Err(Vst2LibraryError::InvalidPath)
         ));
@@ -626,6 +630,7 @@ impl Vst2Library {
         block_size: i32,
     ) -> Result<(), Vst2LibraryError> {
         if !sample_rate_hz.is_finite()
+            || sample_rate_hz.fract() != 0.0
             || !(8_000.0..=192_000.0).contains(&sample_rate_hz)
             || !(1..=2048).contains(&block_size)
         {

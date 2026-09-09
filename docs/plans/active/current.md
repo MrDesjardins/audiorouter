@@ -68,6 +68,12 @@ release completion.
   strict Clippy, formatting, and diff checks; no plugin or machine
   configuration changed.
 
+- Closed the remaining PLUG-03/PLUG-07 rate-shape gap on 2026-09-09: the native
+  VST2 format setter now rejects fractional sample rates, matching the worker's
+  integer-Hz negotiated contract, in addition to the 8–192 kHz range. Focused
+  VST2 tests, strict Clippy, formatting, and diff checks pass; no plugin or
+  machine configuration changed.
+
 - Requalified the locked workspace and guarded M00-M08 chain at pushed head
   `4dc9b67a` on 2026-09-09: workspace tests/doc-tests, strict all-target
   Clippy, formatting, 31-endpoint read-only inventory, disposable pinned
