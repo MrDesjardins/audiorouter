@@ -86,6 +86,11 @@ being called with a hard-coded byte count of one. The adapter now passes the
 bounded chunk length; the fixture test changes its mix parameter, verifies the
 changed audio, restores the saved chunk, and verifies the original mix returns.
 
+The VST2 adapter now caches the negotiated sample-rate/block-size pair and
+avoids repeating `effSetSampleRate`, `effSetBlockSize`, and mains-on for every
+block. A format change performs a bounded mains-off/reconfigure/mains-on
+transition; normal blocks do not re-enter plugin lifecycle callbacks.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

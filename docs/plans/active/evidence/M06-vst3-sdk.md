@@ -1373,6 +1373,12 @@ The behavioral chunk regression also caught and fixed a real ABI argument bug:
 hard-coded value. The fixture test proves changed mix output, restores the
 saved opaque chunk, and then observes the original mix output again.
 
+The adapter also caches the active VST2 processing format. Repeated blocks at
+the same rate and size no longer invoke setup or mains lifecycle callbacks;
+when a bounded format change is requested, the effect receives one
+mains-off/reconfigure/mains-on transition. This reduces legacy-plugin lifecycle
+reentrancy while keeping all calls on the contained worker thread.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export

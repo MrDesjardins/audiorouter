@@ -277,6 +277,7 @@ pub enum Vst2LibraryError {
 pub struct Vst2Library {
     module: *mut c_void,
     effect: *mut Vst2Effect,
+    processing_format: Option<(u32, i32)>,
 }
 
 #[cfg(windows)]
@@ -339,7 +340,11 @@ impl Vst2Library {
                 0.0,
             )
         };
-        Ok(Self { module, effect })
+        Ok(Self {
+            module,
+            effect,
+            processing_format: None,
+        })
     }
 
     pub fn set_processing_format(
@@ -353,10 +358,17 @@ impl Vst2Library {
         {
             return Err(Vst2LibraryError::InvalidPath);
         }
+        let sample_rate_bits = sample_rate_hz.to_bits();
+        if self.processing_format == Some((sample_rate_bits, block_size)) {
+            return Ok(());
+        }
         // SAFETY: The effect was validated at load and remains owned by this
         // handle. These setup opcodes run on the worker control thread.
         unsafe {
             let dispatcher = (*self.effect).dispatcher.expect("validated dispatcher");
+            if self.processing_format.is_some() {
+                dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 0, ptr::null_mut(), 0.0);
+            }
             dispatcher(
                 self.effect,
                 EFF_SET_SAMPLE_RATE,
@@ -375,6 +387,7 @@ impl Vst2Library {
             );
             dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 1, ptr::null_mut(), 0.0);
         }
+        self.processing_format = Some((sample_rate_bits, block_size));
         Ok(())
     }
 
