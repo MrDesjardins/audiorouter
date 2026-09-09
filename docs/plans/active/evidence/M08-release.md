@@ -1004,3 +1004,12 @@ outputs and checkouts were cleaned. No driver installation/loading,
 signing-mode change, plugin/startup registration, audio stream, or persistent
 machine audio configuration occurred. This remains guarded preparation rather
 than signed-release or production-driver evidence.
+
+## Test-artifact hygiene (2026-09-08)
+
+After the guarded acceptance run, a bounded cleanup removed exactly 6,690
+direct children of `%TEMP%` matching the repository-owned `audiorouter-*`
+prefix. Each target was validated as a direct child under the resolved temp
+root before removal. A follow-up scan found zero matching direct children.
+Repository files, local plugin binaries, drivers, audio streams, and
+persistent machine configuration were not touched.
