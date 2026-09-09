@@ -13,6 +13,12 @@ use std::path::Path;
 use std::ptr;
 #[cfg(windows)]
 use std::slice;
+#[cfg(windows)]
+use std::sync::mpsc::{self, Receiver, Sender};
+#[cfg(windows)]
+use std::thread::{self, JoinHandle};
+#[cfg(windows)]
+use std::time::Duration;
 
 /// The VST2 `AEffect` magic (`'VstP'`) in little-endian form.
 pub const VST2_EFFECT_MAGIC: i32 = 0x5673_7450;
@@ -847,6 +853,15 @@ unsafe extern "C" fn host_callback(
 #[link(name = "user32")]
 unsafe extern "system" {
     fn IsWindow(window: *mut c_void) -> i32;
+    fn PeekMessageW(
+        message: *mut NativeMessage,
+        window: *mut c_void,
+        minimum: u32,
+        maximum: u32,
+        remove: u32,
+    ) -> i32;
+    fn TranslateMessage(message: *const NativeMessage) -> i32;
+    fn DispatchMessageW(message: *const NativeMessage) -> isize;
 }
 
 #[cfg(windows)]
@@ -854,6 +869,140 @@ fn is_window_handle(window: usize) -> bool {
     // SAFETY: IsWindow accepts an arbitrary HWND value and only queries
     // whether it currently identifies a window; it does not retain it.
     unsafe { IsWindow(window as *mut c_void) != 0 }
+}
+
+#[cfg(windows)]
+enum EditorThreadCommand {
+    Open(usize, Sender<Result<(), String>>),
+    Close(Sender<Result<(), String>>),
+    Shutdown,
+}
+
+/// Disposable native-editor owner. The editor instance is loaded and used
+/// exclusively by its Windows UI thread, separate from the worker's audio
+/// processing instance. Dropping this handle requests shutdown and detaches
+/// the thread; the enclosing disposable worker remains the hard containment
+/// boundary if a third-party editor does not return.
+#[cfg(windows)]
+pub struct Vst2EditorThread {
+    commands: Sender<EditorThreadCommand>,
+    _thread: JoinHandle<()>,
+}
+
+#[cfg(windows)]
+impl Vst2EditorThread {
+    pub fn spawn(path: &Path) -> Result<Self, Vst2LibraryError> {
+        if !path.is_absolute() || !path.is_file() {
+            return Err(Vst2LibraryError::InvalidPath);
+        }
+        let path = path.to_path_buf();
+        let (commands, receiver) = mpsc::channel();
+        let thread = thread::Builder::new()
+            .name("audiorouter-vst2-editor".into())
+            .spawn(move || editor_thread_main(path, receiver))
+            .map_err(|_| Vst2LibraryError::InvalidPath)?;
+        Ok(Self {
+            commands,
+            _thread: thread,
+        })
+    }
+
+    pub fn open(&self, parent_window: usize) -> Result<(), String> {
+        let (response, receiver) = mpsc::channel();
+        self.commands
+            .send(EditorThreadCommand::Open(parent_window, response))
+            .map_err(|_| "editor UI thread stopped".to_string())?;
+        receiver
+            .recv_timeout(crate::WORKER_RESPONSE_TIMEOUT)
+            .map_err(|_| "editor UI thread timed out".to_string())?
+    }
+
+    pub fn close(&self) -> Result<(), String> {
+        let (response, receiver) = mpsc::channel();
+        self.commands
+            .send(EditorThreadCommand::Close(response))
+            .map_err(|_| "editor UI thread stopped".to_string())?;
+        receiver
+            .recv_timeout(crate::WORKER_RESPONSE_TIMEOUT)
+            .map_err(|_| "editor UI thread timed out".to_string())?
+    }
+}
+
+#[cfg(windows)]
+impl Drop for Vst2EditorThread {
+    fn drop(&mut self) {
+        let _ = self.commands.send(EditorThreadCommand::Shutdown);
+    }
+}
+
+#[cfg(windows)]
+fn editor_thread_main(path: std::path::PathBuf, receiver: Receiver<EditorThreadCommand>) {
+    let mut plugin: Option<Vst2Library> = None;
+    loop {
+        pump_editor_messages();
+        match receiver.recv_timeout(Duration::from_millis(10)) {
+            Ok(EditorThreadCommand::Open(parent, response)) => {
+                let result = if !is_window_handle(parent) {
+                    Err("parent window is not valid".to_string())
+                } else {
+                    let plugin = match plugin.as_mut() {
+                        Some(plugin) => Ok(plugin),
+                        None => Vst2Library::load(&path)
+                            .map(|loaded| plugin.insert(loaded))
+                            .map_err(|error| format!("VST2 editor load failed: {error:?}")),
+                    };
+                    plugin.and_then(|plugin| {
+                        plugin
+                            .open_editor(parent)
+                            .map_err(|error| format!("VST2 editor open failed: {error:?}"))
+                    })
+                };
+                let _ = response.send(result);
+            }
+            Ok(EditorThreadCommand::Close(response)) => {
+                let result = plugin
+                    .as_mut()
+                    .ok_or_else(|| "editor is not open".to_string())
+                    .and_then(|plugin| {
+                        plugin
+                            .close_editor()
+                            .map_err(|error| format!("VST2 editor close failed: {error:?}"))
+                    });
+                let _ = response.send(result);
+            }
+            Ok(EditorThreadCommand::Shutdown) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+        if let Some(plugin) = plugin.as_mut() {
+            let _ = plugin.idle_editor();
+        }
+    }
+}
+
+#[cfg(windows)]
+fn pump_editor_messages() {
+    let mut message = NativeMessage::default();
+    while unsafe { PeekMessageW(&mut message, ptr::null_mut(), 0, 0, 1) } != 0 {
+        unsafe {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+    }
+}
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Default)]
+struct NativeMessage {
+    window: *mut c_void,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    time: u32,
+    point_x: i32,
+    point_y: i32,
+    private: u32,
 }
 
 #[cfg(windows)]

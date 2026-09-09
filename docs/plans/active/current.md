@@ -108,6 +108,12 @@ Editor opens now reject zero or stale parent handles through a read-only
 `IsWindow` check before calling plugin code; explicit control-plane
 authorization and dedicated UI-thread/message-pump ownership remain required.
 
+Added a disposable `Vst2EditorThread` owner that loads a separate editor
+instance, pumps the Windows queue, and serializes editor open/close/idle calls
+on its own thread. It is not connected to worker messages yet, so it cannot
+alter processing or expose an unauthorized window; the remaining integration
+gate is to pass an explicitly authorized parent from the control plane.
+
 Ordered next tasks: (1) implement actual native editor open/close only behind a
 worker-owned Windows UI thread and explicit parent/window authorization; (2)
 qualify chunk-state behavior with an additional legally usable VST2 fixture; (3)

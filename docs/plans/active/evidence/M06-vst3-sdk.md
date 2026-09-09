@@ -1395,6 +1395,12 @@ so an arbitrary nonzero integer cannot reach a plugin. This remains only a
 primitive-level guard; cross-process authorization and the dedicated UI thread
 are still required for actual editor integration.
 
+The native layer now includes a disposable `Vst2EditorThread`. It owns a
+separate VST2 instance, runs the Windows message pump, and serializes editor
+open/close/idle calls away from the processing instance. Package tests and
+strict Clippy pass. It is not wired to worker messages or a parent-window
+authorization token, so no editor window was opened by this change.
+
 ## Initial ReaPlugs compatibility inspection (2026-09-08)
 
 The scanner now identifies the six x64 DLLs as `vst2` from the PE export
