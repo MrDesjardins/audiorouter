@@ -483,6 +483,14 @@ mod opcode_tests {
             library.process_replacing(&inputs, &mut malformed_outputs),
             Err(Vst2LibraryError::InvalidPath)
         ));
+        let oversized_input = vec![0.0; crate::MAX_WORKER_FRAMES + 1];
+        let mut oversized_output = vec![0.0; crate::MAX_WORKER_FRAMES + 1];
+        let oversized_inputs = [&oversized_input[..]];
+        let mut oversized_outputs = [&mut oversized_output[..]];
+        assert!(matches!(
+            library.process_replacing(&oversized_inputs, &mut oversized_outputs),
+            Err(Vst2LibraryError::InvalidPath)
+        ));
         drop(library);
     }
 }
@@ -933,6 +941,9 @@ impl Vst2Library {
         if !(1..=VST2_MAX_INPUT_CHANNELS as usize).contains(&inputs.len())
             || !(1..=VST2_MAX_AUDIO_CHANNELS as usize).contains(&outputs.len())
             || inputs.iter().any(|channel| channel.is_empty())
+            || inputs
+                .first()
+                .is_some_and(|channel| channel.len() > crate::MAX_WORKER_FRAMES)
             || inputs
                 .iter()
                 .any(|channel| channel.len() != inputs[0].len())

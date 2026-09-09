@@ -48,6 +48,13 @@ release completion.
   retaining the non-finite and crash/hang containment boundaries. Documentation
   validation passed; no plugin or machine configuration changed.
 
+- Closed a PLUG-03/PLUG-07 bounded-buffer gap on 2026-09-09: the native VST2
+  adapter now rejects processing blocks larger than the shared 2,048-frame
+  worker limit before invoking plugin code, preventing an oversized length
+  from crossing the ABI boundary. The focused VST2 tests (6), strict
+  plugin-host Clippy, formatting, and diff checks passed; no plugin or machine
+  configuration changed.
+
 - Requalified the locked workspace and guarded M00-M08 chain at pushed head
   `4dc9b67a` on 2026-09-09: workspace tests/doc-tests, strict all-target
   Clippy, formatting, 31-endpoint read-only inventory, disposable pinned
