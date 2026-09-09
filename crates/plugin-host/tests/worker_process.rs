@@ -179,7 +179,12 @@ fn verified_worker_applies_restored_vst2_chunk_state() {
     assert!(plugin_path
         .file_name()
         .and_then(|name| name.to_str())
-        .is_some_and(|name| name == "audiorouter-vst2-state-fixture.dll"));
+        .is_some_and(|name| {
+            matches!(
+                name,
+                "audiorouter-vst2-state-fixture.dll" | "audiorouter-vst2-legacy-main-fixture.dll"
+            )
+        }));
     let root = plugin_path
         .parent()
         .expect("VST2 fixture parent")

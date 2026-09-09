@@ -103,6 +103,10 @@ state-fixture acceptance compiles that ignored x64 DLL and runs the verified
 worker load/process test against it, providing runtime evidence for the
 fallback entry point without adding a third-party binary.
 
+The legacy `main` fixture also runs the opaque chunk-state save/restore
+acceptance, confirming that the fallback covers stateful processing as well as
+basic audio transformation.
+
 The stronger behavioral round trip initially exposed that `effSetChunk` was
 being called with a hard-coded byte count of one. The adapter now passes the
 bounded chunk length; the fixture test changes its mix parameter, verifies the

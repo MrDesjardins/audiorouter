@@ -1285,6 +1285,10 @@ the legacy `main` export and successfully loads/processes it through the
 verified worker. This is runtime fallback evidence, not third-party
 compatibility evidence.
 
+The same legacy-main fixture passes the chunk-state behavioral round trip, so
+the fallback is verified for stateful processing rather than only loading and
+finite audio output.
+
 A focused scanner regression also classifies a minimal x64 PE containing only
 `main` as VST2, preventing the inspection boundary from regressing to the
 preferred export name only.
