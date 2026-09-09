@@ -4,9 +4,10 @@ use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
     PluginStateAsset, SharedAudioLayout, SharedAudioTransport, SupervisedWorkerProcess,
-    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess, MAX_WORKER_SAMPLE_RATE_HZ,
-    MIN_WORKER_SAMPLE_RATE_HZ,
+    WorkerFrame, WorkerLatency, WorkerMessage, WorkerProcess,
 };
+#[cfg(feature = "test-fixtures")]
+use audiorouter_plugin_host::{MAX_WORKER_SAMPLE_RATE_HZ, MIN_WORKER_SAMPLE_RATE_HZ};
 use std::path::PathBuf;
 #[cfg(feature = "test-fixtures")]
 use std::time::Duration;
