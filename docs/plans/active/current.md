@@ -12,8 +12,8 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `1504700b` (2026-09-09). The guarded M00-M08
-chain passed at this checkpoint; the focused native auxiliary-bus
+The latest pushed plan head is `77d2ee1e` (2026-09-09). The latest clean full
+M00-M08 acceptance passed at checkpoint `1504700b`; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
 startup/plugin registration, signing-mode change, audio stream, or persistent
