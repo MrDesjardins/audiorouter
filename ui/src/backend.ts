@@ -131,7 +131,7 @@ export class SnapshotCache {
       this.state = {
         ...this.state,
         stale: true,
-        error: error instanceof Error ? error.message : "Backend refresh failed",
+        error: formatUiError(error, "Backend refresh failed"),
       };
     }
     return this.state;

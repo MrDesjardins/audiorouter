@@ -105,6 +105,32 @@ describe("snapshot cache", () => {
     expect(second.stale).toBe(true);
     expect(second.error).toBe("pipe closed");
   });
+
+  it("retains structured audio diagnostics when the status refresh fails", async () => {
+    const cache = new SnapshotCache();
+    const failing: UiBackend = {
+      ...createDisconnectedBackend(),
+      connected: true,
+      snapshot: async () => {
+        throw new AudioRouterRpcError({
+          code: -32010,
+          message: "Audio status unavailable.",
+          data: {
+            code: "accessDenied",
+            fieldPath: null,
+            resourceIds: [],
+            retryable: false,
+            remediation: "Check endpoint access and microphone privacy permissions.",
+            hresult: 0x80070005,
+          },
+        });
+      },
+    };
+    await expect(cache.refresh(failing)).resolves.toMatchObject({
+      stale: true,
+      error: "Audio status unavailable. [accessDenied, HRESULT 0x80070005] Check endpoint access and microphone privacy permissions.",
+    });
+  });
 });
 
 describe("live event cursor", () => {
