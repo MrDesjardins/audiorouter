@@ -193,6 +193,13 @@ was rejected by read-only inspection as `unsupportedArchitecture`; it was not
 loaded. This negative control confirms that the x64 VST2 gate does not bridge
 or execute x86 plugins.
 
+The x64 Pitchproof binary was requalified on 2026-09-09 with SHA-256
+`1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`.
+Processing passed at 44.1, 48, and 96 kHz, and both bounded editor-containment
+checks passed. The editor probe intentionally terminates and reaps the worker
+when the native editor does not return; this is failure-containment evidence,
+not editor-window support or release qualification.
+
 The bounded native-editor probe can be repeated with:
 
 ```powershell

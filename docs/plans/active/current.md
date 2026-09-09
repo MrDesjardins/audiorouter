@@ -92,6 +92,16 @@ release completion.
   and scheduler evidence only; managed-driver callback and physical-latency
   gates remain open.
 
+- Requalified the installed rights-unreviewed Pitchproof x64 VST2 binary on
+  2026-09-09 through `m06-vst2-installed.ps1`. SHA-256 was
+  `1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`;
+  processing passed at 44.1, 48, and 96 kHz, and both bounded editor tests
+  passed, including worker termination/reaping for the non-returning editor
+  path. The environment was restored and no copy, registration, audio stream,
+  or machine audio configuration change occurred. This is independent local
+  compatibility and failure-containment evidence, not rights or release
+  qualification.
+
 - Clarified the M06 milestone status on 2026-09-09: the approved PLUG-07 native
   x64 VST2 extension is implemented through its separate ABI adapter and
   contained worker, with modern `VSTPluginMain` and legacy `main` fixtures
