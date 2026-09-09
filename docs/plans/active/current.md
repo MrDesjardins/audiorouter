@@ -12,8 +12,8 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `fb519d23` (2026-09-09). The guarded M00-M08
-chain passed at its clean parent `eb0ad978`; the focused native auxiliary-bus
+The latest pushed checkpoint is `4dc9b67a` (2026-09-09). The guarded M00-M08
+chain passed at this checkpoint; the focused native auxiliary-bus
 transformation and validated state-restoration regressions and all-features
 plugin-host checks pass at this checkpoint. The repository is clean; no driver or
 startup/plugin registration, signing-mode change, audio stream, or persistent
@@ -26,6 +26,15 @@ continue only with portable hardening and preserve the native-shell, production
 driver callback, signing, installer, clean-machine, physical-latency, editor,
 and independent-plugin gates as blocked prerequisites rather than claiming
 release completion.
+
+- Requalified the locked workspace and guarded M00-M08 chain at pushed head
+  `4dc9b67a` on 2026-09-09: workspace tests/doc-tests, strict all-target
+  Clippy, formatting, 31-endpoint read-only inventory, disposable pinned
+  SysVAD x64 compile/package/API/signability checks, M01/M04/M05, VST3 and
+  VST2 fixtures, M07, unsigned M08 preparation, traceability, and documentation
+  validation all passed. Temporary outputs/checkouts were cleaned; no driver
+  installation/loading, signing-mode change, plugin/startup registration,
+  stream, or persistent machine audio configuration occurred.
 
 - Rechecked the authorized standard Windows plugin roots on 2026-09-09 with a
   read-only file inventory: the available candidates remain the six qualified
