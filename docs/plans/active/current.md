@@ -112,6 +112,14 @@ release completion.
   concrete portable hardening; retain all native production and independent-
   vendor qualification blockers.
 
+- Revalidated M06 SDK installer provenance on 2026-09-09: the checked-in
+  provenance/lock metadata acceptance passed using disposable Git metadata.
+  No SDK installation, plugin registration, driver action, or audio
+  configuration change occurred.
+- Next safe task: continue with the remaining independently observable native
+  qualification scripts while retaining production driver, signing, installer,
+  shell/HWND, physical-latency, accessibility, and independent-vendor gates.
+
 - Closed the portable workspace test evidence gap on 2026-09-09 with
   independently observable locked package runs: engine (89), recording (30),
   storage (80), Windows audio (33), protocol (6), and transport (19) tests all
