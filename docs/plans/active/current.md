@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `8bec013d`; the native probe compile was
+The latest pushed checkpoint is `8e651307`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -33,7 +33,8 @@ The latest directly observed qualification commits after that checkpoint are
 `a1a91780` (exact endpoint bridge), `ed0f4d47` (focused DSP/recording),
 `cb44208a` (plugin host), `266b44ea` (UI), `42c05293` (contracts/docs),
 `68e8071a`/`145d48bc` (differing-rate route), `80f1e3a9` (process attribution),
-and `8bec013d` (SysVAD qualification). The latest working tree is clean and
+and `8bec013d` (SysVAD qualification), `922b55da` (M05 UI), and `8e651307`
+(M01 CLI). The latest working tree is clean and
 pushed. No driver installation/loading, plugin registration, signing-mode
 change, or persistent machine audio configuration has occurred.
 
