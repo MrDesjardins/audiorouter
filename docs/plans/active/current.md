@@ -137,6 +137,12 @@ configuration changes.
   aggregation, explicit quit-and-stop, and elevated interactive tray evidence
   remain open.
 
+- Extended tray Refresh status on 2026-09-10 to query the bounded authenticated
+  `recordings.list` API and report active, paused, armed, and failed recording
+  counts. Unit coverage now includes the authoritative state aggregation;
+  shell tests passed 7/7, strict Clippy passed, and the release build passed.
+  Explicit quit-and-stop and elevated interactive tray evidence remain open.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native

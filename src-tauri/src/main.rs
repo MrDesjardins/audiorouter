@@ -100,6 +100,31 @@ fn tray_status_text(response: &JsonRpcResponse) -> String {
     format!("Sessions: {active} active · Mic: {}", if muted { "muted" } else { "unmuted" })
 }
 
+fn tray_recording_text(response: &JsonRpcResponse) -> String {
+    let Some(result) = response.result.as_ref() else {
+        return "Recordings: unavailable".to_owned();
+    };
+    let Some(items) = result
+        .as_array()
+        .or_else(|| result.get("items").and_then(serde_json::Value::as_array))
+    else {
+        return "Recordings: unavailable".to_owned();
+    };
+    let count = |state: &str| {
+        items
+            .iter()
+            .filter(|item| item.get("state").and_then(serde_json::Value::as_str) == Some(state))
+            .count()
+    };
+    format!(
+        "Recordings: {} active · {} paused · {} armed · {} failed",
+        count("recording"),
+        count("paused"),
+        count("armed"),
+        count("failed")
+    )
+}
+
 fn main() {
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
@@ -120,9 +145,11 @@ fn main() {
             let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
             let refresh_status = MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
             let status = MenuItem::with_id(app, "status", "Status unavailable", false, None::<&str>)?;
+            let recordings = MenuItem::with_id(app, "recordings", "Recordings: unavailable", false, None::<&str>)?;
             let pipe_name = tray_pipe_name.clone();
             let status_for_handler = status.clone();
-            let menu = Menu::with_items(app, &[&open, &close, &refresh_status, &status])?;
+            let recordings_for_handler = recordings.clone();
+            let menu = Menu::with_items(app, &[&open, &close, &refresh_status, &status, &recordings])?;
             TrayIconBuilder::with_id("audiorouter")
                 .menu(&menu)
                 .tooltip("AudioRouter")
@@ -148,6 +175,16 @@ fn main() {
                                 .map(|response| tray_status_text(&response))
                                 .unwrap_or_else(|_| "Status unavailable".to_owned());
                             let _ = status_for_handler.set_text(text);
+                            let recordings_request = JsonRpcRequest {
+                                jsonrpc: "2.0".into(),
+                                id: Some(serde_json::json!("tray-recordings")),
+                                method: "recordings.list".into(),
+                                params: None,
+                            };
+                            let text = forward_rpc_request(&recordings_request, &pipe_name)
+                                .map(|response| tray_recording_text(&response))
+                                .unwrap_or_else(|_| "Recordings: unavailable".to_owned());
+                            let _ = recordings_for_handler.set_text(text);
                         }
                         _ => {}
                     }
@@ -214,6 +251,20 @@ mod tests {
         assert_eq!(tray_status_text(&response), "Sessions: 2 active · Mic: muted");
         let unavailable = JsonRpcResponse { result: None, ..response };
         assert_eq!(tray_status_text(&unavailable), "Status unavailable");
+    }
+
+    #[test]
+    fn tray_recording_status_counts_each_authoritative_state() {
+        let response = JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("tray-recordings")),
+            result: Some(json!([
+                { "state": "recording" }, { "state": "recording" },
+                { "state": "paused" }, { "state": "armed" }, { "state": "failed" }
+            ])),
+            error: None,
+        };
+        assert_eq!(tray_recording_text(&response), "Recordings: 2 active · 1 paused · 1 armed · 1 failed");
     }
 
     #[test]
