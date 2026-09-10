@@ -6129,6 +6129,25 @@ bounded failure recovery, repeated-quantum timing, state restoration, finite
 output, and bounded shutdown all passed with repository-local fixtures. No
 plugin registration, audio stream, or machine configuration action occurred.
 
+## Current handoff — 2026-09-10
+
+The native compile-only checkpoint was requalified with
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m00-native-build.ps1`.
+It passed under the installed Visual Studio 2026/MSVC and Windows SDK/WDK
+toolchain (`main.cpp`; `M00 native probe compile acceptance passed`). This
+validates the disposable native probe build only; it does not validate driver
+installation/loading, endpoint-owned production routing, signing, or physical
+latency. No audio stream, plugin registration, signing-mode change, or
+persistent machine audio configuration occurred.
+
+The next actionable task remains administrator-authorized M07 shell-RPC
+qualification. The current session is not elevated, and that acceptance must
+not be faked or worked around by changing security or driver state. Continue
+with safe portable/disposable qualification if elevation is unavailable.
+
+Rollback: this is documentation-only; restore this file to remove the new
+checkpoint. No machine or external audio configuration was changed.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
