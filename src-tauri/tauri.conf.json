@@ -9,6 +9,7 @@
     "frontendDist": "../ui/dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -26,4 +27,3 @@
     "active": false
   }
 }
-

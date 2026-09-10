@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `210711de`; later commits after
+The active branch is currently pushed through `e90dfdf0`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -95,6 +95,11 @@ configuration changes.
   incomplete pipe option creates no database; CLI unit/integration tests pass
   33/33, `cargo fmt --all` passes, and strict CLI Clippy passes. No audio or
   machine configuration is involved.
+- Corrected the Tauri shell bridge configuration on 2026-09-09 by enabling the
+  global Tauri core API surface required by `ui/src/main.tsx` to discover
+  `window.__TAURI__.core.invoke`. The shell config and Rust crate were checked
+  again with `cargo check --manifest-path src-tauri/Cargo.toml`; no shell was
+  launched and no audio, driver, plugin, or machine configuration changed.
 - Re-ran the elevated read-only native endpoint format inventory on 2026-09-09
   at 19:13 local time. It passed across 34 active capture/render endpoints and
   recorded 48 kHz 32-bit mono/stereo formats plus observed 96 kHz alternatives.
