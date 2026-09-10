@@ -588,6 +588,11 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified dedicated M01 CLI acceptance on 2026-09-10 with
+  `tests/acceptance/m01-cli.ps1`: API discovery, status, session, recording,
+  and read-only device/application command paths passed. The acceptance used
+  disposable state and did not open or modify audio configuration.
+
 - Requalified dedicated M05 UI acceptance on 2026-09-10 with
   `tests/acceptance/m05-ui.ps1`: TypeScript typecheck, 17 test files/121 tests,
   and the temporary production build passed. This was UI-only validation; no
