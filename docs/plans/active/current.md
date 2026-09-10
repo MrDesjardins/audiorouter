@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `c1a6ed67`; later commits after
+The active branch is currently pushed through `ad9feed6`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -95,6 +95,13 @@ configuration changes.
   incomplete pipe option creates no database; CLI unit/integration tests pass
   33/33, `cargo fmt --all` passes, and strict CLI Clippy passes. No audio or
   machine configuration is involved.
+- Re-ran the elevated read-only native endpoint format inventory on 2026-09-09
+  at 19:13 local time. It passed across 34 active capture/render endpoints and
+  recorded 48 kHz 32-bit mono/stereo formats plus observed 96 kHz alternatives.
+  The acceptance used only endpoint metadata and a media-device snapshot; it
+  opened no audio stream and changed no defaults, volume, mute, driver, or
+  persistent machine configuration. Live tone/loopback acceptance remains
+  deferred to the user-authorized test window.
 - The user supplied additional local plugin fixtures under `third_party/vst/`
   on 2026-09-09: BUSTERse VST2/VST3, COMPER x64 VST3 plus AAX material, and TDR
   Nova Win32/x64 VST2/VST3 plus AAX material. The inventory is documented in
