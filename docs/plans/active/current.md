@@ -260,6 +260,21 @@ configuration changes.
   formatting passed. Concrete WAV/FLAC worker attachment to the native graph
   remains the next integration gate.
 
+- Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
+  `4ac4e240` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
+  qualification, M01/M04/M05/M06/M07 headless acceptance, M08 unsigned release
+  preparation and traceability, and documentation validation all passed. The
+  run removed all 13 owned temporary children. This evidence excludes live
+  audio, driver installation, signing-mode changes, plugin registration,
+  startup registration, and persistent machine audio configuration changes.
+
+- Attempted the separately elevated frontend-owned M07 shell RPC check on
+  2026-09-10. The managed execution token still reports non-administrator and
+  the script failed closed before creating its disposable database or starting
+  the shell/backend. This confirms the remaining gate is the interactive
+  elevated desktop/WebView boundary, not an audio-device contention result.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
@@ -788,11 +803,10 @@ action occurred.
   PE architecture and format, then use the contained worker matrix for x64
   processing/state/editor evidence. Do not load AAX or execute Win32 variants.
 
-Next action: implement and test a backend-owned recorder finalize/shutdown
-operation, using `recorders.list` as its authoritative live-state input, before
-adding any tray quit action. Then perform the first runtime Tauri-shell-to-
-backend request check against the bounded authenticated service without
-touching the live audio graph.
+Next action: integrate a concrete WAV/FLAC recorder worker with the native graph
+and authoritative live recorder state, then repeat the runtime Tauri-shell-to-
+backend request check from an interactive elevated desktop. Do not add a tray
+quit action until worker finalization and runtime request evidence exist.
 Preserve the production driver callback, signing, installer, clean-machine,
 physical-latency, editor, and independent-plugin gates as separate prerequisites
 rather than claiming release completion.
