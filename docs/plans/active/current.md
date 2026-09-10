@@ -588,6 +588,14 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the native VST3 worker matrix on 2026-09-10 with
+  `tests/acceptance/m06-vst3-worker.ps1`: isolated AGain single-stream and
+  auxiliary-bus processing, asynchronous graph staging, bounded failure
+  recovery/quarantine, validated state restoration, repeated-quantum timing,
+  finite transformed output, and bounded shutdown all passed. Repository-local
+  fixtures were used without plugin registration, audio streams, or machine
+  configuration changes.
+
 - Requalified dedicated M07 headless acceptance on 2026-09-10 with
   `tests/acceptance/m07-headless.ps1`: the CLI, MCP, control, plugin-host, and
   supervised worker suites passed, with no audio-device or machine-
