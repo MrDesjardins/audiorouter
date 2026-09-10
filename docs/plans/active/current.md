@@ -28,6 +28,17 @@ updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-09 at the current head. Elevated VS2026/MSVC/SDK/WDK discovery and
+  native compile, read-only 34-endpoint inventory, disposable SysVAD x64
+  package/API/signability qualification, M01/M04/M05, pinned VST3 SDK and
+  native single-/multi-bus workers, repository VST2 modern/legacy/fault
+  fixtures, M07, unsigned M08 artifacts, 159 traceability mappings, and
+  documentation validation (51 Markdown files/163 local links) all passed.
+  Cleanup removed 13 run-owned temporary children. No driver installation or
+  loading, signing-mode change, plugin/startup registration, audio stream, or
+  persistent machine audio configuration occurred.
+
 - Added an explicit native-shell host bridge in `src-tauri/src/main.rs` on
   2026-09-09. The initialization script now publishes the validated session
   ID and a bounded `AudioRouterHostBridge` whose transport invokes the
