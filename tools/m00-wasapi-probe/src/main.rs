@@ -671,20 +671,13 @@ fn adapter_bridge_smoke(
         .ok_or(AudioError::InvalidFrameSize)?;
     let render_info = select_endpoint(&endpoints, EndpointDirection::Render, render_id)
         .ok_or(AudioError::InvalidFrameSize)?;
-    if !capture_info.is_ieee_float32()
-        || !render_info.is_ieee_float32()
-        || capture_info.channels != render_info.channels
-        || capture_info.sample_rate_hz != render_info.sample_rate_hz
-        || !(1..=2).contains(&capture_info.channels)
-    {
-        return Err(AudioError::InvalidFrameSize);
-    }
     let mut monitor = EndpointMonitor::start()?;
     let mut capture = SharedCapture::open_refreshed_bound(&mut monitor, capture_info, 1_000_000)?;
     let mut render = SharedRender::open_refreshed_bound(&mut monitor, render_info, 1_000_000)?;
-    let mut bridge = WasapiSchedulerBridge::new(
+    let mut bridge = WasapiSchedulerBridge::new_for_endpoints(
         8,
-        usize::from(capture_info.channels),
+        capture_info,
+        render_info,
         128,
         4_096,
     )?;

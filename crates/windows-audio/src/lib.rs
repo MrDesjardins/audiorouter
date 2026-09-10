@@ -259,6 +259,7 @@ pub fn encode_interleaved_float32(
 /// it; this ceiling prevents a device-reported period from causing an
 /// unbounded preparation allocation.
 pub const MAX_FLOAT32_ACCUMULATOR_FRAMES: usize = 4_096;
+const RENDER_CARRY_QUANTA: usize = 64;
 
 /// Fixed-capacity interleaved float32 packet accumulator for the engine's
 /// fixed quantum. WASAPI packets may be shorter, longer, or split at an
@@ -366,12 +367,47 @@ pub struct WasapiSchedulerBridge {
     accumulator: Float32PacketAccumulator,
     capture_bytes: Vec<u8>,
     render_bytes: Vec<u8>,
+    render_pending: Vec<u8>,
+    render_pending_bytes: usize,
     bytes_per_frame: usize,
     quantum_frames: usize,
     timeline_frame: u64,
 }
 
 impl WasapiSchedulerBridge {
+    /// Construct a bridge only for two already-validated endpoint descriptors
+    /// with the same IEEE float32 mix format. This check is intentionally
+    /// metadata-only; callers still activate the exact bindings separately.
+    pub fn new_for_endpoints(
+        ring_capacity: usize,
+        capture: &EndpointInfo,
+        render: &EndpointInfo,
+        quantum_frames: usize,
+        max_packet_frames: usize,
+    ) -> Result<Self, AudioError> {
+        if capture.direction != EndpointDirection::Capture
+            || render.direction != EndpointDirection::Render
+            || !capture.is_ieee_float32()
+            || !render.is_ieee_float32()
+            || capture.sample_rate_hz != render.sample_rate_hz
+            || capture.channels != render.channels
+            || capture.bits_per_sample != render.bits_per_sample
+            || capture.format_tag != render.format_tag
+            || capture.channel_mask != render.channel_mask
+            || !capture
+                .subformat_guid
+                .eq_ignore_ascii_case(&render.subformat_guid)
+        {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        Self::new(
+            ring_capacity,
+            usize::from(capture.channels),
+            quantum_frames,
+            max_packet_frames,
+        )
+    }
+
     pub fn new(
         ring_capacity: usize,
         channels: usize,
@@ -390,6 +426,9 @@ impl WasapiSchedulerBridge {
         let render_bytes = quantum_frames
             .checked_mul(bytes_per_frame)
             .ok_or(AudioError::InvalidFrameSize)?;
+        let render_pending = render_bytes
+            .checked_mul(RENDER_CARRY_QUANTA)
+            .ok_or(AudioError::InvalidFrameSize)?;
         let scheduler =
             audiorouter_engine::RealtimeScheduler::new(ring_capacity, channels, quantum_frames)
                 .map_err(|_| AudioError::InvalidFrameSize)?;
@@ -403,6 +442,8 @@ impl WasapiSchedulerBridge {
             accumulator,
             capture_bytes: vec![0; capture_bytes],
             render_bytes: vec![0; render_bytes],
+            render_pending: vec![0; render_pending],
+            render_pending_bytes: 0,
             bytes_per_frame,
             quantum_frames,
             timeline_frame: 0,
@@ -429,16 +470,15 @@ impl WasapiSchedulerBridge {
         capture: &SharedCapture,
         render: &SharedRender,
     ) -> Result<WasapiSchedulerPump, AudioError> {
+        let mut result = WasapiSchedulerPump::default();
+        self.drain_render_pending(render, &mut result)?;
         let Some((packet, packet_bytes)) =
             capture.next_packet_into(&mut self.capture_bytes, self.bytes_per_frame)?
         else {
-            return Ok(WasapiSchedulerPump::default());
+            return Ok(result);
         };
-        let mut result = WasapiSchedulerPump {
-            packets: 1,
-            captured_frames: packet.frames,
-            ..WasapiSchedulerPump::default()
-        };
+        result.packets = 1;
+        result.captured_frames = packet.frames;
         let mut offset = 0;
         while offset < packet_bytes {
             let consumed = self
@@ -463,6 +503,7 @@ impl WasapiSchedulerBridge {
         result: &mut WasapiSchedulerPump,
     ) -> Result<(), AudioError> {
         while self.accumulator.pending_frames() >= self.quantum_frames {
+            self.drain_render_pending(render, result)?;
             let Some(mut input) = self.scheduler.acquire_input() else {
                 return Err(AudioError::BufferTooSmall {
                     required: self.quantum_frames * self.bytes_per_frame,
@@ -493,15 +534,53 @@ impl WasapiSchedulerBridge {
                 continue;
             };
             encode_interleaved_float32(&output, &mut self.render_bytes)?;
-            let submitted = render.submit_bytes(&self.render_bytes, self.bytes_per_frame)?;
-            result.rendered_frames = result.rendered_frames.saturating_add(submitted);
-            result.dropped_render_frames = result
-                .dropped_render_frames
-                .saturating_add(output.frames() as u32 - submitted);
+            let output_bytes = output.frames() * self.bytes_per_frame;
+            if self.render_pending_bytes + output_bytes > self.render_pending.len() {
+                self.scheduler
+                    .output()
+                    .try_recycle(output)
+                    .map_err(|_| AudioError::InvalidFrameSize)?;
+                return Err(AudioError::BufferTooSmall {
+                    required: self.render_pending_bytes + output_bytes,
+                    available: self.render_pending.len(),
+                });
+            }
+            self.render_pending
+                [self.render_pending_bytes..self.render_pending_bytes + output_bytes]
+                .copy_from_slice(&self.render_bytes[..output_bytes]);
+            self.render_pending_bytes += output_bytes;
             self.scheduler
                 .output()
                 .try_recycle(output)
                 .map_err(|_| AudioError::InvalidFrameSize)?;
+            self.drain_render_pending(render, result)?;
+        }
+        Ok(())
+    }
+
+    fn drain_render_pending(
+        &mut self,
+        render: &SharedRender,
+        result: &mut WasapiSchedulerPump,
+    ) -> Result<(), AudioError> {
+        while self.render_pending_bytes > 0 {
+            let submitted = render.submit_bytes(
+                &self.render_pending[..self.render_pending_bytes],
+                self.bytes_per_frame,
+            )?;
+            if submitted == 0 {
+                break;
+            }
+            let submitted_bytes = (submitted as usize)
+                .checked_mul(self.bytes_per_frame)
+                .ok_or(AudioError::InvalidFrameSize)?;
+            if submitted_bytes > self.render_pending_bytes {
+                return Err(AudioError::InvalidFrameSize);
+            }
+            self.render_pending
+                .copy_within(submitted_bytes..self.render_pending_bytes, 0);
+            self.render_pending_bytes -= submitted_bytes;
+            result.rendered_frames = result.rendered_frames.saturating_add(submitted);
         }
         Ok(())
     }
@@ -2625,6 +2704,34 @@ mod tests {
         info.format_tag = 0xfffe;
         info.subformat_guid = "{00000003-0000-0010-8000-00aa00389b71}".into();
         assert!(info.is_ieee_float32());
+    }
+
+    #[test]
+    fn scheduler_bridge_rejects_mismatched_endpoint_formats_before_activation() {
+        let endpoint = |direction| EndpointInfo {
+            id: match direction {
+                EndpointDirection::Capture => "capture",
+                EndpointDirection::Render => "render",
+            }
+            .into(),
+            direction,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 20_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: "{00000003-0000-0010-8000-00AA00389B71}".into(),
+        };
+        let capture = endpoint(EndpointDirection::Capture);
+        let mut render = endpoint(EndpointDirection::Render);
+        assert!(WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256).is_ok());
+        render.sample_rate_hz = 44_100;
+        assert!(matches!(
+            WasapiSchedulerBridge::new_for_endpoints(2, &capture, &render, 128, 256),
+            Err(AudioError::InvalidFrameSize)
+        ));
     }
 
     #[test]
