@@ -40,6 +40,7 @@ M01 shall produce machine-readable method and node schemas, golden request/respo
 | `virtualDevices.list/plan/apply` | Bus lifecycle as explicit privileged operations, separate from graph commits |
 | `plugins.scan/list/inspect`, `plugins.retry` | Isolated discovery, compatibility/quarantine, deliberate retry |
 | `presets.list/save/import/export` | Versioned parameter/subgraph presets; apply through graph.plan |
+| `recorders.list` | Live in-memory recorder state and last frame boundary; does not imply persisted file finalization |
 | `recorders.arm/start/pause/resume/split/stop` | Recording state changes with exact frame/file identities |
 | `recordings.list/get/rename/setMetadata/reveal/preview/removeEntry/recycle` | Independent library/file actions and permission scopes |
 | `startup.get/plan/apply` | Sign-in behavior preview and registration result |

@@ -31,6 +31,7 @@ after the initial 47-method reference.
 | `operations.get` | `read` | read-only |
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
 | `recordings.list` | `record` | read-only |
+| `recorders.list` | `record` | read-only |
 | `recorders.arm` | `record` | mutating; requires an idempotency key |
 | `recorders.start` | `record` | mutating; requires an idempotency key |
 | `recorders.pause` | `record` | mutating; requires an idempotency key |
