@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `34c51e1b`; later commits after
+The active branch is currently pushed through `f6594f9e`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -57,6 +57,14 @@ configuration changes.
   can feed WAV/FLAC workers safely; adding an allocating conversion in the tap
   would violate ARCH-04. This is an explicit implementation prerequisite, not
   native graph or production-driver evidence.
+
+- Added a preallocated recording queue pool on 2026-09-10 at pushed head
+  `f6594f9e`. `new_pooled` creates bounded owned chunks, while
+  `try_acquire`/`try_commit`/`recycle` provide a nonallocating producer path
+  and worker return path. The existing WAV/FLAC workers recycle successfully
+  consumed chunks; pooled-queue coverage passed, recording tests passed 34/34,
+  and strict Clippy passed. The native adapter still must copy engine blocks
+  into these chunks and bind them to an actual device lifecycle.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
   `8438bd82` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
