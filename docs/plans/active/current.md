@@ -39,6 +39,14 @@ configuration changes.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Extended unsigned M08 artifact preparation on 2026-09-09 to build and hash
+  `audiorouter-shell.exe` from the standalone Tauri workspace alongside the
+  CLI, plugin worker, UI archive, SBOMs, and notices. The release verifier's
+  required-artifact fixture was updated accordingly; the focused verifier
+  regression passed. End-to-end M08 rerun follows after this clean-tree
+  change is committed. The shell remains unsigned and no installer, driver,
+  audio stream, or machine configuration is involved.
+
 - Added an explicit native-shell host bridge in `src-tauri/src/main.rs` on
   2026-09-09. The initialization script now publishes the validated session
   ID and a bounded `AudioRouterHostBridge` whose transport invokes the

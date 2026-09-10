@@ -26,6 +26,7 @@ try {
     foreach ($required in @(
         "audiorouter-cli.exe",
         "audiorouter-plugin-worker.exe",
+        "audiorouter-shell.exe",
         "audiorouter-ui.zip",
         "sbom.cargo.json",
         "sbom.npm.json",

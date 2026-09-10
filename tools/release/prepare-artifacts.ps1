@@ -40,6 +40,10 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
     }
+    & cargo build --release --locked --manifest-path (Join-Path $workspace "src-tauri/Cargo.toml")
+    if ($LASTEXITCODE -ne 0) {
+        throw "native shell release build failed with exit code $LASTEXITCODE"
+    }
 
     if (Test-Path -LiteralPath $uiBuild) {
         throw "temporary UI build directory already exists; refusing to reuse it: $uiBuild"
@@ -69,15 +73,16 @@ try {
     New-Item -ItemType Directory -Path $output | Out-Null
 
     $binaries = @(
-        "audiorouter-cli.exe",
-        "audiorouter-plugin-worker.exe"
+        @{ Name = "audiorouter-cli.exe"; Source = (Join-Path $workspace "target/release/audiorouter-cli.exe") }
+        @{ Name = "audiorouter-plugin-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe") }
+        @{ Name = "audiorouter-shell.exe"; Source = (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe") }
     )
     foreach ($binary in $binaries) {
-        $source = Join-Path $workspace "target/release/$binary"
+        $source = $binary.Source
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "Expected release binary was not produced: $source"
         }
-        Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary)
+        Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary.Name)
     }
     Compress-Archive -Path (Join-Path $uiBuild "*") -DestinationPath (Join-Path $output "audiorouter-ui.zip") -CompressionLevel Optimal
     Copy-Item -LiteralPath $uiLock -Destination (Join-Path $output "sbom.npm.package-lock.json")

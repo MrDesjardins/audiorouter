@@ -12,6 +12,7 @@ try {
         foreach ($name in @(
             "audiorouter-cli.exe",
             "audiorouter-plugin-worker.exe",
+            "audiorouter-shell.exe",
             "audiorouter-ui.zip",
             "sbom.npm.json",
             "sbom.npm.package-lock.json"
