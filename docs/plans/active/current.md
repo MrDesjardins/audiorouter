@@ -167,6 +167,13 @@ configuration changes.
   the UI typecheck passed. This enables a future backend-owned finalize
   operation but does not itself authorize tray quit or process exit.
 
+- Revalidated the native shell boundary on 2026-09-10. The shell unit suite
+  passed 7/7, strict Clippy passed, and the optimized release build passed.
+  The guarded `m07-shell-rpc.ps1` acceptance still fails closed before any
+  temporary process or state is created because the invoking PowerShell is not
+  in the Administrator role; this is an environment/elevation limitation, not
+  a shell RPC result. No audio or persistent configuration was touched.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
@@ -695,8 +702,11 @@ action occurred.
   PE architecture and format, then use the contained worker matrix for x64
   processing/state/editor evidence. Do not load AAX or execute Win32 variants.
 
-Next action: perform the first runtime Tauri-shell-to-backend request check
-against the bounded authenticated service without touching the live audio graph.
+Next action: implement and test a backend-owned recorder finalize/shutdown
+operation, using `recorders.list` as its authoritative live-state input, before
+adding any tray quit action. Then perform the first runtime Tauri-shell-to-
+backend request check against the bounded authenticated service without
+touching the live audio graph.
 At the next authorized live-audio window, run the reversible VB-Audio endpoint
 loopback snapshot test and restore/compare media state. Preserve
 the production driver callback, signing, installer, clean-machine,
