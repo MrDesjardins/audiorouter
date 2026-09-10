@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `d19c74a5`; later commits after
+The active branch is currently pushed through `204edcee`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -43,6 +43,13 @@ configuration changes.
   shell Clippy passed. This remains compile/control-plane evidence; interactive
   WebView2 invocation, audio routing, driver, signing, and installation gates
   remain open. No audio or machine configuration changed.
+
+- Requalified the locked all-features workspace on 2026-09-10 after the
+  supplied-plugin and release-boundary additions: all workspace unit,
+  integration, worker-process, MCP, and doc tests passed, and rustfmt passed.
+  This portable/native-worker validation did not install drivers, register
+  plugins, open an audio stream, change signing mode, or alter machine audio
+  configuration.
 
 - Hardened M08 release preparation on 2026-09-09: every shipped executable
   (CLI, plugin worker, and native shell) is now checked as a regular non-reparse
