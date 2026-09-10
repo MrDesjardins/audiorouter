@@ -66,6 +66,14 @@ configuration has occurred.
   persistent machine configuration changed. Rights and release qualification
   remain separate gates.
 
+- Rechecked the read-only native format inventory on 2026-09-10. The initial
+  non-elevated invocation failed closed at `Get-PnpDevice` with access denied
+  (`0x80041003`); the elevated retry passed with 31 endpoints and observed
+  48 kHz float32 mono/stereo plus 96 kHz mono/eight-channel formats. No audio
+  stream was opened and no driver, endpoint, or persistent machine
+  configuration was changed. This records the host-permission prerequisite
+  separately from the format evidence.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
