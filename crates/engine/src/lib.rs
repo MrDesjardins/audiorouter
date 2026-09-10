@@ -813,6 +813,17 @@ pub struct AudioBlock {
     generation: u64,
 }
 
+/// Realtime observer for a processed graph quantum.
+///
+/// Implementations must be allocation-free, nonblocking, non-panicking, and
+/// free of I/O/logging. The callback receives a borrowed block and must copy
+/// it only into caller-owned preallocated storage. This boundary lets a
+/// platform adapter feed recording or metering without making the engine
+/// depend on a file encoder.
+pub trait AudioTap: Send + Sync {
+    fn on_processed_block(&self, start_frame: u64, block: &AudioBlock);
+}
+
 /// Bounded per-frame gain transition for de-clicked parameter changes.
 /// Construction and target changes occur off the callback thread; applying a
 /// ramp only updates existing block samples and this small state object.
@@ -3554,6 +3565,24 @@ impl RuntimeProcessor {
         Some(graph.generation())
     }
 
+    /// Process one block and notify a caller-owned realtime tap after the
+    /// active graph has completed. The tap is invoked only for an active
+    /// generation; pre-activation silence is not presented as recorded audio.
+    /// The tap contract is intentionally limited to a borrowed block so this
+    /// method performs no allocation, locking, I/O, or encoder work here.
+    pub fn process_with_tap(
+        &self,
+        block: &mut AudioBlock,
+        start_frame: u64,
+        tap: &dyn AudioTap,
+    ) -> Option<RuntimeGeneration> {
+        let generation = self.process(block);
+        if generation.is_some() {
+            tap.on_processed_block(start_frame, block);
+        }
+        generation
+    }
+
     /// Consume one queued block into caller-owned output storage. This helper
     /// is for the control/worker path: dropping the popped block may reclaim
     /// its backing allocation, so a realtime callback must use a reusable
@@ -4103,6 +4132,40 @@ impl RuntimeGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct CountingTap {
+        calls: AtomicU64,
+        last_frame: AtomicU64,
+    }
+
+    impl AudioTap for CountingTap {
+        fn on_processed_block(&self, start_frame: u64, block: &AudioBlock) {
+            if block.channel(0).is_some() {
+                self.last_frame.store(start_frame, Ordering::Relaxed);
+                self.calls.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+
+    #[test]
+    fn runtime_processor_notifies_tap_only_after_activation() {
+        let processor = RuntimeProcessor::default();
+        let tap = CountingTap {
+            calls: AtomicU64::new(0),
+            last_frame: AtomicU64::new(0),
+        };
+        let mut block = AudioBlock::new(1, 4).unwrap();
+        assert_eq!(processor.process_with_tap(&mut block, 10, &tap), None);
+        assert_eq!(tap.calls.load(Ordering::Relaxed), 0);
+
+        processor.publish(RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]));
+        assert_eq!(
+            processor.process_with_tap(&mut block, 20, &tap),
+            Some(RuntimeGeneration::new(1))
+        );
+        assert_eq!(tap.calls.load(Ordering::Relaxed), 1);
+        assert_eq!(tap.last_frame.load(Ordering::Relaxed), 20);
+    }
 
     #[test]
     fn block_reuses_planar_storage_for_gain_and_mix() {
