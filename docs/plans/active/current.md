@@ -588,6 +588,14 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified exact endpoint-ID routed adapter binding on 2026-09-10 with
+  `tests/acceptance/m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 500`: 24,480 frames were captured, 24,448 frames
+  routed across 191 graph blocks, processing p99.9 was 65,536 ns, and zero
+  deadline misses occurred. The explicit VB-Audio endpoint IDs were used
+  directly; streams stopped/reset and defaults, volume, mute, privacy, drivers,
+  signing, startup, and persistent audio configuration remained unchanged.
+
 - Requalified the Rust process-loopback rate-conversion probe on 2026-09-10
   with `tests/acceptance/m00-rust-process-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 500`: both include and exclude modes converted 22,050
