@@ -41,6 +41,10 @@ configuration changes.
   for 51 Markdown files and 163 local links. No native audio stream, driver,
   plugin registration, signing action, or persistent machine configuration was
   involved.
+- Re-ran the UI contract gate on 2026-09-09 after the native shell lifecycle
+  change: TypeScript typecheck passed and Vitest passed all 16 files/113 tests.
+  This validates the adapter and disconnected/connected UI contracts only; it
+  does not substitute for manual WebView2 invocation or accessibility evidence.
 - Next task: create a frontend-owned or manually observable WebView2 invocation
   acceptance that proves `rpc_request` reaches an enrolled backend; otherwise
   continue the next portable M06 worker/graph gate without claiming GUI
