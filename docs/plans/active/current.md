@@ -175,6 +175,15 @@ configuration has occurred.
   temporary checkout; this is an external-network blocker, not a driver-build
   result, and no driver or machine audio configuration was touched.
 
+- Requalified disposable SysVAD x64 compile/package/API/signability on
+  2026-09-10 after connectivity recovered with `tools\\m00-sysvad\\qualify.ps1`.
+  The pinned Windows driver samples and WIL checkout built successfully,
+  package signability reported no errors or warnings, and the temporary
+  checkout was removed; a follow-up temp scan found zero `audiorouter-*`
+  artifacts. This remains reference-driver qualification only: no driver was
+  installed or loaded, test-signing mode was changed, or machine audio
+  configuration touched.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
