@@ -55,6 +55,13 @@ configuration changes.
   only; installer, production signing, driver installation, and clean-machine
   gates remain open, and no audio or machine configuration changed.
 
+- Synchronized M08 user-facing documentation on 2026-09-09 after adding the
+  shell artifact: the release qualification checklist and development release
+  notes now identify the unsigned native shell alongside the CLI, worker, UI,
+  provenance, and checksum outputs. Documentation validation passed for 51
+  Markdown files and 163 local links; no runtime, installation, signing,
+  driver, audio, or machine configuration action occurred.
+
 - Added an explicit native-shell host bridge in `src-tauri/src/main.rs` on
   2026-09-09. The initialization script now publishes the validated session
   ID and a bounded `AudioRouterHostBridge` whose transport invokes the

@@ -20,9 +20,9 @@ release and must not be presented as an installable Windows audio product.
 - M07 headless acceptance passes 26 CLI tests, 2 MCP interoperability tests,
   97 control tests, 57 plugin-host tests, 13 worker-process tests, and strict
   Clippy.
-- M08 disposable artifact preparation creates and verifies unsigned x64 CLI
-  and plugin-worker artifacts, SBOM metadata, notices, checksums, and a
-  manifest, then removes the temporary output.
+- M08 disposable artifact preparation creates and verifies unsigned x64 CLI,
+  native-shell, and plugin-worker artifacts, SBOM metadata, notices, checksums,
+  and a manifest, then removes the temporary output.
 - VST3 SDK acceptance passes 51 SDK self-tests, 1,598 official validator tests
   with 0 failures, and the offline native mda fixture loader.
 - A Windows-only, gated native x64 VST2 adapter is verified with repository-owned
