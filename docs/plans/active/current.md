@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `97fd1fa7`; later commits after
+The active branch is currently pushed through `a0e8b418`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -61,7 +61,7 @@ action occurred.
   asynchronous graph-staging regressions through the supervised worker path.
   The temporary native worker was built and removed, the fixture was used in
   place, and no plugin registration, audio stream, or machine configuration
-  changed. This confirms compatibility with the bounded two-input-bus worker
+changed. This confirms compatibility with the bounded two-input-bus worker
   contract only; broad vendor/editor/rights/release qualification remains open.
 
 - Rechecked the native-shell frontend invocation boundary on 2026-09-09 after
