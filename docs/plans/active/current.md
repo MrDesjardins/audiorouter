@@ -74,6 +74,13 @@ configuration changes.
   production build (212 modules), shell formatting, and diff checks passed.
   This improves the supported frontend integration path but does not close
   the interactive WebView2 runtime gate.
+- Repeated the real UI startup probe after that API integration on 2026-09-09
+  with a fresh 212-module bundle. The shell stayed alive and the temporary
+  authenticated backend stayed waiting, so no UI request reached the native
+  command in this headless WebView2 launch. The bundle, database, pipe,
+  processes, and environment variables were removed/restored; no audio stream
+  or persistent machine configuration changed. This remains manual-GUI
+  evidence work, not a failed transport or authorization result.
 - Added a reproducible interactive shell acceptance procedure to the native
   shell README and headless runbook on 2026-09-09. It uses only a temporary
   SID-enrolled database and named pipe, starts the bounded backend, and states
