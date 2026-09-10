@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the pinned VST3 SDK boundary on 2026-09-10 with
+  `tests/acceptance/m06-vst3-sdk.ps1 -SkipBuild`: validator self-tests, AGain
+  main and auxiliary-bus classes, explicit single-bus rejection, offline
+  loader checks, and the five-class mda matrix passed. The SDK and fixtures
+  remained repository-local; no system plugin registration, audio stream, or
+  machine configuration action occurred.
+
 - Requalified the native VST3 worker matrix on 2026-09-10 with
   `tests/acceptance/m06-vst3-worker.ps1`: isolated AGain single-stream and
   auxiliary-bus processing, asynchronous graph staging, bounded failure
