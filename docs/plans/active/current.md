@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `3316f1de`; the native probe compile was
+The latest pushed checkpoint is `42c05293`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -28,6 +28,13 @@ because the managed host returned no usable child transcript. M07 headless
 acceptance remains passed, while the interactive elevated shell-RPC gate is
 still open. Production routing, owned-driver distribution, signing, installer,
 clean-machine, physical-latency, and manual UI gates remain explicit blockers.
+
+The latest directly observed qualification commits after that checkpoint are
+`a1a91780` (exact endpoint bridge), `ed0f4d47` (focused DSP/recording),
+`cb44208a` (plugin host), `266b44ea` (UI), and `42c05293` (contracts/docs).
+The latest working tree is clean and pushed. No driver installation/loading,
+plugin registration, signing-mode change, or persistent machine audio
+configuration has occurred.
 
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
