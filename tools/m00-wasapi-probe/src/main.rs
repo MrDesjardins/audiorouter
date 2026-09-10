@@ -13,6 +13,7 @@ use audiorouter_engine::{
     histogram_upper_bound_ns, AudioBlock, AudioTap, DriftController, Pcm16QuantumAdapter,
     ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph, StreamingResampler,
 };
+use audiorouter_control::{RecorderWorker, StreamingFlacRecorderWorker};
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
     ProcessLoopbackCapture, ProcessLoopbackMode, SharedCapture, SharedRender,
@@ -710,8 +711,30 @@ fn adapter_bridge_smoke(
         generation,
         vec![ProcessingStage::Gain { linear: 0.5 }],
     ));
+    let recording_path = std::env::temp_dir().join(format!(
+        "audiorouter-bridge-recording-{}-{}.flac",
+        std::process::id(),
+        capture_info.id.len()
+    ));
+    let recording_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&recording_path)
+        .map_err(|_| AudioError::InvalidFrameSize)?;
+    let mut recorder = StreamingFlacRecorderWorker::new(
+        recording_file,
+        capture_info.channels,
+        capture_info.sample_rate_hz,
+        24,
+        32,
+        64,
+    )
+    .map_err(|_| AudioError::InvalidFrameSize)?;
+    recorder.arm().map_err(|_| AudioError::InvalidFrameSize)?;
+    recorder.start(0).map_err(|_| AudioError::InvalidFrameSize)?;
     capture.start()?;
     render.start()?;
+    let recorder_tap = recorder.audio_tap();
     let tap = ProbeTap::default();
     let result = (|| {
         let deadline = std::time::Instant::now()
@@ -723,7 +746,10 @@ fn adapter_bridge_smoke(
                 let current = bridge.pump_with_tap_and_deadline(
                     &capture,
                     &render,
-                    &tap,
+                    &CombinedTap {
+                        recorder: &recorder_tap,
+                        probe: &tap,
+                    },
                     std::time::Instant::now()
                         .checked_add(graph_quantum_duration(capture_info.sample_rate_hz, 128))
                         .unwrap_or_else(std::time::Instant::now),
@@ -747,8 +773,21 @@ fn adapter_bridge_smoke(
         {
             return Err(AudioError::InvalidFrameSize);
         }
+        drop(recorder_tap);
+        let finalized = recorder
+            .finalize(bridge.timeline_frame())
+            .map_err(|_| AudioError::InvalidFrameSize)?;
+        if !finalized.file_finalized
+            || finalized.state != "completed"
+            || std::fs::metadata(&recording_path)
+                .map_err(|_| AudioError::InvalidFrameSize)?
+                .len()
+                <= 128
+        {
+            return Err(AudioError::InvalidFrameSize);
+        }
         println!(
-            "adapter_bridge capture_endpoint={} render_endpoint={} rate_hz={} channels={} packets={} captured_frames={} processed_quanta={} tap_calls={} tap_non_finite_samples={} rendered_frames={} dropped_render_frames={} timeline_frame={} scheduler_xruns={} scheduler_deadline_misses={}",
+            "adapter_bridge capture_endpoint={} render_endpoint={} rate_hz={} channels={} packets={} captured_frames={} processed_quanta={} tap_calls={} tap_non_finite_samples={} rendered_frames={} dropped_render_frames={} timeline_frame={} recording_file_bytes={} scheduler_xruns={} scheduler_deadline_misses={}",
             capture_info.id,
             render_info.id,
             capture_info.sample_rate_hz,
@@ -761,6 +800,9 @@ fn adapter_bridge_smoke(
             pump.rendered_frames,
             pump.dropped_render_frames,
             bridge.timeline_frame(),
+            std::fs::metadata(&recording_path)
+                .map_err(|_| AudioError::InvalidFrameSize)?
+                .len(),
             telemetry.xruns,
             telemetry.deadline_misses,
         );
@@ -768,7 +810,21 @@ fn adapter_bridge_smoke(
     })();
     let capture_stop = capture.stop();
     let render_stop = render.stop();
-    result.and(capture_stop).and(render_stop)
+    let result = result.and(capture_stop).and(render_stop);
+    let _ = std::fs::remove_file(recording_path);
+    result
+}
+
+struct CombinedTap<'a> {
+    recorder: &'a dyn AudioTap,
+    probe: &'a ProbeTap,
+}
+
+impl AudioTap for CombinedTap<'_> {
+    fn on_processed_block(&self, start_frame: u64, block: &AudioBlock) {
+        self.recorder.on_processed_block(start_frame, block);
+        self.probe.on_processed_block(start_frame, block);
+    }
 }
 
 fn select_endpoint<'a>(

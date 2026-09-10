@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+audiorouter-control = { path = "../../crates/control" }
 audiorouter-windows-audio = { path = "../../crates/windows-audio" }
 audiorouter-engine = { path = "../../crates/engine" }
 windows = { version = "0.62.2", features = [
