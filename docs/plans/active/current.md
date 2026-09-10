@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `c8993c01`; later commits after
+The active branch is currently pushed through `5d47527c`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -59,6 +59,15 @@ configuration changes.
   AudioRouter's managed virtual input/output creation and production driver
   gates remain open. No defaults, volume, mute, privacy, driver, signing,
   startup, or persistent machine audio configuration changed.
+
+- Requalified native process-loopback include/exclude on 2026-09-09 during
+  the authorized live-audio window. The disposable include path captured
+  22,050 frames and 76,661 nonzero bytes; the exclude path captured 22,050
+  frames while excluding the child process. Activation/start/stop/reset,
+  child cleanup, and before/after media-state comparison passed. This is
+  Windows application-loopback API evidence only; production graph routing,
+  cross-process isolation thresholds, managed-driver callback timing, and
+  physical latency remain open. No persistent audio configuration changed.
 
 - Extracted the M08 bounded x64 PE validator into
   `tools/release/pe-validation.ps1` on 2026-09-10 and added focused negative

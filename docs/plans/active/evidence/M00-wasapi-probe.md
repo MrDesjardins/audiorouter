@@ -1181,6 +1181,20 @@ cleanup path, not proof of the production managed-driver callback or physical
 latency gate. No defaults, volume, mute, privacy, driver, signing, startup, or
 persistent machine audio setting changed.
 
+## Native process-loopback include/exclude requalification (2026-09-09)
+
+The explicitly authorized bounded process-loopback checks passed:
+`m00-native-process-live.ps1 -AllowLiveAudio -DurationMilliseconds 500`
+captured 22,050 frames and 76,661 nonzero bytes from its disposable child
+process tree, and `m00-native-process-exclude-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` captured 22,050 frames while excluding that child.
+Both activation/start/stop/reset lifecycles and child cleanup succeeded. The
+media-device state remained unchanged and no defaults, volume, mute, privacy,
+driver, signing, startup, or persistent audio setting was modified. These
+results qualify the Windows application-loopback API modes and lifecycle; they
+do not claim production graph routing, cross-process isolation thresholds, or
+managed-driver callback timing.
+
 ## Native tone/loopback signal-path requalification (2026-09-09)
 
 `tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
