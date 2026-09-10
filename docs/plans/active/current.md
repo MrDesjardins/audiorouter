@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `82a86715`; later commits after
+The active branch is currently pushed through `0859220e`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -73,6 +73,13 @@ configuration changes.
   end to end before session-stop finalization. Control tests passed 105/105,
   recording tests 34/34, engine tests 90/90, and strict Clippy passed. Native
   WASAPI graph/device construction and production-driver lifecycle remain open.
+
+- Added a caller-clocked virtual-bus lease boundary on 2026-09-10 at pushed
+  head `0859220e`. `renew_lease` validates the active generation and
+  `expire_if_stale` atomically disables the bridge and drains both rings, so a
+  lost backend/owner cannot expose stale buffered audio. The regression passed
+  with engine tests 91/91 and strict Clippy. This is portable bridge evidence;
+  the native driver heartbeat and 500 ms measured deadline remain open.
 
 - Hardened the pooled tap path on 2026-09-10. Variable-sized engine quanta are
   accepted without allocation by truncating owned pooled vectors and restoring
