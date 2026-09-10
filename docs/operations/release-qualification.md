@@ -17,7 +17,9 @@ Preparation requires a clean worktree, locked Cargo inputs, and a new output
 directory. It produces unsigned x64 CLI, native-shell, and disposable-worker
 artifacts, a disposable zipped UI bundle, locked Cargo SBOM metadata, the authoritative UI
 `package-lock.json` plus a deterministic CycloneDX npm SBOM generated from the
-lockfile, and checksums. The standard preparation flow does not install a
+lockfile, and checksums. Before copying the three executables, preparation reads
+bounded DOS/PE headers and rejects malformed, reparse-point, or non-x64 files.
+The standard preparation flow does not install a
 driver or generate an installer. An optional transient unsigned NSIS smoke can
 exercise the native bundler without installation:
 
@@ -32,16 +34,17 @@ qualification.
 At the current repository revision, the safe, repository-local qualification
 surface is green:
 
-- The locked Rust workspace passes 379 tests across all targets, formatting,
+- The locked Rust workspace passes 466 unit/integration tests and all doc-tests,
+  formatting,
   and strict workspace Clippy.
-- M04 passes 25 DSP and 30 recording tests, including the 60-second pitch
+- M04 passes 30 DSP and 30 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 76 UI tests, and a disposable production
+- M05 passes TypeScript typecheck, 113 UI tests, and a disposable production
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
-- M07 passes 25 CLI tests, MCP stdio/named-pipe interoperability, 83 control
-  tests, 33 plugin-host tests, 8 worker-process tests, and strict Clippy.
+- M07 passes 30 CLI tests, MCP stdio/named-pipe interoperability, 99 control
+  tests, 67 plugin-host tests, 13 worker-process tests, and strict Clippy.
 - M08 unsigned artifact preparation, provenance/SBOM, checksums, exact-content
   verification, and cleanup pass in a disposable output directory.
 - M00 native validation is compile-only on this machine. Visual Studio

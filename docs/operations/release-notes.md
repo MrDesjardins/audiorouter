@@ -22,7 +22,8 @@ release and must not be presented as an installable Windows audio product.
   Clippy.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI,
   native-shell, and plugin-worker artifacts, SBOM metadata, notices, checksums,
-  and a manifest, then removes the temporary output.
+  and a manifest, validates bounded PE headers for x64 executables, then removes
+  the temporary output.
 - A transient Tauri 2.11.4 NSIS bundler smoke also succeeds with `--no-sign`;
   the generated installer is removed and is not a production or installability
   qualification result.
