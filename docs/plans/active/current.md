@@ -588,6 +588,14 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the native process-loopback exclusion probe on 2026-09-10 with
+  `tests/acceptance/m00-native-process-exclude-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 500`: the disposable child was excluded from the
+  selected process-loopback tree and the capture completed with 22,050 frames.
+  Temporary process/capture resources were cleaned up. This validates API mode
+  and lifecycle only, not a full cross-process isolation threshold; persistent
+  audio configuration remained unchanged.
+
 - Requalified the native digital signal-path probe on 2026-09-10 with
   `tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio`: the selected
   VB-Audio render/capture pair produced 216,756 nonzero captured bytes during
