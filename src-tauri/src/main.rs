@@ -9,6 +9,7 @@ const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 struct ShellState {
     pipe_name: String,
     session_id: String,
+    probe_file: Option<std::path::PathBuf>,
 }
 
 #[tauri::command]
@@ -16,7 +17,16 @@ fn rpc_request(
     request: JsonRpcRequest,
     state: State<'_, ShellState>,
 ) -> Result<JsonRpcResponse, String> {
-    forward_rpc_request(&request, &state.pipe_name)
+    let response = forward_rpc_request(&request, &state.pipe_name)?;
+    if request.method == "system.describe" {
+        if let Some(path) = &state.probe_file {
+            let contents = serde_json::to_vec(&response)
+                .map_err(|error| format!("probe response encoding failed: {error}"))?;
+            std::fs::write(path, contents)
+                .map_err(|error| format!("probe marker write failed: {error}"))?;
+        }
+    }
+    Ok(response)
 }
 
 fn forward_rpc_request(
@@ -42,10 +52,15 @@ fn session_id(state: State<'_, ShellState>) -> String {
     state.session_id.clone()
 }
 
-fn session_initialization_script(session_id: &str) -> String {
+fn session_initialization_script(session_id: &str, frontend_probe: bool) -> String {
     let encoded = serde_json::to_string(session_id).expect("session id is serializable");
+    let probe = if frontend_probe {
+        "window.__TAURI_INTERNALS__.invoke('rpc_request',{request:{jsonrpc:'2.0',id:'shell-probe',method:'system.describe'}});"
+    } else {
+        ""
+    };
     format!(
-        "window.__AUDIO_ROUTER_SESSION_ID__ = {encoded};window.__AUDIO_ROUTER_HOST__ = {{sessionId: {encoded}, transport: {{send: (request) => window.__TAURI_INTERNALS__.invoke('rpc_request', {{request}})}}}};"
+        "window.__AUDIO_ROUTER_SESSION_ID__ = {encoded};window.__AUDIO_ROUTER_HOST__ = {{sessionId: {encoded}, transport: {{send: (request) => window.__TAURI_INTERNALS__.invoke('rpc_request', {{request}})}}}};{probe}"
     )
 }
 
@@ -55,8 +70,10 @@ fn main() {
     let state = ShellState {
         pipe_name,
         session_id: format!("tauri-shell-{}", std::process::id()),
+        probe_file: std::env::var_os("AUDIOROUTER_SHELL_PROBE_FILE").map(std::path::PathBuf::from),
     };
-    let session_script = session_initialization_script(&state.session_id);
+    let session_script =
+        session_initialization_script(&state.session_id, state.probe_file.is_some());
     tauri::Builder::default()
         .manage(state)
         .invoke_handler(tauri::generate_handler![rpc_request, session_id])
@@ -82,12 +99,25 @@ mod tests {
 
     #[test]
     fn session_initialization_script_uses_json_string_encoding() {
-        let script = session_initialization_script("shell\";window.pwned=true;\\escape");
+        let script = session_initialization_script("shell\";window.pwned=true;\\escape", false);
         assert!(script.starts_with(
             r#"window.__AUDIO_ROUTER_SESSION_ID__ = "shell\";window.pwned=true;\\escape";"#
         ));
         assert!(script.contains("window.__AUDIO_ROUTER_HOST__"));
         assert!(script.contains("window.__TAURI_INTERNALS__.invoke('rpc_request', {request})"));
+    }
+
+    #[test]
+    fn optional_frontend_probe_is_not_present_by_default() {
+        let script = session_initialization_script("probe", false);
+        assert!(!script.contains("shell-probe"));
+    }
+
+    #[test]
+    fn optional_frontend_probe_uses_the_native_command() {
+        let script = session_initialization_script("probe", true);
+        assert!(script.contains("id:'shell-probe'"));
+        assert!(script.contains("method:'system.describe'"));
     }
 
     #[cfg(windows)]

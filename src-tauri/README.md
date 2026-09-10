@@ -41,3 +41,10 @@ Remove-Item -LiteralPath $params, $database -Force -ErrorAction SilentlyContinue
 The expected observation is that the shell opens and its normal UI reports a
 connected backend after a read-only refresh. This does not prove driver or
 audio routing behavior. Do not use the user's normal database for diagnosis.
+
+For a repeatable control-plane check without manual UI observation, build the
+debug CLI and shell, then run `tests/acceptance/m07-shell-rpc.ps1` from an
+elevated PowerShell session. It opts into a temporary frontend initialization
+probe through `AUDIOROUTER_SHELL_PROBE_FILE`; the marker is written only after
+the authenticated native command receives `system.describe`, and the script
+removes its database, marker, processes, and pipe-related state afterward.
