@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the sustained live Rust adapter telemetry probe on 2026-09-10
+  with `tests/acceptance/m02-rust-adapter-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 750`: 36,480 frames crossed 285 scheduler quanta,
+  36,480 frames were rendered, and zero xruns, input/output overruns, pending
+  frames, or deadline misses occurred. Processing p99.9 was 131,072 ns;
+  streams were stopped/reset and media-device identity/state remained unchanged.
+
 - Requalified the guarded native endpoint lifecycle/contention probe on
   2026-09-10 with `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 100`: all 13 capture and 18 render endpoints passed
