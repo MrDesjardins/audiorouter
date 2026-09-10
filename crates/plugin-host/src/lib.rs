@@ -5574,6 +5574,7 @@ impl Default for WorkerFrameGuard {
 mod tests {
     use super::*;
     use std::io::{Cursor, Read};
+    use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     struct ChunkedReader {
@@ -5598,13 +5599,23 @@ mod tests {
     }
 
     fn temp_root() -> PathBuf {
-        let id = SystemTime::now()
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("audiorouter-plugin-{id}"));
-        fs::create_dir_all(&path).unwrap();
-        path
+        loop {
+            let suffix = COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "audiorouter-plugin-{}-{timestamp}-{suffix}",
+                std::process::id()
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => return path,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("create unique plugin test root: {error}"),
+            }
+        }
     }
 
     fn pe_x64() -> Vec<u8> {
