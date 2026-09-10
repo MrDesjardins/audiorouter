@@ -6215,6 +6215,14 @@ the one already documented above. No machine audio configuration was changed.
   repeated-start/stop evidence only and does not close the managed-driver
   ownership or production callback gate.
 
+- Re-ran the portable regression set on 2026-09-10 from the current working
+  head: `cargo test --workspace --locked`, strict all-target/all-feature
+  Clippy, and `npm.cmd --prefix ui run typecheck` all completed successfully.
+  A post-run scan found 29 direct `audiorouter-*` SQLite children in the OS
+  temp root; each was validated as an exact immediate-child cleanup target,
+  removed, and the follow-up scan found zero. No repository, audio endpoint,
+  or persistent machine configuration was changed.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
