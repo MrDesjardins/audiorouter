@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Rechecked the read-only native endpoint format inventory on 2026-09-10 with
+  `tests/acceptance/m00-native-format-inventory.ps1`: 31 active endpoints were
+  enumerated, including 48 kHz float32 mono/stereo formats and 96 kHz mono and
+  eight-channel variants. The probe performed endpoint activation and
+  `GetMixFormat` inspection only; no stream, driver, or machine configuration
+  action occurred.
+
 - Requalified the three-cycle live adapter bridge soak on 2026-09-10 with
   `tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio -Cycles 3
   -DurationMilliseconds 300`: all three cycles completed with 14,400–14,880
