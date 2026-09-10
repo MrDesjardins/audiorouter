@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `98abf17d`; later commits after
+The active branch is currently pushed through `34c51e1b`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -49,6 +49,14 @@ configuration changes.
   the engine to encoders. Engine tests passed 90/90, control tests passed
   105/105, and strict Clippy passed. The concrete Windows graph adapter still
   needs to implement the tap and device lifecycle.
+
+- Audited the engine-to-recorder integration boundary on 2026-09-10. The
+  engine can now expose processed quanta without allocation or blocking, but
+  the recording queue still requires caller-prepared owned chunks. A native
+  adapter therefore needs a preallocated chunk-pool return protocol before it
+  can feed WAV/FLAC workers safely; adding an allocating conversion in the tap
+  would violate ARCH-04. This is an explicit implementation prerequisite, not
+  native graph or production-driver evidence.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
   `8438bd82` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
