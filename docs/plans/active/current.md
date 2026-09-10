@@ -67,6 +67,13 @@ configuration changes.
   including hostile quote/backslash input coverage, and strict shell Clippy,
   formatting, and diff checks pass. This protects the pre-page session bridge;
   interactive WebView2 invocation remains separately unproven.
+- Switched the UI’s primary Tauri bridge to the pinned official
+  `@tauri-apps/api/core` `invoke` package on 2026-09-09, retaining the global
+  `window.__TAURI__` surface as a compatibility fallback and leaving the
+  WebView2 adapter unchanged. UI typecheck, all 16 files/113 tests, temporary
+  production build (212 modules), shell formatting, and diff checks passed.
+  This improves the supported frontend integration path but does not close
+  the interactive WebView2 runtime gate.
 - Added a reproducible interactive shell acceptance procedure to the native
   shell README and headless runbook on 2026-09-09. It uses only a temporary
   SID-enrolled database and named pipe, starts the bounded backend, and states

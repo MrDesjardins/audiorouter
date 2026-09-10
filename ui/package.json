@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@audiorouter/contracts": "file:../contracts",
+    "@tauri-apps/api": "2.11.1",
     "@xyflow/react": "12.11.6",
     "react": "19.1.1",
     "react-dom": "19.1.1"
