@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `54f24bca`; later commits after
+The active branch is currently pushed through `e9f144db`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -6042,7 +6042,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 ## Current handoff — 2026-09-10
 
-Latest pushed checkpoint: `54f24bca` (`docs: record SDK provenance`). The
+Latest pushed checkpoint: `e9f144db` (`docs: requalify DSP recording`). The
 working tree is clean and `main` is pushed. Since the last complete guarded
 M00-M08 acceptance, the native VST3 worker and pinned SDK qualification have
 both been re-run successfully; the active evidence remains valid for the
@@ -6075,7 +6075,7 @@ result, evidence, and next task before committing and pushing.
 
 ## Current handoff — 2026-09-10
 
-Latest pushed checkpoint: `54f24bca`. Since the prior full acceptance, the
+Latest pushed checkpoint: `e9f144db`. Since the prior full acceptance, the
 guarded native endpoint lifecycle, impulse correlation, endpoint loopback,
 process-loopback include/exclude, event-mode lifecycle, Rust adapter telemetry,
 workspace regression, ReaPlugs classification, and Pitchproof x64 processing/
