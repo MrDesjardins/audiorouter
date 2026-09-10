@@ -213,6 +213,17 @@ configuration changes.
   7/7, strict Clippy, formatting, and the optimized release build passed. No
   audio, process registration, or machine configuration changed.
 
+- Requalified the authorized native application-loopback boundaries on
+  2026-09-10. Include attribution captured 22,050 frames with 78,114 nonzero
+  bytes; exclude mode captured 22,050 frames while excluding the disposable
+  child; and event-driven VB-Audio lifecycle processed 24,480 capture and
+  27,840 render frames. Each probe used temporary processes/artifacts and
+  restored its owned state. This is Windows API/lifecycle evidence only: the
+  production graph callback, managed virtual devices, cross-process isolation
+  thresholds, and physical latency remain open. No defaults, volume, mute,
+  privacy, driver, signing, startup, or persistent machine audio settings
+  changed.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
