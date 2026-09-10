@@ -84,6 +84,22 @@ fn session_initialization_script(session_id: &str, frontend_probe: bool) -> Stri
     )
 }
 
+fn tray_status_text(response: &JsonRpcResponse) -> String {
+    let Some(result) = response.result.as_ref() else {
+        return "Status unavailable".to_owned();
+    };
+    let active = result
+        .get("activeSessionCount")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    let muted = result
+        .get("privacyMute")
+        .and_then(|value| value.get("muted"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(true);
+    format!("Sessions: {active} active · Mic: {}", if muted { "muted" } else { "unmuted" })
+}
+
 fn main() {
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
@@ -94,6 +110,7 @@ fn main() {
     };
     let session_script =
         session_initialization_script(&state.session_id, state.probe_file.is_some());
+    let tray_pipe_name = state.pipe_name.clone();
     tauri::Builder::default()
         .manage(state)
         .invoke_handler(tauri::generate_handler![rpc_request, session_id])
@@ -101,11 +118,15 @@ fn main() {
             let session_script = session_script.clone();
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
             let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &close])?;
+            let refresh_status = MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
+            let status = MenuItem::with_id(app, "status", "Status unavailable", false, None::<&str>)?;
+            let pipe_name = tray_pipe_name.clone();
+            let status_for_handler = status.clone();
+            let menu = Menu::with_items(app, &[&open, &close, &refresh_status, &status])?;
             TrayIconBuilder::with_id("audiorouter")
                 .menu(&menu)
                 .tooltip("AudioRouter")
-                .on_menu_event(|app, event| {
+                .on_menu_event(move |app, event| {
                     let Some(window) = app.get_webview_window("main") else { return; };
                     match event.id().as_ref() {
                         "open" => {
@@ -115,6 +136,18 @@ fn main() {
                         }
                         "close" => {
                             let _ = window.hide();
+                        }
+                        "refresh-status" => {
+                            let request = JsonRpcRequest {
+                                jsonrpc: "2.0".into(),
+                                id: Some(serde_json::json!("tray-status")),
+                                method: "status.get".into(),
+                                params: None,
+                            };
+                            let text = forward_rpc_request(&request, &pipe_name)
+                                .map(|response| tray_status_text(&response))
+                                .unwrap_or_else(|_| "Status unavailable".to_owned());
+                            let _ = status_for_handler.set_text(text);
                         }
                         _ => {}
                     }
@@ -168,6 +201,19 @@ mod tests {
         let script = session_initialization_script("probe", true);
         assert!(script.contains("id:'shell-probe'"));
         assert!(script.contains("method:'system.describe'"));
+    }
+
+    #[test]
+    fn tray_status_uses_authoritative_session_and_privacy_fields() {
+        let response = JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("tray-status")),
+            result: Some(json!({ "activeSessionCount": 2, "privacyMute": { "muted": true } })),
+            error: None,
+        };
+        assert_eq!(tray_status_text(&response), "Sessions: 2 active · Mic: muted");
+        let unavailable = JsonRpcResponse { result: None, ..response };
+        assert_eq!(tray_status_text(&unavailable), "Status unavailable");
     }
 
     #[test]
