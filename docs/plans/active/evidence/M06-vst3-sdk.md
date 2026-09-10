@@ -496,6 +496,17 @@ plugin-host suite to 22 tests with strict Clippy clean. This is transport
 evidence only; native process creation and shared-memory audio transport remain
 open.
 
+## TDR Nova VST3 auxiliary-bus worker requalification (2026-09-09)
+
+The user-provided x64 TDR Nova VST3 bundle passed
+`verified_native_vst3_worker_processes_an_opt_in_multi_bus_fixture` (1/1)
+through the existing supervised native worker. This confirms the declared
+auxiliary-bus activation and contained processing path for this local binary;
+it does not imply redistribution rights, editor usability, production
+realtime callback timing, or release qualification. The temporary worker and
+environment overrides were removed/restored, and no plugin registration,
+audio stream, or machine configuration changed.
+
 ## VST2 editor containment matrix (2026-09-09)
 
 `tests/acceptance/m06-vst2-editor.ps1` passed both the non-returning editor
