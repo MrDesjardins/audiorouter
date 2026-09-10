@@ -232,6 +232,16 @@ configuration changes.
   operation and per-recorder shutdown outcomes remain required before tray or
   backend quit can be enabled.
 
+- Added the worker-backed graceful recording primitive on 2026-09-10.
+  `RecorderController` now preserves a pending stop boundary in its
+  backward-compatible checkpoint, and WAV, buffered-FLAC, and streaming-FLAC
+  workers expose `stop_and_drain`: queued chunks are drained before the state
+  becomes completed and the encoder is allowed to finalize. A stopping
+  checkpoint round-trip and exact WAV frame-count regression were added;
+  recording tests passed 32/32, the workspace tests passed, and workspace
+  strict Clippy passed. The control plane still needs ownership of these
+  workers before this can be wired into session/backend shutdown.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native

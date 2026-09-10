@@ -203,6 +203,10 @@ pub struct RecorderCheckpoint {
     pub pauses: Vec<FrameInterval>,
     pub pause_start: Option<u64>,
     pub last_frame: Option<u64>,
+    /// The requested stop boundary while a worker is draining queued audio.
+    /// Defaults to `None` for checkpoints written before graceful draining.
+    #[serde(default)]
+    pub stop_frame: Option<u64>,
 }
 
 /// Control-plane recorder state machine. File encoding and queue draining are
@@ -213,6 +217,7 @@ pub struct RecorderController {
     pauses: Vec<FrameInterval>,
     pause_start: Option<u64>,
     last_frame: Option<u64>,
+    stop_frame: Option<u64>,
 }
 
 impl RecorderController {
@@ -223,6 +228,7 @@ impl RecorderController {
             pauses: Vec::new(),
             pause_start: None,
             last_frame: None,
+            stop_frame: None,
         }
     }
 
@@ -249,6 +255,7 @@ impl RecorderController {
             pauses: self.pauses.clone(),
             pause_start: self.pause_start,
             last_frame: self.last_frame,
+            stop_frame: self.stop_frame,
         }
     }
 
@@ -266,19 +273,30 @@ impl RecorderController {
                 .any(|interval| interval.end_frame < interval.start_frame)
             || (checkpoint.state == RecorderState::Paused) != checkpoint.pause_start.is_some()
             || checkpoint.state != RecorderState::Paused && checkpoint.pause_start.is_some()
+            || (checkpoint.state == RecorderState::Stopping) != checkpoint.stop_frame.is_some()
+            || checkpoint
+                .stop_frame
+                .is_some_and(|stop| checkpoint.last_frame.is_some_and(|last| stop < last))
         {
             return Err(RecorderError::InvalidCheckpoint);
         }
         if let Some(last_frame) = checkpoint.last_frame {
             if checkpoint.parts.iter().any(|part| {
-                part.start_frame > last_frame || part.end_frame.is_some_and(|end| end > last_frame)
+                part.start_frame > last_frame
+                    || part.end_frame.is_some_and(|end| {
+                        end > last_frame
+                            && !(checkpoint.state == RecorderState::Stopping
+                                && checkpoint.stop_frame.is_some_and(|stop| end <= stop))
+                    })
+            }) || checkpoint.pauses.iter().any(|interval| {
+                interval.end_frame > last_frame
+                    && !(checkpoint.state == RecorderState::Stopping
+                        && checkpoint
+                            .stop_frame
+                            .is_some_and(|stop| interval.end_frame <= stop))
             }) || checkpoint
-                .pauses
-                .iter()
-                .any(|interval| interval.end_frame > last_frame)
-                || checkpoint
-                    .pause_start
-                    .is_some_and(|start| start > last_frame)
+                .pause_start
+                .is_some_and(|start| start > last_frame)
             {
                 return Err(RecorderError::InvalidCheckpoint);
             }
@@ -289,6 +307,7 @@ impl RecorderController {
             pauses: checkpoint.pauses,
             pause_start: checkpoint.pause_start,
             last_frame: checkpoint.last_frame,
+            stop_frame: checkpoint.stop_frame,
         })
     }
 
@@ -316,6 +335,7 @@ impl RecorderController {
                 self.pauses.clear();
                 self.pause_start = None;
                 self.last_frame = None;
+                self.stop_frame = None;
                 self.state = RecorderState::Armed;
                 Ok(())
             }
@@ -391,13 +411,23 @@ impl RecorderController {
     }
 
     pub fn stop(&mut self, frame: u64) -> Result<(), RecorderError> {
-        self.require_frame(frame)?;
+        self.request_stop(frame)?;
+        self.complete()
+    }
+
+    /// Requests a stop without declaring the file complete. A worker must
+    /// drain its queue and call `complete` before the destination is finalized.
+    pub fn request_stop(&mut self, frame: u64) -> Result<(), RecorderError> {
+        if self.last_frame.is_some_and(|last| frame < last) {
+            return Err(RecorderError::FrameWentBackwards);
+        }
         if !matches!(self.state, RecorderState::Recording | RecorderState::Paused) {
             return Err(RecorderError::InvalidTransition {
                 state: self.state,
                 action: "stop",
             });
         }
+        self.stop_frame = Some(frame);
         if let Some(start) = self.pause_start.take() {
             self.pauses.push(FrameInterval {
                 start_frame: start,
@@ -406,6 +436,18 @@ impl RecorderController {
         }
         self.state = RecorderState::Stopping;
         self.close_current_part(frame);
+        Ok(())
+    }
+
+    /// Marks a requested stop complete after the worker has drained all input.
+    pub fn complete(&mut self) -> Result<(), RecorderError> {
+        if self.state != RecorderState::Stopping {
+            return Err(RecorderError::InvalidTransition {
+                state: self.state,
+                action: "complete",
+            });
+        }
+        self.last_frame = self.stop_frame.take().or(self.last_frame);
         self.state = RecorderState::Completed;
         Ok(())
     }
@@ -413,7 +455,10 @@ impl RecorderController {
     /// Advances the durable boundary after a worker has committed audio.
     /// This does not change lifecycle state or part boundaries.
     pub fn advance(&mut self, frame: u64) -> Result<(), RecorderError> {
-        if self.state != RecorderState::Recording {
+        if !matches!(
+            self.state,
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
             return Err(RecorderError::InvalidTransition {
                 state: self.state,
                 action: "advance",
@@ -531,6 +576,7 @@ pub enum RecordingError {
     TooManyFrames,
     InvalidQueueCapacity,
     NotRecording,
+    QueueNotEmpty,
     FrameDiscontinuity { expected: u64, actual: u64 },
     Controller(RecorderError),
     InvalidMetadata,
@@ -1911,6 +1957,27 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
         self.controller.stop(frame)
     }
 
+    /// Requests stop, drains every queued chunk, and completes the control
+    /// state. The caller must invoke `finish` only after this succeeds.
+    pub fn stop_and_drain(
+        &mut self,
+        queue: &RecordingQueue,
+        frame: u64,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        self.controller
+            .request_stop(frame)
+            .map_err(RecordingError::Controller)?;
+        let drained = self.drain_queue(queue, maximum_chunks)?;
+        if !queue.is_empty() {
+            return Err(RecordingError::QueueNotEmpty);
+        }
+        self.controller
+            .complete()
+            .map_err(RecordingError::Controller)?;
+        Ok(drained)
+    }
+
     pub fn fail(&mut self) {
         self.controller.fail();
     }
@@ -1932,7 +1999,10 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
     where
         F: FnMut(&RecorderCheckpoint) -> Result<(), RecordingError>,
     {
-        if self.controller.state() != RecorderState::Recording {
+        if !matches!(
+            self.controller.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
             return Err(RecordingError::NotRecording);
         }
         let mut drained = 0;
@@ -2029,6 +2099,27 @@ impl BufferedFlacRecorder {
         self.controller.stop(frame)
     }
 
+    /// Requests stop, drains every queued chunk, and completes the control
+    /// state. The caller must invoke `finish` only after this succeeds.
+    pub fn stop_and_drain(
+        &mut self,
+        queue: &RecordingQueue,
+        frame: u64,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        self.controller
+            .request_stop(frame)
+            .map_err(RecordingError::Controller)?;
+        let drained = self.drain_queue(queue, maximum_chunks)?;
+        if !queue.is_empty() {
+            return Err(RecordingError::QueueNotEmpty);
+        }
+        self.controller
+            .complete()
+            .map_err(RecordingError::Controller)?;
+        Ok(drained)
+    }
+
     pub fn fail(&mut self) {
         self.controller.fail();
     }
@@ -2053,7 +2144,10 @@ impl BufferedFlacRecorder {
     where
         F: FnMut(&RecorderCheckpoint) -> Result<(), RecordingError>,
     {
-        if self.controller.state() != RecorderState::Recording {
+        if !matches!(
+            self.controller.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
             return Err(RecordingError::NotRecording);
         }
         let mut drained = 0;
@@ -2155,6 +2249,27 @@ impl<W: Write + Seek> WavRecorder<W> {
         self.controller.stop(frame)
     }
 
+    /// Requests stop, drains every queued chunk, and completes the control
+    /// state. The caller must invoke `finish` only after this succeeds.
+    pub fn stop_and_drain(
+        &mut self,
+        queue: &RecordingQueue,
+        frame: u64,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        self.controller
+            .request_stop(frame)
+            .map_err(RecordingError::Controller)?;
+        let drained = self.drain_queue(queue, maximum_chunks)?;
+        if !queue.is_empty() {
+            return Err(RecordingError::QueueNotEmpty);
+        }
+        self.controller
+            .complete()
+            .map_err(RecordingError::Controller)?;
+        Ok(drained)
+    }
+
     /// Marks the recorder failed after an unrecoverable worker or I/O error.
     /// The destination remains caller-owned so it can be recovered or moved
     /// to quarantine by a higher-level library.
@@ -2182,7 +2297,10 @@ impl<W: Write + Seek> WavRecorder<W> {
     where
         F: FnMut(&RecorderCheckpoint) -> Result<(), RecordingError>,
     {
-        if self.controller.state() != RecorderState::Recording {
+        if !matches!(
+            self.controller.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
             return Err(RecordingError::NotRecording);
         }
         let mut drained = 0;
@@ -2482,6 +2600,21 @@ mod tests {
     }
 
     #[test]
+    fn stopping_checkpoint_preserves_the_pending_drain_boundary() {
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        recorder.request_stop(13).unwrap();
+        let checkpoint = recorder.checkpoint();
+        assert_eq!(checkpoint.state, RecorderState::Stopping);
+        assert_eq!(checkpoint.last_frame, Some(10));
+        assert_eq!(checkpoint.stop_frame, Some(13));
+        let restored = RecorderController::restore(checkpoint).unwrap();
+        assert_eq!(restored.checkpoint().state, RecorderState::Stopping);
+        assert_eq!(restored.checkpoint().stop_frame, Some(13));
+    }
+
+    #[test]
     fn recorder_checkpoint_rejects_corrupt_or_inconsistent_state() {
         let mut checkpoint = RecorderController::new().checkpoint();
         checkpoint.version = 2;
@@ -2549,6 +2682,34 @@ mod tests {
         assert_eq!(recorder.drain_queue(&queue, 8).unwrap(), 1);
         recorder.stop(13).unwrap();
         assert_eq!(recorder.checkpoint().state, RecorderState::Completed);
+        let output = recorder.finish().unwrap().into_inner();
+        assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn wav_stop_and_drain_completes_only_after_queue_is_empty() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 10,
+                samples: vec![0.0, 0.5],
+            })
+            .unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 12,
+                samples: vec![-0.5],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        assert_eq!(recorder.state(), RecorderState::Recording);
+        assert_eq!(recorder.stop_and_drain(&queue, 13, 8).unwrap(), 2);
+        assert!(queue.is_empty());
+        assert_eq!(recorder.state(), RecorderState::Completed);
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
     }
