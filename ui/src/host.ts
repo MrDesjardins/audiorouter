@@ -7,6 +7,11 @@ export type AudioRouterHostBridge = {
   sessionId: string;
 };
 
+/** Minimal Tauri 2 core surface used by the native shell adapter. */
+export interface TauriCore {
+  invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
+}
+
 export interface WebView2Webview {
   postMessage(message: unknown): void;
   addEventListener(type: "message", listener: (event: { data: unknown; origin?: string }) => void): void;
@@ -91,6 +96,32 @@ export class WebView2RpcTransport implements RpcTransport {
   }
 }
 
+/** Bounded JSON-RPC transport for a Tauri 2 command bridge. */
+export class TauriRpcTransport implements RpcTransport {
+  private closed = false;
+
+  constructor(private readonly core: TauriCore, private readonly timeoutMs = 5000) {
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw new Error("Tauri transport timeout is out of bounds");
+  }
+
+  send(request: JsonRpcRequest): Promise<JsonRpcResponse> {
+    if (this.closed) return Promise.reject(new Error("Tauri transport is closed"));
+    if (!isWebView2Request(request)) return Promise.reject(new Error("Tauri transport rejected the request shape"));
+    const invocation = this.core.invoke("rpc_request", { request });
+    return Promise.race([
+      invocation.then((response) => {
+        if (typeof response !== "object" || response === null || !isJsonRpcResponse(response) || response.id !== request.id) throw new Error("Tauri transport received an invalid response");
+        return response;
+      }),
+      new Promise<JsonRpcResponse>((_, reject) => setTimeout(() => reject(new Error("Tauri request timed out")), this.timeoutMs)),
+    ]);
+  }
+
+  dispose(): void {
+    this.closed = true;
+  }
+}
+
 function isJsonRpcResponse(value: object): value is JsonRpcResponse {
   const hasResult = "result" in value;
   const error = (value as { error?: unknown }).error;
@@ -121,6 +152,7 @@ declare global {
   interface Window {
     __AUDIO_ROUTER_HOST__?: unknown;
     __AUDIO_ROUTER_SESSION_ID__?: unknown;
+    __TAURI__?: unknown;
     chrome?: { webview?: unknown };
   }
 }
@@ -144,9 +176,17 @@ function isWebView2Webview(value: unknown): value is WebView2Webview {
     typeof candidate.removeEventListener === "function";
 }
 
+function isTauriCore(value: unknown): value is TauriCore {
+  if (typeof value !== "object" || value === null) return false;
+  return typeof (value as { invoke?: unknown }).invoke === "function";
+}
+
 /** Select the injected native backend, or remain safely disconnected. */
 export function createInitialBackend(host: unknown, webview: unknown = undefined, sessionId: unknown = undefined, webviewOrigin: unknown = undefined): UiBackend {
   if (isHostBridge(host)) return createLiveBackendFromTransport(host.transport, host.sessionId);
+  if (isTauriCore(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
+    return createLiveBackendFromTransport(new TauriRpcTransport(webview), sessionId);
+  }
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
     if (!isTrustedWebView2Origin(webviewOrigin)) return createDisconnectedBackend();
     return createLiveBackendFromTransport(new WebView2RpcTransport(webview, 5000, 64, webviewOrigin), sessionId);

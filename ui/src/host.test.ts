@@ -1,10 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { JsonRpcRequest, JsonRpcResponse } from "@audiorouter/contracts";
-import { createInitialBackend, WebView2RpcTransport, type WebView2Webview } from "./host";
+import { createInitialBackend, TauriRpcTransport, WebView2RpcTransport, type WebView2Webview } from "./host";
 
 const response: JsonRpcResponse = { jsonrpc: "2.0", id: 1, result: {} };
 
 describe("native host bridge", () => {
+  it("uses the bounded Tauri command transport", async () => {
+    const tauriResponse = { jsonrpc: "2.0" as const, id: 1, result: { ok: true } };
+    const core = { invoke: vi.fn().mockResolvedValue(tauriResponse) };
+    await expect(new TauriRpcTransport(core).send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).resolves.toEqual(tauriResponse);
+    expect(core.invoke).toHaveBeenCalledWith("rpc_request", { request: { jsonrpc: "2.0", id: 1, method: "session.snapshot" } });
+  });
+
+  it("rejects a Tauri response with a mismatched request ID", async () => {
+    const transport = new TauriRpcTransport({ invoke: vi.fn().mockResolvedValue({ jsonrpc: "2.0", id: 2, result: {} }) });
+    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("invalid response");
+  });
+
   it("uses an injected typed transport and session identity", () => {
     const transport = { send: async (_request: JsonRpcRequest) => response };
     const backend = createInitialBackend({ transport, sessionId: "session-1" });

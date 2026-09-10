@@ -37,6 +37,17 @@ configuration changes.
   and no plugin registration, audio stream, or machine configuration changed.
   This is local user-authorized compatibility evidence only; it does not infer
   redistribution rights or successful editor compatibility.
+- Added and tested `TauriRpcTransport` in `ui/src/host.ts` and selected it from
+  the existing host boundary when a Tauri 2 core `invoke` surface is injected.
+  The adapter validates request/response shape and ID correlation, bounds each
+  request by a five-second timeout, and fails closed after disposal. On
+  2026-09-09 the focused UI test passed 10/10, the full UI suite passed 113/113,
+  and TypeScript typecheck passed. A production Vite build also passed to a
+  disposable repository-level output directory; the default `ui/dist` build
+  was blocked by `EPERM` while Vite attempted to unlink an existing output
+  asset, so that directory was not overwritten. The temporary output was
+  removed. This is the UI adapter seam only; the native Tauri command and
+  authenticated backend session remain the next implementation task.
 
 Next action: qualify the first supplied rights-cleared independent x64 VST2 or
 VST3 effect through the existing contained worker matrix. If none is supplied,
