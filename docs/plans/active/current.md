@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `cbe48db9`; later commits after
+The active branch is currently pushed through `9806500b`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -94,6 +94,15 @@ configuration changes.
   were unchanged. This supports the distinction between ordinary render
   ownership contention and the earlier capture `E_INVALIDARG` result; it does
   not claim production driver or physical-latency completion.
+
+- Requalified the authorized Rust process-loopback adapter on 2026-09-09 in
+  include and exclude modes for 250 ms. Both converted 44.1 kHz source audio
+  to the 48 kHz engine rate with positive frame/block counts, zero rejected
+  packets, and zero scheduler XRuns. Include produced 11,025/11,904 source/
+  engine frames and 93 blocks; exclude produced 10,584/11,392 and 89 blocks.
+  Media state and persistent configuration were unchanged. This remains
+  asynchronous user-mode evidence, not production-driver or physical-latency
+  evidence.
 
 - Extracted the M08 bounded x64 PE validator into
   `tools/release/pe-validation.ps1` on 2026-09-10 and added focused negative

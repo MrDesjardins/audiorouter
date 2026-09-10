@@ -368,3 +368,15 @@ explicit route path processed 24,000 capture frames, 187 graph blocks, and
 and reset their streams and verified unchanged media-device state. This is
 user-mode adapter evidence; managed-driver ownership, production callback
 timing, and calibrated physical latency remain open.
+
+## Rust process-loopback adapter requalification (2026-09-09)
+
+The authorized 250 ms Rust process-loopback acceptance passed in both include
+and exclude modes. Each mode converted a 44.1 kHz source to the 48 kHz engine
+rate, produced positive source/engine frame counts and scheduler blocks, and
+reported zero rejected packets and zero scheduler XRuns. Include produced
+11,025 source frames, 11,904 engine frames, and 93 blocks; exclude produced
+10,584 source frames, 11,392 engine frames, and 89 blocks. Media state remained
+unchanged and the adapter stopped/reset its streams. This is asynchronous
+user-mode process-loopback and resampling evidence, not production-driver or
+physical-latency evidence.
