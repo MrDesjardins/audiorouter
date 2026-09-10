@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `61ff8066`; later commits after
+The active branch is currently pushed through `603205bc`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -128,6 +128,14 @@ configuration changes.
   status and explicit Quit-and-stop remain open until the backend exposes a
   safe finalize/stop command and an elevated interactive runtime proves the
   menu behavior.
+
+- Extended the native tray slice on 2026-09-10 with an authenticated Refresh
+  status action. The disabled tray status line now reports the backend's
+  authoritative active-session count and privacy-mute state from `status.get`,
+  or a bounded unavailable state when the control pipe cannot be reached.
+  Shell tests passed 6/6, strict Clippy and the release build passed; recording
+  aggregation, explicit quit-and-stop, and elevated interactive tray evidence
+  remain open.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
