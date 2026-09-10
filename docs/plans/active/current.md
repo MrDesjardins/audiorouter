@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the bounded digital impulse-correlation probe on 2026-09-10
+  with `tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio
+  -ImpulseCount 250`: 246 of 250 impulse groups were detected, p95 spacing
+  error was 0 frames, and estimated digital-loopback onset was 80.60 ms. The
+  temporary stream and artifacts were removed. This is signal-correlation
+  evidence only; calibrated physical p95 latency remains open.
+
 - Requalified the event-driven native lifecycle probe on 2026-09-10 with
   `tests/acceptance/m00-native-event-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 750`: the selected VB-Audio endpoints produced 36,480
