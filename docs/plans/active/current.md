@@ -12,21 +12,22 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `d1c9f5af`; the
-latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
-qualification checkpoint is `977188a5`; later
-commits only update the execution evidence below. The focused native auxiliary-bus
-transformation and validated state-restoration regressions and all-features
-plugin-host checks pass at this checkpoint. The repository is clean; no driver or
-startup/plugin registration, signing-mode change, audio stream, or persistent
-machine audio configuration has been performed. The gated x64 VST2 boundary
-is implemented, but rights/editor/release qualification remains open.
+The latest pushed checkpoint is `3316f1de`; the native probe compile was
+requalified at `214fc678`, and the follow-up handoff records the current
+acceptance-transcript limitation. The focused native auxiliary-bus
+transformation, validated state restoration, recording-worker, and all-features
+plugin-host checks remain covered by the evidence below. The repository is
+clean; no driver or startup/plugin registration, signing-mode change, audio
+stream, or persistent machine audio configuration has been performed. The
+gated x64 VST2 boundary is implemented, but rights/editor/release
+qualification remains open.
 
-The active branch is currently pushed through `4037c4fb`; later commits after
-the last full M00-M08 run are contained worker/control-boundary and evidence
-updates. The repository remains clean, and the M07 headless acceptance has
-passed at this line without audio, driver, registration, signing, or machine
-configuration changes.
+The latest complete guarded M00-M08 result documented below remains the
+previous successful run; the most recent wrapper invocation was inconclusive
+because the managed host returned no usable child transcript. M07 headless
+acceptance remains passed, while the interactive elevated shell-RPC gate is
+still open. Production routing, owned-driver distribution, signing, installer,
+clean-machine, physical-latency, and manual UI gates remain explicit blockers.
 
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
