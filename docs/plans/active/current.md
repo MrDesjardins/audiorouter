@@ -6186,6 +6186,16 @@ the one already documented above. No machine audio configuration was changed.
   configuration changes. This is not calibrated acoustic p95 latency evidence;
   the physical setup and production managed-driver callback gate remain open.
 
+- Requalified the authorized native tone/loopback path on 2026-09-10 with
+  `tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
+  -CaptureDurationMilliseconds 1000 -ToneDurationMilliseconds 1500`.
+  The explicitly selected VB-Audio Virtual Cable pair captured 214,302
+  nonzero bytes and completed the bounded signal-path check. Defaults, volume,
+  mute, privacy, drivers, signing, and startup configuration were unchanged.
+  This proves digital propagation through an existing third-party virtual
+  cable only; managed virtual-device creation and production routing remain
+  separate gates.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
