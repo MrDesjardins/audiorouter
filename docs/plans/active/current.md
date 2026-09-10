@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `c4a8306e`; later commits after
+The active branch is currently pushed through `be757e8a`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -63,12 +63,13 @@ configuration changes.
   shell and validate a UI-to-control request without touching the live audio
   graph.
 
-Next action: qualify the first supplied rights-cleared independent x64 VST2 or
-VST3 effect through the existing contained worker matrix. If none is supplied,
-continue only with portable hardening and preserve the native-shell, production
-driver callback, signing, installer, clean-machine, physical-latency, editor,
-and independent-plugin gates as blocked prerequisites rather than claiming
-release completion.
+Next action: connect the compiled Tauri shell to a bounded backend service and
+authenticated session using the existing control-plane transport, then validate
+one UI-to-control request without touching the live audio graph. After that,
+continue the loopback/device path with reversible endpoint snapshots. Preserve
+the production driver callback, signing, installer, clean-machine,
+physical-latency, editor, and independent-plugin gates as separate prerequisites
+rather than claiming release completion.
 
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
   on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
