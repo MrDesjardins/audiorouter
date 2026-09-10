@@ -98,21 +98,28 @@ export class WebView2RpcTransport implements RpcTransport {
 
 /** Bounded JSON-RPC transport for a Tauri 2 command bridge. */
 export class TauriRpcTransport implements RpcTransport {
+  private readonly pending = new Set<string>();
   private closed = false;
   private generation = 0;
 
-  constructor(private readonly core: TauriCore, private readonly timeoutMs = 5000) {
+  constructor(private readonly core: TauriCore, private readonly timeoutMs = 5000, private readonly maxPending = 64) {
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw new Error("Tauri transport timeout is out of bounds");
+    if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > 256) throw new Error("Tauri transport pending limit is out of bounds");
   }
 
   send(request: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (this.closed) return Promise.reject(new Error("Tauri transport is closed"));
     if (!isWebView2Request(request)) return Promise.reject(new Error("Tauri transport rejected the request shape"));
+    const key = requestKey(request.id);
+    if (this.pending.has(key)) return Promise.reject(new Error("Tauri request ID is already pending"));
+    if (this.pending.size >= this.maxPending) return Promise.reject(new Error("Tauri transport pending request limit reached"));
     const generation = this.generation;
+    this.pending.add(key);
     let invocation: Promise<unknown>;
     try {
       invocation = Promise.resolve(this.core.invoke("rpc_request", { request }));
     } catch (error) {
+      this.pending.delete(key);
       return Promise.reject(error instanceof Error ? error : new Error("Tauri request could not be sent"));
     }
     let timeout: ReturnType<typeof setTimeout>;
@@ -126,13 +133,17 @@ export class TauriRpcTransport implements RpcTransport {
         return response;
       }),
       timeoutPromise,
-    ]).finally(() => clearTimeout(timeout));
+    ]).finally(() => {
+      clearTimeout(timeout);
+      this.pending.delete(key);
+    });
   }
 
   dispose(): void {
     if (this.closed) return;
     this.closed = true;
     this.generation += 1;
+    this.pending.clear();
   }
 }
 

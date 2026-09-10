@@ -32,6 +32,20 @@ describe("native host bridge", () => {
     await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("bridge unavailable");
   });
 
+  it("bounds pending Tauri requests and rejects duplicate IDs", async () => {
+    const resolveInvocations: Array<(value: unknown) => void> = [];
+    const core = { invoke: vi.fn(() => new Promise((resolve) => { resolveInvocations.push(resolve); })) };
+    const transport = new TauriRpcTransport(core, 1000, 2);
+    const first = transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" });
+    const second = transport.send({ jsonrpc: "2.0", id: 2, method: "session.snapshot" });
+    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("already pending");
+    await expect(transport.send({ jsonrpc: "2.0", id: 3, method: "session.snapshot" })).rejects.toThrow("pending request limit");
+    transport.dispose();
+    for (const resolve of resolveInvocations) resolve({ jsonrpc: "2.0", id: 1, result: {} });
+    await expect(first).rejects.toThrow("closed");
+    await expect(second).rejects.toThrow("closed");
+  });
+
   it("uses an injected typed transport and session identity", () => {
     const transport = { send: async (_request: JsonRpcRequest) => response };
     const backend = createInitialBackend({ transport, sessionId: "session-1" });
