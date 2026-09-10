@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the M08 traceability and documentation gates on 2026-09-10:
+  `tests/acceptance/m08-traceability.ps1` covered 159 normative requirement
+  IDs, and `tests/acceptance/docs.ps1` validated 51 Markdown files with 163
+  local links. These are documentation gates only and do not close hardware,
+  driver, signing, installer, or release blockers; no runtime or machine
+  configuration action occurred.
+
 - Requalified `tests/acceptance/m08-release.ps1` on 2026-09-10 at the current
   head: optimized CLI/plugin-host and native-shell builds, UI typecheck and
   production builds, unsigned artifact preparation, SBOM structure checks, and
