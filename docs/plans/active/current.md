@@ -69,6 +69,14 @@ configuration changes.
   and 163 local links; no shell launch, audio, driver, signing, or machine
   configuration action occurred.
 
+- Corrected Tauri CLI build-hook portability on 2026-09-09: the CLI executes
+  lifecycle commands from a package-directory context (`contracts` on this
+  checkout), so plain `--prefix ui` was invalid. Both native lifecycle hooks
+  now resolve the repository root with Git before addressing `ui`; the pinned
+  transient Tauri CLI 2.11.4 successfully ran the build hook and produced the
+  debug shell. No installer, driver, audio stream, signing, or machine
+  configuration action occurred.
+
 - Hardened M08 native-shell reproducibility on 2026-09-09 after inspecting
   Tauri's generated release resources: release preparation now builds the
   current root UI before compiling the shell, so the embedded `frontendDist`

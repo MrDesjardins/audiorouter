@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.audiorouter.desktop",
   "build": {
-    "beforeDevCommand": "npm.cmd run dev --prefix ui",
-    "beforeBuildCommand": "npm.cmd run build --prefix ui",
+    "beforeDevCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"`$root = (& git rev-parse --show-toplevel).Trim(); if (`$LASTEXITCODE -ne 0) { exit 1 }; & npm.cmd run dev --prefix (Join-Path `$root 'ui')\"",
+    "beforeBuildCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"`$root = (& git rev-parse --show-toplevel).Trim(); if (`$LASTEXITCODE -ne 0) { exit 1 }; & npm.cmd run build --prefix (Join-Path `$root 'ui'); exit `$LASTEXITCODE\"",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../ui/dist"
   },
