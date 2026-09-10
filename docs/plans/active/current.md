@@ -151,6 +151,11 @@ configuration has occurred.
   not a full cross-process isolation threshold or managed-driver path; no
   persistent audio configuration changed.
 
+- Requalified M06 SDK installer provenance on 2026-09-10 with
+  `tests/acceptance/m06-sdk-installer.ps1`. The disposable Git metadata check
+  passed; no SDK or plugin installation, driver action, or audio
+  configuration change occurred.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
