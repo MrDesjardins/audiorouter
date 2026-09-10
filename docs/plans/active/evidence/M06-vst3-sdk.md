@@ -506,6 +506,17 @@ stream, or machine configuration changed. This qualifies containment and
 failure handling only, not native editor usability, HWND ownership, or plugin
 redistribution rights.
 
+## Supplied VST2 compatibility requalification (2026-09-09)
+
+The explicitly selected user-provided x64 TDR Nova and BUSTERse VST2 DLLs
+passed the contained processing matrix at 44.1, 48, and 96 kHz plus both
+editor-thread containment tests. Their SHA-256 fingerprints remained,
+respectively, `4dfc5973416b4b23fa9351128b65e7b42547f6280436cce4cbf8aab1334e4e33`
+and `580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3`.
+Environment variables were restored and neither DLL was copied or registered.
+This is local compatibility evidence only; rights, redistribution, editor
+usability, and release qualification remain open.
+
 Added `audiorouter-plugin-worker`, a disposable process protocol fixture. It
 negotiates the plugin fingerprint and channel count, accepts `Ready`, validates
 and echoes framed process buffers, echoes latency reports, and exits on

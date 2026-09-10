@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `50da9f10`; later commits after
+The active branch is currently pushed through `c37c34c1`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -51,6 +51,14 @@ configuration changes.
   disposable and the fixture environment was restored; no plugin registration,
   audio stream, or machine configuration changed. Native editor usability,
   authenticated HWND ownership, and redistribution rights remain open.
+
+- Requalified the explicitly selected user-provided x64 TDR Nova and BUSTERse
+  VST2 DLLs on 2026-09-09. Both passed contained processing at 44.1, 48, and
+  96 kHz plus editor-thread containment, with unchanged fingerprints
+  (`4dfc5973...4e33` and `58032534...61d3`). Environment variables were
+  restored; no DLL was copied or registered, and no audio configuration
+  changed. This remains local compatibility evidence, not rights or release
+  qualification.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
