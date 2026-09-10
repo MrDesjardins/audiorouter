@@ -45,6 +45,16 @@ configuration changes.
   change: TypeScript typecheck passed and Vitest passed all 16 files/113 tests.
   This validates the adapter and disconnected/connected UI contracts only; it
   does not substitute for manual WebView2 invocation or accessibility evidence.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-09 at the current shell checkpoint. Toolchain/native compile,
+  read-only 34-endpoint inventory, disposable SysVAD x64 package/API/
+  signability qualification, M01/M04/M05, pinned VST3 SDK and native
+  single-/multi-bus workers, repository VST2 modern/legacy/fault fixtures, M07,
+  unsigned M08 artifacts, 159 traceability mappings, and documentation (51
+  Markdown files/163 local links) all passed. Cleanup removed 13 run-owned
+  temporary children. No driver installation/loading, signing-mode change,
+  plugin/startup registration, audio stream, or persistent machine audio
+  configuration occurred.
 - Next task: create a frontend-owned or manually observable WebView2 invocation
   acceptance that proves `rpc_request` reaches an enrolled backend; otherwise
   continue the next portable M06 worker/graph gate without claiming GUI
