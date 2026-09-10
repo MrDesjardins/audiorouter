@@ -473,6 +473,12 @@ export interface SessionStopResult {
   sessionId: EntityId;
   state: "stopped";
   runtime: "fake";
+  recorders: Array<{
+    sessionId: EntityId;
+    state: "completed";
+    fileFinalized: true;
+    recoverable: false;
+  }>;
 }
 
 export interface GraphUndoPlanResult {

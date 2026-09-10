@@ -68,6 +68,24 @@ const STATE_CATEGORIES: [&str; 15] = [
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
+/// Result returned by a backend-owned encoder worker during graceful stop.
+/// `file_finalized` is intentionally explicit so a control-state transition
+/// cannot be mistaken for a durable file finalization.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct RecorderFinalizationOutcome {
+    pub state: String,
+    pub file_finalized: bool,
+    pub recoverable: bool,
+}
+
+/// Backend-owned recording worker boundary. Implementations own their queue,
+/// encoder, and destination handle; the control plane owns the lifecycle
+/// decision and will stop a session only after this method reports a finalized
+/// file. The frame is the last committed control-plane boundary.
+pub trait RecorderWorker: Send {
+    fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String>;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum VirtualBusOperation {
     Create { id: EntityId, name: String },
@@ -942,9 +960,24 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "stopped" },
-                "runtime": { "const": "fake" }
+                "runtime": { "const": "fake" },
+                "recorders": {
+                    "type": "array",
+                    "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                            "state": { "const": "completed" },
+                            "fileFinalized": { "const": true },
+                            "recoverable": { "const": false }
+                        },
+                        "required": ["sessionId", "state", "fileFinalized", "recoverable"],
+                        "additionalProperties": false
+                    }
+                }
             },
-            "required": ["sessionId", "state", "runtime"],
+            "required": ["sessionId", "state", "runtime", "recorders"],
             "additionalProperties": false
         }),
         "graph.undoPlan" => json!({
@@ -2015,6 +2048,7 @@ pub struct ControlPlane {
     build: String,
     runtimes: HashMap<EntityId, FakeRuntime>,
     recorders: HashMap<EntityId, RecorderController>,
+    recorder_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
     storage: Option<Storage>,
     enrollments: HashMap<String, (ClientRole, bool)>,
     events: EventLog,
@@ -2051,6 +2085,7 @@ impl ControlPlane {
             build: build.into(),
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
+            recorder_workers: HashMap::new(),
             storage: None,
             enrollments: HashMap::new(),
             events: EventLog::new(1),
@@ -2160,6 +2195,7 @@ impl ControlPlane {
             build: build.into(),
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
+            recorder_workers: HashMap::new(),
             storage: Some(storage),
             enrollments: HashMap::new(),
             events: EventLog::new(backend_epoch),
@@ -2643,6 +2679,22 @@ impl ControlPlane {
         });
         self.journal_idempotent_result(&operation.0, "operations.cancel", &operation.1, &result)?;
         Ok(result)
+    }
+
+    /// Attach the encoder/queue owner for one session. Replacing an existing
+    /// worker is rejected so a live destination cannot be orphaned silently.
+    pub fn attach_recorder_worker(
+        &mut self,
+        session_id: EntityId,
+        worker: Box<dyn RecorderWorker>,
+    ) -> Result<(), ControlError> {
+        if self.recorder_workers.contains_key(&session_id) {
+            return Err(ControlError::InvalidRequest(
+                "recorder worker is already attached".into(),
+            ));
+        }
+        self.recorder_workers.insert(session_id, worker);
+        Ok(())
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
@@ -3400,15 +3452,61 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        if self.recorders.get(id).is_some_and(|recorder| {
+        let mut recorder_outcomes = Vec::new();
+        let active_frame = self.recorders.get(id).and_then(|recorder| {
             matches!(
                 recorder.state(),
                 RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
             )
-        }) {
-            return Err(ControlError::InvalidRequest(
-                "finalize the active recorder before stopping the session".into(),
-            ));
+            .then(|| recorder.checkpoint().last_frame)
+            .flatten()
+        });
+        if let Some(frame) = active_frame {
+            let worker = self.recorder_workers.get_mut(id).ok_or_else(|| {
+                ControlError::InvalidRequest(
+                    "finalize the active recorder before stopping the session".into(),
+                )
+            })?;
+            let outcome = worker.finalize(frame).map_err(|error| {
+                ControlError::InvalidRequest(format!("recorder finalization failed: {error}"))
+            })?;
+            if outcome.state != "completed" || !outcome.file_finalized || outcome.recoverable {
+                return Err(ControlError::InvalidRequest(
+                    "recorder finalization did not produce a completed file".into(),
+                ));
+            }
+            let recorder = self.recorders.get_mut(id).ok_or_else(|| {
+                ControlError::InvalidRequest("active recorder state disappeared".into())
+            })?;
+            let boundary_result = if recorder.state() == RecorderState::Stopping {
+                recorder.complete()
+            } else {
+                recorder.stop(frame)
+            };
+            boundary_result.map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "recorder boundary finalization failed: {error:?}"
+                ))
+            })?;
+            let checkpoint = recorder.checkpoint();
+            if let Some(storage) = &self.storage {
+                storage
+                    .save_recording_checkpoint(id.as_str(), &checkpoint)
+                    .map_err(storage_error)?;
+            }
+            self.events.append(
+                self.get_session(id)?.revision,
+                None,
+                "recorder.changed",
+                Some(id.clone()),
+            );
+            self.recorder_workers.remove(id);
+            recorder_outcomes.push(json!({
+                "sessionId": id,
+                "state": "completed",
+                "fileFinalized": true,
+                "recoverable": false
+            }));
         }
         let revision = self.get_session(id)?.revision;
         if let Some(runtime) = self.runtimes.get_mut(id) {
@@ -3416,7 +3514,12 @@ impl ControlPlane {
         }
         self.events
             .append(revision, None, "runtime.stopped", Some(id.clone()));
-        Ok(json!({ "sessionId": id, "state": "stopped", "runtime": "fake" }))
+        Ok(json!({
+            "sessionId": id,
+            "state": "stopped",
+            "runtime": "fake",
+            "recorders": recorder_outcomes
+        }))
     }
 
     fn ensure_session_loaded(&mut self, id: &EntityId) -> Result<(), ControlError> {
@@ -6147,6 +6250,18 @@ fn application_error_data(code: &str) -> Value {
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
+
+    struct TestRecorderWorker;
+
+    impl RecorderWorker for TestRecorderWorker {
+        fn finalize(&mut self, _frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+            Ok(RecorderFinalizationOutcome {
+                state: "completed".into(),
+                file_finalized: true,
+                recoverable: false,
+            })
+        }
+    }
 
     #[test]
     fn timestamped_plan_id_allocator_skips_collisions_and_bounds_exhaustion() {
@@ -9516,6 +9631,32 @@ mod tests {
                 if message == "finalize the active recorder before stopping the session"
         ));
         assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Running);
+    }
+
+    #[test]
+    fn session_stop_uses_attached_worker_and_reports_finalization() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane.session_start(&original.id).unwrap();
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(128).unwrap();
+        plane.recorders.insert(original.id.clone(), recorder);
+        plane
+            .attach_recorder_worker(original.id.clone(), Box::new(TestRecorderWorker))
+            .unwrap();
+
+        let result = plane.session_stop(&original.id).unwrap();
+        assert_eq!(result["state"], "stopped");
+        assert_eq!(result["recorders"][0]["state"], "completed");
+        assert_eq!(result["recorders"][0]["fileFinalized"], true);
+        assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
+        assert_eq!(
+            plane.recorders[&original.id].state(),
+            RecorderState::Completed
+        );
+        assert!(!plane.recorder_workers.contains_key(&original.id));
     }
 
     #[test]

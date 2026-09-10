@@ -250,6 +250,16 @@ configuration changes.
   33/33, strict Clippy and formatting passed; no audio or machine configuration
   changed.
 
+- Added the backend worker-ownership seam on 2026-09-10. `ControlPlane` can
+  now attach one non-replaceable `RecorderWorker` per session; `sessions.stop`
+  invokes it at the last committed frame and stops the runtime only when the
+  worker reports `completed`, `fileFinalized: true`, and `recoverable: false`.
+  Stop responses now carry bounded per-recorder outcomes. A failing or missing
+  worker leaves the runtime running, and an attached-worker regression passed;
+  control tests passed 102/102, UI contract typecheck passed, strict Clippy and
+  formatting passed. Concrete WAV/FLAC worker attachment to the native graph
+  remains the next integration gate.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
