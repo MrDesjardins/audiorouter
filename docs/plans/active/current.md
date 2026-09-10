@@ -588,6 +588,12 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified M00 toolchain compatibility on 2026-09-10 with
+  `tests/acceptance/m00-toolchain.ps1`: Visual Studio Community 2026, MSVC
+  14.51.36231, Windows SDK 10.0.28000.0, and matching WDK were discovered.
+  This was read-only toolchain validation; no SDK installation, driver action,
+  signing-mode change, or audio configuration action occurred.
+
 - Requalified dedicated M01 CLI acceptance on 2026-09-10 with
   `tests/acceptance/m01-cli.ps1`: API discovery, status, session, recording,
   and read-only device/application command paths passed. The acceptance used
