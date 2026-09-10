@@ -5854,6 +5854,13 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M05/M06 task: retain verified identity as display-only until the authenticated native shell and managed process-capture owner are integrated; continue independent plugin qualification and native gates.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at pushed head `f6b394e2` on 2026-09-08 after the verified application identity UI panel: M00 toolchain/native compile and read-only 31-endpoint inventory, disposable pinned SysVAD x64 package/API/signability qualification, M01/M04, M05 UI (typecheck, 15 files/93 tests, temporary production build), M06 SDK/VST3 and VST2 fixtures, M07, unsigned M08 preparation, 159 normative traceability mappings, and documentation validation (51 Markdown files/161 local links) passed. Temporary outputs/checkouts were removed; no driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred. Production/native release gates remain open.
 - Next M05/M06 task: retain the read-only identity presentation until authenticated native-shell/process-capture integration exists; qualify an independent rights-cleared plugin when supplied and continue the remaining native release gates.
+- Requalified `cargo test --workspace --locked` on 2026-09-10 after the
+  installed VST2 acceptance; all workspace unit/integration tests and
+  doc-tests passed, including the Windows-audio and plugin-host regressions.
+  The run left 358 direct repository-named temporary test artifacts in
+  `%TEMP%`; each was validated as an immediate child of the temp root and
+  removed, with zero matching children remaining. No audio stream, driver,
+  plugin registration, or persistent machine configuration changed.
 
 ## Current handoff — 2026-09-10
 
