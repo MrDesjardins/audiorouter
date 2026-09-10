@@ -260,6 +260,14 @@ configuration changes.
   formatting passed. Concrete WAV/FLAC worker attachment to the native graph
   remains the next integration gate.
 
+- Added a concrete control-owned WAV worker on 2026-09-10. It owns a bounded
+  recording queue and seekable WAV encoder, drains queued chunks in bounded
+  passes, syncs the finalized file, and reports completion through the same
+  `RecorderWorker` contract used by `sessions.stop`. A regression verified a
+  two-frame file and completed control state; control tests passed 103/103 and
+  strict Clippy passed. The native graph still needs to construct and feed this
+  worker at an actual recording start boundary; no audio device was opened.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
   `4ac4e240` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native

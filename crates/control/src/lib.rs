@@ -14,7 +14,10 @@ use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
 };
-use audiorouter_recording::{RecorderController, RecorderState};
+use audiorouter_recording::{
+    RecorderController, RecorderState, RecordingChunk, RecordingError, RecordingQueue, WavFormat,
+    WavRecorder, WavWriter,
+};
 use audiorouter_storage::{
     GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_PENDING_PLAN_RECORDS,
     MAX_RECORDING_LIST_ITEMS,
@@ -84,6 +87,100 @@ pub struct RecorderFinalizationOutcome {
 /// file. The frame is the last committed control-plane boundary.
 pub trait RecorderWorker: Send {
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String>;
+}
+
+/// Concrete file-backed worker used by the backend integration layer.
+///
+/// The queue is fed by the graph adapter and is never touched by the audio
+/// callback during finalization. The control plane may call `finalize` only
+/// from its non-realtime lifecycle path; each drain pass is bounded so a
+/// malformed or unexpectedly large queue cannot turn one operation into an
+/// unbounded inner loop.
+pub struct WavRecorderWorker {
+    recorder: Option<WavRecorder<std::fs::File>>,
+    queue: RecordingQueue,
+    maximum_chunks_per_pass: usize,
+}
+
+impl WavRecorderWorker {
+    pub fn new(
+        output: std::fs::File,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<Self, String> {
+        if maximum_chunks_per_pass == 0 {
+            return Err("maximum recorder drain pass must be positive".into());
+        }
+        let writer = WavWriter::new(output, format, channels, sample_rate, false)
+            .map_err(|error| format!("WAV writer initialization failed: {error:?}"))?;
+        let queue = RecordingQueue::new(queue_capacity)
+            .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        Ok(Self {
+            recorder: Some(WavRecorder::new(writer)),
+            queue,
+            maximum_chunks_per_pass,
+        })
+    }
+
+    pub fn arm(&mut self) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "WAV recorder is already finalized".to_owned())?
+            .arm()
+            .map_err(|error| format!("WAV recorder arm failed: {error:?}"))
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "WAV recorder is already finalized".to_owned())?
+            .start(frame)
+            .map_err(|error| format!("WAV recorder start failed: {error:?}"))
+    }
+
+    /// Enqueues caller-prepared samples. This method is intended for the
+    /// graph adapter, which must prepare the chunk before entering the audio
+    /// callback and treat a rejected chunk as an overrun.
+    pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        self.queue.try_push(chunk)
+    }
+
+    pub fn queue_len(&self) -> usize {
+        self.queue.len()
+    }
+}
+
+impl RecorderWorker for WavRecorderWorker {
+    fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+        let mut recorder = self
+            .recorder
+            .take()
+            .ok_or_else(|| "WAV recorder was finalized more than once".to_owned())?;
+        loop {
+            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                Ok(_) => break,
+                Err(RecordingError::QueueNotEmpty) => continue,
+                Err(error) => {
+                    self.recorder = Some(recorder);
+                    return Err(format!("WAV recorder finalization failed: {error:?}"));
+                }
+            }
+        }
+        let output = recorder
+            .finish()
+            .map_err(|error| format!("WAV file finalization failed: {error:?}"))?;
+        output
+            .sync_all()
+            .map_err(|error| format!("WAV file sync failed: {error}"))?;
+        Ok(RecorderFinalizationOutcome {
+            state: "completed".into(),
+            file_finalized: true,
+            recoverable: false,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -9657,6 +9754,53 @@ mod tests {
             RecorderState::Completed
         );
         assert!(!plane.recorder_workers.contains_key(&original.id));
+    }
+
+    #[test]
+    fn concrete_wav_worker_drains_and_finalizes_before_session_stop() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-worker-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        let mut worker = WavRecorderWorker::new(file, WavFormat::Float32, 1, 48_000, 8, 1).unwrap();
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        worker
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.25, -0.25],
+            })
+            .unwrap();
+
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane.session_start(&original.id).unwrap();
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        recorder.advance(2).unwrap();
+        plane.recorders.insert(original.id.clone(), recorder);
+        plane
+            .attach_recorder_worker(original.id.clone(), Box::new(worker))
+            .unwrap();
+
+        let result = plane.session_stop(&original.id).unwrap();
+        assert_eq!(result["recorders"][0]["fileFinalized"], true);
+        let info = audiorouter_recording::inspect_wav_file(&path).unwrap();
+        assert_eq!(info.frames, 2);
+        assert_eq!(info.sample_rate, 48_000);
+        assert_eq!(
+            plane.recorders[&original.id].state(),
+            RecorderState::Completed
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
