@@ -5878,6 +5878,16 @@ no machine or external audio configuration was changed. After the next
 meaningful result, update this handoff with the exact command, environment,
 result, evidence, and next task before committing and pushing.
 
+- Requalified the explicitly authorized installed Pitchproof x64 VST2 binary on
+  2026-09-10 with `tests/acceptance/m06-vst2-installed.ps1`: processing passed
+  at 44.1, 48, and 96 kHz; editor-thread timeout containment and supervised
+  worker reaping passed; and the before/after SHA-256 remained
+  `1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`.
+  The original DLL was used in place and neither plugin registration nor audio
+  or persistent machine configuration changed. This strengthens bounded x64
+  VST2 processing evidence, but does not close rights, editor compatibility,
+  sandbox, auxiliary-bus, or release gates.
+
 ## Current handoff — 2026-09-10
 
 Latest pushed checkpoint: `1deb9cda`. Since the prior full acceptance, the
