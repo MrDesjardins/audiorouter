@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `0a6fd9ba`; later commits after
+The active branch is currently pushed through `037ac0ac`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -57,6 +57,13 @@ configuration changes.
   settlement or synchronous bridge failure. Focused host tests passed 13/13,
   the full UI suite passed 16 files/116 tests, and TypeScript typecheck passed.
   No audio, driver, signing, or machine configuration action occurred.
+
+- Hardened Tauri transport disposal on 2026-09-10: pending command promises
+  are now rejected immediately when the transport closes, while late native
+  responses remain generation-checked and timeout handles/IDs are cleaned on
+  every settlement. Focused host tests passed 14/14, the full UI suite passed
+  16 files/117 tests, TypeScript typecheck and a temporary production build
+  passed. No audio, driver, signing, or machine configuration action occurred.
 
 - Hardened M08 release preparation on 2026-09-09: every shipped executable
   (CLI, plugin worker, and native shell) is now checked as a regular non-reparse
