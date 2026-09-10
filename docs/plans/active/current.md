@@ -6196,6 +6196,16 @@ the one already documented above. No machine audio configuration was changed.
   cable only; managed virtual-device creation and production routing remain
   separate gates.
 
+- Requalified the authorized M02 Rust adapter bridge on 2026-09-10 for 750 ms
+  with `tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio`.
+  The selected VB-Audio Cable endpoints processed 36,480 captured frames
+  across 285 quanta, invoked the recording tap 285 times, produced a 25,072
+  byte temporary recording, and rendered 36,480 frames. Tap output was finite;
+  dropped frames, scheduler xruns, and deadline misses were all zero. The
+  temporary stream/recording artifacts were removed and media-device state
+  remained unchanged. This validates the user-mode transformation/recording
+  bridge, not managed virtual-device ownership or production callback timing.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
