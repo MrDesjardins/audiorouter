@@ -6206,6 +6206,15 @@ the one already documented above. No machine audio configuration was changed.
   remained unchanged. This validates the user-mode transformation/recording
   bridge, not managed virtual-device ownership or production callback timing.
 
+- Requalified the adapter bridge across three authorized 300 ms lifecycle
+  cycles on 2026-09-10. Each cycle captured 14,880 frames, processed 116
+  quanta, invoked the tap 116 times, rendered 14,848 frames, and finalized a
+  25,072 byte temporary recording. All cycles reported finite tap output and
+  zero dropped frames, xruns, or deadline misses; every temporary stream and
+  recording was removed and media-device state stayed unchanged. This adds
+  repeated-start/stop evidence only and does not close the managed-driver
+  ownership or production callback gate.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
