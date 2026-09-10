@@ -6215,6 +6215,15 @@ the one already documented above. No machine audio configuration was changed.
   repeated-start/stop evidence only and does not close the managed-driver
   ownership or production callback gate.
 
+- Requalified the adapter bridge using the exact persisted VB-Audio endpoint
+  IDs on 2026-09-10 for 500 ms. It captured 24,480 frames, processed 191
+  quanta, invoked the finite tap 191 times, rendered 24,448 frames, and
+  finalized a 25,072 byte temporary recording. Dropped frames, scheduler
+  xruns, and deadline misses were zero; temporary artifacts were removed and
+  media-device state remained unchanged. This confirms identity-bound
+  user-mode routing but does not close the managed-driver or production
+  routing gates.
+
 - Re-ran the portable regression set on 2026-09-10 from the current working
   head: `cargo test --workspace --locked`, strict all-target/all-feature
   Clippy, and `npm.cmd --prefix ui run typecheck` all completed successfully.
