@@ -580,6 +580,15 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the rollback-checked live `tests/acceptance/m02-rust-adapter-
+  bridge-live.ps1 -AllowLiveAudio -DurationMilliseconds 750` probe on
+  2026-09-10 against the existing VB-Audio endpoints: 36,480 capture and
+  render frames crossed 285 processed/tapped quanta, with zero non-finite tap
+  samples, dropped render frames, scheduler xruns, or deadline misses. The
+  temporary FLAC finalized at 25,072 bytes and was removed; the media-device
+  snapshot remained unchanged. This is existing-endpoint adapter evidence,
+  not managed virtual-driver or physical-latency qualification.
+
 - Extended unsigned M08 artifact preparation on 2026-09-09 to build and hash
   `audiorouter-shell.exe` from the standalone Tauri workspace alongside the
   CLI, plugin worker, UI archive, SBOMs, and notices. The release verifier's
