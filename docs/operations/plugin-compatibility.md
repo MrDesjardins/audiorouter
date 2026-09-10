@@ -77,6 +77,37 @@ shell supplies an owner HWND; it is not native editor compatibility evidence.
 
 ## Inspection and execution boundary
 
+## User-supplied local fixtures
+
+On 2026-09-09 the user supplied three local plugin folders under
+`third_party/vst/` for Windows-only compatibility testing. They are intentionally
+not release artifacts and must not be committed:
+
+- `BUSTERse_1.1_VST_WIN/`: `BUSTERse.dll` (VST2 candidate) and `BUSTERse.vst3`
+  (VST3 candidate).
+- `COMPER_1.1/`: `COMPER.vst3/Contents/x86_64-win/COMPER.vst3` (VST3 candidate),
+  plus an AAX bundle that is outside AudioRouter's supported plugin boundary.
+- `TDR Nova (no installer)/TDR Nova (no installer)/`: VST2 Win32/x64 and VST3
+  Win32/x64 candidates, plus an AAX bundle.
+
+These filenames and folder names are inventory data only; architecture, format,
+activation, processing, state, editor, and rights status must be established by
+the existing read-only inspection and contained worker gates. The x86/Win32
+variants must remain excluded from x64 execution. The main execution plan is
+updated with this inventory so the next agent can qualify the x64 VST2/VST3
+candidates without copying or registering them.
+
+The 2026-09-09 qualification results are split by host contract. BUSTERse VST2
+passed the contained VST2 processing/editor matrix at 44.1, 48, and 96 kHz;
+its VST3 module crashed the standalone loader with Windows exception
+`0xC0000005`. COMPER VST3 loaded its factory but failed controller creation.
+TDR Nova VST2 passed the same contained VST2 matrix, while TDR Nova VST3
+passed the existing multi-bus worker acceptance and standalone two-input-bus
+loader probe. The VST3 failures are compatibility results, not evidence that
+the Windows audio device is unavailable. The supplied binaries remained in
+place and unchanged, and no plugin registration or machine audio configuration
+was performed.
+
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,
 return bounded identity/compatibility metadata, including best-effort VST3
 vendor, version, and class IDs read from `moduleinfo.json`, and do not load or

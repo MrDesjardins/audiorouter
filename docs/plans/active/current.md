@@ -37,6 +37,20 @@ configuration changes.
   and no plugin registration, audio stream, or machine configuration changed.
   This is local user-authorized compatibility evidence only; it does not infer
   redistribution rights or successful editor compatibility.
+- Qualified the newly supplied x64 VST fixtures on 2026-09-09 without copying
+  or registering them. BUSTERse VST2 and TDR Nova VST2 passed the contained
+  processing/editor matrix at 44.1, 48, and 96 kHz; their SHA-256 values are
+  `580325343014664A61FD1C2D73E5424897A47199BE5C5538DA75C25A8D0261D3` and
+  `4DFC5973416B4B23FA9351128B65E7B42547F6280436CCE4CBF8AAB1334E4E33`.
+  TDR Nova VST3 passed the standalone native loader with its two-input-bus
+  layout and the existing multi-bus worker acceptance. BUSTERse VST3 crashed
+  the standalone loader with `0xC0000005`, while COMPER VST3 loaded its factory
+  but failed controller creation. All VST3 candidates failed the existing
+  single-bus worker entry point, as expected for TDR Nova's two-bus layout or
+  the other candidates' activation failures. The runner restored environment
+  variables and removed temporary workers/loaders; no audio stream or machine
+  configuration changed. These are compatibility observations only and do not
+  infer plugin redistribution rights.
 - Added and tested `TauriRpcTransport` in `ui/src/host.ts` and selected it from
   the existing host boundary when a Tauri 2 core `invoke` surface is injected.
   The adapter validates request/response shape and ID correlation, bounds each
@@ -57,7 +71,8 @@ configuration changes.
   development slice. `cargo check --manifest-path src-tauri/Cargo.toml
   --message-format short` passed on Windows with Visual Studio Community 18 and
   WebView2 Runtime 152.0.4191.66 after resolving the Tauri 2.11.5 dependency
-  graph. No shell was launched, no driver or plugin was registered, and no
+  graph. Rustfmt verification and a subsequent compile check also passed. No
+  shell was launched, no driver or plugin was registered, and no
   audio stream or persistent machine configuration changed. The next task is
   to provide a bounded, explicitly configured backend service/session for this
   shell and validate a UI-to-control request without touching the live audio
