@@ -5857,7 +5857,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 ## Current handoff — 2026-09-10
 
-Latest pushed checkpoint: `2f2a5da3`. Since the prior full acceptance, the
+Latest pushed checkpoint: `c991797c`. Since the prior full acceptance, the
 guarded native endpoint lifecycle, impulse correlation, endpoint loopback,
 process-loopback include/exclude, event-mode lifecycle, Rust adapter telemetry,
 workspace regression, ReaPlugs classification, and Pitchproof x64 processing/
