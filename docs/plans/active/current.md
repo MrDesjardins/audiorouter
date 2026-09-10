@@ -28,6 +28,20 @@ updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
 
+- Added an explicit native-shell host bridge in `src-tauri/src/main.rs` on
+  2026-09-09. The initialization script now publishes the validated session
+  ID and a bounded `AudioRouterHostBridge` whose transport invokes the
+  authenticated `rpc_request` command through Tauri's internal bridge;
+  hostile session text remains JSON-encoded. The focused shell suite passed
+  2/2, the locked all-features workspace passed, UI typecheck and all 113 UI
+  tests passed, and strict shell Clippy passed. A fresh elevated WebView2
+  startup probe launched the shell and backend safely but did not observe a
+  frontend RPC before timeout; its temporary bundle, database, pipe,
+  processes, environment, and configuration were restored/removed. This is
+  therefore an implementation improvement with interactive WebView2 command
+  invocation still an open acceptance gate; no audio stream, driver,
+  signing, registration, or persistent machine configuration changed.
+
 - Requalified the locked all-features workspace on 2026-09-09 after the shell
   lifecycle change: all workspace unit and integration tests passed (including
   the native-gated plugin tests that were not applicable), all doc-tests passed,

@@ -44,7 +44,9 @@ fn session_id(state: State<'_, ShellState>) -> String {
 
 fn session_initialization_script(session_id: &str) -> String {
     let encoded = serde_json::to_string(session_id).expect("session id is serializable");
-    format!("window.__AUDIO_ROUTER_SESSION_ID__ = {encoded};")
+    format!(
+        "window.__AUDIO_ROUTER_SESSION_ID__ = {encoded};window.__AUDIO_ROUTER_HOST__ = {{sessionId: {encoded}, transport: {{send: (request) => window.__TAURI_INTERNALS__.invoke('rpc_request', {{request}})}}}};"
+    )
 }
 
 fn main() {
@@ -81,10 +83,11 @@ mod tests {
     #[test]
     fn session_initialization_script_uses_json_string_encoding() {
         let script = session_initialization_script("shell\";window.pwned=true;\\escape");
-        assert_eq!(
-            script,
+        assert!(script.starts_with(
             r#"window.__AUDIO_ROUTER_SESSION_ID__ = "shell\";window.pwned=true;\\escape";"#
-        );
+        ));
+        assert!(script.contains("window.__AUDIO_ROUTER_HOST__"));
+        assert!(script.contains("window.__TAURI_INTERNALS__.invoke('rpc_request', {request})"));
     }
 
     #[cfg(windows)]
