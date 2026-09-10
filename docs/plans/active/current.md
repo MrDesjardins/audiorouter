@@ -224,6 +224,14 @@ configuration changes.
   privacy, driver, signing, startup, or persistent machine audio settings
   changed.
 
+- Hardened the shutdown boundary on 2026-09-10: `sessions.stop` now refuses to
+  stop a runtime while its live recorder is recording, paused, or already
+  stopping, leaving the runtime running instead of orphaning recorder work.
+  Control tests passed 101/101, strict Clippy and formatting passed. This is a
+  fail-closed guard, not recorder finalization: the worker-backed drain/close
+  operation and per-recorder shutdown outcomes remain required before tray or
+  backend quit can be enabled.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native

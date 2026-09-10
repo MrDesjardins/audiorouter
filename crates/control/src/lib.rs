@@ -3400,6 +3400,16 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
+        if self.recorders.get(id).is_some_and(|recorder| {
+            matches!(
+                recorder.state(),
+                RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
+            )
+        }) {
+            return Err(ControlError::InvalidRequest(
+                "finalize the active recorder before stopping the session".into(),
+            ));
+        }
         let revision = self.get_session(id)?.revision;
         if let Some(runtime) = self.runtimes.get_mut(id) {
             runtime.stop();
@@ -9487,6 +9497,25 @@ mod tests {
         let events = plane.events.since(0, 10).unwrap();
         assert_eq!(events.last().unwrap().resource_revision, original.revision);
         assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
+    }
+
+    #[test]
+    fn session_stop_refuses_to_orphan_an_active_recorder() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane.session_start(&original.id).unwrap();
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(128).unwrap();
+        plane.recorders.insert(original.id.clone(), recorder);
+
+        assert!(matches!(
+            plane.session_stop(&original.id),
+            Err(ControlError::InvalidRequest(message))
+                if message == "finalize the active recorder before stopping the session"
+        ));
+        assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Running);
     }
 
     #[test]
