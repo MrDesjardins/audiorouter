@@ -357,3 +357,14 @@ bucket 31 return the bucket-13 bound for p99.9. The engine suite passed 76
 tests plus doc-tests, strict Clippy, formatting, and diff checks. This anchors
 the quantile semantics used by the M02 acceptance wrappers; native callback
 timing remains open.
+
+## Rust adapter live and route requalification (2026-09-09)
+
+The authorized 500 ms Rust adapter acceptance passed on the existing VB-Audio
+pair. The non-route smoke path negotiated 48 kHz on both endpoints, processed
+24,480 capture frames and 191 graph blocks with zero deadline misses. The
+explicit route path processed 24,000 capture frames, 187 graph blocks, and
+23,936 routed frames, also with zero deadline misses. Both wrappers stopped
+and reset their streams and verified unchanged media-device state. This is
+user-mode adapter evidence; managed-driver ownership, production callback
+timing, and calibrated physical latency remain open.

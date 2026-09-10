@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `fedb74f5`; later commits after
+The active branch is currently pushed through `99080774`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -77,6 +77,15 @@ configuration changes.
   These are digital lifecycle/correlation results only; calibrated physical
   latency, production callback timing, and managed-driver ownership remain
   open.
+
+- Requalified the authorized Rust adapter live and explicit route paths on
+  2026-09-09 at 500 ms. The smoke path negotiated 48 kHz capture/render,
+  processed 24,480 capture frames and 191 graph blocks, and recorded zero
+  deadline misses. The route path processed 24,000 capture frames, 187 graph
+  blocks, and 23,936 routed frames, also with zero deadline misses. Streams
+  stopped/reset and media state was unchanged. This is user-mode adapter
+  evidence only; managed-driver ownership, production callback timing, and
+  calibrated physical latency remain open.
 
 - Extracted the M08 bounded x64 PE validator into
   `tools/release/pe-validation.ps1` on 2026-09-10 and added focused negative
