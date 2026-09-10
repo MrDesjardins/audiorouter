@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `fec0df35`; later commits after
+The active branch is currently pushed through `c8993c01`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -47,6 +47,18 @@ configuration changes.
   the managed non-administrator session could not initialize the shell WebView
   and correctly failed closed; elevated desktop evidence remains required.
   No audio endpoint or persistent machine configuration was changed.
+
+- Requalified the explicitly authorized native tone/loopback path on
+  2026-09-09 at 23:00 using
+  `tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
+  -CaptureDurationMilliseconds 1000 -ToneDurationMilliseconds 1500`.
+  The named VB-Audio Virtual Cable pair returned 210,670 nonzero capture
+  bytes and completed render/capture stop/reset; the before/after media
+  snapshot matched and all temporary artifacts were removed. This proves
+  digital propagation through an existing third-party virtual cable only;
+  AudioRouter's managed virtual input/output creation and production driver
+  gates remain open. No defaults, volume, mute, privacy, driver, signing,
+  startup, or persistent machine audio configuration changed.
 
 - Extracted the M08 bounded x64 PE validator into
   `tools/release/pe-validation.ps1` on 2026-09-10 and added focused negative

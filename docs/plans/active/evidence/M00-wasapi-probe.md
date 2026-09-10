@@ -1180,3 +1180,16 @@ executable/object. This is evidence for the contention classification and
 cleanup path, not proof of the production managed-driver callback or physical
 latency gate. No defaults, volume, mute, privacy, driver, signing, startup, or
 persistent machine audio setting changed.
+
+## Native tone/loopback signal-path requalification (2026-09-09)
+
+`tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
+-CaptureDurationMilliseconds 1000 -ToneDurationMilliseconds 1500` passed on
+the explicitly selected existing VB-Audio Virtual Cable pair. The render
+tone lifecycle completed successfully and capture returned 210,670 nonzero
+payload bytes over the one-second capture. The before/after media snapshot
+was identical and the temporary executable, object, and logs were removed.
+This is digital signal-path evidence using an existing third-party virtual
+cable; it does not claim that AudioRouter creates or owns a managed virtual
+driver. Defaults, volume, mute, privacy, driver, signing, startup, and
+persistent machine audio configuration were unchanged.
