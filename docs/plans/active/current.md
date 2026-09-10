@@ -91,6 +91,14 @@ configuration has occurred.
   a temp-root scan found zero `audiorouter-*` artifacts and no machine audio
   configuration changed.
 
+- Requalified the pinned VST3 SDK and offline loader directly on 2026-09-10
+  with `tests/acceptance/m06-vst3-sdk.ps1 -SkipBuild`. Checkout/build
+  validation, loader discovery of 68 classes, AGain main and auxiliary-bus
+  processing, explicit single-bus rejection, and the five-class mda matrix
+  all passed. The repository-local fixture was used offline only; no system
+  installation or audio configuration changed, and the temp-root scan found
+  zero `audiorouter-*` artifacts.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
