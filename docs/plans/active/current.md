@@ -62,6 +62,13 @@ configuration changes.
   to provide a bounded, explicitly configured backend service/session for this
   shell and validate a UI-to-control request without touching the live audio
   graph.
+- The user supplied additional local plugin fixtures under `third_party/vst/`
+  on 2026-09-09: BUSTERse VST2/VST3, COMPER x64 VST3 plus AAX material, and TDR
+  Nova Win32/x64 VST2/VST3 plus AAX material. The inventory is documented in
+  `docs/operations/plugin-compatibility.md`; the files remain local-only and
+  are not committed. Treat names/extensions as candidates only: inspect exact
+  PE architecture and format, then use the contained worker matrix for x64
+  processing/state/editor evidence. Do not load AAX or execute Win32 variants.
 
 Next action: connect the compiled Tauri shell to a bounded backend service and
 authenticated session using the existing control-plane transport, then validate

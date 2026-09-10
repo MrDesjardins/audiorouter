@@ -16,7 +16,8 @@ fn rpc_request(
     request: JsonRpcRequest,
     state: State<'_, ShellState>,
 ) -> Result<JsonRpcResponse, String> {
-    let frame = encode_frame(&request).map_err(|error| format!("request encoding failed: {error}"))?;
+    let frame =
+        encode_frame(&request).map_err(|error| format!("request encoding failed: {error}"))?;
 
     #[cfg(windows)]
     let response_frame = audiorouter_transport::round_trip(&state.pipe_name, &frame)
@@ -36,13 +37,14 @@ fn session_id(state: State<'_, ShellState>) -> String {
 }
 
 fn main() {
-    let pipe_name = std::env::var("AUDIOROUTER_CONTROL_PIPE")
-        .unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
+    let pipe_name =
+        std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
     let state = ShellState {
         pipe_name,
         session_id: format!("tauri-shell-{}", std::process::id()),
     };
-    let session_script = serde_json::to_string(&state.session_id).expect("session id is serializable");
+    let session_script =
+        serde_json::to_string(&state.session_id).expect("session id is serializable");
 
     tauri::Builder::default()
         .manage(state)
@@ -51,7 +53,9 @@ fn main() {
             let window = app
                 .get_webview_window("main")
                 .ok_or_else(|| "main shell window was not created".to_owned())?;
-            window.eval(&format!("window.__AUDIO_ROUTER_SESSION_ID__ = {session_script};"))?;
+            window.eval(&format!(
+                "window.__AUDIO_ROUTER_SESSION_ID__ = {session_script};"
+            ))?;
             Ok(())
         })
         .run(tauri::generate_context!())
