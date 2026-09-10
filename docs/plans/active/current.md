@@ -208,6 +208,13 @@ change, or persistent machine audio configuration has occurred.
   -D warnings` both passed. No runtime, plugin, driver, audio, or persistent
   machine configuration action occurred.
 
+- Requalified the Windows-audio package directly on 2026-09-10 with
+  `cargo test -p audiorouter-windows-audio --locked`: all 39 unit tests and
+  package doc-tests passed, covering exact endpoint identity, format shape,
+  contention/error classification, bounded recovery, process-loopback, and
+  read-only discovery. No live stream or persistent machine configuration was
+  accessed or changed.
+
 - Requalified standalone M01 CLI acceptance directly on 2026-09-10 with
   `tests\\acceptance\\m01-cli.ps1`; it passed. This check is control-plane
   validation only and performed no audio, driver, plugin-registration, or
