@@ -588,6 +588,14 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the three-cycle live adapter bridge soak on 2026-09-10 with
+  `tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio -Cycles 3
+  -DurationMilliseconds 300`: all three cycles completed with 14,400–14,880
+  captured frames, 112–116 processed/tapped quanta, zero non-finite tap
+  samples, dropped frames, xruns, or deadline misses. Temporary FLAC artifacts
+  were finalized and removed after each cycle; media-device state remained
+  unchanged.
+
 - Requalified the sustained live Rust adapter telemetry probe on 2026-09-10
   with `tests/acceptance/m02-rust-adapter-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 750`: 36,480 frames crossed 285 scheduler quanta,
