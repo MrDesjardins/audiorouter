@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `a90b3256`; the native probe compile was
+The latest pushed checkpoint is `d93e3ca1`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -42,6 +42,15 @@ qualification remains open.
   response (no OS startup registration in this build) remain verified. No
   startup entry, audio endpoint, driver, plugin registration, or persistent
   machine configuration was changed.
+
+- Retried the administrator-only M07 frontend shell acceptance on 2026-09-10
+  through a controlled `Start-Process -Verb RunAs` child. Windows canceled the
+  elevation before a child transcript was created, so the shell/backend/pipe
+  probe did not start. No temporary state, audio endpoint, startup entry,
+  driver, plugin registration, or persistent machine configuration changed.
+  The remaining shell gate therefore specifically requires an interactive
+  administrator desktop/UAC confirmation; it is not an audio or protocol
+  failure.
 
 - Requalified the installed ReaPlugs VST2 directory on 2026-09-10 with
   `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates`.
