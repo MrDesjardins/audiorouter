@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `fec0df35`; the
+The latest clean full M00-M08 acceptance passed at pushed head `c75090cc`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -22,11 +22,21 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `9806500b`; later commits after
+The active branch is currently pushed through `c75090cc`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
+
+- Fixed and requalified a real parallel-test defect on 2026-09-09. The
+  plugin-host fixture helper previously derived temporary roots from a
+  timestamp and could collide while another test removed the same directory;
+  it now allocates roots with an atomic directory create and process-local
+  counter. The affected library suite passed 67/67 in three consecutive runs,
+  and the clean guarded M00-M08 chain passed at pushed head `c75090cc` with
+  exit code 0, including M08 release preparation and cleanup of 13 owned
+  temporary children. No audio, driver, signing, or machine configuration
+  changed.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
