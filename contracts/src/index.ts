@@ -654,6 +654,7 @@ export type ImplementedMethod =
   | "operations.get"
   | "operations.cancel"
   | "recordings.list"
+  | "recorders.list"
   | "recorders.arm"
   | "recorders.start"
   | "recorders.pause"
@@ -720,6 +721,7 @@ export type MethodParams = {
   "recordings.list":
     | { sessionId?: EntityId | null; cursor?: string | null; limit?: number }
     | undefined;
+  "recorders.list": undefined;
   "recorders.arm": { sessionId: EntityId; idempotencyKey?: string };
   "recorders.start": { sessionId: EntityId; frame: number; idempotencyKey?: string };
   "recorders.pause": { sessionId: EntityId; frame: number; idempotencyKey?: string };
@@ -818,6 +820,7 @@ export type MethodResult = {
   "operations.get": OperationCompleted | OperationUnknown;
   "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
+  "recorders.list": Array<{ sessionId: EntityId; state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"; lastFrame: number | null }>;
   "recorders.arm": RecorderLifecycleResult;
   "recorders.start": RecorderLifecycleResult;
   "recorders.pause": RecorderLifecycleResult;

@@ -239,6 +239,7 @@ fn method_description(name: &str) -> &'static str {
         "operations.get" => "Read the durable outcome of an idempotent operation.",
         "operations.cancel" => "Cancel a pending operation when it has not completed.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
+        "recorders.list" => "List live in-memory recorder states and frame boundaries.",
         "recorders.arm" => "Arm a session recorder without opening an audio device.",
         "recorders.start" => "Start a recorder at an explicit engine frame boundary.",
         "recorders.pause" => "Pause a recorder at an explicit engine frame boundary.",
@@ -371,6 +372,7 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &[],
         ),
+        "recorders.list" => object_schema(json!({}), &[]),
         "recorders.arm" => recorder_input_schema(false),
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => recorder_input_schema(true),
@@ -641,6 +643,20 @@ fn recorder_input_schema(frame_required: bool) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "recorders.list" => json!({
+            "type": "array",
+            "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                    "state": { "enum": ["idle", "armed", "recording", "paused", "stopping", "completed", "failed"] },
+                    "lastFrame": { "type": ["integer", "null"], "minimum": 0 }
+                },
+                "required": ["sessionId", "state", "lastFrame"],
+                "additionalProperties": false
+            }
+        }),
         "recorders.arm" | "recorders.start" | "recorders.pause" | "recorders.resume"
         | "recorders.split" | "recorders.stop" => json!({
             "type": "object",
@@ -3461,6 +3477,7 @@ impl ControlPlane {
                     "operations.get" => self.dispatch_operation_get(request.params),
                     "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
+                    "recorders.list" => self.dispatch_recorders_list(request.params),
                     "recorders.arm" | "recorders.start" | "recorders.pause"
                     | "recorders.resume" | "recorders.split" | "recorders.stop" => {
                         self.dispatch_recorder(request.method.as_str(), request.params)
@@ -4403,6 +4420,31 @@ impl ControlPlane {
         } else {
             Ok(json!(values))
         }
+    }
+
+    fn dispatch_recorders_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+        if let Some(params) = params {
+            if !params.is_object() || !params.as_object().is_some_and(|object| object.is_empty()) {
+                return Err(ControlError::InvalidRequest(
+                    "recorders.list does not accept parameters".into(),
+                ));
+            }
+        }
+        let mut recorders = self
+            .recorders
+            .iter()
+            .map(|(session_id, recorder)| {
+                let checkpoint = recorder.checkpoint();
+                json!({
+                    "sessionId": session_id,
+                    "state": recorder_state_name(recorder.state()),
+                    "lastFrame": checkpoint.last_frame
+                })
+            })
+            .collect::<Vec<_>>();
+        recorders
+            .sort_by(|left, right| left["sessionId"].as_str().cmp(&right["sessionId"].as_str()));
+        Ok(Value::Array(recorders))
     }
 
     fn dispatch_recordings_get(&self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -5832,6 +5874,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "operations.get" => &["operationId"],
         "operations.cancel" => &["operationId", "idempotencyKey"],
         "recordings.list" => &["sessionId", "cursor", "limit"],
+        "recorders.list" => &[],
         "recorders.arm" => &["sessionId", "idempotencyKey"],
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => &["sessionId", "frame", "idempotencyKey"],
@@ -9009,6 +9052,40 @@ mod tests {
             params: Some(json!({ "recordingId": "missing" })),
         });
         assert_eq!(missing.result.unwrap()["status"], "missing");
+    }
+
+    #[test]
+    fn live_recorders_list_reports_in_memory_state_and_frame() {
+        let mut plane = ControlPlane::default();
+        plane.insert_session(session()).unwrap();
+        let arm = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "recorders.arm".into(),
+            params: Some(json!({ "sessionId": "session", "idempotencyKey": "arm-live-list" })),
+        });
+        assert_eq!(arm.result.unwrap()["state"], "armed");
+        let start = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "recorders.start".into(),
+            params: Some(json!({ "sessionId": "session", "frame": 128, "idempotencyKey": "start-live-list" })),
+        });
+        assert_eq!(start.result.unwrap()["state"], "recording");
+        let listed = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "recorders.list".into(),
+            params: None,
+        });
+        assert_eq!(
+            listed.result.unwrap(),
+            json!([{
+                "sessionId": "session",
+                "state": "recording",
+                "lastFrame": 128
+            }])
+        );
     }
 
     #[test]
