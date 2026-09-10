@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `2627b40f`; later commits after
+The active branch is currently pushed through `8438bd82`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -34,6 +34,16 @@ configuration changes.
   TypeScript typecheck passed through `npm.cmd` (the equivalent `npm.ps1`
   invocation was blocked by the unchanged PowerShell execution policy). The
   worker changes open no audio endpoint and modify no machine configuration.
+
+- Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
+  `8438bd82` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00-M08 all passed,
+  including the current 31-endpoint native inventory, SysVAD x64 qualification,
+  104 control tests, 121 UI tests, VST3/VST2 worker checks, unsigned release
+  preparation, traceability, and documentation validation. The run removed all
+  13 owned temporary children. This remains portable/reference-driver evidence
+  only; no production driver, installation, signing mode, plugin registration,
+  audio stream, or persistent machine configuration was changed.
 
 - Fixed and requalified a real parallel-test defect on 2026-09-09. The
   plugin-host fixture helper previously derived temporary roots from a
