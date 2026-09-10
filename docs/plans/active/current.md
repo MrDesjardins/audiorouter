@@ -57,6 +57,11 @@ configuration changes.
   no backend, audio stream, driver, plugin registration, or persistent machine
   configuration was touched. Interactive WebView2 command invocation remains
   the next shell acceptance gate.
+- Revalidated the permanent shell capability change on 2026-09-09: the locked
+  shell forwarding regression passed 1/1, Rust formatting/diff checks passed,
+  and documentation validation passed for 51 Markdown files and 163 local
+  links. No audio, driver, signing, or persistent machine configuration was
+  changed.
 - Re-ran the locked all-features workspace validation on 2026-09-09: all unit
   and integration tests passed (466 tests across the workspace), all doc-tests
   passed, strict all-target Clippy passed, and documentation validation passed
