@@ -168,6 +168,13 @@ configuration has occurred.
   compile-only and performed no SDK installation, driver action,
   signing-mode change, audio stream, or machine configuration change.
 
+- Retried disposable SysVAD qualification on 2026-09-10 with
+  `tools\\m00-sysvad\\qualify.ps1`. It failed before checkout because this
+  execution environment could not connect to GitHub (`fatal: unable to access
+  ...Windows-driver-samples.git... port 443`). The script removed its
+  temporary checkout; this is an external-network blocker, not a driver-build
+  result, and no driver or machine audio configuration was touched.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
