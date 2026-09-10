@@ -122,10 +122,10 @@ where
 /// remains a transport adapter and never opens the database itself.
 pub fn run_control_server(args: &[String]) -> Result<(), CliError> {
     let database_path = option_value_owned(args, "--database")?;
-    let pipe_name = option_value_owned(args, "--pipe")
-        .unwrap_or_else(|_| r"\\.\pipe\audiorouter-control".to_owned());
-    let connections = option_value_owned(args, "--connections")
-        .unwrap_or_else(|_| "256".to_owned())
+    let pipe_name = optional_option_value_owned(args, "--pipe")?
+        .unwrap_or_else(|| r"\\.\pipe\audiorouter-control".to_owned());
+    let connections = optional_option_value_owned(args, "--connections")?
+        .unwrap_or_else(|| "256".to_owned())
         .parse::<usize>()
         .map_err(|_| CliError::InvalidArguments("--connections must be an integer".into()))?;
     if !(1..=500).contains(&connections) {
@@ -1939,6 +1939,18 @@ fn option_value_owned(args: &[String], option: &str) -> Result<String, CliError>
         .ok_or_else(|| CliError::InvalidArguments(format!("{option} requires a value")))
 }
 
+fn optional_option_value_owned(args: &[String], option: &str) -> Result<Option<String>, CliError> {
+    match args.iter().position(|value| value == option) {
+        Some(index) => args
+            .get(index + 1)
+            .filter(|value| !value.is_empty() && !value.starts_with('-'))
+            .cloned()
+            .map(Some)
+            .ok_or_else(|| CliError::InvalidArguments(format!("{option} requires a value"))),
+        None => Ok(None),
+    }
+}
+
 fn mcp_error(id: Option<Value>, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
@@ -2720,6 +2732,21 @@ mod tests {
             run(["plugins", "scan", "--directory", "relative"]),
             Err(CliError::InvalidArguments(_))
         ));
+    }
+
+    #[test]
+    fn backend_server_rejects_malformed_optional_arguments_before_opening_storage() {
+        let database = std::env::temp_dir().join("audiorouter-parser-test.sqlite");
+        let args = vec![
+            "--database".into(),
+            database.to_string_lossy().into_owned(),
+            "--pipe".into(),
+        ];
+        assert_eq!(
+            run_control_server(&args),
+            Err(CliError::InvalidArguments("--pipe requires a value".into()))
+        );
+        assert!(!database.exists());
     }
 
     #[test]

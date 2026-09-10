@@ -89,6 +89,12 @@ configuration changes.
   audio configuration was touched. The service is intentionally bounded for
   development/acceptance; unbounded production lifecycle and shutdown ownership
   remain open release work.
+- Hardened the backend-service argument boundary on 2026-09-09: malformed
+  optional `--pipe` and `--connections` values now fail before SQLite is opened
+  instead of silently selecting defaults. The regression verifies that an
+  incomplete pipe option creates no database; CLI unit/integration tests pass
+  33/33, `cargo fmt --all` passes, and strict CLI Clippy passes. No audio or
+  machine configuration is involved.
 - The user supplied additional local plugin fixtures under `third_party/vst/`
   on 2026-09-09: BUSTERse VST2/VST3, COMPER x64 VST3 plus AAX material, and TDR
   Nova Win32/x64 VST2/VST3 plus AAX material. The inventory is documented in
