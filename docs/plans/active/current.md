@@ -6148,6 +6148,15 @@ with safe portable/disposable qualification if elevation is unavailable.
 Rollback: this is documentation-only; restore this file to remove the new
 checkpoint. No machine or external audio configuration was changed.
 
+## Handoff correction — 2026-09-10
+
+The native compile checkpoint above is pushed at `214fc678`.
+`tests/acceptance/safe-all.ps1` was also invoked from the managed session, but
+the host wrapper returned no usable stdout/stderr or exit status after the
+child completed. It is therefore inconclusive and is not counted as new
+acceptance evidence; the last recorded successful guarded-chain result remains
+the one already documented above. No machine audio configuration was changed.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
