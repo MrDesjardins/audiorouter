@@ -6254,6 +6254,12 @@ the one already documented above. No machine audio configuration was changed.
   accessibility, and managed audio-device gates remain separate. No audio,
   driver, plugin registration, or persistent machine configuration changed.
 
+- Re-ran the contract drift and documentation validators directly on
+  2026-09-10: `node tools/contracts/check-drift.mjs` matched 63 methods, 17
+  node kinds, and 7 processors; `node tools/docs/validate.mjs` passed with 51
+  Markdown files and 163 local links. No runtime, audio, driver, or machine
+  configuration action occurred.
+
 - Requalified the guarded native endpoint lifecycle on 2026-09-10 with
   `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 100`. It enumerated 13 capture and 18 render
