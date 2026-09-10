@@ -22,11 +22,18 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `0d528b30`; later commits after
+The active branch is currently pushed through `2627b40f`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
+
+- Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
+  `2627b40f`; the subsequent workspace regression pass completed successfully:
+  all workspace Rust tests passed, workspace strict Clippy passed, and the UI
+  TypeScript typecheck passed through `npm.cmd` (the equivalent `npm.ps1`
+  invocation was blocked by the unchanged PowerShell execution policy). The
+  worker changes open no audio endpoint and modify no machine configuration.
 
 - Fixed and requalified a real parallel-test defect on 2026-09-09. The
   plugin-host fixture helper previously derived temporary roots from a
