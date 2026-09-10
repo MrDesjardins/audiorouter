@@ -54,10 +54,11 @@ configuration changes.
   ownership failure or change any machine audio configuration.
 
 - Closed a native-build reproducibility gap on 2026-09-09: `src-tauri/tauri.conf.json`
-  now runs the locked UI build from `../ui` before a Tauri production build,
+  now runs the locked UI build from the repository-root `ui` directory before a Tauri production build,
   preventing `frontendDist` from silently using stale assets. The configured
-  command succeeded from the standalone native project directory, followed by
-  a successful shell rebuild and diff check. This changes no audio, driver,
+  command succeeded from the repository root, followed by a successful shell
+  rebuild and diff check. A follow-up working-directory check corrected the
+  command to match the existing Tauri root-command convention. This changes no audio, driver,
   plugin, startup, signing, or machine configuration.
 
 - Requalified the locked all-features workspace on 2026-09-09 after the shell

@@ -5,7 +5,7 @@
   "identifier": "com.audiorouter.desktop",
   "build": {
     "beforeDevCommand": "npm.cmd run dev --prefix ui",
-    "beforeBuildCommand": "npm.cmd --prefix ../ui run build",
+    "beforeBuildCommand": "npm.cmd run build --prefix ui",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../ui/dist"
   },
