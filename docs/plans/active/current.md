@@ -61,6 +61,17 @@ configuration changes.
   command to match the existing Tauri root-command convention. This changes no audio, driver,
   plugin, startup, signing, or machine configuration.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-09 after the Tauri build-hook correction. Elevated toolchain/native
+  compile, read-only 34-endpoint inventory, disposable SysVAD x64 package/API/
+  signability, M01/M04/M05, pinned VST3 SDK and native single-/multi-bus
+  workers, repository VST2 modern/legacy/fault fixtures, M07, unsigned M08
+  artifacts, 159 traceability mappings, and documentation validation (51
+  Markdown files/163 local links) all passed. Cleanup removed 13 run-owned
+  temporary children. No driver installation/loading, signing-mode change,
+  plugin/startup registration, audio stream, or persistent machine audio
+  configuration occurred.
+
 - Requalified the locked all-features workspace on 2026-09-09 after the shell
   lifecycle change: all workspace unit and integration tests passed (including
   the native-gated plugin tests that were not applicable), all doc-tests passed,
