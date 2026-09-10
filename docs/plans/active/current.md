@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `13e34f63`; later commits after
+The active branch is currently pushed through `950c998d`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -96,6 +96,14 @@ configuration changes.
   run. No driver installation/loading, plugin or startup registration,
   signing-mode change, audio stream, or persistent machine audio setting was
   performed.
+
+- Closed a portable UI-12 layout-containment gap on 2026-09-09. The workspace
+  grid's content track can now shrink, action groups and status controls wrap,
+  and long node/status labels break within their containers instead of forcing
+  horizontal overflow. The UI suite passed 17 files/121 tests, TypeScript
+  typecheck passed, and a disposable 213-module production build passed. This
+  is automated layout hardening; the manual 1280x720/100-200% scaling and
+  screen-reader audit remains open.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
