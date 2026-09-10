@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `1381a374`; the native probe compile was
+The latest pushed checkpoint is `9c919405`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -21,6 +21,19 @@ clean; no driver or startup/plugin registration, signing-mode change, audio
 stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
+
+- Completion audit on 2026-09-10: the remaining safe/testable evidence is
+  exhausted at this host. User-mode native transformation, endpoint loopback,
+  process loopback, rate conversion, recorder tapping, VST2/VST3 containment,
+  portable contracts, and the guarded M00-M08 chain are all directly
+  validated. The next requirements-changing work requires one of three
+  external prerequisites: an AudioRouter-owned virtual-driver/endpoint
+  implementation and signing path (M03/M08), an interactive administrator
+  desktop for frontend-owned WebView2 shell acceptance (M07), or a
+  rights-cleared independent second-vendor plugin (M06). Do not substitute
+  SysVAD, an installed third-party cable, or the local ReaPlugs files for
+  those requirements; retain the current fail-closed capability responses and
+  rollback-safe user-mode bridge until the prerequisite is available.
 
 - Requalified the installed ReaPlugs VST2 directory on 2026-09-10 with
   `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates`.
