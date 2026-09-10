@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `728259d2`; later commits after
+The active branch is currently pushed through `2b850a55`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -122,6 +122,13 @@ configuration changes.
   No backend was started, no GUI action was automated, and no audio device or
   machine configuration was accessed. This establishes elevated shell/runtime
   startup only; UI interaction and live loopback remain separate gates.
+- Repeated the native shell runtime smoke test on 2026-09-09 at 19:25 local
+  time. The non-elevated process exited with setup `Access is denied`; the
+  elevated process stayed alive for five seconds, created one
+  `msedgewebview2.exe` child, and was then terminated with both exact process
+  levels absent afterward. This confirms the built shell can initialize its
+  WebView2 runtime under the required desktop permission boundary. It did not
+  start the backend, invoke control RPC, open audio, or change machine state.
 - Re-ran the elevated read-only native endpoint format inventory on 2026-09-09
   at 19:13 local time. It passed across 34 active capture/render endpoints and
   recorded 48 kHz 32-bit mono/stereo formats plus observed 96 kHz alternatives.
