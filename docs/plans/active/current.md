@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `22912e35`; later commits after
+The active branch is currently pushed through `d00cab9f`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -63,8 +63,8 @@ configuration changes.
   `try_acquire`/`try_commit`/`recycle` provide a nonallocating producer path
   and worker return path. The existing WAV/FLAC workers recycle successfully
   consumed chunks; pooled-queue coverage passed, recording tests passed 34/34,
-  and strict Clippy passed. The native adapter still must copy engine blocks
-  into these chunks and bind them to an actual device lifecycle.
+  and strict Clippy passed. The portable engine tap now copies engine blocks
+  into these chunks; only native device lifecycle binding remains.
 
 - Connected the portable engine-to-recorder path on 2026-09-10 at pushed head
   `22912e35`. `RecorderAudioTap` shares each concrete worker's pooled queue,
@@ -73,6 +73,12 @@ configuration changes.
   end to end before session-stop finalization. Control tests passed 105/105,
   recording tests 34/34, engine tests 90/90, and strict Clippy passed. Native
   WASAPI graph/device construction and production-driver lifecycle remain open.
+
+- Hardened the pooled tap path on 2026-09-10. Variable-sized engine quanta are
+  accepted without allocation by truncating owned pooled vectors and restoring
+  their capacity on recycle; the regression now covers engine tap to finalized
+  WAV output. Recording tests passed 34/34 and control tests 105/105 after the
+  correction, with strict Clippy clean.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
   `8438bd82` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
