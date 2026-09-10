@@ -35,6 +35,12 @@ configuration changes.
   evidence only; the Tauri WebView-to-command interaction remains unproven.
   No audio stream, driver, plugin registration, signing action, or persistent
   machine configuration changed.
+- Re-ran the locked all-features workspace validation on 2026-09-09: all unit
+  and integration tests passed (466 tests across the workspace), all doc-tests
+  passed, strict all-target Clippy passed, and documentation validation passed
+  for 51 Markdown files and 163 local links. No native audio stream, driver,
+  plugin registration, signing action, or persistent machine configuration was
+  involved.
 - Next task: create a frontend-owned or manually observable WebView2 invocation
   acceptance that proves `rpc_request` reaches an enrolled backend; otherwise
   continue the next portable M06 worker/graph gate without claiming GUI
