@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `d0c74d3c`; the
+The latest clean full M00-M08 acceptance passed at pushed head `0ab6aa19`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -22,11 +22,22 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `d0c74d3c`; later commits after
+The active branch is currently pushed through `0ab6aa19`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `0ab6aa19` on 2026-09-09. Toolchain/WDK discovery, native compile
+  and read-only endpoint inventory, disposable SysVAD x64 package/API/
+  signability qualification, M01/M04/M05, pinned VST3 SDK and native workers,
+  repository VST2 modern/legacy/fault fixtures, M07, unsigned shell-inclusive
+  M08 artifacts, 159 traceability mappings, and documentation validation (51
+  Markdown files/163 local links) passed. Cleanup removed 13 run-owned temp
+  children. No live audio, driver installation/loading, signing-mode change,
+  plugin/startup registration, or persistent machine audio configuration
+  occurred.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
   2026-09-09 at the current head. Elevated VS2026/MSVC/SDK/WDK discovery and
