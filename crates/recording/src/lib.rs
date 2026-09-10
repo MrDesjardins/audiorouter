@@ -1965,9 +1965,11 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
         frame: u64,
         maximum_chunks: usize,
     ) -> Result<usize, RecordingError> {
-        self.controller
-            .request_stop(frame)
-            .map_err(RecordingError::Controller)?;
+        if self.controller.state() != RecorderState::Stopping {
+            self.controller
+                .request_stop(frame)
+                .map_err(RecordingError::Controller)?;
+        }
         let drained = self.drain_queue(queue, maximum_chunks)?;
         if !queue.is_empty() {
             return Err(RecordingError::QueueNotEmpty);
@@ -2107,9 +2109,11 @@ impl BufferedFlacRecorder {
         frame: u64,
         maximum_chunks: usize,
     ) -> Result<usize, RecordingError> {
-        self.controller
-            .request_stop(frame)
-            .map_err(RecordingError::Controller)?;
+        if self.controller.state() != RecorderState::Stopping {
+            self.controller
+                .request_stop(frame)
+                .map_err(RecordingError::Controller)?;
+        }
         let drained = self.drain_queue(queue, maximum_chunks)?;
         if !queue.is_empty() {
             return Err(RecordingError::QueueNotEmpty);
@@ -2257,9 +2261,11 @@ impl<W: Write + Seek> WavRecorder<W> {
         frame: u64,
         maximum_chunks: usize,
     ) -> Result<usize, RecordingError> {
-        self.controller
-            .request_stop(frame)
-            .map_err(RecordingError::Controller)?;
+        if self.controller.state() != RecorderState::Stopping {
+            self.controller
+                .request_stop(frame)
+                .map_err(RecordingError::Controller)?;
+        }
         let drained = self.drain_queue(queue, maximum_chunks)?;
         if !queue.is_empty() {
             return Err(RecordingError::QueueNotEmpty);
@@ -2709,6 +2715,37 @@ mod tests {
         assert_eq!(recorder.state(), RecorderState::Recording);
         assert_eq!(recorder.stop_and_drain(&queue, 13, 8).unwrap(), 2);
         assert!(queue.is_empty());
+        assert_eq!(recorder.state(), RecorderState::Completed);
+        let output = recorder.finish().unwrap().into_inner();
+        assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn wav_stop_and_drain_can_resume_after_a_bounded_pass() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        let queue = RecordingQueue::new(2).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 10,
+                samples: vec![0.0, 0.5],
+            })
+            .unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 12,
+                samples: vec![-0.5],
+            })
+            .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(10).unwrap();
+        assert!(matches!(
+            recorder.stop_and_drain(&queue, 13, 1),
+            Err(RecordingError::QueueNotEmpty)
+        ));
+        assert_eq!(recorder.state(), RecorderState::Stopping);
+        assert_eq!(recorder.stop_and_drain(&queue, 13, 8).unwrap(), 1);
         assert_eq!(recorder.state(), RecorderState::Completed);
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);

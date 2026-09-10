@@ -237,8 +237,9 @@ configuration changes.
   backward-compatible checkpoint, and WAV, buffered-FLAC, and streaming-FLAC
   workers expose `stop_and_drain`: queued chunks are drained before the state
   becomes completed and the encoder is allowed to finalize. A stopping
-  checkpoint round-trip and exact WAV frame-count regression were added;
-  recording tests passed 32/32, the workspace tests passed, and workspace
+  checkpoint round-trip, exact WAV frame-count, and bounded multi-pass drain
+  regressions were added; recording tests passed 33/33, the workspace tests
+  passed, and workspace
   strict Clippy passed. The control plane still needs ownership of these
   workers before this can be wired into session/backend shutdown.
 
