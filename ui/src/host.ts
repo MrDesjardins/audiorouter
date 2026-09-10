@@ -99,6 +99,7 @@ export class WebView2RpcTransport implements RpcTransport {
 /** Bounded JSON-RPC transport for a Tauri 2 command bridge. */
 export class TauriRpcTransport implements RpcTransport {
   private closed = false;
+  private generation = 0;
 
   constructor(private readonly core: TauriCore, private readonly timeoutMs = 5000) {
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) throw new Error("Tauri transport timeout is out of bounds");
@@ -107,18 +108,31 @@ export class TauriRpcTransport implements RpcTransport {
   send(request: JsonRpcRequest): Promise<JsonRpcResponse> {
     if (this.closed) return Promise.reject(new Error("Tauri transport is closed"));
     if (!isWebView2Request(request)) return Promise.reject(new Error("Tauri transport rejected the request shape"));
-    const invocation = this.core.invoke("rpc_request", { request });
+    const generation = this.generation;
+    let invocation: Promise<unknown>;
+    try {
+      invocation = Promise.resolve(this.core.invoke("rpc_request", { request }));
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error("Tauri request could not be sent"));
+    }
+    let timeout: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<JsonRpcResponse>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error("Tauri request timed out")), this.timeoutMs);
+    });
     return Promise.race([
       invocation.then((response) => {
+        if (this.closed || this.generation !== generation) throw new Error("Tauri transport is closed");
         if (typeof response !== "object" || response === null || !isJsonRpcResponse(response) || response.id !== request.id) throw new Error("Tauri transport received an invalid response");
         return response;
       }),
-      new Promise<JsonRpcResponse>((_, reject) => setTimeout(() => reject(new Error("Tauri request timed out")), this.timeoutMs)),
-    ]);
+      timeoutPromise,
+    ]).finally(() => clearTimeout(timeout));
   }
 
   dispose(): void {
+    if (this.closed) return;
     this.closed = true;
+    this.generation += 1;
   }
 }
 

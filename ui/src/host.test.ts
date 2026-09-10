@@ -17,6 +17,21 @@ describe("native host bridge", () => {
     await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("invalid response");
   });
 
+  it("rejects a response that arrives after disposal", async () => {
+    let resolveInvocation: ((value: unknown) => void) | undefined;
+    const core = { invoke: vi.fn(() => new Promise((resolve) => { resolveInvocation = resolve; })) };
+    const transport = new TauriRpcTransport(core);
+    const pending = transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" });
+    transport.dispose();
+    resolveInvocation?.({ jsonrpc: "2.0", id: 1, result: {} });
+    await expect(pending).rejects.toThrow("closed");
+  });
+
+  it("turns a synchronous Tauri invoke failure into a rejected request", async () => {
+    const transport = new TauriRpcTransport({ invoke: vi.fn(() => { throw new Error("bridge unavailable"); }) });
+    await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("bridge unavailable");
+  });
+
   it("uses an injected typed transport and session identity", () => {
     const transport = { send: async (_request: JsonRpcRequest) => response };
     const backend = createInitialBackend({ transport, sessionId: "session-1" });
