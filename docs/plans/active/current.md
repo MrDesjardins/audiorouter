@@ -134,6 +134,14 @@ configuration has occurred.
   unchanged and temporary artifacts were removed. This is shared-mode
   resampler evidence, not managed-driver callback or physical-latency proof.
 
+- Extended the same exact-ID differing-rate route to the 2,000 ms maximum on
+  2026-09-10. It processed 192,000 capture frames across 750 graph blocks,
+  producing 96,000 scheduler and 95,488 routed frames. Processing p99.9 was
+  131,072 ns against the 1,333,334 ns deadline; deadline misses and lateness
+  remained zero. Endpoint/media state was unchanged and temporary artifacts
+  were removed. This is bounded shared-mode resampler stability evidence, not
+  independent-clock lock, managed-driver timing, or physical latency proof.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
