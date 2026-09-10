@@ -48,6 +48,20 @@ configuration changes.
   asset, so that directory was not overwritten. The temporary output was
   removed. This is the UI adapter seam only; the native Tauri command and
   authenticated backend session remain the next implementation task.
+- Added the standalone Tauri 2/WebView2 shell scaffold under `src-tauri/` on
+  2026-09-09. Its `rpc_request` command uses the existing framed named-pipe
+  client and does not bypass the control-plane authorization boundary; the
+  session identity is injected into the UI at shell startup. The shell is kept
+  outside the portable Cargo workspace, uses an explicit `AUDIOROUTER_CONTROL_PIPE`
+  override with a documented default, and has packaging disabled for this
+  development slice. `cargo check --manifest-path src-tauri/Cargo.toml
+  --message-format short` passed on Windows with Visual Studio Community 18 and
+  WebView2 Runtime 152.0.4191.66 after resolving the Tauri 2.11.5 dependency
+  graph. No shell was launched, no driver or plugin was registered, and no
+  audio stream or persistent machine configuration changed. The next task is
+  to provide a bounded, explicitly configured backend service/session for this
+  shell and validate a UI-to-control request without touching the live audio
+  graph.
 
 Next action: qualify the first supplied rights-cleared independent x64 VST2 or
 VST3 effect through the existing contained worker matrix. If none is supplied,
