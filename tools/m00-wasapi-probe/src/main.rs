@@ -10,8 +10,8 @@
 //! matching float32 endpoint formats.
 
 use audiorouter_engine::{
-    histogram_upper_bound_ns, AudioBlock, DriftController, Pcm16QuantumAdapter, ProcessingStage,
-    RealtimeScheduler, RuntimeGeneration, RuntimeGraph, StreamingResampler,
+    histogram_upper_bound_ns, AudioBlock, AudioTap, DriftController, Pcm16QuantumAdapter,
+    ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph, StreamingResampler,
 };
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
@@ -47,6 +47,30 @@ fn graph_quantum_duration(sample_rate_hz: u32, frames: u64) -> Duration {
 }
 use windows::Win32::System::Threading::GetCurrentProcessId;
 use windows::Win32::System::Variant::VT_BLOB;
+
+#[derive(Default)]
+struct ProbeTap {
+    calls: std::sync::atomic::AtomicU64,
+    non_finite_samples: std::sync::atomic::AtomicU64,
+}
+
+impl AudioTap for ProbeTap {
+    fn on_processed_block(&self, _start_frame: u64, block: &AudioBlock) {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let invalid = (0..block.channels()).fold(0_u64, |count, channel| {
+            count.saturating_add(
+                block
+                    .channel(channel)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter(|sample| !sample.is_finite())
+                    .count() as u64,
+            )
+        });
+        self.non_finite_samples
+            .fetch_add(invalid, std::sync::atomic::Ordering::Relaxed);
+    }
+}
 
 fn main() -> Result<()> {
     if std::env::args().nth(1).as_deref() == Some("adapter-smoke") {
@@ -688,6 +712,7 @@ fn adapter_bridge_smoke(
     ));
     capture.start()?;
     render.start()?;
+    let tap = ProbeTap::default();
     let result = (|| {
         let deadline = std::time::Instant::now()
             .checked_add(Duration::from_millis(duration_ms))
@@ -695,7 +720,14 @@ fn adapter_bridge_smoke(
         let mut pump = audiorouter_windows_audio::WasapiSchedulerPump::default();
         while std::time::Instant::now() < deadline {
             if capture.wait_for_data(10)? {
-                let current = bridge.pump(&capture, &render)?;
+                let current = bridge.pump_with_tap_and_deadline(
+                    &capture,
+                    &render,
+                    &tap,
+                    std::time::Instant::now()
+                        .checked_add(graph_quantum_duration(capture_info.sample_rate_hz, 128))
+                        .unwrap_or_else(std::time::Instant::now),
+                )?;
                 pump.packets = pump.packets.saturating_add(current.packets);
                 pump.captured_frames = pump.captured_frames.saturating_add(current.captured_frames);
                 pump.processed_quanta = pump
@@ -708,11 +740,15 @@ fn adapter_bridge_smoke(
             }
         }
         let telemetry = bridge.scheduler().telemetry();
-        if pump.packets == 0 || pump.processed_quanta == 0 {
+        if pump.packets == 0
+            || pump.processed_quanta == 0
+            || u64::from(pump.processed_quanta) != tap.calls.load(std::sync::atomic::Ordering::Relaxed)
+            || tap.non_finite_samples.load(std::sync::atomic::Ordering::Relaxed) != 0
+        {
             return Err(AudioError::InvalidFrameSize);
         }
         println!(
-            "adapter_bridge capture_endpoint={} render_endpoint={} rate_hz={} channels={} packets={} captured_frames={} processed_quanta={} rendered_frames={} dropped_render_frames={} timeline_frame={} scheduler_xruns={} scheduler_deadline_misses={}",
+            "adapter_bridge capture_endpoint={} render_endpoint={} rate_hz={} channels={} packets={} captured_frames={} processed_quanta={} tap_calls={} tap_non_finite_samples={} rendered_frames={} dropped_render_frames={} timeline_frame={} scheduler_xruns={} scheduler_deadline_misses={}",
             capture_info.id,
             render_info.id,
             capture_info.sample_rate_hz,
@@ -720,6 +756,8 @@ fn adapter_bridge_smoke(
             pump.packets,
             pump.captured_frames,
             pump.processed_quanta,
+            tap.calls.load(std::sync::atomic::Ordering::Relaxed),
+            tap.non_finite_samples.load(std::sync::atomic::Ordering::Relaxed),
             pump.rendered_frames,
             pump.dropped_render_frames,
             bridge.timeline_frame(),

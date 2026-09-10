@@ -470,6 +470,40 @@ impl WasapiSchedulerBridge {
         capture: &SharedCapture,
         render: &SharedRender,
     ) -> Result<WasapiSchedulerPump, AudioError> {
+        self.pump_internal(capture, render, None, None)
+    }
+
+    /// Pump capture/render data while forwarding each processed quantum to an
+    /// allocation-free tap. The tap is borrowed only for this call and must
+    /// obey the engine's realtime callback contract.
+    pub fn pump_with_tap(
+        &mut self,
+        capture: &SharedCapture,
+        render: &SharedRender,
+        tap: &dyn audiorouter_engine::AudioTap,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        self.pump_internal(capture, render, Some(tap), None)
+    }
+
+    /// Pump with both a caller-owned processed-audio tap and one deadline
+    /// observation for every complete quantum in this bounded pump.
+    pub fn pump_with_tap_and_deadline(
+        &mut self,
+        capture: &SharedCapture,
+        render: &SharedRender,
+        tap: &dyn audiorouter_engine::AudioTap,
+        deadline: std::time::Instant,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        self.pump_internal(capture, render, Some(tap), Some(deadline))
+    }
+
+    fn pump_internal(
+        &mut self,
+        capture: &SharedCapture,
+        render: &SharedRender,
+        tap: Option<&dyn audiorouter_engine::AudioTap>,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
         let mut result = WasapiSchedulerPump::default();
         self.drain_render_pending(render, &mut result)?;
         let Some((packet, packet_bytes)) =
@@ -485,7 +519,7 @@ impl WasapiSchedulerBridge {
                 .accumulator
                 .push(&self.capture_bytes[offset..packet_bytes])?;
             offset += consumed;
-            self.process_ready(render, &mut result)?;
+            self.process_ready(render, &mut result, tap, deadline)?;
             if consumed == 0 {
                 return Err(AudioError::BufferTooSmall {
                     required: self.bytes_per_frame,
@@ -493,7 +527,7 @@ impl WasapiSchedulerBridge {
                 });
             }
         }
-        self.process_ready(render, &mut result)?;
+        self.process_ready(render, &mut result, tap, deadline)?;
         Ok(result)
     }
 
@@ -501,6 +535,8 @@ impl WasapiSchedulerBridge {
         &mut self,
         render: &SharedRender,
         result: &mut WasapiSchedulerPump,
+        tap: Option<&dyn audiorouter_engine::AudioTap>,
+        deadline: Option<std::time::Instant>,
     ) -> Result<(), AudioError> {
         while self.accumulator.pending_frames() >= self.quantum_frames {
             self.drain_render_pending(render, result)?;
@@ -519,9 +555,17 @@ impl WasapiSchedulerBridge {
                     required: self.quantum_frames * self.bytes_per_frame,
                     available: 0,
                 })?;
-            let generation = self
-                .scheduler
-                .process_once()
+            let generation =
+                match (tap, deadline) {
+                    (Some(tap), Some(deadline)) => self
+                        .scheduler
+                        .process_once_with_tap_and_deadline(self.timeline_frame, tap, deadline),
+                    (Some(tap), None) => self
+                        .scheduler
+                        .process_once_with_tap(self.timeline_frame, tap),
+                    (None, Some(deadline)) => self.scheduler.process_once_with_deadline(deadline),
+                    (None, None) => self.scheduler.process_once(),
+                }
                 .map_err(|_| AudioError::InvalidFrameSize)?;
             self.timeline_frame = self
                 .timeline_frame

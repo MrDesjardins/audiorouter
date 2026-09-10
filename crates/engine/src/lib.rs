@@ -3902,6 +3902,24 @@ impl RealtimeScheduler {
             .process_ring_once_with_tap(&self.input, &self.output, start_frame, tap)
     }
 
+    /// Execute one nonblocking scheduler step, forward the processed quantum
+    /// to a caller-owned tap, and record its caller-supplied deadline. The tap
+    /// remains subject to the realtime contract: no allocation, blocking,
+    /// logging, or I/O.
+    pub fn process_once_with_tap_and_deadline(
+        &self,
+        start_frame: u64,
+        tap: &dyn AudioTap,
+        deadline: std::time::Instant,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        self.processor.process_ring_once_with_deadline_and_tap(
+            &self.input,
+            &self.output,
+            Some(deadline),
+            Some((start_frame, tap)),
+        )
+    }
+
     /// Execute one nonblocking scheduler step and compare its completed
     /// processing boundary with a caller-owned quantum deadline. The deadline
     /// observation uses atomics only and is intended for a future native
@@ -4264,6 +4282,36 @@ mod tests {
         assert_eq!(tap.last_frame.load(Ordering::Relaxed), 40);
         let output = scheduler.receive_output().unwrap();
         scheduler.output().try_recycle(output).unwrap();
+    }
+
+    #[test]
+    fn realtime_scheduler_combines_tap_and_deadline_accounting() {
+        let scheduler = RealtimeScheduler::new(1, 1, 2).unwrap();
+        let generation = RuntimeGeneration::new(2);
+        scheduler.publish(RuntimeGraph::prepare(generation, vec![]));
+        scheduler
+            .submit_input(scheduler.acquire_input().unwrap())
+            .unwrap();
+        let tap = CountingTap {
+            calls: AtomicU64::new(0),
+            last_frame: AtomicU64::new(0),
+        };
+        let deadline = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_millis(1))
+            .unwrap();
+        assert_eq!(
+            scheduler
+                .process_once_with_tap_and_deadline(128, &tap, deadline)
+                .unwrap(),
+            Some(generation)
+        );
+        assert_eq!(tap.calls.load(Ordering::Relaxed), 1);
+        assert_eq!(tap.last_frame.load(Ordering::Relaxed), 128);
+        assert_eq!(scheduler.telemetry().deadline_misses, 1);
+        scheduler
+            .output()
+            .try_recycle(scheduler.receive_output().unwrap())
+            .unwrap();
     }
 
     #[test]
