@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `3fd3e51f`; later commits after
+The active branch is currently pushed through `3e8a97d2`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -587,6 +587,12 @@ action occurred.
   Cleanup removed 13 run-owned temporary children. No driver installation or
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
+
+- Requalified dedicated M07 headless acceptance on 2026-09-10 with
+  `tests/acceptance/m07-headless.ps1`: the CLI, MCP, control, plugin-host, and
+  supervised worker suites passed, with no audio-device or machine-
+  configuration access. This remains headless evidence; elevated shell-RPC
+  and manual UI acceptance are still separate gates.
 
 - Requalified the M08 traceability and documentation gates on 2026-09-10:
   `tests/acceptance/m08-traceability.ps1` covered 159 normative requirement
