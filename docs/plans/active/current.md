@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `b83a41f9`; later commits after
+The active branch is currently pushed through `db7c4757`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -173,6 +173,13 @@ configuration changes.
   temporary process or state is created because the invoking PowerShell is not
   in the Administrator role; this is an environment/elevation limitation, not
   a shell RPC result. No audio or persistent configuration was touched.
+
+- Ran `cargo test --workspace --locked` on 2026-09-10 after the recorder-state
+  contract change. All workspace unit, integration, and doc-test groups passed,
+  including CLI/MCP, control (100 tests), domain, DSP, engine, recording,
+  storage, transport, and Windows-audio crates. This is portable/native test
+  evidence only; it does not close the elevated shell, driver, signed install,
+  live audio, or physical-latency gates.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
