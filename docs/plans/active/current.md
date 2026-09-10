@@ -77,6 +77,16 @@ configuration changes.
   debug shell. No installer, driver, audio stream, signing, or machine
   configuration action occurred.
 
+- Qualified transient unsigned NSIS bundling on 2026-09-09 with Tauri CLI
+  2.11.4: the location-independent UI hook ran, the native shell built, NSIS
+  tooling was downloaded and hash-validated, and
+  `AudioRouter_0.1.0_x64-setup.exe` was generated (3,263,281 bytes; SHA-256
+  `1A065DB45E7EA7DD727F3642FB444D757670A50C1D3E50ECE0435BE2D468C37C`). The
+  installer was not run or committed; generated bundle output and CLI-induced
+  dependency formatting were removed/restored. This is unsigned bundler
+  evidence only; production signing, installation, driver, and clean-machine
+  gates remain open.
+
 - Hardened M08 native-shell reproducibility on 2026-09-09 after inspecting
   Tauri's generated release resources: release preparation now builds the
   current root UI before compiling the shell, so the embedded `frontendDist`

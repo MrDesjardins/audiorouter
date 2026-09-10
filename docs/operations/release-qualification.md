@@ -17,7 +17,15 @@ Preparation requires a clean worktree, locked Cargo inputs, and a new output
 directory. It produces unsigned x64 CLI, native-shell, and disposable-worker
 artifacts, a disposable zipped UI bundle, locked Cargo SBOM metadata, the authoritative UI
 `package-lock.json` plus a deterministic CycloneDX npm SBOM generated from the
-lockfile, and checksums. It does not produce an installer or install a driver.
+lockfile, and checksums. The standard preparation flow does not install a
+driver or generate an installer. An optional transient unsigned NSIS smoke can
+exercise the native bundler without installation:
+
+    npm.cmd exec --yes --package @tauri-apps/cli@2.11.4 -- tauri build --debug --no-sign --ci --bundles nsis --config src-tauri/tauri.conf.json
+
+That smoke writes only to the native Cargo target directory and must be
+cleaned afterward; it is not production signing, installer, or clean-machine
+qualification.
 
 ## Current qualification snapshot
 

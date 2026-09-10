@@ -23,6 +23,9 @@ release and must not be presented as an installable Windows audio product.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI,
   native-shell, and plugin-worker artifacts, SBOM metadata, notices, checksums,
   and a manifest, then removes the temporary output.
+- A transient Tauri 2.11.4 NSIS bundler smoke also succeeds with `--no-sign`;
+  the generated installer is removed and is not a production or installability
+  qualification result.
 - VST3 SDK acceptance passes 51 SDK self-tests, 1,598 official validator tests
   with 0 failures, and the offline native mda fixture loader.
 - A Windows-only, gated native x64 VST2 adapter is verified with repository-owned
