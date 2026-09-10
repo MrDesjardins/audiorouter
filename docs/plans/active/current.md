@@ -243,6 +243,13 @@ configuration changes.
   strict Clippy passed. The control plane still needs ownership of these
   workers before this can be wired into session/backend shutdown.
 
+- Added MCP parity for live recorder inspection on 2026-09-10. The new
+  read-only `list_live_recorders` tool delegates to `recorders.list`, retains
+  recording-scope authorization, and is covered by direct MCP tool coverage
+  plus the stdio interoperability test. CLI tests and integration tests passed
+  33/33, strict Clippy and formatting passed; no audio or machine configuration
+  changed.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native

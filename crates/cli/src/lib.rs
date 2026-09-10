@@ -1971,6 +1971,7 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "inspect_routes"
             | "get_operation"
             | "list_recordings"
+            | "list_live_recorders"
             | "get_recording"
             | "get_recording_recovery"
             | "preview_recording"
@@ -2018,6 +2019,7 @@ fn mcp_tools() -> Value {
         { "name": "get_operation", "description": "Read an idempotent operation outcome.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string" } }, "required": ["operationId"], "additionalProperties": false } },
         { "name": "cancel_operation", "description": "Request cancellation with an idempotency key; completed operations are never undone.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["operationId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content; requires recording scope. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] }, "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
+        { "name": "list_live_recorders", "description": "List live in-memory recorder states and frame boundaries; requires recording scope and does not inspect persisted files.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "arm_recorder", "description": "Arm a session recorder at the control boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "start_recorder", "description": "Start a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "pause_recorder", "description": "Pause a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
@@ -2093,6 +2095,7 @@ fn mcp_tool_call(
         "get_operation" => ("operations.get", Some(arguments)),
         "cancel_operation" => ("operations.cancel", Some(arguments)),
         "list_recordings" => ("recordings.list", Some(arguments)),
+        "list_live_recorders" => ("recorders.list", Some(arguments)),
         "arm_recorder" => ("recorders.arm", Some(arguments)),
         "start_recorder" => ("recorders.start", Some(arguments)),
         "pause_recorder" => ("recorders.pause", Some(arguments)),
@@ -3599,6 +3602,28 @@ mod tests {
         let recorder_content = recorder["result"]["content"][0]["text"].as_str().unwrap();
         let recorder_payload: Value = serde_json::from_str(recorder_content).unwrap();
         assert_eq!(recorder_payload["result"]["state"], "armed");
+        let live_recorders = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &recording_grant,
+            None,
+            &json!({
+                "id": 16,
+                "params": {
+                    "name": "list_live_recorders",
+                    "arguments": {}
+                }
+            }),
+        );
+        assert_eq!(live_recorders["result"]["isError"], false);
+        let live_content = live_recorders["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let live_payload: Value = serde_json::from_str(live_content).unwrap();
+        assert_eq!(
+            live_payload["result"][0],
+            json!({ "sessionId": "session-fixture", "state": "armed", "lastFrame": null })
+        );
         let recovery = mcp_tool_call(
             &mut plane,
             "mcp-test",
@@ -3640,7 +3665,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 43);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 44);
         let tools = mcp_tools();
         let list_recordings = tools
             .as_array()
