@@ -46,6 +46,16 @@ configuration has occurred.
   startup registration, audio stream, or persistent machine configuration
   changed.
 
+- Requalified M01/M07 headless acceptance directly on 2026-09-10 through
+  `cmd.exe /d /c "powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  tests\\acceptance\\m07-headless.ps1"`. The run passed 30 CLI tests, 3 MCP
+  interoperability tests, 105 control tests, 67 plugin-host tests, and 13
+  worker-process tests. It created 13 explicitly named temporary SQLite
+  fixtures; each was validated under the OS temp root and removed, leaving
+  zero matching artifacts. No audio device, driver, or machine configuration
+  changed. This is headless evidence; the interactive elevated shell/WebView2
+  gate remains open.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
