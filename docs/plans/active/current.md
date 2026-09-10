@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `744500a3`; later commits after
+The active branch is currently pushed through `e1acf35a`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -51,6 +51,12 @@ configuration changes.
   boundary remains a manual/interactive acceptance gate. Temporary probe code
   and artifacts were removed, and formatting, shell compilation, and diff
   checks passed without audio or machine configuration changes.
+- Rechecked elevated native shell startup on 2026-09-09 against the normal
+  `../ui/dist` frontend path after the capability change. The shell remained
+  alive for the bounded five-second check and was removed by targeted cleanup;
+  no backend, audio stream, driver, plugin registration, or persistent machine
+  configuration was touched. Interactive WebView2 command invocation remains
+  the next shell acceptance gate.
 - Re-ran the locked all-features workspace validation on 2026-09-09: all unit
   and integration tests passed (466 tests across the workspace), all doc-tests
   passed, strict all-target Clippy passed, and documentation validation passed
