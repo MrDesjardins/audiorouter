@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `8d1a8370`; later commits after
+The active branch is currently pushed through `88a03ffa`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -106,6 +106,14 @@ configuration changes.
   the GUI was not launched, the external backend was not started by the shell,
   and no audio stream, driver, plugin registration, or machine configuration
   changed.
+- Added a Windows-gated shell forwarding regression on 2026-09-09. The test
+  exercises the same request encoder, native transport client, response
+  decoder, and Tauri command helper against an authenticated control server;
+  `cargo test --manifest-path src-tauri/Cargo.toml --locked --offline` passed
+  1/1 and the locked shell compile check passed. No GUI was launched and no
+  audio or machine configuration changed. This closes code-path transport
+  validation, while GUI/WebView2 manual acceptance and live loopback remain
+  open.
 - Re-ran the elevated read-only native endpoint format inventory on 2026-09-09
   at 19:13 local time. It passed across 34 active capture/render endpoints and
   recorded 48 kHz 32-bit mono/stereo formats plus observed 96 kHz alternatives.

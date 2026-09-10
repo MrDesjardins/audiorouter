@@ -193,6 +193,7 @@ dependencies = [
 name = "audiorouter-shell"
 version = "0.1.0"
 dependencies = [
+ "audiorouter-control",
  "audiorouter-protocol",
  "audiorouter-transport",
  "serde",
