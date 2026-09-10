@@ -157,6 +157,7 @@ pub struct RecordingChunk {
 /// encode, touch files, or wait for a consumer.
 pub struct RecordingQueue {
     chunks: crossbeam_queue::ArrayQueue<RecordingChunk>,
+    free_chunks: Option<crossbeam_queue::ArrayQueue<RecordingChunk>>,
     overruns: AtomicU64,
     oversized: AtomicU64,
 }
@@ -500,9 +501,39 @@ impl RecordingQueue {
         }
         Ok(Self {
             chunks: crossbeam_queue::ArrayQueue::new(capacity),
+            free_chunks: None,
             overruns: AtomicU64::new(0),
             oversized: AtomicU64::new(0),
         })
+    }
+
+    /// Create a queue with a caller-owned pool of fixed-size chunks. A
+    /// realtime adapter can acquire, fill, and commit a chunk without a heap
+    /// allocation; workers return consumed chunks with `recycle`.
+    pub fn new_pooled(
+        capacity: usize,
+        channels: usize,
+        frames_per_chunk: usize,
+    ) -> Result<Self, RecordingError> {
+        if !(1..=MAX_CHANNELS as usize).contains(&channels)
+            || frames_per_chunk == 0
+            || frames_per_chunk
+                .checked_mul(channels)
+                .map_or(true, |samples| samples > MAX_RECORDING_CHUNK_SAMPLES)
+        {
+            return Err(RecordingError::InvalidSampleCount);
+        }
+        let mut queue = Self::new(capacity)?;
+        let free = crossbeam_queue::ArrayQueue::new(capacity);
+        for _ in 0..capacity {
+            free.push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.0; frames_per_chunk * channels],
+            })
+            .map_err(|_| RecordingError::InvalidQueueCapacity)?;
+        }
+        queue.free_chunks = Some(free);
+        Ok(queue)
     }
 
     pub fn capacity(&self) -> usize {
@@ -541,6 +572,35 @@ impl RecordingQueue {
 
     pub fn try_pop(&self) -> Option<RecordingChunk> {
         self.chunks.pop()
+    }
+
+    /// Acquire one preallocated chunk for a realtime producer. The returned
+    /// chunk is not visible to consumers until `try_commit` succeeds.
+    pub fn try_acquire(&self) -> Option<RecordingChunk> {
+        self.free_chunks.as_ref()?.pop()
+    }
+
+    /// Commit an acquired chunk without allocating. A full active queue
+    /// returns ownership to the caller, which may recycle it or count a gap.
+    pub fn try_commit(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        if self.free_chunks.is_none() {
+            return self.try_push(chunk);
+        }
+        match self.chunks.push(chunk) {
+            Ok(()) => Ok(()),
+            Err(chunk) => {
+                self.overruns.fetch_add(1, Ordering::Relaxed);
+                Err(chunk)
+            }
+        }
+    }
+
+    /// Return a consumed pooled chunk to the producer pool. Unpooled queues
+    /// simply drop it, preserving compatibility with existing workers.
+    pub fn recycle(&self, chunk: RecordingChunk) {
+        if let Some(free) = &self.free_chunks {
+            let _ = free.push(chunk);
+        }
     }
 }
 
@@ -2041,6 +2101,7 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
                 self.controller.fail();
                 return Err(error);
             }
+            queue.recycle(chunk);
             drained += 1;
         }
         Ok(drained)
@@ -2184,6 +2245,7 @@ impl BufferedFlacRecorder {
                 self.controller.fail();
                 return Err(error);
             }
+            queue.recycle(chunk);
             drained += 1;
         }
         Ok(drained)
@@ -2343,6 +2405,7 @@ impl<W: Write + Seek> WavRecorder<W> {
                 self.controller.fail();
                 return Err(error);
             }
+            queue.recycle(chunk);
             drained += 1;
         }
         Ok(drained)
@@ -2545,6 +2608,31 @@ mod tests {
         assert!(matches!(
             RecordingQueue::new(usize::MAX),
             Err(RecordingError::InvalidQueueCapacity)
+        ));
+    }
+
+    #[test]
+    fn pooled_recording_queue_reuses_owned_chunks_without_allocation() {
+        let queue = RecordingQueue::new_pooled(2, 2, 4).unwrap();
+        let mut chunk = queue.try_acquire().unwrap();
+        assert_eq!(chunk.samples.len(), 8);
+        chunk.start_frame = 12;
+        chunk.samples.fill(0.25);
+        queue.try_commit(chunk).unwrap();
+        let consumed = queue.try_pop().unwrap();
+        assert_eq!(consumed.start_frame, 12);
+        queue.recycle(consumed);
+        let recycled = queue.try_acquire().unwrap();
+        assert_eq!(recycled.samples.len(), 8);
+        assert!(queue.try_acquire().is_some());
+        assert!(queue.try_acquire().is_none());
+        assert!(matches!(
+            RecordingQueue::new_pooled(0, 1, 4),
+            Err(RecordingError::InvalidQueueCapacity)
+        ));
+        assert!(matches!(
+            RecordingQueue::new_pooled(1, 3, 4),
+            Err(RecordingError::InvalidSampleCount)
         ));
     }
 
