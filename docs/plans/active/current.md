@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `c75090cc`; the
+The latest clean full M00-M08 acceptance passed at pushed head `ffd9cbeb`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -84,6 +84,18 @@ configuration changes.
   output directory because the existing `ui/dist` was locked by another
   process. This is app-scoped keyboard support only; native tray, OS-wide
   registration, and manual conflict testing remain open.
+
+- Re-ran the complete guarded M00-M08 acceptance chain at elevated read-only
+  Windows access on 2026-09-09 from pushed head `ffd9cbeb`: toolchain/native
+  compile, 31-endpoint inventory, disposable SysVAD qualification, M01/M04/M05,
+  pinned VST3 and native worker, VST2 fixtures, M07, unsigned M08 artifacts,
+  159 requirement mappings, and documentation validation (51 Markdown files,
+  163 local links) all passed. The run cleaned 13 owned temporary children.
+  The initial non-elevated retry failed closed at media inventory with
+  `Get-PnpDevice` HRESULT `0x80041003`; no configuration was changed in either
+  run. No driver installation/loading, plugin or startup registration,
+  signing-mode change, audio stream, or persistent machine audio setting was
+  performed.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
