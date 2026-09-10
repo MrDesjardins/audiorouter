@@ -1,4 +1,5 @@
 use audiorouter_control::{ClientRole, ControlPlane};
+use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
 use audiorouter_storage::Storage;
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
@@ -313,5 +314,50 @@ fn mcp_pipe_proxy_interoperates_with_authenticated_backend() {
     drop(input);
     assert!(child.wait().unwrap().success());
     backend.join().unwrap();
+    std::fs::remove_file(database).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn bounded_backend_command_interoperates_with_authenticated_pipe_client() {
+    let database =
+        std::env::temp_dir().join(format!("audiorouter-backend-{}.sqlite", std::process::id()));
+    let _ = std::fs::remove_file(&database);
+    let storage = Storage::open(&database).unwrap();
+    let mut plane = ControlPlane::with_storage("backend-test", storage);
+    let sid = audiorouter_transport::current_user_sid().unwrap();
+    plane.enroll_client(sid, ClientRole::Observer).unwrap();
+    drop(plane);
+
+    let pipe_name = format!(r"\\.\pipe\audiorouter-backend-{}", std::process::id());
+    let mut child = Command::new(cli_path())
+        .args([
+            "backend",
+            "serve",
+            "--database",
+            database.to_str().unwrap(),
+            "--pipe",
+            &pipe_name,
+            "--connections",
+            "1",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn bounded backend");
+
+    let request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "system.describe".into(),
+        params: None,
+    };
+    let frame = encode_frame(&request).unwrap();
+    let response = audiorouter_transport::round_trip(&pipe_name, &frame).unwrap();
+    let response: JsonRpcResponse = decode_frame(&response).unwrap();
+    assert!(response.error.is_none());
+    assert_eq!(response.result.unwrap()["protocolVersion"]["major"], 1);
+    assert!(child.wait().unwrap().success());
     std::fs::remove_file(database).unwrap();
 }

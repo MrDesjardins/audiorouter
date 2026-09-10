@@ -12,6 +12,26 @@ audiorouter session list --database C:\path\to\audiorouter.sqlite --json
 
 Use absolute paths for databases and JSON files.
 
+## Run the bounded native backend
+
+On Windows, the external backend can expose the same authenticated control
+pipe used by the desktop shell:
+
+```powershell
+audiorouter backend serve `
+  --database C:\path\to\audiorouter.sqlite `
+  --pipe \\\.\pipe\audiorouter-control `
+  --connections 256
+```
+
+The current Windows user must already be enrolled in the database. The server
+accepts at most 500 connections and then exits, making the lifecycle explicit
+for development and acceptance tests. It uses the existing owner-only pipe
+ACL, same-user peer validation, and stored client grant; it does not bootstrap
+permissions, open an audio endpoint, install a driver, or modify Windows audio
+settings. The Tauri shell forwards its requests to this pipe and does not open
+the database itself.
+
 ## Plan and apply a graph change
 
 Create a plan against the observed revision, inspect it, then apply it once with a unique idempotency key:

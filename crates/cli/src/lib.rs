@@ -117,6 +117,39 @@ where
     }
 }
 
+/// Run the authenticated local control backend for a bounded number of
+/// connections. The backend owns the durable control plane; the desktop shell
+/// remains a transport adapter and never opens the database itself.
+pub fn run_control_server(args: &[String]) -> Result<(), CliError> {
+    let database_path = option_value_owned(args, "--database")?;
+    let pipe_name = option_value_owned(args, "--pipe")
+        .unwrap_or_else(|_| r"\\.\pipe\audiorouter-control".to_owned());
+    let connections = option_value_owned(args, "--connections")
+        .unwrap_or_else(|_| "256".to_owned())
+        .parse::<usize>()
+        .map_err(|_| CliError::InvalidArguments("--connections must be an integer".into()))?;
+    if !(1..=500).contains(&connections) {
+        return Err(CliError::InvalidArguments(
+            "--connections must be between 1 and 500".into(),
+        ));
+    }
+    let database_path = std::path::PathBuf::from(database_path);
+    if !database_path.is_absolute() {
+        return Err(CliError::InvalidArguments(
+            "--database path must be absolute".into(),
+        ));
+    }
+    let storage =
+        Storage::open(database_path).map_err(|error| CliError::Storage(format!("{error:?}")))?;
+    let plane = ControlPlane::with_storage("backend", storage);
+    audiorouter_transport::serve_control_connections_for_current_user(
+        &pipe_name,
+        connections,
+        plane,
+    )
+    .map_err(|error| CliError::Io(format!("control server stopped: {error:?}")))
+}
+
 fn status_request() -> audiorouter_protocol::JsonRpcRequest {
     audiorouter_protocol::JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -1527,7 +1560,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list [--limit N] [--cursor ID]", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N] [--cursor REVISION]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> [--idempotency-key <key>] [--dry-run] --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client." });
+    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list [--limit N] [--cursor ID]", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N] [--cursor REVISION]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> [--idempotency-key <key>] --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "backend serve --database <path> [--pipe \\\\.\\pipe\\audiorouter-control] [--connections 1..500]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client; the bounded backend server requires the current Windows user to be enrolled in the database." });
     value["commands"][2] =
         json!("diagnostics [export] [--database <path>] [--output <absolute-path>]");
     value["commands"]

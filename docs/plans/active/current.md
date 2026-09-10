@@ -77,6 +77,18 @@ configuration changes.
   to provide a bounded, explicitly configured backend service/session for this
   shell and validate a UI-to-control request without touching the live audio
   graph.
+- Added the bounded `audiorouter backend serve` entry point on 2026-09-09.
+  It opens the selected absolute SQLite database, requires the current Windows
+  user to already have a stored enrollment, and delegates to the existing
+  owner-only, same-user authenticated control-pipe server for 1--500
+  connections. A new Windows integration test spawned the CLI backend, sent a
+  framed `system.describe` request through the native client, verified the
+  response, and confirmed clean process exit; the existing MCP pipe and stdio
+  integration tests also passed (3/3). `cargo fmt --all` and the CLI test target
+  passed. No audio endpoint, driver, plugin registration, or persistent machine
+  audio configuration was touched. The service is intentionally bounded for
+  development/acceptance; unbounded production lifecycle and shutdown ownership
+  remain open release work.
 - The user supplied additional local plugin fixtures under `third_party/vst/`
   on 2026-09-09: BUSTERse VST2/VST3, COMPER x64 VST3 plus AAX material, and TDR
   Nova Win32/x64 VST2/VST3 plus AAX material. The inventory is documented in
