@@ -1181,6 +1181,18 @@ cleanup path, not proof of the production managed-driver callback or physical
 latency gate. No defaults, volume, mute, privacy, driver, signing, startup, or
 persistent machine audio setting changed.
 
+## Native endpoint contention sweep (2026-09-09)
+
+The authorized 100 ms endpoint sweep passed across all 13 capture and 18
+render endpoints. Every capture endpoint completed initialize/start/stop/reset;
+one already-occupied render endpoint returned the expected
+`0x8889000A` (`AUDCLNT_E_DEVICE_IN_USE`) branch and completed cleanup, while
+the remaining render endpoints completed the normal lifecycle. The media
+snapshot and persistent configuration were unchanged. This current-state
+result distinguishes ordinary render ownership contention from the earlier
+capture `E_INVALIDARG` observation; it does not close the production driver or
+physical-latency gates.
+
 ## Native process-loopback include/exclude requalification (2026-09-09)
 
 The explicitly authorized bounded process-loopback checks passed:

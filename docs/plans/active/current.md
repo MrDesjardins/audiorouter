@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `99080774`; later commits after
+The active branch is currently pushed through `cbe48db9`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -86,6 +86,14 @@ configuration changes.
   stopped/reset and media state was unchanged. This is user-mode adapter
   evidence only; managed-driver ownership, production callback timing, and
   calibrated physical latency remain open.
+
+- Requalified the current native endpoint contention boundary on 2026-09-09
+  with the authorized 100 ms sweep: all 13 capture and 18 render endpoints
+  completed lifecycle, with one occupied render endpoint taking the expected
+  `AUDCLNT_E_DEVICE_IN_USE` path. Media state and persistent configuration
+  were unchanged. This supports the distinction between ordinary render
+  ownership contention and the earlier capture `E_INVALIDARG` result; it does
+  not claim production driver or physical-latency completion.
 
 - Extracted the M08 bounded x64 PE validator into
   `tools/release/pe-validation.ps1` on 2026-09-10 and added focused negative
