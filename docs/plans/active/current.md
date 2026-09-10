@@ -580,6 +580,14 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the event-driven native lifecycle probe on 2026-09-10 with
+  `tests/acceptance/m00-native-event-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 750`: the selected VB-Audio endpoints produced 36,480
+  capture frames and 40,320 render frames, and the bounded start/reset/stop
+  sequence passed. Silent render was used; defaults, volume, mute, privacy,
+  drivers, signing, startup, and other persistent audio configuration remained
+  unchanged.
+
 - Requalified the rollback-checked live `tests/acceptance/m02-rust-adapter-
   bridge-live.ps1 -AllowLiveAudio -DurationMilliseconds 750` probe on
   2026-09-10 against the existing VB-Audio endpoints: 36,480 capture and
