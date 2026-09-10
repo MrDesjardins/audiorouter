@@ -496,6 +496,16 @@ plugin-host suite to 22 tests with strict Clippy clean. This is transport
 evidence only; native process creation and shared-memory audio transport remain
 open.
 
+## VST2 editor containment matrix (2026-09-09)
+
+`tests/acceptance/m06-vst2-editor.ps1` passed both the non-returning editor
+thread bound and supervised editor-timeout/reaping test for all six local
+ReaPlugs x64 fixtures (12/12 focused worker tests). The tests used disposable
+workers and restored the fixture environment; no plugin registration, audio
+stream, or machine configuration changed. This qualifies containment and
+failure handling only, not native editor usability, HWND ownership, or plugin
+redistribution rights.
+
 Added `audiorouter-plugin-worker`, a disposable process protocol fixture. It
 negotiates the plugin fingerprint and channel count, accepts `Ready`, validates
 and echoes framed process buffers, echoes latency reports, and exits on

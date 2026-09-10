@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `3f113dd8`; later commits after
+The active branch is currently pushed through `d67a500e`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -44,6 +44,13 @@ configuration changes.
   crash/hang fixtures were contained with timeout/reaping. The generated
   fixtures remained ignored/local-only, environment variables were restored,
   and no plugin registration, audio stream, or machine configuration changed.
+
+- Requalified the local VST2 editor containment matrix on 2026-09-09: all six
+  ReaPlugs x64 fixtures passed the non-returning editor-thread bound and
+  supervised timeout/reaping checks (12/12 focused tests). Workers were
+  disposable and the fixture environment was restored; no plugin registration,
+  audio stream, or machine configuration changed. Native editor usability,
+  authenticated HWND ownership, and redistribution rights remain open.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
