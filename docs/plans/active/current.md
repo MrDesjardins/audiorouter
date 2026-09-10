@@ -6239,6 +6239,15 @@ the one already documented above. No machine audio configuration was changed.
   endpoint, driver, plugin registration, or persistent machine configuration
   was touched.
 
+- Re-ran the focused plugin-host suites directly on 2026-09-10 with
+  `cargo test -p audiorouter-plugin-host --all-features --locked`. The host
+  library passed 67 tests; the worker-process suite passed 35 tests with 10
+  fixture-dependent tests correctly ignored. Coverage included VST2 legacy
+  ABI boundaries, state/failure containment, VST3 bus contracts, protected
+  paths, and bounded worker lifecycle. A post-run temp-root scan found zero
+  direct `audiorouter-*` artifacts; no plugin registration, audio stream,
+  driver action, or persistent machine configuration occurred.
+
 - Requalified the guarded native endpoint lifecycle on 2026-09-10 with
   `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 100`. It enumerated 13 capture and 18 render
