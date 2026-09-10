@@ -196,6 +196,16 @@ configuration changes.
   installed or loaded, and no plugin/startup registration, signing-mode
   change, audio stream, or persistent machine audio setting was touched.
 
+- Requalified the explicitly authorized reversible VB-Audio signal path on
+  2026-09-10 at 00:35. The named virtual render/capture pair completed tone,
+  capture, stop, and reset; capture contained 210,664 nonzero bytes, and the
+  before/after media snapshot matched. Temporary probe binaries/logs were
+  removed. This proves propagation through the existing third-party virtual
+  cable only; AudioRouter-managed virtual-device creation, production callback,
+  and physical-latency gates remain open. Defaults, volume, mute, privacy,
+  drivers, signing, startup, and persistent machine audio settings were
+  unchanged.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
