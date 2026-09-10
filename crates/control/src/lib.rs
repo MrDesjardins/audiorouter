@@ -15,8 +15,8 @@ use audiorouter_protocol::{
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
 };
 use audiorouter_recording::{
-    RecorderController, RecorderState, RecordingChunk, RecordingError, RecordingQueue, WavFormat,
-    WavRecorder, WavWriter,
+    BufferedFlacRecorder, RecorderController, RecorderState, RecordingChunk, RecordingError,
+    RecordingQueue, WavFormat, WavRecorder, WavWriter,
 };
 use audiorouter_storage::{
     GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_PENDING_PLAN_RECORDS,
@@ -175,6 +175,96 @@ impl RecorderWorker for WavRecorderWorker {
         output
             .sync_all()
             .map_err(|error| format!("WAV file sync failed: {error}"))?;
+        Ok(RecorderFinalizationOutcome {
+            state: "completed".into(),
+            file_finalized: true,
+            recoverable: false,
+        })
+    }
+}
+
+/// Concrete buffered-FLAC worker for offline and non-realtime recording
+/// integration. The encoder retains compressed output until finalization;
+/// native realtime wiring must use the streaming worker once that adapter is
+/// available.
+pub struct BufferedFlacRecorderWorker {
+    recorder: Option<BufferedFlacRecorder>,
+    queue: RecordingQueue,
+    output: Option<std::fs::File>,
+    maximum_chunks_per_pass: usize,
+}
+
+impl BufferedFlacRecorderWorker {
+    pub fn new(
+        output: std::fs::File,
+        channels: usize,
+        sample_rate: u32,
+        bits_per_sample: u8,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<Self, String> {
+        if maximum_chunks_per_pass == 0 {
+            return Err("maximum recorder drain pass must be positive".into());
+        }
+        let recorder = BufferedFlacRecorder::new(channels, sample_rate, bits_per_sample)
+            .map_err(|error| format!("FLAC writer initialization failed: {error:?}"))?;
+        let queue = RecordingQueue::new(queue_capacity)
+            .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        Ok(Self {
+            recorder: Some(recorder),
+            queue,
+            output: Some(output),
+            maximum_chunks_per_pass,
+        })
+    }
+
+    pub fn arm(&mut self) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
+            .arm()
+            .map_err(|error| format!("FLAC recorder arm failed: {error:?}"))
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
+            .start(frame)
+            .map_err(|error| format!("FLAC recorder start failed: {error:?}"))
+    }
+
+    pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        self.queue.try_push(chunk)
+    }
+}
+
+impl RecorderWorker for BufferedFlacRecorderWorker {
+    fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+        let mut recorder = self
+            .recorder
+            .take()
+            .ok_or_else(|| "FLAC recorder was finalized more than once".to_owned())?;
+        loop {
+            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                Ok(_) => break,
+                Err(RecordingError::QueueNotEmpty) => continue,
+                Err(error) => {
+                    self.recorder = Some(recorder);
+                    return Err(format!("FLAC recorder finalization failed: {error:?}"));
+                }
+            }
+        }
+        let encoded = recorder
+            .finish()
+            .map_err(|error| format!("FLAC encoding failed: {error:?}"))?;
+        let mut output = self
+            .output
+            .take()
+            .ok_or_else(|| "FLAC output was already finalized".to_owned())?;
+        std::io::Write::write_all(&mut output, &encoded)
+            .and_then(|()| output.sync_all())
+            .map_err(|error| format!("FLAC file finalization failed: {error}"))?;
         Ok(RecorderFinalizationOutcome {
             state: "completed".into(),
             file_finalized: true,
@@ -9794,6 +9884,53 @@ mod tests {
         let result = plane.session_stop(&original.id).unwrap();
         assert_eq!(result["recorders"][0]["fileFinalized"], true);
         let info = audiorouter_recording::inspect_wav_file(&path).unwrap();
+        assert_eq!(info.frames, 2);
+        assert_eq!(info.sample_rate, 48_000);
+        assert_eq!(
+            plane.recorders[&original.id].state(),
+            RecorderState::Completed
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn concrete_buffered_flac_worker_finalizes_before_session_stop() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-worker-{}.flac",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        let mut worker = BufferedFlacRecorderWorker::new(file, 1, 48_000, 16, 8, 1).unwrap();
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        worker
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.25, -0.25],
+            })
+            .unwrap();
+
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane.session_start(&original.id).unwrap();
+        let mut recorder = RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        recorder.advance(2).unwrap();
+        plane.recorders.insert(original.id.clone(), recorder);
+        plane
+            .attach_recorder_worker(original.id.clone(), Box::new(worker))
+            .unwrap();
+
+        let result = plane.session_stop(&original.id).unwrap();
+        assert_eq!(result["recorders"][0]["fileFinalized"], true);
+        let info = audiorouter_recording::inspect_flac_file(&path).unwrap();
         assert_eq!(info.frames, 2);
         assert_eq!(info.sample_rate, 48_000);
         assert_eq!(

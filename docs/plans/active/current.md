@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `ffd9cbeb`; the
+The latest clean full M00-M08 acceptance passed at pushed head `4ac4e240`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `983f1666`; later commits after
+The active branch is currently pushed through `0d528b30`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -267,6 +267,13 @@ configuration changes.
   two-frame file and completed control state; control tests passed 103/103 and
   strict Clippy passed. The native graph still needs to construct and feed this
   worker at an actual recording start boundary; no audio device was opened.
+
+- Added a concrete buffered-FLAC worker on 2026-09-10. It follows the same
+  queue-drain and finalization contract, writes and syncs a valid FLAC file,
+  and passed a two-frame session-stop regression alongside 104/104 control
+  tests and strict Clippy. Its full encoded output remains memory-buffered by
+  the recording primitive; streaming FLAC and native graph attachment remain
+  separate gates.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
   `4ac4e240` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
