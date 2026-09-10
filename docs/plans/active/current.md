@@ -42,6 +42,17 @@ configuration changes.
   invocation still an open acceptance gate; no audio stream, driver,
   signing, registration, or persistent machine configuration changed.
 
+- Repeated the shell proof on 2026-09-09 with a corrected process harness
+  that explicitly set `AUDIOROUTER_CONTROL_PIPE` inside the backend and shell
+  child commands; the earlier isolated-environment harness could have hidden
+  a default-pipe mismatch. The elevated shell and enrolled backend both
+  launched with the same disposable pipe, but the backend remained waiting
+  after five seconds. A WebView2 localhost DevTools attempt was also
+  unavailable for the embedded host. Exact temporary state and process trees
+  were removed. This strengthens the conclusion that interactive WebView2
+  observation is still required; it does not indicate an audio-device
+  ownership failure or change any machine audio configuration.
+
 - Requalified the locked all-features workspace on 2026-09-09 after the shell
   lifecycle change: all workspace unit and integration tests passed (including
   the native-gated plugin tests that were not applicable), all doc-tests passed,
