@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the six available user-provided ReaPlugs x64 VST2 effects on
+  2026-09-10 with `tests/acceptance/m06-vst2-reaplugs.ps1` at 44.1, 48, and
+  96 kHz: all 18 effect/rate combinations passed through disposable workers,
+  including parameter-offset and before/after binary-integrity checks. The
+  original DLLs were used in place and no plugin registration or audio
+  configuration changed.
+
 - Requalified exact endpoint-ID routed adapter binding on 2026-09-10 with
   `tests/acceptance/m02-rust-adapter-route-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 500`: 24,480 frames were captured, 24,448 frames
