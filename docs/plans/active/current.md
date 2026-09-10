@@ -107,6 +107,15 @@ configuration has occurred.
   repository-local test fixtures and were not committed; no plugin
   registration, audio stream, or machine configuration changed.
 
+- Requalified the M02 Rust adapter smoke path on 2026-09-10 for 750 ms. The
+  initial non-elevated invocation failed closed at the read-only media
+  snapshot with `Get-PnpDevice` access denied (`0x80041003`); the elevated
+  retry passed with 36,480 captured/processed frames, 285 graph quanta,
+  generation 1, zero pending frames, zero xruns/overruns, and zero deadline
+  misses. Processing p99.9 was 65,536 ns against a 2,666,667 ns deadline.
+  Streams stopped/reset and media identity/state were unchanged. This is
+  user-mode built-in graph evidence, not managed-driver callback evidence.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
