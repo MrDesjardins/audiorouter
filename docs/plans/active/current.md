@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `1deb9cda`; later commits after
+The active branch is currently pushed through `9904700d`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -5854,6 +5854,29 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M05/M06 task: retain verified identity as display-only until the authenticated native shell and managed process-capture owner are integrated; continue independent plugin qualification and native gates.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at pushed head `f6b394e2` on 2026-09-08 after the verified application identity UI panel: M00 toolchain/native compile and read-only 31-endpoint inventory, disposable pinned SysVAD x64 package/API/signability qualification, M01/M04, M05 UI (typecheck, 15 files/93 tests, temporary production build), M06 SDK/VST3 and VST2 fixtures, M07, unsigned M08 preparation, 159 normative traceability mappings, and documentation validation (51 Markdown files/161 local links) passed. Temporary outputs/checkouts were removed; no driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred. Production/native release gates remain open.
 - Next M05/M06 task: retain the read-only identity presentation until authenticated native-shell/process-capture integration exists; qualify an independent rights-cleared plugin when supplied and continue the remaining native release gates.
+
+## Current handoff — 2026-09-10
+
+Latest pushed checkpoint: `9904700d` (`docs: advance VST3 SDK checkpoint`). The
+working tree is clean and `main` is pushed. Since the last complete guarded
+M00-M08 acceptance, the native VST3 worker and pinned SDK qualification have
+both been re-run successfully; the active evidence remains valid for the
+portable and disposable Windows boundaries. No driver installation/loading,
+signing-mode change, plugin or startup registration, audio stream, or persistent
+machine audio configuration was performed.
+
+The next actionable task is elevated M07 shell-RPC qualification. The current
+attempt is blocked before launch because the PowerShell session is not elevated
+and the packaged WebView2 setup requires administrator rights. If an elevated
+session is available, run `tests/acceptance/m07-shell-rpc.ps1` and record the
+result. Otherwise continue portable/native disposable work while preserving the
+production-driver, signing, installer, clean-machine, physical-latency, manual
+UI, and independent rights-cleared plugin gates.
+
+Rollback: documentation-only changes can be reverted by restoring this file;
+no machine or external audio configuration was changed. After the next
+meaningful result, update this handoff with the exact command, environment,
+result, evidence, and next task before committing and pushing.
 
 ## Current handoff — 2026-09-10
 
