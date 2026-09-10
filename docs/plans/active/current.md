@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `e90dfdf0`; later commits after
+The active branch is currently pushed through `2d0268d4`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -115,10 +115,10 @@ configuration changes.
   PE architecture and format, then use the contained worker matrix for x64
   processing/state/editor evidence. Do not load AAX or execute Win32 variants.
 
-Next action: connect the compiled Tauri shell to a bounded backend service and
-authenticated session using the existing control-plane transport, then validate
-one UI-to-control request without touching the live audio graph. After that,
-continue the loopback/device path with reversible endpoint snapshots. Preserve
+Next action: perform the first runtime Tauri-shell-to-backend request check
+against the bounded authenticated service without touching the live audio graph.
+At the next authorized live-audio window, run the reversible VB-Audio endpoint
+loopback snapshot test and restore/compare media state. Preserve
 the production driver callback, signing, installer, clean-machine,
 physical-latency, editor, and independent-plugin gates as separate prerequisites
 rather than claiming release completion.
