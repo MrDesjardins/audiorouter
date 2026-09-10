@@ -5857,7 +5857,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 ## Current handoff — 2026-09-10
 
-Latest pushed checkpoint: `9904700d` (`docs: advance VST3 SDK checkpoint`). The
+Latest pushed checkpoint: `ce965c61` (`docs: record Pitchproof VST2 requalification`). The
 working tree is clean and `main` is pushed. Since the last complete guarded
 M00-M08 acceptance, the native VST3 worker and pinned SDK qualification have
 both been re-run successfully; the active evidence remains valid for the
