@@ -14,6 +14,29 @@ if (-not (Test-Path -LiteralPath $PluginPath -PathType Leaf)) {
     throw "Installed VST2 fixture was not found: $PluginPath"
 }
 
+function Get-PeMachine([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        if ($stream.Length -lt 64) { return $null }
+        $dos = [byte[]]::new(64)
+        if ($stream.Read($dos, 0, $dos.Length) -ne $dos.Length -or $dos[0] -ne 0x4d -or $dos[1] -ne 0x5a) { return $null }
+        $peOffset = [BitConverter]::ToInt32($dos, 0x3c)
+        if ($peOffset -lt 0 -or $peOffset + 6 -gt $stream.Length) { return $null }
+        $stream.Position = $peOffset
+        $pe = [byte[]]::new(6)
+        if ($stream.Read($pe, 0, $pe.Length) -ne $pe.Length -or $pe[0] -ne 0x50 -or $pe[1] -ne 0x45 -or $pe[2] -ne 0 -or $pe[3] -ne 0) { return $null }
+        return [BitConverter]::ToUInt16($pe, 4)
+    } finally {
+        $stream.Dispose()
+    }
+}
+
+$machine = Get-PeMachine $PluginPath
+if ($machine -ne 0x8664) {
+    if ($null -eq $machine) { throw 'Selected VST2 binary has an invalid or unreadable PE header; x64 is required.' }
+    throw "Selected VST2 binary has unsupported PE machine 0x$('{0:X4}' -f $machine); x64 is required."
+}
+
 $initialFile = Get-Item -LiteralPath $PluginPath
 $initialSize = $initialFile.Length
 $hash = (Get-FileHash -LiteralPath $PluginPath -Algorithm SHA256).Hash.ToLowerInvariant()
