@@ -123,6 +123,7 @@ version = "0.1.0"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-dsp",
+ "audiorouter-engine",
  "audiorouter-plugin-host",
  "audiorouter-protocol",
  "audiorouter-recording",
