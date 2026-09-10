@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the guarded native endpoint lifecycle/contention probe on
+  2026-09-10 with `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 100`: all 13 capture and 18 render endpoints passed
+  bounded lifecycle checks, including one occupied render endpoint on the
+  expected contention branch. Defaults, volume, mute, privacy, drivers,
+  signing, startup, and persistent audio configuration remained unchanged.
+
 - Requalified the native process-loopback exclusion probe on 2026-09-10 with
   `tests/acceptance/m00-native-process-exclude-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 500`: the disposable child was excluded from the
