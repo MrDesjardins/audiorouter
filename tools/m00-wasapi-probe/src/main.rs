@@ -711,11 +711,16 @@ fn adapter_bridge_smoke(
         generation,
         vec![ProcessingStage::Gain { linear: 0.5 }],
     ));
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| AudioError::InvalidFrameSize)?
+        .as_nanos();
     let recording_path = std::env::temp_dir().join(format!(
         "audiorouter-bridge-recording-{}-{}.flac",
         std::process::id(),
-        capture_info.id.len()
+        nonce
     ));
+    let recording_cleanup = TemporaryRecording::new(recording_path.clone());
     let recording_file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -811,8 +816,24 @@ fn adapter_bridge_smoke(
     let capture_stop = capture.stop();
     let render_stop = render.stop();
     let result = result.and(capture_stop).and(render_stop);
-    let _ = std::fs::remove_file(recording_path);
+    drop(recording_cleanup);
     result
+}
+
+struct TemporaryRecording {
+    path: std::path::PathBuf,
+}
+
+impl TemporaryRecording {
+    fn new(path: std::path::PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl Drop for TemporaryRecording {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
 }
 
 struct CombinedTap<'a> {
