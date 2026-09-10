@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `eb8b1777`; later commits after
+The active branch is currently pushed through `c14c0fbe`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -5857,7 +5857,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 ## Current handoff — 2026-09-10
 
-Latest pushed checkpoint: `93124bfd`. Since the prior full acceptance, the
+Latest pushed checkpoint: `c14c0fbe`. Since the prior full acceptance, the
 guarded native endpoint lifecycle, impulse correlation, endpoint loopback,
 process-loopback include/exclude, event-mode lifecycle, Rust adapter telemetry,
 workspace regression, ReaPlugs classification, and Pitchproof x64 processing/
