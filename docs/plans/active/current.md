@@ -47,6 +47,14 @@ configuration changes.
   change is committed. The shell remains unsigned and no installer, driver,
   audio stream, or machine configuration is involved.
 
+- Completed the clean M08 rerun on 2026-09-09 after adding the native shell:
+  optimized CLI/plugin-worker and standalone Tauri shell builds succeeded;
+  the UI archive, Cargo/npm provenance, notices, checksums, unsigned status,
+  blocker metadata, and required-artifact verifier all passed. The temporary
+  release directory was removed. This qualifies unsigned artifact preparation
+  only; installer, production signing, driver installation, and clean-machine
+  gates remain open, and no audio or machine configuration changed.
+
 - Added an explicit native-shell host bridge in `src-tauri/src/main.rs` on
   2026-09-09. The initialization script now publishes the validated session
   ID and a bounded `AudioRouterHostBridge` whose transport invokes the
