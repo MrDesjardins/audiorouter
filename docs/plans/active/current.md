@@ -185,6 +185,13 @@ change, or persistent machine audio configuration has occurred.
   installed or loaded, test-signing mode was changed, or machine audio
   configuration touched.
 
+- Requalified M05 UI acceptance directly on 2026-09-10 with
+  `tests\\acceptance\\m05-ui.ps1`. TypeScript typecheck, all 17 UI test files
+  and 121 tests, and the disposable 213-module production build passed. The
+  temporary build output was removed and a temp-root scan found zero
+  `audiorouter-*` artifacts. This was UI-only validation; no audio, driver, or
+  machine configuration changed.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
