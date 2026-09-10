@@ -107,6 +107,15 @@ fn main() {
                 .build()?;
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // Closing the editor must not tear down an independently owned
+                // backend/audio process. A future tray Quit action will use an
+                // explicit stop/finalize path before allowing application exit.
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running AudioRouter shell");
 }

@@ -113,6 +113,13 @@ configuration changes.
   elevated interactive desktop token, not an authenticated RPC response or
   audio-path failure; the shell/HWND gate remains open.
 
+- Added the native shell close policy on 2026-09-09: a window close request is
+  prevented and the editor window is hidden, leaving the separately owned
+  backend/audio process untouched. The code documents that explicit Quit must
+  later finalize recorders and stop the backend before exit; tray construction,
+  authenticated HWND runtime proof, and manual close/quit acceptance remain
+  open.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
