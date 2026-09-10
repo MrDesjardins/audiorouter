@@ -116,6 +116,14 @@ configuration has occurred.
   Streams stopped/reset and media identity/state were unchanged. This is
   user-mode built-in graph evidence, not managed-driver callback evidence.
 
+- Requalified the explicit M02 Rust adapter route on 2026-09-10 for 500 ms
+  against the selected VB-Audio Cable endpoints. It processed 24,480 capture
+  frames across 191 graph blocks and routed 24,448 scheduler frames, with
+  65,536 ns p99.9 processing time against a 2,666,667 ns deadline and zero
+  deadline misses or lateness. The selected endpoints were both 48 kHz in
+  this run, so this is route accounting rather than differing-rate evidence;
+  stream teardown and media-state preservation passed.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
