@@ -3660,11 +3660,31 @@ impl RuntimeProcessor {
         self.process_ring_once_with_deadline(input, output, None)
     }
 
+    fn process_ring_once_with_tap(
+        &self,
+        input: &AudioBlockRing,
+        output: &AudioBlockRing,
+        start_frame: u64,
+        tap: &dyn AudioTap,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        self.process_ring_once_with_deadline_and_tap(input, output, None, Some((start_frame, tap)))
+    }
+
     fn process_ring_once_with_deadline(
         &self,
         input: &AudioBlockRing,
         output: &AudioBlockRing,
         deadline: Option<std::time::Instant>,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        self.process_ring_once_with_deadline_and_tap(input, output, deadline, None)
+    }
+
+    fn process_ring_once_with_deadline_and_tap(
+        &self,
+        input: &AudioBlockRing,
+        output: &AudioBlockRing,
+        deadline: Option<std::time::Instant>,
+        tap: Option<(u64, &dyn AudioTap)>,
     ) -> Result<Option<RuntimeGeneration>, BlockError> {
         let Some(block) = input.try_receive() else {
             return Ok(None);
@@ -3688,7 +3708,10 @@ impl RuntimeProcessor {
         input
             .try_recycle(block)
             .map_err(|_| BlockError::ShapeMismatch)?;
-        let generation = self.process(&mut destination);
+        let generation = match tap {
+            Some((start_frame, tap)) => self.process_with_tap(&mut destination, start_frame, tap),
+            None => self.process(&mut destination),
+        };
         if let Some(deadline) = deadline {
             self.metrics.record_deadline(deadline);
         }
@@ -3864,6 +3887,19 @@ impl RealtimeScheduler {
     /// Execute one nonblocking ownership-preserving scheduler step.
     pub fn process_once(&self) -> Result<Option<RuntimeGeneration>, BlockError> {
         self.processor.process_ring_once(&self.input, &self.output)
+    }
+
+    /// Execute one nonblocking scheduler step and forward the processed
+    /// quantum to a caller-owned realtime tap. The supplied frame is the
+    /// scheduler's timeline boundary and must advance monotonically per
+    /// submitted input quantum.
+    pub fn process_once_with_tap(
+        &self,
+        start_frame: u64,
+        tap: &dyn AudioTap,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        self.processor
+            .process_ring_once_with_tap(&self.input, &self.output, start_frame, tap)
     }
 
     /// Execute one nonblocking scheduler step and compare its completed
@@ -4207,6 +4243,27 @@ mod tests {
         );
         assert_eq!(tap.calls.load(Ordering::Relaxed), 1);
         assert_eq!(tap.last_frame.load(Ordering::Relaxed), 20);
+    }
+
+    #[test]
+    fn realtime_scheduler_forwards_processed_quantum_to_tap() {
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        scheduler.publish(RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]));
+        let mut input = scheduler.acquire_input().unwrap();
+        input.channel_mut(0).unwrap().fill(0.5);
+        scheduler.submit_input(input).unwrap();
+        let tap = CountingTap {
+            calls: AtomicU64::new(0),
+            last_frame: AtomicU64::new(0),
+        };
+        assert_eq!(
+            scheduler.process_once_with_tap(40, &tap).unwrap(),
+            Some(RuntimeGeneration::new(1))
+        );
+        assert_eq!(tap.calls.load(Ordering::Relaxed), 1);
+        assert_eq!(tap.last_frame.load(Ordering::Relaxed), 40);
+        let output = scheduler.receive_output().unwrap();
+        scheduler.output().try_recycle(output).unwrap();
     }
 
     #[test]
