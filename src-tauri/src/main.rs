@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
-use tauri::{State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{menu::{Menu, MenuItem}, tray::TrayIconBuilder, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 
@@ -99,6 +99,27 @@ fn main() {
         .invoke_handler(tauri::generate_handler![rpc_request, session_id])
         .setup(move |app| {
             let session_script = session_script.clone();
+            let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
+            let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &close])?;
+            TrayIconBuilder::with_id("audiorouter")
+                .menu(&menu)
+                .tooltip("AudioRouter")
+                .on_menu_event(|app, event| {
+                    let Some(window) = app.get_webview_window("main") else { return; };
+                    match event.id().as_ref() {
+                        "open" => {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                        "close" => {
+                            let _ = window.hide();
+                        }
+                        _ => {}
+                    }
+                })
+                .build(app)?;
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("AudioRouter")
                 .inner_size(1280.0, 800.0)

@@ -120,6 +120,15 @@ configuration changes.
   authenticated HWND runtime proof, and manual close/quit acceptance remain
   open.
 
+- Added the first native tray slice on 2026-09-10. The shell now creates a
+  bundled tray entry with Open AudioRouter and Close window actions; Open
+  restores, unminimizes, and focuses the hidden window, while Close hides it
+  without touching the backend. The Tauri tray feature, shell unit tests,
+  strict Clippy, and release build pass. Tray session-state/mute/recording
+  status and explicit Quit-and-stop remain open until the backend exposes a
+  safe finalize/stop command and an elevated interactive runtime proves the
+  menu behavior.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native

@@ -14,7 +14,7 @@ audiorouter-protocol = { path = "../crates/protocol" }
 audiorouter-transport = { path = "../crates/transport" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.151"
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.11.5", features = ["tray-icon"] }
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
