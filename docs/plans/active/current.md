@@ -142,6 +142,15 @@ configuration has occurred.
   were removed. This is bounded shared-mode resampler stability evidence, not
   independent-clock lock, managed-driver timing, or physical latency proof.
 
+- Requalified native process-loopback attribution on 2026-09-10. The
+  disposable-child include path captured 21,609 frames and 77,823 nonzero
+  bytes over 500 ms; the exclusion path captured 22,050 frames while
+  excluding the selected child tree. Both tests completed child cleanup and
+  API lifecycle checks, and a temp-root scan found zero `audiorouter-*`
+  artifacts. This validates Windows process-loopback include/exclude modes,
+  not a full cross-process isolation threshold or managed-driver path; no
+  persistent audio configuration changed.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
