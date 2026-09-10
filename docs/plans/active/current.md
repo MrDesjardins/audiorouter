@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `dee26c58`; later commits after
+The active branch is currently pushed through `d0118f7d`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -5882,6 +5882,12 @@ the supplied x86 Pitchproof binary was rejected as `0x014C`, while the x64
 binary passed processing/state/editor qualification at 44.1, 48, and 96 kHz
 with its fingerprint unchanged. No plugin registration or audio configuration
 action occurred.
+
+The repository VST2 state/legacy fixture matrix was requalified on 2026-09-10:
+modern and legacy entry points, chunk-state restoration at 44.1/48/96 kHz,
+non-finite-output rejection, crash containment, and hang containment all passed
+in disposable workers. No plugin registration or audio configuration action
+occurred.
 - Fixed M08 release reproducibility on 2026-09-10: `src-tauri/Cargo.lock` now includes the recently added `audiorouter-engine` workspace dependency, allowing the native shell release build to honor `--locked`. The lockfile refresh was committed and pushed as `9f6d1a5d`; `cargo generate-lockfile` resolved the intended one-package lockfile delta, and the release input tree remained clean before acceptance.
 - Re-ran `tests/acceptance/m08-release.ps1` at `9f6d1a5d` on 2026-09-10 with the installed VS2026/Rust toolchain: release CLI/plugin-host build, UI typecheck/Vite build, native shell release build, unsigned artifact preparation, SBOM structure checks, and artifact verification passed. Disposable output was removed by the test's `finally` block. No installer, driver, signing, plugin registration, audio stream, or persistent machine audio configuration action occurred.
 - Next M00/M02 task: retain the structured diagnostics and portable scheduler/tap boundaries while connecting them to the managed endpoint-owned callback after the production virtual-device driver boundary exists; separately retain the authenticated elevated-shell, signed-driver, installer, clean-machine, physical-latency, manual-UI, and rights-cleared independent-plugin gates.
