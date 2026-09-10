@@ -27,6 +27,14 @@ describe("native host bridge", () => {
     await expect(pending).rejects.toThrow("closed");
   });
 
+  it("rejects a pending Tauri request immediately on disposal", async () => {
+    const core = { invoke: vi.fn(() => new Promise(() => undefined)) };
+    const transport = new TauriRpcTransport(core, 1000);
+    const pending = transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" });
+    transport.dispose();
+    await expect(pending).rejects.toThrow("closed");
+  });
+
   it("turns a synchronous Tauri invoke failure into a rejected request", async () => {
     const transport = new TauriRpcTransport({ invoke: vi.fn(() => { throw new Error("bridge unavailable"); }) });
     await expect(transport.send({ jsonrpc: "2.0", id: 1, method: "session.snapshot" })).rejects.toThrow("bridge unavailable");

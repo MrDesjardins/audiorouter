@@ -98,7 +98,7 @@ export class WebView2RpcTransport implements RpcTransport {
 
 /** Bounded JSON-RPC transport for a Tauri 2 command bridge. */
 export class TauriRpcTransport implements RpcTransport {
-  private readonly pending = new Set<string>();
+  private readonly pending = new Map<string, (error: Error) => void>();
   private closed = false;
   private generation = 0;
 
@@ -114,7 +114,11 @@ export class TauriRpcTransport implements RpcTransport {
     if (this.pending.has(key)) return Promise.reject(new Error("Tauri request ID is already pending"));
     if (this.pending.size >= this.maxPending) return Promise.reject(new Error("Tauri transport pending request limit reached"));
     const generation = this.generation;
-    this.pending.add(key);
+    let rejectDisposed: (error: Error) => void = () => undefined;
+    const disposedPromise = new Promise<JsonRpcResponse>((_, reject) => {
+      rejectDisposed = reject;
+    });
+    this.pending.set(key, rejectDisposed);
     let invocation: Promise<unknown>;
     try {
       invocation = Promise.resolve(this.core.invoke("rpc_request", { request }));
@@ -133,6 +137,7 @@ export class TauriRpcTransport implements RpcTransport {
         return response;
       }),
       timeoutPromise,
+      disposedPromise,
     ]).finally(() => {
       clearTimeout(timeout);
       this.pending.delete(key);
@@ -143,7 +148,9 @@ export class TauriRpcTransport implements RpcTransport {
     if (this.closed) return;
     this.closed = true;
     this.generation += 1;
+    const pending = [...this.pending.values()];
     this.pending.clear();
+    for (const reject of pending) reject(new Error("Tauri transport is closed"));
   }
 }
 
