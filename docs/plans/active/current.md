@@ -82,6 +82,15 @@ configuration has occurred.
   session remains required; this is not an `E_INVALIDARG` or endpoint
   contention result.
 
+- Requalified the pinned native VST3 worker matrix directly on 2026-09-10 with
+  `tests/acceptance/m06-vst3-worker.ps1`. Isolated AGain single-stream and
+  auxiliary-bus processing, asynchronous graph staging, bounded failure
+  recovery, validated state restoration, repeated-quanta timing, finite
+  transformed output, and bounded shutdown all passed. The repository-local
+  worker and fixture were used without plugin registration or audio streams;
+  a temp-root scan found zero `audiorouter-*` artifacts and no machine audio
+  configuration changed.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
