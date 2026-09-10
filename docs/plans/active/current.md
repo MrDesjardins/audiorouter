@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `0ab6aa19`; the
+The latest clean full M00-M08 acceptance passed at pushed head `fec0df35`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -22,11 +22,20 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `037ac0ac`; later commits after
+The active branch is currently pushed through `fec0df35`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
+
+- Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
+  head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
+  qualification, M01/M04/M05/M06/M07 acceptance, M08 unsigned artifact
+  preparation and traceability, and documentation validation all passed. The
+  run removed all 13 owned temporary children. This evidence excludes live
+  audio, driver installation, signing-mode changes, plugin registration,
+  startup registration, and persistent machine audio configuration changes.
 
 - Extracted the M08 bounded x64 PE validator into
   `tools/release/pe-validation.ps1` on 2026-09-10 and added focused negative
