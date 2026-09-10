@@ -192,6 +192,11 @@ change, or persistent machine audio configuration has occurred.
   `audiorouter-*` artifacts. This was UI-only validation; no audio, driver, or
   machine configuration changed.
 
+- Requalified standalone M01 CLI acceptance directly on 2026-09-10 with
+  `tests\\acceptance\\m01-cli.ps1`; it passed. This check is control-plane
+  validation only and performed no audio, driver, plugin-registration, or
+  persistent machine configuration action.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
