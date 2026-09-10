@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest clean full M00-M08 acceptance passed at pushed head `4ac4e240`; the
+The latest clean full M00-M08 acceptance passed at pushed head `96a75921`; the
 latest portable metering checkpoint is `ca4aafd0`; the latest guarded/live
 qualification checkpoint is `977188a5`; later
 commits only update the execution evidence below. The focused native auxiliary-bus
@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `54c855f7`; later commits after
+The active branch is currently pushed through `380f77fb`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -5860,6 +5860,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Added the M00/M02 native packet format boundary on 2026-09-10 at pushed head `c55227da`: `windows-audio` now exposes bounded allocation-free conversion between caller-owned interleaved IEEE float32 WASAPI bytes and the engine's planar `AudioBlock`, sanitizing non-finite capture samples and rejecting wrong shapes before access. The focused Windows-audio suite passed 35 tests, strict Clippy passed, and formatting passed. The root lockfile was synchronized for the new adapter dependency. This remains a conversion contract; endpoint activation, scheduler ownership, production virtual-device lifecycle, and callback timing evidence remain open.
 - Next M00/M02 task: wire the tested float boundary into a native endpoint-owned scheduler worker using preallocated capture/render buffers, with explicit packet accumulation/splitting and rollback-safe lifecycle; do not claim production routing until the managed virtual-device driver and measured callback gates exist.
 - Requalified the locked workspace after the native float boundary on 2026-09-10: `cargo test --workspace --locked` passed all workspace unit/integration tests and doc-tests, including Windows-audio (35) and engine (92). No endpoint was opened by this regression and no driver, plugin registration, stream, or persistent machine audio configuration changed.
+- Composed the native WASAPI/scheduler boundary on 2026-09-10 at pushed head `380f77fb`: `WasapiSchedulerBridge` now owns preallocated capture/render storage, accumulates variable packets, advances the engine timeline per complete quantum, processes through `RealtimeScheduler`, and submits bounded render output with explicit dropped-frame counts. Construction does not open clients; `pump` requires caller-owned already-open clients and never starts, waits, allocates, or changes endpoint configuration. Windows-audio tests passed 37/37 and strict Clippy passed.
 - Added a fixed-capacity `Float32PacketAccumulator` on 2026-09-10 at pushed head `c91d0d03`. It accepts partial or oversized interleaved WASAPI packets, reports bounded backpressure, and yields complete engine-sized planar float quanta without allocation in `push`/`pop_into`; malformed frame shapes and non-finite samples are handled explicitly. Windows-audio tests passed 37/37, strict Clippy passed, and formatting passed. No endpoint was opened or machine configuration changed.
 - Next M00/M02 task: compose the accumulator, scheduler, and existing `SharedCapture`/`SharedRender` clients behind an endpoint-owned worker with preallocated buffers, explicit output backpressure/drop telemetry, and rollback-safe start/stop. Production virtual-device lifecycle and measured callback timing remain separate gates.
 - Hardened guarded acceptance cleanup on 2026-09-09: `safe-all.ps1` snapshots existing temp children and removes only newly created, directly validated `audiorouter-*` children in `finally`, including failure paths. It avoids deleting pre-existing temp artifacts and preserves M08 clean-tree validation.
