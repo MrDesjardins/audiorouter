@@ -41,6 +41,7 @@ dependencies = [
 name = "audiorouter-windows-audio"
 version = "0.1.0"
 dependencies = [
+ "audiorouter-engine",
  "windows",
  "windows-core",
 ]

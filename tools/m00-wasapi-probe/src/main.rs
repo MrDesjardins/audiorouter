@@ -6,6 +6,8 @@
 //! data, submits zero-valued caller-owned render buffers, then stops and resets
 //! both streams. The separately named `adapter-route` mode is an opt-in,
 //! endpoint-ID-selected digital route smoke for compatible 32-bit endpoints.
+//! `adapter-bridge` directly exercises the bounded WASAPI scheduler bridge for
+//! matching float32 endpoint formats.
 
 use audiorouter_engine::{
     histogram_upper_bound_ns, AudioBlock, DriftController, Pcm16QuantumAdapter, ProcessingStage,
@@ -14,6 +16,7 @@ use audiorouter_engine::{
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
     ProcessLoopbackCapture, ProcessLoopbackMode, SharedCapture, SharedRender,
+    WasapiSchedulerBridge,
 };
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -71,6 +74,23 @@ fn main() -> Result<()> {
             true,
         ) {
             eprintln!("adapter_route_error={error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("adapter-bridge") {
+        let duration_ms = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(500);
+        let capture_id = std::env::args().nth(3);
+        let render_id = std::env::args().nth(4);
+        if let Err(error) = adapter_bridge_smoke(
+            duration_ms,
+            capture_id.as_deref(),
+            render_id.as_deref(),
+        ) {
+            eprintln!("adapter_bridge_error={error}");
             std::process::exit(1);
         }
         return Ok(());
@@ -630,6 +650,88 @@ fn adapter_smoke(
             telemetry.deadline_lateness_ns_max,
             deadline_lateness_p999_upper_bound_ns,
             deadline_lateness_histogram
+        );
+        Ok(())
+    })();
+    let capture_stop = capture.stop();
+    let render_stop = render.stop();
+    result.and(capture_stop).and(render_stop)
+}
+
+fn adapter_bridge_smoke(
+    duration_ms: u64,
+    capture_id: Option<&str>,
+    render_id: Option<&str>,
+) -> std::result::Result<(), AudioError> {
+    if !(100..=2_000).contains(&duration_ms) {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    let endpoints = enumerate_active_endpoints()?;
+    let capture_info = select_endpoint(&endpoints, EndpointDirection::Capture, capture_id)
+        .ok_or(AudioError::InvalidFrameSize)?;
+    let render_info = select_endpoint(&endpoints, EndpointDirection::Render, render_id)
+        .ok_or(AudioError::InvalidFrameSize)?;
+    if !capture_info.is_ieee_float32()
+        || !render_info.is_ieee_float32()
+        || capture_info.channels != render_info.channels
+        || capture_info.sample_rate_hz != render_info.sample_rate_hz
+        || !(1..=2).contains(&capture_info.channels)
+    {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    let mut monitor = EndpointMonitor::start()?;
+    let mut capture = SharedCapture::open_refreshed_bound(&mut monitor, capture_info, 1_000_000)?;
+    let mut render = SharedRender::open_refreshed_bound(&mut monitor, render_info, 1_000_000)?;
+    let mut bridge = WasapiSchedulerBridge::new(
+        8,
+        usize::from(capture_info.channels),
+        128,
+        4_096,
+    )?;
+    let generation = RuntimeGeneration::new(1);
+    let _ = bridge.scheduler_mut().publish(RuntimeGraph::prepare(
+        generation,
+        vec![ProcessingStage::Gain { linear: 0.5 }],
+    ));
+    capture.start()?;
+    render.start()?;
+    let result = (|| {
+        let deadline = std::time::Instant::now()
+            .checked_add(Duration::from_millis(duration_ms))
+            .unwrap_or_else(std::time::Instant::now);
+        let mut pump = audiorouter_windows_audio::WasapiSchedulerPump::default();
+        while std::time::Instant::now() < deadline {
+            if capture.wait_for_data(10)? {
+                let current = bridge.pump(&capture, &render)?;
+                pump.packets = pump.packets.saturating_add(current.packets);
+                pump.captured_frames = pump.captured_frames.saturating_add(current.captured_frames);
+                pump.processed_quanta = pump
+                    .processed_quanta
+                    .saturating_add(current.processed_quanta);
+                pump.rendered_frames = pump.rendered_frames.saturating_add(current.rendered_frames);
+                pump.dropped_render_frames = pump
+                    .dropped_render_frames
+                    .saturating_add(current.dropped_render_frames);
+            }
+        }
+        let telemetry = bridge.scheduler().telemetry();
+        if pump.packets == 0 || pump.processed_quanta == 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        println!(
+            "adapter_bridge capture_endpoint={} render_endpoint={} rate_hz={} channels={} packets={} captured_frames={} processed_quanta={} rendered_frames={} dropped_render_frames={} timeline_frame={} scheduler_xruns={} scheduler_deadline_misses={}",
+            capture_info.id,
+            render_info.id,
+            capture_info.sample_rate_hz,
+            capture_info.channels,
+            pump.packets,
+            pump.captured_frames,
+            pump.processed_quanta,
+            pump.rendered_frames,
+            pump.dropped_render_frames,
+            bridge.timeline_frame(),
+            telemetry.xruns,
+            telemetry.deadline_misses,
         );
         Ok(())
     })();
