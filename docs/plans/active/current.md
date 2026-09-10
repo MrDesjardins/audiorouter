@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `916b8604`; later commits after
+The active branch is currently pushed through `b83f5c26`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -114,6 +114,14 @@ configuration changes.
   audio or machine configuration changed. This closes code-path transport
   validation, while GUI/WebView2 manual acceptance and live loopback remain
   open.
+- Performed the first native shell runtime smoke test on 2026-09-09. A
+  non-elevated launch failed during Tauri setup with Windows `Access is denied`
+  before window/audio initialization. The same built executable launched
+  elevated, remained alive for five seconds, created an `msedgewebview2.exe`
+  child, and then both the shell and child were absent after targeted cleanup.
+  No backend was started, no GUI action was automated, and no audio device or
+  machine configuration was accessed. This establishes elevated shell/runtime
+  startup only; UI interaction and live loopback remain separate gates.
 - Re-ran the elevated read-only native endpoint format inventory on 2026-09-09
   at 19:13 local time. It passed across 34 active capture/render endpoints and
   recorded 48 kHz 32-bit mono/stereo formats plus observed 96 kHz alternatives.
