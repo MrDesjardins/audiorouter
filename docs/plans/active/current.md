@@ -124,6 +124,16 @@ configuration has occurred.
   this run, so this is route accounting rather than differing-rate evidence;
   stream teardown and media-state preservation passed.
 
+- Requalified the documented exact-ID differing-rate route on 2026-09-10 for
+  500 ms: 96 kHz mono capture endpoint
+  `{0.0.1.00000000}.{2b694137-729a-4e08-b290-e891a6bc2487}` into 48 kHz
+  stereo render endpoint `{0.0.0.00000000}.{1869e2ef-82c1-4602-a35a-be804a32112a}`.
+  The route processed 48,000 capture frames into 23,936 scheduler frames and
+  23,520 routed frames; the computed 1,333,334 ns deadline had zero misses or
+  lateness, and processing p99.9 was 32,768 ns. Endpoint/media state remained
+  unchanged and temporary artifacts were removed. This is shared-mode
+  resampler evidence, not managed-driver callback or physical-latency proof.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
