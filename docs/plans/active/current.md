@@ -22,11 +22,20 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `e0bbe955`; later commits after
+The active branch is currently pushed through `ffc721b1`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
+
+- Hardened M08 release preparation on 2026-09-09: every shipped executable
+  (CLI, plugin worker, and native shell) is now checked as a regular non-reparse
+  PE file with a bounded DOS/PE header read and required x64 machine type before
+  it is copied into the release directory. Focused M08 rebuilt all three real
+  binaries and passed preparation plus manifest verification; release verifier,
+  path-safety, and documentation checks also passed (51 Markdown files/163
+  local links). No installer, signing, driver, audio, or machine configuration
+  action occurred.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `0ab6aa19` on 2026-09-09. Toolchain/WDK discovery, native compile
