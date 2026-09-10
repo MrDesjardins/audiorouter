@@ -105,6 +105,14 @@ configuration changes.
   is automated layout hardening; the manual 1280x720/100-200% scaling and
   screen-reader audit remains open.
 
+- Re-attempted the disposable M07 frontend-owned shell RPC acceptance on
+  2026-09-09 through the elevated command wrapper. The script still observed
+  `WindowsPrincipal.IsInRole(Administrator) = false` and stopped at its
+  administrator-only precondition before creating the temporary database,
+  pipe, or shell process. This confirms the remaining requirement is an
+  elevated interactive desktop token, not an authenticated RPC response or
+  audio-path failure; the shell/HWND gate remains open.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
