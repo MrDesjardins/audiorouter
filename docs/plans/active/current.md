@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `a5f38e82`; later commits after
+The active branch is currently pushed through `5fefaf1c`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -5938,7 +5938,7 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 
 ## Current handoff — 2026-09-10
 
-Latest pushed checkpoint: `a5f38e82` (`docs: record process exclusion probe`). The
+Latest pushed checkpoint: `5fefaf1c` (`docs: record endpoint lifecycle probe`). The
 working tree is clean and `main` is pushed. Since the last complete guarded
 M00-M08 acceptance, the native VST3 worker and pinned SDK qualification have
 both been re-run successfully; the active evidence remains valid for the
@@ -5971,7 +5971,7 @@ result, evidence, and next task before committing and pushing.
 
 ## Current handoff — 2026-09-10
 
-Latest pushed checkpoint: `a5f38e82`. Since the prior full acceptance, the
+Latest pushed checkpoint: `5fefaf1c`. Since the prior full acceptance, the
 guarded native endpoint lifecycle, impulse correlation, endpoint loopback,
 process-loopback include/exclude, event-mode lifecycle, Rust adapter telemetry,
 workspace regression, ReaPlugs classification, and Pitchproof x64 processing/
