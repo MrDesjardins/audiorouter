@@ -21,6 +21,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\m06-vst3-sdk\install
 This downloads source into `third_party\vst3sdk`; it is not a system-wide
 installation and does not register plugins.
 
+To build the native Tauri shell and its embedded current UI without launching
+or packaging it, run from the repository root:
+
+```powershell
+npm.cmd run build --prefix ui
+cargo build --manifest-path src-tauri/Cargo.toml
+```
+
+The shell executable is written to `src-tauri\target\debug\audiorouter-shell.exe`.
+This is compile-only evidence; it does not install a driver, register startup,
+open an audio stream, or alter machine audio configuration. The release flow
+rebuilds the UI automatically before its optimized shell build.
+
 ## 2. Run the safe acceptance checks
 
 From the repository root:

@@ -62,6 +62,13 @@ configuration changes.
   Markdown files and 163 local links; no runtime, installation, signing,
   driver, audio, or machine configuration action occurred.
 
+- Added native-shell build instructions to the development quickstart on
+  2026-09-09. The documented root-level UI build followed by standalone Tauri
+  Cargo build matches the release embedding order and clearly labels the
+  result compile-only. Documentation validation passed for 51 Markdown files
+  and 163 local links; no shell launch, audio, driver, signing, or machine
+  configuration action occurred.
+
 - Hardened M08 native-shell reproducibility on 2026-09-09 after inspecting
   Tauri's generated release resources: release preparation now builds the
   current root UI before compiling the shell, so the embedded `frontendDist`
