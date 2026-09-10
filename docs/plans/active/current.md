@@ -44,6 +44,13 @@ configuration changes.
   removed afterward; no audio stream or persistent machine configuration was
   changed. This remains an environment/manual-GUI acceptance blocker, not a
   passed end-to-end result.
+- Added the scoped Tauri capability manifest on 2026-09-09 for the `main`
+  window and `core:default`, then rebuilt and repeated the disposable frontend
+  RPC probe. The manifest is the least-privilege shell configuration, but it
+  did not make the headless WebView2 invocation observable; the native command
+  boundary remains a manual/interactive acceptance gate. Temporary probe code
+  and artifacts were removed, and formatting, shell compilation, and diff
+  checks passed without audio or machine configuration changes.
 - Re-ran the locked all-features workspace validation on 2026-09-09: all unit
   and integration tests passed (466 tests across the workspace), all doc-tests
   passed, strict all-target Clippy passed, and documentation validation passed
