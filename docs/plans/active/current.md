@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the repository VST2 state/legacy/fault fixture matrix on
+  2026-09-10 with `tests/acceptance/m06-vst2-state-fixture.ps1`: modern and
+  legacy entry points, chunk-state restoration at 44.1/48/96 kHz,
+  non-finite-output rejection, native crash containment, and hang containment
+  all passed in disposable workers. No plugin registration or audio
+  configuration change occurred.
+
 - Requalified the pinned VST3 SDK boundary on 2026-09-10 with
   `tests/acceptance/m06-vst3-sdk.ps1 -SkipBuild`: validator self-tests, AGain
   main and auxiliary-bus classes, explicit single-bus rejection, offline
