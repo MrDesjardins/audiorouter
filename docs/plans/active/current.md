@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `370e51eb`; later commits after
+The active branch is currently pushed through `2cee57d4`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -35,6 +35,15 @@ configuration changes.
   evidence only; the Tauri WebView-to-command interaction remains unproven.
   No audio stream, driver, plugin registration, signing action, or persistent
   machine configuration changed.
+- Followed up on the shell RPC boundary on 2026-09-09 with a disposable fresh
+  Vite bundle whose request originated in `ui/src/main.tsx`, through the same
+  Tauri core surface selected by `createInitialBackend`. The shell launched
+  and the authenticated backend remained alive, but no `rpc_request` reached
+  the native command in this headless WebView2 context. The probe code,
+  temporary bundle, database, pipe, processes, and environment variables were
+  removed afterward; no audio stream or persistent machine configuration was
+  changed. This remains an environment/manual-GUI acceptance blocker, not a
+  passed end-to-end result.
 - Re-ran the locked all-features workspace validation on 2026-09-09: all unit
   and integration tests passed (466 tests across the workspace), all doc-tests
   passed, strict all-target Clippy passed, and documentation validation passed
