@@ -494,7 +494,39 @@ impl WasapiSchedulerBridge {
         tap: &dyn audiorouter_engine::AudioTap,
         deadline: std::time::Instant,
     ) -> Result<WasapiSchedulerPump, AudioError> {
-        self.pump_internal(capture, render, Some(tap), Some(deadline))
+        self.pump_internal(
+            capture,
+            render,
+            Some(tap),
+            Some(DeadlineSchedule {
+                timeline_frame: self.timeline_frame,
+                first_deadline: deadline,
+                quantum_duration: std::time::Duration::ZERO,
+                quantum_frames: self.quantum_frames,
+            }),
+        )
+    }
+
+    /// Pump with a tap and a deadline schedule whose timestamps advance once
+    /// per engine quantum. `first_deadline` describes the first quantum made
+    /// ready by this call; subsequent quanta use `quantum_duration` offsets.
+    /// The schedule is only an observation passed to the engine and never
+    /// makes the audio path wait.
+    pub fn pump_with_tap_and_quantum_deadline(
+        &mut self,
+        capture: &SharedCapture,
+        render: &SharedRender,
+        tap: &dyn audiorouter_engine::AudioTap,
+        first_deadline: std::time::Instant,
+        quantum_duration: std::time::Duration,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        let anchor = DeadlineSchedule {
+            timeline_frame: self.timeline_frame,
+            first_deadline,
+            quantum_duration,
+            quantum_frames: self.quantum_frames,
+        };
+        self.pump_internal(capture, render, Some(tap), Some(anchor))
     }
 
     fn pump_internal(
@@ -502,7 +534,7 @@ impl WasapiSchedulerBridge {
         capture: &SharedCapture,
         render: &SharedRender,
         tap: Option<&dyn audiorouter_engine::AudioTap>,
-        deadline: Option<std::time::Instant>,
+        deadline: Option<DeadlineSchedule>,
     ) -> Result<WasapiSchedulerPump, AudioError> {
         let mut result = WasapiSchedulerPump::default();
         self.drain_render_pending(render, &mut result)?;
@@ -536,7 +568,7 @@ impl WasapiSchedulerBridge {
         render: &SharedRender,
         result: &mut WasapiSchedulerPump,
         tap: Option<&dyn audiorouter_engine::AudioTap>,
-        deadline: Option<std::time::Instant>,
+        deadline: Option<DeadlineSchedule>,
     ) -> Result<(), AudioError> {
         while self.accumulator.pending_frames() >= self.quantum_frames {
             self.drain_render_pending(render, result)?;
@@ -555,18 +587,21 @@ impl WasapiSchedulerBridge {
                     required: self.quantum_frames * self.bytes_per_frame,
                     available: 0,
                 })?;
-            let generation =
-                match (tap, deadline) {
-                    (Some(tap), Some(deadline)) => self
-                        .scheduler
-                        .process_once_with_tap_and_deadline(self.timeline_frame, tap, deadline),
-                    (Some(tap), None) => self
-                        .scheduler
-                        .process_once_with_tap(self.timeline_frame, tap),
-                    (None, Some(deadline)) => self.scheduler.process_once_with_deadline(deadline),
-                    (None, None) => self.scheduler.process_once(),
-                }
-                .map_err(|_| AudioError::InvalidFrameSize)?;
+            let generation = match (tap, deadline) {
+                (Some(tap), Some(schedule)) => self.scheduler.process_once_with_tap_and_deadline(
+                    self.timeline_frame,
+                    tap,
+                    schedule.deadline_for(self.timeline_frame),
+                ),
+                (Some(tap), None) => self
+                    .scheduler
+                    .process_once_with_tap(self.timeline_frame, tap),
+                (None, Some(schedule)) => self
+                    .scheduler
+                    .process_once_with_deadline(schedule.deadline_for(self.timeline_frame)),
+                (None, None) => self.scheduler.process_once(),
+            }
+            .map_err(|_| AudioError::InvalidFrameSize)?;
             self.timeline_frame = self
                 .timeline_frame
                 .saturating_add(self.quantum_frames as u64);
@@ -627,6 +662,25 @@ impl WasapiSchedulerBridge {
             result.rendered_frames = result.rendered_frames.saturating_add(submitted);
         }
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DeadlineSchedule {
+    timeline_frame: u64,
+    first_deadline: std::time::Instant,
+    quantum_duration: std::time::Duration,
+    quantum_frames: usize,
+}
+
+impl DeadlineSchedule {
+    fn deadline_for(self, timeline_frame: u64) -> std::time::Instant {
+        let quantum_index =
+            timeline_frame.saturating_sub(self.timeline_frame) / self.quantum_frames as u64;
+        let quantum_index = u32::try_from(quantum_index).unwrap_or(u32::MAX);
+        self.first_deadline
+            .checked_add(self.quantum_duration.saturating_mul(quantum_index))
+            .unwrap_or(self.first_deadline)
     }
 }
 
@@ -2681,6 +2735,27 @@ mod tests {
             accumulator.push(&[0; 3]),
             Err(AudioError::InvalidFrameSize)
         ));
+    }
+
+    #[test]
+    fn quantum_deadline_schedule_advances_with_the_bridge_timeline() {
+        let first = std::time::Instant::now();
+        let schedule = DeadlineSchedule {
+            timeline_frame: 10,
+            first_deadline: first,
+            quantum_duration: std::time::Duration::from_millis(3),
+            quantum_frames: 128,
+        };
+        assert_eq!(schedule.deadline_for(10), first);
+        assert_eq!(
+            schedule.deadline_for(138),
+            first + std::time::Duration::from_millis(3)
+        );
+        assert_eq!(
+            schedule.deadline_for(266),
+            first + std::time::Duration::from_millis(6)
+        );
+        assert_eq!(schedule.deadline_for(137), first);
     }
 
     #[test]

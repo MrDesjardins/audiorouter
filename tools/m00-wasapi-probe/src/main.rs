@@ -748,7 +748,7 @@ fn adapter_bridge_smoke(
         let mut pump = audiorouter_windows_audio::WasapiSchedulerPump::default();
         while std::time::Instant::now() < deadline {
             if capture.wait_for_data(10)? {
-                let current = bridge.pump_with_tap_and_deadline(
+                let current = bridge.pump_with_tap_and_quantum_deadline(
                     &capture,
                     &render,
                     &CombinedTap {
@@ -758,6 +758,7 @@ fn adapter_bridge_smoke(
                     std::time::Instant::now()
                         .checked_add(graph_quantum_duration(capture_info.sample_rate_hz, 128))
                         .unwrap_or_else(std::time::Instant::now),
+                    graph_quantum_duration(capture_info.sample_rate_hz, 128),
                 )?;
                 pump.packets = pump.packets.saturating_add(current.packets);
                 pump.captured_frames = pump.captured_frames.saturating_add(current.captured_frames);
