@@ -254,6 +254,96 @@ pub fn encode_interleaved_float32(
     Ok(())
 }
 
+/// Maximum packet storage a native adapter may reserve for quantum
+/// accumulation. A caller chooses a smaller bound when the endpoint permits
+/// it; this ceiling prevents a device-reported period from causing an
+/// unbounded preparation allocation.
+pub const MAX_FLOAT32_ACCUMULATOR_FRAMES: usize = 4_096;
+
+/// Fixed-capacity interleaved float32 packet accumulator for the engine's
+/// fixed quantum. WASAPI packets may be shorter, longer, or split at an
+/// unrelated period boundary. The accumulator accepts only complete frames,
+/// returns the number of source bytes consumed, and yields complete quanta
+/// through [`Self::pop_into`]. All storage is allocated by `new`; `push` and
+/// `pop_into` never allocate, wait, or access Windows.
+pub struct Float32PacketAccumulator {
+    channels: usize,
+    quantum_frames: usize,
+    pending_frames: usize,
+    bytes: Vec<u8>,
+}
+
+impl Float32PacketAccumulator {
+    pub fn new(
+        channels: usize,
+        quantum_frames: usize,
+        capacity_frames: usize,
+    ) -> Result<Self, AudioError> {
+        if channels == 0
+            || quantum_frames == 0
+            || capacity_frames < quantum_frames
+            || capacity_frames > MAX_FLOAT32_ACCUMULATOR_FRAMES
+        {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let bytes = capacity_frames
+            .checked_mul(channels)
+            .and_then(|samples| samples.checked_mul(std::mem::size_of::<f32>()))
+            .ok_or(AudioError::InvalidFrameSize)?;
+        Ok(Self {
+            channels,
+            quantum_frames,
+            pending_frames: 0,
+            bytes: vec![0; bytes],
+        })
+    }
+
+    pub fn pending_frames(&self) -> usize {
+        self.pending_frames
+    }
+
+    /// Copy as many complete interleaved frames as fit and return the number
+    /// of source bytes consumed. The caller can submit the remainder on the
+    /// next nonblocking iteration; no source memory is retained.
+    pub fn push(&mut self, source: &[u8]) -> Result<usize, AudioError> {
+        let bytes_per_frame = self.channels * std::mem::size_of::<f32>();
+        if source.len() % bytes_per_frame != 0 {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let capacity_frames = self.bytes.len() / bytes_per_frame;
+        let writable_frames = capacity_frames.saturating_sub(self.pending_frames);
+        let frames = writable_frames.min(source.len() / bytes_per_frame);
+        let bytes = frames * bytes_per_frame;
+        let start = self.pending_frames * bytes_per_frame;
+        self.bytes[start..start + bytes].copy_from_slice(&source[..bytes]);
+        self.pending_frames += frames;
+        Ok(bytes)
+    }
+
+    /// Decode one complete quantum into a caller-owned engine block. Returns
+    /// `false` when fewer than one quantum is pending; the pending bytes stay
+    /// intact for the next packet.
+    pub fn pop_into(
+        &mut self,
+        destination: &mut audiorouter_engine::AudioBlock,
+    ) -> Result<bool, AudioError> {
+        if destination.channels() != self.channels || destination.frames() != self.quantum_frames {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        if self.pending_frames < self.quantum_frames {
+            return Ok(false);
+        }
+        let quantum_bytes = self.quantum_frames * self.channels * std::mem::size_of::<f32>();
+        decode_interleaved_float32(&self.bytes[..quantum_bytes], self.channels, destination)?;
+        let remaining_frames = self.pending_frames - self.quantum_frames;
+        let remaining_bytes = remaining_frames * self.channels * std::mem::size_of::<f32>();
+        self.bytes
+            .copy_within(quantum_bytes..quantum_bytes + remaining_bytes, 0);
+        self.pending_frames = remaining_frames;
+        Ok(true)
+    }
+}
+
 /// Maximum packet period accepted by the process-loopback adapter before a
 /// packet can be split into the fixed 128-frame engine quantum. Larger device
 /// periods are rejected rather than creating an unbounded staging request.
@@ -2258,6 +2348,52 @@ mod tests {
         assert!(matches!(
             encode_interleaved_float32(&block, &mut [0; 4]),
             Err(AudioError::BufferTooSmall { .. })
+        ));
+    }
+
+    #[test]
+    fn packet_accumulator_splits_and_reassembles_variable_packets() {
+        let mut accumulator = Float32PacketAccumulator::new(2, 2, 4).unwrap();
+        let mut block = audiorouter_engine::AudioBlock::new(2, 2).unwrap();
+        let first = [0.0_f32, 0.1, 1.0, 1.1, 2.0, 2.1];
+        let first_bytes: Vec<u8> = first
+            .iter()
+            .flat_map(|sample| sample.to_ne_bytes())
+            .collect();
+        assert_eq!(accumulator.push(&first_bytes).unwrap(), first_bytes.len());
+        assert_eq!(accumulator.pending_frames(), 3);
+        assert!(accumulator.pop_into(&mut block).unwrap());
+        assert_eq!(block.channel(0).unwrap(), &[0.0, 1.0]);
+        assert_eq!(block.channel(1).unwrap(), &[0.1, 1.1]);
+        assert_eq!(accumulator.pending_frames(), 1);
+
+        let second = [3.0_f32, 3.1];
+        let second_bytes: Vec<u8> = second
+            .iter()
+            .flat_map(|sample| sample.to_ne_bytes())
+            .collect();
+        assert_eq!(accumulator.push(&second_bytes).unwrap(), second_bytes.len());
+        assert!(accumulator.pop_into(&mut block).unwrap());
+        assert_eq!(block.channel(0).unwrap(), &[2.0, 3.0]);
+        assert_eq!(block.channel(1).unwrap(), &[2.1, 3.1]);
+        assert_eq!(accumulator.pending_frames(), 0);
+        assert!(!accumulator.pop_into(&mut block).unwrap());
+    }
+
+    #[test]
+    fn packet_accumulator_reports_backpressure_without_dropping_source_shape() {
+        let mut accumulator = Float32PacketAccumulator::new(1, 2, 2).unwrap();
+        let source = [0.0_f32, 1.0, 2.0, 3.0];
+        let bytes: Vec<u8> = source
+            .iter()
+            .flat_map(|sample| sample.to_ne_bytes())
+            .collect();
+        assert_eq!(accumulator.push(&bytes).unwrap(), 8);
+        assert_eq!(accumulator.pending_frames(), 2);
+        assert_eq!(accumulator.push(&bytes[8..]).unwrap(), 0);
+        assert!(matches!(
+            accumulator.push(&[0; 3]),
+            Err(AudioError::InvalidFrameSize)
         ));
     }
 
