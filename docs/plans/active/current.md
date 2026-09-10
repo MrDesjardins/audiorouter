@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `c37c34c1`; later commits after
+The active branch is currently pushed through `12cdcac9`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -73,6 +73,17 @@ configuration changes.
   accessibility coverage was added; the full UI suite passed 16 files/118
   tests, TypeScript typecheck passed, and a disposable 212-module production
   build passed. No audio, driver, signing, or machine configuration changed.
+
+- Added the portable UI-10 shortcut boundary on 2026-09-09. The workspace now
+  persists local bindings for session start/stop and privacy mute, dispatches
+  them through the same backend actions as the visible controls, ignores
+  editable text targets, and disables dispatch while duplicate bindings are
+  present. Shortcut normalization, conflict detection, and focus protection
+  are covered by unit tests. The full UI suite passed 17 files/121 tests and
+  TypeScript typecheck passed; the production bundle passed in a disposable
+  output directory because the existing `ui/dist` was locked by another
+  process. This is app-scoped keyboard support only; native tray, OS-wide
+  registration, and manual conflict testing remain open.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
