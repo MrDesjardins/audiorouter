@@ -74,6 +74,14 @@ configuration has occurred.
   configuration was changed. This records the host-permission prerequisite
   separately from the format evidence.
 
+- Retried the administrator-required M07 frontend-owned shell acceptance on
+  2026-09-10 from the escalated command context. It still failed closed before
+  creating disposable state because the execution token is not an elevated
+  PowerShell session. No shell, backend, audio stream, or machine
+  configuration was started or changed. An interactive administrator desktop
+  session remains required; this is not an `E_INVALIDARG` or endpoint
+  contention result.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
