@@ -156,6 +156,11 @@ configuration has occurred.
   passed; no SDK or plugin installation, driver action, or audio
   configuration change occurred.
 
+- Requalified M08 traceability on 2026-09-10 with
+  `tests/acceptance/m08-traceability.ps1`: all 159 normative requirement IDs
+  remain covered by the delivery map. This is documentation coverage only and
+  does not close implementation, hardware, driver, signing, or release gates.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
