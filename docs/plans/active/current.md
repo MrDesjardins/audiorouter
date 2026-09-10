@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `5c34bdbf`; later commits after
+The active branch is currently pushed through `ccd32a28`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -41,6 +41,14 @@ configuration changes.
   two-frame inspection regression passed; the control suite passed 105/105 and
   strict Clippy passed. Native graph construction/attachment and live-device
   timing evidence remain open.
+
+- Added an allocation-free `RuntimeProcessor::process_with_tap` boundary on
+  2026-09-10 at pushed head `ccd32a28`. A borrowed post-processing tap receives
+  only active-generation quanta and the authoritative start frame, allowing a
+  platform adapter to copy into preallocated recorder storage without coupling
+  the engine to encoders. Engine tests passed 90/90, control tests passed
+  105/105, and strict Clippy passed. The concrete Windows graph adapter still
+  needs to implement the tap and device lifecycle.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
   `8438bd82` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
