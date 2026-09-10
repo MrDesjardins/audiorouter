@@ -206,6 +206,13 @@ configuration changes.
   drivers, signing, startup, and persistent machine audio settings were
   unchanged.
 
+- Corrected a tray-status contract bug on 2026-09-10. Tray Refresh previously
+  queried persisted `recordings.list` rows and could report stale library data
+  as active recording state after a restart; it now queries live-only
+  `recorders.list` and labels the menu item “Live recorders”. Shell tests passed
+  7/7, strict Clippy, formatting, and the optimized release build passed. No
+  audio, process registration, or machine configuration changed.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00 toolchain/native
