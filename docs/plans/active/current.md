@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `47274214`; later commits after
+The active branch is currently pushed through `1dec2199`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -187,7 +187,7 @@ configuration changes.
   this contract documentation change.
 
 - Re-ran the complete guarded `tests/acceptance/safe-all.ps1` chain on
-  2026-09-10 from pushed head `7781149f`. VS/SDK/WDK discovery, native compile,
+  2026-09-10 from pushed head `1dec2199`. VS/SDK/WDK discovery, native compile,
   read-only endpoint inventory, disposable SysVAD x64 compile/package/API
   validation, M01/M04/M05, pinned VST3 and native workers, VST2 legacy/state/
   fault fixtures, M07 headless, unsigned M08 artifacts, 159 traceability IDs,
@@ -739,9 +739,7 @@ operation, using `recorders.list` as its authoritative live-state input, before
 adding any tray quit action. Then perform the first runtime Tauri-shell-to-
 backend request check against the bounded authenticated service without
 touching the live audio graph.
-At the next authorized live-audio window, run the reversible VB-Audio endpoint
-loopback snapshot test and restore/compare media state. Preserve
-the production driver callback, signing, installer, clean-machine,
+Preserve the production driver callback, signing, installer, clean-machine,
 physical-latency, editor, and independent-plugin gates as separate prerequisites
 rather than claiming release completion.
 
