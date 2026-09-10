@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `6b8e7dd9`; later commits after
+The active branch is currently pushed through `01362060`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -45,6 +45,16 @@ action occurred.
   TypeScript typecheck and a temporary production build passed, and generated
   output was removed. No audio, driver, signing, or machine configuration
 action occurred.
+
+- Requalified the user-supplied x64 VST2 fixtures on 2026-09-10 through
+  `tests/acceptance/m06-vst2-installed.ps1`: BUSTERse and TDR Nova each passed
+  contained processing at 44.1, 48, and 96 kHz plus dedicated editor-thread
+  containment and supervised timeout/reaping. Before/after fingerprints were
+  unchanged (`580325343014664A61FD1C2D73E5424897A47199BE5C5538DA75C25A8D0261D3`
+  and `4DFC5973416B4B23FA9351128B65E7B42547F6280436CCE4CBF8AAB1334E4E33`),
+  and both environment variables were restored. No plugin registration, audio
+  stream, or machine configuration changed; rights and release qualification
+  remain gated.
 
 - Rechecked the native-shell frontend invocation boundary on 2026-09-09 after
   the Tauri transport lifecycle fix: the connected UI still issues its initial
