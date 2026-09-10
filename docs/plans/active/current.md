@@ -62,6 +62,12 @@ configuration changes.
   and documentation validation passed for 51 Markdown files and 163 local
   links. No audio, driver, signing, or persistent machine configuration was
   changed.
+- Added a reproducible interactive shell acceptance procedure to the native
+  shell README and headless runbook on 2026-09-09. It uses only a temporary
+  SID-enrolled database and named pipe, starts the bounded backend, and states
+  the connected-UI observation and cleanup requirements. Documentation
+  validation passed for 51 Markdown files and 163 local links; no audio stream,
+  driver, signing, or persistent machine configuration is involved.
 - Re-ran the locked all-features workspace validation on 2026-09-09: all unit
   and integration tests passed (466 tests across the workspace), all doc-tests
   passed, strict all-target Clippy passed, and documentation validation passed

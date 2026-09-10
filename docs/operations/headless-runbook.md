@@ -32,6 +32,32 @@ permissions, open an audio endpoint, install a driver, or modify Windows audio
 settings. The Tauri shell forwards its requests to this pipe and does not open
 the database itself.
 
+## Interactive Tauri shell acceptance
+
+For the remaining desktop-shell gate, use a disposable database and pipe. Run
+from an elevated PowerShell session after building the CLI and shell. Enroll
+only the current Windows user's SID as an observer, start the bounded backend,
+and launch the shell:
+
+```powershell
+$database = Join-Path $env:TEMP "audiorouter-shell-check.sqlite"
+$pipe = "\\.\pipe\audiorouter-shell-check"
+$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$params = Join-Path $env:TEMP "audiorouter-shell-check.json"
+Set-Content -LiteralPath $params -NoNewline -Value ('{"clientId":"' + $sid + '","role":"observer","idempotencyKey":"shell-check-enroll"}')
+.\target\debug\audiorouter-cli.exe api call clients.authorize $params --database $database --json
+Start-Process .\target\debug\audiorouter-cli.exe -ArgumentList @("backend", "serve", "--database", $database, "--pipe", $pipe, "--connections", "1")
+$env:AUDIOROUTER_CONTROL_PIPE = $pipe
+.\src-tauri\target\debug\audiorouter-shell.exe
+Remove-Item Env:AUDIOROUTER_CONTROL_PIPE -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $params, $database -Force -ErrorAction SilentlyContinue
+```
+
+The manual gate passes only when the shell opens and the UI reports a connected
+backend after a read-only refresh. It does not open an audio stream, install a
+driver, or change persistent audio settings. Do not use the normal user
+database for diagnosis.
+
 ## Plan and apply a graph change
 
 Create a plan against the observed revision, inspect it, then apply it once with a unique idempotency key:
