@@ -282,6 +282,14 @@ configuration changes.
   drivers, signing, startup, and persistent machine audio settings were
   unchanged.
 
+- Requalified the rollback-checked live routed adapter on 2026-09-10 with
+  `tests/acceptance/m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 750`: 36,480 frames were captured across 285 graph
+  blocks, 35,968 frames were routed through the built-in processing path, and
+  processing p99.9 was 131,072 ns with zero deadline misses. The selected
+  VB-Audio endpoints were stopped and reset; defaults, volume, mute, privacy,
+  drivers, signing, startup, and persistent audio configuration were unchanged.
+
 - Corrected a tray-status contract bug on 2026-09-10. Tray Refresh previously
   queried persisted `recordings.list` rows and could report stale library data
   as active recording state after a restart; it now queries live-only
