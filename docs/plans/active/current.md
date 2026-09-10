@@ -62,6 +62,14 @@ configuration changes.
   Markdown files and 163 local links; no runtime, installation, signing,
   driver, audio, or machine configuration action occurred.
 
+- Hardened M08 native-shell reproducibility on 2026-09-09 after inspecting
+  Tauri's generated release resources: release preparation now builds the
+  current root UI before compiling the shell, so the embedded `frontendDist`
+  cannot come from an older ignored `ui/dist`. The separate temporary UI ZIP
+  is still built and verified afterward. PowerShell parsing and the subsequent
+  clean M08 acceptance are required before this slice is complete; no audio,
+  driver, signing, installation, or machine configuration is involved.
+
 - Added an explicit native-shell host bridge in `src-tauri/src/main.rs` on
   2026-09-09. The initialization script now publishes the validated session
   ID and a bounded `AudioRouterHostBridge` whose transport invokes the

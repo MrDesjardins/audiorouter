@@ -40,6 +40,10 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
     }
+    & npm.cmd run build --prefix ui
+    if ($LASTEXITCODE -ne 0) {
+        throw "UI build for native shell embedding failed with exit code $LASTEXITCODE"
+    }
     & cargo build --release --locked --manifest-path (Join-Path $workspace "src-tauri/Cargo.toml")
     if ($LASTEXITCODE -ne 0) {
         throw "native shell release build failed with exit code $LASTEXITCODE"
