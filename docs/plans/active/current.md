@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `c0204d94`; later commits after
+The active branch is currently pushed through `8abe51c3`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -35,6 +35,15 @@ configuration changes.
   binaries and passed preparation plus manifest verification; release verifier,
   path-safety, and documentation checks also passed (51 Markdown files/163
   local links). No installer, signing, driver, audio, or machine configuration
+action occurred.
+
+- Closed a portable native-shell transport lifecycle gap on 2026-09-09:
+  `TauriRpcTransport` now converts synchronous bridge failures into rejected
+  requests, clears request timeout handles after settlement, and rejects late
+  responses from a disposed transport using a generation boundary. Focused
+  host tests passed 12/12, the full UI suite passed 16 files/115 tests,
+  TypeScript typecheck and a temporary production build passed, and generated
+  output was removed. No audio, driver, signing, or machine configuration
   action occurred.
 
 - Synchronized M08 operational documentation on 2026-09-09 after the release
