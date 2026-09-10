@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `a0e8b418`; later commits after
+The active branch is currently pushed through `84912971`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -63,6 +63,14 @@ action occurred.
   place, and no plugin registration, audio stream, or machine configuration
 changed. This confirms compatibility with the bounded two-input-bus worker
   contract only; broad vendor/editor/rights/release qualification remains open.
+
+- Extended the TDR Nova x64 VST3 multi-bus qualification on 2026-09-10 across
+  the full supported rate matrix: the supervised multi-bus worker and
+  asynchronous graph-staging tests each passed at 44.1, 48, and 96 kHz. The
+  native worker was temporary and removed, the supplied module was used in
+  place, and no plugin registration, audio stream, or machine configuration
+  changed. This remains contained worker evidence, not physical-latency or
+  release qualification.
 
 - Rechecked the native-shell frontend invocation boundary on 2026-09-09 after
   the Tauri transport lifecycle fix: the connected UI still issues its initial
