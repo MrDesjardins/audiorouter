@@ -6232,6 +6232,13 @@ the one already documented above. No machine audio configuration was changed.
   removed, and the follow-up scan found zero. No repository, audio endpoint,
   or persistent machine configuration was changed.
 
+- Re-ran the focused M04 package suites directly on 2026-09-10:
+  `cargo test -p audiorouter-dsp -p audiorouter-recording --locked` passed
+  30 DSP tests, 34 recording tests, and all package doc-tests. The post-run
+  temp-root scan found zero direct `audiorouter-*` artifacts. No audio
+  endpoint, driver, plugin registration, or persistent machine configuration
+  was touched.
+
 - Requalified the guarded native endpoint lifecycle on 2026-09-10 with
   `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 100`. It enumerated 13 capture and 18 render
