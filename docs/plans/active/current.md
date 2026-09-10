@@ -37,6 +37,14 @@ qualification remains open.
   destination fixtures were rejected as required. Disposable Git fixtures
   were removed; no SDK, plugin, driver, or audio configuration changed.
 
+- Requalified installed ReaPlugs VST2 editor containment on 2026-09-10 with
+  `tests/acceptance/m06-vst2-editor.ps1 -FixtureDirectory
+  'C:\\Program Files\\VSTPlugins\\ReaPlugs'`: all 9 x64 DLL candidates passed
+  both the dedicated non-returning editor-thread bound and the supervised
+  timeout/worker-reaping case. This is containment evidence, not a claim that
+  every candidate is a supported audio effect; no plugin registration, audio
+  stream, or persistent audio configuration changed.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
   2026-09-10 at `23ce0f3d`: VS2026/MSVC/SDK/WDK discovery and native compile,
   read-only 31-endpoint inventory, disposable pinned SysVAD x64
