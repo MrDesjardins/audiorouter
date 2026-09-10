@@ -6042,3 +6042,8 @@ stream, or machine configuration action occurred.
 - Next M06 task: qualify a supplied rights-cleared independent x64 VST2/VST3 fixture through the existing worker matrix, or integrate the authenticated native-shell HWND owner when available; retain the gated VST2 rights/editor/release boundary.
 - Completed M08 test-artifact hygiene on 2026-09-08: after the guarded acceptance run, removed exactly 6,690 direct children of `%TEMP%` whose names matched the repository-owned `audiorouter-*` prefix (SQLite test databases and disposable plugin/recording/CLI fixtures). The target paths were validated under the temp root before removal; a follow-up scan found zero matching direct children. Repository files, local plugin binaries, drivers, audio streams, and persistent machine configuration were not touched.
 - Next M05/M06 task: retain the read-only identity presentation until authenticated native-shell/process-capture integration exists; qualify an independent rights-cleared plugin when supplied and continue the remaining native release gates.
+- Requalified strict all-target Clippy and formatting on 2026-09-10 after the
+  workspace regression: `cargo clippy --workspace --all-features --locked
+  --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff
+  --check` passed. No runtime, audio, driver, plugin registration, or machine
+  configuration action occurred.
