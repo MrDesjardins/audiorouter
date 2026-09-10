@@ -610,6 +610,19 @@ action occurred.
   and 163 local links; no shell launch, audio, driver, signing, or machine
   configuration action occurred.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-10 at the current head: VS2026/WDK discovery and native compile,
+  read-only 31-endpoint inventory, disposable SysVAD x64 compile/package/API/
+  signability qualification, M01 CLI, M04 DSP/recording, M05 UI (17 files/
+  121 tests and temporary production build), pinned VST3 SDK/validator and
+  native worker, repository VST2 modern/legacy/state/fault fixtures, M07
+  headless, unsigned M08 artifacts, 159 traceability IDs, and documentation
+  validation (51 Markdown files/163 local links) all passed. The runner removed
+  13 run-owned temporary children; a follow-up scan found zero `audiorouter-*`
+  temp children and no lingering project processes. No driver installation or
+  loading, signing-mode change, plugin/startup registration, audio stream, or
+  persistent machine audio configuration occurred.
+
 - Corrected Tauri CLI build-hook portability on 2026-09-09: the CLI executes
   lifecycle commands from a package-directory context (`contracts` on this
   checkout), so plain `--prefix ui` was invalid. Both native lifecycle hooks
