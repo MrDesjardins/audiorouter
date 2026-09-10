@@ -42,6 +42,11 @@ fn session_id(state: State<'_, ShellState>) -> String {
     state.session_id.clone()
 }
 
+fn session_initialization_script(session_id: &str) -> String {
+    let encoded = serde_json::to_string(session_id).expect("session id is serializable");
+    format!("window.__AUDIO_ROUTER_SESSION_ID__ = {encoded};")
+}
+
 fn main() {
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
@@ -49,8 +54,7 @@ fn main() {
         pipe_name,
         session_id: format!("tauri-shell-{}", std::process::id()),
     };
-    let session_script =
-        serde_json::to_string(&state.session_id).expect("session id is serializable");
+    let session_script = session_initialization_script(&state.session_id);
     tauri::Builder::default()
         .manage(state)
         .invoke_handler(tauri::generate_handler![rpc_request, session_id])
@@ -60,9 +64,7 @@ fn main() {
                 .title("AudioRouter")
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
-                .initialization_script(format!(
-                    "window.__AUDIO_ROUTER_SESSION_ID__ = {session_script};"
-                ))
+                .initialization_script(session_script.clone())
                 .build()?;
             Ok(())
         })
@@ -75,6 +77,15 @@ mod tests {
     use super::*;
     use audiorouter_control::ControlPlane;
     use serde_json::json;
+
+    #[test]
+    fn session_initialization_script_uses_json_string_encoding() {
+        let script = session_initialization_script("shell\";window.pwned=true;\\escape");
+        assert_eq!(
+            script,
+            r#"window.__AUDIO_ROUTER_SESSION_ID__ = "shell\";window.pwned=true;\\escape";"#
+        );
+    }
 
     #[cfg(windows)]
     #[test]

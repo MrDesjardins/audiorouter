@@ -62,6 +62,11 @@ configuration changes.
   and documentation validation passed for 51 Markdown files and 163 local
   links. No audio, driver, signing, or persistent machine configuration was
   changed.
+- Hardened the shell session bootstrap on 2026-09-09 by extracting its JSON
+  encoding into a tested helper. The focused native shell suite now passes 2/2,
+  including hostile quote/backslash input coverage, and strict shell Clippy,
+  formatting, and diff checks pass. This protects the pre-page session bridge;
+  interactive WebView2 invocation remains separately unproven.
 - Added a reproducible interactive shell acceptance procedure to the native
   shell README and headless runbook on 2026-09-09. It uses only a temporary
   SID-enrolled database and named pipe, starts the bounded backend, and states
