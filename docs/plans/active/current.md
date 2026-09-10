@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `247e833a`; later commits after
+The active branch is currently pushed through `7781149f`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -185,6 +185,16 @@ configuration changes.
   `recorders.list`, explicitly distinguishing live recorder state from the
   persisted recording library. Documentation validation remains required after
   this contract documentation change.
+
+- Re-ran the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-10 from pushed head `7781149f`. VS/SDK/WDK discovery, native compile,
+  read-only endpoint inventory, disposable SysVAD x64 compile/package/API
+  validation, M01/M04/M05, pinned VST3 and native workers, VST2 legacy/state/
+  fault fixtures, M07 headless, unsigned M08 artifacts, 159 traceability IDs,
+  and documentation validation all passed. Cleanup removed 13 run-owned
+  temporary children. This remains non-installing evidence: no driver was
+  installed or loaded, and no plugin/startup registration, signing-mode
+  change, audio stream, or persistent machine audio setting was touched.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
