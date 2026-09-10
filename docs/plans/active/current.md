@@ -6178,6 +6178,14 @@ the one already documented above. No machine audio configuration was changed.
   This is existing third-party endpoint evidence; AudioRouter's managed
   virtual-device and production callback gates remain open.
 
+- Requalified native digital impulse correlation on 2026-09-10 with
+  `tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio`. The existing
+  VB-Audio Virtual Cable pair detected 997 of 1,000 expected impulse groups,
+  with zero p95 spacing error and an estimated digital onset of 75.38 ms.
+  The bounded correlation completed with state checks and no persistent audio
+  configuration changes. This is not calibrated acoustic p95 latency evidence;
+  the physical setup and production managed-driver callback gate remain open.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
