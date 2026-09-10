@@ -344,6 +344,169 @@ impl Float32PacketAccumulator {
     }
 }
 
+/// Result of one nonblocking endpoint pump. Counts are control/diagnostic
+/// data; the pump itself does not log or allocate.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct WasapiSchedulerPump {
+    pub packets: u32,
+    pub captured_frames: u32,
+    pub processed_quanta: u32,
+    pub rendered_frames: u32,
+    pub dropped_render_frames: u32,
+}
+
+/// Endpoint-owned composition boundary for the portable realtime scheduler.
+/// The caller owns client activation, event waits, start/stop, graph
+/// publication, and any tap. `pump` only performs bounded packet copying,
+/// accumulation, graph steps, and render submission using storage allocated by
+/// `new`; it never starts a client, waits, allocates, or changes endpoint
+/// configuration.
+pub struct WasapiSchedulerBridge {
+    scheduler: audiorouter_engine::RealtimeScheduler,
+    accumulator: Float32PacketAccumulator,
+    capture_bytes: Vec<u8>,
+    render_bytes: Vec<u8>,
+    bytes_per_frame: usize,
+    quantum_frames: usize,
+    timeline_frame: u64,
+}
+
+impl WasapiSchedulerBridge {
+    pub fn new(
+        ring_capacity: usize,
+        channels: usize,
+        quantum_frames: usize,
+        max_packet_frames: usize,
+    ) -> Result<Self, AudioError> {
+        if max_packet_frames == 0 || max_packet_frames > MAX_FLOAT32_ACCUMULATOR_FRAMES {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        let bytes_per_frame = channels
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or(AudioError::InvalidFrameSize)?;
+        let capture_bytes = max_packet_frames
+            .checked_mul(bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        let render_bytes = quantum_frames
+            .checked_mul(bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
+        let scheduler =
+            audiorouter_engine::RealtimeScheduler::new(ring_capacity, channels, quantum_frames)
+                .map_err(|_| AudioError::InvalidFrameSize)?;
+        let accumulator = Float32PacketAccumulator::new(
+            channels,
+            quantum_frames,
+            max_packet_frames.max(quantum_frames),
+        )?;
+        Ok(Self {
+            scheduler,
+            accumulator,
+            capture_bytes: vec![0; capture_bytes],
+            render_bytes: vec![0; render_bytes],
+            bytes_per_frame,
+            quantum_frames,
+            timeline_frame: 0,
+        })
+    }
+
+    pub fn scheduler(&self) -> &audiorouter_engine::RealtimeScheduler {
+        &self.scheduler
+    }
+
+    pub fn scheduler_mut(&mut self) -> &mut audiorouter_engine::RealtimeScheduler {
+        &mut self.scheduler
+    }
+
+    pub fn timeline_frame(&self) -> u64 {
+        self.timeline_frame
+    }
+
+    /// Copy and process at most the currently available capture packet. A
+    /// render buffer with insufficient device capacity is explicitly dropped
+    /// and counted rather than blocking the graph or retaining unbounded data.
+    pub fn pump(
+        &mut self,
+        capture: &SharedCapture,
+        render: &SharedRender,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        let Some((packet, packet_bytes)) =
+            capture.next_packet_into(&mut self.capture_bytes, self.bytes_per_frame)?
+        else {
+            return Ok(WasapiSchedulerPump::default());
+        };
+        let mut result = WasapiSchedulerPump {
+            packets: 1,
+            captured_frames: packet.frames,
+            ..WasapiSchedulerPump::default()
+        };
+        let mut offset = 0;
+        while offset < packet_bytes {
+            let consumed = self
+                .accumulator
+                .push(&self.capture_bytes[offset..packet_bytes])?;
+            offset += consumed;
+            self.process_ready(render, &mut result)?;
+            if consumed == 0 {
+                return Err(AudioError::BufferTooSmall {
+                    required: self.bytes_per_frame,
+                    available: 0,
+                });
+            }
+        }
+        self.process_ready(render, &mut result)?;
+        Ok(result)
+    }
+
+    fn process_ready(
+        &mut self,
+        render: &SharedRender,
+        result: &mut WasapiSchedulerPump,
+    ) -> Result<(), AudioError> {
+        while self.accumulator.pending_frames() >= self.quantum_frames {
+            let Some(mut input) = self.scheduler.acquire_input() else {
+                return Err(AudioError::BufferTooSmall {
+                    required: self.quantum_frames * self.bytes_per_frame,
+                    available: 0,
+                });
+            };
+            if !self.accumulator.pop_into(&mut input)? {
+                return Ok(());
+            }
+            self.scheduler
+                .submit_input(input)
+                .map_err(|_| AudioError::BufferTooSmall {
+                    required: self.quantum_frames * self.bytes_per_frame,
+                    available: 0,
+                })?;
+            let generation = self
+                .scheduler
+                .process_once()
+                .map_err(|_| AudioError::InvalidFrameSize)?;
+            self.timeline_frame = self
+                .timeline_frame
+                .saturating_add(self.quantum_frames as u64);
+            result.processed_quanta = result.processed_quanta.saturating_add(1);
+            let Some(generation) = generation else {
+                continue;
+            };
+            let Some(output) = self.scheduler.receive_output_for_generation(generation) else {
+                continue;
+            };
+            encode_interleaved_float32(&output, &mut self.render_bytes)?;
+            let submitted = render.submit_bytes(&self.render_bytes, self.bytes_per_frame)?;
+            result.rendered_frames = result.rendered_frames.saturating_add(submitted);
+            result.dropped_render_frames = result
+                .dropped_render_frames
+                .saturating_add(output.frames() as u32 - submitted);
+            self.scheduler
+                .output()
+                .try_recycle(output)
+                .map_err(|_| AudioError::InvalidFrameSize)?;
+        }
+        Ok(())
+    }
+}
+
 /// Maximum packet period accepted by the process-loopback adapter before a
 /// packet can be split into the fixed 128-frame engine quantum. Larger device
 /// periods are rejected rather than creating an unbounded staging request.
