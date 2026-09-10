@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `5d47527c`; later commits after
+The active branch is currently pushed through `fedb74f5`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -68,6 +68,15 @@ configuration changes.
   Windows application-loopback API evidence only; production graph routing,
   cross-process isolation thresholds, managed-driver callback timing, and
   physical latency remain open. No persistent audio configuration changed.
+
+- Requalified native event-driven lifecycle and digital impulse correlation on
+  2026-09-09 during the authorized window. Event capture/render processed
+  24,480/28,800 frames over 500 ms; the impulse analyzer detected 98/100
+  groups with zero p95 spacing error and an 85.83 ms estimated digital onset.
+  Temporary artifacts were removed and media/configuration state was unchanged.
+  These are digital lifecycle/correlation results only; calibrated physical
+  latency, production callback timing, and managed-driver ownership remain
+  open.
 
 - Extracted the M08 bounded x64 PE validator into
   `tools/release/pe-validation.ps1` on 2026-09-10 and added focused negative

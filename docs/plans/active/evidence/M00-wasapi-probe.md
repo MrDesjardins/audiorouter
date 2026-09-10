@@ -1195,6 +1195,18 @@ results qualify the Windows application-loopback API modes and lifecycle; they
 do not claim production graph routing, cross-process isolation thresholds, or
 managed-driver callback timing.
 
+## Native event and impulse requalification (2026-09-09)
+
+The authorized event-driven lifecycle check passed on the explicitly selected
+VB-Audio pair: capture processed 24,480 frames and silent render processed
+28,800 frames over 500 ms, with both streams stopped/reset and temporary
+artifacts removed. The bounded digital impulse check then detected 98 of 100
+expected groups, with zero p95 spacing error and an estimated digital onset of
+85.83 ms. Media identity/state and persistent audio configuration remained
+unchanged. These results qualify event-driven lifecycle and digital return-path
+correlation only; calibrated physical latency, production callback timing, and
+managed-driver ownership remain open.
+
 ## Native tone/loopback signal-path requalification (2026-09-09)
 
 `tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio
