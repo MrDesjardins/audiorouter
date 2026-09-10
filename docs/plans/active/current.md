@@ -6158,6 +6158,17 @@ child completed. It is therefore inconclusive and is not counted as new
 acceptance evidence; the last recorded successful guarded-chain result remains
 the one already documented above. No machine audio configuration was changed.
 
+- Requalified the authorized Rust process-loopback adapter on 2026-09-10 for
+  500 ms with `tests/acceptance/m00-rust-process-live.ps1 -AllowLiveAudio`.
+  Include mode processed 22,050 source frames into 23,936 engine frames over
+  187 quanta; exclude mode processed 21,609 source frames into 23,296 engine
+  frames over 182 quanta. Both modes reported zero rejected packets, xruns,
+  input/output overruns, and input/output underruns. The streams stopped and
+  reset successfully; no defaults, volume, mute, privacy, driver, or
+  persistent machine audio configuration changed. This is user-mode
+  process-loopback evidence only and does not close the managed-driver or
+  production callback gate.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
