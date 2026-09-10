@@ -203,6 +203,11 @@ change, or persistent machine audio configuration has occurred.
   no driver, plugin registration, audio stream, or persistent machine
   configuration changed.
 
+- Requalified static quality gates on 2026-09-10: `cargo fmt --all -- --check`
+  and `cargo clippy --workspace --all-features --all-targets --locked --
+  -D warnings` both passed. No runtime, plugin, driver, audio, or persistent
+  machine configuration action occurred.
+
 - Requalified standalone M01 CLI acceptance directly on 2026-09-10 with
   `tests\\acceptance\\m01-cli.ps1`; it passed. This check is control-plane
   validation only and performed no audio, driver, plugin-registration, or
