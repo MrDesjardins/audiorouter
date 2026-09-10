@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the native digital signal-path probe on 2026-09-10 with
+  `tests/acceptance/m00-native-loopback.ps1 -AllowLiveAudio`: the selected
+  VB-Audio render/capture pair produced 216,756 nonzero captured bytes during
+  the script's reported 1,000 ms capture and 1,500 ms tone windows. Temporary
+  stream artifacts were removed; defaults, volume, mute, privacy, drivers,
+  signing, startup, and persistent audio configuration remained unchanged.
+
 - Requalified the bounded digital impulse-correlation probe on 2026-09-10
   with `tests/acceptance/m00-native-impulse.ps1 -AllowLiveAudio
   -ImpulseCount 250`: 246 of 250 impulse groups were detected, p95 spacing
