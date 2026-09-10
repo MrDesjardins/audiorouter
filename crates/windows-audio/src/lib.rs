@@ -187,6 +187,73 @@ pub struct CapturePacket {
     pub qpc_position: u64,
 }
 
+/// Decode caller-owned interleaved IEEE float32 bytes into the engine's
+/// caller-owned planar block. The native capture adapter must copy a WASAPI
+/// packet into `source` and release the COM buffer before calling this helper.
+/// No allocation, endpoint access, or format conversion occurs here.
+pub fn decode_interleaved_float32(
+    source: &[u8],
+    channels: usize,
+    destination: &mut audiorouter_engine::AudioBlock,
+) -> Result<(), AudioError> {
+    if channels == 0 || destination.channels() != channels {
+        return Err(AudioError::InvalidFrameSize);
+    }
+    let expected = channels
+        .checked_mul(destination.frames())
+        .and_then(|samples| samples.checked_mul(std::mem::size_of::<f32>()))
+        .ok_or(AudioError::InvalidFrameSize)?;
+    if source.len() != expected {
+        return Err(AudioError::BufferTooSmall {
+            required: expected,
+            available: source.len(),
+        });
+    }
+    for frame in 0..destination.frames() {
+        for channel in 0..channels {
+            let offset = (frame * channels + channel) * std::mem::size_of::<f32>();
+            let sample = f32::from_ne_bytes([
+                source[offset],
+                source[offset + 1],
+                source[offset + 2],
+                source[offset + 3],
+            ]);
+            destination.channel_mut(channel).expect("validated channel")[frame] =
+                if sample.is_finite() { sample } else { 0.0 };
+        }
+    }
+    Ok(())
+}
+
+/// Encode the engine's planar float32 block into caller-owned interleaved
+/// IEEE float32 bytes for a WASAPI render packet. The destination must already
+/// be sized for exactly one block; this helper never allocates or touches an
+/// endpoint.
+pub fn encode_interleaved_float32(
+    source: &audiorouter_engine::AudioBlock,
+    destination: &mut [u8],
+) -> Result<(), AudioError> {
+    let expected = source
+        .channels()
+        .checked_mul(source.frames())
+        .and_then(|samples| samples.checked_mul(std::mem::size_of::<f32>()))
+        .ok_or(AudioError::InvalidFrameSize)?;
+    if destination.len() != expected {
+        return Err(AudioError::BufferTooSmall {
+            required: expected,
+            available: destination.len(),
+        });
+    }
+    for frame in 0..source.frames() {
+        for channel in 0..source.channels() {
+            let sample = source.channel(channel).expect("validated channel")[frame];
+            let offset = (frame * source.channels() + channel) * std::mem::size_of::<f32>();
+            destination[offset..offset + 4].copy_from_slice(&sample.to_ne_bytes());
+        }
+    }
+    Ok(())
+}
+
 /// Maximum packet period accepted by the process-loopback adapter before a
 /// packet can be split into the fixed 128-frame engine quantum. Larger device
 /// periods are rejected rather than creating an unbounded staging request.
@@ -2159,6 +2226,40 @@ unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn float32_boundary_converts_interleaved_and_planar_without_allocating() {
+        let mut block = audiorouter_engine::AudioBlock::new(2, 2).unwrap();
+        let source = [0.25_f32, -0.5, 1.0, f32::NAN];
+        let bytes: Vec<u8> = source
+            .iter()
+            .flat_map(|sample| sample.to_ne_bytes())
+            .collect();
+        decode_interleaved_float32(&bytes, 2, &mut block).unwrap();
+        assert_eq!(block.channel(0).unwrap(), &[0.25, 1.0]);
+        assert_eq!(block.channel(1).unwrap(), &[-0.5, 0.0]);
+
+        let mut encoded = vec![0_u8; bytes.len()];
+        encode_interleaved_float32(&block, &mut encoded).unwrap();
+        let encoded_samples: Vec<f32> = encoded
+            .chunks_exact(4)
+            .map(|sample| f32::from_ne_bytes(sample.try_into().unwrap()))
+            .collect();
+        assert_eq!(encoded_samples, vec![0.25, -0.5, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn float32_boundary_rejects_wrong_shape_before_access() {
+        let mut block = audiorouter_engine::AudioBlock::new(2, 2).unwrap();
+        assert!(matches!(
+            decode_interleaved_float32(&[0; 4], 2, &mut block),
+            Err(AudioError::BufferTooSmall { .. })
+        ));
+        assert!(matches!(
+            encode_interleaved_float32(&block, &mut [0; 4]),
+            Err(AudioError::BufferTooSmall { .. })
+        ));
+    }
 
     #[test]
     fn endpoint_metadata_shape_is_stable() {
