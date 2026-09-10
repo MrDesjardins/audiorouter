@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `d67a500e`; later commits after
+The active branch is currently pushed through `50da9f10`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -467,6 +467,12 @@ action occurred.
   and no plugin registration, audio stream, or machine configuration changed.
   This is local user-authorized compatibility evidence only; it does not infer
   redistribution rights or successful editor compatibility.
+- Requalified the same explicitly selected Pitchproof x64 VST2 DLL after the
+  plugin fixture race fix on 2026-09-09. Processing passed at 44.1, 48, and
+  96 kHz, both bounded editor-containment tests passed, and the SHA-256 stayed
+  `1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`.
+  Environment variables were restored; the installed binary was not copied,
+  registered, or modified, and no audio configuration changed.
 - Qualified the newly supplied x64 VST fixtures on 2026-09-09 without copying
   or registering them. BUSTERse VST2 and TDR Nova VST2 passed the contained
   processing/editor matrix at 44.1, 48, and 96 kHz; their SHA-256 values are
