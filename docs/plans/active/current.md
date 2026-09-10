@@ -588,6 +588,12 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified dedicated M04 DSP/recording acceptance on 2026-09-10 with
+  `tests/acceptance/m04-dsp-recording.ps1`: 30 DSP tests, 34 recording tests,
+  and associated doc-tests passed, including finite pitch shifting, bounded
+  processing, queue/recovery behavior, metadata, and file finalization. No
+  audio device or machine configuration was accessed.
+
 - Requalified M06 SDK installer provenance on 2026-09-10 with
   `tests/acceptance/m06-sdk-installer.ps1`: the pinned SDK Git metadata check
   passed. This was disposable metadata validation only; no SDK installation,
