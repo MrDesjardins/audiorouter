@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `a0b1635c`; later commits after
+The active branch is currently pushed through `c37c34c1`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -66,6 +66,13 @@ configuration changes.
   removed/restored; no registration, audio stream, or machine configuration
   changed. This is local auxiliary-bus compatibility evidence only, not a
   rights, editor, production-callback, or release qualification.
+
+- Closed a UI-05 inspector gap on 2026-09-09: bounded numeric processor
+  descriptors now render both an authoritative-range slider and a precise
+  number entry, sharing the existing draft validation path. Focused UI
+  accessibility coverage was added; the full UI suite passed 16 files/118
+  tests, TypeScript typecheck passed, and a disposable 212-module production
+  build passed. No audio, driver, signing, or machine configuration changed.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File

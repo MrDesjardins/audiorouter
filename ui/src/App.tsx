@@ -70,7 +70,10 @@ function ProcessorParameterEditor({ node, processors, connected, onChange }: { n
     if (parameter.type !== "number") return null;
     const fallback = typeof parameter.default === "number" ? parameter.default : 0;
     const numericValue = typeof value === "number" && Number.isFinite(value) ? value : fallback;
-    return <label key={parameter.name}>{parameter.name}{parameter.unit ? ` (${parameter.unit})` : ""}<input type="number" value={numericValue} min={parameter.minimum} max={parameter.maximum} step={parameter.unit === "Hz" ? 1 : 0.1} disabled={!connected} onChange={(event) => onChange(parameter.name, Number(event.target.value))} /></label>;
+    const step = parameter.unit === "Hz" ? 1 : 0.1;
+    const hasRange = Number.isFinite(parameter.minimum) && Number.isFinite(parameter.maximum) && parameter.minimum! < parameter.maximum!;
+    const sliderValue = hasRange ? Math.min(parameter.maximum!, Math.max(parameter.minimum!, numericValue)) : numericValue;
+    return <label key={parameter.name}><span>{parameter.name}{parameter.unit ? ` (${parameter.unit})` : ""}</span>{hasRange && <input type="range" aria-label={`${parameter.name} slider`} value={sliderValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onChange={(event) => onChange(parameter.name, Number(event.target.value))} />}<input type="number" aria-label={`${parameter.name} precise value`} value={numericValue} min={parameter.minimum} max={parameter.maximum} step={step} disabled={!connected} onChange={(event) => onChange(parameter.name, Number(event.target.value))} /></label>;
   })}</>;
 }
 

@@ -9,6 +9,7 @@ import { appendDraftConnection, insertDraftMixer } from "./draft";
 import { demoSession } from "./fixtures";
 import { BackendConnectionContext } from "./backendConnectionContext";
 import { GraphList } from "./GraphList";
+import type { ProcessorDescriptor } from "./processorCatalog";
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
@@ -78,6 +79,28 @@ describe("keyboard connection dialog", () => {
 
     expect(await screen.findByLabelText("Microphone out output")).toBeTruthy();
     expect(await screen.findByLabelText("Voice gain in input")).toBeTruthy();
+  });
+
+  it("offers bounded slider and precise entry for numeric processor parameters", async () => {
+    const processor: ProcessorDescriptor = {
+      id: "gain",
+      version: 1,
+      category: "effect",
+      availability: { status: "available" },
+      latencySamples: 0,
+      parameters: [{ name: "gainDb", type: "number", unit: "dB", minimum: -60, maximum: 24, default: 0 }],
+    };
+    const backend = { ...createDisconnectedBackend(), connected: true, listProcessors: async () => [processor] };
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByLabelText("Voice gain, gain"));
+
+    const slider = await screen.findByRole("slider", { name: "gainDb slider" });
+    const precise = screen.getByRole("spinbutton", { name: "gainDb precise value" });
+    expect(slider.getAttribute("min")).toBe("-60");
+    expect(slider.getAttribute("max")).toBe("24");
+    expect((precise as HTMLInputElement).value).toBe("0");
+    fireEvent.change(slider, { target: { value: "-6" } });
+    expect((precise as HTMLInputElement).value).toBe("-6");
   });
 
   it("persists tidy layout positions as presentation state", async () => {
