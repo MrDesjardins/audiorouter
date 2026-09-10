@@ -46,10 +46,13 @@ try {
     if (-not $line) { throw "adapter bridge did not report telemetry: $($output -join "`n")" }
     $captured = [int]([regex]::Match($line, 'captured_frames=(\d+)').Groups[1].Value)
     $quanta = [int]([regex]::Match($line, 'processed_quanta=(\d+)').Groups[1].Value)
+    $tapCalls = [int]([regex]::Match($line, 'tap_calls=(\d+)').Groups[1].Value)
+    $tapNonFinite = [int]([regex]::Match($line, 'tap_non_finite_samples=(\d+)').Groups[1].Value)
     $rendered = [int]([regex]::Match($line, 'rendered_frames=(\d+)').Groups[1].Value)
     $dropped = [int]([regex]::Match($line, 'dropped_render_frames=(\d+)').Groups[1].Value)
     $xruns = [int]([regex]::Match($line, 'scheduler_xruns=(\d+)').Groups[1].Value)
-    if ($captured -le 0 -or $quanta -le 0 -or $rendered -le 0 -or $dropped -ne 0 -or $xruns -ne 0) {
+    $deadlineMisses = [int]([regex]::Match($line, 'scheduler_deadline_misses=(\d+)').Groups[1].Value)
+    if ($captured -le 0 -or $quanta -le 0 -or $tapCalls -ne $quanta -or $tapNonFinite -ne 0 -or $rendered -le 0 -or $dropped -ne 0 -or $xruns -ne 0 -or $deadlineMisses -ne 0) {
         throw "adapter bridge reported invalid live telemetry: $line"
     }
     $after = Get-MediaSnapshot
