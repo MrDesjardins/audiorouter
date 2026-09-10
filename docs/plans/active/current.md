@@ -28,6 +28,18 @@ updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
 
+- Requalified the locked all-features workspace on 2026-09-09 after the shell
+  lifecycle change: all workspace unit and integration tests passed (including
+  the native-gated plugin tests that were not applicable), all doc-tests passed,
+  and the shell forwarding test passed 1/1. This is portable/native code-path
+  evidence only; the Tauri WebView-to-command interaction remains unproven.
+  No audio stream, driver, plugin registration, signing action, or persistent
+  machine configuration changed.
+- Next task: create a frontend-owned or manually observable WebView2 invocation
+  acceptance that proves `rpc_request` reaches an enrolled backend; otherwise
+  continue the next portable M06 worker/graph gate without claiming GUI
+  end-to-end completion.
+
 - Requalified the explicitly user-authorized installed x64 Pitchproof VST2 DLL
   on 2026-09-09 through `tests/acceptance/m06-vst2-installed.ps1`. Processing
   passed at 44.1, 48, and 96 kHz; the dedicated editor-thread bound and
