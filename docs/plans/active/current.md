@@ -56,6 +56,16 @@ configuration has occurred.
   changed. This is headless evidence; the interactive elevated shell/WebView2
   gate remains open.
 
+- Requalified the explicitly authorized installed Pitchproof x64 VST2 DLL on
+  2026-09-10 with `tests/acceptance/m06-vst2-installed.ps1`. Processing passed
+  at 44.1, 48, and 96 kHz; the dedicated editor-thread containment and
+  supervised timeout/reaping checks also passed. The before/after SHA-256
+  remained `1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`;
+  the fixture environment was restored and a temp-root scan found zero
+  `audiorouter-*` artifacts. No copy, registration, audio stream, or
+  persistent machine configuration changed. Rights and release qualification
+  remain separate gates.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
