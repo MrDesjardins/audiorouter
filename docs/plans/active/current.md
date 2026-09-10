@@ -193,6 +193,16 @@ change, or persistent machine audio configuration has occurred.
   `audiorouter-*` artifacts. This was UI-only validation; no audio, driver, or
   machine configuration changed.
 
+- Requalified the locked all-features workspace on 2026-09-10 with
+  `cargo test --workspace --all-features --locked`. All workspace unit,
+  integration, and doc-tests passed; the feature-enabled worker suite passed
+  35 tests with 10 fixture-dependent tests correctly ignored. The run covered
+  the control, domain, DSP, engine, plugin-host, protocol, recording, storage,
+  transport, Windows-audio, and CLI crates. Sixteen known direct SQLite test
+  artifacts were validated under the OS temp root and removed, leaving zero;
+  no driver, plugin registration, audio stream, or persistent machine
+  configuration changed.
+
 - Requalified standalone M01 CLI acceptance directly on 2026-09-10 with
   `tests\\acceptance\\m01-cli.ps1`; it passed. This check is control-plane
   validation only and performed no audio, driver, plugin-registration, or
