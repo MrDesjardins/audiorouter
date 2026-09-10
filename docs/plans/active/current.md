@@ -6169,6 +6169,15 @@ the one already documented above. No machine audio configuration was changed.
   process-loopback evidence only and does not close the managed-driver or
   production callback gate.
 
+- Requalified the authorized event-driven native endpoint lifecycle on
+  2026-09-10 for 500 ms with `tests/acceptance/m00-native-event-live.ps1
+  -AllowLiveAudio`. The existing VB-Audio Virtual Cable pair completed
+  activation, capture, render, reset, and stop with 24,480 capture frames and
+  28,800 render frames. The test used silent render only and reported defaults,
+  volume, mute, privacy, driver, signing, and startup configuration unchanged.
+  This is existing third-party endpoint evidence; AudioRouter's managed
+  virtual-device and production callback gates remain open.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
