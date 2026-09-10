@@ -588,6 +588,12 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the six available ReaPlugs x64 VST2 editor-containment cases on
+  2026-09-10 with `tests/acceptance/m06-vst2-editor.ps1 -SkipIncompatibleCandidates`:
+  every dedicated editor-thread bound and supervised worker-timeout/reaping
+  case passed. The plugins were used in place; no registration, audio stream,
+  or persistent audio configuration changed.
+
 - Requalified the six available user-provided ReaPlugs x64 VST2 effects on
   2026-09-10 with `tests/acceptance/m06-vst2-reaplugs.ps1` at 44.1, 48, and
   96 kHz: all 18 effect/rate combinations passed through disposable workers,
