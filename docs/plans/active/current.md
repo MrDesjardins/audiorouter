@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `204edcee`; later commits after
+The active branch is currently pushed through `0a6fd9ba`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -50,6 +50,13 @@ configuration changes.
   This portable/native-worker validation did not install drivers, register
   plugins, open an audio stream, change signing mode, or alter machine audio
   configuration.
+
+- Closed a Tauri host-boundary capacity gap on 2026-09-10: native command
+  requests now enforce the same bounded pending-request limit as WebView2,
+  reject duplicate JSON-RPC IDs deterministically, and remove IDs on every
+  settlement or synchronous bridge failure. Focused host tests passed 13/13,
+  the full UI suite passed 16 files/116 tests, and TypeScript typecheck passed.
+  No audio, driver, signing, or machine configuration action occurred.
 
 - Hardened M08 release preparation on 2026-09-09: every shipped executable
   (CLI, plugin worker, and native shell) is now checked as a regular non-reparse
