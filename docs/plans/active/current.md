@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `576b9008`; the native probe compile was
+The latest pushed checkpoint is `23ce0f3d`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -36,6 +36,19 @@ qualification remains open.
   `tests/acceptance/m06-sdk-installer.ps1`: wrong-origin and reparse-point
   destination fixtures were rejected as required. Disposable Git fixtures
   were removed; no SDK, plugin, driver, or audio configuration changed.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-10 at `23ce0f3d`: VS2026/MSVC/SDK/WDK discovery and native compile,
+  read-only 31-endpoint inventory, disposable pinned SysVAD x64
+  compile/package/API/signability qualification, M01/M04/M05, VST3 SDK and
+  native workers, repository VST2 state/legacy/fault fixtures, M07 headless,
+  unsigned M08 artifacts, 159 normative mappings, and documentation
+  validation (51 Markdown files/163 local links) all passed. The chain removed
+  13 run-owned temporary directories. It did not install/load a driver, change
+  signing mode, register plugins/startup entries, open live audio, or change
+  persistent machine audio configuration. Interactive elevated shell-RPC,
+  production driver ownership/signing, installer, clean-machine, physical
+  latency, and manual UI gates remain open.
 
 The latest complete guarded M00-M08 result documented below remains the
 previous successful run; the most recent wrapper invocation was inconclusive
