@@ -2152,3 +2152,15 @@ passed 67 library and 34 worker tests with nine expected fixture-dependent
 skips; strict Clippy and documentation validation passed. This is fixture and
 control-plane evidence only; native third-party state/editor, callback-timing,
 and physical-latency gates remain open.
+
+## VST2 state and legacy-main fixture requalification (2026-09-09)
+
+`tests/acceptance/m06-vst2-state-fixture.ps1` rebuilt the repository-owned
+ignored fixtures and passed processing plus chunk-state restoration for both
+the standard `VSTPluginMain` and legacy `main` exports at 44.1, 48, and 96
+kHz. The nonfinite-output fixture was rejected fail-closed, and crash and
+hang fixtures were contained by the worker boundary (including timeout and
+reaping). Environment variables were restored and generated DLL/object/import
+artifacts remain local-only. This is compatibility and containment evidence;
+third-party rights, editor, production callback, and release gates remain
+open.

@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `c75090cc`; later commits after
+The active branch is currently pushed through `3f113dd8`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -37,6 +37,13 @@ configuration changes.
   exit code 0, including M08 release preparation and cleanup of 13 owned
   temporary children. No audio, driver, signing, or machine configuration
   changed.
+
+- Requalified the repository-owned VST2 state/legacy boundary on 2026-09-09:
+  standard and legacy `main` fixtures passed processing and chunk-state
+  restoration at 44.1, 48, and 96 kHz; nonfinite output was rejected; and
+  crash/hang fixtures were contained with timeout/reaping. The generated
+  fixtures remained ignored/local-only, environment variables were restored,
+  and no plugin registration, audio stream, or machine configuration changed.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
