@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `9c919405`; the native probe compile was
+The latest pushed checkpoint is `37f7771d`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -34,6 +34,14 @@ qualification remains open.
   SysVAD, an installed third-party cable, or the local ReaPlugs files for
   those requirements; retain the current fail-closed capability responses and
   rollback-safe user-mode bridge until the prerequisite is available.
+
+- Requalified the focused M07 startup boundary on 2026-09-10 with
+  `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
+  four targeted tests passed. Durable startup-plan persistence, bounded
+  session restoration, idempotent planning, and the explicit fail-closed
+  response (no OS startup registration in this build) remain verified. No
+  startup entry, audio endpoint, driver, plugin registration, or persistent
+  machine configuration was changed.
 
 - Requalified the installed ReaPlugs VST2 directory on 2026-09-10 with
   `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates`.
