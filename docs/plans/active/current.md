@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `12cdcac9`; later commits after
+The active branch is currently pushed through `13e34f63`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -70,7 +70,7 @@ configuration changes.
 - Closed a UI-05 inspector gap on 2026-09-09: bounded numeric processor
   descriptors now render both an authoritative-range slider and a precise
   number entry, sharing the existing draft validation path. Focused UI
-  accessibility coverage was added; the full UI suite passed 16 files/118
+  accessibility coverage was added; the full UI suite passed 17 files/121
   tests, TypeScript typecheck passed, and a disposable 212-module production
   build passed. No audio, driver, signing, or machine configuration changed.
 
