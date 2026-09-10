@@ -588,6 +588,11 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified M06 SDK installer provenance on 2026-09-10 with
+  `tests/acceptance/m06-sdk-installer.ps1`: the pinned SDK Git metadata check
+  passed. This was disposable metadata validation only; no SDK installation,
+  plugin, driver, or audio configuration action occurred.
+
 - Requalified the repository VST2 state/legacy/fault fixture matrix on
   2026-09-10 with `tests/acceptance/m06-vst2-state-fixture.ps1`: modern and
   legacy entry points, chunk-state restoration at 44.1/48/96 kHz,
