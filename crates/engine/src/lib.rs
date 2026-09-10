@@ -337,6 +337,7 @@ pub struct VirtualBusBridge {
     active: AtomicBool,
     generation: AtomicU64,
     activation_lock: AtomicBool,
+    lease_deadline: AtomicU64,
     dropped: AtomicU64,
 }
 
@@ -348,6 +349,7 @@ impl VirtualBusBridge {
             active: AtomicBool::new(false),
             generation: AtomicU64::new(0),
             activation_lock: AtomicBool::new(false),
+            lease_deadline: AtomicU64::new(0),
             dropped: AtomicU64::new(0),
         })
     }
@@ -388,6 +390,7 @@ impl VirtualBusBridge {
             return Err(VirtualBusBridgeError::InvalidGeneration);
         }
         self.active.store(false, Ordering::Release);
+        self.lease_deadline.store(0, Ordering::Release);
         self.drain();
         self.active.store(true, Ordering::Release);
         self.release_activation_lock();
@@ -399,8 +402,47 @@ impl VirtualBusBridge {
     pub fn deactivate(&self) {
         self.acquire_activation_lock();
         self.active.store(false, Ordering::Release);
+        self.lease_deadline.store(0, Ordering::Release);
         self.drain();
         self.release_activation_lock();
+    }
+
+    /// Renew the bridge lease using a caller-owned monotonic clock. A zero
+    /// deadline disables expiry for this generation; native control code should
+    /// normally provide a bounded future deadline. This method is control-side
+    /// only and never runs on the audio callback.
+    pub fn renew_lease(
+        &self,
+        generation: u64,
+        deadline_tick: u64,
+    ) -> Result<(), VirtualBusBridgeError> {
+        self.acquire_activation_lock();
+        let valid = self.is_active() && self.generation() == generation;
+        if valid {
+            self.lease_deadline.store(deadline_tick, Ordering::Release);
+        }
+        self.release_activation_lock();
+        valid
+            .then_some(())
+            .ok_or(VirtualBusBridgeError::InvalidGeneration)
+    }
+
+    /// Expire a stale lease and clear both rings. The caller supplies the same
+    /// monotonic tick domain used by `renew_lease`; expiry is deterministic in
+    /// tests and does not read a clock or sleep on the realtime path.
+    pub fn expire_if_stale(&self, generation: u64, now_tick: u64) -> bool {
+        self.acquire_activation_lock();
+        let stale = self.is_active()
+            && self.generation() == generation
+            && self.lease_deadline.load(Ordering::Acquire) != 0
+            && now_tick >= self.lease_deadline.load(Ordering::Acquire);
+        if stale {
+            self.active.store(false, Ordering::Release);
+            self.lease_deadline.store(0, Ordering::Release);
+            self.drain();
+        }
+        self.release_activation_lock();
+        stale
     }
 
     pub fn submit_render(&self, generation: u64, mut block: AudioBlock) -> Result<(), AudioBlock> {
@@ -4701,6 +4743,25 @@ mod tests {
         assert_eq!(bridge.dropped(), 0);
         assert_eq!(
             bridge.activate(1),
+            Err(VirtualBusBridgeError::InvalidGeneration)
+        );
+    }
+
+    #[test]
+    fn virtual_bus_bridge_expires_stale_lease_and_clears_buffered_audio() {
+        let bridge = VirtualBusBridge::new(2, 1, 2).unwrap();
+        bridge.activate(1).unwrap();
+        assert_eq!(bridge.renew_lease(1, 100), Ok(()));
+        let mut input = AudioBlock::new(1, 2).unwrap();
+        input.channel_mut(0).unwrap().fill(0.75);
+        bridge.submit_render(1, input).unwrap();
+        assert!(!bridge.expire_if_stale(1, 99));
+        assert!(bridge.is_active());
+        assert!(bridge.expire_if_stale(1, 100));
+        assert!(!bridge.is_active());
+        assert!(bridge.try_receive_capture().is_none());
+        assert_eq!(
+            bridge.renew_lease(1, 200),
             Err(VirtualBusBridgeError::InvalidGeneration)
         );
     }
