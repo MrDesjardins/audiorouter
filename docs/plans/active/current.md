@@ -70,6 +70,14 @@ configuration changes.
   clean M08 acceptance are required before this slice is complete; no audio,
   driver, signing, installation, or machine configuration is involved.
 
+- Completed the clean M08 rerun on 2026-09-09 after the release-ordering fix:
+  the root UI rebuilt before shell compilation, the optimized standalone
+  Tauri shell succeeded, and the UI archive, provenance/SBOMs, notices,
+  checksums, unsigned status, blockers, and required-artifact verifier all
+  passed. Temporary release output was removed. This remains unsigned artifact
+  evidence only; installer, driver, signing, and clean-machine gates remain
+  open, with no audio or machine configuration changed.
+
 - Added an explicit native-shell host bridge in `src-tauri/src/main.rs` on
   2026-09-09. The initialization script now publishes the validated session
   ID and a bounded `AudioRouterHostBridge` whose transport invokes the
