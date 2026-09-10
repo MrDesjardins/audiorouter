@@ -588,6 +588,13 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified `tests/acceptance/m08-release.ps1` on 2026-09-10 at the current
+  head: optimized CLI/plugin-host and native-shell builds, UI typecheck and
+  production builds, unsigned artifact preparation, SBOM structure checks, and
+  artifact verification all passed. Disposable release output was removed by
+  the acceptance cleanup. No installer, driver, signing, plugin registration,
+  audio stream, or persistent audio configuration action occurred.
+
 - Requalified the six available ReaPlugs x64 VST2 editor-containment cases on
   2026-09-10 with `tests/acceptance/m06-vst2-editor.ps1 -SkipIncompatibleCandidates`:
   every dedicated editor-thread bound and supervised worker-timeout/reaping
