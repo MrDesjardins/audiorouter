@@ -5854,6 +5854,22 @@ When work begins, add objective, requirement IDs, task checklist, changes, decis
 - Next M05/M06 task: retain verified identity as display-only until the authenticated native shell and managed process-capture owner are integrated; continue independent plugin qualification and native gates.
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at pushed head `f6b394e2` on 2026-09-08 after the verified application identity UI panel: M00 toolchain/native compile and read-only 31-endpoint inventory, disposable pinned SysVAD x64 package/API/signability qualification, M01/M04, M05 UI (typecheck, 15 files/93 tests, temporary production build), M06 SDK/VST3 and VST2 fixtures, M07, unsigned M08 preparation, 159 normative traceability mappings, and documentation validation (51 Markdown files/161 local links) passed. Temporary outputs/checkouts were removed; no driver installation/loading, signing-mode change, plugin/startup registration, audio stream, or persistent machine audio configuration occurred. Production/native release gates remain open.
 - Next M05/M06 task: retain the read-only identity presentation until authenticated native-shell/process-capture integration exists; qualify an independent rights-cleared plugin when supplied and continue the remaining native release gates.
+
+## Current handoff — 2026-09-10
+
+Latest pushed checkpoint: `93124bfd`. Since the prior full acceptance, the
+guarded native endpoint lifecycle, impulse correlation, endpoint loopback,
+process-loopback include/exclude, event-mode lifecycle, Rust adapter telemetry,
+workspace regression, ReaPlugs classification, and Pitchproof x64 processing/
+editor checks have all passed and their evidence is recorded above. The
+repository is clean; temporary streams, plugin copies, recordings, and test
+artifacts were removed, and no persistent audio configuration was changed.
+
+Next actionable work is the administrator-authorized M07 shell RPC acceptance
+when an elevated PowerShell session is available. The production virtual-device
+driver/endpoint-owned callback, calibrated physical latency, signing, installer,
+clean-machine, and manual usability gates remain explicit blockers; do not
+weaken or simulate those gates.
 - Fixed M08 release reproducibility on 2026-09-10: `src-tauri/Cargo.lock` now includes the recently added `audiorouter-engine` workspace dependency, allowing the native shell release build to honor `--locked`. The lockfile refresh was committed and pushed as `9f6d1a5d`; `cargo generate-lockfile` resolved the intended one-package lockfile delta, and the release input tree remained clean before acceptance.
 - Re-ran `tests/acceptance/m08-release.ps1` at `9f6d1a5d` on 2026-09-10 with the installed VS2026/Rust toolchain: release CLI/plugin-host build, UI typecheck/Vite build, native shell release build, unsigned artifact preparation, SBOM structure checks, and artifact verification passed. Disposable output was removed by the test's `finally` block. No installer, driver, signing, plugin registration, audio stream, or persistent machine audio configuration action occurred.
 - Next M00/M02 task: retain the structured diagnostics and portable scheduler/tap boundaries while connecting them to the managed endpoint-owned callback after the production virtual-device driver boundary exists; separately retain the authenticated elevated-shell, signed-driver, installer, clean-machine, physical-latency, manual-UI, and rights-cleared independent-plugin gates.
