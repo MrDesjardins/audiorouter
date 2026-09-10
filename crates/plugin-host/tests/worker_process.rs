@@ -6,6 +6,8 @@ use audiorouter_plugin_host::vst2::Vst2EditorThread;
 use audiorouter_plugin_host::ParameterEvent;
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::SupervisedBusWorkerLoop;
+#[cfg(all(windows, feature = "test-fixtures"))]
+use audiorouter_plugin_host::WorkerProcessError;
 use audiorouter_plugin_host::{
     decode_worker_message, encode_worker_message, inspect_binary, worker_clock_tick,
     EditorParentAuthorizationIssuer, PeArchitecture, PluginFormat, PluginIdentity,
@@ -1025,6 +1027,43 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
         .shutdown()
         .expect("reap native VST3 worker")
         .success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires an explicitly selected VST3 fixture that is expected to fail in the worker"]
+fn verified_native_vst3_worker_contains_an_opt_in_fixture_failure() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_FIXTURE")
+            .expect("set AUDIOROUTER_VST3_FIXTURE for native VST3 failure acceptance"),
+    );
+    let worker_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER")
+            .expect("set AUDIOROUTER_VST3_NATIVE_WORKER for native VST3 failure acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST3 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST3 fixture without loading it");
+    assert_eq!(identity.format, PluginFormat::Vst3);
+    assert_eq!(identity.architecture, PeArchitecture::X64);
+    let result = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    );
+    assert!(matches!(
+        result,
+        Err(WorkerProcessError::Message(_)
+            | WorkerProcessError::Protocol(_)
+            | WorkerProcessError::Exited
+            | WorkerProcessError::Timeout)
+    ));
 }
 
 #[cfg(all(windows, feature = "test-fixtures"))]
