@@ -618,6 +618,13 @@ action occurred.
   result compile-only. Documentation validation passed for 51 Markdown files
   and 163 local links; no shell launch, audio, driver, signing, or machine
   configuration action occurred.
+- Requalified the controlled native process-loopback probe on 2026-09-10 with
+  `tests/acceptance/m00-native-process-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 500`: the disposable process-tree capture completed
+  with 21,609 frames and 77,823 nonzero payload bytes. The child and temporary
+  capture were cleaned up, and no persistent audio configuration changed. This
+  remains controlled process-attribution evidence, not PID-reuse or physical-
+  latency qualification.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
   2026-09-10 at the current head: VS2026/WDK discovery and native compile,
