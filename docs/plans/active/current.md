@@ -99,6 +99,14 @@ configuration has occurred.
   installation or audio configuration changed, and the temp-root scan found
   zero `audiorouter-*` artifacts.
 
+- Requalified the repository VST2 fixture matrix directly on 2026-09-10 with
+  `tests/acceptance/m06-vst2-state-fixture.ps1`. Modern and legacy `main`
+  entry points, chunk-state restoration, non-finite-output rejection, and
+  crash/hang containment all passed at 44.1, 48, and 96 kHz in disposable
+  workers. The generated DLLs and build intermediates remain ignored,
+  repository-local test fixtures and were not committed; no plugin
+  registration, audio stream, or machine configuration changed.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
