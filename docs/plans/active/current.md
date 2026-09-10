@@ -6223,6 +6223,16 @@ the one already documented above. No machine audio configuration was changed.
   removed, and the follow-up scan found zero. No repository, audio endpoint,
   or persistent machine configuration was changed.
 
+- Requalified the guarded native endpoint lifecycle on 2026-09-10 with
+  `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 100`. It enumerated 13 capture and 18 render
+  endpoints, completed the bounded shared-capture lifecycle and silent-render
+  checks, and observed one occupied render endpoint without treating that
+  expected ownership condition as a configuration failure. Defaults, volume,
+  mute, privacy, drivers, signing, and startup configuration were unchanged.
+  This supports the contention-handling boundary; it does not prove managed
+  driver ownership or production routing.
+
 The pinned VST3 SDK qualification was rechecked on 2026-09-10: validator
 self-tests, AGain main/auxiliary-bus classes, explicit single-bus rejection,
 offline loader checks, and the five-class mda matrix passed. The SDK and fixture
