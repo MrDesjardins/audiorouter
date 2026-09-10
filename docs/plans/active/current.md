@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `a1f56db1`; later commits after
+The active branch is currently pushed through `55785376`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -61,7 +61,7 @@ action occurred.
   asynchronous graph-staging regressions through the supervised worker path.
   The temporary native worker was built and removed, the fixture was used in
   place, and no plugin registration, audio stream, or machine configuration
-changed. This confirms compatibility with the bounded two-input-bus worker
+  changed. This confirms compatibility with the bounded two-input-bus worker
   contract only; broad vendor/editor/rights/release qualification remains open.
 
 - Extended the TDR Nova x64 VST3 multi-bus qualification on 2026-09-10 across
@@ -80,6 +80,15 @@ changed. This confirms compatibility with the bounded two-input-bus worker
   and strict all-target Clippy passed. The temporary worker and environment
   were cleaned/restored; no plugin registration, audio stream, or machine
   configuration changed.
+
+- Extended supplied VST3 failure-boundary evidence on 2026-09-10: BUSTERse's
+  crashing x64 module, COMPER's controller-activation failure, and TDR Nova's
+  deliberate single-stream/two-bus mismatch each passed the contained
+  `verified_native_vst3_worker_contains_an_opt_in_fixture_failure` regression.
+  Each result was observed as a bounded worker error, with temporary workers
+  and environment variables cleaned/restored. TDR Nova's supported multi-bus
+  path remains separately qualified; no plugin registration, audio stream, or
+  machine configuration changed.
 
 - Rechecked the native-shell frontend invocation boundary on 2026-09-09 after
   the Tauri transport lifecycle fix: the connected UI still issues its initial
