@@ -1,6 +1,6 @@
 # Active plan
 
-Updated: 2026-09-09.
+Updated: 2026-09-10.
 
 ## Current state
 
@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `3a49d027`; later commits after
+The active branch is currently pushed through `b83a41f9`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -157,6 +157,15 @@ configuration changes.
   The prototype was completely reverted after compile verification. No quit
   action is exposed until an atomic backend-owned finalize/shutdown method is
   implemented and tested.
+
+- Added the authenticated-contract prerequisite `recorders.list` on
+  2026-09-10. It reports only live in-memory recorder state and the last frame
+  boundary, avoiding the unsafe inference that persisted `recordings.list`
+  metadata represents an active recorder. Domain metadata, TypeScript
+  contracts, control dispatch/schema validation, and a lifecycle regression
+  test were updated; control tests passed 100/100, strict Clippy passed, and
+  the UI typecheck passed. This enables a future backend-owned finalize
+  operation but does not itself authorize tray quit or process exit.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
