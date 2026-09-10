@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `3f04ccc0`; later commits after
+The active branch is currently pushed through `f05386d4`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -142,6 +142,13 @@ configuration changes.
   counts. Unit coverage now includes the authoritative state aggregation;
   shell tests passed 7/7, strict Clippy passed, and the release build passed.
   Explicit quit-and-stop and elevated interactive tray evidence remain open.
+
+- Audited explicit tray quit-and-stop on 2026-09-10. The current authenticated
+  API exposes per-session stop and recorder transitions that require a frame,
+  but no atomic backend shutdown/finalize operation; session stop alone does
+  not prove recorder finalization. The shell therefore intentionally exposes
+  no unsafe quit action. A future implementation must add and test one
+  backend-owned finalize/stop operation before permitting process exit.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
