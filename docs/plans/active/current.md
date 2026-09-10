@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `0859220e`; later commits after
+The active branch is currently pushed through `54c855f7`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -80,6 +80,13 @@ configuration changes.
   lost backend/owner cannot expose stale buffered audio. The regression passed
   with engine tests 91/91 and strict Clippy. This is portable bridge evidence;
   the native driver heartbeat and 500 ms measured deadline remain open.
+
+- Added `RealtimeScheduler::process_once_with_tap` on 2026-09-10 at pushed
+  head `54c855f7`. The scheduler now forwards each processed ring quantum to
+  the allocation-free tap with its explicit timeline boundary, while retaining
+  bounded input/output ownership and generation handling. Engine tests passed
+  92/92 and strict Clippy passed. Native WASAPI packet conversion, device
+  activation, and measured callback timing remain open.
 
 - Hardened the pooled tap path on 2026-09-10. Variable-sized engine quanta are
   accepted without allocation by truncating owned pooled vectors and restoring
