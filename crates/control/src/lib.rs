@@ -10,6 +10,7 @@ use audiorouter_domain::{
     PermissionScope, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState, Session,
     VirtualBusRegistry, API_METHODS,
 };
+use audiorouter_engine::{AudioBlock, AudioTap};
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
@@ -26,6 +27,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const MUTATION_RATE_PER_SECOND: f64 = 20.0;
@@ -98,7 +100,7 @@ pub trait RecorderWorker: Send {
 /// unbounded inner loop.
 pub struct WavRecorderWorker {
     recorder: Option<WavRecorder<std::fs::File>>,
-    queue: RecordingQueue,
+    queue: Arc<RecordingQueue>,
     maximum_chunks_per_pass: usize,
 }
 
@@ -116,11 +118,15 @@ impl WavRecorderWorker {
         }
         let writer = WavWriter::new(output, format, channels, sample_rate, false)
             .map_err(|error| format!("WAV writer initialization failed: {error:?}"))?;
-        let queue = RecordingQueue::new(queue_capacity)
-            .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        let queue = RecordingQueue::new_pooled(
+            queue_capacity,
+            usize::from(channels),
+            (audiorouter_recording::MAX_RECORDING_CHUNK_SAMPLES / usize::from(channels)).max(1),
+        )
+        .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
         Ok(Self {
             recorder: Some(WavRecorder::new(writer)),
-            queue,
+            queue: Arc::new(queue),
             maximum_chunks_per_pass,
         })
     }
@@ -150,6 +156,10 @@ impl WavRecorderWorker {
 
     pub fn queue_len(&self) -> usize {
         self.queue.len()
+    }
+
+    pub fn audio_tap(&self) -> RecorderAudioTap {
+        RecorderAudioTap::new(self.queue.clone())
     }
 }
 
@@ -189,7 +199,7 @@ impl RecorderWorker for WavRecorderWorker {
 /// available.
 pub struct BufferedFlacRecorderWorker {
     recorder: Option<BufferedFlacRecorder>,
-    queue: RecordingQueue,
+    queue: Arc<RecordingQueue>,
     output: Option<std::fs::File>,
     maximum_chunks_per_pass: usize,
 }
@@ -208,11 +218,15 @@ impl BufferedFlacRecorderWorker {
         }
         let recorder = BufferedFlacRecorder::new(channels, sample_rate, bits_per_sample)
             .map_err(|error| format!("FLAC writer initialization failed: {error:?}"))?;
-        let queue = RecordingQueue::new(queue_capacity)
-            .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        let queue = RecordingQueue::new_pooled(
+            queue_capacity,
+            channels,
+            (audiorouter_recording::MAX_RECORDING_CHUNK_SAMPLES / channels).max(1),
+        )
+        .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
         Ok(Self {
             recorder: Some(recorder),
-            queue,
+            queue: Arc::new(queue),
             output: Some(output),
             maximum_chunks_per_pass,
         })
@@ -236,6 +250,10 @@ impl BufferedFlacRecorderWorker {
 
     pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
         self.queue.try_push(chunk)
+    }
+
+    pub fn audio_tap(&self) -> RecorderAudioTap {
+        RecorderAudioTap::new(self.queue.clone())
     }
 }
 
@@ -278,7 +296,7 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
 /// queue is drained; only the seekable STREAMINFO patch remains for finish.
 pub struct StreamingFlacRecorderWorker {
     recorder: Option<StreamingFlacRecorder<std::fs::File>>,
-    queue: RecordingQueue,
+    queue: Arc<RecordingQueue>,
     maximum_chunks_per_pass: usize,
 }
 
@@ -299,11 +317,15 @@ impl StreamingFlacRecorderWorker {
                 .map_err(|error| {
                     format!("streaming FLAC writer initialization failed: {error:?}")
                 })?;
-        let queue = RecordingQueue::new(queue_capacity)
-            .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        let queue = RecordingQueue::new_pooled(
+            queue_capacity,
+            usize::from(channels),
+            (audiorouter_recording::MAX_RECORDING_CHUNK_SAMPLES / usize::from(channels)).max(1),
+        )
+        .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
         Ok(Self {
             recorder: Some(StreamingFlacRecorder::new(writer)),
-            queue,
+            queue: Arc::new(queue),
             maximum_chunks_per_pass,
         })
     }
@@ -326,6 +348,10 @@ impl StreamingFlacRecorderWorker {
 
     pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
         self.queue.try_push(chunk)
+    }
+
+    pub fn audio_tap(&self) -> RecorderAudioTap {
+        RecorderAudioTap::new(self.queue.clone())
     }
 }
 
@@ -356,6 +382,48 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
             file_finalized: true,
             recoverable: false,
         })
+    }
+}
+
+/// Allocation-free bridge from a processed engine block to a pooled recorder.
+/// The worker owns the queue's consumer side; this tap owns no audio buffers
+/// and only uses chunks acquired from the worker's preallocated pool.
+pub struct RecorderAudioTap {
+    queue: Arc<RecordingQueue>,
+}
+
+impl RecorderAudioTap {
+    fn new(queue: Arc<RecordingQueue>) -> Self {
+        Self { queue }
+    }
+}
+
+impl AudioTap for RecorderAudioTap {
+    fn on_processed_block(&self, start_frame: u64, block: &AudioBlock) {
+        let Some(mut chunk) = self.queue.try_acquire() else {
+            return;
+        };
+        let sample_count = block.channels().saturating_mul(block.frames());
+        if sample_count > chunk.samples.len() {
+            self.queue.recycle(chunk);
+            return;
+        }
+        chunk.samples.truncate(sample_count);
+        chunk.start_frame = start_frame;
+        for frame in 0..block.frames() {
+            for channel in 0..block.channels() {
+                let sample = block
+                    .channel(channel)
+                    .and_then(|samples| samples.get(frame))
+                    .copied()
+                    .filter(|sample| sample.is_finite())
+                    .unwrap_or(0.0);
+                chunk.samples[frame * block.channels() + channel] = sample;
+            }
+        }
+        if let Err(chunk) = self.queue.try_commit(chunk) {
+            self.queue.recycle(chunk);
+        }
     }
 }
 
@@ -6523,6 +6591,7 @@ fn application_error_data(code: &str) -> Value {
 mod tests {
     use super::*;
     use audiorouter_domain::{Edge, Node, NodeKind, Port, PortDirection};
+    use audiorouter_engine::{RuntimeGeneration, RuntimeGraph, RuntimeProcessor};
 
     struct TestRecorderWorker;
 
@@ -9947,12 +10016,18 @@ mod tests {
         let mut worker = WavRecorderWorker::new(file, WavFormat::Float32, 1, 48_000, 8, 1).unwrap();
         worker.arm().unwrap();
         worker.start(0).unwrap();
-        worker
-            .try_push(RecordingChunk {
-                start_frame: 0,
-                samples: vec![0.25, -0.25],
-            })
-            .unwrap();
+        let tap = worker.audio_tap();
+        let processor = RuntimeProcessor::default();
+        processor.publish(RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]));
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.25, -0.25]);
+        assert_eq!(
+            processor.process_with_tap(&mut block, 0, &tap),
+            Some(RuntimeGeneration::new(1))
+        );
 
         let mut plane = ControlPlane::default();
         let original = session();

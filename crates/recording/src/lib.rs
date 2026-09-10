@@ -158,6 +158,7 @@ pub struct RecordingChunk {
 pub struct RecordingQueue {
     chunks: crossbeam_queue::ArrayQueue<RecordingChunk>,
     free_chunks: Option<crossbeam_queue::ArrayQueue<RecordingChunk>>,
+    pooled_sample_capacity: Option<usize>,
     overruns: AtomicU64,
     oversized: AtomicU64,
 }
@@ -502,6 +503,7 @@ impl RecordingQueue {
         Ok(Self {
             chunks: crossbeam_queue::ArrayQueue::new(capacity),
             free_chunks: None,
+            pooled_sample_capacity: None,
             overruns: AtomicU64::new(0),
             oversized: AtomicU64::new(0),
         })
@@ -533,6 +535,7 @@ impl RecordingQueue {
             .map_err(|_| RecordingError::InvalidQueueCapacity)?;
         }
         queue.free_chunks = Some(free);
+        queue.pooled_sample_capacity = frames_per_chunk.checked_mul(channels);
         Ok(queue)
     }
 
@@ -599,6 +602,10 @@ impl RecordingQueue {
     /// simply drop it, preserving compatibility with existing workers.
     pub fn recycle(&self, chunk: RecordingChunk) {
         if let Some(free) = &self.free_chunks {
+            let mut chunk = chunk;
+            if let Some(capacity) = self.pooled_sample_capacity {
+                chunk.samples.resize(capacity, 0.0);
+            }
             let _ = free.push(chunk);
         }
     }
