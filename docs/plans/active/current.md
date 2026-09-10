@@ -28,6 +28,16 @@ updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
 configuration changes.
 
+- Requalified the explicitly user-authorized installed x64 Pitchproof VST2 DLL
+  on 2026-09-09 through `tests/acceptance/m06-vst2-installed.ps1`. Processing
+  passed at 44.1, 48, and 96 kHz; the dedicated editor-thread bound and
+  supervised worker-timeout/reaping checks also passed. The SHA-256 remained
+  `1974A3033B53AE72DA5F419A9F37056D44C1610591BFD11A615ACE0C448CF050`.
+  The original file was used in place, environment variables were restored,
+  and no plugin registration, audio stream, or machine configuration changed.
+  This is local user-authorized compatibility evidence only; it does not infer
+  redistribution rights or successful editor compatibility.
+
 Next action: qualify the first supplied rights-cleared independent x64 VST2 or
 VST3 effect through the existing contained worker matrix. If none is supplied,
 continue only with portable hardening and preserve the native-shell, production
