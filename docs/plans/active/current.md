@@ -6248,6 +6248,12 @@ the one already documented above. No machine audio configuration was changed.
   direct `audiorouter-*` artifacts; no plugin registration, audio stream,
   driver action, or persistent machine configuration occurred.
 
+- Re-ran the UI contract suite directly on 2026-09-10 with
+  `npm.cmd --prefix ui test -- --run`: all 17 test files and 121 tests passed.
+  This is portable UI evidence only; native shell/WebView2, manual
+  accessibility, and managed audio-device gates remain separate. No audio,
+  driver, plugin registration, or persistent machine configuration changed.
+
 - Requalified the guarded native endpoint lifecycle on 2026-09-10 with
   `tests/acceptance/m00-native-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 100`. It enumerated 13 capture and 18 render
