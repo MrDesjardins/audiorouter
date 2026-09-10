@@ -22,6 +22,21 @@ stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
 
+- Requalified the installed ReaPlugs VST2 directory on 2026-09-10 with
+  `tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates`.
+  Seven x64 audio effects (`reacomp`, `readelay`, `reaeq`, `reafir`,
+  `reagate`, `reastream`, and `reaxcomp`) passed at 44.1, 48, and 96 kHz
+  (21 combinations). `reacontrolmidi` and `reajs` were explicitly reported
+  as incompatible with the bounded audio-effect/state contract. The harness
+  restored `AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE`, and
+  all qualified DLL fingerprints were unchanged; no registration, copying,
+  audio stream, or persistent machine configuration occurred.
+
+- Requalified M06 SDK installer provenance checks on 2026-09-10 with
+  `tests/acceptance/m06-sdk-installer.ps1`: wrong-origin and reparse-point
+  destination fixtures were rejected as required. Disposable Git fixtures
+  were removed; no SDK, plugin, driver, or audio configuration changed.
+
 The latest complete guarded M00-M08 result documented below remains the
 previous successful run; the most recent wrapper invocation was inconclusive
 because the managed host returned no usable child transcript. M07 headless
