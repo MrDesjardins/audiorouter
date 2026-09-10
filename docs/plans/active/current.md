@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `84912971`; later commits after
+The active branch is currently pushed through `a1f56db1`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -71,6 +71,15 @@ changed. This confirms compatibility with the bounded two-input-bus worker
   place, and no plugin registration, audio stream, or machine configuration
   changed. This remains contained worker evidence, not physical-latency or
   release qualification.
+
+- Added and ran an explicit M06/SEC-07 VST3 crash-containment regression on
+  2026-09-10 using the supplied BUSTERse x64 VST3 module. Its native worker
+  failure is now asserted as a bounded `WorkerProcessError` rather than being
+  treated as a successful activation or an uncaught host crash. The focused
+  regression passed 1/1; default and feature-enabled worker builds, formatting,
+  and strict all-target Clippy passed. The temporary worker and environment
+  were cleaned/restored; no plugin registration, audio stream, or machine
+  configuration changed.
 
 - Rechecked the native-shell frontend invocation boundary on 2026-09-09 after
   the Tauri transport lifecycle fix: the connected UI still issues its initial
