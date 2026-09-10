@@ -22,7 +22,7 @@ startup/plugin registration, signing-mode change, audio stream, or persistent
 machine audio configuration has been performed. The gated x64 VST2 boundary
 is implemented, but rights/editor/release qualification remains open.
 
-The active branch is currently pushed through `f05386d4`; later commits after
+The active branch is currently pushed through `3a49d027`; later commits after
 the last full M00-M08 run are contained worker/control-boundary and evidence
 updates. The repository remains clean, and the M07 headless acceptance has
 passed at this line without audio, driver, registration, signing, or machine
@@ -149,6 +149,14 @@ configuration changes.
   not prove recorder finalization. The shell therefore intentionally exposes
   no unsafe quit action. A future implementation must add and test one
   backend-owned finalize/stop operation before permitting process exit.
+
+- Revalidated the quit safety boundary on 2026-09-10 while prototyping the
+  tray action. `recordings.list` contains persisted library metadata and cannot
+  prove that an in-memory recorder is inactive; therefore a shell-only
+  preflight could incorrectly stop a session without finalizing its recorder.
+  The prototype was completely reverted after compile verification. No quit
+  action is exposed until an atomic backend-owned finalize/shutdown method is
+  implemented and tested.
 
 - Re-ran the complete guarded acceptance chain on 2026-09-09 from clean pushed
   head `fec0df35` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
