@@ -588,6 +588,14 @@ action occurred.
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
 
+- Requalified the Rust process-loopback rate-conversion probe on 2026-09-10
+  with `tests/acceptance/m00-rust-process-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 500`: both include and exclude modes converted 22,050
+  source frames at 44.1 kHz into 23,936 engine frames at 48 kHz across 187
+  quantum blocks, with 25 bounded resampler frames and zero xrun, overrun, or
+  underrun counters. Streams stopped/reset and persistent audio configuration
+  remained unchanged.
+
 - Rechecked the read-only native endpoint format inventory on 2026-09-10 with
   `tests/acceptance/m00-native-format-inventory.ps1`: 31 active endpoints were
   enumerated, including 48 kHz float32 mono/stereo formats and 96 kHz mono and
