@@ -22,11 +22,31 @@ fn rpc_request(
         if let Some(path) = &state.probe_file {
             let contents = serde_json::to_vec(&response)
                 .map_err(|error| format!("probe response encoding failed: {error}"))?;
-            std::fs::write(path, contents)
-                .map_err(|error| format!("probe marker write failed: {error}"))?;
+            write_probe_marker(path, &contents)?;
         }
     }
     Ok(response)
+}
+
+fn write_probe_marker(path: &std::path::Path, contents: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "probe marker has no parent directory".to_owned())?;
+    let metadata = std::fs::symlink_metadata(parent)
+        .map_err(|error| format!("probe marker parent inspection failed: {error}"))?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err("probe marker parent must be a regular directory".into());
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| format!("probe marker create failed: {error}"))?;
+    use std::io::Write;
+    file.write_all(contents)
+        .and_then(|()| file.flush())
+        .and_then(|()| file.sync_all())
+        .map_err(|error| format!("probe marker write failed: {error}"))
 }
 
 fn forward_rpc_request(
@@ -118,6 +138,17 @@ mod tests {
         let script = session_initialization_script("probe", true);
         assert!(script.contains("id:'shell-probe'"));
         assert!(script.contains("method:'system.describe'"));
+    }
+
+    #[test]
+    fn probe_marker_is_create_only() {
+        let path =
+            std::env::temp_dir().join(format!("audiorouter-shell-marker-{}", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        write_probe_marker(&path, br#"{"ok":true}"#).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), br#"{"ok":true}"#);
+        assert!(write_probe_marker(&path, b"replacement").is_err());
+        std::fs::remove_file(path).unwrap();
     }
 
     #[cfg(windows)]

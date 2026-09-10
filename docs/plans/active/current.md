@@ -40,8 +40,9 @@ configuration changes.
 - Added an opt-in frontend-owned Tauri RPC acceptance on 2026-09-09:
   `AUDIOROUTER_SHELL_PROBE_FILE` makes the WebView initialization script issue
   `system.describe`; the native command writes the authenticated response only
-  after it has crossed the control pipe. The shell unit suite passed 4/4 and
-  the release shell rebuilt successfully. The disposable acceptance harness
+  after it has crossed the control pipe. The marker is now create-only and
+  rejects symlinked parents. The shell unit suite passed 5/5 and strict
+  all-target Clippy passed. The release shell rebuilt successfully. The disposable acceptance harness
   is PowerShell/.NET compatible and cleans its owned state, but its run from
   the managed non-administrator session could not initialize the shell WebView
   and correctly failed closed; elevated desktop evidence remains required.
