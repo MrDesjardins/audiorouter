@@ -161,6 +161,13 @@ configuration has occurred.
   remain covered by the delivery map. This is documentation coverage only and
   does not close implementation, hardware, driver, signing, or release gates.
 
+- Requalified the M00 native toolchain and compile gates directly on 2026-09-10:
+  `m00-toolchain.ps1` found Visual Studio Community 18, MSVC 14.51.36231,
+  Windows SDK 10.0.28000.0, and matching WDK 28000; `m00-native-build.ps1`
+  then compiled `main.cpp` successfully. Both checks were read-only or
+  compile-only and performed no SDK installation, driver action,
+  signing-mode change, audio stream, or machine configuration change.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
