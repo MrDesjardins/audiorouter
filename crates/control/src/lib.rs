@@ -16,7 +16,7 @@ use audiorouter_protocol::{
 };
 use audiorouter_recording::{
     BufferedFlacRecorder, RecorderController, RecorderState, RecordingChunk, RecordingError,
-    RecordingQueue, WavFormat, WavRecorder, WavWriter,
+    RecordingQueue, StreamingFlacRecorder, StreamingFlacWriter, WavFormat, WavRecorder, WavWriter,
 };
 use audiorouter_storage::{
     GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_PENDING_PLAN_RECORDS,
@@ -265,6 +265,92 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
         std::io::Write::write_all(&mut output, &encoded)
             .and_then(|()| output.sync_all())
             .map_err(|error| format!("FLAC file finalization failed: {error}"))?;
+        Ok(RecorderFinalizationOutcome {
+            state: "completed".into(),
+            file_finalized: true,
+            recoverable: false,
+        })
+    }
+}
+
+/// Concrete incremental FLAC worker intended for eventual realtime graph
+/// attachment. Unlike the buffered worker, encoded frames are written as the
+/// queue is drained; only the seekable STREAMINFO patch remains for finish.
+pub struct StreamingFlacRecorderWorker {
+    recorder: Option<StreamingFlacRecorder<std::fs::File>>,
+    queue: RecordingQueue,
+    maximum_chunks_per_pass: usize,
+}
+
+impl StreamingFlacRecorderWorker {
+    pub fn new(
+        output: std::fs::File,
+        channels: u16,
+        sample_rate: u32,
+        bits_per_sample: u8,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<Self, String> {
+        if maximum_chunks_per_pass == 0 {
+            return Err("maximum recorder drain pass must be positive".into());
+        }
+        let writer =
+            StreamingFlacWriter::new(output, channels, sample_rate, bits_per_sample, false)
+                .map_err(|error| {
+                    format!("streaming FLAC writer initialization failed: {error:?}")
+                })?;
+        let queue = RecordingQueue::new(queue_capacity)
+            .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        Ok(Self {
+            recorder: Some(StreamingFlacRecorder::new(writer)),
+            queue,
+            maximum_chunks_per_pass,
+        })
+    }
+
+    pub fn arm(&mut self) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
+            .arm()
+            .map_err(|error| format!("streaming FLAC recorder arm failed: {error:?}"))
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
+            .start(frame)
+            .map_err(|error| format!("streaming FLAC recorder start failed: {error:?}"))
+    }
+
+    pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        self.queue.try_push(chunk)
+    }
+}
+
+impl RecorderWorker for StreamingFlacRecorderWorker {
+    fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+        let mut recorder = self
+            .recorder
+            .take()
+            .ok_or_else(|| "streaming FLAC recorder was finalized more than once".to_owned())?;
+        loop {
+            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                Ok(_) => break,
+                Err(RecordingError::QueueNotEmpty) => continue,
+                Err(error) => {
+                    self.recorder = Some(recorder);
+                    return Err(format!("streaming FLAC finalization failed: {error:?}"));
+                }
+            }
+        }
+        let output = recorder
+            .finish()
+            .map_err(|error| format!("streaming FLAC file finalization failed: {error:?}"))?;
+        output
+            .sync_all()
+            .map_err(|error| format!("streaming FLAC file sync failed: {error}"))?;
         Ok(RecorderFinalizationOutcome {
             state: "completed".into(),
             file_finalized: true,
@@ -9937,6 +10023,34 @@ mod tests {
             plane.recorders[&original.id].state(),
             RecorderState::Completed
         );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn concrete_streaming_flac_worker_writes_frames_before_finalize() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-streaming-worker-{}.flac",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        let mut worker = StreamingFlacRecorderWorker::new(file, 1, 48_000, 16, 8, 1).unwrap();
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        worker
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.25, -0.25],
+            })
+            .unwrap();
+        let outcome = worker.finalize(2).unwrap();
+        assert_eq!(outcome.state, "completed");
+        let info = audiorouter_recording::inspect_flac_file(&path).unwrap();
+        assert_eq!(info.frames, 2);
         let _ = std::fs::remove_file(path);
     }
 

@@ -35,6 +35,13 @@ configuration changes.
   invocation was blocked by the unchanged PowerShell execution policy). The
   worker changes open no audio endpoint and modify no machine configuration.
 
+- Added a concrete incremental FLAC worker on 2026-09-10. It writes encoded
+  frames while the bounded queue is drained and patches seekable STREAMINFO at
+  finish, avoiding the buffered worker's complete-output memory limit. A
+  two-frame inspection regression passed; the control suite passed 105/105 and
+  strict Clippy passed. Native graph construction/attachment and live-device
+  timing evidence remain open.
+
 - Re-ran the complete guarded acceptance chain on 2026-09-10 from pushed head
   `8438bd82` using `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
   .\\tests\\acceptance\\safe-all.ps1`: exit code 0. M00-M08 all passed,
