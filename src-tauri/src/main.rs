@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
-use tauri::{Manager, State};
+use tauri::{State, WebviewUrl, WebviewWindowBuilder};
 
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 
@@ -51,17 +51,19 @@ fn main() {
     };
     let session_script =
         serde_json::to_string(&state.session_id).expect("session id is serializable");
-
     tauri::Builder::default()
         .manage(state)
         .invoke_handler(tauri::generate_handler![rpc_request, session_id])
         .setup(move |app| {
-            let window = app
-                .get_webview_window("main")
-                .ok_or_else(|| "main shell window was not created".to_owned())?;
-            window.eval(&format!(
-                "window.__AUDIO_ROUTER_SESSION_ID__ = {session_script};"
-            ))?;
+            let session_script = session_script.clone();
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title("AudioRouter")
+                .inner_size(1280.0, 800.0)
+                .resizable(true)
+                .initialization_script(format!(
+                    "window.__AUDIO_ROUTER_SESSION_ID__ = {session_script};"
+                ))
+                .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -10,15 +10,7 @@
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [
-      {
-        "label": "main",
-        "title": "AudioRouter",
-        "width": 1280,
-        "height": 800,
-        "resizable": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": "default-src 'self'; connect-src 'self' http://localhost:5173; style-src 'self' 'unsafe-inline'"
     }

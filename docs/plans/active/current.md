@@ -299,6 +299,22 @@ rather than claiming release completion.
   recovery, privacy mute, recording, authorization, idempotency, paging,
   plugin boundaries, and persisted operations without audio-device access or
   machine configuration changes.
+
+- Continued the native shell integration slice on 2026-09-09. The Tauri shell
+  now creates its WebView explicitly and places the session identity in a
+  pre-page initialization script, preventing the UI from rendering before its
+  control identity is available. Rust formatting and the native shell build
+  passed. Three disposable elevated shell/backend probes reached shell startup
+  and kept the authenticated backend alive, but did not reach the Tauri command
+  from Rust-injected JavaScript; this runtime interaction is recorded as
+  unproven rather than passed. Temporary databases, pipes, processes, and the
+  alternate frontend output were removed; environment variables and the
+  checked-in frontend output configuration were restored. No audio stream,
+  driver, plugin registration, or persistent machine configuration changed.
+- Next shell task: add a user-visible/manual WebView2 acceptance path or a
+  frontend-owned Tauri invocation test that proves `rpc_request` reaches the
+  enrolled backend; retain the existing Rust forwarding regression and do not
+  claim end-to-end GUI evidence until that command boundary is observed.
 - Next safe task: continue with the next independently observable acceptance
   gate while retaining the native driver callback, signing, installer,
   shell/HWND, physical-latency, manual accessibility, and independent-vendor
