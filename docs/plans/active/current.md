@@ -36,6 +36,16 @@ The latest working tree is clean and pushed. No driver installation/loading,
 plugin registration, signing-mode change, or persistent machine audio
 configuration has occurred.
 
+- Requalified M08 unsigned release preparation directly on 2026-09-10 with
+  `cmd.exe /d /c "powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  tests\\acceptance\\m08-release.ps1"`. Optimized Rust binaries and the
+  213-module UI production bundle were built, copied into the disposable
+  release directory, and verified as unsigned artifacts. The acceptance
+  passed; its temporary output was removed and a follow-up scan found zero
+  `audiorouter-*` temp children. No installer, driver, signing action,
+  startup registration, audio stream, or persistent machine configuration
+  changed.
+
 - Added the concrete buffered-FLAC worker on 2026-09-10 at pushed head
   `2627b40f`; the subsequent workspace regression pass completed successfully:
   all workspace Rust tests passed, workspace strict Clippy passed, and the UI
