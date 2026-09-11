@@ -359,6 +359,12 @@ fn adapter_control_route(
     control
         .start_native_endpoint_worker()
         .map_err(|error| format!("endpoint start: {error:?}"))?;
+    if control
+        .pump_native_endpoint_worker_with_bound_taps(&session_id, generation + 1, 64)
+        .is_ok()
+    {
+        return Err("stale native generation was not rejected".into());
+    }
     let started_at = std::time::Instant::now();
     let mut packets = 0_u64;
     let mut captured_frames = 0_u64;

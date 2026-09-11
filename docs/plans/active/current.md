@@ -8334,3 +8334,12 @@ live-driver evidence.
 - Next M02/M03 task: add a deliberate stale-generation probe to the harness,
   verify it increments the rejection counter without opening a second stream,
   then continue driver bridge qualification.
+- Added the stale-generation regression on 2026-09-11. The live harness now
+  submits one generation-2 pump against the generation-1 prepared graph,
+  confirms rejection before draining packets, and reports exactly one rejected
+  pump while the valid route still completes. Media state and endpoint
+  configuration remained unchanged.
+- Next M02/M03 task: qualify native render-source/capture-sink bridge
+  publication through the AudioRouter driver prototype using the same explicit
+  lease/generation checks; installation, signing, and production PortCls
+  ownership remain separate gates.

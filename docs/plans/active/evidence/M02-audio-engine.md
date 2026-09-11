@@ -303,7 +303,9 @@ latency.
 The same run reported one start attempt/success, one stop attempt/success,
 one successful stream reset, and zero rejected pumps. These are bounded
 control-thread lifecycle counters; they are not a production callback timing
-claim.
+claim. A deliberately stale generation pump was rejected before packet drain;
+the control rejection counter reported exactly one rejection, and the valid
+route remained at generation 1.
 
 ## Rust process-loopback requalification (2026-09-08)
 

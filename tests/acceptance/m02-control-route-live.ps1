@@ -38,7 +38,7 @@ try {
     $rejectedPumps = [int]([regex]::Match($line, 'rejected_pumps=(\d+)').Groups[1].Value)
     $captureRate = [int]([regex]::Match($line, 'capture_rate_hz=(\d+)').Groups[1].Value)
     $renderRate = [int]([regex]::Match($line, 'render_rate_hz=(\d+)').Groups[1].Value)
-    if ($line -notmatch 'route=true' -or $generation -ne 1 -or $packets -le 0 -or $captured -le 0 -or $quanta -le 0 -or $rendered -le 0 -or $recordingBytes -le 44 -or $startAttempts -ne 1 -or $successfulStarts -ne 1 -or $stopAttempts -ne 1 -or $successfulStops -ne 1 -or $resetSuccesses -ne 1 -or $rejectedPumps -ne 0 -or $captureRate -le 0 -or $renderRate -le 0) {
+    if ($line -notmatch 'route=true' -or $generation -ne 1 -or $packets -le 0 -or $captured -le 0 -or $quanta -le 0 -or $rendered -le 0 -or $recordingBytes -le 44 -or $startAttempts -ne 1 -or $successfulStarts -ne 1 -or $stopAttempts -ne 1 -or $successfulStops -ne 1 -or $resetSuccesses -ne 1 -or $rejectedPumps -ne 1 -or $captureRate -le 0 -or $renderRate -le 0) {
         throw "control-owned route reported invalid telemetry: $line"
     }
     $after = Get-MediaSnapshot
