@@ -152,6 +152,12 @@ and virtual-cable runs are the current runtime evidence. Native graph-to-device
 scheduling, dual-device drift, failure recovery, and measured physical latency
 remain open.
 
+The complete administrator-authorized safe acceptance chain was requalified at
+`830152dc` after this worker implementation. M00-M08 project, portable DSP,
+UI, plugin, headless, release, traceability, and documentation checks passed;
+13 run-owned temporary children were removed. This does not upgrade the
+worker to managed-driver callback or production endpoint evidence.
+
 ## Bounded endpoint-worker packet drain (2026-09-10)
 
 `WasapiEndpointWorker` now drains a caller-selected packet budget per event
