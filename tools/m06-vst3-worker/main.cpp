@@ -448,6 +448,20 @@ public:
     }
 };
 
+class ComponentHandler final : public Vst::IComponentHandler {
+public:
+    tresult PLUGIN_API queryInterface(const TUID, void** object) override {
+        if (object) *object = nullptr;
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+    tresult PLUGIN_API beginEdit(Vst::ParamID) override { return kResultOk; }
+    tresult PLUGIN_API performEdit(Vst::ParamID, Vst::ParamValue) override { return kResultOk; }
+    tresult PLUGIN_API endEdit(Vst::ParamID) override { return kResultOk; }
+    tresult PLUGIN_API restartComponent(int32) override { return kResultOk; }
+};
+
 class StateStream final : public IBStream {
 public:
     StateStream() = default;
@@ -583,6 +597,8 @@ public:
                 const auto initialize_result = controller_->initialize(&host_application_);
                 if (initialize_result == kResultOk) {
                     controller_initialized_ = true;
+                    require_result("controller component handler", controller_->setComponentHandler(
+                        &component_handler_));
                     component_->queryInterface(Vst::IConnectionPoint::iid,
                                                 reinterpret_cast<void**>(&component_connection_));
                     controller_->queryInterface(Vst::IConnectionPoint::iid,
@@ -941,6 +957,7 @@ private:
 
     HMODULE module_ = nullptr;
     HostApplication host_application_;
+    ComponentHandler component_handler_;
     IPluginFactory* factory_ = nullptr;
     Vst::IComponent* component_ = nullptr;
     Vst::IAudioProcessor* processor_ = nullptr;

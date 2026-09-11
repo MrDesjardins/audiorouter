@@ -163,6 +163,14 @@ qualification remains open.
   component state restore, so the limitation is confirmed after host context,
   connection-point, and inactive-state sequencing were all corrected.
 
+- Added the required bounded VST3 `IComponentHandler` to controller
+  initialization on 2026-09-10. Parameter-edit and restart callbacks are
+  acknowledged locally without crossing into UI, IPC, disk, network, or
+  realtime device work. The complete AGain native VST3 acceptance matrix
+  passed again, including single-/auxiliary-bus processing, async staging,
+  recovery, repeated quanta, and state restoration. No plugin registration,
+  audio stream, or persistent machine configuration changed.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded
