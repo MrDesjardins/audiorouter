@@ -18,8 +18,10 @@ It combines an explicitly prepared physical endpoint worker with a negotiated
 capture-sink bridge. It is stopped by default, publishes through the bounded
 realtime writer, and keeps lease heartbeats on the worker/control thread.
 Construction does not activate endpoints or alter Windows defaults. The
-complementary render-source direction remains a separate integration gate until
-its stale-data and fail-closed behavior is qualified.
+complementary `NativeBridgeInputWorker` now provides the render-source
+direction with stale-data and fail-closed behavior, but its loaded-driver,
+PortCls-owned callback, and end-to-end virtual-endpoint qualification remain
+separate integration gates.
 
 The complementary `NativeBridgeInputWorker` consumes only a newer
 render-source sequence and feeds the same bounded scheduler before submitting

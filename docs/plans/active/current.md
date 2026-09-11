@@ -7675,3 +7675,8 @@ stream, or machine configuration action occurred.
   x64 WDK build/source acceptance passed with zero signability errors/warnings
   and catalog generation. No driver was installed or loaded and no machine
   audio configuration changed.
+- Synchronized VDEV-04/VDEV-12 wording on 2026-09-11: the specification now
+  records that the render-source adapter and stale-data/fail-closed behavior
+  are implemented, while loaded-driver PortCls callback and end-to-end virtual
+  endpoint qualification remain open. Documentation validation passed with 52
+  Markdown files and 165 local links.
