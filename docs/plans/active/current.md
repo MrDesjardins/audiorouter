@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `ab52bd37`; the native probe compile was
+The latest implementation checkpoint is `832b81a8`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -21,6 +21,14 @@ clean; no driver or startup/plugin registration, signing-mode change, audio
 stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
+
+- Extended stream recovery at pushed head `832b81a8` on 2026-09-10 to reset
+  stateful DSP history in the active graph (EQ, dynamics, delay, graphic EQ,
+  and pitch) in addition to transport staging and queued blocks. Poisoned
+  processor locks fail closed after queued audio is still recycled. The
+  regression proves delayed audio history is discarded after reset; the full
+  workspace tests/doc-tests, strict Clippy, formatting, and diff checks
+  passed. No endpoint or persistent machine configuration was changed.
 
 - Closed the endpoint-recovery staging gap at pushed head `76e5224c` on
   2026-09-10. `WasapiSchedulerBridge::reset_stream` now discards partial
