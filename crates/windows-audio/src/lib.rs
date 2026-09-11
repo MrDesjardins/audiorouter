@@ -1292,8 +1292,8 @@ impl WasapiSchedulerBridge {
 /// both endpoint stops and clears staged audio before reporting the first
 /// failure. No endpoint is replaced automatically after invalidation.
 pub struct WasapiEndpointWorker {
-    capture: SharedCapture,
-    render: SharedRender,
+    capture: Option<SharedCapture>,
+    render: Option<SharedRender>,
     bridge: WasapiSchedulerBridge,
     running: bool,
 }
@@ -1308,8 +1308,8 @@ impl WasapiEndpointWorker {
         bridge: WasapiSchedulerBridge,
     ) -> Self {
         Self {
-            capture,
-            render,
+            capture: Some(capture),
+            render: Some(render),
             bridge,
             running: false,
         }
@@ -1333,9 +1333,17 @@ impl WasapiEndpointWorker {
         if self.running {
             return Ok(());
         }
-        self.capture.start()?;
-        if let Err(error) = self.render.start() {
-            let _ = self.capture.stop();
+        let capture = self
+            .capture
+            .as_mut()
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
+        capture.start()?;
+        let render = self
+            .render
+            .as_mut()
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
+        if let Err(error) = render.start() {
+            let _ = capture.stop();
             return Err(error);
         }
         self.running = true;
@@ -1350,10 +1358,61 @@ impl WasapiEndpointWorker {
             return Ok(());
         }
         self.running = false;
-        let render_result = self.render.stop();
-        let capture_result = self.capture.stop();
+        let render_result = self
+            .render
+            .as_mut()
+            .ok_or(AudioError::ProcessingStateUnavailable)
+            .and_then(SharedRender::stop);
+        let capture_result = self
+            .capture
+            .as_mut()
+            .ok_or(AudioError::ProcessingStateUnavailable)
+            .and_then(SharedCapture::stop);
         let reset_result = self.bridge.reset_stream().map(|_| ());
         render_result.and(capture_result).and(reset_result)
+    }
+
+    /// Stop and discard both old clients, refresh the monitor, and open only
+    /// the exact persisted capture/render bindings. The worker remains
+    /// stopped after a successful rebind; the caller must deliberately call
+    /// `start`. Any open failure leaves the worker without clients so a stale
+    /// endpoint cannot continue processing or be replaced implicitly.
+    pub fn rebind_with_refreshed_bound_with_retry(
+        &mut self,
+        monitor: &mut EndpointMonitor,
+        expected_capture: &EndpointInfo,
+        expected_render: &EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<(), AudioError> {
+        self.stop()?;
+        drop(self.capture.take());
+        drop(self.render.take());
+
+        let capture = SharedCapture::open_refreshed_bound_with_retry(
+            monitor,
+            expected_capture,
+            buffer_duration_100ns,
+            max_attempts,
+            retry_delay_ms,
+        )?;
+        let render = match SharedRender::open_refreshed_bound_with_retry(
+            monitor,
+            expected_render,
+            buffer_duration_100ns,
+            max_attempts,
+            retry_delay_ms,
+        ) {
+            Ok(render) => render,
+            Err(error) => {
+                drop(capture);
+                return Err(error);
+            }
+        };
+        self.capture = Some(capture);
+        self.render = Some(render);
+        Ok(())
     }
 
     /// Pump one bounded capture packet through the graph and into render.
@@ -1362,7 +1421,15 @@ impl WasapiEndpointWorker {
         if !self.running {
             return Err(AudioError::ProcessingStateUnavailable);
         }
-        self.bridge.pump(&self.capture, &self.render)
+        let capture = self
+            .capture
+            .as_ref()
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
+        let render = self
+            .render
+            .as_ref()
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
+        self.bridge.pump(capture, render)
     }
 
     /// Pump one bounded packet with the allocation-free graph tap and the
@@ -1376,9 +1443,17 @@ impl WasapiEndpointWorker {
         if !self.running {
             return Err(AudioError::ProcessingStateUnavailable);
         }
+        let capture = self
+            .capture
+            .as_ref()
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
+        let render = self
+            .render
+            .as_ref()
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
         self.bridge.pump_with_tap_and_quantum_deadline(
-            &self.capture,
-            &self.render,
+            capture,
+            render,
             tap,
             first_deadline,
             quantum_duration,

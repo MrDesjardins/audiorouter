@@ -44,6 +44,19 @@ the existing exact-ID/format monitor and bounded retry helpers. Rebind must
 stop and discard the old pair before opening only the verified persisted pair;
 missing, direction-changed, or format-changed endpoints remain fail-closed.
 
+Implemented `WasapiEndpointWorker::rebind_with_refreshed_bound_with_retry`.
+It stops and discards both old clients before invoking the existing bounded,
+exact-binding recovery helpers, keeps the worker stopped after a successful
+rebind, and leaves it without clients if either exact binding cannot be opened.
+Focused Windows-audio tests (53), strict package Clippy, formatting, and diff
+checks passed. These checks did not open an endpoint or change machine audio
+state.
+
+Next action: add a bounded worker pump loop that drains a caller-selected
+packet budget per event wake while retaining the existing nonblocking graph,
+render-carry, and drop telemetry semantics. Keep event waits and endpoint
+start/stop outside the pump and preserve fail-closed behavior on invalidation.
+
 ## Priority shift: owned virtual-driver prototype
 
 The user has explicitly redirected execution from extended VST3 qualification to

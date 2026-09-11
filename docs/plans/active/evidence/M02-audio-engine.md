@@ -1293,3 +1293,17 @@ p99.9 was 65,536 ns, with zero deadline misses/lateness and no telemetry
 accounting faults. Endpoint/media state was unchanged after teardown. This is
 shared-mode adapter evidence only, not managed-driver callback, independent
 clock, or physical-latency qualification.
+
+## Exact-binding endpoint rebind transaction (2026-09-10)
+
+`WasapiEndpointWorker::rebind_with_refreshed_bound_with_retry` now provides the
+control-thread lifecycle boundary around the two endpoint clients and the
+preallocated scheduler bridge. It stops and discards the old capture/render
+pair before opening only the exact persisted bindings through the existing
+monitor and bounded retry helpers. A successful rebind is deliberately left
+stopped for an explicit subsequent `start`; an open failure cannot leave the
+old pair processing or silently select a replacement. The focused
+Windows-audio suite passed 53 tests, strict package Clippy passed, and
+formatting/diff checks passed. No endpoint was opened by these checks; managed
+driver ownership, production callback timing, signing, and physical latency
+remain open.
