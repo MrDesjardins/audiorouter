@@ -21,6 +21,13 @@ Construction does not activate endpoints or alter Windows defaults. The
 complementary render-source direction remains a separate integration gate until
 its stale-data and fail-closed behavior is qualified.
 
+The complementary `NativeBridgeInputWorker` consumes only a newer
+render-source sequence and feeds the same bounded scheduler before submitting
+to an exact physical render binding. Empty, busy, torn, stale-generation, and
+repeated slots produce a fresh silent quantum; they never replay a previous
+owner's payload. Both worker types remain explicit lifecycle adapters and do
+not install, start, or reconfigure the driver by themselves.
+
 Persistent endpoint identity and continuous processed audio are separate properties. Driver presence keeps endpoints enumerated; a running authorized backend supplies their live audio. Silence is the safe default when no owner exists.
 
 ## Requirements

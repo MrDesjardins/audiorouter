@@ -268,6 +268,99 @@ pub enum NativeBridgeOutputWorkerError {
 }
 
 #[cfg(windows)]
+#[derive(Debug)]
+pub enum NativeBridgeInputWorkerError {
+    Bridge(NativeBridgeControllerError),
+    Audio(AudioError),
+}
+
+#[cfg(windows)]
+enum NativeBridgeInputPumpError {
+    Bridge(NativeBridgeControllerError),
+    Audio(AudioError),
+}
+
+#[cfg(windows)]
+/// Consumes the negotiated virtual render-source bridge and renders its
+/// processed output to one explicitly selected physical endpoint.
+pub struct NativeBridgeInputWorker {
+    source: NativeBridgeController,
+    render: SharedRender,
+    bridge: WasapiSchedulerBridge,
+    last_sequence: u64,
+    running: bool,
+}
+
+#[cfg(windows)]
+impl NativeBridgeInputWorker {
+    pub fn new(
+        source: NativeBridgeController,
+        render: SharedRender,
+        bridge: WasapiSchedulerBridge,
+    ) -> Self {
+        Self {
+            source,
+            render,
+            bridge,
+            last_sequence: 0,
+            running: false,
+        }
+    }
+
+    pub fn start(&mut self) -> Result<(), NativeBridgeInputWorkerError> {
+        if self.running {
+            return Ok(());
+        }
+        self.render
+            .start()
+            .map_err(NativeBridgeInputWorkerError::Audio)?;
+        self.running = true;
+        Ok(())
+    }
+
+    pub fn stop(&mut self) -> Result<(), NativeBridgeInputWorkerError> {
+        self.running = false;
+        self.bridge
+            .reset_stream()
+            .map_err(NativeBridgeInputWorkerError::Audio)?;
+        self.render
+            .stop()
+            .map_err(NativeBridgeInputWorkerError::Audio)
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeInputWorkerError> {
+        self.source
+            .heartbeat()
+            .map_err(NativeBridgeInputWorkerError::Bridge)
+    }
+
+    /// Pump one bridge block without waiting. Empty, busy, torn, stale, or
+    /// repeated bridge slots are rendered as a fresh silent quantum; no old
+    /// bridge payload is replayed after a reconnect or owner handoff.
+    pub fn pump(&mut self) -> Result<WasapiSchedulerPump, NativeBridgeInputWorkerError> {
+        if !self.running {
+            return Err(NativeBridgeInputWorkerError::Audio(
+                AudioError::ProcessingStateUnavailable,
+            ));
+        }
+        self.bridge
+            .pump_from_native_render_source(&self.source, &self.render, &mut self.last_sequence)
+            .map_err(|error| match error {
+                NativeBridgeInputPumpError::Bridge(error) => {
+                    NativeBridgeInputWorkerError::Bridge(error)
+                }
+                NativeBridgeInputPumpError::Audio(error) => {
+                    NativeBridgeInputWorkerError::Audio(error)
+                }
+            })
+    }
+}
+
+#[cfg(windows)]
 /// Couples an already-prepared endpoint worker to one negotiated virtual
 /// capture sink. Construction is deliberately stopped-by-default: endpoint
 /// activation, driver installation, and default-device changes remain outside
@@ -1162,6 +1255,7 @@ pub struct WasapiSchedulerBridge {
     capture_bytes: Vec<u8>,
     render_bytes: Vec<u8>,
     render_pending: Vec<u8>,
+    bridge_samples: Vec<f32>,
     render_pending_bytes: usize,
     bytes_per_frame: usize,
     quantum_frames: usize,
@@ -1237,6 +1331,7 @@ impl WasapiSchedulerBridge {
             capture_bytes: vec![0; capture_bytes],
             render_bytes: vec![0; render_bytes],
             render_pending: vec![0; render_pending],
+            bridge_samples: vec![0.0; max_packet_frames * channels],
             render_pending_bytes: 0,
             bytes_per_frame,
             quantum_frames,
@@ -1296,6 +1391,95 @@ impl WasapiSchedulerBridge {
         tap: &dyn audiorouter_engine::AudioTap,
     ) -> Result<WasapiSchedulerPump, AudioError> {
         self.pump_internal(capture, render, Some(tap), None)
+    }
+
+    #[cfg(windows)]
+    fn pump_from_native_render_source(
+        &mut self,
+        source: &NativeBridgeController,
+        render: &SharedRender,
+        last_sequence: &mut u64,
+    ) -> Result<WasapiSchedulerPump, NativeBridgeInputPumpError> {
+        let mut result = WasapiSchedulerPump::default();
+        self.drain_render_pending(render, &mut result)
+            .map_err(NativeBridgeInputPumpError::Audio)?;
+        let mut input = self
+            .scheduler
+            .acquire_input()
+            .ok_or(NativeBridgeInputPumpError::Audio(
+                AudioError::BufferTooSmall {
+                    required: self.quantum_frames * self.bytes_per_frame,
+                    available: 0,
+                },
+            ))?;
+        let source_result = source.read_into_after(*last_sequence, &mut self.bridge_samples);
+        match source_result {
+            Ok(header) => {
+                if usize::from(header.channels) != input.channels()
+                    || usize::from(header.frames) != input.frames()
+                {
+                    input.clear();
+                    return Err(NativeBridgeInputPumpError::Audio(
+                        AudioError::InvalidFrameSize,
+                    ));
+                }
+                input
+                    .copy_from_interleaved(
+                        &self.bridge_samples[..input.channels() * input.frames()],
+                    )
+                    .map_err(|_| NativeBridgeInputPumpError::Audio(AudioError::InvalidFrameSize))?;
+                *last_sequence = header.sequence;
+            }
+            Err(NativeBridgeControllerError::Session(NativeBridgeSessionError::Region(
+                NativeBridgeRegionError::Empty
+                | NativeBridgeRegionError::Busy
+                | NativeBridgeRegionError::TornRead
+                | NativeBridgeRegionError::SequenceRegression
+                | NativeBridgeRegionError::StaleGeneration,
+            ))) => input.clear(),
+            Err(error) => {
+                input.clear();
+                return Err(NativeBridgeInputPumpError::Bridge(error));
+            }
+        }
+        self.scheduler.submit_input(input).map_err(|_| {
+            NativeBridgeInputPumpError::Audio(AudioError::BufferTooSmall {
+                required: self.quantum_frames * self.bytes_per_frame,
+                available: 0,
+            })
+        })?;
+        result.packets = 1;
+        let generation = self
+            .scheduler
+            .process_once()
+            .map_err(|_| NativeBridgeInputPumpError::Audio(AudioError::InvalidFrameSize))?;
+        self.timeline_frame = self
+            .timeline_frame
+            .saturating_add(self.quantum_frames as u64);
+        result.processed_quanta = 1;
+        if let Some(generation) = generation {
+            if let Some(output) = self.scheduler.receive_output_for_generation(generation) {
+                encode_interleaved_float32(&output, &mut self.render_bytes)
+                    .map_err(NativeBridgeInputPumpError::Audio)?;
+                let bytes = output.frames() * self.bytes_per_frame;
+                if self.render_pending_bytes + bytes > self.render_pending.len() {
+                    self.scheduler.output().try_recycle(output).ok();
+                    return Err(NativeBridgeInputPumpError::Audio(
+                        AudioError::BufferTooSmall {
+                            required: self.render_pending_bytes + bytes,
+                            available: self.render_pending.len(),
+                        },
+                    ));
+                }
+                self.render_pending[self.render_pending_bytes..self.render_pending_bytes + bytes]
+                    .copy_from_slice(&self.render_bytes[..bytes]);
+                self.render_pending_bytes += bytes;
+                self.scheduler.output().try_recycle(output).ok();
+                self.drain_render_pending(render, &mut result)
+                    .map_err(NativeBridgeInputPumpError::Audio)?;
+            }
+        }
+        Ok(result)
     }
 
     /// Pump with both a caller-owned processed-audio tap and one deadline

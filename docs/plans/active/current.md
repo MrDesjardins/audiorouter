@@ -7521,3 +7521,19 @@ stream, or machine configuration action occurred.
   both directions against a disposable bridge fixture. Keep installation,
   signing, endpoint provisioning, physical-latency, and live-driver gates
   open until their required evidence exists.
+
+- Added the complementary managed render-source boundary on 2026-09-11:
+  `NativeBridgeInputWorker` consumes only newer negotiated bridge blocks,
+  feeds the existing bounded scheduler, and submits processed output to one
+  exact physical render binding. Empty, busy, torn, stale-generation, and
+  repeated slots become a fresh silent quantum; old payloads are never
+  replayed. The worker is stopped by default and lease heartbeat remains
+  outside the realtime pump. Windows-audio (57), strict Clippy, formatting,
+  and diff checks passed. This remains code/fixture evidence only because the
+  production driver is not installed or loaded and no live virtual stream was
+  opened.
+- Next M00/M02 task: add disposable two-direction bridge-worker tests with
+  injected endpoint seams, including sequence recovery and stop/reset proof.
+  Then qualify the managed worker against a non-installed driver test harness;
+  installation, signing, provisioning, physical-latency, and clean-machine
+  gates remain open.
