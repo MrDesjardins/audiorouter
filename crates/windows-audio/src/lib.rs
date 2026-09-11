@@ -2978,6 +2978,90 @@ impl NativeBridgeRegion {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NativeBridgeSessionError {
+    InvalidHello(audiorouter_protocol::AudioBridgeContractError),
+    Region(NativeBridgeRegionError),
+    SequenceExhausted,
+}
+
+/// Negotiated owner of one native bridge slot.
+///
+/// The session keeps the protocol identity next to the mapped region so a
+/// caller cannot accidentally write a valid block for another bus or graph
+/// generation. Construction and opening are control-plane operations;
+/// `write` and `read_into` only use caller-owned buffers and the bounded slot.
+pub struct NativeBridgeSession {
+    hello: audiorouter_protocol::AudioBridgeHello,
+    region: NativeBridgeRegion,
+    next_sequence: u64,
+}
+
+impl NativeBridgeSession {
+    pub fn create(
+        path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeSessionError> {
+        hello
+            .validate()
+            .map_err(NativeBridgeSessionError::InvalidHello)?;
+        let region = NativeBridgeRegion::create(path, hello.channels, hello.frames_per_quantum)
+            .map_err(NativeBridgeSessionError::Region)?;
+        Ok(Self {
+            hello,
+            region,
+            next_sequence: 0,
+        })
+    }
+
+    pub fn open(
+        path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeSessionError> {
+        hello
+            .validate()
+            .map_err(NativeBridgeSessionError::InvalidHello)?;
+        let region = NativeBridgeRegion::open(path, hello.channels, hello.frames_per_quantum)
+            .map_err(NativeBridgeSessionError::Region)?;
+        Ok(Self {
+            hello,
+            region,
+            next_sequence: 0,
+        })
+    }
+
+    pub fn hello(&self) -> &audiorouter_protocol::AudioBridgeHello {
+        &self.hello
+    }
+
+    pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeSessionError> {
+        let sequence = self
+            .next_sequence
+            .checked_add(1)
+            .ok_or(NativeBridgeSessionError::SequenceExhausted)?;
+        self.region
+            .write(self.hello.generation, sequence, samples)
+            .map_err(NativeBridgeSessionError::Region)?;
+        self.next_sequence = sequence;
+        Ok(sequence)
+    }
+
+    pub fn read_into(
+        &self,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
+        self.region
+            .read_into(self.hello.generation, samples)
+            .map_err(NativeBridgeSessionError::Region)
+    }
+
+    pub fn flush(&mut self) -> Result<(), NativeBridgeSessionError> {
+        self.region
+            .flush()
+            .map_err(NativeBridgeSessionError::Region)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3948,6 +4032,70 @@ mod tests {
             NativeBridgeRegion::create(&path, 2, 0),
             Err(NativeBridgeRegionError::InvalidFrame)
         ));
+    }
+
+    #[test]
+    fn native_bridge_session_negotiates_identity_and_assigns_sequences() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-session-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-main".to_owned(),
+            generation: 9,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 4,
+            lease_ms: 1_000,
+        };
+        let mut writer = NativeBridgeSession::create(&path, hello.clone()).unwrap();
+        let reader = NativeBridgeSession::open(&path, hello).unwrap();
+        let input = [0.25_f32, -0.25, 0.5, -0.5];
+        assert_eq!(writer.write(&input).unwrap(), 1);
+        assert_eq!(writer.write(&input).unwrap(), 2);
+        let mut output = [0.0; 4];
+        let header = reader.read_into(&mut output).unwrap();
+        assert_eq!(header.sequence, 2);
+        assert_eq!(output, input);
+        assert_eq!(reader.hello().bus_id, "bus-main");
+        drop(reader);
+        drop(writer);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_session_rejects_invalid_identity_before_file_creation() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-invalid-session-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: String::new(),
+            generation: 1,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        assert!(matches!(
+            NativeBridgeSession::create(&path, hello),
+            Err(NativeBridgeSessionError::InvalidHello(
+                audiorouter_protocol::AudioBridgeContractError::EmptyBusId
+            ))
+        ));
+        assert!(!path.exists());
     }
 
     #[cfg(windows)]

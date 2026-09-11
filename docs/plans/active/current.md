@@ -64,6 +64,16 @@ requires a live generation and an exact bounded f32 payload length. The focused
 protocol suite passed 8 tests. This is SEC-08/VDEV-12 contract evidence, not
 native shared-memory or IOCTL execution evidence.
 
+The Windows adapter now adds `NativeBridgeSession` above the mapped region. It
+validates the hello before creating a file, binds every block to the negotiated
+bus/generation/shape, assigns monotonic bounded-slot sequences, and preserves
+caller-owned buffers for reads. The focused Windows-audio suite passed 45 tests,
+strict package Clippy passed, and formatting/diff checks passed. This still does
+not expose a kernel control device: the sample driver has no broker IOCTL path,
+and adding an unsecured named device would violate SEC-08. The next driver task
+is a secured, lifecycle-owned control endpoint with matching IOCTL validation;
+installation, signing, and live activation remain gated.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

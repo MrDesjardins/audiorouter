@@ -63,6 +63,19 @@ buffer. `cargo test -p audiorouter-windows-audio --locked` passed all 43 tests;
 strict package Clippy passed. The mapping is not connected to a driver IOCTL,
 and no device handle or endpoint was opened.
 
+`NativeBridgeSession` now owns the negotiated hello and mapped region together.
+It rejects an invalid bus identity before creating the backing file, binds writes
+and reads to the negotiated generation and PCM shape, and assigns monotonic
+sequences without allocating audio buffers. The focused Windows-audio suite
+passed 45 tests after this addition, with strict package Clippy and formatting
+checks passing. This remains broker-side evidence: the sample driver still has
+no control-device IOCTL, and no device handle, endpoint, or driver was opened.
+
+The driver IOCTL is intentionally not added as an unsecured named device. A
+real implementation must define the security descriptor, broker ownership,
+PnP/remove cleanup, bounded request validation, and mapping lifetime together;
+until then, the driver build remains a safe non-installing prototype.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded
