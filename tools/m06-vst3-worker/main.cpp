@@ -29,6 +29,7 @@
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 
@@ -425,6 +426,28 @@ static void require_result(const char* operation, tresult result) {
     throw std::runtime_error(message.str());
 }
 
+class HostApplication final : public Vst::IHostApplication {
+public:
+    tresult PLUGIN_API queryInterface(const TUID, void** object) override {
+        if (object) *object = nullptr;
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+
+    tresult PLUGIN_API getName(Vst::String128 name) override {
+        if (!name) return kInvalidArgument;
+        const char16_t value[] = u"AudioRouter";
+        std::copy(std::begin(value), std::end(value), name);
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API createInstance(TUID, TUID, void** object) override {
+        if (object) *object = nullptr;
+        return kNotImplemented;
+    }
+};
+
 class StateStream final : public IBStream {
 public:
     StateStream() = default;
@@ -518,7 +541,7 @@ public:
                                 << "): component creation rejected;";
                 continue;
             }
-            const auto initialize_result = component_->initialize(nullptr);
+            const auto initialize_result = component_->initialize(&host_application_);
             if (initialize_result != kResultOk) {
                 class_failures << " class " << index << " (" << info.name
                                 << "): initialize returned 0x" << std::hex
@@ -557,7 +580,7 @@ public:
                 controller_id, Vst::IEditController_iid,
                 reinterpret_cast<void**>(&controller_));
             if (controller_result == kResultOk) {
-                const auto initialize_result = controller_->initialize(nullptr);
+                const auto initialize_result = controller_->initialize(&host_application_);
                 if (initialize_result == kResultOk) {
                     controller_initialized_ = true;
                     component_->queryInterface(Vst::IConnectionPoint::iid,
@@ -917,6 +940,7 @@ private:
     }
 
     HMODULE module_ = nullptr;
+    HostApplication host_application_;
     IPluginFactory* factory_ = nullptr;
     Vst::IComponent* component_ = nullptr;
     Vst::IAudioProcessor* processor_ = nullptr;

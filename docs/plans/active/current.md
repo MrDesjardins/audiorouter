@@ -113,6 +113,14 @@ qualification remains open.
   rejects the full-state qualification. This is recorded as a binary-specific
   compatibility limitation, not an E_INVALIDARG/device-contention issue.
 
+- Added a bounded `IHostApplication` context to the native VST3 worker on
+  2026-09-10 and passed it to both component and controller initialization,
+  satisfying the VST3 host contract without exposing host object creation,
+  filesystem, network, or UI services. The full AGain native matrix passed
+  again after this change. TDR Nova still returns `kResultFalse` from its
+  component state restore, so the limitation is confirmed after host context,
+  connection-point, and inactive-state sequencing were all corrected.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded
