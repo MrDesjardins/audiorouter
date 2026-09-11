@@ -7646,3 +7646,13 @@ stream, or machine configuration action occurred.
   non-installing x64 WDK build passed with zero signability errors/warnings and
   catalog generation. No driver was installed or loaded and no audio
   configuration changed.
+- Requalified the complete guarded M00-M08 `safe-all.ps1` chain on 2026-09-11
+  after the driver bridge hardening. Toolchain/native compile, the project
+  driver and disposable SysVAD packages, read-only endpoint inventory, M01,
+  M04, M05 (121 UI tests), M06 SDK/native VST3 and VST2 workers, M07, unsigned
+  M08 artifacts, 159 traceability IDs, and documentation validation (52 files,
+  165 links) passed. Cleanup removed 13 run-owned temporary children. No
+  driver installation/loading, signing-mode change, plugin/startup
+  registration, audio stream, or persistent machine audio configuration
+  occurred. Production driver activation/signing, installer, clean-machine,
+  physical-latency, and manual UI gates remain open.
