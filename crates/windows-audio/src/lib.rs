@@ -303,6 +303,13 @@ impl Float32PacketAccumulator {
         self.pending_frames
     }
 
+    /// Discard a partial packet during endpoint invalidation or stream
+    /// replacement. Old samples must not be completed or replayed after a
+    /// recovery boundary.
+    pub fn reset(&mut self) {
+        self.pending_frames = 0;
+    }
+
     /// Copy as many complete interleaved frames as fit and return the number
     /// of source bytes consumed. The caller can submit the remainder on the
     /// next nonblocking iteration; no source memory is retained.
@@ -460,6 +467,20 @@ impl WasapiSchedulerBridge {
 
     pub fn timeline_frame(&self) -> u64 {
         self.timeline_frame
+    }
+
+    /// Clear all audio staged by the adapter at an endpoint lifecycle
+    /// boundary. The prepared graph remains published, but partial capture,
+    /// pending render, queued scheduler blocks, and the timeline are reset so
+    /// a reopened client cannot replay audio from the invalidated stream.
+    ///
+    /// This is a control/recovery operation and must be called only after the
+    /// endpoint clients have stopped; `pump` never invokes it.
+    pub fn reset_stream(&mut self) -> usize {
+        self.accumulator.reset();
+        self.render_pending_bytes = 0;
+        self.timeline_frame = 0;
+        self.scheduler.reset_io()
     }
 
     /// Copy and process at most the currently available capture packet. A
@@ -2735,6 +2756,22 @@ mod tests {
             accumulator.push(&[0; 3]),
             Err(AudioError::InvalidFrameSize)
         ));
+    }
+
+    #[test]
+    fn packet_accumulator_reset_discards_partial_endpoint_audio() {
+        let mut accumulator = Float32PacketAccumulator::new(1, 4, 8).unwrap();
+        let partial = [0.25_f32, 0.5];
+        let bytes: Vec<u8> = partial
+            .iter()
+            .flat_map(|sample| sample.to_ne_bytes())
+            .collect();
+        accumulator.push(&bytes).unwrap();
+        assert_eq!(accumulator.pending_frames(), 2);
+        accumulator.reset();
+        assert_eq!(accumulator.pending_frames(), 0);
+        let mut block = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
+        assert!(!accumulator.pop_into(&mut block).unwrap());
     }
 
     #[test]

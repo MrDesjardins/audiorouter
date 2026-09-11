@@ -3826,6 +3826,13 @@ impl RealtimeScheduler {
         self.output.recycle_all();
     }
 
+    /// Recycle queued audio without changing the published graph. This is a
+    /// control/recovery operation for an endpoint stop, invalidation, or
+    /// owner handoff; callers must keep it off the realtime callback.
+    pub fn reset_io(&self) -> usize {
+        self.input.recycle_all() + self.output.recycle_all()
+    }
+
     pub fn input(&self) -> &AudioBlockRing {
         &self.input
     }
@@ -5215,6 +5222,28 @@ mod tests {
             scheduler.output().available(),
             scheduler.output().capacity()
         );
+    }
+
+    #[test]
+    fn scheduler_reset_io_discards_queued_audio_without_deactivating_graph() {
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        let generation = RuntimeGeneration::new(52);
+        scheduler
+            .processor()
+            .publish(RuntimeGraph::prepare(generation, Vec::new()));
+        let input = scheduler.acquire_input().unwrap();
+        scheduler.submit_input(input).unwrap();
+        scheduler.process_once().unwrap();
+        assert_eq!(scheduler.input().ready(), 0);
+        assert_eq!(scheduler.output().ready(), 1);
+
+        assert_eq!(scheduler.reset_io(), 1);
+        assert_eq!(scheduler.output().ready(), 0);
+        assert_eq!(
+            scheduler.output().available(),
+            scheduler.output().capacity()
+        );
+        assert_eq!(scheduler.telemetry().active_generation, Some(generation));
     }
 
     #[test]
