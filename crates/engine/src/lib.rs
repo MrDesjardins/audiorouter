@@ -998,6 +998,12 @@ impl AudioTapSet {
     }
 }
 
+impl AudioTap for AudioTapSet {
+    fn on_processed_block(&self, start_frame: u64, block: &AudioBlock) {
+        self.notify(start_frame, block);
+    }
+}
+
 impl Default for AudioTapSet {
     fn default() -> Self {
         Self::new()

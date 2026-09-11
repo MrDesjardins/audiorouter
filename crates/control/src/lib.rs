@@ -3443,6 +3443,7 @@ pub struct ControlPlane {
     endpoint_monitor: Option<audiorouter_windows_audio::EndpointMonitor>,
     native_endpoint_worker: Option<audiorouter_windows_audio::WasapiEndpointWorker>,
     native_endpoint_session: Option<EntityId>,
+    native_endpoint_taps: Option<AudioTapSet>,
 }
 
 impl Default for ControlPlane {
@@ -3493,6 +3494,7 @@ impl ControlPlane {
             endpoint_monitor: None,
             native_endpoint_worker: None,
             native_endpoint_session: None,
+            native_endpoint_taps: None,
         }
     }
 
@@ -3595,6 +3597,88 @@ impl ControlPlane {
         }))
     }
 
+    /// Compile and publish the validated session graph into the attached
+    /// native scheduler. Graph preparation happens on the control thread and
+    /// replaces the scheduler generation atomically; endpoint start remains a
+    /// separate explicit operation.
+    pub fn activate_native_graph(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        sample_rate_hz: u32,
+    ) -> Result<(), ControlError> {
+        if self.native_endpoint_session.as_ref() != Some(session_id) {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is not bound to the session".into(),
+            ));
+        }
+        let runtime_generation = self
+            .runtimes
+            .get(session_id)
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .map(FakeRuntime::generation)
+            .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
+        if runtime_generation != generation {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker generation is stale".into(),
+            ));
+        }
+        let session = self.get_session(session_id)?.clone();
+        let recorder_node_ids = session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && node.kind == NodeKind::Recorder)
+            .map(|node| node.id.as_str())
+            .collect::<Vec<_>>();
+        let recorder_taps = if recorder_node_ids.is_empty() {
+            AudioTapSet::new()
+        } else {
+            let bindings =
+                self.recorder_tap_bindings(session_id, RuntimeGeneration::new(generation))?;
+            bindings
+                .tap_set_for_generation(RuntimeGeneration::new(generation), &recorder_node_ids)
+                .map_err(|_| {
+                    ControlError::InvalidRequest("recorder graph tap binding is invalid".into())
+                })?
+        };
+        let graph = audiorouter_engine::compile_session_at_sample_rate(
+            &session,
+            RuntimeGeneration::new(generation),
+            sample_rate_hz,
+        )
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
+        })?;
+        self.native_endpoint_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?
+            .bridge_mut()
+            .scheduler_mut()
+            .publish(graph);
+        self.native_endpoint_taps = Some(recorder_taps);
+        Ok(())
+    }
+
+    /// Pump using the recorder taps prepared by the last native graph
+    /// activation. Taking the set for the duration of the call keeps the
+    /// callback borrow explicit while avoiding construction or allocation in
+    /// the packet path.
+    pub fn pump_native_endpoint_worker_with_bound_taps(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        max_packets: u32,
+    ) -> Result<Value, ControlError> {
+        let taps = self.native_endpoint_taps.take().ok_or_else(|| {
+            ControlError::InvalidRequest("native graph recorder taps are not prepared".into())
+        })?;
+        let result = self.pump_native_endpoint_worker(session_id, generation, max_packets, &taps);
+        self.native_endpoint_taps = Some(taps);
+        result
+    }
+
     /// Detach only a stopped native worker; this never affects unrelated
     /// endpoints or machine audio configuration.
     pub fn detach_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
@@ -3613,6 +3697,7 @@ impl ControlPlane {
             ));
         }
         self.native_endpoint_session = None;
+        self.native_endpoint_taps = None;
         Ok(())
     }
 
@@ -3745,6 +3830,7 @@ impl ControlPlane {
             endpoint_monitor: None,
             native_endpoint_worker: None,
             native_endpoint_session: None,
+            native_endpoint_taps: None,
         })
     }
 

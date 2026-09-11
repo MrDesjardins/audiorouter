@@ -8279,3 +8279,22 @@ live-driver evidence.
 - Next M02/M03 task: publish a compiled graph and recorder tap set into the
   native worker during explicit activation, then qualify one guarded Windows
   pump with before/after endpoint and generation evidence.
+- Added explicit native graph publication on 2026-09-11. A session-bound
+  worker can now compile the validated session at the negotiated sample rate
+  and publish that graph into its scheduler only when the control runtime is
+  running at the requested generation. Endpoint start and packet pumping
+  remain separate, explicit operations. Control tests (121), strict Clippy,
+  formatting, and diff checks pass; no endpoint was opened.
+- Next M02/M03 task: bind the recorder tap set to the published native graph
+  during explicit activation, then qualify one guarded Windows pump with
+  endpoint media-state and graph-generation before/after evidence.
+- Bound recorder taps during native graph activation on 2026-09-11. The
+  control plane now constructs the bounded `AudioTapSet` from the validated
+  recorder-node bindings before atomically publishing the compiled graph, and
+  provides a pump entry that reuses that prebuilt set without rebuilding it in
+  the packet path. Engine (102) and control (121) tests, strict Clippy,
+  formatting, and diff checks pass; no endpoint was opened.
+- Next M02/M03 task: add a guarded Windows integration harness that explicitly
+  opens the persisted endpoint pair, activates this graph/tap boundary, pumps
+  bounded packets, and records before/after endpoint media state; keep driver,
+  signing, installation, and physical-latency gates separate.
