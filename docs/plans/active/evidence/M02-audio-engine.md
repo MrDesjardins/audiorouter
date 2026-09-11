@@ -1457,3 +1457,14 @@ identity/state snapshot and removed its temporary executable/object. Defaults,
 volume, mute, privacy, drivers, signing, startup configuration, and endpoint
 registration were unchanged. This is live adapter evidence, not production
 driver or physical-latency qualification.
+
+## 2026-09-11 — Control-owned endpoint route probe
+
+The new `m02-control-route-live.ps1` harness requires explicit endpoint IDs
+and `-AllowLiveAudio`, snapshots present media identity/state, and invokes the
+control-owned route probe. Against the existing VB-Audio cable it ran for 500
+ms at generation 1, processing 50 packets/24,000 captured frames, 187 graph
+quanta, and 23,936 rendered frames at 48 kHz. The worker was explicitly
+stopped and detached; the before/after media snapshot was unchanged. This
+qualifies control-owned graph publication and bounded pumping on existing
+endpoints, not driver installation, production signing, or physical latency.

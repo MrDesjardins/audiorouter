@@ -618,6 +618,7 @@ name = "m00-wasapi-probe"
 version = "0.1.0"
 dependencies = [
  "audiorouter-control",
+ "audiorouter-domain",
  "audiorouter-engine",
  "audiorouter-windows-audio",
  "windows",

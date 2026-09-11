@@ -14,6 +14,7 @@ use audiorouter_engine::{
     ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph, StreamingResampler,
 };
 use audiorouter_control::{RecorderWorker, StreamingFlacRecorderWorker};
+use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session, Edge};
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
     ProcessLoopbackCapture, ProcessLoopbackMode, SharedCapture, SharedRender,
@@ -120,6 +121,24 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
+    if std::env::args().nth(1).as_deref() == Some("adapter-control-route") {
+        let duration_ms = std::env::args()
+            .nth(2)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(500);
+        let capture_id = std::env::args().nth(3);
+        let render_id = std::env::args().nth(4);
+        if let (Some(capture_id), Some(render_id)) = (capture_id, render_id) {
+            if let Err(error) = adapter_control_route(duration_ms, &capture_id, &render_id) {
+                eprintln!("adapter_control_route_error={error}");
+                std::process::exit(1);
+            }
+        } else {
+            eprintln!("adapter_control_route_error=capture and render endpoint IDs are required");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("process-loopback") {
         let duration_ms = std::env::args()
             .nth(2)
@@ -142,6 +161,158 @@ fn main() -> Result<()> {
         CoUninitialize();
         result
     }
+}
+
+fn adapter_control_route(
+    duration_ms: u64,
+    capture_id: &str,
+    render_id: &str,
+) -> std::result::Result<(), String> {
+    if !(100..=2_000).contains(&duration_ms) {
+        return Err("duration must be between 100 and 2000 ms".into());
+    }
+    let mut monitor = EndpointMonitor::start().map_err(|error| format!("monitor: {error:?}"))?;
+    let capture_info = monitor
+        .snapshot()
+        .iter()
+        .find(|endpoint| endpoint.id == capture_id && endpoint.direction == EndpointDirection::Capture)
+        .cloned()
+        .ok_or_else(|| "capture endpoint is not present in the exact monitor snapshot".to_owned())?;
+    let render_info = monitor
+        .snapshot()
+        .iter()
+        .find(|endpoint| endpoint.id == render_id && endpoint.direction == EndpointDirection::Render)
+        .cloned()
+        .ok_or_else(|| "render endpoint is not present in the exact monitor snapshot".to_owned())?;
+    if capture_info.channels != render_info.channels {
+        return Err("capture/render channel counts do not match".into());
+    }
+    let channels = usize::from(capture_info.channels);
+    let channel_count = u8::try_from(channels).map_err(|_| "endpoint has too many channels")?;
+    let capture = SharedCapture::open_refreshed_bound(&mut monitor, &capture_info, 1_000_000)
+        .map_err(|error| format!("capture open: {error:?}"))?;
+    let render = SharedRender::open_refreshed_bound(&mut monitor, &render_info, 1_000_000)
+        .map_err(|error| format!("render open: {error:?}"))?;
+    let bridge = WasapiSchedulerBridge::new_for_endpoints(
+        8,
+        &capture_info,
+        &render_info,
+        128,
+        4_096,
+    )
+    .map_err(|error| format!("bridge: {error:?}"))?;
+    let worker = audiorouter_windows_audio::WasapiEndpointWorker::new(capture, render, bridge);
+    let session_id = EntityId::new("native-control-probe");
+    let input_id = EntityId::new("input");
+    let output_id = EntityId::new("output");
+    let ports = |direction| {
+        vec![Port {
+            name: "main".into(),
+            direction,
+            channels: channel_count,
+        }]
+    };
+    let session = Session {
+        id: session_id.clone(),
+        name: "native control probe".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            Node {
+                id: input_id.clone(),
+                kind: NodeKind::PhysicalInput,
+                type_version: 1,
+                name: "probe input".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: ports(PortDirection::Output),
+            },
+            Node {
+                id: output_id.clone(),
+                kind: NodeKind::PhysicalOutput,
+                type_version: 1,
+                name: "probe output".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: ports(PortDirection::Input),
+            },
+        ],
+        edges: vec![Edge {
+            id: EntityId::new("probe-edge"),
+            source_node: input_id,
+            source_port: "main".into(),
+            destination_node: output_id,
+            destination_port: "main".into(),
+            matrix: (0..channels)
+                .flat_map(|row| {
+                    (0..channels).map(move |column| {
+                        if row == column {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    })
+                })
+                .collect(),
+            enabled: true,
+        }],
+    };
+    let mut control = audiorouter_control::ControlPlane::default();
+    control
+        .insert_session(session)
+        .map_err(|error| format!("session insert: {error:?}"))?;
+    control
+        .attach_native_endpoint_worker(session_id.clone(), worker)
+        .map_err(|error| format!("worker attach: {error:?}"))?;
+    let started = control
+        .session_start(&session_id)
+        .map_err(|error| format!("session start: {error:?}"))?;
+    let generation = started
+        .get("generation")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "session start did not return a generation".to_owned())?;
+    control
+        .activate_native_graph(&session_id, generation, capture_info.sample_rate_hz)
+        .map_err(|error| format!("graph activation: {error:?}"))?;
+    control
+        .start_native_endpoint_worker()
+        .map_err(|error| format!("endpoint start: {error:?}"))?;
+    let started_at = std::time::Instant::now();
+    let mut packets = 0_u64;
+    let mut captured_frames = 0_u64;
+    let mut processed_quanta = 0_u64;
+    let mut rendered_frames = 0_u64;
+    while started_at.elapsed() < Duration::from_millis(duration_ms) {
+        let result = control
+            .pump_native_endpoint_worker_with_bound_taps(&session_id, generation, 64)
+            .map_err(|error| format!("native pump: {error:?}"))?;
+        packets = packets.saturating_add(result["packets"].as_u64().unwrap_or(0));
+        captured_frames = captured_frames.saturating_add(result["capturedFrames"].as_u64().unwrap_or(0));
+        processed_quanta = processed_quanta.saturating_add(result["processedQuanta"].as_u64().unwrap_or(0));
+        rendered_frames = rendered_frames.saturating_add(result["renderedFrames"].as_u64().unwrap_or(0));
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    control
+        .stop_native_endpoint_worker()
+        .map_err(|error| format!("endpoint stop: {error:?}"))?;
+    control
+        .detach_native_endpoint_worker()
+        .map_err(|error| format!("worker detach: {error:?}"))?;
+    control
+        .session_stop(&session_id)
+        .map_err(|error| format!("session stop: {error:?}"))?;
+    if packets == 0 || captured_frames == 0 || processed_quanta == 0 || rendered_frames == 0 {
+        return Err(format!(
+            "control route reported no complete audio work: packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames}"
+        ));
+    }
+    println!(
+        "adapter_control_route route=true generation={generation} packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames} capture_rate_hz={} render_rate_hz={}",
+        capture_info.sample_rate_hz, render_info.sample_rate_hz
+    );
+    Ok(())
 }
 
 fn process_loopback_smoke(

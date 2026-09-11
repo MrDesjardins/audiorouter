@@ -8307,3 +8307,13 @@ live-driver evidence.
 - Next M02/M03 task: adapt the live harness to construct the exact-bound worker,
   publish the control-compiled graph, and exercise the explicit control pump
   with before/after endpoint and scheduler-generation evidence.
+- Added and ran `tests/acceptance/m02-control-route-live.ps1` on 2026-09-11.
+  With explicit VB-Audio endpoint IDs and `-AllowLiveAudio`, the control-owned
+  route reached generation 1, processed 50 packets/24,000 captured frames,
+  187 graph quanta, and rendered 23,936 frames. It stopped and detached the
+  worker and verified unchanged media identity/state. This is the first live
+  evidence for the control-owned graph/pump boundary; driver installation,
+  signing, and physical latency remain open.
+- Next M02/M03 task: extend the harness to attach a recorder branch and verify
+  prebuilt tap delivery through the control-owned native worker, then measure
+  the guarded endpoint pair's before/after stream lifecycle counters.
