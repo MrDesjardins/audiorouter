@@ -3570,12 +3570,17 @@ impl ControlPlane {
                 "native endpoint worker generation is stale".into(),
             ));
         }
-        let pump = self
-            .native_endpoint_worker
-            .as_mut()
-            .ok_or_else(|| {
-                ControlError::InvalidRequest("native endpoint worker is not attached".into())
-            })?
+        let worker = self.native_endpoint_worker.as_mut().ok_or_else(|| {
+            ControlError::InvalidRequest("native endpoint worker is not attached".into())
+        })?;
+        if worker.bridge().scheduler().telemetry().active_generation
+            != Some(RuntimeGeneration::new(generation))
+        {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker has no matching prepared graph".into(),
+            ));
+        }
+        let pump = worker
             .pump_available_with_tap(max_packets, tap)
             .map_err(audio_control_error)?;
         Ok(json!({

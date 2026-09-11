@@ -8271,3 +8271,11 @@ live-driver evidence.
 - Next M02/M03 task: replace the fake-runtime generation check with the
   prepared native graph generation once graph activation is wired, then add a
   guarded Windows integration test for one explicit endpoint-worker pump.
+- Tightened the native pump gate on 2026-09-11: before draining packets, the
+  control plane now also reads the worker scheduler's lock-free active graph
+  generation and rejects missing or mismatched prepared graphs. Control tests
+  (121), strict Clippy, formatting, diff checks, and documentation validation
+  pass; no endpoint was opened.
+- Next M02/M03 task: publish a compiled graph and recorder tap set into the
+  native worker during explicit activation, then qualify one guarded Windows
+  pump with before/after endpoint and generation evidence.
