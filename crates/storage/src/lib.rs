@@ -838,6 +838,12 @@ impl Storage {
                  comment TEXT
              );
              CREATE INDEX IF NOT EXISTS recordings_session_id ON recordings(session_id);
+             CREATE TABLE IF NOT EXISTS recording_node_bindings (
+                 recording_id TEXT PRIMARY KEY,
+                 node_id TEXT NOT NULL
+             );
+             CREATE INDEX IF NOT EXISTS recording_node_bindings_node_id
+                 ON recording_node_bindings(node_id);
              CREATE TABLE IF NOT EXISTS recording_checkpoints (
                  recording_id TEXT PRIMARY KEY,
                  checkpoint TEXT NOT NULL,
@@ -1314,6 +1320,39 @@ impl Storage {
         Ok(())
     }
 
+    /// Persist the graph recorder node that produced a recording. Legacy
+    /// recordings may remain unmapped and continue to return `None`.
+    pub fn save_recording_node_binding(
+        &self,
+        recording_id: &str,
+        node_id: &str,
+    ) -> Result<(), StorageError> {
+        validate_recording_id(recording_id)?;
+        validate_recording_id(node_id)?;
+        self.connection.execute(
+            "INSERT INTO recording_node_bindings(recording_id, node_id)
+             VALUES (?1, ?2)
+             ON CONFLICT(recording_id) DO UPDATE SET node_id=excluded.node_id",
+            params![recording_id, node_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_recording_node_binding(
+        &self,
+        recording_id: &str,
+    ) -> Result<Option<String>, StorageError> {
+        validate_recording_id(recording_id)?;
+        self.connection
+            .query_row(
+                "SELECT node_id FROM recording_node_bindings WHERE recording_id = ?1",
+                params![recording_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
     /// Persist only a validated recorder state checkpoint. Audio samples,
     /// queues, and file handles remain outside SQLite.
     pub fn save_recording_checkpoint(
@@ -1551,6 +1590,10 @@ impl Storage {
         let removed =
             transaction.execute("DELETE FROM recordings WHERE id = ?1", params![id])? == 1;
         if removed {
+            transaction.execute(
+                "DELETE FROM recording_node_bindings WHERE recording_id = ?1",
+                params![id],
+            )?;
             transaction.execute(
                 "DELETE FROM recording_checkpoints WHERE recording_id = ?1",
                 params![id],
@@ -4850,6 +4893,13 @@ mod tests {
             comment: None,
         };
         storage.save_recording(&recording).unwrap();
+        storage
+            .save_recording_node_binding("rec-1", "capture-recorder")
+            .unwrap();
+        assert_eq!(
+            storage.load_recording_node_binding("rec-1").unwrap(),
+            Some("capture-recorder".into())
+        );
         let mut second = recording.clone();
         second.id = "rec-2".into();
         second.start_time = "2026-09-05T12:01:00Z".into();
@@ -4887,6 +4937,7 @@ mod tests {
             Some("Take 1".into())
         );
         assert!(reopened.remove_recording_entry("rec-1").unwrap());
+        assert_eq!(reopened.load_recording_node_binding("rec-1").unwrap(), None);
         assert!(!reopened.remove_recording_entry("rec-1").unwrap());
         assert_eq!(reopened.list_recordings(None).unwrap().len(), 1);
         let _ = std::fs::remove_file(path);

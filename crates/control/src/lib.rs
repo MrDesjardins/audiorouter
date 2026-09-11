@@ -2981,6 +2981,7 @@ fn recording_item_schema() -> Value {
             "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
             "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
             "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
+            "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
             "path": { "type": "string", "minLength": 1 },
             "format": { "enum": ["wav", "flac"] },
             "channels": { "enum": [1, 2] },
@@ -4397,6 +4398,9 @@ impl ControlPlane {
                 .map_err(storage_error)?;
             for recording in &finalized_recordings {
                 storage.save_recording(recording).map_err(storage_error)?;
+                storage
+                    .save_recording_node_binding(recording.id.as_str(), node_id.as_str())
+                    .map_err(storage_error)?;
             }
         }
         let last_frame = checkpoint.last_frame;
@@ -6587,10 +6591,14 @@ impl ControlPlane {
         let values = records
             .into_iter()
             .map(|record| {
-                json!({
+                let node_id = storage
+                    .load_recording_node_binding(record.id.as_str())
+                    .map_err(storage_error)?;
+                Ok(json!({
                     "id": record.id,
                     "sessionId": record.session_id,
                     "recorderId": record.recorder_id,
+                    "nodeId": node_id,
                     "path": record.path,
                     "format": record.format,
                     "channels": record.channels,
@@ -6603,9 +6611,9 @@ impl ControlPlane {
                     "title": record.title,
                     "artist": record.artist,
                     "comment": record.comment
-                })
+                }))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, ControlError>>()?;
         if paged {
             let next_cursor = has_more
                 .then(|| values.last().and_then(|value| value["id"].as_str()))
@@ -6676,10 +6684,14 @@ impl ControlPlane {
             .get_recording(&recording_id)
             .map_err(storage_error)?
             .ok_or_else(|| ControlError::InvalidRequest("recording not found".into()))?;
+        let node_id = storage
+            .load_recording_node_binding(record.id.as_str())
+            .map_err(storage_error)?;
         Ok(json!({
             "id": record.id,
             "sessionId": record.session_id,
             "recorderId": record.recorder_id,
+            "nodeId": node_id,
             "path": record.path,
             "format": record.format,
             "channels": record.channels,
@@ -12743,6 +12755,12 @@ mod tests {
         assert!(recordings
             .iter()
             .any(|recording| recording["recorderId"] == "desktop"));
+        assert!(recordings
+            .iter()
+            .any(|recording| recording["nodeId"] == "capture-recorder"));
+        assert!(recordings
+            .iter()
+            .any(|recording| recording["nodeId"] == "desktop-recorder"));
         let _ = std::fs::remove_dir_all(root);
     }
 

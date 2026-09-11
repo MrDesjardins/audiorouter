@@ -63,6 +63,8 @@ file worker and lifecycle state are attached to that validated recorder node.
 `recorders.list` reports `nodeId` for node-targeted entries and keeps it absent
 for compatibility session entries; results are bounded and deterministically
 ordered.
+Finalized node-targeted recording rows from `recordings.list` and
+`recordings.get` include the persisted `nodeId`; legacy rows return `null`.
 | `startup.get` | `read` | read-only |
 | `startup.plan` | `sessionControl` | plan-only |
 | `startup.apply` | `sessionControl` | mutating; requires an idempotency key |

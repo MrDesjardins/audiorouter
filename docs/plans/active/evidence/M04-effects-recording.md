@@ -110,6 +110,10 @@ The fixture now contains two node-targeted recorders with separate workers and
 identities, and verifies two independent finalized library rows after both
 JSON-RPC lifecycles complete. This confirms durable multi-sink metadata
 ownership without claiming native graph fan-out.
+Recording storage now keeps a backward-compatible `recording_node_bindings`
+table. Node finalization persists the producing node ID, and recording list/get
+responses return it while legacy rows remain unmapped. Storage round-trip and
+the two-node control regression both pass.
 The global arm limit now counts legacy session controllers and node-keyed
 controllers through the same bounded eight-recorder calculation, preventing a
 mixed configuration from exceeding REC-01.

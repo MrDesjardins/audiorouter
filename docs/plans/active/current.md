@@ -8234,3 +8234,10 @@ live-driver evidence.
   checks pass.
 - Next M04/REC-01 task: continue node-aware durable recovery/checkpoint
   hydration and complete native-independent graph branch qualification.
+- Added persisted recording-node bindings on 2026-09-11. Finalized node
+  recordings now store their producing graph node in a backward-compatible
+  table; `recordings.list`/`recordings.get` expose optional `nodeId`, and
+  removal cleans the binding. Storage and two-node control regressions pass,
+  with strict Clippy, formatting, diff, and documentation checks green.
+- Next M04/REC-01 task: continue node-aware checkpoint hydration and recovery
+  semantics, then complete native-independent graph branch qualification.
