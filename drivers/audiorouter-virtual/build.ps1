@@ -55,7 +55,13 @@ $args = @(
 Write-Host "Build-only AudioRouter virtual driver qualification"
 Write-Host "MSBuild: $msbuild"
 Write-Host "WDK target: $($wdkTargets[0].FullName)"
-& $msbuild @args
+# PowerShell 7 can preserve both `Path` and `PATH` from the host environment.
+# .NET Framework's MSBuild task treats its environment as case-sensitive while
+# Windows treats those names as equivalent, which otherwise fails before CL.exe
+# starts. Let cmd.exe normalize the inherited environment for this build-only
+# invocation; this does not modify the persistent machine or user environment.
+$commandLine = 'set "Path=" && set "PATH=' + $env:Path + '" && "' + $msbuild + '" ' + ($args -join ' ')
+& cmd.exe /d /c $commandLine
 if ($LASTEXITCODE -ne 0) { throw "MSBuild failed with exit code $LASTEXITCODE. See $log" }
 
 $sys = @(Get-ChildItem -LiteralPath $driverRoot -Filter 'AudioRouterVirtual.sys' -Recurse -File | Where-Object { $_.FullName -notlike "$output*" })

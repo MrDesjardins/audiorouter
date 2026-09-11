@@ -2,6 +2,25 @@
 
 Updated: 2026-09-10.
 
+## Current execution checkpoint: driver bridge data-path slice
+
+The core implementation is moving ahead of the extended VST3 qualification.
+The AudioRouter-owned x64 driver prototype now has both directions represented
+in the sample WaveRT path: render-source blocks are consumed by the sample
+capture fill callback, and render DMA consumption publishes capture-sink
+blocks through the bounded seqlock bridge. Publication uses fixed per-stream
+scratch storage and remains enabled when diagnostic file output is disabled;
+diagnostic files retain their existing opt-in guard. The source-contract and
+non-installing WDK acceptance passed with VS 18.9.1 and WDK 10.0.28000.0 after
+the build wrapper normalized the host's duplicate `Path`/`PATH` names. This is
+still an evaluation-only sample derivative: no driver was installed or loaded,
+and production PortCls ownership, signed deployment, and live endpoint proof
+remain explicit gates. Evidence: [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+
+Next action: commit/push this capture-sink data-path slice, then continue the
+next non-blocked core application/driver contract task while preserving the
+loaded-driver and signing gates.
+
 ## Priority shift: owned virtual-driver prototype
 
 The user has explicitly redirected execution from extended VST3 qualification to

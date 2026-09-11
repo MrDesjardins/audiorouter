@@ -55,6 +55,11 @@ NTSTATUS AudioRouterPublishLeaseBlockForDirection(
     _In_reads_(SampleCapacity) const FLOAT* Samples,
     _In_ SIZE_T SampleCapacity);
 
+NTSTATUS AudioRouterGetLeaseShapeForDirection(
+    _In_ USHORT Direction,
+    _Out_ USHORT* Frames,
+    _Out_ USHORT* Channels);
+
 #define IOCTL_AUDIOROUTER_BRIDGE_OPEN \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
 #define IOCTL_AUDIOROUTER_BRIDGE_CLOSE \

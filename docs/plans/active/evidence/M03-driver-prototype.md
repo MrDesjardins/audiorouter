@@ -304,6 +304,20 @@ bridge failure. Source-contract acceptance covers this callback seam and the
 WDK build passed with zero signability errors/warnings. This is not yet
 production PortCls ownership or loaded-driver audio evidence.
 
+The capture-sink path is now connected to the sample WaveRT render-consumption
+callback as well. `ReadBytes` accumulates negotiated float32 interleaved DMA
+frames in the stream's fixed scratch buffer and publishes complete quanta
+through `AudioRouterPublishLeaseBlockForDirection`; the call remains active
+when diagnostic file output is disabled, while the existing file side effect
+remains guarded by `g_DoNotCreateDataFiles`. The source-contract acceptance
+now checks both bridge directions and the unconditional render-consumption
+seam. The build-only WDK qualification passed after normalizing the host's
+duplicate `Path`/`PATH` environment names through a disposable `cmd.exe`
+child process. No persistent environment, audio configuration, driver
+installation, signing mode, or boot policy was changed. This remains sample
+integration evidence; loaded-driver endpoint transport and production PortCls
+ownership are still open.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one
@@ -312,3 +326,8 @@ it also hit a WDK `InfVerif.dll` x86-load exception. The build script now keeps
 project-relative outputs, uses a separate log directory, disables the known
 local verifier/API-validation hooks for this build-only qualification, and
 leaves installation/signing explicit future gates.
+
+The VS 18.9.1/.NET Framework MSBuild invocation also failed before compilation
+when the agent host exposed both case variants of `Path`. The build script now
+clears the duplicate spelling and supplies one temporary `PATH` only to the
+child build process; the system/user environment is not modified.

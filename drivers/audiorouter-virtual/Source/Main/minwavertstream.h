@@ -132,6 +132,8 @@ protected:
     ULONG                       m_BridgeScratchFrames;
     ULONG                       m_BridgeScratchFrameOffset;
     ULONGLONG                  m_BridgeReadSequence;
+    ULONG                       m_BridgePublishFrames;
+    ULONG                       m_BridgePublishChannels;
     // Member variable as config params for tone generator
 
 public:

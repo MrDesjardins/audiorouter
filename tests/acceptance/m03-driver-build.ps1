@@ -53,12 +53,18 @@ if ($publishHelper.Contains('KeAcquireSpinLock')) {
 $stream = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
 foreach ($required in @(
         'AudioRouterCopyLeaseBlockForDirection',
+        'AudioRouterPublishLeaseBlockForDirection',
+        'AudioRouterGetLeaseShapeForDirection',
         'm_BridgeScratch',
         'AR_BRIDGE_DIRECTION_RENDER_SOURCE',
+        'AR_BRIDGE_DIRECTION_CAPTURE_SINK',
         'RtlZeroMemory')) {
     if (-not $stream.Contains($required)) {
         throw "WaveRT bridge fill path is missing required fail-closed seam: $required"
     }
+}
+if (-not $stream.Contains('ReadBytes(ByteDisplacement);')) {
+    throw 'WaveRT render consumption must run the bridge publisher even when file diagnostics are disabled'
 }
 
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')

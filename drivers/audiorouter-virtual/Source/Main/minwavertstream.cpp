@@ -230,6 +230,8 @@ Return Value:
     m_BridgeScratchFrames = 0;
     m_BridgeScratchFrameOffset = 0;
     m_BridgeReadSequence = 0;
+    m_BridgePublishFrames = 0;
+    m_BridgePublishChannels = 0;
 
     m_ulHostCaptureToneFrequency = IsEqualGUID(SignalProcessingMode, AUDIO_SIGNALPROCESSINGMODE_RAW) ? 1000 : 2000;
     m_dwHostCaptureToneAmplitude = 50;
@@ -1367,11 +1369,9 @@ VOID CMiniportWaveRTStream::UpdatePosition
             m_bLastBufferRendered = TRUE;
         }
 
-        if (!g_DoNotCreateDataFiles)
-        {
-            // Read from buffer and write to a file.
-            ReadBytes(ByteDisplacement);
-        }
+        // Read from the render DMA for the capture-sink bridge and, when
+        // enabled, write the same consumed bytes to the diagnostic file.
+        ReadBytes(ByteDisplacement);
     }
 
     // Increment the DMA position by the number of bytes displaced since the last
@@ -1410,14 +1410,34 @@ ByteDisplacement - # of bytes to process.
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
-    // The capture endpoint is the virtual sink for processed render audio.
-    // Only the negotiated float32 interleaved shape can use the bridge; an
-    // unavailable or incoherent block is rendered as silence.
     const BOOLEAN bridgeFormat =
         m_pWfExt != NULL &&
         m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
         m_pWfExt->Format.nBlockAlign ==
             m_pWfExt->Format.nChannels * sizeof(FLOAT);
+    if (bridgeFormat && m_pWfExt->Format.nChannels <= AR_BRIDGE_MAX_CHANNELS) {
+        if (m_BridgePublishFrames == 0 ||
+            m_BridgePublishChannels != m_pWfExt->Format.nChannels) {
+            USHORT frames = 0;
+            USHORT channels = 0;
+            if (NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
+                    AR_BRIDGE_DIRECTION_CAPTURE_SINK, &frames, &channels)) &&
+                channels == m_pWfExt->Format.nChannels) {
+                m_BridgePublishFrames = frames;
+                m_BridgePublishChannels = channels;
+            } else {
+                m_BridgePublishFrames = 0;
+                m_BridgePublishChannels = 0;
+            }
+        }
+    } else {
+        m_BridgePublishFrames = 0;
+        m_BridgePublishChannels = 0;
+    }
+
+    // The capture endpoint is the virtual sink for processed render audio.
+    // Only the negotiated float32 interleaved shape can use the bridge; an
+    // unavailable or incoherent block is rendered as silence.
     const ULONG bridgeChannels = bridgeFormat ? m_pWfExt->Format.nChannels : 0;
 
     // Normally this will loop no more than once for a single wrap, but if
@@ -1495,13 +1515,44 @@ ByteDisplacement - # of bytes to process.
 --*/
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
+    const BOOLEAN bridgeFormat =
+        m_pWfExt != NULL &&
+        m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
+        m_pWfExt->Format.nBlockAlign ==
+            m_pWfExt->Format.nChannels * sizeof(FLOAT);
 
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-        m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);
+        ULONG frameBytes = bridgeFormat ? m_pWfExt->Format.nBlockAlign : 0;
+        ULONG frames = frameBytes == 0 ? 0 : runWrite / frameBytes;
+        if (m_BridgePublishFrames != 0 && frames != 0) {
+            ULONG consumedFrames = 0;
+            while (consumedFrames < frames) {
+                ULONG needed = m_BridgePublishFrames - m_BridgeScratchFrames;
+                ULONG copyFrames = min(needed, frames - consumedFrames);
+                RtlCopyMemory(
+                    m_BridgeScratch + m_BridgeScratchFrames * m_BridgePublishChannels,
+                    m_pDmaBuffer + bufferOffset + consumedFrames * frameBytes,
+                    copyFrames * frameBytes);
+                m_BridgeScratchFrames += copyFrames;
+                consumedFrames += copyFrames;
+                if (m_BridgeScratchFrames == m_BridgePublishFrames) {
+                    (void)AudioRouterPublishLeaseBlockForDirection(
+                        AR_BRIDGE_DIRECTION_CAPTURE_SINK,
+                        static_cast<USHORT>(m_BridgePublishFrames),
+                        static_cast<USHORT>(m_BridgePublishChannels),
+                        m_BridgeScratch,
+                        ARRAYSIZE(m_BridgeScratch));
+                    m_BridgeScratchFrames = 0;
+                }
+            }
+        }
+        if (!g_DoNotCreateDataFiles) {
+            m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);
+        }
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
     }

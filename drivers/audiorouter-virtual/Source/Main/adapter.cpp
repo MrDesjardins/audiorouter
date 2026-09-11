@@ -221,6 +221,29 @@ NTSTATUS AudioRouterPublishLeaseBlockForDirection(
             lease, Frames, Channels, Samples, SampleCapacity);
 }
 
+NTSTATUS AudioRouterGetLeaseShapeForDirection(
+    _In_ USHORT Direction,
+    _Out_ USHORT* Frames,
+    _Out_ USHORT* Channels)
+{
+    if (Frames == NULL || Channels == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(Direction);
+    if (lease == NULL || !ExAcquireRundownProtection(&lease->Rundown)) {
+        return STATUS_DEVICE_NOT_READY;
+    }
+    PVOID view = InterlockedCompareExchangePointer(&lease->MappedView, NULL, NULL);
+    if (view == NULL || lease->Request.Direction != Direction) {
+        ExReleaseRundownProtection(&lease->Rundown);
+        return STATUS_DEVICE_NOT_READY;
+    }
+    *Frames = lease->Request.FramesPerQuantum;
+    *Channels = lease->Request.Channels;
+    ExReleaseRundownProtection(&lease->Rundown);
+    return STATUS_SUCCESS;
+}
+
 //-----------------------------------------------------------------------------
 // Referenced forward.
 //-----------------------------------------------------------------------------
