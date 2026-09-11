@@ -15,6 +15,17 @@
 
 #pragma comment(lib, "Wdmsec.lib")
 
+// This sample's target-version headers omit these documented exports even
+// though the WDK kernel library provides them.
+extern "C" NTKERNELAPI NTSTATUS MmMapViewInSystemSpace(
+    _In_ PVOID Section,
+    _Outptr_result_bytebuffer_(*ViewSize) PVOID* MappedBase,
+    _Inout_ PSIZE_T ViewSize
+);
+extern "C" NTKERNELAPI NTSTATUS MmUnmapViewInSystemSpace(
+    _In_ PVOID MappedBase
+);
+
 #define AR_BRIDGE_PROTOCOL_MAJOR 1
 #define AR_BRIDGE_PROTOCOL_MINOR 0
 #define AR_BRIDGE_MAX_BUS_ID_BYTES 128

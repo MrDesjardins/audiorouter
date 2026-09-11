@@ -34,6 +34,9 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
     BOOLEAN Active;
     ULONGLONG LastHeartbeat100ns;
     AR_BRIDGE_OPEN_REQUEST Request;
+    PVOID SectionObject;
+    PVOID MappedView;
+    SIZE_T MappedBytes;
 } AR_BRIDGE_LEASE_STATE;
 
 AR_BRIDGE_LEASE_STATE g_BridgeLease = {};
@@ -105,6 +108,42 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
             static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer);
         status = AudioRouterValidateBridgeOpenRequest(request);
         if (NT_SUCCESS(status)) {
+            PVOID sectionObject = NULL;
+            PVOID mappedView = NULL;
+            SIZE_T mappedBytes = request->MappingBytes;
+            if (request->SectionHandle != 0) {
+                SIZE_T requiredBytes = AR_BRIDGE_HEADER_BYTES +
+                    static_cast<SIZE_T>(request->Channels) *
+                    static_cast<SIZE_T>(request->FramesPerQuantum) * sizeof(float);
+                if (mappedBytes < requiredBytes) {
+                    status = STATUS_BUFFER_TOO_SMALL;
+                } else {
+                    status = ObReferenceObjectByHandle(
+                        reinterpret_cast<HANDLE>(static_cast<ULONG_PTR>(request->SectionHandle)),
+                        SECTION_MAP_READ | SECTION_MAP_WRITE, NULL, UserMode,
+                        &sectionObject, NULL);
+                    if (NT_SUCCESS(status)) {
+                        status = MmMapViewInSystemSpace(
+                            sectionObject, &mappedView, &mappedBytes);
+                        if (!NT_SUCCESS(status)) {
+                            ObDereferenceObject(sectionObject);
+                            sectionObject = NULL;
+                        }
+                    }
+                }
+            }
+            if (!NT_SUCCESS(status)) {
+                if (mappedView != NULL) {
+                    MmUnmapViewInSystemSpace(mappedView);
+                }
+                if (sectionObject != NULL) {
+                    ObDereferenceObject(sectionObject);
+                }
+                return CompleteBridgeIrp(Irp, status);
+            }
+
+            PVOID oldSectionObject = NULL;
+            PVOID oldMappedView = NULL;
             KIRQL oldIrql;
             KeAcquireSpinLock(&g_BridgeLease.Lock, &oldIrql);
             ULONGLONG now = KeQueryInterruptTime();
@@ -116,9 +155,16 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 if (g_BridgeLease.Active && !expired) {
                     status = STATUS_DEVICE_BUSY;
                 } else {
+                    oldSectionObject = g_BridgeLease.SectionObject;
+                    oldMappedView = g_BridgeLease.MappedView;
                     g_BridgeLease.Request = *request;
                     g_BridgeLease.LastHeartbeat100ns = now;
                     g_BridgeLease.Active = TRUE;
+                    g_BridgeLease.SectionObject = sectionObject;
+                    g_BridgeLease.MappedView = mappedView;
+                    g_BridgeLease.MappedBytes = mappedBytes;
+                    sectionObject = NULL;
+                    mappedView = NULL;
                     status = STATUS_SUCCESS;
                 }
             } else if (!g_BridgeLease.Active || expired ||
@@ -127,15 +173,32 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                            sizeof(AR_BRIDGE_OPEN_REQUEST)) {
                 status = STATUS_INVALID_DEVICE_STATE;
             } else if (code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE) {
+                oldSectionObject = g_BridgeLease.SectionObject;
+                oldMappedView = g_BridgeLease.MappedView;
                 g_BridgeLease.Active = FALSE;
                 RtlZeroMemory(&g_BridgeLease.Request, sizeof(g_BridgeLease.Request));
                 g_BridgeLease.LastHeartbeat100ns = 0;
+                g_BridgeLease.SectionObject = NULL;
+                g_BridgeLease.MappedView = NULL;
+                g_BridgeLease.MappedBytes = 0;
                 status = STATUS_SUCCESS;
             } else {
                 g_BridgeLease.LastHeartbeat100ns = now;
                 status = STATUS_SUCCESS;
             }
             KeReleaseSpinLock(&g_BridgeLease.Lock, oldIrql);
+            if (oldMappedView != NULL) {
+                MmUnmapViewInSystemSpace(oldMappedView);
+            }
+            if (oldSectionObject != NULL) {
+                ObDereferenceObject(oldSectionObject);
+            }
+            if (mappedView != NULL) {
+                MmUnmapViewInSystemSpace(mappedView);
+            }
+            if (sectionObject != NULL) {
+                ObDereferenceObject(sectionObject);
+            }
         }
     }
 
@@ -172,6 +235,27 @@ void DeleteBridgeControlDevice()
 {
     UNICODE_STRING dosName;
     RtlInitUnicodeString(&dosName, AUDIOROUTER_BRIDGE_DOS_NAME);
+
+    PVOID sectionObject = NULL;
+    PVOID mappedView = NULL;
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&g_BridgeLease.Lock, &oldIrql);
+    sectionObject = g_BridgeLease.SectionObject;
+    mappedView = g_BridgeLease.MappedView;
+    g_BridgeLease.SectionObject = NULL;
+    g_BridgeLease.MappedView = NULL;
+    g_BridgeLease.MappedBytes = 0;
+    g_BridgeLease.Active = FALSE;
+    RtlZeroMemory(&g_BridgeLease.Request, sizeof(g_BridgeLease.Request));
+    g_BridgeLease.LastHeartbeat100ns = 0;
+    KeReleaseSpinLock(&g_BridgeLease.Lock, oldIrql);
+
+    if (mappedView != NULL) {
+        MmUnmapViewInSystemSpace(mappedView);
+    }
+    if (sectionObject != NULL) {
+        ObDereferenceObject(sectionObject);
+    }
     if (g_BridgeControlDevice != NULL) {
         IoDeleteSymbolicLink(&dosName);
         IoDeleteDevice(g_BridgeControlDevice);

@@ -112,6 +112,14 @@ closes the lease before flushing the mapping, and attempts release on drop/error
 paths. The adapter still does not claim that the driver can access the file
 mapping; section-handle ownership is the next transport task.
 
+The kernel now consumes a nonzero section handle on a mapped open: it checks
+the declared size against the negotiated PCM layout, references the caller's
+section handle with `UserMode` access, maps it in system space, and unwinds the
+view/object on contention, close, expiry replacement, or unload. Lease-only
+opens remain explicitly unmapped. The WDK build passed with zero signability
+errors/warnings; live mapped-driver execution remains gated on deliberate
+isolated installation.
+
 The bridge ABI now carries an optional section handle and mapping-size pair.
 Both kernel and user-mode validation reject mismatched zero/nonzero pairs and
 undersized mappings; the user-mode client exposes an explicit

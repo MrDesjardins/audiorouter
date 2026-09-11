@@ -118,6 +118,14 @@ paths. This is a user-mode lifecycle integration boundary. The kernel still
 does not receive the file mapping, so live shared-memory/audio transport and
 driver-loaded validation remain open.
 
+The kernel mapping boundary is now implemented for mapped opens: a nonzero
+section handle is checked for the negotiated PCM size, referenced with
+`UserMode` access, mapped into system space, and released on contention, close,
+expiry replacement, and unload. Lease-only opens remain unmapped by design.
+The updated WDK build passed with zero signability errors/warnings. No mapped
+open was sent to a loaded driver, so live kernel/audio transport evidence is
+still outstanding.
+
 The fixed bridge ABI now includes an optional section handle and mapping byte
 count. Kernel and user-mode validators reject half-specified or undersized
 mapping descriptors, while the client exposes an explicit mapped-open method.
