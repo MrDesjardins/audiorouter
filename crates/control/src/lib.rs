@@ -5684,7 +5684,13 @@ impl ControlPlane {
             .endpoint_monitor
             .as_mut()
             .expect("endpoint monitor initialized above");
-        monitor.poll_changes().map_err(audio_control_error)?;
+        let endpoint_changes = monitor.poll_changes().map_err(audio_control_error)?;
+        if !endpoint_changes.is_empty() {
+            // EventLog is the bounded notification surface. Endpoint details
+            // are intentionally refetched through devices.list so events do
+            // not duplicate an unbounded or stale device payload.
+            self.events.append(0, None, "devices.changed", None);
+        }
         let endpoints = monitor.snapshot().to_vec();
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;

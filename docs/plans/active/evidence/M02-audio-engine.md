@@ -1405,6 +1405,17 @@ removed 13 run-owned temporary children. This is compile/portable/disposable
 evidence only; no driver was installed or loaded, no stream was opened, and no
 persistent audio configuration was changed.
 
+## 2026-09-11 — Bounded endpoint-change event signal
+
+When `devices.list` consumes a notification and the active endpoint snapshot
+diff is non-empty, the control plane now appends one bounded `devices.changed`
+state event. The event intentionally carries no endpoint payload; clients
+refetch the authoritative snapshot, preventing stale or oversized event data
+and preserving exact-ID binding behavior. Focused control (106) and
+Windows-audio (56) tests, strict Clippy, formatting, and diff checks passed.
+An injected transition seam is still needed for deterministic inactive-to-active
+event tests without modifying live endpoint state.
+
 ## 2026-09-11 â€” Opt-in format-optional inactive inventory
 
 `devices.list({includeInactive:true})` now merges the active monitor snapshot

@@ -93,6 +93,9 @@ includes a bounded presentation `name` and `defaultRoles`, containing zero or mo
 `multimedia`, and `communications`; these are current Windows default-role
 observations, not persistent bindings. A pinned endpoint remains identified by
 its opaque ID, and follow-default behavior must be an explicit graph choice.
+When endpoint notifications produce a non-empty snapshot diff, the control
+plane retains a bounded `devices.changed` state event; clients should refetch
+`devices.list` rather than expect endpoint details in the event payload.
 
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls

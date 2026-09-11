@@ -7479,3 +7479,13 @@ stream, or machine configuration action occurred.
 - Next M00/M02 task: emit bounded endpoint snapshot-change events from the
   notification refresh path and test inactive-to-active transitions without
   automatic route replacement.
+- Added the bounded `devices.changed` event signal on 2026-09-11: when the
+  control thread consumes a notification and the active snapshot diff is
+  non-empty, one retained state event is appended; endpoint details remain in
+  the refetched bounded `devices.list` snapshot, and no route is rebound.
+  Control (106), Windows-audio (56), strict Clippy, formatting, and diff checks
+  passed. The next transition test still requires a controllable endpoint
+  state source rather than mutating the user's devices.
+- Next M00/M02 task: add a pure/injected snapshot transition seam for testing
+  inactive-to-active and removal events, then expose explicit event replay
+  coverage without touching live device state.
