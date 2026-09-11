@@ -2775,6 +2775,30 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_bridge_reset_stream_recycles_queued_audio_and_keeps_graph() {
+        let mut bridge = WasapiSchedulerBridge::new(2, 1, 2, 4).unwrap();
+        let generation = audiorouter_engine::RuntimeGeneration::new(7);
+        bridge
+            .scheduler_mut()
+            .publish(audiorouter_engine::RuntimeGraph::prepare(
+                generation,
+                vec![],
+            ));
+        let input = bridge.scheduler().acquire_input().unwrap();
+        bridge.scheduler().submit_input(input).unwrap();
+        bridge.scheduler().process_once().unwrap();
+        assert_eq!(bridge.scheduler().output().ready(), 1);
+
+        assert_eq!(bridge.reset_stream(), 1);
+        assert_eq!(bridge.scheduler().output().ready(), 0);
+        assert_eq!(
+            bridge.scheduler().telemetry().active_generation,
+            Some(generation)
+        );
+        assert_eq!(bridge.timeline_frame(), 0);
+    }
+
+    #[test]
     fn quantum_deadline_schedule_advances_with_the_bridge_timeline() {
         let first = std::time::Instant::now();
         let schedule = DeadlineSchedule {
