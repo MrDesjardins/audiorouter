@@ -5118,6 +5118,18 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
+        let has_node_worker = self
+            .get_session(id)?
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Recorder)
+            .any(|node| self.recorder_node_workers.contains_key(&node.id));
+        if has_node_worker {
+            return Err(ControlError::InvalidRequest(
+                "node-keyed recorder lifecycle must be finalized before stopping the session"
+                    .into(),
+            ));
+        }
         let mut recorder_outcomes = Vec::new();
         let active_frame = self.recorders.get(id).and_then(|recorder| {
             matches!(
@@ -12083,6 +12095,7 @@ mod tests {
             .tap_set_for_generation(RuntimeGeneration::new(9), &["recorder-a", "recorder-b"])
             .unwrap();
         assert_eq!(taps.len(), 2);
+        assert!(plane.session_stop(&session_id).is_err());
         assert!(plane
             .attach_recorder_worker_to_node(
                 &session_id,

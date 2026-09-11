@@ -8163,3 +8163,10 @@ live-driver evidence.
 - Next M04/REC-01 task: promote node-keyed workers into recorder identities
   for lifecycle/API commands and durable library rows, preserving per-recorder
   failure isolation and the eight-recorder global limit.
+- Hardened session-stop ownership on 2026-09-11: a session with an attached
+  node-keyed recorder worker now fails closed until that worker has an explicit
+  lifecycle finalization path. The two-sink regression verifies the refusal,
+  preventing silent orphaning; Clippy, formatting, diff, and documentation
+  checks pass.
+- Next M04/REC-01 task: add explicit node-recorder lifecycle identities and
+  finalize each worker independently during recorder/session stop.

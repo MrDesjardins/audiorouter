@@ -83,6 +83,9 @@ the validated session. Node-keyed workers are currently a realtime attachment
 boundary only; recorder lifecycle/API identity remains session-scoped.
 Deletion now removes node-keyed workers for the deleted stopped session, and
 the regression verifies no node-worker ownership remains after deletion.
+Session stop now fails closed while a node-keyed worker is attached, because
+the session-scoped lifecycle cannot yet finalize that worker safely. The
+two-sink regression verifies this refusal; no recording is silently orphaned.
 
 ## 2026-09-09 limiter requalification
 
