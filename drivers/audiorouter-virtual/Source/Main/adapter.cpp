@@ -408,6 +408,12 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                         status = STATUS_SUCCESS;
                     }
                 }
+            } else if (lease->Active && !expired && !lease->Retiring &&
+                       lease->OwnerFileObject != stack->FileObject) {
+                // A live lease belongs to the handle that opened it. Keep
+                // ownership failures distinct from an expired or invalidated
+                // lease so user mode can report authorization separately.
+                status = STATUS_ACCESS_DENIED;
             } else if (!lease->Active || expired || lease->Retiring ||
                        lease->OwnerFileObject != stack->FileObject ||
                        RtlCompareMemory(&lease->Request, request,

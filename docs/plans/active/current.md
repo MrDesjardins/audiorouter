@@ -7656,3 +7656,9 @@ stream, or machine configuration action occurred.
   registration, audio stream, or persistent machine audio configuration
   occurred. Production driver activation/signing, installer, clean-machine,
   physical-latency, and manual UI gates remain open.
+- Improved bridge diagnostics on 2026-09-11: a live lease request from a
+  different control handle now returns `STATUS_ACCESS_DENIED`, distinct from
+  inactive, expired, or invalidated lease status. The guarded non-installing
+  M03 x64 WDK build/source acceptance passed with zero signability
+  errors/warnings and catalog generation. No driver was installed or loaded;
+  machine audio configuration was unchanged.
