@@ -27,9 +27,22 @@ children. No driver installation/loading, signing-mode change, plugin/startup
 registration, audio stream, or persistent machine configuration occurred.
 
 Next action: implement the next portable endpoint-worker lifecycle seam around
-the tested accumulator/scheduler boundary, with explicit start/stop/rebind
-state and no automatic replacement of invalidated endpoints. Preserve the
-loaded-driver, signing, installer, and physical-latency gates.
+the tested accumulator/scheduler boundary, with explicit rebind recovery and
+no automatic replacement of invalidated endpoints. Preserve the loaded-driver,
+signing, installer, and physical-latency gates.
+
+Implemented the first lifecycle slice in `audiorouter-windows-audio` as
+`WasapiEndpointWorker`. It owns the selected capture/render clients and the
+preallocated scheduler bridge, starts capture before render, rolls capture back
+if render activation fails, attempts both stops, resets staged audio, and
+rejects pumping while stopped. Tap/deadline pumping is exposed through the
+same owner. Focused Windows-audio tests (53), strict package Clippy, formatting,
+and diff checks passed; no endpoint was opened by these checks.
+
+Next action: add the control-thread rebind transaction around this owner, using
+the existing exact-ID/format monitor and bounded retry helpers. Rebind must
+stop and discard the old pair before opening only the verified persisted pair;
+missing, direction-changed, or format-changed endpoints remain fail-closed.
 
 ## Priority shift: owned virtual-driver prototype
 

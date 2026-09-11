@@ -721,6 +721,20 @@ volume, mute, privacy, driver, signing, and startup snapshots were unchanged.
 This is shared-mode user-space adapter evidence, not managed-driver callback or
 physical-latency qualification.
 
+## Endpoint worker lifecycle composition (2026-09-10)
+
+`audiorouter-windows-audio` now exposes `WasapiEndpointWorker`, an explicit
+owner for the selected `SharedCapture`, `SharedRender`, and preallocated
+`WasapiSchedulerBridge`. It activates capture before render, stops capture if
+render activation fails, attempts both endpoint stops during shutdown, clears
+queued/partial graph audio, and refuses pump calls while stopped. The worker
+also forwards the allocation-free tap/deadline path. The focused Windows-audio
+suite passed 53 tests, strict package Clippy passed, and formatting/diff checks
+passed. This is lifecycle composition evidence only: no endpoint was opened by
+the focused checks, and automatic endpoint replacement, managed-driver
+ownership, production callback timing, signing, and physical latency remain
+open.
+
 ## Shared adapter 2-second qualification (2026-09-08)
 
 The guarded shared capture/render adapter wrapper passed for 2,000 ms on the

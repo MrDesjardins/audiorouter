@@ -1285,6 +1285,113 @@ impl WasapiSchedulerBridge {
     }
 }
 
+/// Owns the two explicitly selected endpoint clients and the bounded graph
+/// bridge that connects them. Construction does not activate either client;
+/// `start` is the only activation transition, and a render-start failure
+/// stops the capture client before returning the error. `stop` always attempts
+/// both endpoint stops and clears staged audio before reporting the first
+/// failure. No endpoint is replaced automatically after invalidation.
+pub struct WasapiEndpointWorker {
+    capture: SharedCapture,
+    render: SharedRender,
+    bridge: WasapiSchedulerBridge,
+    running: bool,
+}
+
+impl WasapiEndpointWorker {
+    /// Compose stopped, already-validated endpoint clients with their bridge.
+    /// The clients must have matching shape validated by the bridge
+    /// constructor; this method performs no activation or waiting.
+    pub fn new(
+        capture: SharedCapture,
+        render: SharedRender,
+        bridge: WasapiSchedulerBridge,
+    ) -> Self {
+        Self {
+            capture,
+            render,
+            bridge,
+            running: false,
+        }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn bridge(&self) -> &WasapiSchedulerBridge {
+        &self.bridge
+    }
+
+    pub fn bridge_mut(&mut self) -> &mut WasapiSchedulerBridge {
+        &mut self.bridge
+    }
+
+    /// Start capture first, then render. If render activation fails, capture
+    /// is synchronously stopped before the failure is returned.
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        if self.running {
+            return Ok(());
+        }
+        self.capture.start()?;
+        if let Err(error) = self.render.start() {
+            let _ = self.capture.stop();
+            return Err(error);
+        }
+        self.running = true;
+        Ok(())
+    }
+
+    /// Stop both clients and reset all staged graph audio. Both stop calls are
+    /// attempted even when the first one fails; the first endpoint/reset error
+    /// is then returned to the control plane.
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        if !self.running {
+            return Ok(());
+        }
+        self.running = false;
+        let render_result = self.render.stop();
+        let capture_result = self.capture.stop();
+        let reset_result = self.bridge.reset_stream().map(|_| ());
+        render_result.and(capture_result).and(reset_result)
+    }
+
+    /// Pump one bounded capture packet through the graph and into render.
+    /// Endpoint activation and event waiting remain the caller's responsibility.
+    pub fn pump(&mut self) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        self.bridge.pump(&self.capture, &self.render)
+    }
+
+    /// Pump one bounded packet with the allocation-free graph tap and the
+    /// rate-aware deadline observation used by the live adapter acceptance.
+    pub fn pump_with_tap_and_quantum_deadline(
+        &mut self,
+        tap: &dyn audiorouter_engine::AudioTap,
+        first_deadline: std::time::Instant,
+        quantum_duration: std::time::Duration,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        self.bridge.pump_with_tap_and_quantum_deadline(
+            &self.capture,
+            &self.render,
+            tap,
+            first_deadline,
+            quantum_duration,
+        )
+    }
+}
+
+impl Drop for WasapiEndpointWorker {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct DeadlineSchedule {
     timeline_frame: u64,
