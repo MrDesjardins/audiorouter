@@ -7765,3 +7765,9 @@ live-driver evidence.
   six-frame input. Recording tests (35), strict package Clippy, formatting,
   and diff checks passed. Durable path allocation, UI/API threshold settings,
   realtime graph attachment, and native endpoint ownership remain open.
+- Revalidated the full locked workspace after the segmented recorder change:
+  all suites passed, including recording (35), control (107), storage (80),
+  Windows-audio (62, with 11 expected native-fixture skips), plugin-host (67),
+  and worker-process coverage. Workspace strict Clippy, formatting, and diff
+  checks passed; no endpoint, plugin, driver, or machine audio configuration
+  changed.
