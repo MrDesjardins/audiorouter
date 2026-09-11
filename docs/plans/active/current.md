@@ -7574,3 +7574,16 @@ stream, or machine configuration action occurred.
   error. This prevents repeated invalid bridge data from exhausting reusable
   audio storage. Windows-audio (58), strict Clippy, formatting, and diff checks
   passed; no endpoint or machine audio configuration was touched.
+
+- Added an injected scheduler I/O seam on 2026-09-11: the managed
+  render-source pump now accepts the same minimal source/sink contracts used
+  by production controller/render clients, allowing disposable tests to drive
+  a valid block followed by a replay without COM activation or endpoint I/O.
+  The regression confirms one processed quantum is produced and the replay is
+  consumed as silence while the sequence floor remains unchanged. Windows-
+  audio (59), strict Clippy, formatting, and diff checks passed. This is
+  injected portable-path evidence, not live-driver evidence.
+- Next M00/M02 task: use the seam to add injected start/stop/reset failure
+  tests and bounded telemetry assertions, then integrate the owner with the
+  control session only after exact bindings and production driver activation
+  are available.

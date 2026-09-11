@@ -275,6 +275,7 @@ pub enum NativeBridgeInputWorkerError {
 }
 
 #[cfg(windows)]
+#[derive(Debug)]
 enum NativeBridgeInputPumpError {
     Bridge(NativeBridgeControllerError),
     Audio(AudioError),
@@ -697,6 +698,26 @@ impl Drop for NativeBridgeController {
         } else {
             let _ = self.client.close(self.session.hello());
         }
+    }
+}
+
+#[cfg(windows)]
+trait NativeRenderSource {
+    fn read_into_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError>;
+}
+
+#[cfg(windows)]
+impl NativeRenderSource for NativeBridgeController {
+    fn read_into_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
+        NativeBridgeController::read_into_after(self, minimum_sequence, samples)
     }
 }
 
@@ -1410,8 +1431,8 @@ impl WasapiSchedulerBridge {
     #[cfg(windows)]
     fn pump_from_native_render_source(
         &mut self,
-        source: &NativeBridgeController,
-        render: &SharedRender,
+        source: &impl NativeRenderSource,
+        render: &dyn RenderSink,
         last_sequence: &mut u64,
     ) -> Result<WasapiSchedulerPump, NativeBridgeInputPumpError> {
         let mut result = WasapiSchedulerPump::default();
@@ -1548,7 +1569,7 @@ impl WasapiSchedulerBridge {
     fn pump_internal(
         &mut self,
         capture: &SharedCapture,
-        render: &SharedRender,
+        render: &dyn RenderSink,
         tap: Option<&dyn audiorouter_engine::AudioTap>,
         deadline: Option<DeadlineSchedule>,
     ) -> Result<WasapiSchedulerPump, AudioError> {
@@ -1581,7 +1602,7 @@ impl WasapiSchedulerBridge {
 
     fn process_ready(
         &mut self,
-        render: &SharedRender,
+        render: &dyn RenderSink,
         result: &mut WasapiSchedulerPump,
         tap: Option<&dyn audiorouter_engine::AudioTap>,
         deadline: Option<DeadlineSchedule>,
@@ -1655,7 +1676,7 @@ impl WasapiSchedulerBridge {
 
     fn drain_render_pending(
         &mut self,
-        render: &SharedRender,
+        render: &dyn RenderSink,
         result: &mut WasapiSchedulerPump,
     ) -> Result<(), AudioError> {
         while self.render_pending_bytes > 0 {
@@ -3381,6 +3402,20 @@ impl Drop for SharedRender {
     }
 }
 
+/// Minimal output seam used by the bounded scheduler. The production
+/// implementation is `SharedRender`; tests and a future driver harness may
+/// provide a disposable sink without changing the scheduler's ownership or
+/// realtime rules.
+trait RenderSink {
+    fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError>;
+}
+
+impl RenderSink for SharedRender {
+    fn submit_bytes(&self, source: &[u8], bytes_per_frame: usize) -> Result<u32, AudioError> {
+        SharedRender::submit_bytes(self, source, bytes_per_frame)
+    }
+}
+
 fn retry_transient_audio_operation<T, F>(
     max_attempts: u32,
     retry_delay_ms: u64,
@@ -4720,6 +4755,66 @@ mod tests {
         assert!(!native_bridge_input_error_is_silence(
             &NativeBridgeControllerError::Session(NativeBridgeSessionError::SequenceExhausted)
         ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_render_source_pump_accepts_injected_blocks_and_rejects_replays() {
+        struct Source {
+            replay: bool,
+        }
+
+        impl NativeRenderSource for Source {
+            fn read_into_after(
+                &self,
+                _minimum_sequence: u64,
+                samples: &mut [f32],
+            ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError>
+            {
+                if self.replay {
+                    return Err(NativeBridgeControllerError::Session(
+                        NativeBridgeSessionError::Region(
+                            NativeBridgeRegionError::SequenceRegression,
+                        ),
+                    ));
+                }
+                samples[..128].fill(0.25);
+                Ok(audiorouter_protocol::AudioBridgeBlockHeader {
+                    generation: 1,
+                    sequence: 7,
+                    frames: 64,
+                    channels: 2,
+                    payload_bytes: 512,
+                })
+            }
+        }
+
+        struct Sink;
+        impl RenderSink for Sink {
+            fn submit_bytes(
+                &self,
+                _source: &[u8],
+                _bytes_per_frame: usize,
+            ) -> Result<u32, AudioError> {
+                Ok(0)
+            }
+        }
+
+        let mut bridge = WasapiSchedulerBridge::new(2, 2, 64, 64).unwrap();
+        let mut last_sequence = 0;
+        let result = bridge
+            .pump_from_native_render_source(&Source { replay: false }, &Sink, &mut last_sequence)
+            .unwrap();
+        assert_eq!(result.packets, 1);
+        assert_eq!(result.processed_quanta, 1);
+        assert_eq!(last_sequence, 7);
+
+        let result = bridge
+            .pump_from_native_render_source(&Source { replay: true }, &Sink, &mut last_sequence)
+            .unwrap();
+        assert_eq!(result.packets, 1);
+        assert_eq!(result.processed_quanta, 1);
+        assert_eq!(last_sequence, 7);
     }
 
     #[test]
