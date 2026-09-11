@@ -46,6 +46,13 @@ qualification remains open.
   registration, audio stream, or persistent machine audio configuration
   occurred.
 
+- Requalified the locked workspace after `f88e352b` on 2026-09-10:
+  `cargo test --workspace --locked` passed all workspace unit/integration
+  tests and doc-tests, including engine (95), plugin-host, control, storage,
+  transport, and Windows-audio (41) coverage. Workspace all-target strict
+  Clippy, formatting, and diff checks also passed. No endpoint, driver,
+  plugin registration, or persistent machine audio configuration changed.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
