@@ -641,6 +641,10 @@ impl WavFormat {
             Self::Pcm16 | Self::Pcm24 => 1,
         }
     }
+
+    fn bytes_per_sample(self) -> u64 {
+        u64::from(self.bits() / 8)
+    }
 }
 
 #[derive(Debug)]
@@ -1758,6 +1762,17 @@ impl<W: Write + Seek> WavWriter<W> {
         }
         let frames = samples.len() / usize::from(self.channels);
         let added = u64::try_from(frames).map_err(|_| RecordingError::TooManyFrames)?;
+        let added_bytes = added
+            .checked_mul(u64::from(self.channels))
+            .and_then(|bytes| bytes.checked_mul(self.format.bytes_per_sample()))
+            .ok_or(RecordingError::TooManyFrames)?;
+        if self
+            .data_bytes
+            .checked_add(added_bytes)
+            .map_or(true, |bytes| bytes > u64::from(u32::MAX) - 36)
+        {
+            return Err(RecordingError::TooManyFrames);
+        }
         self.frames = self
             .frames
             .checked_add(added)
@@ -2032,6 +2047,12 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
         metadata: WavMetadata,
     ) -> Result<Self, RecordingError> {
         if max_segment_frames == 0 {
+            return Err(RecordingError::TooManyFrames);
+        }
+        validate_format(format, channels, sample_rate)?;
+        let bytes_per_frame = format.bytes_per_sample() * u64::from(channels);
+        let max_frames = (u64::from(u32::MAX) - 36) / bytes_per_frame;
+        if max_segment_frames > max_frames {
             return Err(RecordingError::TooManyFrames);
         }
         let writer = WavWriter::new(output, format, channels, sample_rate, dither)?;
@@ -3174,6 +3195,20 @@ mod tests {
                     .contains([':', '?'])
         }));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn segmented_wav_recorder_rejects_a_threshold_that_cannot_fit_in_riff() {
+        let result = SegmentedWavRecorder::new(
+            Cursor::new(Vec::new()),
+            |_index| Ok(Cursor::new(Vec::new())),
+            WavFormat::Float32,
+            2,
+            48_000,
+            false,
+            u64::MAX,
+        );
+        assert!(matches!(result, Err(RecordingError::TooManyFrames)));
     }
 
     #[test]

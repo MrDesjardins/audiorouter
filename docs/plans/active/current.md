@@ -345,6 +345,12 @@ qualification remains open.
   embedded frontend resources; the standalone shell lockfile was refreshed to
   include current bridge dependencies. No audio endpoint or persistent machine
   configuration changed.
+- Added M04 RIFF capacity guards on 2026-09-11. `WavWriter` now rejects a
+  payload that would exceed the RIFF 32-bit size boundary before writing it,
+  and `SegmentedWavRecorder` rejects thresholds that cannot fit the selected
+  format/channel count. Recording tests (37), control tests (108), strict
+  package Clippy, formatting, and diff checks passed. JSON-RPC segment
+  configuration and durable recording-library integration remain open.
 
 - Requalified the complete locked workspace after the directional and replay
   bridge changes on 2026-09-10 with `cargo test --workspace --locked

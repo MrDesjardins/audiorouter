@@ -850,6 +850,16 @@ checks pass. This closes the portable path-allocation slice, while durable
 session/API integration, UI size/time controls, realtime graph attachment,
 and native endpoint ownership remain open.
 
+## RIFF capacity guard (2026-09-11)
+
+The WAV writer now rejects a write whose data payload would exceed the RIFF
+32-bit size boundary before writing samples. `SegmentedWavRecorder` also
+rejects a configured segment threshold that cannot fit for the selected format
+and channel count. A regression covers an oversized threshold; recording tests
+(37), control tests (108), strict Clippy, formatting, and diff checks pass.
+This prevents an invalid threshold from being accepted, but does not change
+the separate JSON-RPC configuration and durable library integration gates.
+
 ## Control-plane segmented worker (2026-09-11)
 
 `SegmentedWavRecorderWorker` now connects the REC-06 segmented file worker to
