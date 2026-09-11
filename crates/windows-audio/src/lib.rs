@@ -155,6 +155,7 @@ pub enum NativeBridgeControllerError {
 pub struct NativeBridgeController {
     client: NativeBridgeControlClient,
     session: NativeBridgeSession,
+    section: Option<NativeBridgeSectionHandle>,
 }
 
 #[cfg(windows)]
@@ -171,14 +172,18 @@ impl NativeBridgeController {
         client
             .open_bridge(&hello)
             .map_err(NativeBridgeControllerError::Windows)?;
-        Ok(Self { client, session })
+        Ok(Self {
+            client,
+            session,
+            section: None,
+        })
     }
 
     pub fn create_with_section(
         device_path: &str,
         mapping_path: impl AsRef<std::path::Path>,
         hello: audiorouter_protocol::AudioBridgeHello,
-    ) -> Result<(Self, NativeBridgeSectionHandle), NativeBridgeControllerError> {
+    ) -> Result<Self, NativeBridgeControllerError> {
         let client = NativeBridgeControlClient::open(device_path)
             .map_err(NativeBridgeControllerError::Windows)?;
         let session = NativeBridgeSession::create(&mapping_path, hello.clone())
@@ -189,13 +194,27 @@ impl NativeBridgeController {
         client
             .open_bridge_with_mapping(&hello, section.raw_handle(), section.mapping_bytes())
             .map_err(NativeBridgeControllerError::Windows)?;
-        Ok((Self { client, session }, section))
+        Ok(Self {
+            client,
+            session,
+            section: Some(section),
+        })
     }
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
-        self.client
-            .heartbeat(self.session.hello())
-            .map_err(NativeBridgeControllerError::Windows)?;
+        if let Some(section) = &self.section {
+            self.client
+                .heartbeat_with_mapping(
+                    self.session.hello(),
+                    section.raw_handle(),
+                    section.mapping_bytes(),
+                )
+                .map_err(NativeBridgeControllerError::Windows)?;
+        } else {
+            self.client
+                .heartbeat(self.session.hello())
+                .map_err(NativeBridgeControllerError::Windows)?;
+        }
         self.session
             .heartbeat()
             .map_err(NativeBridgeControllerError::Session)
@@ -217,9 +236,19 @@ impl NativeBridgeController {
     }
 
     pub fn close(mut self) -> Result<(), NativeBridgeControllerError> {
-        self.client
-            .close(self.session.hello())
-            .map_err(NativeBridgeControllerError::Windows)?;
+        if let Some(section) = &self.section {
+            self.client
+                .close_with_mapping(
+                    self.session.hello(),
+                    section.raw_handle(),
+                    section.mapping_bytes(),
+                )
+                .map_err(NativeBridgeControllerError::Windows)?;
+        } else {
+            self.client
+                .close(self.session.hello())
+                .map_err(NativeBridgeControllerError::Windows)?;
+        }
         self.session
             .flush()
             .map_err(NativeBridgeControllerError::Session)
@@ -231,7 +260,15 @@ impl Drop for NativeBridgeController {
     fn drop(&mut self) {
         // Best-effort release for panic/error paths. The kernel lease timeout
         // remains the final recovery boundary when close cannot be delivered.
-        let _ = self.client.close(self.session.hello());
+        if let Some(section) = &self.section {
+            let _ = self.client.close_with_mapping(
+                self.session.hello(),
+                section.raw_handle(),
+                section.mapping_bytes(),
+            );
+        } else {
+            let _ = self.client.close(self.session.hello());
+        }
     }
 }
 
@@ -301,6 +338,22 @@ impl NativeBridgeControlClient {
         self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT, &request)
     }
 
+    pub fn heartbeat_with_mapping(
+        &self,
+        hello: &audiorouter_protocol::AudioBridgeHello,
+        section_handle: u64,
+        mapping_bytes: u32,
+    ) -> Result<(), windows::core::Error> {
+        let request =
+            native_bridge_open_request(hello, section_handle, mapping_bytes).map_err(|_| {
+                windows::core::Error::new(
+                    windows::core::HRESULT(0x80070057u32 as i32),
+                    "invalid hello or mapping",
+                )
+            })?;
+        self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT, &request)
+    }
+
     pub fn close(
         &self,
         hello: &audiorouter_protocol::AudioBridgeHello,
@@ -311,6 +364,22 @@ impl NativeBridgeControlClient {
                 "invalid hello",
             )
         })?;
+        self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_CLOSE, &request)
+    }
+
+    pub fn close_with_mapping(
+        &self,
+        hello: &audiorouter_protocol::AudioBridgeHello,
+        section_handle: u64,
+        mapping_bytes: u32,
+    ) -> Result<(), windows::core::Error> {
+        let request =
+            native_bridge_open_request(hello, section_handle, mapping_bytes).map_err(|_| {
+                windows::core::Error::new(
+                    windows::core::HRESULT(0x80070057u32 as i32),
+                    "invalid hello or mapping",
+                )
+            })?;
         self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_CLOSE, &request)
     }
 

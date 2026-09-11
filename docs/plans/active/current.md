@@ -128,11 +128,11 @@ while the broker-side section creation and kernel system mapping are developed.
 The updated elevated WDK build passed with zero signability errors/warnings.
 
 `NativeBridgeSectionHandle` now creates and retains a bounded file-backed
-Windows section for the temporary bridge file. `NativeBridgeController` can
-pass its exact handle and mapping size through `open_bridge_with_mapping`; a
-Windows-only regression created and released the temporary section successfully
-without opening an audio endpoint. This still requires a deliberately loaded
-driver for end-to-end proof.
+Windows section for the temporary bridge file. `NativeBridgeController` retains
+the handle and passes its exact value and mapping size through mapped open,
+heartbeat, and close; a Windows-only regression created and released the
+temporary section successfully without opening an audio endpoint. This still
+requires a deliberately loaded driver for end-to-end proof.
 
 ## Current state
 

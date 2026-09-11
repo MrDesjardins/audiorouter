@@ -133,6 +133,12 @@ The current lease-only path remains valid for control testing; no zero handle is
 interpreted as mapped audio. The updated elevated WDK build passed with zero
 signability errors/warnings and catalog generation.
 
+The controller now retains the section handle for the complete lease and sends
+the same handle/size pair on mapped heartbeat and close, preventing a mapped
+lease from being accidentally downgraded to a lease-only request. The focused
+Windows-audio suite passed 48 tests. End-to-end execution remains gated on a
+deliberately loaded driver.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded
