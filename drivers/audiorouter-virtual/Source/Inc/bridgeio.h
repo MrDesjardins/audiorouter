@@ -144,10 +144,18 @@ AudioRouterCopyBridgeBlock(
         return STATUS_BUFFER_TOO_SMALL;
     }
     for (SIZE_T index = 0; index < sampleCount; ++index) {
+        FLOAT sample = 0.0F;
         RtlCopyMemory(
-            &Destination[index],
+            &sample,
             View + AR_BRIDGE_PAYLOAD_OFFSET + index * sizeof(FLOAT),
             sizeof(FLOAT));
+        // NaN is unequal to itself; the finite bounds reject both infinities
+        // without depending on CRT floating-point helpers in kernel mode.
+        if (sample != sample || sample > 3.402823466e+38F ||
+            sample < -3.402823466e+38F) {
+            return STATUS_DATA_ERROR;
+        }
+        Destination[index] = sample;
     }
     *Header = *sourceHeader;
     return STATUS_SUCCESS;
