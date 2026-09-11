@@ -48,6 +48,7 @@ $args = @(
     '/p:SkipPackageVerification=true',
     '/p:ApiValidator_Enable=false',
     '/p:SignMode=Off',
+    '/p:TrackFileAccess=false',
     '/v:minimal',
     "/flp:LogFile=$log;Verbosity=normal"
 )

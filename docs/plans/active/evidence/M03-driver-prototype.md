@@ -85,6 +85,16 @@ elevated WDK rebuild compiled the header into the x64 driver and again reported
 zero signability errors/warnings. No control device is registered and no
 IOCTL was sent to the system.
 
+The driver now contains the first secured control-device scaffold in
+`Source/Main/adapter.cpp`. `IoCreateDeviceSecure` uses the explicit
+`D:P(A;;GA;;;SY)(A;;GA;;;BA)` ACL, and create/close/device-control dispatch plus
+symbolic-link cleanup are defined. Open and heartbeat requests are validated
+against the bounded ABI but valid requests return `STATUS_NOT_IMPLEMENTED`
+until the broker owns mapping and lease state. The x64 WDK rebuild passed with
+`wdmsec.lib`, zero signability errors/warnings, and catalog generation. The
+control device was not registered or loaded; this is compile evidence, not live
+driver evidence.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded

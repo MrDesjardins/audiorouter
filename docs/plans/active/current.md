@@ -82,6 +82,15 @@ signability errors/warnings and catalog generation. The ABI is compile evidence
 only; no control device is registered until its security descriptor and PnP
 lifecycle are implemented.
 
+The prototype now has a secured, non-installing control-device scaffold in
+`Source/Main/adapter.cpp`. It uses an explicit system/Administrators-only ACL,
+create/close/device-control dispatch, symbolic-link cleanup, and bounded open /
+heartbeat request validation; valid requests deliberately return
+`STATUS_NOT_IMPLEMENTED` until broker ownership and shared-memory lifetime are
+wired. The x64 WDK rebuild passed after linking `wdmsec.lib`, with zero
+signability errors/warnings and catalog generation. No device was registered or
+loaded on this machine.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

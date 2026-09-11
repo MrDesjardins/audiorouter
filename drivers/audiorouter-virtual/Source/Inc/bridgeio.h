@@ -11,6 +11,9 @@
 #define _AUDIOROUTERVIRTUAL_BRIDGEIO_H_
 
 #include <ntddk.h>
+#include <wdmsec.h>
+
+#pragma comment(lib, "Wdmsec.lib")
 
 #define AR_BRIDGE_PROTOCOL_MAJOR 1
 #define AR_BRIDGE_PROTOCOL_MINOR 0
@@ -25,6 +28,16 @@
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x801, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
 #define IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
+
+#define AUDIOROUTER_BRIDGE_DEVICE_NAME L"\\Device\\AudioRouterVirtualBridge"
+#define AUDIOROUTER_BRIDGE_DOS_NAME L"\\DosDevices\\AudioRouterVirtualBridge"
+
+// Only LocalSystem and built-in Administrators may open the broker endpoint.
+// Do not replace this with a world-readable WDK convenience SDDL.
+DECLARE_CONST_UNICODE_STRING(
+    AUDIOROUTER_BRIDGE_DEVICE_SDDL,
+    L"D:P(A;;GA;;;SY)(A;;GA;;;BA)"
+);
 
 typedef struct _AR_BRIDGE_OPEN_REQUEST {
     USHORT ProtocolMajor;

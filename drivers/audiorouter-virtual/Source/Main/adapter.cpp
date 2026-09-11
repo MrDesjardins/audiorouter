@@ -27,6 +27,7 @@ Abstract:
 typedef void (*fnPcDriverUnload) (PDRIVER_OBJECT);
 fnPcDriverUnload gPCDriverUnloadRoutine = NULL;
 extern "C" DRIVER_UNLOAD DriverUnload;
+PDEVICE_OBJECT g_BridgeControlDevice = NULL;
 
 //-----------------------------------------------------------------------------
 // Referenced forward.
@@ -45,6 +46,13 @@ StartDevice
 _Dispatch_type_(IRP_MJ_PNP)
 DRIVER_DISPATCH PnpHandler;
 
+_Dispatch_type_(IRP_MJ_CREATE)
+_Dispatch_type_(IRP_MJ_CLOSE)
+DRIVER_DISPATCH BridgeControlCreateClose;
+
+_Dispatch_type_(IRP_MJ_DEVICE_CONTROL)
+DRIVER_DISPATCH BridgeControlDeviceControl;
+
 //
 // Rendering streams are not saved to a file by default. Use the registry value
 // DoNotCreateDataFiles (DWORD) = 0 to override this default.
@@ -56,6 +64,80 @@ UNICODE_STRING g_RegistryPath;      // This is used to store the registry settin
 //-----------------------------------------------------------------------------
 // Functions
 //-----------------------------------------------------------------------------
+
+static NTSTATUS CompleteBridgeIrp(_In_ PIRP Irp, _In_ NTSTATUS Status)
+{
+    Irp->IoStatus.Status = Status;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return Status;
+}
+
+NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
+{
+    return CompleteBridgeIrp(Irp, STATUS_SUCCESS);
+}
+
+NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
+{
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
+    NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
+
+    if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN ||
+        code == IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT) {
+        if (stack->Parameters.DeviceIoControl.InputBufferLength !=
+            sizeof(AR_BRIDGE_OPEN_REQUEST) || Irp->AssociatedIrp.SystemBuffer == NULL) {
+            return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
+        }
+        status = AudioRouterValidateBridgeOpenRequest(
+            static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer));
+        if (NT_SUCCESS(status)) {
+            // The secured endpoint is scaffolding until broker ownership and
+            // mapping lifetime are implemented; never accept a false session.
+            status = STATUS_NOT_IMPLEMENTED;
+        }
+    }
+
+    return CompleteBridgeIrp(Irp, status);
+}
+
+NTSTATUS CreateBridgeControlDevice(_In_ PDRIVER_OBJECT DriverObject)
+{
+    UNICODE_STRING deviceName;
+    UNICODE_STRING dosName;
+    RtlInitUnicodeString(&deviceName, AUDIOROUTER_BRIDGE_DEVICE_NAME);
+    RtlInitUnicodeString(&dosName, AUDIOROUTER_BRIDGE_DOS_NAME);
+
+    NTSTATUS status = IoCreateDeviceSecure(
+        DriverObject, 0, &deviceName, FILE_DEVICE_UNKNOWN,
+        FILE_DEVICE_SECURE_OPEN, FALSE,
+        &AUDIOROUTER_BRIDGE_DEVICE_SDDL,
+        &PID_AUDIOROUTERVIRTUAL, &g_BridgeControlDevice);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    status = IoCreateSymbolicLink(&dosName, &deviceName);
+    if (!NT_SUCCESS(status)) {
+        IoDeleteDevice(g_BridgeControlDevice);
+        g_BridgeControlDevice = NULL;
+        return status;
+    }
+    g_BridgeControlDevice->Flags &= ~DO_DEVICE_INITIALIZING;
+    return STATUS_SUCCESS;
+}
+
+void DeleteBridgeControlDevice()
+{
+    UNICODE_STRING dosName;
+    RtlInitUnicodeString(&dosName, AUDIOROUTER_BRIDGE_DOS_NAME);
+    if (g_BridgeControlDevice != NULL) {
+        IoDeleteSymbolicLink(&dosName);
+        IoDeleteDevice(g_BridgeControlDevice);
+        g_BridgeControlDevice = NULL;
+    }
+}
 
 #pragma code_seg("PAGE")
 void ReleaseRegistryStringBuffer()
@@ -98,6 +180,7 @@ Environment:
 
     DPF(D_TERSE, ("[DriverUnload]"));
 
+    DeleteBridgeControlDevice();
     ReleaseRegistryStringBuffer();
 
     if (DriverObject == NULL)
@@ -316,6 +399,15 @@ Return Value:
         DPF(D_ERROR, ("WdfDriverCreate failed, 0x%x", ntStatus)),
         Done);
 
+    ntStatus = CreateBridgeControlDevice(DriverObject);
+    IF_FAILED_ACTION_JUMP(
+        ntStatus,
+        DPF(D_ERROR, ("CreateBridgeControlDevice failed, 0x%x", ntStatus)),
+        Done);
+    DriverObject->MajorFunction[IRP_MJ_CREATE] = BridgeControlCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLOSE] = BridgeControlCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = BridgeControlDeviceControl;
+
     //
     // Get registry configuration.
     //
@@ -356,6 +448,7 @@ Done:
 
     if (!NT_SUCCESS(ntStatus))
     {
+        DeleteBridgeControlDevice();
         if (WdfGetDriver() != NULL)
         {
             WdfDriverMiniportUnload(WdfGetDriver());
