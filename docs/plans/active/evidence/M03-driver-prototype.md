@@ -286,6 +286,12 @@ The updated WDK/source-contract acceptance passed with zero signability
 errors/warnings. The producer is not yet connected to the reference sample's
 simulated capture timer, so loaded endpoint transport remains unverified.
 
+The fixed kernel ABI now has compile-time assertions for the 176-byte open
+request and 24-byte block header, including the alignment-sensitive mapped
+field offsets. The WDK/source-contract acceptance passed with zero signability
+errors/warnings. This protects layout compatibility but does not qualify a
+loaded driver or endpoint data path.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

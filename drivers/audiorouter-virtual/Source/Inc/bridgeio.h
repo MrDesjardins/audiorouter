@@ -82,6 +82,21 @@ typedef struct _AR_BRIDGE_BLOCK_HEADER {
     ULONG PayloadBytes;
 } AR_BRIDGE_BLOCK_HEADER, *PAR_BRIDGE_BLOCK_HEADER;
 
+// Keep the fixed ABI fail-fast at compile time. The Rust encoder mirrors these
+// offsets; changing either layout requires an explicit protocol revision.
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_OPEN_REQUEST, ProtocolMajor) == 0);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_OPEN_REQUEST, Generation) == 24);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_OPEN_REQUEST, SectionHandle) == 32);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_OPEN_REQUEST, MappingBytes) == 40);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_OPEN_REQUEST, BusId) == 48);
+C_ASSERT(sizeof(AR_BRIDGE_OPEN_REQUEST) == 176);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, Generation) == 0);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, Sequence) == 8);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, Frames) == 16);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, Channels) == 18);
+C_ASSERT(FIELD_OFFSET(AR_BRIDGE_BLOCK_HEADER, PayloadBytes) == 20);
+C_ASSERT(sizeof(AR_BRIDGE_BLOCK_HEADER) == 24);
+
 // This validator is safe to call from a future callback-owned mapped-view
 // reader: it performs only bounded arithmetic and scalar reads. It does not
 // acquire a lock, allocate, access an endpoint, or issue an IOCTL.

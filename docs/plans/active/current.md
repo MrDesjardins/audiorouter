@@ -2002,6 +2002,11 @@ seqlock ownership, and monotonic sequence publication under the same rundown
 boundary, without callback allocation or lease locking. The WDK build and
 source-contract acceptance passed; the sample capture timer remains unwired.
 
+Added compile-time ABI assertions to `bridgeio.h` on 2026-09-10 for the
+request's 176-byte layout, mapped-field offsets, and 24-byte block header.
+The project-owned WDK/source-contract acceptance passed, so request-layout
+drift now fails at driver compilation rather than at a loaded-device gate.
+
 Closed an expiry teardown gap on 2026-09-10: a rejected maintenance request
 now detaches an expired mapped lease before returning, waits for callback
 readers, and retires the mapping instead of leaving stale audio readable until
