@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `8ee7d4e6`; the native probe compile was
+The latest pushed checkpoint is `31fdc8de`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -64,6 +64,17 @@ qualification remains open.
   verification all passed. The acceptance removed its temporary release and
   UI output; no installer, driver, signing, plugin registration, audio stream,
   or persistent machine configuration action occurred.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  `31fdc8de` on 2026-09-10 in the elevated read-only Windows context. M00
+  toolchain/native compile and 34-endpoint inventory, disposable pinned
+  SysVAD x64 compile/package/API/signability, M01 CLI, M04 DSP/recording, M05
+  UI (17 files/121 tests), M06 SDK/native VST3 and VST2 fixtures, M07
+  headless, unsigned M08 artifacts, 159 normative traceability mappings, and
+  documentation validation (51 Markdown files/163 local links) all passed.
+  Cleanup removed 13 run-owned temporary children. No driver installation or
+  loading, signing-mode change, plugin/startup registration, audio stream, or
+  persistent machine audio configuration action occurred.
 
 - Implemented and pushed bounded native-worker diagnostics in `3577e36d`.
   The Rust supervisor now drains at most 8 KiB of worker stderr on a control
