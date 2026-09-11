@@ -46,6 +46,16 @@ qualification remains open.
   registration, audio stream, or persistent machine audio configuration
   occurred.
 
+- Requalified the Rust asynchronous process-loopback adapter on 2026-09-10
+  with `-AllowLiveAudio -DurationMilliseconds 100`. Include and exclude modes
+  each converted 4,410 source frames at 44.1 kHz into 4,736 engine frames at
+  48 kHz across 37 scheduler blocks. Both modes reported zero rejected
+  packets, zero scheduler xruns, and successful bounded teardown; the media
+  device identity/state snapshot was unchanged. This is user-mode adapter and
+  process-loopback lifecycle evidence, not production cross-process isolation,
+  driver, or physical-latency evidence. No persistent audio configuration
+  changed.
+
 - Requalified the locked workspace after `f88e352b` on 2026-09-10:
   `cargo test --workspace --locked` passed all workspace unit/integration
   tests and doc-tests, including engine (95), plugin-host, control, storage,
