@@ -53,6 +53,15 @@ qualification remains open.
   Clippy, formatting, and diff checks also passed. No endpoint, driver,
   plugin registration, or persistent machine audio configuration changed.
 
+- Requalified the installed-plugin boundary on 2026-09-10 with the supplied
+  `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reacomp-standalone.dll`. ReaComp
+  processing passed at 44.1, 48, and 96 kHz; the bounded editor-thread and
+  supervised editor-timeout tests passed; and the before/after SHA-256
+  fingerprint (`4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`)
+  was unchanged. The acceptance restored both VST2 environment variables and
+  performed no copy, registration, audio stream, or persistent machine
+  configuration action.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
