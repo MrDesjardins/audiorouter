@@ -1371,7 +1371,7 @@ impl WasapiEndpointWorker {
     /// is then returned to the control plane.
     pub fn stop(&mut self) -> Result<(), AudioError> {
         if !self.running {
-            return Ok(());
+            return self.bridge.reset_stream().map(|_| ());
         }
         self.running = false;
         let render_result = self
@@ -1402,9 +1402,10 @@ impl WasapiEndpointWorker {
         max_attempts: u32,
         retry_delay_ms: u64,
     ) -> Result<(), AudioError> {
-        self.stop()?;
+        let stop_result = self.stop();
         drop(self.capture.take());
         drop(self.render.take());
+        stop_result?;
 
         let capture = SharedCapture::open_refreshed_bound_with_retry(
             monitor,

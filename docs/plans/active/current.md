@@ -76,6 +76,11 @@ Next action: connect this worker owner to the control-plane session lifecycle
 and recovery state without opening endpoints implicitly; preserve explicit
 authorization, exact binding, and fail-closed protected-path behavior.
 
+Hardened the worker failure path: rebind now discards both prior endpoint
+clients even when a stop/reset call reports an error, and an idempotent stop
+still clears staged bridge audio. Focused Windows-audio coverage remains 54
+tests, with strict package Clippy, formatting, and diff checks passing.
+
 ## Priority shift: owned virtual-driver prototype
 
 The user has explicitly redirected execution from extended VST3 qualification to

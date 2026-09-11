@@ -152,6 +152,11 @@ and virtual-cable runs are the current runtime evidence. Native graph-to-device
 scheduling, dual-device drift, failure recovery, and measured physical latency
 remain open.
 
+The rebind failure path was hardened so endpoint objects are discarded after
+stop attempts even when one stop reports an error; repeated stop also resets
+staged bridge audio. The focused 54-test Windows-audio suite, strict Clippy,
+formatting, and diff checks passed. No endpoint was opened by the checks.
+
 The complete administrator-authorized safe acceptance chain was requalified at
 `830152dc` after this worker implementation. M00-M08 project, portable DSP,
 UI, plugin, headless, release, traceability, and documentation checks passed;
