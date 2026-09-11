@@ -7455,3 +7455,15 @@ stream, or machine configuration action occurred.
 - Next M00/M02 task: add explicit format-optional inactive records to
   `devices.list`, then emit bounded endpoint snapshot-change events without
   silently rebinding routes.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-11 at pushed head `744c2194`: VS2026/WDK discovery and native
+  compile, non-installing AudioRouter driver build, 31-endpoint read-only
+  inventory, disposable SysVAD, M01/M04/M05, pinned VST3 SDK and native
+  workers, VST2 legacy/state fixtures, M07, unsigned M08 artifacts, 159
+  traceability IDs, and 52-document/165-link validation passed. Cleanup
+  removed 13 run-owned temporary children. No driver installation/loading,
+  signing-mode change, plugin/startup registration, audio stream, or
+  persistent machine configuration occurred.
+- Next M00/M02 task: implement the format-optional inactive `devices.list`
+  records and bounded snapshot-change event contract before claiming full
+  CAP-01 control-plane coverage.

@@ -1393,3 +1393,14 @@ still performs only an atomic store, preserving the realtime and callback
 invariants. Focused control (106) and Windows-audio (56) tests, strict Clippy,
 formatting, and diff checks passed. Inactive format-optional records and
 public snapshot-change events remain open.
+
+## 2026-09-11 — Full guarded acceptance requalification
+
+The complete `tests/acceptance/safe-all.ps1` chain passed at pushed head
+`744c2194`. It rechecked the Windows toolchain, non-installing AudioRouter
+driver build, read-only endpoint inventory, disposable SysVAD, portable DSP and
+UI, pinned VST3 SDK/native workers, VST2 legacy/state fixtures, headless
+control, unsigned M08 artifacts, traceability, and documentation. The runner
+removed 13 run-owned temporary children. This is compile/portable/disposable
+evidence only; no driver was installed or loaded, no stream was opened, and no
+persistent audio configuration was changed.
