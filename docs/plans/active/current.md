@@ -7831,6 +7831,12 @@ live-driver evidence.
   Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
   driver, plugin registration, or persistent machine audio configuration
   changed.
+- Revalidated the locked workspace after API stop finalization at pushed head
+  `55612b99` on 2026-09-11. Workspace tests passed, including control (110),
+  recording (37), Windows-audio (62 with 11 expected native-fixture skips),
+  plugin-host (67), storage (80), and worker-process coverage. Workspace
+  strict Clippy, formatting, and diff checks passed. No endpoint, driver,
+  plugin registration, or persistent machine audio configuration changed.
 - Corrected M04 API stop finalization on 2026-09-11. `recorders.stop` now
   requires an attached worker to drain and finalize successfully before the
   authoritative recorder becomes completed; failed finalization leaves the
