@@ -40,6 +40,14 @@ callback-owned path, and deactivates/drains before removal. The focused engine
 suite passed 96 tests after this change. This is still portable bridge evidence;
 the native shared-memory/driver transport and control-plane wiring remain open.
 
+Control-plane wiring is now present as well. Managed create lazily provisions a
+bridge keyed by stable bus ID; disable deactivates it after durable state is
+written; delete removes it and compensates on storage failure; and planned
+apply rolls back bridge changes when its durable journal write fails. The
+focused control suite passed 106 tests. Native endpoint IDs and actual driver
+transport remain unavailable by design until the signed/installable driver gate
+is solved.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

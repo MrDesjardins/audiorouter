@@ -10,7 +10,7 @@ use audiorouter_domain::{
     PermissionScope, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState, Session,
     VirtualBusRegistry, API_METHODS,
 };
-use audiorouter_engine::{AudioBlock, AudioTap};
+use audiorouter_engine::{AudioBlock, AudioTap, VirtualBusBridgeSet, VirtualBusBridgeSetError};
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
@@ -2404,6 +2404,7 @@ pub struct ControlPlane {
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
     virtual_buses: VirtualBusRegistry,
+    virtual_bridges: VirtualBusBridgeSet,
     virtual_bus_plans: HashMap<EntityId, VirtualBusPlan>,
     next_virtual_bus_plan: u64,
     startup_plans: HashMap<EntityId, (bool, Instant)>,
@@ -2441,6 +2442,12 @@ impl ControlPlane {
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses: VirtualBusRegistry::default(),
+            virtual_bridges: VirtualBusBridgeSet::new(
+                8,
+                2,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+            .expect("valid default virtual bridge collection"),
             virtual_bus_plans: HashMap::new(),
             next_virtual_bus_plan: 1,
             startup_plans: HashMap::new(),
@@ -2551,6 +2558,12 @@ impl ControlPlane {
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
+            virtual_bridges: VirtualBusBridgeSet::new(
+                8,
+                2,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            )
+            .expect("valid default virtual bridge collection"),
             virtual_bus_plans,
             next_virtual_bus_plan: 1,
             startup_plans,
@@ -2696,13 +2709,19 @@ impl ControlPlane {
         id: EntityId,
         name: impl Into<String>,
     ) -> Result<(), ControlError> {
+        let bridge_id = id.clone();
         let checkpoint = self.virtual_buses.clone();
         self.virtual_buses
             .create(id, name)
             .map_err(virtual_bus_control_error)?;
+        if let Err(error) = self.virtual_bridges.ensure(bridge_id.clone()) {
+            self.virtual_buses = checkpoint;
+            return Err(virtual_bridge_control_error(error));
+        }
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
                 self.virtual_buses = checkpoint;
+                let _ = self.virtual_bridges.remove(&bridge_id);
                 return Err(storage_error(error));
             }
         }
@@ -2742,6 +2761,11 @@ impl ControlPlane {
                 return Err(storage_error(error));
             }
         }
+        if !enabled {
+            if let Some(bridge) = self.virtual_bridges.get(id) {
+                bridge.deactivate();
+            }
+        }
         Ok(())
     }
 
@@ -2750,11 +2774,63 @@ impl ControlPlane {
         self.virtual_buses
             .delete(id)
             .map_err(virtual_bus_control_error)?;
+        if self.virtual_bridges.get(id).is_some() {
+            self.virtual_bridges
+                .remove(id)
+                .map_err(virtual_bridge_control_error)?;
+        }
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.save_virtual_buses(&self.virtual_buses) {
                 self.virtual_buses = checkpoint;
+                let _ = self.virtual_bridges.ensure(id.clone());
                 return Err(storage_error(error));
             }
+        }
+        Ok(())
+    }
+
+    fn sync_virtual_bridge_operation(
+        &mut self,
+        operation: &VirtualBusOperation,
+    ) -> Result<(), ControlError> {
+        match operation {
+            VirtualBusOperation::Create { id, .. } => self
+                .virtual_bridges
+                .ensure(id.clone())
+                .map(|_| ())
+                .map_err(virtual_bridge_control_error),
+            VirtualBusOperation::SetEnabled { .. } => Ok(()),
+            VirtualBusOperation::Delete { id } => {
+                if self.virtual_bridges.get(id).is_some() {
+                    self.virtual_bridges
+                        .remove(id)
+                        .map_err(virtual_bridge_control_error)?;
+                }
+                Ok(())
+            }
+            VirtualBusOperation::Rename { .. } => Ok(()),
+        }
+    }
+
+    fn rollback_virtual_bridge_operation(
+        &mut self,
+        operation: &VirtualBusOperation,
+    ) -> Result<(), ControlError> {
+        match operation {
+            VirtualBusOperation::Create { id, .. } => {
+                if self.virtual_bridges.get(id).is_some() {
+                    self.virtual_bridges
+                        .remove(id)
+                        .map_err(virtual_bridge_control_error)?;
+                }
+            }
+            VirtualBusOperation::Delete { id } => {
+                self.virtual_bridges
+                    .ensure(id.clone())
+                    .map(|_| ())
+                    .map_err(virtual_bridge_control_error)?;
+            }
+            VirtualBusOperation::Rename { .. } | VirtualBusOperation::SetEnabled { .. } => {}
         }
         Ok(())
     }
@@ -5962,6 +6038,10 @@ impl ControlPlane {
         }
         let checkpoint = self.virtual_buses.clone();
         apply_virtual_bus_operation(&mut self.virtual_buses, &plan.operation)?;
+        if let Err(error) = self.sync_virtual_bridge_operation(&plan.operation) {
+            self.virtual_buses = checkpoint;
+            return Err(error);
+        }
         let result = json!({
             "planId": plan_id,
             "state": "applied",
@@ -5980,7 +6060,13 @@ impl ControlPlane {
                 &result,
             ) {
                 self.virtual_buses = checkpoint;
+                let _ = self.rollback_virtual_bridge_operation(&plan.operation);
                 return Err(storage_error(error));
+            }
+        }
+        if let VirtualBusOperation::SetEnabled { id, enabled: false } = &plan.operation {
+            if let Some(bridge) = self.virtual_bridges.get(id) {
+                bridge.deactivate();
             }
         }
         self.virtual_bus_plans.remove(&EntityId::new(plan_id));
@@ -6480,6 +6566,16 @@ fn recorder_state_name(state: audiorouter_recording::RecorderState) -> &'static 
 
 fn virtual_bus_control_error(error: audiorouter_domain::VirtualBusError) -> ControlError {
     ControlError::InvalidRequest(format!("virtual bus operation rejected: {error:?}"))
+}
+
+fn virtual_bridge_control_error(error: VirtualBusBridgeSetError) -> ControlError {
+    let message = match error {
+        VirtualBusBridgeSetError::InvalidCapacity => "invalid virtual bridge capacity",
+        VirtualBusBridgeSetError::MissingBus => "virtual bridge is not registered",
+        VirtualBusBridgeSetError::CapacityReached => "virtual bridge capacity reached",
+        VirtualBusBridgeSetError::Queue(_) => "virtual bridge queue shape is invalid",
+    };
+    ControlError::InvalidRequest(message.into())
 }
 
 fn virtual_device_request_hash(plan_id: &str) -> String {
@@ -10490,6 +10586,20 @@ mod tests {
         };
         let response = plane.dispatch_authorized(request, &ClientGrant::read_only());
         assert_eq!(response.error.unwrap().code, -32600);
+    }
+
+    #[test]
+    fn virtual_bus_lifecycle_keeps_bridge_identity_and_drains_on_disable_delete() {
+        let mut plane = ControlPlane::default();
+        let id = EntityId::new("bus-stable");
+        plane.create_virtual_bus(id.clone(), "Stable bus").unwrap();
+        let bridge = plane.virtual_bridges.get(&id).unwrap();
+        bridge.activate(1).unwrap();
+        plane.set_virtual_bus_enabled(&id, false).unwrap();
+        assert!(!bridge.is_active());
+        assert!(plane.virtual_bridges.get(&id).is_some());
+        plane.delete_virtual_bus(&id).unwrap();
+        assert!(plane.virtual_bridges.get(&id).is_none());
     }
 
     #[test]

@@ -47,6 +47,12 @@ the realtime path, and deactivates/drains a bridge before removal. The focused
 `cargo test -p audiorouter-engine --locked` run passed all 96 tests. This does
 not claim native shared-memory transport or driver callback integration.
 
+Managed control operations now synchronize the bounded bridge collection using
+stable bus IDs. Create provisions lazily, disable deactivates after durable
+state succeeds, delete removes the bridge and restores it on storage failure,
+and planned apply compensates bridge changes when its journal write fails. The
+focused `cargo test -p audiorouter-control --locked` run passed all 106 tests.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one
