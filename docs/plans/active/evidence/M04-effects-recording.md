@@ -13,6 +13,11 @@ finalized file. Control tests (113), strict Clippy, formatting, and diff checks
 passed. JSON-RPC automatic recorder construction, graph attachment, and
 native endpoint ownership remain open.
 
+The control plane now exposes `attach_recorder_worker_with_identity`, which
+configures that identity before attachment and rejects workers that cannot
+own one file. The WAV session-stop regression exercises this boundary; no
+path or session ownership is inferred from an unconfigured worker.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30

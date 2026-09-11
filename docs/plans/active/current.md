@@ -7974,6 +7974,17 @@ live-driver evidence.
   publish rows without manual worker mutation. Keep path allocation and file
   creation on the control/lifecycle thread; reject missing identity rather
   than guessing ownership.
+- Added the control-plane attachment boundary for explicit file identities on
+  2026-09-11. `attach_recorder_worker_with_identity` configures WAV/FLAC
+  workers before attachment and rejects workers without single-file ownership;
+  the WAV session-stop regression exercises the boundary. Control targeted
+  test, strict Clippy, formatting, and diff checks passed. A true API-created
+  recorder factory, realtime graph attachment, and native endpoint ownership
+  remain open.
+- Next M04/REC-10 task: define the versioned recorder configuration payload
+  and lifecycle-owned factory that allocates the approved path, creates the
+  WAV/FLAC worker, and attaches it atomically before `recorders.arm`. Do not
+  expose raw file handles or perform file creation from the audio callback.
 - Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
   chain at the current head on 2026-09-11. VS/WDK discovery and the
   non-installing AudioRouter driver build, read-only 31-endpoint inventory,

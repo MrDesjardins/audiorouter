@@ -193,6 +193,13 @@ fn finalized_wav_recording(
 /// decision and will stop a session only after this method reports a finalized
 /// file. The frame is the last committed control-plane boundary.
 pub trait RecorderWorker: Send {
+    /// Supplies explicit file ownership metadata before lifecycle start.
+    /// Workers that do not own a single file reject this configuration rather
+    /// than allowing the control plane to guess a library path.
+    fn set_library_identity(&mut self, _identity: FileRecordingIdentity) -> Result<(), String> {
+        Err("recorder worker does not support single-file library identity".into())
+    }
+
     fn arm(&mut self) -> Result<(), String> {
         Ok(())
     }
@@ -318,6 +325,11 @@ impl WavRecorderWorker {
 }
 
 impl RecorderWorker for WavRecorderWorker {
+    fn set_library_identity(&mut self, identity: FileRecordingIdentity) -> Result<(), String> {
+        WavRecorderWorker::set_library_identity(self, identity);
+        Ok(())
+    }
+
     fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
         self.finalized_recordings.clone()
     }
@@ -775,6 +787,11 @@ impl BufferedFlacRecorderWorker {
 }
 
 impl RecorderWorker for BufferedFlacRecorderWorker {
+    fn set_library_identity(&mut self, identity: FileRecordingIdentity) -> Result<(), String> {
+        BufferedFlacRecorderWorker::set_library_identity(self, identity);
+        Ok(())
+    }
+
     fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
         self.finalized_recordings.clone()
     }
@@ -960,6 +977,11 @@ impl StreamingFlacRecorderWorker {
 }
 
 impl RecorderWorker for StreamingFlacRecorderWorker {
+    fn set_library_identity(&mut self, identity: FileRecordingIdentity) -> Result<(), String> {
+        StreamingFlacRecorderWorker::set_library_identity(self, identity);
+        Ok(())
+    }
+
     fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
         self.finalized_recordings.clone()
     }
@@ -3878,6 +3900,21 @@ impl ControlPlane {
         }
         self.recorder_workers.insert(session_id, worker);
         Ok(())
+    }
+
+    /// Attach a single-file worker and configure its durable library identity
+    /// before it can be started. This is the factory/session boundary for
+    /// callers that create WAV or FLAC workers outside the control plane.
+    pub fn attach_recorder_worker_with_identity(
+        &mut self,
+        session_id: EntityId,
+        identity: FileRecordingIdentity,
+        mut worker: Box<dyn RecorderWorker>,
+    ) -> Result<(), ControlError> {
+        worker
+            .set_library_identity(identity)
+            .map_err(ControlError::InvalidRequest)?;
+        self.attach_recorder_worker(session_id, worker)
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
@@ -11310,11 +11347,6 @@ mod tests {
             .open(&path)
             .unwrap();
         let mut worker = WavRecorderWorker::new(file, WavFormat::Float32, 1, 48_000, 8, 1).unwrap();
-        worker.set_library_identity(FileRecordingIdentity {
-            session_id: "session".into(),
-            recorder_id: "voice".into(),
-            path: path.clone(),
-        });
         worker.arm().unwrap();
         worker.start(0).unwrap();
         let tap = worker.audio_tap();
@@ -11340,7 +11372,15 @@ mod tests {
         recorder.advance(2).unwrap();
         plane.recorders.insert(original.id.clone(), recorder);
         plane
-            .attach_recorder_worker(original.id.clone(), Box::new(worker))
+            .attach_recorder_worker_with_identity(
+                original.id.clone(),
+                FileRecordingIdentity {
+                    session_id: original.id.as_str().to_owned(),
+                    recorder_id: "voice".into(),
+                    path: path.clone(),
+                },
+                Box::new(worker),
+            )
             .unwrap();
 
         let result = plane.session_stop(&original.id).unwrap();
