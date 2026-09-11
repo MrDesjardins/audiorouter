@@ -8202,3 +8202,9 @@ live-driver evidence.
   strict Clippy, formatting, diff, and documentation checks green.
 - Next M04/REC-01/API task: expose node-targeted finalized library rows and
   recorder identity in recording queries, preserving compatibility responses.
+- Verified node-targeted finalized library visibility on 2026-09-11: the
+  create/JSON-RPC lifecycle regression now confirms one durable `recordings.list`
+  row with the node recorder identity and completed state. Clippy, formatting,
+  diff, and documentation checks pass.
+- Next M04/REC-01 task: add node identity to library records where needed and
+  verify multiple node recorders produce independent durable rows.

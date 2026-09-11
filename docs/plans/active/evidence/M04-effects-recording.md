@@ -103,6 +103,9 @@ until node-targeted creation is implemented.
 deterministic ordering and an optional `nodeId`, while preserving the legacy
 session entry shape. A regression confirms the node-created recorder is
 discoverable before lifecycle control.
+The same node-targeted create/lifecycle regression now queries durable
+`recordings.list` after stop and verifies one finalized row with the expected
+recorder identity and `completed` state.
 Node-targeted `recorders.create` is now supported. It validates the enabled
 session node before creating a file, attaches the worker and controller to that
 node, and preserves exclusive-file rollback and idempotent replay. A control

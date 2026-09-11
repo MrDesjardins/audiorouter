@@ -12529,6 +12529,18 @@ mod tests {
             assert!(response.error.is_none(), "{method}: {response:?}");
         }
         assert!(plane.recorder_node_workers.is_empty());
+        let recordings = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(20)),
+                method: "recordings.list".into(),
+                params: Some(json!({ "sessionId": original.id })),
+            })
+            .result
+            .unwrap();
+        assert_eq!(recordings.as_array().unwrap().len(), 1);
+        assert_eq!(recordings[0]["recorderId"], "capture");
+        assert_eq!(recordings[0]["state"], "completed");
         let _ = std::fs::remove_dir_all(root);
     }
 
