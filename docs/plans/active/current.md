@@ -80,6 +80,14 @@ qualification remains open.
   isolation or physical-latency gate. No persistent audio configuration
   changed.
 
+- Requalified the event-driven native capture/render lifecycle on 2026-09-10
+  for the existing VB-Audio Cable endpoints with `-AllowLiveAudio
+  -DurationMilliseconds 100`. Capture produced 5,280 frames and silent render
+  submitted 9,120 frames; initialization, event binding, start/stop, reset,
+  teardown, and unchanged media snapshots all passed. This is existing-endpoint
+  lifecycle evidence only; defaults, volume, mute, privacy, drivers, signing,
+  and startup configuration were unchanged.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
