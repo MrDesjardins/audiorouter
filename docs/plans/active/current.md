@@ -7616,3 +7616,9 @@ stream, or machine configuration action occurred.
   session only after exact persisted bindings and production driver activation
   are available; continue portable failure/recovery coverage and built-in DSP
   work without claiming live-driver evidence.
+- Revalidated downstream compatibility on 2026-09-11 after the pump telemetry
+  extension: `cargo test --workspace --all-features --locked --quiet` passed
+  across all workspace suites; the Windows-audio suite passed 61 tests and
+  reported 11 intentionally ignored native-fixture tests. Workspace strict
+  Clippy, formatting, and diff checks also passed. No endpoint, plugin,
+  driver, or machine audio configuration was touched.
