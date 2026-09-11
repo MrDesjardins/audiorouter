@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `d3fe5165`; the native probe compile was
+The latest implementation checkpoint is `f88e352b`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -21,6 +21,18 @@ clean; no driver or startup/plugin registration, signing-mode change, audio
 stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
+
+- Fixed and pushed `f88e352b` on 2026-09-10 after the complete guarded chain
+  exposed a real asynchronous recovery race: the test observed
+  `InputQueueFull` after the owner had emptied `input_ready` but before it had
+  returned the slot to `input_free`. The regression now retries only that
+  explicitly nonblocking condition within a two-second bound. The scheduler
+  also recycles a reserved slot when concurrent input/output publication
+  loses its ready-queue race, preserving the fixed-pool invariant. Focused
+  native VST3 acceptance passed afterward, including asynchronous recovery and
+  repeated-quanta containment; engine (95) and plugin-host (67) tests, strict
+  Clippy, formatting, and diff checks passed. No audio endpoint or persistent
+  machine configuration changed.
 
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
