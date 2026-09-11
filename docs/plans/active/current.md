@@ -7680,3 +7680,9 @@ stream, or machine configuration action occurred.
   are implemented, while loaded-driver PortCls callback and end-to-end virtual
   endpoint qualification remain open. Documentation validation passed with 52
   Markdown files and 165 local links.
+- Hardened M03 acceptance on 2026-09-11: the driver source contract now
+  verifies that `IRP_MJ_CLEANUP` is actually registered to the owner-scoped
+  lease release handler, not merely that the handler exists. The guarded
+  non-installing x64 WDK build/source acceptance passed with zero signability
+  errors/warnings and catalog generation; no driver or audio configuration was
+  activated.

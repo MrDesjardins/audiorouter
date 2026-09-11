@@ -18,6 +18,7 @@ foreach ($required in @(
         'ReleaseLeasesOwnedByFileObject',
         'IRP_MJ_CLEANUP',
         'IRP_MJ_CLOSE',
+        'DriverObject->MajorFunction[IRP_MJ_CLEANUP] = BridgeControlCreateClose',
         'OwnerFileObject == FileObject',
         'RetireBridgeResources(lease, mappedView, sectionObject')) {
     if (-not $source.Contains($required)) {
