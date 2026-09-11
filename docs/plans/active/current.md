@@ -8298,3 +8298,12 @@ live-driver evidence.
   opens the persisted endpoint pair, activates this graph/tap boundary, pumps
   bounded packets, and records before/after endpoint media state; keep driver,
   signing, installation, and physical-latency gates separate.
+- Requalified the existing guarded M02 route harness on 2026-09-11. The
+  authorized 500 ms VB-Audio cable run delivered 24,480 captured frames,
+  24,448 routed frames, 191 graph blocks, and zero deadline misses while the
+  media identity/state snapshot remained unchanged. This validates the lower
+  Windows adapter route only; it does not yet exercise the new control-owned
+  native worker or claim a production driver/physical-latency gate.
+- Next M02/M03 task: adapt the live harness to construct the exact-bound worker,
+  publish the control-compiled graph, and exercise the explicit control pump
+  with before/after endpoint and scheduler-generation evidence.

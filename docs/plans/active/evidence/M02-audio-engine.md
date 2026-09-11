@@ -1444,3 +1444,16 @@ response schema, TypeScript union, and UI presentation preserve this
 distinction. Focused control (106), Windows-audio (56), contracts/UI
 typechecks, UI (121), strict Clippy, formatting, and diff checks passed. No
 stream or persistent audio configuration changed.
+
+## 2026-09-11 — Authorized existing-endpoint route probe
+
+`tests/acceptance/m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` ran against the existing VB-Audio virtual-cable
+render/capture pair. It captured 24,480 frames, processed 191 graph blocks,
+and routed 24,448 frames at 48 kHz with a 128-frame graph quantum. Processing
+time totaled 4,196,600 ns with a 55,700 ns maximum; deadline misses and
+deadline lateness were zero. The harness compared the before/after media
+identity/state snapshot and removed its temporary executable/object. Defaults,
+volume, mute, privacy, drivers, signing, startup configuration, and endpoint
+registration were unchanged. This is live adapter evidence, not production
+driver or physical-latency qualification.
