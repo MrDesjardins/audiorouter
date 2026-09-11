@@ -62,6 +62,15 @@ qualification remains open.
   performed no copy, registration, audio stream, or persistent machine
   configuration action.
 
+- Requalified the complete local ReaPlugs VST2 matrix on 2026-09-10 after the
+  shared-worker fault hardening. Six x64 effects (ReaComp, ReaDelay, ReaEQ,
+  ReaFIR, ReaGate, and ReaXComp) passed contained processing at 44.1, 48, and
+  96 kHz, including parameter-offset coverage and before/after binary
+  integrity checks. The acceptance restored `AUDIOROUTER_VST2_FIXTURE` and
+  `AUDIOROUTER_VST2_SAMPLE_RATE`; no plugin registration, audio stream, or
+  machine configuration changed. Independent rights-cleared VST2
+  qualification remains open.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
