@@ -74,10 +74,11 @@ pub enum NodeKind {
     Delay,
     GraphicEq,
     Pitch,
+    Recorder,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -95,6 +96,7 @@ impl NodeKind {
         Self::Delay,
         Self::GraphicEq,
         Self::Pitch,
+        Self::Recorder,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -116,6 +118,7 @@ impl NodeKind {
             Self::Delay => "delay",
             Self::GraphicEq => "graphic-eq",
             Self::Pitch => "pitch",
+            Self::Recorder => "recorder",
         }
     }
 }
@@ -170,7 +173,7 @@ fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> boo
     }
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 17] {
+pub fn node_registry() -> [NodeTypeSpec; 18] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -186,6 +189,7 @@ pub fn node_registry() -> [NodeTypeSpec; 17] {
             NodeKind::Delay => CapabilityAvailability::Available,
             NodeKind::GraphicEq => CapabilityAvailability::Available,
             NodeKind::Pitch => CapabilityAvailability::Available,
+            NodeKind::Recorder => CapabilityAvailability::Available,
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -2987,7 +2991,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 17);
+        assert_eq!(registry.len(), 18);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)
@@ -3003,6 +3007,12 @@ mod tests {
             .find(|spec| spec.kind == NodeKind::Gain)
             .unwrap();
         assert_eq!(gain.availability, CapabilityAvailability::Available);
+        let recorder = registry
+            .iter()
+            .find(|spec| spec.kind == NodeKind::Recorder)
+            .unwrap();
+        assert_eq!(recorder.kind.type_name(), "recorder");
+        assert_eq!(recorder.availability, CapabilityAvailability::Available);
         let virtual_source = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::VirtualRenderSource)

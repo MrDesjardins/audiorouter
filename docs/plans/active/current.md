@@ -8128,3 +8128,12 @@ live-driver evidence.
   recorder-node branches and generation changes, rejecting stale or
   unattached branches while preserving independent-sink fan-out. Native
   endpoint attachment remains a separate M03/M08 gate.
+- Added the missing M04 `Recorder` node to the authoritative domain registry
+  on 2026-09-11 and taught the portable graph compiler to preserve it as a
+  validated sink/no-op stage. The actual queue remains supplied through the
+  prepared bounded tap set; no callback-time lookup or allocation was added.
+  Domain (59), engine (99), control (115), workspace Clippy, formatting, and
+  diff checks passed. Native endpoint graph ownership remains open.
+- Next M04/REC-01/GRAPH-10 task: bind each validated recorder node identity to
+  exactly one attached recorder tap and generation, rejecting stale,
+  unattached, or duplicate bindings while preserving sibling-route output.

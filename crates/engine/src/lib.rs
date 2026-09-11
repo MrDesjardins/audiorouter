@@ -3384,7 +3384,8 @@ pub fn compile_session_at_sample_rate(
             | NodeKind::PhysicalOutput
             | NodeKind::VirtualRenderSource
             | NodeKind::VirtualCaptureSink
-            | NodeKind::Mixer => {}
+            | NodeKind::Mixer
+            | NodeKind::Recorder => {}
             NodeKind::Meter => {
                 let index = stages
                     .iter()
@@ -6282,6 +6283,36 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(graph.generation().value(), 3);
         assert_eq!(block.channel(0).unwrap(), &[0.0; 2]);
+    }
+
+    #[test]
+    fn compiler_accepts_recorder_node_as_a_runtime_sink_boundary() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "recorder-boundary".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: EntityId::new("recorder"),
+                kind: NodeKind::Recorder,
+                type_version: 1,
+                name: "Recorder".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![],
+            }],
+            edges: vec![],
+        };
+
+        let graph = compile_session(&session, RuntimeGeneration::new(31)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(0.75);
+        graph.process(&mut block);
+        assert_eq!(graph.generation().value(), 31);
+        assert_eq!(block.channel(0).unwrap(), &[0.75; 2]);
     }
 
     #[test]

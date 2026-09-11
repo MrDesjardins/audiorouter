@@ -11863,6 +11863,35 @@ mod tests {
     }
 
     #[test]
+    fn attached_wav_recorder_exposes_one_prebuilt_realtime_tap() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-tap-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        let worker = WavRecorderWorker::new(file, WavFormat::Pcm16, 1, 48_000, 4, 1).unwrap();
+        let mut plane = ControlPlane::default();
+        let session_id = EntityId::new("tap-session");
+        plane
+            .attach_recorder_worker(session_id.clone(), Box::new(worker))
+            .unwrap();
+
+        let taps = plane.recorder_tap_set(&session_id).unwrap();
+        assert_eq!(taps.len(), 1);
+        assert!(!taps.is_empty());
+        assert!(plane
+            .recorder_tap_set(&EntityId::new("missing-session"))
+            .is_err());
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn recorder_create_api_is_idempotent_and_does_not_arm() {
         let run_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

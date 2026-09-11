@@ -32,6 +32,7 @@ after the initial 47-method reference.
 | `operations.cancel` | `sessionControl` | mutating; requires an idempotency key |
 | `recordings.list` | `record` | read-only |
 | `recorders.list` | `record` | read-only |
+| `recorders.create` | `record` | mutating; requires an idempotency key |
 | `recorders.arm` | `record` | mutating; requires an idempotency key |
 | `recorders.start` | `record` | mutating; requires an idempotency key |
 | `recorders.pause` | `record` | mutating; requires an idempotency key |
@@ -120,6 +121,7 @@ The current node catalog is available through `nodes.describe` and contains:
 | `physical-output@1` | unavailable | Requires M02 Windows audio adapters |
 | `virtual-render-source@1` | unavailable | Requires M03 managed virtual driver |
 | `virtual-capture-sink@1` | unavailable | Requires M03 managed virtual driver |
+| `recorder@1` | available | Bounded recording sink boundary; the runtime tap is attached by the control plane |
 | `mixer@1` | available | Bounded graph mixer |
 | `gain@1` | available | `gainDb`, from -60 to +24 dB |
 | `mute@1` | available | `muted`, boolean |

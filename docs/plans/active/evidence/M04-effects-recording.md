@@ -52,6 +52,12 @@ Control workers expose their queue tap through the worker boundary, and
 adapter. Engine fan-out and tap-set regressions pass; this is portable graph
 attachment evidence, not loaded-driver or native endpoint ownership evidence.
 
+The domain registry and portable compiler now include an available `Recorder`
+node kind. It participates in validated linear graph topology as a sink/no-op
+processing stage; the runtime adapter supplies its actual queue tap through
+the prepared `AudioTapSet`. Registry and compiler regressions pass. This does
+not claim a loaded virtual endpoint or native device graph.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30
