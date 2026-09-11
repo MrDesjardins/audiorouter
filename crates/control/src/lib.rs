@@ -3406,6 +3406,7 @@ pub struct ControlPlane {
     runtimes: HashMap<EntityId, FakeRuntime>,
     recorders: HashMap<EntityId, RecorderController>,
     recorder_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
+    recorder_node_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
     recording_policy: Option<RecordingPathPolicy>,
     storage: Option<Storage>,
     enrollments: HashMap<String, (ClientRole, bool)>,
@@ -3446,6 +3447,7 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
+            recorder_node_workers: HashMap::new(),
             recording_policy: None,
             storage: None,
             enrollments: HashMap::new(),
@@ -3573,6 +3575,7 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
+            recorder_node_workers: HashMap::new(),
             recording_policy,
             storage: Some(storage),
             enrollments: HashMap::new(),
@@ -4196,22 +4199,65 @@ impl ControlPlane {
             .filter(|node| node.enabled && node.kind == NodeKind::Recorder)
             .map(|node| &node.id)
             .collect();
-        if recorder_nodes.len() != 1 {
+        if recorder_nodes.is_empty() {
             return Err(ControlError::InvalidRequest(
-                "session must contain exactly one enabled recorder node".into(),
+                "session must contain an enabled recorder node".into(),
             ));
         }
-        let worker = self.recorder_workers.get(session_id).ok_or_else(|| {
-            ControlError::InvalidRequest("recorder worker is not attached".into())
-        })?;
-        let tap = worker.shared_audio_tap().ok_or_else(|| {
-            ControlError::InvalidRequest("recorder worker has no realtime tap".into())
-        })?;
+        let recorder_node_count = recorder_nodes.len();
         let mut bindings = RecorderTapBindings::new();
-        bindings
-            .add_shared(recorder_nodes[0].as_str(), generation, tap)
-            .map_err(|_| ControlError::InvalidRequest("recorder node binding is invalid".into()))?;
+        for node_id in recorder_nodes {
+            let tap = if let Some(worker) = self.recorder_node_workers.get(node_id) {
+                worker.shared_audio_tap()
+            } else if recorder_node_count == 1 {
+                self.recorder_workers
+                    .get(session_id)
+                    .and_then(|worker| worker.shared_audio_tap())
+            } else {
+                None
+            }
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("recorder node worker is not attached".into())
+            })?;
+            bindings
+                .add_shared(node_id.as_str(), generation, tap)
+                .map_err(|_| {
+                    ControlError::InvalidRequest("recorder node binding is invalid".into())
+                })?;
+        }
         Ok(bindings)
+    }
+
+    /// Attach a worker to one validated recorder node. Node-keyed workers are
+    /// the independent-sink path; lifecycle commands remain session-scoped
+    /// until the recorder API grows explicit recorder IDs.
+    pub fn attach_recorder_worker_to_node(
+        &mut self,
+        session_id: &EntityId,
+        node_id: EntityId,
+        worker: Box<dyn RecorderWorker>,
+    ) -> Result<(), ControlError> {
+        let session = self.get_session(session_id)?;
+        let node = session
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id && node.kind == NodeKind::Recorder && node.enabled)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("enabled recorder node is not in the session".into())
+            })?;
+        let _ = node;
+        if self.recorder_node_workers.contains_key(&node_id) {
+            return Err(ControlError::InvalidRequest(
+                "recorder node worker is already attached".into(),
+            ));
+        }
+        if worker.shared_audio_tap().is_none() {
+            return Err(ControlError::InvalidRequest(
+                "recorder worker has no realtime tap".into(),
+            ));
+        }
+        self.recorder_node_workers.insert(node_id, worker);
+        Ok(())
     }
 
     /// Attach a single-file worker and configure its durable library identity
@@ -11971,6 +12017,82 @@ mod tests {
         ));
 
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn independent_recorder_nodes_bind_distinct_workers_and_taps() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let paths = [
+            std::env::temp_dir().join(format!("audiorouter-control-node-a-{run_id}.wav")),
+            std::env::temp_dir().join(format!("audiorouter-control-node-b-{run_id}.wav")),
+        ];
+        let make_worker = |path: &std::path::Path| {
+            let file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .unwrap();
+            WavRecorderWorker::new(file, WavFormat::Pcm16, 1, 48_000, 4, 1).unwrap()
+        };
+        let mut graph = session();
+        for (id, name) in [("recorder-a", "A"), ("recorder-b", "B")] {
+            graph.nodes.push(Node {
+                id: EntityId::new(id),
+                kind: NodeKind::Recorder,
+                type_version: 1,
+                name: name.into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![],
+            });
+        }
+        let session_id = graph.id.clone();
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph).unwrap();
+        plane
+            .attach_recorder_worker_to_node(
+                &session_id,
+                EntityId::new("recorder-a"),
+                Box::new(make_worker(&paths[0])),
+            )
+            .unwrap();
+        plane
+            .attach_recorder_worker_to_node(
+                &session_id,
+                EntityId::new("recorder-b"),
+                Box::new(make_worker(&paths[1])),
+            )
+            .unwrap();
+
+        let bindings = plane
+            .recorder_tap_bindings(&session_id, RuntimeGeneration::new(9))
+            .unwrap();
+        assert_eq!(bindings.len(), 2);
+        let taps = bindings
+            .tap_set_for_generation(RuntimeGeneration::new(9), &["recorder-a", "recorder-b"])
+            .unwrap();
+        assert_eq!(taps.len(), 2);
+        assert!(plane
+            .attach_recorder_worker_to_node(
+                &session_id,
+                EntityId::new("missing"),
+                Box::new(make_worker(
+                    &std::env::temp_dir()
+                        .join(format!("audiorouter-control-node-missing-{run_id}.wav"))
+                )),
+            )
+            .is_err());
+
+        for path in paths {
+            let _ = std::fs::remove_file(path);
+        }
+        let _ = std::fs::remove_file(
+            std::env::temp_dir().join(format!("audiorouter-control-node-missing-{run_id}.wav")),
+        );
     }
 
     #[test]

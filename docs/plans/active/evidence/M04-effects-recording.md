@@ -70,10 +70,17 @@ ownership or loaded-driver activation.
 
 The control plane now derives that binding from the stored session graph through
 `ControlPlane::recorder_tap_bindings`. It requires exactly one enabled
-`Recorder` node and an attached worker, then binds the node ID to the requested
-generation. A control regression proves the prepared tap is available for the
-matching generation and stale-generation preparation fails closed. Multiple
-recorder nodes are rejected until independent worker ownership is implemented.
+`Recorder` node for the compatibility session-worker path and an attached
+worker, then binds the node ID to the requested generation. A control
+regression proves the prepared tap is available for the matching generation
+and stale-generation preparation fails closed. Multiple nodes use the
+node-worker path described below.
+
+The control boundary now supports independent node-keyed workers through
+`attach_recorder_worker_to_node`. A two-node/two-worker regression proves that
+the binding builder returns two distinct taps and rejects a node absent from
+the validated session. Node-keyed workers are currently a realtime attachment
+boundary only; recorder lifecycle/API identity remains session-scoped.
 
 ## 2026-09-09 limiter requalification
 

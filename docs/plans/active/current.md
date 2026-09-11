@@ -8147,3 +8147,12 @@ live-driver evidence.
 - Next M04/REC-01/GRAPH-10 task: connect validated session recorder-node IDs
   to `RecorderTapBindings` in the control/runtime activation path, then prove
   generation replacement removes stale taps without affecting sibling output.
+- Added independent node-keyed recorder worker attachment on 2026-09-11.
+  `ControlPlane::attach_recorder_worker_to_node` validates enabled `Recorder`
+  membership, rejects duplicate or tap-less workers, and lets multiple node
+  workers produce distinct generation-bound taps. The two-node/two-worker
+  regression passed; lifecycle and JSON-RPC commands remain session-scoped by
+  design and are the next integration gap.
+- Next M04/REC-01 task: promote node-keyed workers into recorder identities
+  for arm/start/pause/resume/split/stop and durable library rows, preserving
+  per-recorder failure isolation and the eight-recorder global limit.
