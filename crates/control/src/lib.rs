@@ -281,6 +281,7 @@ pub struct SegmentedWavRecorderWorker {
     sample_rate: u32,
     paths: Arc<std::sync::Mutex<Vec<std::path::PathBuf>>>,
     started_at: Option<String>,
+    run_id: Option<String>,
     finalized_recordings: Vec<FinalizedRecording>,
 }
 
@@ -377,6 +378,7 @@ impl SegmentedWavRecorderWorker {
             sample_rate,
             paths,
             started_at: None,
+            run_id: None,
             finalized_recordings: Vec::new(),
         })
     }
@@ -395,7 +397,13 @@ impl SegmentedWavRecorderWorker {
             .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
             .start(frame)
             .map_err(|error| format!("segmented WAV recorder start failed: {error:?}"))?;
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+            .to_string();
         self.started_at = Some(unix_epoch_seconds().to_string());
+        self.run_id = Some(run_id);
         Ok(())
     }
 
@@ -489,6 +497,10 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
             .started_at
             .clone()
             .ok_or_else(|| "segmented WAV finalized before start".to_owned())?;
+        let run_id = self
+            .run_id
+            .clone()
+            .ok_or_else(|| "segmented WAV finalized without a run identity".to_owned())?;
         let mut finalized = Vec::with_capacity(outputs.len());
         for (index, output) in outputs.into_iter().enumerate() {
             output
@@ -504,7 +516,10 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
             if data_bytes % bytes_per_frame != 0 {
                 return Err("segmented WAV data is not frame aligned".into());
             }
-            let id = format!("{}-{}-{}", self.session_id, self.recorder_id, index);
+            let id = format!(
+                "{}-{}-{}-{}",
+                self.session_id, self.recorder_id, run_id, index
+            );
             if id.len() > MAX_RECORDING_ID_BYTES {
                 return Err("segmented WAV recording identity exceeds its bound".into());
             }
@@ -11245,7 +11260,8 @@ mod tests {
         let storage = Storage::open(&database).unwrap();
         let records = storage.list_recordings(Some("session")).unwrap();
         assert_eq!(records.len(), 1);
-        assert_eq!(records[0].id, "session-voice-0");
+        assert!(records[0].id.starts_with("session-voice-"));
+        assert!(records[0].id.ends_with("-0"));
         assert_eq!(records[0].frames, 2);
         assert!(!records[0].missing);
         assert!(std::path::Path::new(&records[0].path).is_file());

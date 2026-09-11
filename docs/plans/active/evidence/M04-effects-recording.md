@@ -981,3 +981,7 @@ completed row, frame count, path, and present-file state. Control coverage
 passed 113 tests with strict Clippy, formatting, and diff checks. FLAC/simple
 file-worker metadata handoff, automatic recorder configuration, realtime graph
 attachment, and native endpoint ownership remain open.
+
+Segment identities include a per-start run identifier so a later recording
+cannot replace an earlier segment row through SQLite upsert. The focused
+regression verifies the bounded identity shape and remains green.

@@ -8015,6 +8015,12 @@ live-driver evidence.
   tests (113), strict Clippy, formatting, and diff checks passed. FLAC/simple
   file-worker metadata handoff, automatic recorder configuration, realtime
   graph attachment, and native endpoint ownership remain open.
+- Corrected segmented recording-library identity on 2026-09-11. Each worker
+  start now generates a bounded per-run identity, so repeated recordings do
+  not overwrite a prior segment's library row. Focused control tests and
+  strict Clippy passed; file-worker metadata handoff, automatic recorder
+  configuration, realtime graph attachment, and native endpoint ownership
+  remain open.
 - Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
   chain at pushed head `d350b013` after the segmented library-row handoff.
   M00/M03, M04 (30 DSP and 40 recording tests), M05 (124 UI tests), M06, M07,
