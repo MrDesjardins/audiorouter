@@ -53,6 +53,84 @@ pub struct NativeBridgeControlClient {
 }
 
 #[cfg(windows)]
+#[derive(Debug)]
+pub enum NativeBridgeControllerError {
+    Windows(windows::core::Error),
+    Session(NativeBridgeSessionError),
+}
+
+#[cfg(windows)]
+/// Explicit owner of the driver lease and its broker-side mapped session.
+///
+/// Construction claims the kernel lease before callers can publish blocks.
+/// The mapping is still broker-owned until the driver receives a future section
+/// handle; this type deliberately does not claim kernel access to the file view.
+pub struct NativeBridgeController {
+    client: NativeBridgeControlClient,
+    session: NativeBridgeSession,
+}
+
+#[cfg(windows)]
+impl NativeBridgeController {
+    pub fn create(
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        let client = NativeBridgeControlClient::open(device_path)
+            .map_err(NativeBridgeControllerError::Windows)?;
+        let session = NativeBridgeSession::create(mapping_path, hello.clone())
+            .map_err(NativeBridgeControllerError::Session)?;
+        client
+            .open_bridge(&hello)
+            .map_err(NativeBridgeControllerError::Windows)?;
+        Ok(Self { client, session })
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
+        self.client
+            .heartbeat(self.session.hello())
+            .map_err(NativeBridgeControllerError::Windows)?;
+        self.session
+            .heartbeat()
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeControllerError> {
+        self.session
+            .write(samples)
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    pub fn read_into(
+        &self,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
+        self.session
+            .read_into(samples)
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    pub fn close(mut self) -> Result<(), NativeBridgeControllerError> {
+        self.client
+            .close(self.session.hello())
+            .map_err(NativeBridgeControllerError::Windows)?;
+        self.session
+            .flush()
+            .map_err(NativeBridgeControllerError::Session)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for NativeBridgeController {
+    fn drop(&mut self) {
+        // Best-effort release for panic/error paths. The kernel lease timeout
+        // remains the final recovery boundary when close cannot be delivered.
+        let _ = self.client.close(self.session.hello());
+    }
+}
+
+#[cfg(windows)]
 impl NativeBridgeControlClient {
     /// Opens the secured driver endpoint explicitly; discovery never opens it.
     pub fn open(path: &str) -> Result<Self, windows::core::Error> {

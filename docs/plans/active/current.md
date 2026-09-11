@@ -106,6 +106,12 @@ IOCTLs, and closes the handle with RAII. Its layout and UTF-16 bound regression
 passes; the client can now exercise the kernel lease once the driver is
 deliberately installed in an isolated validation environment.
 
+`NativeBridgeController` now co-owns the mapped session and secured driver
+client. It claims the kernel lease before publishing, forwards heartbeats,
+closes the lease before flushing the mapping, and attempts release on drop/error
+paths. The adapter still does not claim that the driver can access the file
+mapping; section-handle ownership is the next transport task.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

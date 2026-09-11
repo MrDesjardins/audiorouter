@@ -111,6 +111,13 @@ The client has not been run against a loaded driver because installation and
 loading remain outside this non-mutating validation scope; no live audio-path
 claim is made.
 
+`NativeBridgeController` now composes the explicit control client and mapped
+session: it claims the kernel lease before block publication, forwards
+heartbeats, closes the lease before flushing, and retries release on drop/error
+paths. This is a user-mode lifecycle integration boundary. The kernel still
+does not receive the file mapping, so live shared-memory/audio transport and
+driver-loaded validation remain open.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded
