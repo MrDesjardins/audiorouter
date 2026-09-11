@@ -51,6 +51,15 @@ qualification remains open.
   non-administrator `Get-PnpDevice` access-denied prerequisite; no audio or
   persistent machine configuration was changed.
 
+- Implemented and pushed bounded native-worker diagnostics in `3577e36d`.
+  The Rust supervisor now drains at most 8 KiB of worker stderr on a control
+  thread and appends it to startup/response I/O failures; realtime processing
+  methods do not read, wait, allocate, or lock on this diagnostic path. The
+  plugin-host all-features suite passed 67 unit tests and 35 non-ignored
+  integration tests, all-target Clippy passed with warnings denied, and
+  formatting/diff checks passed. No audio stream or machine configuration was
+  touched.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded
