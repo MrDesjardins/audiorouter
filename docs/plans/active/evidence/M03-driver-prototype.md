@@ -253,6 +253,17 @@ WebView initialization, the native Tauri command, authenticated
 persistent machine configuration. The shell probe now also has a single-fire
 DOMContentLoaded/250 ms fallback for document timing differences.
 
+The driver lease now has a mapped-view lifetime boundary for the future
+callback reader. OPEN replacement detaches the old view, blocks competing
+claims during retirement, waits for `EX_RUNDOWN_REF` readers, and reinitializes
+rundown before publishing the replacement. CLOSE and unload use the same
+detach-before-unmap order, and request metadata is not cleared until mapped
+readers have drained. `AudioRouterCopyLeaseBlock` acquires rundown and takes
+only atomic view/generation snapshots; it does not take the lease spin lock.
+The non-installing x64 WDK build passed with zero signability errors/warnings.
+The helper remains intentionally unwired to the reference sample timer, so
+loaded-driver callback ownership and endpoint data-path evidence remain open.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

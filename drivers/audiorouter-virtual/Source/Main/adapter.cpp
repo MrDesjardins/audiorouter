@@ -31,16 +31,65 @@ PDEVICE_OBJECT g_BridgeControlDevice = NULL;
 
 typedef struct _AR_BRIDGE_LEASE_STATE {
     KSPIN_LOCK Lock;
+    EX_RUNDOWN_REF Rundown;
     BOOLEAN Active;
+    BOOLEAN Retiring;
+    BOOLEAN RundownStarted;
     ULONGLONG LastHeartbeat100ns;
     AR_BRIDGE_OPEN_REQUEST Request;
     PVOID SectionObject;
-    PVOID MappedView;
-    SIZE_T MappedBytes;
+    volatile PVOID MappedView;
+    volatile ULONG MappedBytes;
 } AR_BRIDGE_LEASE_STATE;
 
 #define AR_BRIDGE_LEASE_SLOTS 2
 AR_BRIDGE_LEASE_STATE g_BridgeLeases[AR_BRIDGE_LEASE_SLOTS] = {};
+
+// This helper is intentionally independent of the sample's timer callback.
+// It is safe for a future PortCls callback: rundown protects the mapped view
+// from CLOSE/expiry/unload, and the callback takes no lease spin lock.
+NTSTATUS AudioRouterCopyLeaseBlock(
+    _In_ AR_BRIDGE_LEASE_STATE* Lease,
+    _In_ ULONGLONG MinimumSequence,
+    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _In_ SIZE_T DestinationCapacitySamples,
+    _Out_ AR_BRIDGE_BLOCK_HEADER* Header)
+{
+    if (Lease == NULL || Destination == NULL || Header == NULL ||
+        !ExAcquireRundownProtection(&Lease->Rundown)) {
+        return STATUS_DEVICE_NOT_READY;
+    }
+    PVOID view = InterlockedCompareExchangePointer(&Lease->MappedView, NULL, NULL);
+    ULONG mappedBytes = Lease->MappedBytes;
+    ULONGLONG generation = InterlockedCompareExchange64(
+        reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
+    KeMemoryBarrier();
+    NTSTATUS status = STATUS_DEVICE_NOT_READY;
+    if (view != NULL && mappedBytes != 0 && generation != 0) {
+        status = AudioRouterCopyBridgeBlock(
+            static_cast<const UCHAR*>(view), mappedBytes, generation,
+            MinimumSequence, Destination, DestinationCapacitySamples, Header);
+    }
+    ExReleaseRundownProtection(&Lease->Rundown);
+    return status;
+}
+
+static void RetireBridgeResources(
+    _In_ AR_BRIDGE_LEASE_STATE* Lease,
+    _In_opt_ PVOID MappedView,
+    _In_opt_ PVOID SectionObject,
+    _In_ BOOLEAN RundownStarted)
+{
+    if (RundownStarted) {
+        ExWaitForRundownProtectionRelease(&Lease->Rundown);
+    }
+    if (MappedView != NULL) {
+        MmUnmapViewInSystemSpace(MappedView);
+    }
+    if (SectionObject != NULL) {
+        ObDereferenceObject(SectionObject);
+    }
+}
 
 static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(_In_ USHORT Direction)
 {
@@ -169,6 +218,8 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
 
             PVOID oldSectionObject = NULL;
             PVOID oldMappedView = NULL;
+            BOOLEAN oldRundownStarted = FALSE;
+            BOOLEAN publishAfterRetire = FALSE;
             KIRQL oldIrql;
             KeAcquireSpinLock(&lease->Lock, &oldIrql);
             ULONGLONG now = KeQueryInterruptTime();
@@ -177,34 +228,52 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 (now - lease->LastHeartbeat100ns > leaseTicks);
 
             if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN) {
-                if (lease->Active && !expired) {
+                if ((lease->Active && !expired) || lease->Retiring) {
                     status = STATUS_DEVICE_BUSY;
                 } else {
                     oldSectionObject = lease->SectionObject;
-                    oldMappedView = lease->MappedView;
-                    lease->Request = *request;
-                    lease->LastHeartbeat100ns = now;
-                    lease->Active = TRUE;
-                    lease->SectionObject = sectionObject;
-                    lease->MappedView = mappedView;
-                    lease->MappedBytes = mappedBytes;
-                    sectionObject = NULL;
-                    mappedView = NULL;
-                    status = STATUS_SUCCESS;
+                    BOOLEAN priorRundownStarted = lease->RundownStarted;
+                    oldMappedView = InterlockedExchangePointer(
+                        &lease->MappedView, NULL);
+                    oldRundownStarted = oldMappedView != NULL;
+                    lease->RundownStarted = oldRundownStarted;
+                    lease->MappedBytes = 0;
+                    lease->SectionObject = NULL;
+                    lease->Active = FALSE;
+                    if (oldRundownStarted) {
+                        lease->Retiring = TRUE;
+                        publishAfterRetire = TRUE;
+                    } else {
+                        if (priorRundownStarted) {
+                            ExReInitializeRundownProtection(&lease->Rundown);
+                            lease->RundownStarted = FALSE;
+                        }
+                        lease->Request = *request;
+                        lease->LastHeartbeat100ns = now;
+                        lease->Active = TRUE;
+                        lease->SectionObject = sectionObject;
+                        lease->MappedView = mappedView;
+                        lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
+                        sectionObject = NULL;
+                        mappedView = NULL;
+                        status = STATUS_SUCCESS;
+                    }
                 }
-            } else if (!lease->Active || expired ||
+            } else if (!lease->Active || expired || lease->Retiring ||
                        RtlCompareMemory(&lease->Request, request,
                                         sizeof(AR_BRIDGE_OPEN_REQUEST)) !=
                            sizeof(AR_BRIDGE_OPEN_REQUEST)) {
                 status = STATUS_INVALID_DEVICE_STATE;
             } else if (code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE) {
                 oldSectionObject = lease->SectionObject;
-                oldMappedView = lease->MappedView;
+                oldMappedView = InterlockedExchangePointer(
+                    &lease->MappedView, NULL);
+                oldRundownStarted = oldMappedView != NULL;
+                lease->RundownStarted = oldRundownStarted;
+                lease->Retiring = oldRundownStarted;
                 lease->Active = FALSE;
-                RtlZeroMemory(&lease->Request, sizeof(lease->Request));
                 lease->LastHeartbeat100ns = 0;
                 lease->SectionObject = NULL;
-                lease->MappedView = NULL;
                 lease->MappedBytes = 0;
                 status = STATUS_SUCCESS;
             } else {
@@ -212,11 +281,35 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 status = STATUS_SUCCESS;
             }
             KeReleaseSpinLock(&lease->Lock, oldIrql);
-            if (oldMappedView != NULL) {
-                MmUnmapViewInSystemSpace(oldMappedView);
-            }
-            if (oldSectionObject != NULL) {
-                ObDereferenceObject(oldSectionObject);
+            if (publishAfterRetire) {
+                RetireBridgeResources(lease, oldMappedView, oldSectionObject,
+                                      oldRundownStarted);
+                oldMappedView = NULL;
+                oldSectionObject = NULL;
+                KeAcquireSpinLock(&lease->Lock, &oldIrql);
+                ExReInitializeRundownProtection(&lease->Rundown);
+                lease->RundownStarted = FALSE;
+                lease->Request = *request;
+                lease->LastHeartbeat100ns = now;
+                lease->SectionObject = sectionObject;
+                lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
+                KeMemoryBarrier();
+                lease->MappedView = mappedView;
+                lease->Active = TRUE;
+                lease->Retiring = FALSE;
+                KeReleaseSpinLock(&lease->Lock, oldIrql);
+                sectionObject = NULL;
+                mappedView = NULL;
+                status = STATUS_SUCCESS;
+            } else if (oldMappedView != NULL || oldSectionObject != NULL) {
+                RetireBridgeResources(lease, oldMappedView, oldSectionObject,
+                                      oldRundownStarted);
+                if (lease->Retiring) {
+                    KeAcquireSpinLock(&lease->Lock, &oldIrql);
+                    RtlZeroMemory(&lease->Request, sizeof(lease->Request));
+                    lease->Retiring = FALSE;
+                    KeReleaseSpinLock(&lease->Lock, oldIrql);
+                }
             }
             if (mappedView != NULL) {
                 MmUnmapViewInSystemSpace(mappedView);
@@ -264,10 +357,15 @@ void DeleteBridgeControlDevice()
     for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
         PVOID sectionObject = NULL;
         PVOID mappedView = NULL;
+        BOOLEAN rundownStarted = FALSE;
         KIRQL oldIrql;
         KeAcquireSpinLock(&g_BridgeLeases[index].Lock, &oldIrql);
         sectionObject = g_BridgeLeases[index].SectionObject;
-        mappedView = g_BridgeLeases[index].MappedView;
+        mappedView = InterlockedExchangePointer(
+            &g_BridgeLeases[index].MappedView, NULL);
+        rundownStarted = mappedView != NULL;
+        g_BridgeLeases[index].RundownStarted = rundownStarted;
+        g_BridgeLeases[index].Retiring = rundownStarted;
         g_BridgeLeases[index].SectionObject = NULL;
         g_BridgeLeases[index].MappedView = NULL;
         g_BridgeLeases[index].MappedBytes = 0;
@@ -277,12 +375,8 @@ void DeleteBridgeControlDevice()
         g_BridgeLeases[index].LastHeartbeat100ns = 0;
         KeReleaseSpinLock(&g_BridgeLeases[index].Lock, oldIrql);
 
-        if (mappedView != NULL) {
-            MmUnmapViewInSystemSpace(mappedView);
-        }
-        if (sectionObject != NULL) {
-            ObDereferenceObject(sectionObject);
-        }
+        RetireBridgeResources(&g_BridgeLeases[index], mappedView,
+                              sectionObject, rundownStarted);
     }
     if (g_BridgeControlDevice != NULL) {
         IoDeleteSymbolicLink(&dosName);
@@ -533,6 +627,7 @@ Return Value:
     WDF_DRIVER_CONFIG_INIT(&config, WDF_NO_EVENT_CALLBACK);
     for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
         KeInitializeSpinLock(&g_BridgeLeases[index].Lock);
+        ExInitializeRundownProtection(&g_BridgeLeases[index].Rundown);
     }
     //
     // Set WdfDriverInitNoDispatchOverride flag to tell the framework

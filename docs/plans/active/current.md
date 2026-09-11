@@ -238,7 +238,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `fe5e7a45`; the native probe compile was
+The latest implementation checkpoint is `d557c2c8`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -1955,6 +1955,12 @@ a mapped-view use-after-unmap race. The next implementation must publish and
 detach the mapped view atomically, wait for rundown readers before unmapping,
 and reinitialize rundown before republishing a replacement; the sample timer
 must remain unwired until that lifecycle is build- and review-validated.
+
+The mapped-view lifecycle is now implemented in the non-installing driver
+scaffold: rundown-protected callback snapshots, detach-before-unmap on CLOSE,
+expiry replacement, and unload, with replacement claims blocked while readers
+drain. The helper is still not wired to the reference sample timer; loaded
+PortCls callback ownership remains the next native gate.
 
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
   on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
