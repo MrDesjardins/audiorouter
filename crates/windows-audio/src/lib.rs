@@ -476,11 +476,16 @@ impl WasapiSchedulerBridge {
     ///
     /// This is a control/recovery operation and must be called only after the
     /// endpoint clients have stopped; `pump` never invokes it.
-    pub fn reset_stream(&mut self) -> usize {
+    pub fn reset_stream(&mut self) -> Result<usize, AudioError> {
         self.accumulator.reset();
         self.render_pending_bytes = 0;
         self.timeline_frame = 0;
-        self.scheduler.reset_io()
+        let state_reset = self.scheduler.reset_processing_state();
+        let recycled = self.scheduler.reset_io();
+        if !state_reset {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        Ok(recycled)
     }
 
     /// Copy and process at most the currently available capture packet. A
@@ -816,6 +821,7 @@ pub enum AudioError {
         available: usize,
     },
     InvalidFrameSize,
+    ProcessingStateUnavailable,
     ApplicationNotFound {
         process_id: u32,
     },
@@ -923,6 +929,7 @@ impl AudioError {
             | Self::ApplicationRestartAmbiguous { .. }
             | Self::BufferTooSmall { .. }
             | Self::EndpointBinding { .. } => 0x80070057,
+            Self::ProcessingStateUnavailable => 0x80004005,
             Self::ApplicationIdentityUnavailable { .. }
             | Self::ApplicationRestartIdentityUnavailable { .. } => 0x80070005,
         }
@@ -980,6 +987,9 @@ impl fmt::Display for AudioError {
                 )
             }
             Self::InvalidFrameSize => formatter.write_str("audio frame size was invalid"),
+            Self::ProcessingStateUnavailable => {
+                formatter.write_str("audio processor state could not be reset safely")
+            }
             Self::ApplicationNotFound { process_id } => {
                 write!(formatter, "application process {process_id} was not found")
             }
@@ -2789,7 +2799,7 @@ mod tests {
         bridge.scheduler().process_once().unwrap();
         assert_eq!(bridge.scheduler().output().ready(), 1);
 
-        assert_eq!(bridge.reset_stream(), 1);
+        assert_eq!(bridge.reset_stream().unwrap(), 1);
         assert_eq!(bridge.scheduler().output().ready(), 0);
         assert_eq!(
             bridge.scheduler().telemetry().active_generation,

@@ -3591,6 +3591,16 @@ impl RuntimeProcessor {
         self.publication.load().map(|graph| graph.sample_rate_hz())
     }
 
+    /// Reset stateful stages in the active graph at a stopped-stream
+    /// recovery boundary. An absent graph is already safe; a poisoned stage
+    /// lock is reported so the caller can keep the route silent.
+    pub fn reset_processing_state(&self) -> bool {
+        match self.publication.load() {
+            Some(graph) => graph.reset_processing_state(),
+            None => true,
+        }
+    }
+
     /// Process one block and return the active generation. Before a graph is
     /// published, the block is cleared and `None` is returned.
     pub fn process(&self, block: &mut AudioBlock) -> Option<RuntimeGeneration> {
@@ -3833,6 +3843,12 @@ impl RealtimeScheduler {
         self.input.recycle_all() + self.output.recycle_all()
     }
 
+    /// Reset active DSP history without changing the published graph. This
+    /// is a control/recovery operation and must not run from the callback.
+    pub fn reset_processing_state(&self) -> bool {
+        self.processor.reset_processing_state()
+    }
+
     pub fn input(&self) -> &AudioBlockRing {
         &self.input
     }
@@ -4034,6 +4050,90 @@ impl RuntimeGraph {
         }
     }
 
+    /// Reset stateful DSP history at a stopped-stream recovery boundary.
+    /// Processing uses `try_lock` on the realtime path; this control-side
+    /// operation may wait for those short critical sections, but never runs
+    /// from the callback. A poisoned state lock fails closed so callers can
+    /// keep the route silent instead of reusing unknown processor state.
+    pub fn reset_processing_state(&self) -> bool {
+        let mut success = true;
+        for stage in &self.stages {
+            match stage {
+                ProcessingStage::ParametricEq { left, right } => {
+                    if !reset_dsp(left, |processor| processor.reset()) {
+                        success = false;
+                    }
+                    if let Some(right) = right {
+                        if !reset_dsp(right, |processor| processor.reset()) {
+                            success = false;
+                        }
+                    }
+                }
+                ProcessingStage::Compressor { left, right } => {
+                    if !reset_dsp(left, |processor| processor.reset()) {
+                        success = false;
+                    }
+                    if let Some(right) = right {
+                        if !reset_dsp(right, |processor| processor.reset()) {
+                            success = false;
+                        }
+                    }
+                }
+                ProcessingStage::Gate { left, right } => {
+                    if !reset_dsp(left, |processor| processor.reset()) {
+                        success = false;
+                    }
+                    if let Some(right) = right {
+                        if !reset_dsp(right, |processor| processor.reset()) {
+                            success = false;
+                        }
+                    }
+                }
+                ProcessingStage::Limiter { limiter } => {
+                    if !reset_dsp(limiter, |processor| processor.reset()) {
+                        success = false;
+                    }
+                }
+                ProcessingStage::Delay { left, right } => {
+                    if !reset_dsp(left, |processor| processor.reset()) {
+                        success = false;
+                    }
+                    if let Some(right) = right {
+                        if !reset_dsp(right, |processor| processor.reset()) {
+                            success = false;
+                        }
+                    }
+                }
+                ProcessingStage::GraphicEq { left, right } => {
+                    if !reset_dsp(left, |processor| processor.reset()) {
+                        success = false;
+                    }
+                    if let Some(right) = right {
+                        if !reset_dsp(right, |processor| processor.reset()) {
+                            success = false;
+                        }
+                    }
+                }
+                ProcessingStage::Pitch { left, right } => {
+                    if !reset_dsp(left, |processor| processor.reset()) {
+                        success = false;
+                    }
+                    if let Some(right) = right {
+                        if !reset_dsp(right, |processor| processor.reset()) {
+                            success = false;
+                        }
+                    }
+                }
+                ProcessingStage::Gain { .. }
+                | ProcessingStage::Mute { .. }
+                | ProcessingStage::ChannelMatrix { .. }
+                | ProcessingStage::Meter { .. } => {}
+            }
+        }
+        self.reset_meters();
+        success
+    }
+
     pub fn process(&self, block: &mut AudioBlock) -> usize {
         self.process_inner(block, None)
     }
@@ -4229,6 +4329,16 @@ impl RuntimeGraph {
             metrics.record(repaired);
         }
         repaired
+    }
+}
+
+fn reset_dsp<T>(processor: &std::sync::Mutex<T>, reset: impl FnOnce(&mut T)) -> bool {
+    match processor.lock() {
+        Ok(mut processor) => {
+            reset(&mut processor);
+            true
+        }
+        Err(_) => false,
     }
 }
 
@@ -5244,6 +5354,27 @@ mod tests {
             scheduler.output().capacity()
         );
         assert_eq!(scheduler.telemetry().active_generation, Some(generation));
+    }
+
+    #[test]
+    fn runtime_graph_reset_processing_state_discards_dsp_history() {
+        let mut delay = audiorouter_dsp::DelayLine::new(1_000.0, 48_000.0, 1).unwrap();
+        delay.set_delay_ms(10.0).unwrap();
+        let graph = RuntimeGraph::prepare(
+            RuntimeGeneration::new(53),
+            vec![ProcessingStage::Delay {
+                left: Box::new(std::sync::Mutex::new(delay)),
+                right: None,
+            }],
+        );
+        let mut impulse = AudioBlock::new(1, 128).unwrap();
+        impulse.channel_mut(0).unwrap()[0] = 1.0;
+        graph.process(&mut impulse);
+        assert!(graph.reset_processing_state());
+
+        let mut after_reset = AudioBlock::new(1, 128).unwrap();
+        graph.process(&mut after_reset);
+        assert_eq!(after_reset.channel(0).unwrap(), &[0.0; 128]);
     }
 
     #[test]
