@@ -7496,3 +7496,12 @@ stream, or machine configuration action occurred.
   formatting, and diff checks passing; no live endpoint state was changed.
 - Next M00/M02 task: add control-level event replay coverage using an injected
   transition source, then retain native notification/driver activation gates.
+- Completed control-level endpoint event replay coverage on 2026-09-11: the
+  control helper emits at most one `devices.changed` event per non-empty
+  refresh, suppresses empty transitions, and the event is returned through
+  `events.subscribe` with the normal cursor/category filters. Control (107),
+  strict Clippy, formatting, and diff checks passed; live device state was not
+  modified.
+- Next M00/M02 task: add live-to-control inactive transition observation only
+  through the existing read-only notification path, then proceed to the
+  managed driver callback integration gate.

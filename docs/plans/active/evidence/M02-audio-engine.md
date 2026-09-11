@@ -1424,6 +1424,16 @@ removal, addition, and stable ordering. This supports future control event
 replay tests without mutating the user's live device state. Windows-audio
 coverage passed 57 tests with strict Clippy, formatting, and diff checks.
 
+## 2026-09-11 â€” Control event replay coverage
+
+The control-plane endpoint-change signal now has a dedicated replay regression:
+an injected non-empty transition produces one `devices.changed` state event,
+an empty transition produces none, and `events.subscribe` returns the event
+through its category filter and cursor response. Control coverage passed 107
+tests with strict Clippy, formatting, and diff checks. This is deterministic
+control evidence; it does not claim a live endpoint transition or driver
+activation.
+
 ## 2026-09-11 â€” Opt-in format-optional inactive inventory
 
 `devices.list({includeInactive:true})` now merges the active monitor snapshot

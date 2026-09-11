@@ -5680,18 +5680,16 @@ impl ControlPlane {
                 audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
             );
         }
-        let monitor = self
-            .endpoint_monitor
-            .as_mut()
-            .expect("endpoint monitor initialized above");
-        let endpoint_changes = monitor.poll_changes().map_err(audio_control_error)?;
-        if !endpoint_changes.is_empty() {
-            // EventLog is the bounded notification surface. Endpoint details
-            // are intentionally refetched through devices.list so events do
-            // not duplicate an unbounded or stale device payload.
-            self.events.append(0, None, "devices.changed", None);
-        }
-        let endpoints = monitor.snapshot().to_vec();
+        let (endpoint_changes, endpoints) = {
+            let monitor = self
+                .endpoint_monitor
+                .as_mut()
+                .expect("endpoint monitor initialized above");
+            let endpoint_changes = monitor.poll_changes().map_err(audio_control_error)?;
+            let endpoints = monitor.snapshot().to_vec();
+            (endpoint_changes, endpoints)
+        };
+        self.record_endpoint_changes(!endpoint_changes.is_empty());
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
         let display_info = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
@@ -5810,6 +5808,15 @@ impl ControlPlane {
             .then(|| devices.last().and_then(|device| device["id"].as_str()))
             .flatten();
         Ok(json!({ "items": devices, "nextCursor": next_cursor }))
+    }
+
+    fn record_endpoint_changes(&mut self, changed: bool) {
+        if changed {
+            // EventLog is the bounded notification surface. Endpoint details
+            // are intentionally refetched through devices.list so events do
+            // not duplicate an unbounded or stale device payload.
+            self.events.append(0, None, "devices.changed", None);
+        }
     }
 
     fn dispatch_plugins_scan(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
@@ -9384,6 +9391,26 @@ mod tests {
         assert_eq!(result["backendEpoch"], 1);
         assert_eq!(result["events"].as_array().unwrap().len(), 2);
         assert_eq!(result["events"][1]["operationId"], "event-commit");
+    }
+
+    #[test]
+    fn endpoint_change_signal_replays_through_event_cursor() {
+        let mut plane = ControlPlane::default();
+        plane.record_endpoint_changes(false);
+        plane.record_endpoint_changes(true);
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(44)),
+            method: "events.subscribe".into(),
+            params: Some(json!({
+                "afterSequence": 0,
+                "categories": ["devices.changed"]
+            })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["events"].as_array().unwrap().len(), 1);
+        assert_eq!(result["events"][0]["category"], "devices.changed");
+        assert_eq!(result["events"][0]["resourceRevision"], 0);
     }
 
     #[test]
