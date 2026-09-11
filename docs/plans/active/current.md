@@ -7633,3 +7633,10 @@ stream, or machine configuration action occurred.
   preserved. The Windows-audio suite now passes 62 tests; strict Clippy,
   formatting, and diff checks pass. No endpoint, driver, plugin, or machine
   audio configuration was touched.
+- Hardened the project driver lease boundary on 2026-09-11: each directional
+  lease now records the claiming control file object, and heartbeat/close
+  requests from another handle are rejected even when request identity fields
+  match. Ownership is cleared on replacement, expiry, close, and unload. The
+  non-installing x64 WDK build and guarded M03 acceptance passed with zero
+  signability errors/warnings and catalog generation. No driver was installed
+  or loaded and no audio configuration changed.

@@ -35,6 +35,10 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
     BOOLEAN Active;
     BOOLEAN Retiring;
     BOOLEAN RundownStarted;
+    // The control file object that claimed this directional lease.  It is
+    // compared under Lock so another authorized handle cannot replay the
+    // request identity to refresh or close the lease.
+    PFILE_OBJECT OwnerFileObject;
     ULONGLONG LastHeartbeat100ns;
     AR_BRIDGE_OPEN_REQUEST Request;
     PVOID SectionObject;
@@ -382,6 +386,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->MappedBytes = 0;
                     lease->SectionObject = NULL;
                     lease->Active = FALSE;
+                    lease->OwnerFileObject = NULL;
                     if (oldRundownStarted) {
                         lease->Retiring = TRUE;
                         publishAfterRetire = TRUE;
@@ -391,6 +396,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                             lease->RundownStarted = FALSE;
                         }
                         lease->Request = *request;
+                        lease->OwnerFileObject = stack->FileObject;
                         lease->LastHeartbeat100ns = now;
                         lease->Active = TRUE;
                         lease->SectionObject = sectionObject;
@@ -403,6 +409,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     }
                 }
             } else if (!lease->Active || expired || lease->Retiring ||
+                       lease->OwnerFileObject != stack->FileObject ||
                        RtlCompareMemory(&lease->Request, request,
                                         sizeof(AR_BRIDGE_OPEN_REQUEST)) !=
                            sizeof(AR_BRIDGE_OPEN_REQUEST)) {
@@ -418,6 +425,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->SectionObject = NULL;
                     lease->MappedBytes = 0;
                     lease->Active = FALSE;
+                    lease->OwnerFileObject = NULL;
                     lease->Retiring = oldRundownStarted;
                     if (!oldRundownStarted) {
                         RtlZeroMemory(&lease->Request, sizeof(lease->Request));
@@ -432,6 +440,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 lease->RundownStarted = oldRundownStarted;
                 lease->Retiring = oldRundownStarted;
                 lease->Active = FALSE;
+                lease->OwnerFileObject = NULL;
                 lease->LastHeartbeat100ns = 0;
                 lease->SectionObject = NULL;
                 lease->MappedBytes = 0;
@@ -450,6 +459,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 ExReInitializeRundownProtection(&lease->Rundown);
                 lease->RundownStarted = FALSE;
                 lease->Request = *request;
+                lease->OwnerFileObject = stack->FileObject;
                 lease->LastHeartbeat100ns = now;
                 lease->SectionObject = sectionObject;
                 lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
@@ -531,6 +541,7 @@ void DeleteBridgeControlDevice()
         g_BridgeLeases[index].MappedView = NULL;
         g_BridgeLeases[index].MappedBytes = 0;
         g_BridgeLeases[index].Active = FALSE;
+        g_BridgeLeases[index].OwnerFileObject = NULL;
         RtlZeroMemory(&g_BridgeLeases[index].Request,
                       sizeof(g_BridgeLeases[index].Request));
         g_BridgeLeases[index].LastHeartbeat100ns = 0;
