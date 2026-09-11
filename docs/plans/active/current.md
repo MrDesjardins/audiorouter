@@ -22,6 +22,16 @@ stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
 
+- Closed the endpoint-recovery staging gap at pushed head `76e5224c` on
+  2026-09-10. `WasapiSchedulerBridge::reset_stream` now discards partial
+  capture packets, pending render carry, queued scheduler blocks, and the
+  adapter timeline after stopped-client invalidation/rebind while preserving
+  the prepared graph. The underlying scheduler exposes a control-side
+  `reset_io` operation, and regressions verify partial packet discard and
+  queued-output recycling without graph deactivation. Focused engine (94)
+  and Windows-audio (40) tests, strict Clippy, formatting, and diff checks
+  passed. No endpoint or persistent machine configuration was changed.
+
 - Hardened unattended VST3-worker fault handling on 2026-09-10. The
   disposable worker now disables both legacy fault dialogs (`SetErrorMode`)
   and Windows Error Reporting UI (`WerSetFlags(WER_FAULT_REPORTING_NO_UI)`)
