@@ -7787,3 +7787,10 @@ live-driver evidence.
   Control tests (108), strict package Clippy, formatting, and diff checks
   passed. JSON-RPC segment configuration, durable library rows, realtime graph
   attachment, and native endpoint ownership remain open.
+- Revalidated the locked workspace after the control worker integration at
+  pushed head `3e2a94cd` on 2026-09-11. Workspace tests passed, including
+  recording (36), control (108), storage (80), Windows-audio (62 with 11
+  expected native-fixture skips), plugin-host (67), and worker-process
+  coverage. Workspace strict Clippy, formatting, and diff checks passed. No
+  endpoint, driver, plugin registration, or persistent machine audio
+  configuration changed.
