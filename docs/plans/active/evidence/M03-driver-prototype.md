@@ -337,3 +337,14 @@ authorized full safe acceptance chain passed. This rechecked the project
 driver build alongside the existing M00-M08 portable, plugin, shell, release,
 traceability, and documentation gates; no driver was installed or loaded and
 no persistent audio configuration changed.
+
+On 2026-09-11, the bridge lease owner was bound to the control file object
+that claimed it. Heartbeat and close requests from another authorized handle
+now return `STATUS_ACCESS_DENIED` rather than being treated as an inactive
+lease. `IRP_MJ_CLEANUP` and `IRP_MJ_CLOSE` release only leases owned by the
+tearing-down handle, wait for callback rundown, and retire mapped sections
+before unmapping. Non-zero reserved request fields are rejected before lease
+or mapping work. The guarded x64 WDK build/source acceptance passed with zero
+signability errors/warnings and catalog generation. This remains compile and
+source-contract evidence; no driver was installed or loaded, and live PnP,
+PortCls ownership, endpoint transport, and production signing remain open.
