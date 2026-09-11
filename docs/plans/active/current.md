@@ -7714,3 +7714,17 @@ stream, or machine configuration action occurred.
   disabled/unplugged/not-present states. UI tests (122), typecheck, and the
   disposable alternate-output production build passed; no audio configuration
   changed.
+- Hardened M04 recorder finalization on 2026-09-11: WAV, buffered FLAC, and
+  streaming FLAC workers now cap the number of bounded queue-drain passes.
+  A producer that continually refills a recorder queue can no longer make a
+  stop operation loop forever; the worker retains ownership and returns a
+  recoverable bounded-finalization error. Control tests (107), strict
+  Clippy, formatting, and diff checks passed. No recording, endpoint, driver,
+  or machine audio configuration was used.
+
+Next actionable portable task: continue closing bounded recorder/engine
+integration gaps where they can be tested without native activation. The
+production endpoint-owned callback, signed/installable driver, installer,
+clean-machine, physical-latency, manual UI, and independent plugin rights
+gates remain explicitly open; do not represent this portable progress as
+live-driver evidence.
