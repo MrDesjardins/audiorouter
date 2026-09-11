@@ -932,3 +932,8 @@ sinks to receive the same processed quantum. Fan-out is performed over
 borrowed observers after processing and retains the allocation-free,
 nonblocking callback contract. Engine tests (97), strict Clippy, and
 formatting pass. Native endpoint-owned graph attachment remains open.
+
+The control recorder capacity now consumes the engine's shared tap bound, and
+a scheduler regression verifies all eight sinks receive one processed
+quantum. This is portable attachment plumbing only; it does not claim native
+endpoint ownership or live-driver qualification.

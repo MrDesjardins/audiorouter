@@ -48,7 +48,7 @@ const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
 /// Maximum simultaneously armed/active recorder controllers across sessions.
-const MAX_ACTIVE_RECORDERS: usize = 8;
+const MAX_ACTIVE_RECORDERS: usize = audiorouter_engine::MAX_AUDIO_TAPS;
 /// Maximum number of bounded queue-drain passes a recorder finalization may
 /// perform. A producer that keeps refilling a queue must not make a stop
 /// operation loop forever; the caller receives a recoverable finalization

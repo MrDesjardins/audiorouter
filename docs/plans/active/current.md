@@ -7896,3 +7896,8 @@ live-driver evidence.
   Engine tests (97), strict Clippy, and formatting passed. Control/native
   attachment of recorder taps to a production endpoint-owned graph remains
   open and is not claimed by this portable seam.
+- Synchronized the REC-01 control recorder capacity with the engine tap bound
+  on 2026-09-11 and added scheduler-level fan-out coverage. The control limit
+  now consumes the shared eight-observer constant rather than repeating a
+  literal; engine tests (98), strict Clippy, formatting, and the locked
+  workspace remain green. Native graph attachment is still open.

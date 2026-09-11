@@ -4578,6 +4578,37 @@ mod tests {
     }
 
     #[test]
+    fn realtime_scheduler_fans_out_processed_quantum_to_all_taps() {
+        let scheduler = RealtimeScheduler::new(2, 1, 2).unwrap();
+        scheduler.publish(RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]));
+        let mut input = scheduler.acquire_input().unwrap();
+        input.channel_mut(0).unwrap().fill(0.25);
+        scheduler.submit_input(input).unwrap();
+        let taps = (0..MAX_AUDIO_TAPS)
+            .map(|_| CountingTap {
+                calls: AtomicU64::new(0),
+                last_frame: AtomicU64::new(0),
+            })
+            .collect::<Vec<_>>();
+        let references = taps
+            .iter()
+            .map(|tap| tap as &dyn AudioTap)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            scheduler.process_once_with_taps(96, &references).unwrap(),
+            Some(RuntimeGeneration::new(1))
+        );
+        assert!(taps
+            .iter()
+            .all(|tap| tap.calls.load(Ordering::Relaxed) == 1));
+        assert!(taps
+            .iter()
+            .all(|tap| tap.last_frame.load(Ordering::Relaxed) == 96));
+        let output = scheduler.receive_output().unwrap();
+        scheduler.output().try_recycle(output).unwrap();
+    }
+
+    #[test]
     fn realtime_scheduler_combines_tap_and_deadline_accounting() {
         let scheduler = RealtimeScheduler::new(1, 1, 2).unwrap();
         let generation = RuntimeGeneration::new(2);
