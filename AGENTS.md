@@ -54,6 +54,8 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- 2026-09-11 - Bridge lease identity must follow the control handle. Evidence: [M03 driver evidence](docs/plans/active/evidence/M03-driver-prototype.md). Scope: project-driver bridge ownership and teardown. Consequence: bind heartbeat/close to the claiming file object, return authorization failures distinctly, and release only that owner during IRP_MJ_CLEANUP/IRP_MJ_CLOSE before mapped-view retirement.
+
 - 2026-09-09 - Official VST3 validator success is not AudioRouter activation evidence. Evidence: [plugin compatibility snapshot](docs/operations/plugin-compatibility.md). Scope: x64 VST3 fixture qualification. Consequence: run the AudioRouter offline loader/worker path after vendor validation and record `E_NOTIMPL` or other activation failures as unsupported instead of claiming multi-vendor compatibility.
 
 - 2026-09-09 - `E_INVALIDARG` is not evidence of an audio-device ownership conflict. Evidence: [M00 WASAPI probe](docs/plans/active/evidence/M00-wasapi-probe.md). Scope: shared WASAPI capture initialization and retry policy. Consequence: retain the exact `E_INVALIDARG` event-to-polling fallback, but preserve `AUDCLNT_E_DEVICE_IN_USE`, access-denied, and other HRESULTs as distinct diagnostics rather than masking them as mode incompatibility.
