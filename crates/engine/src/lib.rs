@@ -1234,6 +1234,16 @@ impl AudioBlock {
         })
     }
 
+    /// Borrow both planar stereo channels without aliasing. This is used by
+    /// linked dynamics processors so one detector can drive both channels.
+    pub fn channels_mut_pair(&mut self) -> Option<(&mut [f32], &mut [f32])> {
+        if self.channels != 2 {
+            return None;
+        }
+        let (left, right) = self.samples.split_at_mut(self.frames);
+        Some((left, right))
+    }
+
     /// Clear the existing storage without allocating.
     pub fn clear(&mut self) {
         self.samples.fill(0.0);
@@ -3264,16 +3274,10 @@ pub fn compile_session_at_sample_rate(
                     makeup_db,
                     sample_rate: sample_rate_hz as f32,
                 };
-                let left = audiorouter_dsp::Compressor::new(params, 1)
+                let detector_channels = if input_channels == 2 { 2 } else { 1 };
+                let left = audiorouter_dsp::Compressor::new(params, detector_channels)
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
-                let right = if input_channels == 2 {
-                    Some(
-                        audiorouter_dsp::Compressor::new(params, 1)
-                            .map_err(|_| GraphCompileError::UnsupportedTopology)?,
-                    )
-                } else {
-                    None
-                };
+                let right = None;
                 stages.push(ProcessingStage::Compressor {
                     left: Box::new(std::sync::Mutex::new(left)),
                     right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
@@ -3331,16 +3335,10 @@ pub fn compile_session_at_sample_rate(
                     release_ms,
                     sample_rate: sample_rate_hz as f32,
                 };
-                let left = audiorouter_dsp::Gate::new(params, 1)
+                let detector_channels = if input_channels == 2 { 2 } else { 1 };
+                let left = audiorouter_dsp::Gate::new(params, detector_channels)
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
-                let right = if input_channels == 2 {
-                    Some(
-                        audiorouter_dsp::Gate::new(params, 1)
-                            .map_err(|_| GraphCompileError::UnsupportedTopology)?,
-                    )
-                } else {
-                    None
-                };
+                let right = None;
                 stages.push(ProcessingStage::Gate {
                     left: Box::new(std::sync::Mutex::new(left)),
                     right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
@@ -4548,6 +4546,11 @@ impl RuntimeGraph {
                         block.clear();
                         continue;
                     };
+                    if block.channels() == 2 && right.is_none() && left.channels() == 2 {
+                        let (left_samples, right_samples) = block.channels_mut_pair().unwrap();
+                        left.process_planar_linked(left_samples, right_samples);
+                        continue;
+                    }
                     if let Some(samples) = block.channel_mut(0) {
                         left.process_interleaved(samples);
                     }
@@ -4570,6 +4573,11 @@ impl RuntimeGraph {
                         block.clear();
                         continue;
                     };
+                    if block.channels() == 2 && right.is_none() && left.channels() == 2 {
+                        let (left_samples, right_samples) = block.channels_mut_pair().unwrap();
+                        left.process_planar_linked(left_samples, right_samples);
+                        continue;
+                    }
                     if let Some(samples) = block.channel_mut(0) {
                         left.process_interleaved(samples);
                     }

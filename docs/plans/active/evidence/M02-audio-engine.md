@@ -1477,3 +1477,17 @@ before/after media snapshot was unchanged. This qualifies control-owned graph
 publication, prebuilt tap delivery, bounded pumping, and file finalization on
 existing endpoints, not driver installation, production signing, or physical
 latency.
+# 2026-09-11 - Stereo-linked built-in dynamics
+
+The portable graph compiler now constructs stereo compressor and gate stages
+with one two-channel detector instead of two independent mono detectors. The
+DSP layer exposes allocation-free planar linked processing, applying one
+envelope/gain decision to both channels so a single-channel peak cannot move
+the stereo image. Mono processing and malformed manually assembled stages
+retain their existing behavior, including fail-closed silence when a required
+stereo state is absent.
+
+Validation: `cargo test -p audiorouter-dsp -p audiorouter-engine --locked`
+passed 32 DSP tests and 102 engine tests. This is portable built-in processing
+evidence for DSP-03; native driver callback timing and endpoint activation
+remain separate gates.

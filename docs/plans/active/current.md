@@ -8343,3 +8343,12 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Corrected DSP-03 stereo linking on 2026-09-11. Stereo compressor and gate
+  nodes now use one two-channel detector and allocation-free planar processing,
+  with regressions proving common gain across asymmetric stereo inputs while
+  preserving malformed-stage fail-closed behavior. DSP (32) and engine (102)
+  tests pass; this does not claim native driver callback evidence.
+- Next M02/M03 task: qualify native render-source/capture-sink bridge
+  publication through the AudioRouter driver prototype using the same explicit
+  lease/generation checks; installation, signing, and production PortCls
+  ownership remain separate gates.

@@ -779,6 +779,10 @@ impl Gate {
         self.params
     }
 
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
     pub fn is_open(&self) -> bool {
         self.open
     }
@@ -834,6 +838,59 @@ impl Gate {
                 let output = input * gain;
                 *sample = if output.is_finite() { output } else { 0.0 };
             }
+        }
+    }
+
+    /// Process planar stereo with one shared detector and gain envelope.
+    /// Keeping the detector state in one instance prevents image movement
+    /// when only one channel crosses the threshold.
+    pub fn process_planar_linked(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if self.channels != 2 || left.len() != right.len() {
+            return;
+        }
+        let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
+        let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
+        let hold = (self.params.hold_ms * 0.001 * self.params.sample_rate) as usize;
+        for (left_sample, right_sample) in left.iter_mut().zip(right.iter_mut()) {
+            let left_input = if left_sample.is_finite() {
+                *left_sample
+            } else {
+                0.0
+            };
+            let right_input = if right_sample.is_finite() {
+                *right_sample
+            } else {
+                0.0
+            };
+            let peak = left_input.abs().max(right_input.abs());
+            let level_db = 20.0 * peak.max(1.0e-6).log10();
+            if self.open {
+                if level_db < self.params.threshold_db - self.params.hysteresis_db {
+                    if self.hold_frames == 0 {
+                        self.hold_frames = hold;
+                    }
+                    if self.hold_frames > 0 {
+                        self.hold_frames -= 1;
+                    } else {
+                        self.open = false;
+                    }
+                } else {
+                    self.hold_frames = 0;
+                }
+            } else if level_db >= self.params.threshold_db {
+                self.open = true;
+                self.hold_frames = 0;
+            }
+            let target_db = gate_target_gain_db(level_db, self.params, self.open);
+            let coefficient = if target_db > self.gain_db {
+                attack
+            } else {
+                release
+            };
+            self.gain_db = coefficient * self.gain_db + (1.0 - coefficient) * target_db;
+            let gain = 10.0_f32.powf(self.gain_db / 20.0);
+            *left_sample = finite_or_zero(left_input * gain);
+            *right_sample = finite_or_zero(right_input * gain);
         }
     }
 }
@@ -1542,6 +1599,10 @@ impl Compressor {
         self.params
     }
 
+    pub fn channels(&self) -> usize {
+        self.channels
+    }
+
     pub fn reset(&mut self) {
         self.envelope_db = -120.0;
         self.gain_reduction_db = 0.0;
@@ -1580,6 +1641,46 @@ impl Compressor {
                 let output = input * gain;
                 *sample = if output.is_finite() { output } else { 0.0 };
             }
+        }
+    }
+
+    /// Process planar stereo with one shared detector and gain envelope.
+    /// The same gain is applied to both channels for stable stereo imaging.
+    pub fn process_planar_linked(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if self.channels != 2 || left.len() != right.len() {
+            return;
+        }
+        let attack = (-1.0 / (self.params.attack_ms * 0.001 * self.params.sample_rate)).exp();
+        let release = (-1.0 / (self.params.release_ms * 0.001 * self.params.sample_rate)).exp();
+        for (left_sample, right_sample) in left.iter_mut().zip(right.iter_mut()) {
+            let left_input = if left_sample.is_finite() {
+                *left_sample
+            } else {
+                0.0
+            };
+            let right_input = if right_sample.is_finite() {
+                *right_sample
+            } else {
+                0.0
+            };
+            let peak = left_input.abs().max(right_input.abs());
+            let level_db = 20.0 * peak.max(1.0e-6).log10();
+            let coefficient = if level_db > self.envelope_db {
+                attack
+            } else {
+                release
+            };
+            self.envelope_db = coefficient * self.envelope_db + (1.0 - coefficient) * level_db;
+            let reduction_db = compression_reduction(
+                self.envelope_db,
+                self.params.threshold_db,
+                self.params.ratio,
+                self.params.knee_db,
+            );
+            self.gain_reduction_db = reduction_db;
+            let gain = 10.0_f32.powf((self.params.makeup_db - reduction_db) / 20.0);
+            *left_sample = finite_or_zero(left_input * gain);
+            *right_sample = finite_or_zero(right_input * gain);
         }
     }
 }
@@ -2041,6 +2142,29 @@ mod tests {
     }
 
     #[test]
+    fn planar_compressor_links_detector_across_channels() {
+        let mut compressor = Compressor::new(
+            CompressorParams {
+                threshold_db: -18.0,
+                ratio: 4.0,
+                attack_ms: 0.1,
+                release_ms: 100.0,
+                knee_db: 0.0,
+                makeup_db: 0.0,
+                sample_rate: 48_000.0,
+            },
+            2,
+        )
+        .unwrap();
+        let mut left = [1.0; 128];
+        let mut right = [0.25; 128];
+        compressor.process_planar_linked(&mut left, &mut right);
+        assert!(left[127] < 1.0);
+        assert!((left[127] / right[127] - 4.0).abs() < 1.0e-4);
+        assert!(compressor.gain_reduction_db() > 0.0);
+    }
+
+    #[test]
     fn compressor_rejects_out_of_contract_values_and_repairs_nonfinite() {
         let params = CompressorParams {
             threshold_db: -18.0,
@@ -2093,6 +2217,29 @@ mod tests {
         gate.process_interleaved(&mut loud);
         assert!(gate.is_open());
         assert!((loud[126] / 1.0 - loud[127] / 0.25).abs() < 1e-5);
+    }
+
+    #[test]
+    fn planar_gate_links_detector_and_gain_across_channels() {
+        let mut gate = Gate::new(
+            GateParams {
+                threshold_db: -30.0,
+                hysteresis_db: 3.0,
+                ratio: 4.0,
+                range_db: 60.0,
+                attack_ms: 0.1,
+                hold_ms: 0.0,
+                release_ms: 10.0,
+                sample_rate: 48_000.0,
+            },
+            2,
+        )
+        .unwrap();
+        let mut left = [1.0; 128];
+        let mut right = [0.25; 128];
+        gate.process_planar_linked(&mut left, &mut right);
+        assert!(gate.is_open());
+        assert!((left[127] / right[127] - 4.0).abs() < 1.0e-4);
     }
 
     #[test]
