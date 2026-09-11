@@ -7948,3 +7948,14 @@ live-driver evidence.
   snake_case names, and the `stop_frame` boundary. Control tests (112), strict
   Clippy, formatting, and documentation validation passed; no audio endpoint,
   driver, or machine configuration was accessed.
+- Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
+  chain at the current head on 2026-09-11. VS/WDK discovery and the
+  non-installing AudioRouter driver build, read-only 31-endpoint inventory,
+  disposable SysVAD qualification, M01, M04, M05 (124 UI tests), M06 VST3 and
+  VST2 workers, M07, unsigned M08 artifacts, 159 traceability IDs, and docs
+  validation (52 Markdown files/167 local links) all passed. Cleanup removed
+  13 run-owned temporary children. No driver installation/loading, signing or
+  boot-policy change, plugin/startup registration, live stream, or persistent
+  machine audio configuration change occurred. Production driver activation,
+  signing, installer, clean-machine, physical-latency, manual UI, and
+  independent-plugin rights gates remain open.

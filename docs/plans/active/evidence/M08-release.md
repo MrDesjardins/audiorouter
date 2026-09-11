@@ -1037,3 +1037,16 @@ failure contract was added. The run left 36 direct `audiorouter-*` temporary
 test databases; they were removed after temp-root validation and a follow-up
 scan found zero matches. No driver, plugin/startup registration, audio stream,
 signing-mode, or persistent machine configuration action occurred.
+## Full guarded chain requalification (2026-09-11)
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the current
+head. It covered VS/WDK discovery and the non-installing AudioRouter driver
+build, read-only 31-endpoint inventory, disposable SysVAD qualification, M01,
+M04 (30 DSP/39 recording tests), M05 (17 UI files/124 tests), M06 VST3 and
+VST2 workers, M07, unsigned M08 artifacts, 159 traceability IDs, and
+documentation validation (52 Markdown files/167 local links). Cleanup removed
+13 run-owned temporary children. The chain did not install/load a driver,
+change signing or boot policy, register plugins/startup actions, open a live
+audio stream, or change persistent machine audio configuration. Production
+driver activation, signing, installer, clean-machine, physical-latency,
+manual UI, and independent-plugin rights gates remain open.
