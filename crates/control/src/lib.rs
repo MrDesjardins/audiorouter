@@ -1991,7 +1991,7 @@ fn diagnostics_output_schema() -> Value {
                 "required": ["state", "reason"],
                 "additionalProperties": false
             },
-            "nativeAdapter": { "const": "not activated" },
+            "nativeAdapter": { "const": "implemented-not-activated" },
             "privacyMute": {
                 "type": "object",
                 "properties": {
@@ -3984,7 +3984,7 @@ impl ControlPlane {
                             "state": "unavailable",
                             "reason": "native realtime scheduler and endpoint routing are not implemented"
                         },
-                        "nativeAdapter": "not activated",
+                        "nativeAdapter": "implemented-not-activated",
                         "privacyMute": {
                             "muted": self.privacy_muted,
                             "persistence": if self.storage.is_some() { "durable" } else { "memory" }

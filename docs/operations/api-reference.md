@@ -181,8 +181,9 @@ deadline-lateness distributions, including conservative p99.9 bucket upper
 bounds, for its processed engine quanta; these are probe evidence, not
 control-plane or production-driver callback telemetry.
 When no native adapter session is owned by the control plane,
-`system.diagnostics.nativeAdapter` remains `not activated`; it must not be
-interpreted as a zeroed live stream.
+`system.diagnostics.nativeAdapter` is `implemented-not-activated` while the
+endpoint worker exists but is not yet owned by a control-plane session; it must
+not be interpreted as a zeroed live stream.
 
 The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
 the enrolled client identity and cannot bypass the backend permission checks.

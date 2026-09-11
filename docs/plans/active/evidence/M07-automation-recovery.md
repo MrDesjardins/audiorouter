@@ -1189,3 +1189,12 @@ Storage-backed control startup now walks the full bounded session inventory in
 stable 500-row pages, restoring sessions beyond the former 128-row bootstrap
 limit without unbounded reads. A regression restores 129 valid sessions and
 confirms the complete inventory; control passes 87 tests with strict Clippy.
+## Native adapter implementation status (2026-09-11)
+
+Control diagnostics now reports `nativeAdapter` as
+`implemented-not-activated`: the bounded Windows endpoint worker, lifecycle,
+rebind, and packet-drain seams are implemented, but no control-plane session
+owns endpoint bindings yet. Audio routing therefore remains unavailable and
+session commands retain their portable fake-runtime behavior. The control
+suite passed 106 tests and strict Clippy passed. No endpoint was opened and no
+machine audio configuration changed.

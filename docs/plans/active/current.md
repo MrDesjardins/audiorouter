@@ -85,6 +85,13 @@ Closed a consistency gap in `pump_available`: every worker pump entry point,
 including a zero-budget call, now rejects a stopped worker before doing any
 work. The focused 54-test suite and strict checks passed.
 
+Control diagnostics now distinguishes the implemented native endpoint-worker
+boundary from activation: `nativeAdapter` reports
+`implemented-not-activated`, while audio routing remains unavailable until
+session endpoint bindings and the managed driver are connected. The status is
+read-only and does not alter existing session behavior.
+The control-plane suite passed 106 tests and strict control Clippy passed.
+
 ## Priority shift: owned virtual-driver prototype
 
 The user has explicitly redirected execution from extended VST3 qualification to
