@@ -3342,6 +3342,7 @@ pub struct ControlPlane {
     runtimes: HashMap<EntityId, FakeRuntime>,
     recorders: HashMap<EntityId, RecorderController>,
     recorder_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
+    recording_policy: Option<RecordingPathPolicy>,
     storage: Option<Storage>,
     enrollments: HashMap<String, (ClientRole, bool)>,
     events: EventLog,
@@ -3381,6 +3382,7 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
+            recording_policy: None,
             storage: None,
             enrollments: HashMap::new(),
             events: EventLog::new(1),
@@ -3419,6 +3421,15 @@ impl ControlPlane {
         // Fail closed if the durable latch cannot be read: a persistence
         // failure must never silently unmute a capture path.
         let privacy_muted = storage.load_privacy_mute()?;
+        let recording_policy = storage
+            .load_recording_root()?
+            .map(RecordingPathPolicy::new)
+            .transpose()
+            .map_err(|error| {
+                audiorouter_storage::StorageError::InvalidRecording(format!(
+                    "invalid recording root: {error:?}"
+                ))
+            })?;
         let virtual_buses = storage.load_virtual_buses()?;
         let mut persisted_sessions = Vec::new();
         let mut session_cursor = None;
@@ -3498,6 +3509,7 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
+            recording_policy,
             storage: Some(storage),
             enrollments: HashMap::new(),
             events: EventLog::new(backend_epoch),
@@ -3533,6 +3545,25 @@ impl ControlPlane {
         Self::try_with_storage(build, storage).unwrap_or_else(|error| {
             panic!("AudioRouter storage initialization failed closed: {error:?}")
         })
+    }
+
+    /// Configure the backend-owned recording root. The policy is validated
+    /// before replacing the current in-memory policy and is persisted before
+    /// the new policy becomes active.
+    pub fn configure_recording_root(
+        &mut self,
+        root: impl AsRef<std::path::Path>,
+    ) -> Result<(), ControlError> {
+        let policy = RecordingPathPolicy::new(root.as_ref()).map_err(|error| {
+            ControlError::InvalidRequest(format!("invalid recording root: {error:?}"))
+        })?;
+        if let Some(storage) = &self.storage {
+            storage
+                .save_recording_root(root.as_ref())
+                .map_err(storage_error)?;
+        }
+        self.recording_policy = Some(policy);
+        Ok(())
     }
 
     fn scoped_idempotency_key(&self, method: &str, key: &str) -> String {
@@ -4131,6 +4162,29 @@ impl ControlPlane {
         }
         let (path, worker) = create_file_recorder_with_config(policy, config)
             .map_err(ControlError::InvalidRequest)?;
+        self.attach_recorder_worker(session_id, worker)?;
+        Ok(path)
+    }
+
+    /// Create and attach using the backend-owned, persisted recording root.
+    /// No caller-supplied destination policy is accepted at this boundary.
+    pub fn create_and_attach_configured_file_recorder(
+        &mut self,
+        session_id: EntityId,
+        config: &FileRecorderConfig<'_>,
+    ) -> Result<std::path::PathBuf, ControlError> {
+        if config.session_id != session_id.as_str() {
+            return Err(ControlError::InvalidRequest(
+                "file recorder session identity does not match attachment".into(),
+            ));
+        }
+        let (path, worker) = {
+            let policy = self.recording_policy.as_ref().ok_or_else(|| {
+                ControlError::InvalidRequest("recording root is not configured".into())
+            })?;
+            create_file_recorder_with_config(policy, config)
+                .map_err(ControlError::InvalidRequest)?
+        };
         self.attach_recorder_worker(session_id, worker)?;
         Ok(path)
     }
@@ -11538,6 +11592,7 @@ mod tests {
         let mut plane = ControlPlane::with_storage("factory", Storage::open_memory().unwrap());
         let original = session();
         plane.insert_session(original.clone()).unwrap();
+        plane.configure_recording_root(&root).unwrap();
         let invalid = FileRecorderConfig {
             version: FILE_RECORDER_CONFIG_VERSION + 1,
             session_id: original.id.as_str(),
@@ -11565,7 +11620,7 @@ mod tests {
             maximum_chunks_per_pass: 1,
         };
         let path = plane
-            .create_and_attach_file_recorder_with_config(&policy, original.id.clone(), &config)
+            .create_and_attach_configured_file_recorder(original.id.clone(), &config)
             .unwrap();
         assert!(path.is_file());
 

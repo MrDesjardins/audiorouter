@@ -2549,6 +2549,49 @@ impl Storage {
         Ok(())
     }
 
+    /// Persist the user-approved local recording root after validating its
+    /// current filesystem identity. The path is configuration only; this does
+    /// not create files or alter any audio state.
+    pub fn save_recording_root(
+        &self,
+        root: impl AsRef<std::path::Path>,
+    ) -> Result<(), StorageError> {
+        audiorouter_recording::RecordingPathPolicy::new(root.as_ref()).map_err(|error| {
+            StorageError::InvalidRecording(format!("invalid recording root: {error:?}"))
+        })?;
+        let value = root.as_ref().to_str().ok_or_else(|| {
+            StorageError::InvalidRecording("recording root is not valid Unicode".into())
+        })?;
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('recordingRoot', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![value],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_recording_root(&self) -> Result<Option<std::path::PathBuf>, StorageError> {
+        let value = self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'recordingRoot'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        value
+            .map(|value| {
+                let path = std::path::PathBuf::from(value);
+                audiorouter_recording::RecordingPathPolicy::new(&path).map_err(|error| {
+                    StorageError::InvalidRecording(format!(
+                        "persisted recording root is invalid: {error:?}"
+                    ))
+                })?;
+                Ok(path)
+            })
+            .transpose()
+    }
+
     pub fn load_privacy_mute(&self) -> Result<bool, StorageError> {
         Ok(self
             .connection
@@ -5225,5 +5268,23 @@ mod tests {
                 rusqlite::Error::FromSqlConversionFailure(..)
             ))
         ));
+    }
+
+    #[test]
+    fn recording_root_round_trips_and_rejects_missing_root() {
+        let suffix = format!(
+            "audiorouter-storage-recording-root-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(suffix);
+        std::fs::create_dir_all(&root).unwrap();
+        let storage = Storage::open_memory().unwrap();
+        storage.save_recording_root(&root).unwrap();
+        assert_eq!(storage.load_recording_root().unwrap(), Some(root.clone()));
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(storage.load_recording_root().is_err());
     }
 }

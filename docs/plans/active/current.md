@@ -8004,6 +8004,17 @@ live-driver evidence.
   a permissioned, idempotent API operation. Raw paths remain rejected outside
   the approved root; no API request may arm or start the new recorder
   implicitly.
+- Implemented durable approved-root storage on 2026-09-11. `Storage` now
+  validates and persists an existing non-reparse local recording directory;
+  durable control startup hydrates it fail-closed, and
+  `configure_recording_root` persists before replacing the active policy. A
+  storage round-trip/removal regression and factory integration cover the
+  boundary; storage/control tests, workspace Clippy, formatting, and diff
+  checks passed. Permissioned JSON-RPC creation and native graph attachment
+  remain open.
+- Next M04/REC-10/API-01 task: add the permissioned, idempotent recorder-create
+  API using the hydrated root and versioned configuration, with no implicit
+  arm/start and no raw destination-path override.
 - Next M04/REC-10/API-01 task: expose the bounded factory configuration as a
   discovered API operation with explicit format, channels, rate, dither,
   sequence, queue, and destination-policy fields. Validate all fields before

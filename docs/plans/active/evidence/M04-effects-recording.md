@@ -30,6 +30,12 @@ The factory configuration is now represented by versioned
 channel/rate combinations, FLAC bit depths, and queue limits before path
 creation. The factory regression confirms an invalid version creates no file.
 
+The approved recording root is now persisted in `control_settings` and
+hydrated during durable control startup. Save/load validates the existing
+non-reparse local directory, and a regression proves round-trip plus failure
+when the root disappears. `ControlPlane::configure_recording_root` replaces
+the active policy only after durable save succeeds.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30
