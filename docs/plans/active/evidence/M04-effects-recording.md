@@ -850,6 +850,17 @@ checks pass. This closes the portable path-allocation slice, while durable
 session/API integration, UI size/time controls, realtime graph attachment,
 and native endpoint ownership remain open.
 
+## API stop finalization (2026-09-11)
+
+`recorders.stop` now finalizes an attached worker before completing the
+authoritative recorder state. A failed or incomplete finalization prevents
+the state transition; a successful worker is removed after its file is
+durably synced. The regression drives arm/start/stop through JSON-RPC,
+verifies a two-frame WAV on disk, and confirms the worker is consumed. Control
+tests (110), strict Clippy, formatting, and diff checks pass. Multi-recorder
+durable library rows, automatic thresholds, graph attachment, and native
+endpoint ownership remain open.
+
 ## Recorder lifecycle forwarding (2026-09-11)
 
 The control `RecorderWorker` boundary now exposes lifecycle hooks for arm,

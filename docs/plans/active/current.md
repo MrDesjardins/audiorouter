@@ -7831,3 +7831,11 @@ live-driver evidence.
   Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
   driver, plugin registration, or persistent machine audio configuration
   changed.
+- Corrected M04 API stop finalization on 2026-09-11. `recorders.stop` now
+  requires an attached worker to drain and finalize successfully before the
+  authoritative recorder becomes completed; failed finalization leaves the
+  control transition unapplied. A JSON-RPC regression verified a two-frame WAV
+  and consumed worker removal. Control tests (110), strict package Clippy,
+  formatting, and diff checks passed. Multi-recorder durable library rows,
+  automatic thresholds, graph attachment, and native endpoint ownership remain
+  open.

@@ -5163,6 +5163,7 @@ impl ControlPlane {
             })?;
             self.recorders.insert(session_id.clone(), recorder);
         }
+        let mut worker_finalized = false;
         if let Some(worker) = self.recorder_workers.get_mut(&session_id) {
             let worker_result = match method {
                 "recorders.arm" => worker.arm(),
@@ -5182,7 +5183,25 @@ impl ControlPlane {
                     frame
                         .ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
                 ),
-                "recorders.stop" => Ok(()),
+                "recorders.stop" => {
+                    let frame = frame
+                        .ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?;
+                    let outcome = worker.finalize(frame).map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "recorder finalization failed: {error}"
+                        ))
+                    })?;
+                    if outcome.state != "completed"
+                        || !outcome.file_finalized
+                        || outcome.recoverable
+                    {
+                        return Err(ControlError::InvalidRequest(
+                            "recorder finalization did not produce a completed file".into(),
+                        ));
+                    }
+                    worker_finalized = true;
+                    Ok(())
+                }
                 _ => Err("method not found".into()),
             };
             worker_result.map_err(|error| {
@@ -5240,6 +5259,9 @@ impl ControlPlane {
             .unwrap_or_default();
         self.events
             .append(revision, None, "recorder.changed", Some(session_id.clone()));
+        if worker_finalized {
+            self.recorder_workers.remove(&session_id);
+        }
         Ok(result)
     }
 
@@ -10637,6 +10659,70 @@ mod tests {
             plane.recorders[&original.id].checkpoint().last_frame,
             Some(128)
         );
+    }
+
+    #[test]
+    fn recorder_api_stop_finalizes_attached_wav_before_completion() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-api-stop-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        let worker = WavRecorderWorker::new(file, WavFormat::Pcm16, 1, 48_000, 1, 1).unwrap();
+        worker
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.25, -0.25],
+            })
+            .unwrap();
+
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane
+            .attach_recorder_worker(original.id.clone(), Box::new(worker))
+            .unwrap();
+        for (id, method, frame) in [
+            (1, "recorders.arm", None),
+            (2, "recorders.start", Some(0)),
+            (3, "recorders.stop", Some(2)),
+        ] {
+            let params = match frame {
+                Some(frame) => json!({
+                    "sessionId": original.id,
+                    "frame": frame,
+                    "idempotencyKey": format!("api-stop-{id}")
+                }),
+                None => json!({
+                    "sessionId": original.id,
+                    "idempotencyKey": format!("api-stop-{id}")
+                }),
+            };
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(id)),
+                method: method.into(),
+                params: Some(params),
+            });
+            assert!(response.result.is_some(), "{method}: {response:?}");
+        }
+        assert!(plane.recorder_workers.is_empty());
+        assert_eq!(
+            audiorouter_recording::inspect_wav_file(&path)
+                .unwrap()
+                .frames,
+            2
+        );
+        assert_eq!(
+            plane.recorders[&original.id].state(),
+            RecorderState::Completed
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
