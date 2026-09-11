@@ -7972,6 +7972,16 @@ live-driver evidence.
   package metadata only; dynamic bus provisioning, loaded-driver PortCls
   ownership, production signing, installation, and live endpoint evidence
   remain open.
+- Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
+  chain at pushed head `f578b073` after the endpoint identity update. M00/M03,
+  M04 (30 DSP and 40 recording tests), M05 (124 UI tests), M06, M07, M08,
+  159 traceability IDs, documentation validation (52 Markdown files/167 local
+  links), and cleanup of 13 run-owned temporary children passed. No driver
+  installation/loading, signing or boot-policy change, plugin/startup
+  registration, live stream, or persistent machine audio configuration change
+  occurred. Production driver activation/signing, installer, clean-machine,
+  physical-latency, manual UI, and independent-plugin rights gates remain
+  open.
 - Implemented the portable REC-06 default segment policy on 2026-09-11. The
   recording layer now calculates the earlier of a 2 GiB RIFF-safe payload
   budget and 24 hours at the negotiated sample rate, and exposes default-bound
