@@ -182,6 +182,7 @@ impl Drop for NativeBridgeSectionHandle {
 #[cfg(windows)]
 #[derive(Debug)]
 pub enum NativeBridgeControllerError {
+    InvalidDuplex,
     Windows(windows::core::Error),
     Session(NativeBridgeSessionError),
 }
@@ -196,6 +197,69 @@ pub struct NativeBridgeController {
     client: NativeBridgeControlClient,
     session: NativeBridgeSession,
     section: Option<NativeBridgeSectionHandle>,
+}
+
+#[cfg(windows)]
+/// Owns the two directional bridge leases for one virtual bus.
+///
+/// The render-source side is read by the driver-facing consumer and the
+/// capture-sink side is written by an engine `AudioTap`. They use separate
+/// mappings and lease slots, so a bus cannot accidentally overwrite its own
+/// opposite direction.
+pub struct NativeBridgeDuplexController {
+    render: NativeBridgeController,
+    capture: NativeBridgeController,
+}
+
+#[cfg(windows)]
+impl NativeBridgeDuplexController {
+    pub fn create(
+        device_path: &str,
+        render_mapping_path: impl AsRef<std::path::Path>,
+        capture_mapping_path: impl AsRef<std::path::Path>,
+        render_hello: audiorouter_protocol::AudioBridgeHello,
+        capture_hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        if render_hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource
+            || capture_hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink
+            || render_hello.bus_id != capture_hello.bus_id
+        {
+            return Err(NativeBridgeControllerError::InvalidDuplex);
+        }
+        let render =
+            NativeBridgeController::create(device_path, render_mapping_path, render_hello)?;
+        match NativeBridgeController::create(device_path, capture_mapping_path, capture_hello) {
+            Ok(capture) => Ok(Self { render, capture }),
+            Err(error) => {
+                drop(render);
+                Err(error)
+            }
+        }
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
+        self.render.heartbeat()?;
+        self.capture.heartbeat()
+    }
+
+    pub fn render_read_into(
+        &self,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
+        self.render.read_into(samples)
+    }
+
+    pub fn capture_writer(
+        &self,
+    ) -> Result<NativeBridgeRealtimeWriter, NativeBridgeControllerError> {
+        self.capture.realtime_writer()
+    }
+
+    pub fn close(self) -> Result<(), NativeBridgeControllerError> {
+        let NativeBridgeDuplexController { render, capture } = self;
+        capture.close()?;
+        render.close()
+    }
 }
 
 #[cfg(windows)]

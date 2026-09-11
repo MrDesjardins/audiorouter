@@ -195,6 +195,13 @@ ownership concurrently without cross-direction contention. Cleanup still
 unmaps and dereferences both slots. The non-installing WDK build passed with
 zero signability errors/warnings.
 
+`NativeBridgeDuplexController` now composes those two directional leases for
+one bus. It validates matching bus identity and required directions before any
+device open, rolls back the first lease if the second claim fails, heartbeats
+both sides, exposes the render reader and capture `AudioTap`, and closes both
+leases explicitly. This advances the two-ended application contract without
+claiming installed endpoint routing.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

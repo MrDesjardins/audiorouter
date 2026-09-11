@@ -40,6 +40,13 @@ to coexist while retaining independent ownership and cleanup. The WDK build
 passed with zero signability errors/warnings; no device was installed or
 loaded.
 
+The Windows adapter now provides `NativeBridgeDuplexController`, which composes
+the render-source and capture-sink controllers for one matching bus. It rejects
+direction or bus mismatches before opening the device, compensates a successful
+first claim when the second claim fails, and keeps heartbeat/close ownership
+explicit. It is compiled API evidence only until the driver is installed on an
+isolated target.
+
 No INF installation, service start, device registration, boot-policy change,
 test-signing change, audio-default change, stream open, or persistent machine
 configuration change occurred. The generated build directories are ignored and
