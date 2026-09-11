@@ -1264,6 +1264,9 @@ pub struct WasapiSchedulerPump {
     pub processed_quanta: u32,
     pub rendered_frames: u32,
     pub dropped_render_frames: u32,
+    /// Number of bounded pump attempts that found render carry pending but
+    /// no device capacity. The carry remains queued; this is not a drop.
+    pub render_backpressure_events: u32,
 }
 
 impl WasapiSchedulerPump {
@@ -1275,6 +1278,9 @@ impl WasapiSchedulerPump {
         self.dropped_render_frames = self
             .dropped_render_frames
             .saturating_add(other.dropped_render_frames);
+        self.render_backpressure_events = self
+            .render_backpressure_events
+            .saturating_add(other.render_backpressure_events);
     }
 }
 
@@ -1685,6 +1691,8 @@ impl WasapiSchedulerBridge {
                 self.bytes_per_frame,
             )?;
             if submitted == 0 {
+                result.render_backpressure_events =
+                    result.render_backpressure_events.saturating_add(1);
                 break;
             }
             let submitted_bytes = (submitted as usize)
@@ -4869,6 +4877,36 @@ mod tests {
         assert_eq!(last_sequence, 7);
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn render_carry_reports_backpressure_without_counting_a_drop() {
+        struct FullSink;
+
+        impl RenderSink for FullSink {
+            fn submit_bytes(
+                &self,
+                _source: &[u8],
+                _bytes_per_frame: usize,
+            ) -> Result<u32, AudioError> {
+                Ok(0)
+            }
+        }
+
+        let mut bridge = WasapiSchedulerBridge::new(2, 2, 64, 64).unwrap();
+        bridge.render_pending_bytes = bridge.bytes_per_frame;
+        bridge.render_pending[..bridge.bytes_per_frame].fill(0x5a);
+        let mut result = WasapiSchedulerPump::default();
+
+        bridge.drain_render_pending(&FullSink, &mut result).unwrap();
+
+        assert_eq!(result.render_backpressure_events, 1);
+        assert_eq!(result.dropped_render_frames, 0);
+        assert_eq!(bridge.render_pending_bytes, bridge.bytes_per_frame);
+        assert!(bridge.render_pending[..bridge.bytes_per_frame]
+            .iter()
+            .all(|byte| *byte == 0x5a));
+    }
+
     #[test]
     fn injected_endpoint_lifecycle_rolls_back_and_stops_both_clients() {
         struct Probe {
@@ -4938,6 +4976,7 @@ mod tests {
             processed_quanta: u32::MAX,
             rendered_frames: u32::MAX,
             dropped_render_frames: u32::MAX,
+            render_backpressure_events: u32::MAX,
         };
         total.accumulate(WasapiSchedulerPump {
             packets: 1,
@@ -4945,12 +4984,14 @@ mod tests {
             processed_quanta: 1,
             rendered_frames: 1,
             dropped_render_frames: 1,
+            render_backpressure_events: 1,
         });
         assert_eq!(total.packets, u32::MAX);
         assert_eq!(total.captured_frames, u32::MAX);
         assert_eq!(total.processed_quanta, u32::MAX);
         assert_eq!(total.rendered_frames, u32::MAX);
         assert_eq!(total.dropped_render_frames, u32::MAX);
+        assert_eq!(total.render_backpressure_events, u32::MAX);
     }
 
     #[test]

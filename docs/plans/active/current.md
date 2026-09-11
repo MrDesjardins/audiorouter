@@ -7604,7 +7604,15 @@ stream, or machine configuration action occurred.
   failure while still proving the reset callback ran. Windows-audio (60),
   strict Clippy, formatting, and diff checks passed; no endpoint or machine
   audio configuration changed.
-- Next M00/M02 task: use the seam to add injected start/stop/reset failure
-  tests and bounded telemetry assertions, then integrate the owner with the
-  control session only after exact bindings and production driver activation
-  are available.
+- Added explicit render-carry backpressure telemetry on 2026-09-11. A full
+  render sink no longer gets conflated with dropped audio: a zero-capacity
+  submission increments the saturating `render_backpressure_events` counter,
+  retains the bounded carry for retry, and leaves `dropped_render_frames`
+  unchanged. An injected regression proves the carry bytes remain intact;
+  the aggregate telemetry test proves saturation. Windows-audio (61), strict
+  Clippy, formatting, and diff checks passed. No endpoint or machine audio
+  configuration changed.
+- Next M00/M02 task: integrate the endpoint-worker owner with the control
+  session only after exact persisted bindings and production driver activation
+  are available; continue portable failure/recovery coverage and built-in DSP
+  work without claiming live-driver evidence.
