@@ -12470,6 +12470,16 @@ mod tests {
             parameters: Default::default(),
             ports: vec![],
         });
+        original.nodes.push(Node {
+            id: EntityId::new("desktop-recorder"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Desktop recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![],
+        });
         plane.insert_session(original.clone()).unwrap();
         let request = JsonRpcRequest {
             jsonrpc: "2.0".into(),
@@ -12495,6 +12505,26 @@ mod tests {
         assert_eq!(plane.recorder_node_workers.len(), 1);
         assert_eq!(plane.dispatch(request).result.unwrap(), first_result);
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        let second = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "recorders.create".into(),
+            params: Some(json!({
+                "sessionId": original.id,
+                "nodeId": "desktop-recorder",
+                "recorderId": "desktop",
+                "format": "wavPcm16",
+                "sequence": 0,
+                "channels": 1,
+                "sampleRate": 48000,
+                "queueCapacity": 8,
+                "maximumChunksPerPass": 1,
+                "idempotencyKey": "node-create-2"
+            })),
+        });
+        assert!(second.error.is_none(), "{second:?}");
+        assert_eq!(second.result.unwrap()["nodeId"], "desktop-recorder");
+        assert_eq!(plane.recorder_node_workers.len(), 2);
         let listed = plane
             .dispatch(JsonRpcRequest {
                 jsonrpc: "2.0".into(),
@@ -12504,29 +12534,40 @@ mod tests {
             })
             .result
             .unwrap();
-        assert_eq!(listed.as_array().unwrap().len(), 1);
-        assert_eq!(listed[0]["nodeId"], "capture-recorder");
+        let listed = listed.as_array().unwrap();
+        assert_eq!(listed.len(), 2);
+        assert!(listed
+            .iter()
+            .any(|entry| entry["nodeId"] == "capture-recorder"));
+        assert!(listed
+            .iter()
+            .any(|entry| entry["nodeId"] == "desktop-recorder"));
 
-        for (index, method, frame) in [
-            (2, "recorders.arm", None),
-            (3, "recorders.start", Some(0)),
-            (4, "recorders.stop", Some(0)),
+        for (node_id, recorder_id) in [
+            ("capture-recorder", "capture"),
+            ("desktop-recorder", "desktop"),
         ] {
-            let mut params = json!({
-                "sessionId": original.id,
-                "nodeId": "capture-recorder",
-                "idempotencyKey": format!("node-create-{index}"),
-            });
-            if let Some(frame) = frame {
-                params["frame"] = json!(frame);
+            for (index, method, frame) in [
+                (2, "recorders.arm", None),
+                (3, "recorders.start", Some(0)),
+                (4, "recorders.stop", Some(0)),
+            ] {
+                let mut params = json!({
+                    "sessionId": original.id,
+                    "nodeId": node_id,
+                    "idempotencyKey": format!("node-create-{recorder_id}-{index}"),
+                });
+                if let Some(frame) = frame {
+                    params["frame"] = json!(frame);
+                }
+                let response = plane.dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(index)),
+                    method: method.into(),
+                    params: Some(params),
+                });
+                assert!(response.error.is_none(), "{method}: {response:?}");
             }
-            let response = plane.dispatch(JsonRpcRequest {
-                jsonrpc: "2.0".into(),
-                id: Some(json!(index)),
-                method: method.into(),
-                params: Some(params),
-            });
-            assert!(response.error.is_none(), "{method}: {response:?}");
         }
         assert!(plane.recorder_node_workers.is_empty());
         let recordings = plane
@@ -12538,9 +12579,17 @@ mod tests {
             })
             .result
             .unwrap();
-        assert_eq!(recordings.as_array().unwrap().len(), 1);
-        assert_eq!(recordings[0]["recorderId"], "capture");
-        assert_eq!(recordings[0]["state"], "completed");
+        let recordings = recordings.as_array().unwrap();
+        assert_eq!(recordings.len(), 2);
+        assert!(recordings
+            .iter()
+            .all(|recording| recording["state"] == "completed"));
+        assert!(recordings
+            .iter()
+            .any(|recording| recording["recorderId"] == "capture"));
+        assert!(recordings
+            .iter()
+            .any(|recording| recording["recorderId"] == "desktop"));
         let _ = std::fs::remove_dir_all(root);
     }
 

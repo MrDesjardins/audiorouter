@@ -106,6 +106,10 @@ discoverable before lifecycle control.
 The same node-targeted create/lifecycle regression now queries durable
 `recordings.list` after stop and verifies one finalized row with the expected
 recorder identity and `completed` state.
+The fixture now contains two node-targeted recorders with separate workers and
+identities, and verifies two independent finalized library rows after both
+JSON-RPC lifecycles complete. This confirms durable multi-sink metadata
+ownership without claiming native graph fan-out.
 Node-targeted `recorders.create` is now supported. It validates the enabled
 session node before creating a file, attaches the worker and controller to that
 node, and preserves exclusive-file rollback and idempotent replay. A control

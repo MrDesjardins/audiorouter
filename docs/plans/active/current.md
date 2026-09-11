@@ -8208,3 +8208,11 @@ live-driver evidence.
   diff, and documentation checks pass.
 - Next M04/REC-01 task: add node identity to library records where needed and
   verify multiple node recorders produce independent durable rows.
+- Verified independent durable rows on 2026-09-11: a two-node session creates
+  two node-targeted workers, lists both states, drives both JSON-RPC lifecycles,
+  and finds two completed recording-library rows with distinct recorder IDs.
+  Focused tests, strict Clippy, formatting, diff, and documentation checks
+  pass.
+- Next M04/REC-01 task: expose node identity in persisted library records and
+  recording queries where the recorder ID alone is insufficient for graph
+  rebinding, then continue per-recorder failure-isolation coverage.
