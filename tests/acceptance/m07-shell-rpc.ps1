@@ -8,12 +8,12 @@ $marker = Join-Path $tempRoot 'frontend-response.json'
 $pipe = "\\.\pipe\audiorouter-shell-rpc-" + [guid]::NewGuid().ToString('N')
 $processes = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 
-function Start-IsolatedProcess([string] $file, [string[]] $arguments, [hashtable] $environment) {
+function Start-IsolatedProcess([string] $file, [string[]] $arguments, [hashtable] $environment, [bool] $createNoWindow = $true) {
     $info = [System.Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $file
     $info.WorkingDirectory = $workspace
     $info.UseShellExecute = $false
-    $info.CreateNoWindow = $true
+    $info.CreateNoWindow = $createNoWindow
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
     $info.Arguments = (($arguments | ForEach-Object { '"' + $_.Replace('"', '\\"') + '"' }) -join ' ')
@@ -44,10 +44,13 @@ try {
 
     $backend = Start-IsolatedProcess $cli @('backend', 'serve', '--database', $database, '--pipe', $pipe, '--connections', '1') @{}
     Start-Sleep -Milliseconds 750
+    # WebView2 requires the shell to be attached to the interactive desktop;
+    # keep only the disposable backend hidden so the probe runs in a real GUI
+    # session and remains manually observable when acceptance is attended.
     $frontend = Start-IsolatedProcess $shell @{} @{
         'AUDIOROUTER_CONTROL_PIPE' = $pipe
         'AUDIOROUTER_SHELL_PROBE_FILE' = $marker
-    }
+    } $false
     $deadline = [DateTime]::UtcNow.AddSeconds(12)
     while (-not (Test-Path -LiteralPath $marker -PathType Leaf) -and [DateTime]::UtcNow -lt $deadline) {
         if ($frontend.HasExited) { throw "shell exited before frontend probe marker was written" }

@@ -21,15 +21,27 @@ fn rpc_request(
     request: JsonRpcRequest,
     state: State<'_, ShellState>,
 ) -> Result<JsonRpcResponse, String> {
-    let response = forward_rpc_request(&request, &state.pipe_name)?;
+    let response = forward_rpc_request(&request, &state.pipe_name);
     if request.method == "system.describe" {
         if let Some(path) = &state.probe_file {
-            let contents = serde_json::to_vec(&response)
+            // The probe is diagnostic-only. Preserve the production command's
+            // Result contract, but serialize transport failures as JSON-RPC
+            // errors so the acceptance can distinguish a reached command from
+            // a WebView that never executed the initialization script.
+            let marker_response = match &response {
+                Ok(response) => response.clone(),
+                Err(error) => JsonRpcResponse::failure(
+                    request.id.clone(),
+                    -32000,
+                    format!("shell transport probe failed: {error}"),
+                ),
+            };
+            let contents = serde_json::to_vec(&marker_response)
                 .map_err(|error| format!("probe response encoding failed: {error}"))?;
             write_probe_marker(path, &contents)?;
         }
     }
-    Ok(response)
+    response
 }
 
 fn write_probe_marker(path: &std::path::Path, contents: &[u8]) -> Result<(), String> {
@@ -79,7 +91,7 @@ fn session_id(state: State<'_, ShellState>) -> String {
 fn session_initialization_script(session_id: &str, frontend_probe: bool) -> String {
     let encoded = serde_json::to_string(session_id).expect("session id is serializable");
     let probe = if frontend_probe {
-        "window.__TAURI_INTERNALS__.invoke('rpc_request',{request:{jsonrpc:'2.0',id:'shell-probe',method:'system.describe'}});"
+        "window.addEventListener('DOMContentLoaded',()=>window.__TAURI_INTERNALS__.invoke('rpc_request',{request:{jsonrpc:'2.0',id:'shell-probe',method:'system.describe'}}),{once:true});"
     } else {
         ""
     };
@@ -256,6 +268,7 @@ mod tests {
         let script = session_initialization_script("probe", true);
         assert!(script.contains("id:'shell-probe'"));
         assert!(script.contains("method:'system.describe'"));
+        assert!(script.contains("DOMContentLoaded"));
     }
 
     #[test]

@@ -240,6 +240,16 @@ qualification remains open.
   those requirements; retain the current fail-closed capability responses and
   rollback-safe user-mode bridge until the prerequisite is available.
 
+- Implemented M07 shell-probe robustness on 2026-09-10: the opt-in probe now
+  waits for `DOMContentLoaded`, and its marker records transport failures as
+  JSON-RPC errors while preserving the production command's `Result` behavior.
+  The acceptance harness keeps the disposable backend hidden but attaches the
+  GUI shell to the interactive desktop. Shell unit tests passed, but the
+  elevated command-runner attempt still produced no marker because that
+  runner is not attached to the user's interactive desktop; M07 frontend
+  invocation therefore remains unverified. No audio, driver, or persistent
+  machine configuration changed.
+
 - Implemented and pushed native VST3 worker hardening in `5a8fc574` after
   exercising the user-supplied bundles. The worker now accepts a requested
   main bus when a plugin also exposes optional side-chain/auxiliary buses,
