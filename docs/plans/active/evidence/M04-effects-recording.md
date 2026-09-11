@@ -116,6 +116,10 @@ mixed configuration from exceeding REC-01.
 Node worker finalization errors now mark only that node controller `failed` and
 retain its ownership for recovery, while a healthy sibling can finalize and be
 removed independently. A focused regression verifies this isolation.
+The failure regression also confirms the failed node remains visible in
+`recorders.list` with its `failed` state and node identity. A separate mixed
+legacy/node regression fills the eight active slots with legacy controllers and
+verifies a node arm request is rejected without changing the node state.
 Node-targeted `recorders.create` is now supported. It validates the enabled
 session node before creating a file, attaches the worker and controller to that
 node, and preserves exclusive-file rollback and idempotent replay. A control

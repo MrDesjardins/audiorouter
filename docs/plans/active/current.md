@@ -8227,3 +8227,10 @@ live-driver evidence.
   regressions, strict Clippy, formatting, and diff checks pass.
 - Next M04/REC-01 task: add mixed legacy/node capacity regression coverage and
   durable failed-node recovery/listing semantics.
+- Added mixed-capacity and failed-node listing regressions on 2026-09-11. A
+  failed node remains listed and retained for recovery, while mixed legacy and
+  node controllers share the eight-active-recorder limit without mutating the
+  rejected node state. Control tests, strict Clippy, formatting, and diff
+  checks pass.
+- Next M04/REC-01 task: continue node-aware durable recovery/checkpoint
+  hydration and complete native-independent graph branch qualification.

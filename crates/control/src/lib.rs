@@ -12467,6 +12467,20 @@ mod tests {
             plane.recorder_node_states[&EntityId::new("failed-recorder")].state(),
             RecorderState::Failed
         );
+        let listed = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "recorders.list".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert!(listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["nodeId"] == "failed-recorder" && entry["state"] == "failed"));
         assert!(plane
             .control_recorder_node(
                 &EntityId::new("healthy-recorder"),
@@ -12482,6 +12496,50 @@ mod tests {
             .contains_key(&EntityId::new("failed-recorder")));
         plane.delete_session(&session_id).unwrap();
         let _ = std::fs::remove_file(healthy_path);
+    }
+
+    #[test]
+    fn mixed_legacy_and_node_recorders_share_the_active_capacity_limit() {
+        let mut graph = session();
+        graph.nodes.push(Node {
+            id: EntityId::new("capacity-recorder"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Capacity recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![],
+        });
+        let session_id = graph.id.clone();
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph).unwrap();
+        for index in 0..MAX_ACTIVE_RECORDERS {
+            let mut recorder = RecorderController::new();
+            recorder.arm().unwrap();
+            recorder.start(0).unwrap();
+            plane
+                .recorders
+                .insert(EntityId::new(format!("legacy-{index}")), recorder);
+        }
+        let queue = Arc::new(RecordingQueue::new(4).unwrap());
+        plane
+            .attach_recorder_worker_to_node(
+                &session_id,
+                EntityId::new("capacity-recorder"),
+                Box::new(FailingTapRecorderWorker {
+                    tap: Arc::new(RecorderAudioTap::new(queue)),
+                }),
+            )
+            .unwrap();
+        assert!(plane
+            .control_recorder_node(&EntityId::new("capacity-recorder"), "recorders.arm", None,)
+            .is_err());
+        assert_eq!(
+            plane.recorder_node_states[&EntityId::new("capacity-recorder")].state(),
+            RecorderState::Idle
+        );
+        plane.delete_session(&session_id).unwrap();
     }
 
     #[test]
