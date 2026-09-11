@@ -2007,6 +2007,11 @@ request's 176-byte layout, mapped-field offsets, and 24-byte block header.
 The project-owned WDK/source-contract acceptance passed, so request-layout
 drift now fails at driver compilation rather than at a loaded-device gate.
 
+Bounded capture publication sequence/state arithmetic on 2026-09-10 now
+rejects near-wrap state words and sequence rollover before exposing a block.
+The WDK/source-contract acceptance passed; the capture timer remains unwired
+until loaded PortCls ownership is qualified.
+
 Closed an expiry teardown gap on 2026-09-10: a rejected maintenance request
 now detaches an expired mapped lease before returning, waits for callback
 readers, and retires the mapping instead of leaving stale audio readable until

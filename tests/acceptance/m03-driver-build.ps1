@@ -40,6 +40,7 @@ foreach ($required in @(
         'AR_BRIDGE_DIRECTION_CAPTURE_SINK',
         'InterlockedIncrement64',
         'InterlockedCompareExchange64',
+        'STATUS_INTEGER_OVERFLOW',
         'ExReleaseRundownProtection')) {
     if (-not $publishHelper.Contains($required)) {
         throw "capture callback publisher is missing required invariant: $required"

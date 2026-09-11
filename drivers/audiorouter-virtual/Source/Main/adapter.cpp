@@ -135,9 +135,9 @@ NTSTATUS AudioRouterPublishLeaseBlock(
         static_cast<UCHAR*>(view) + AR_BRIDGE_STATE_OFFSET);
     ULONGLONG current = static_cast<ULONGLONG>(
         InterlockedCompareExchange64(state, 0, 0));
-    if (current & 1) {
+    if ((current & 1) || current > MAXULONGLONG - 2) {
         ExReleaseRundownProtection(&Lease->Rundown);
-        return STATUS_DEVICE_BUSY;
+        return (current & 1) ? STATUS_DEVICE_BUSY : STATUS_INTEGER_OVERFLOW;
     }
     if (InterlockedCompareExchange64(
             state, static_cast<LONG64>(current + 1),
@@ -147,6 +147,11 @@ NTSTATUS AudioRouterPublishLeaseBlock(
     }
     ULONGLONG sequence = static_cast<ULONGLONG>(
         InterlockedIncrement64(&Lease->NextSequence));
+    if (sequence == 0) {
+        InterlockedExchange64(state, static_cast<LONG64>(current + 2));
+        ExReleaseRundownProtection(&Lease->Rundown);
+        return STATUS_INTEGER_OVERFLOW;
+    }
     AR_BRIDGE_BLOCK_HEADER header = { generation, sequence, Frames, Channels,
         static_cast<ULONG>(sampleCount * sizeof(FLOAT)) };
     RtlCopyMemory(static_cast<UCHAR*>(view) + AR_BRIDGE_HEADER_OFFSET,

@@ -292,6 +292,11 @@ field offsets. The WDK/source-contract acceptance passed with zero signability
 errors/warnings. This protects layout compatibility but does not qualify a
 loaded driver or endpoint data path.
 
+Capture publication now rejects near-wrap seqlock state and sequence rollover
+with `STATUS_INTEGER_OVERFLOW`, preserving the nonzero monotonic sequence
+contract even after prolonged operation. The updated non-installing WDK and
+source-contract acceptance passed; loaded-driver endurance remains open.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one
