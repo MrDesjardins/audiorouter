@@ -7574,6 +7574,11 @@ stream, or machine configuration action occurred.
   error. This prevents repeated invalid bridge data from exhausting reusable
   audio storage. Windows-audio (58), strict Clippy, formatting, and diff checks
   passed; no endpoint or machine audio configuration was touched.
+- Corrected the driver prototype README on 2026-09-11 to reflect the now
+  implemented two-direction sample WaveRT bridge wiring while preserving the
+  distinction from production PortCls ownership, loaded-driver transport,
+  managed bus lifecycle, signing, and callback measurement. Documentation
+  validation remains the required check for this wording-only correction.
 
 - Added an injected scheduler I/O seam on 2026-09-11: the managed
   render-source pump now accepts the same minimal source/sink contracts used
