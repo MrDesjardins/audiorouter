@@ -106,7 +106,7 @@ The user-mode Windows adapter now contains an explicit
 `NativeBridgeControlClient` matching the driver's fixed request layout and
 IOCTL numbers. It validates the hello before encoding it, bounds the UTF-16 bus
 ID, opens the secured device only when requested, and closes the handle via
-RAII. The layout regression is included in the 47-test Windows-audio suite.
+RAII. The layout regression is included in the 48-test Windows-audio suite.
 The client has not been run against a loaded driver because installation and
 loading remain outside this non-mutating validation scope; no live audio-path
 claim is made.

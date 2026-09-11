@@ -56,6 +56,90 @@ pub struct NativeBridgeControlClient {
 }
 
 #[cfg(windows)]
+pub struct NativeBridgeSectionHandle {
+    file: windows::Win32::Foundation::HANDLE,
+    section: windows::Win32::Foundation::HANDLE,
+    mapping_bytes: u32,
+}
+
+#[cfg(windows)]
+impl NativeBridgeSectionHandle {
+    /// Creates a temporary-section handle over an already-sized bridge file.
+    /// The caller must keep this handle alive while the driver lease is active.
+    pub fn for_file(
+        path: impl AsRef<std::path::Path>,
+        mapping_bytes: u32,
+    ) -> Result<Self, windows::core::Error> {
+        use windows::core::PCWSTR;
+        use windows::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE};
+        use windows::Win32::Storage::FileSystem::{
+            CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_DELETE, FILE_SHARE_READ,
+            FILE_SHARE_WRITE, OPEN_EXISTING,
+        };
+        use windows::Win32::System::Memory::{CreateFileMappingW, PAGE_READWRITE};
+        if mapping_bytes == 0 {
+            return Err(windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "invalid mapping size",
+            ));
+        }
+        let path = path.as_ref().to_string_lossy();
+        let mut wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        let file = unsafe {
+            CreateFileW(
+                PCWSTR(wide.as_mut_ptr()),
+                GENERIC_READ.0 | GENERIC_WRITE.0,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                None,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                None,
+            )?
+        };
+        let size_high = 0;
+        let section = unsafe {
+            match CreateFileMappingW(
+                file,
+                None,
+                PAGE_READWRITE,
+                size_high,
+                mapping_bytes,
+                PCWSTR::null(),
+            ) {
+                Ok(section) => section,
+                Err(error) => {
+                    let _ = windows::Win32::Foundation::CloseHandle(file);
+                    return Err(error);
+                }
+            }
+        };
+        Ok(Self {
+            file,
+            section,
+            mapping_bytes,
+        })
+    }
+
+    pub fn raw_handle(&self) -> u64 {
+        self.section.0 as usize as u64
+    }
+
+    pub fn mapping_bytes(&self) -> u32 {
+        self.mapping_bytes
+    }
+}
+
+#[cfg(windows)]
+impl Drop for NativeBridgeSectionHandle {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self.section);
+            let _ = windows::Win32::Foundation::CloseHandle(self.file);
+        }
+    }
+}
+
+#[cfg(windows)]
 #[derive(Debug)]
 pub enum NativeBridgeControllerError {
     Windows(windows::core::Error),
@@ -88,6 +172,24 @@ impl NativeBridgeController {
             .open_bridge(&hello)
             .map_err(NativeBridgeControllerError::Windows)?;
         Ok(Self { client, session })
+    }
+
+    pub fn create_with_section(
+        device_path: &str,
+        mapping_path: impl AsRef<std::path::Path>,
+        hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(Self, NativeBridgeSectionHandle), NativeBridgeControllerError> {
+        let client = NativeBridgeControlClient::open(device_path)
+            .map_err(NativeBridgeControllerError::Windows)?;
+        let session = NativeBridgeSession::create(&mapping_path, hello.clone())
+            .map_err(NativeBridgeControllerError::Session)?;
+        let section =
+            NativeBridgeSectionHandle::for_file(mapping_path, session.mapping_bytes() as u32)
+                .map_err(NativeBridgeControllerError::Windows)?;
+        client
+            .open_bridge_with_mapping(&hello, section.raw_handle(), section.mapping_bytes())
+            .map_err(NativeBridgeControllerError::Windows)?;
+        Ok((Self { client, session }, section))
     }
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
@@ -3034,6 +3136,10 @@ impl NativeBridgeRegion {
         })
     }
 
+    pub fn mapping_bytes(&self) -> usize {
+        Self::buffer_len(self.channels, self.max_frames)
+    }
+
     pub fn write(
         &mut self,
         generation: u64,
@@ -3286,6 +3392,10 @@ impl NativeBridgeSession {
 
     pub fn hello(&self) -> &audiorouter_protocol::AudioBridgeHello {
         &self.hello
+    }
+
+    pub fn mapping_bytes(&self) -> usize {
+        NativeBridgeRegion::buffer_len(self.hello.channels, self.hello.frames_per_quantum)
     }
 
     pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeSessionError> {
@@ -4470,6 +4580,27 @@ mod tests {
         .is_err());
         assert!(native_bridge_open_request(&hello, 1, 31).is_err());
         assert!(native_bridge_open_request(&hello, 1, 32).is_ok());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_section_handle_uses_only_the_temporary_bridge_file() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-section-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let region = NativeBridgeRegion::create(&path, 2, 128).unwrap();
+        let mapping_bytes = region.mapping_bytes();
+        let section = NativeBridgeSectionHandle::for_file(&path, mapping_bytes as u32).unwrap();
+        assert_ne!(section.raw_handle(), 0);
+        assert_eq!(section.mapping_bytes(), mapping_bytes as u32);
+        drop(section);
+        drop(region);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[cfg(windows)]

@@ -103,7 +103,7 @@ The Windows adapter now includes an explicit `NativeBridgeControlClient` for
 the secured driver path. It converts the negotiated hello into the fixed C ABI,
 opens the named device only on an explicit call, issues open/heartbeat/close
 IOCTLs, and closes the handle with RAII. Its layout and UTF-16 bound regression
-passes; the client can now exercise the kernel lease once the driver is
+ passes; the client can now exercise the kernel lease once the driver is
 deliberately installed in an isolated validation environment.
 
 `NativeBridgeController` now co-owns the mapped session and secured driver
@@ -126,6 +126,13 @@ undersized mappings; the user-mode client exposes an explicit
 `open_bridge_with_mapping` entry point. Lease-only mode remains intentional
 while the broker-side section creation and kernel system mapping are developed.
 The updated elevated WDK build passed with zero signability errors/warnings.
+
+`NativeBridgeSectionHandle` now creates and retains a bounded file-backed
+Windows section for the temporary bridge file. `NativeBridgeController` can
+pass its exact handle and mapping size through `open_bridge_with_mapping`; a
+Windows-only regression created and released the temporary section successfully
+without opening an audio endpoint. This still requires a deliberately loaded
+driver for end-to-end proof.
 
 ## Current state
 
