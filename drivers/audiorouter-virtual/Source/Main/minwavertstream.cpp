@@ -227,6 +227,9 @@ Return Value:
     m_SignalProcessingMode = SignalProcessingMode;
     m_bEoSReceived = FALSE;
     m_bLastBufferRendered = FALSE;
+    m_BridgeScratchFrames = 0;
+    m_BridgeScratchFrameOffset = 0;
+    m_BridgeReadSequence = 0;
 
     m_ulHostCaptureToneFrequency = IsEqualGUID(SignalProcessingMode, AUDIO_SIGNALPROCESSINGMODE_RAW) ? 1000 : 2000;
     m_dwHostCaptureToneAmplitude = 50;
@@ -1407,13 +1410,66 @@ ByteDisplacement - # of bytes to process.
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
+    // The capture endpoint is the virtual sink for processed render audio.
+    // Only the negotiated float32 interleaved shape can use the bridge; an
+    // unavailable or incoherent block is rendered as silence.
+    const BOOLEAN bridgeFormat =
+        m_pWfExt != NULL &&
+        m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
+        m_pWfExt->Format.nBlockAlign ==
+            m_pWfExt->Format.nChannels * sizeof(FLOAT);
+    const ULONG bridgeChannels = bridgeFormat ? m_pWfExt->Format.nChannels : 0;
+
     // Normally this will loop no more than once for a single wrap, but if
     // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
 
-        m_ToneGenerator.GenerateSine(m_pDmaBuffer + bufferOffset, runWrite);
+        if (!bridgeFormat || bridgeChannels > AR_BRIDGE_MAX_CHANNELS ||
+            runWrite < bridgeChannels * sizeof(FLOAT)) {
+            RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
+        } else {
+            ULONG frameBytes = bridgeChannels * sizeof(FLOAT);
+            ULONG frames = runWrite / frameBytes;
+            ULONG bytes = frames * frameBytes;
+            if (m_BridgeScratchFrameOffset >= m_BridgeScratchFrames) {
+                AR_BRIDGE_BLOCK_HEADER header = {};
+                NTSTATUS status = AudioRouterCopyLeaseBlockForDirection(
+                    AR_BRIDGE_DIRECTION_RENDER_SOURCE,
+                    m_BridgeReadSequence,
+                    m_BridgeScratch,
+                    ARRAYSIZE(m_BridgeScratch),
+                    &header);
+                if (!NT_SUCCESS(status) || header.Channels != bridgeChannels) {
+                    m_BridgeScratchFrames = 0;
+                    m_BridgeScratchFrameOffset = 0;
+                    RtlZeroMemory(m_pDmaBuffer + bufferOffset, runWrite);
+                    bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
+                    ByteDisplacement -= runWrite;
+                    continue;
+                }
+                m_BridgeScratchFrames = header.Frames;
+                m_BridgeScratchFrameOffset = 0;
+                m_BridgeReadSequence = header.Sequence;
+            }
+            ULONG available = m_BridgeScratchFrames - m_BridgeScratchFrameOffset;
+            ULONG copyFrames = min(frames, available);
+            ULONG copyBytes = copyFrames * frameBytes;
+            RtlCopyMemory(
+                m_pDmaBuffer + bufferOffset,
+                m_BridgeScratch + m_BridgeScratchFrameOffset * bridgeChannels,
+                copyBytes);
+            if (copyBytes < bytes) {
+                RtlZeroMemory(m_pDmaBuffer + bufferOffset + copyBytes,
+                              bytes - copyBytes);
+            }
+            m_BridgeScratchFrameOffset += copyFrames;
+            if (bytes < runWrite) {
+                RtlZeroMemory(m_pDmaBuffer + bufferOffset + bytes,
+                              runWrite - bytes);
+            }
+        }
 
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;

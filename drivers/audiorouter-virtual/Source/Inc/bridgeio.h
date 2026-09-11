@@ -41,6 +41,20 @@ extern "C" NTKERNELAPI NTSTATUS MmUnmapViewInSystemSpace(
 #define AR_BRIDGE_MAX_PAYLOAD_BYTES \
     (AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES * sizeof(float))
 
+NTSTATUS AudioRouterCopyLeaseBlockForDirection(
+    _In_ USHORT Direction,
+    _In_ ULONGLONG MinimumSequence,
+    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _In_ SIZE_T DestinationCapacitySamples,
+    _Out_ struct _AR_BRIDGE_BLOCK_HEADER* Header);
+
+NTSTATUS AudioRouterPublishLeaseBlockForDirection(
+    _In_ USHORT Direction,
+    _In_ USHORT Frames,
+    _In_ USHORT Channels,
+    _In_reads_(SampleCapacity) const FLOAT* Samples,
+    _In_ SIZE_T SampleCapacity);
+
 #define IOCTL_AUDIOROUTER_BRIDGE_OPEN \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
 #define IOCTL_AUDIOROUTER_BRIDGE_CLOSE \

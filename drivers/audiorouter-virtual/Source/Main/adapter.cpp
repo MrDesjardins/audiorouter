@@ -192,6 +192,35 @@ static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(_In_ USHORT Direction)
     return NULL;
 }
 
+NTSTATUS AudioRouterCopyLeaseBlockForDirection(
+    _In_ USHORT Direction,
+    _In_ ULONGLONG MinimumSequence,
+    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _In_ SIZE_T DestinationCapacitySamples,
+    _Out_ AR_BRIDGE_BLOCK_HEADER* Header)
+{
+    AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(Direction);
+    return lease == NULL
+        ? STATUS_INVALID_PARAMETER
+        : AudioRouterCopyLeaseBlock(
+            lease, MinimumSequence, Destination, DestinationCapacitySamples,
+            Header);
+}
+
+NTSTATUS AudioRouterPublishLeaseBlockForDirection(
+    _In_ USHORT Direction,
+    _In_ USHORT Frames,
+    _In_ USHORT Channels,
+    _In_reads_(SampleCapacity) const FLOAT* Samples,
+    _In_ SIZE_T SampleCapacity)
+{
+    AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(Direction);
+    return lease == NULL
+        ? STATUS_INVALID_PARAMETER
+        : AudioRouterPublishLeaseBlock(
+            lease, Frames, Channels, Samples, SampleCapacity);
+}
+
 //-----------------------------------------------------------------------------
 // Referenced forward.
 //-----------------------------------------------------------------------------

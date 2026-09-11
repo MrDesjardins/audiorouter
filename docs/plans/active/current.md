@@ -2012,6 +2012,13 @@ rejects near-wrap state words and sequence rollover before exposing a block.
 The WDK/source-contract acceptance passed; the capture timer remains unwired
 until loaded PortCls ownership is qualified.
 
+The render-source reader is now wired into the sample WaveRT capture-buffer
+fill path on 2026-09-10. It uses fixed scratch storage, consumes only newer
+coherent bridge blocks, validates float32/channel shape, and fills silence on
+missing, busy, stale, or malformed input. The M03 acceptance now guards this
+seam as well; this remains evaluation-only until a loaded production callback
+and endpoint ownership test exists.
+
 Closed an expiry teardown gap on 2026-09-10: a rejected maintenance request
 now detaches an expired mapped lease before returning, waits for callback
 readers, and retires the mapping instead of leaving stale audio readable until

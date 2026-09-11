@@ -50,6 +50,17 @@ if ($publishHelper.Contains('KeAcquireSpinLock')) {
     throw 'capture callback publisher must not acquire the lease spin lock'
 }
 
+$stream = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
+foreach ($required in @(
+        'AudioRouterCopyLeaseBlockForDirection',
+        'm_BridgeScratch',
+        'AR_BRIDGE_DIRECTION_RENDER_SOURCE',
+        'RtlZeroMemory')) {
+    if (-not $stream.Contains($required)) {
+        throw "WaveRT bridge fill path is missing required fail-closed seam: $required"
+    }
+}
+
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')
 $retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)
 if ($retireStart -lt 0 -or $retireEnd -le $retireStart) {

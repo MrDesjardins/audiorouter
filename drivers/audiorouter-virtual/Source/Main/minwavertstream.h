@@ -16,6 +16,7 @@ Abstract:
 
 #include "savedata.h"
 #include "ToneGenerator.h"
+#include "bridgeio.h"
 
 //
 // Structure to store notifications events in a protected list
@@ -127,6 +128,10 @@ protected:
     DWORD                       m_dwLoopbackCaptureToneDCOffset; // must be between -100 to 100
     DWORD                       m_dwHostCaptureToneInitialPhase;   // must be between -31416 to 31416
     DWORD                       m_dwLoopbackCaptureToneInitialPhase; // must be between -31416 to 31416
+    FLOAT                       m_BridgeScratch[AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES];
+    ULONG                       m_BridgeScratchFrames;
+    ULONG                       m_BridgeScratchFrameOffset;
+    ULONGLONG                  m_BridgeReadSequence;
     // Member variable as config params for tone generator
 
 public:

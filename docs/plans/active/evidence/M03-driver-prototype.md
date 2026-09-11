@@ -297,6 +297,13 @@ with `STATUS_INTEGER_OVERFLOW`, preserving the nonzero monotonic sequence
 contract even after prolonged operation. The updated non-installing WDK and
 source-contract acceptance passed; loaded-driver endurance remains open.
 
+The render-source path is now connected to the sample WaveRT capture-buffer
+fill callback. It copies into preallocated scratch storage, enforces the
+sequence floor and negotiated float32/channel shape, and writes silence on
+bridge failure. Source-contract acceptance covers this callback seam and the
+WDK build passed with zero signability errors/warnings. This is not yet
+production PortCls ownership or loaded-driver audio evidence.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one
