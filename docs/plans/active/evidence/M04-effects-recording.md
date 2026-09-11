@@ -850,6 +850,16 @@ checks pass. This closes the portable path-allocation slice, while durable
 session/API integration, UI size/time controls, realtime graph attachment,
 and native endpoint ownership remain open.
 
+## Global recorder capacity (2026-09-11)
+
+The control plane now enforces the REC-01 maximum of eight simultaneously
+armed/active recorder controllers and advertises the same bound through
+`system.describe`. A ninth arm request is rejected before changing recorder
+state; completed/inactive controllers do not consume the active budget. The
+regression covers eight accepted sessions and one rejected request. Control
+tests (111), strict Clippy, formatting, and diff checks pass. Independent
+recorder-node graph attachment and native resource qualification remain open.
+
 ## API stop finalization (2026-09-11)
 
 `recorders.stop` now finalizes an attached worker before completing the

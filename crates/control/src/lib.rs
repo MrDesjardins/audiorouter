@@ -47,6 +47,8 @@ const MAX_GRAPH_AFFECTED_DESTINATIONS: usize = audiorouter_domain::MAX_NODES_PER
 const MAX_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_VIRTUAL_DEVICE_LIST_ITEMS: usize = 500;
 const MAX_PROCESSOR_CATALOG_ITEMS: usize = 7;
+/// Maximum simultaneously armed/active recorder controllers across sessions.
+const MAX_ACTIVE_RECORDERS: usize = 8;
 /// Maximum number of bounded queue-drain passes a recorder finalization may
 /// perform. A producer that keeps refilling a queue must not make a stop
 /// operation loop forever; the caller receives a recoverable finalization
@@ -1413,6 +1415,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxEdgesGlobal": { "type": "integer", "minimum": 1 },
                         "maxSessionsGlobal": { "type": "integer", "minimum": 1 },
                         "maxActiveSessions": { "type": "integer", "minimum": 1 },
+                        "maxActiveRecorders": { "type": "integer", "minimum": 1 },
                         "maxClientEnrollments": { "type": "integer", "minimum": 1 },
                         "maxOperationJournalEntries": { "type": "integer", "minimum": 1 },
                         "maxVirtualBuses": { "type": "integer", "minimum": 1 },
@@ -1429,7 +1432,7 @@ fn method_output_schema(name: &str) -> Value {
                         "maxRequestIdBytes": { "type": "integer", "minimum": 1 },
                         "maxRevisionCursorBytes": { "type": "integer", "minimum": 1 }
                     },
-                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxSessionsGlobal", "maxActiveSessions", "maxClientEnrollments", "maxOperationJournalEntries", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
+                    "required": ["maxNodesPerSession", "maxEdgesPerSession", "maxNodesGlobal", "maxEdgesGlobal", "maxSessionsGlobal", "maxActiveSessions", "maxActiveRecorders", "maxClientEnrollments", "maxOperationJournalEntries", "maxVirtualBuses", "maxVirtualBusNameChars", "maxEntityIdBytes", "maxDisplayNameBytes", "maxPortNameBytes", "maxPortsPerNode", "maxChannelMatrixCoefficients", "maxControlValueDepth", "maxControlStringBytes", "maxControlValueCount", "maxMethodNameBytes", "maxRequestIdBytes", "maxRevisionCursorBytes"],
                     "additionalProperties": false
                 },
                 "events": {
@@ -3580,6 +3583,7 @@ impl ControlPlane {
                 "maxEdgesGlobal": audiorouter_domain::MAX_EDGES_GLOBAL,
                 "maxSessionsGlobal": audiorouter_domain::MAX_SESSIONS_GLOBAL,
                 "maxActiveSessions": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                "maxActiveRecorders": MAX_ACTIVE_RECORDERS,
                 "maxClientEnrollments": audiorouter_storage::MAX_CLIENT_ENROLLMENTS,
                 "maxOperationJournalEntries": audiorouter_storage::MAX_OPERATION_JOURNAL_ENTRIES,
                 "maxVirtualBuses": audiorouter_domain::MAX_VIRTUAL_BUSES,
@@ -5162,6 +5166,22 @@ impl ControlPlane {
                 ControlError::InvalidRequest(format!("recorder checkpoint is invalid: {error:?}"))
             })?;
             self.recorders.insert(session_id.clone(), recorder);
+        }
+        if method == "recorders.arm"
+            && !self
+                .recorders
+                .get(&session_id)
+                .is_some_and(|recorder| recorder_is_active(recorder.state()))
+            && self
+                .recorders
+                .values()
+                .filter(|recorder| recorder_is_active(recorder.state()))
+                .count()
+                >= MAX_ACTIVE_RECORDERS
+        {
+            return Err(ControlError::InvalidRequest(
+                "active recorder limit reached".into(),
+            ));
         }
         let mut worker_finalized = false;
         if let Some(worker) = self.recorder_workers.get_mut(&session_id) {
@@ -7054,6 +7074,16 @@ fn recorder_state_name(state: audiorouter_recording::RecorderState) -> &'static 
         audiorouter_recording::RecorderState::Completed => "completed",
         audiorouter_recording::RecorderState::Failed => "failed",
     }
+}
+
+fn recorder_is_active(state: RecorderState) -> bool {
+    matches!(
+        state,
+        RecorderState::Armed
+            | RecorderState::Recording
+            | RecorderState::Paused
+            | RecorderState::Stopping
+    )
 }
 
 fn virtual_bus_control_error(error: audiorouter_domain::VirtualBusError) -> ControlError {
@@ -11012,6 +11042,34 @@ mod tests {
             plane.session_start(&EntityId::new("three")),
             Err(ControlError::InvalidRequest(message)) if message == "active session limit reached"
         ));
+    }
+
+    #[test]
+    fn recorder_arm_enforces_the_eight_recorder_global_limit() {
+        let mut plane = ControlPlane::default();
+        for index in 0..=MAX_ACTIVE_RECORDERS {
+            let id = EntityId::new(format!("recorder-session-{index}"));
+            let mut graph = session();
+            graph.id = id.clone();
+            plane.insert_session(graph).unwrap();
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(index)),
+                method: "recorders.arm".into(),
+                params: Some(json!({
+                    "sessionId": id,
+                    "idempotencyKey": format!("arm-{index}")
+                })),
+            });
+            if index < MAX_ACTIVE_RECORDERS {
+                assert!(response.result.is_some(), "arm {index}: {response:?}");
+            } else {
+                assert!(matches!(
+                    response.error,
+                    Some(error) if error.message.contains("active recorder limit reached")
+                ));
+            }
+        }
     }
 
     #[test]

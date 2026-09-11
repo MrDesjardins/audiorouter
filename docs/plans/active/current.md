@@ -7845,3 +7845,10 @@ live-driver evidence.
   formatting, and diff checks passed. Multi-recorder durable library rows,
   automatic thresholds, graph attachment, and native endpoint ownership remain
   open.
+- Implemented the REC-01 global recorder capacity boundary on 2026-09-11.
+  Control now enforces and discovers a maximum of eight simultaneously
+  armed/active recorder controllers; a ninth arm request is rejected before
+  state mutation. The regression covers eight accepted sessions and one
+  rejected request. Control tests (111), strict package Clippy, formatting,
+  and diff checks passed. Independent recorder-node graph attachment and native
+  resource qualification remain open.
