@@ -96,6 +96,17 @@ qualification remains open.
   This remains user-mode existing-endpoint evidence, not managed-driver or
   calibrated physical-latency evidence.
 
+- Requalified the Rust/WASAPI adapter gates on 2026-09-10 at 100 ms. The
+  default-endpoint smoke captured 5,280 frames into 41 graph blocks and
+  rendered 5,952 frames with zero xruns, overruns, or deadline misses. The
+  explicit VB-Audio route converted 4,800 captured frames into 4,736 routed
+  frames across 37 blocks, also with zero deadline misses. The bridge cycle
+  captured 5,280 frames, processed 41 quanta, rendered 5,248 frames, tapped
+  all 41 quanta, wrote a temporary 25,072-byte recording, and reported zero
+  xruns/drops. All streams and temporary files were cleaned and media state
+  remained unchanged; this is user-mode adapter evidence, not production
+  driver or physical-latency qualification.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
