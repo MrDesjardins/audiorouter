@@ -4919,11 +4919,12 @@ mod tests {
         assert!(start_endpoint_pair(&mut capture, &mut render).is_ok());
         assert_eq!((capture.starts, render.starts), (2, 2));
         let mut reset_called = false;
-        assert!(stop_endpoint_pair_and_reset(&mut capture, &mut render, || {
+        let stop_error = stop_endpoint_pair_and_reset(&mut capture, &mut render, || {
             reset_called = true;
-            Ok(())
+            Err(AudioError::InvalidFrameSize)
         })
-        .is_err());
+        .unwrap_err();
+        assert!(matches!(stop_error, AudioError::ProcessingStateUnavailable));
         assert!(reset_called);
         assert_eq!((capture.stops, render.stops), (2, 1));
     }

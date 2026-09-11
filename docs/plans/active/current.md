@@ -7599,6 +7599,11 @@ stream, or machine configuration action occurred.
   the first endpoint failure. An injected regression proves reset still runs
   when render stop fails. Windows-audio (60), strict Clippy, formatting, and
   diff checks passed; no endpoint or machine audio configuration changed.
+- Strengthened the injected reset regression on 2026-09-11: when endpoint
+  stop and bridge reset both fail, the lifecycle helper returns the endpoint
+  failure while still proving the reset callback ran. Windows-audio (60),
+  strict Clippy, formatting, and diff checks passed; no endpoint or machine
+  audio configuration changed.
 - Next M00/M02 task: use the seam to add injected start/stop/reset failure
   tests and bounded telemetry assertions, then integrate the owner with the
   control session only after exact bindings and production driver activation
