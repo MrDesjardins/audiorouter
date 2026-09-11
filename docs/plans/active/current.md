@@ -34,6 +34,18 @@ qualification remains open.
   Clippy, formatting, and diff checks passed. No audio endpoint or persistent
   machine configuration changed.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain after
+  `f88e352b` on 2026-09-10. M00 VS2026/MSVC/SDK/WDK discovery, native compile,
+  31-endpoint metadata inventory, disposable SysVAD x64 qualification, M01,
+  M04, M05 (17 files/121 tests), M06 SDK/native VST3/VST2 fixtures, M07
+  headless, unsigned M08 artifacts, traceability, and documentation checks
+  all passed. The previously failing native asynchronous recovery test passed;
+  cleanup removed 17 run-owned temporary children. Validator informational
+  parameter-string notices were expected fixture diagnostics, not failures.
+  No driver installation/loading, signing-mode change, plugin/startup
+  registration, audio stream, or persistent machine audio configuration
+  occurred.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
