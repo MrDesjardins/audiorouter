@@ -48,6 +48,15 @@ focused control suite passed 106 tests. Native endpoint IDs and actual driver
 transport remain unavailable by design until the signed/installable driver gate
 is solved.
 
+The first Windows adapter artifact is now implemented in
+`audiorouter-windows-audio`: `NativeBridgeRegion` creates/opens an explicit
+absolute backing file, maps a bounded slot, uses an aligned seqlock state word,
+validates protocol headers before reads, rejects stale generations and sequence
+regressions, and exposes caller-owned read buffers. Its unsafe mapping/state
+access has documented lifetime/alignment invariants. Focused Windows-audio
+tests passed 43 tests and strict Clippy passed. This remains broker-side
+mapping evidence; the driver IOCTL endpoint and live activation are still open.
+
 The future native bridge now has a versioned portable contract in
 `audiorouter-protocol`: hello validation bounds protocol major, stable bus ID,
 generation, negotiated PCM shape, and lease duration; block-header validation

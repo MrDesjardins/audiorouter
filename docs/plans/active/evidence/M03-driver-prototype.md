@@ -53,6 +53,16 @@ state succeeds, delete removes the bridge and restores it on storage failure,
 and planned apply compensates bridge changes when its journal write fails. The
 focused `cargo test -p audiorouter-control --locked` run passed all 106 tests.
 
+## Mapped bridge region
+
+`audiorouter-windows-audio` now provides `NativeBridgeRegion`, a bounded
+explicit-path memory-mapped slot using the protocol block header and an aligned
+seqlock word. It validates path ancestry, shape, generation, sequence, exact
+payload length, finite samples, and torn reads before returning data to a caller
+buffer. `cargo test -p audiorouter-windows-audio --locked` passed all 43 tests;
+strict package Clippy passed. The mapping is not connected to a driver IOCTL,
+and no device handle or endpoint was opened.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded

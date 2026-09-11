@@ -7,6 +7,8 @@ rust-version.workspace = true
 
 [dependencies]
 audiorouter-engine = { path = "../engine" }
+audiorouter-protocol = { path = "../protocol" }
+memmap2.workspace = true
 windows-core = "0.62.2"
 windows = { version = "0.62.2", features = [
   "Win32_Foundation",
