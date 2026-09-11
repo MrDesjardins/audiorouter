@@ -849,3 +849,15 @@ remain rejected. Recording tests (36), strict Clippy, formatting, and diff
 checks pass. This closes the portable path-allocation slice, while durable
 session/API integration, UI size/time controls, realtime graph attachment,
 and native endpoint ownership remain open.
+
+## Control-plane segmented worker (2026-09-11)
+
+`SegmentedWavRecorderWorker` now connects the REC-06 segmented file worker to
+the control-side recorder boundary. It allocates the initial and subsequent
+files through `RecordingPathPolicy`, exposes the existing pooled audio tap,
+uses bounded finalization passes, syncs every finalized segment, and reports a
+completed outcome only after all segments are durable. The control regression
+produced three two-frame WAV files from one six-frame queue item. Control tests
+(108), strict Clippy, formatting, and diff checks pass. JSON-RPC configuration
+for segment limits, durable recording-library rows, realtime graph attachment,
+and native endpoint ownership remain open.

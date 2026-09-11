@@ -7779,3 +7779,11 @@ live-driver evidence.
   tests (36), strict package Clippy, formatting, and diff checks passed. The
   remaining recorder gap is durable session/API and UI configuration wiring;
   realtime graph attachment and native endpoint ownership remain open.
+- Added the control-plane `SegmentedWavRecorderWorker` on 2026-09-11. It
+  allocates all initial/rotated files through `RecordingPathPolicy`, reuses the
+  pooled recorder audio tap, applies bounded finalization passes, syncs every
+  segment, and reports completion only after all segments finalize. The
+  regression produced three two-frame WAV files from one six-frame queue item.
+  Control tests (108), strict package Clippy, formatting, and diff checks
+  passed. JSON-RPC segment configuration, durable library rows, realtime graph
+  attachment, and native endpoint ownership remain open.

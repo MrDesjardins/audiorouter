@@ -16,8 +16,9 @@ use audiorouter_protocol::{
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
 };
 use audiorouter_recording::{
-    BufferedFlacRecorder, RecorderController, RecorderState, RecordingChunk, RecordingError,
-    RecordingQueue, StreamingFlacRecorder, StreamingFlacWriter, WavFormat, WavRecorder, WavWriter,
+    BufferedFlacRecorder, PathPolicyError, RecorderController, RecorderState, RecordingChunk,
+    RecordingError, RecordingPathPolicy, RecordingQueue, SegmentedWavRecorder,
+    StreamingFlacRecorder, StreamingFlacWriter, WavFormat, WavRecorder, WavWriter,
 };
 use audiorouter_storage::{
     GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_PENDING_PLAN_RECORDS,
@@ -204,6 +205,138 @@ impl RecorderWorker for WavRecorderWorker {
             recoverable: false,
         })
     }
+}
+
+type SegmentedWavFactory = Box<dyn FnMut(u32) -> Result<std::fs::File, RecordingError> + Send>;
+
+/// Control-plane worker that creates bounded WAV segments through the
+/// approved recording path policy. File creation and rotation stay on the
+/// worker/lifecycle side; the audio tap only submits pooled chunks.
+pub struct SegmentedWavRecorderWorker {
+    recorder: Option<SegmentedWavRecorder<std::fs::File, SegmentedWavFactory>>,
+    queue: Arc<RecordingQueue>,
+    maximum_chunks_per_pass: usize,
+}
+
+impl SegmentedWavRecorderWorker {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        policy: RecordingPathPolicy,
+        session: &str,
+        recorder_name: &str,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+        max_segment_frames: u64,
+    ) -> Result<Self, String> {
+        if maximum_chunks_per_pass == 0 {
+            return Err("maximum recorder drain pass must be positive".into());
+        }
+        let (_, initial_file) = policy
+            .create_file(session, recorder_name, 0, "wav")
+            .map_err(format_path_policy_error)?;
+        let session = session.to_owned();
+        let recorder_name = recorder_name.to_owned();
+        let factory: SegmentedWavFactory = Box::new(move |index| {
+            let (_, file) = policy
+                .create_file(&session, &recorder_name, u64::from(index), "wav")
+                .map_err(|error| {
+                    RecordingError::Io(std::io::Error::other(format_path_policy_error(error)))
+                })?;
+            Ok(file)
+        });
+        let recorder = SegmentedWavRecorder::new(
+            initial_file,
+            factory,
+            format,
+            channels,
+            sample_rate,
+            false,
+            max_segment_frames,
+        )
+        .map_err(|error| format!("segmented WAV writer initialization failed: {error:?}"))?;
+        let queue = RecordingQueue::new_pooled(
+            queue_capacity,
+            usize::from(channels),
+            (audiorouter_recording::MAX_RECORDING_CHUNK_SAMPLES / usize::from(channels)).max(1),
+        )
+        .map_err(|error| format!("recording queue initialization failed: {error:?}"))?;
+        Ok(Self {
+            recorder: Some(recorder),
+            queue: Arc::new(queue),
+            maximum_chunks_per_pass,
+        })
+    }
+
+    pub fn arm(&mut self) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
+            .arm()
+            .map_err(|error| format!("segmented WAV recorder arm failed: {error:?}"))
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
+            .start(frame)
+            .map_err(|error| format!("segmented WAV recorder start failed: {error:?}"))
+    }
+
+    pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
+        self.queue.try_push(chunk)
+    }
+
+    pub fn audio_tap(&self) -> RecorderAudioTap {
+        RecorderAudioTap::new(self.queue.clone())
+    }
+}
+
+impl RecorderWorker for SegmentedWavRecorderWorker {
+    fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+        let mut recorder = self
+            .recorder
+            .take()
+            .ok_or_else(|| "segmented WAV recorder was finalized more than once".to_owned())?;
+        let mut completed = false;
+        for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
+            match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
+                Ok(_) => {
+                    completed = true;
+                    break;
+                }
+                Err(RecordingError::QueueNotEmpty) => continue,
+                Err(error) => {
+                    self.recorder = Some(recorder);
+                    return Err(format!("segmented WAV finalization failed: {error:?}"));
+                }
+            }
+        }
+        if !completed {
+            self.recorder = Some(recorder);
+            return Err("segmented WAV finalization exceeded its bounded drain budget".into());
+        }
+        let outputs = recorder
+            .finish()
+            .map_err(|error| format!("segmented WAV file finalization failed: {error:?}"))?;
+        for output in outputs {
+            output
+                .sync_all()
+                .map_err(|error| format!("segmented WAV file sync failed: {error}"))?;
+        }
+        Ok(RecorderFinalizationOutcome {
+            state: "completed".into(),
+            file_finalized: true,
+            recoverable: false,
+        })
+    }
+}
+
+fn format_path_policy_error(error: PathPolicyError) -> String {
+    format!("recording path policy rejected file creation: {error:?}")
 }
 
 /// Concrete buffered-FLAC worker for offline and non-realtime recording
@@ -10340,6 +10473,57 @@ mod tests {
             RecorderState::Completed
         );
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn segmented_wav_worker_finalizes_policy_owned_segments() {
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-control-segmented-worker-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let mut worker = SegmentedWavRecorderWorker::new(
+            policy,
+            "session:raw",
+            "voice?raw",
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            1,
+            1,
+            2,
+        )
+        .unwrap();
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        worker
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            })
+            .unwrap();
+
+        let outcome = worker.finalize(6).unwrap();
+        assert_eq!(outcome.state, "completed");
+        assert!(outcome.file_finalized);
+        drop(worker);
+        let mut paths = std::fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths.len(), 3);
+        for path in &paths {
+            assert_eq!(
+                audiorouter_recording::inspect_wav_file(path)
+                    .unwrap()
+                    .frames,
+                2
+            );
+        }
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
