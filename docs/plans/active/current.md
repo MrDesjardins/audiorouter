@@ -34,10 +34,11 @@ and M08 binaries. No driver installation/loading, signing-mode change,
 plugin/startup registration, audio stream, or persistent machine configuration
 occurred.
 
-Next action: implement the next portable endpoint-worker lifecycle seam around
-the tested accumulator/scheduler boundary, with explicit rebind recovery and
-no automatic replacement of invalidated endpoints. Preserve the loaded-driver,
-signing, installer, and physical-latency gates.
+Next action: connect the tested endpoint-worker lifecycle owner to the
+control-plane session lifecycle and recovery state without opening endpoints
+implicitly. Preserve exact persisted bindings, explicit authorization,
+fail-closed invalidation, and the loaded-driver, signing, installer, and
+physical-latency gates.
 
 Implemented the first lifecycle slice in `audiorouter-windows-audio` as
 `WasapiEndpointWorker`. It owns the selected capture/render clients and the
