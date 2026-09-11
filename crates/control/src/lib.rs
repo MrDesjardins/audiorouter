@@ -4327,28 +4327,28 @@ impl ControlPlane {
                 "recorders.pause" => worker.pause(frame(true)?),
                 "recorders.resume" => worker.resume(frame(true)?),
                 "recorders.split" => worker.split(frame(true)?),
-                "recorders.stop" => {
-                    let outcome = worker.finalize(frame(true)?).map_err(|error| {
-                        ControlError::InvalidRequest(format!(
-                            "recorder finalization failed: {error}"
-                        ))
-                    })?;
-                    if outcome.state != "completed"
-                        || !outcome.file_finalized
-                        || outcome.recoverable
+                "recorders.stop" => match worker.finalize(frame(true)?) {
+                    Ok(outcome)
+                        if outcome.state == "completed"
+                            && outcome.file_finalized
+                            && !outcome.recoverable =>
                     {
-                        return Err(ControlError::InvalidRequest(
-                            "recorder finalization did not produce a completed file".into(),
-                        ));
+                        finalized_recordings = worker.finalized_recordings();
+                        Ok(())
                     }
-                    finalized_recordings = worker.finalized_recordings();
-                    Ok(())
-                }
+                    Ok(_) => Err("recorder finalization did not produce a completed file".into()),
+                    Err(error) => Err(format!("recorder finalization failed: {error}")),
+                },
                 _ => return Err(ControlError::InvalidRequest("method not found".into())),
             };
-            result.map_err(|error| {
-                ControlError::InvalidRequest(format!("recorder worker transition failed: {error}"))
-            })?;
+            if let Err(error) = result {
+                if let Some(state) = self.recorder_node_states.get_mut(node_id) {
+                    state.fail();
+                }
+                return Err(ControlError::InvalidRequest(format!(
+                    "recorder worker transition failed: {error}"
+                )));
+            }
         }
         let (checkpoint, state, parts, pauses) = {
             let recorder = self.recorder_node_states.get_mut(node_id).ok_or_else(|| {
@@ -8552,6 +8552,20 @@ mod tests {
         hooks: Arc<std::sync::Mutex<Vec<String>>>,
     }
 
+    struct FailingTapRecorderWorker {
+        tap: Arc<dyn AudioTap>,
+    }
+
+    impl RecorderWorker for FailingTapRecorderWorker {
+        fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+            Some(self.tap.clone())
+        }
+
+        fn finalize(&mut self, _frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+            Err("synthetic encoder failure".into())
+        }
+    }
+
     impl RecorderWorker for HookRecorderWorker {
         fn arm(&mut self) -> Result<(), String> {
             self.hooks.lock().unwrap().push("arm".into());
@@ -12388,6 +12402,86 @@ mod tests {
         let _ = std::fs::remove_file(
             std::env::temp_dir().join(format!("audiorouter-control-node-missing-{run_id}.wav")),
         );
+    }
+
+    #[test]
+    fn failed_node_recorder_does_not_stop_healthy_sibling() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let healthy_path =
+            std::env::temp_dir().join(format!("audiorouter-control-isolation-{run_id}.wav"));
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&healthy_path)
+            .unwrap();
+        let healthy = WavRecorderWorker::new(file, WavFormat::Pcm16, 1, 48_000, 4, 1).unwrap();
+        let queue = Arc::new(RecordingQueue::new(4).unwrap());
+        let failing = FailingTapRecorderWorker {
+            tap: Arc::new(RecorderAudioTap::new(queue)),
+        };
+        let mut graph = session();
+        for id in ["failed-recorder", "healthy-recorder"] {
+            graph.nodes.push(Node {
+                id: EntityId::new(id),
+                kind: NodeKind::Recorder,
+                type_version: 1,
+                name: id.into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![],
+            });
+        }
+        let session_id = graph.id.clone();
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph).unwrap();
+        plane
+            .attach_recorder_worker_to_node(
+                &session_id,
+                EntityId::new("failed-recorder"),
+                Box::new(failing),
+            )
+            .unwrap();
+        plane
+            .attach_recorder_worker_to_node(
+                &session_id,
+                EntityId::new("healthy-recorder"),
+                Box::new(healthy),
+            )
+            .unwrap();
+        for node_id in ["failed-recorder", "healthy-recorder"] {
+            plane
+                .control_recorder_node(&EntityId::new(node_id), "recorders.arm", None)
+                .unwrap();
+            plane
+                .control_recorder_node(&EntityId::new(node_id), "recorders.start", Some(0))
+                .unwrap();
+        }
+        assert!(plane
+            .control_recorder_node(&EntityId::new("failed-recorder"), "recorders.stop", Some(0),)
+            .is_err());
+        assert_eq!(
+            plane.recorder_node_states[&EntityId::new("failed-recorder")].state(),
+            RecorderState::Failed
+        );
+        assert!(plane
+            .control_recorder_node(
+                &EntityId::new("healthy-recorder"),
+                "recorders.stop",
+                Some(0),
+            )
+            .is_ok());
+        assert!(!plane
+            .recorder_node_workers
+            .contains_key(&EntityId::new("healthy-recorder")));
+        assert!(plane
+            .recorder_node_workers
+            .contains_key(&EntityId::new("failed-recorder")));
+        plane.delete_session(&session_id).unwrap();
+        let _ = std::fs::remove_file(healthy_path);
     }
 
     #[test]

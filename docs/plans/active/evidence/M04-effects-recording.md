@@ -113,6 +113,9 @@ ownership without claiming native graph fan-out.
 The global arm limit now counts legacy session controllers and node-keyed
 controllers through the same bounded eight-recorder calculation, preventing a
 mixed configuration from exceeding REC-01.
+Node worker finalization errors now mark only that node controller `failed` and
+retain its ownership for recovery, while a healthy sibling can finalize and be
+removed independently. A focused regression verifies this isolation.
 Node-targeted `recorders.create` is now supported. It validates the enabled
 session node before creating a file, attaches the worker and controller to that
 node, and preserves exclusive-file rollback and idempotent replay. A control

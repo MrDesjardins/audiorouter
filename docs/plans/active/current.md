@@ -8221,3 +8221,9 @@ live-driver evidence.
   strict Clippy, formatting, diff, and documentation checks passing.
 - Next M04/REC-01 task: add mixed legacy/node limit and per-recorder failure
   isolation regressions, then continue native-independent graph qualification.
+- Added per-recorder failure isolation on 2026-09-11. Node finalization errors
+  now transition only the affected controller to `failed` and retain its
+  worker, while a healthy sibling completes and releases its worker; focused
+  regressions, strict Clippy, formatting, and diff checks pass.
+- Next M04/REC-01 task: add mixed legacy/node capacity regression coverage and
+  durable failed-node recovery/listing semantics.
