@@ -16,6 +16,7 @@ if (-not $bridgeHeader.Contains('Request->Reserved2 != 0')) {
 }
 foreach ($required in @(
         'ReleaseLeasesOwnedByFileObject',
+        'IRP_MJ_CLEANUP',
         'IRP_MJ_CLOSE',
         'OwnerFileObject == FileObject',
         'RetireBridgeResources(lease, mappedView, sectionObject')) {

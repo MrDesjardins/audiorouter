@@ -7669,3 +7669,9 @@ stream, or machine configuration action occurred.
   build/source acceptance passed with zero signability errors/warnings and
   catalog generation. No driver was installed or loaded and no machine audio
   configuration changed.
+- Registered the same owner-scoped lease release for `IRP_MJ_CLEANUP` on
+  2026-09-11, so process/handle teardown releases bridge ownership before the
+  later close notification; the close path remains idempotent. Guarded M03
+  x64 WDK build/source acceptance passed with zero signability errors/warnings
+  and catalog generation. No driver was installed or loaded and no machine
+  audio configuration changed.

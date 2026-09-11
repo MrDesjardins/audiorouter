@@ -305,6 +305,7 @@ _Dispatch_type_(IRP_MJ_PNP)
 DRIVER_DISPATCH PnpHandler;
 
 _Dispatch_type_(IRP_MJ_CREATE)
+_Dispatch_type_(IRP_MJ_CLEANUP)
 _Dispatch_type_(IRP_MJ_CLOSE)
 DRIVER_DISPATCH BridgeControlCreateClose;
 
@@ -336,7 +337,8 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject);
 NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
 {
     PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
-    if (stack != NULL && stack->MajorFunction == IRP_MJ_CLOSE) {
+    if (stack != NULL && (stack->MajorFunction == IRP_MJ_CLEANUP ||
+                          stack->MajorFunction == IRP_MJ_CLOSE)) {
         // A client can terminate without sending the close IOCTL. Release
         // only leases claimed by this file object; other bridge owners remain
         // independent and are not disturbed.
@@ -881,6 +883,7 @@ Return Value:
         DPF(D_ERROR, ("CreateBridgeControlDevice failed, 0x%x", ntStatus)),
         Done);
     DriverObject->MajorFunction[IRP_MJ_CREATE] = BridgeControlCreateClose;
+    DriverObject->MajorFunction[IRP_MJ_CLEANUP] = BridgeControlCreateClose;
     DriverObject->MajorFunction[IRP_MJ_CLOSE] = BridgeControlCreateClose;
     DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = BridgeControlDeviceControl;
 
