@@ -2155,41 +2155,56 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
             while offset < chunk.samples.len() {
                 let frame = self.next_frame.unwrap_or(expected);
                 if self.manual_split == Some(frame) {
-                    self.rotate(frame)?;
+                    let result = self.rotate(frame);
+                    self.fail_result(result)?;
                     self.manual_split = None;
                 } else if self.segment_frames == self.max_segment_frames {
-                    self.controller
+                    let result = self
+                        .controller
                         .split(frame)
-                        .map_err(RecordingError::Controller)?;
-                    self.rotate(frame)?;
+                        .map_err(RecordingError::Controller);
+                    self.fail_result(result)?;
+                    let result = self.rotate(frame);
+                    self.fail_result(result)?;
                 }
                 let remaining_frames = (chunk.samples.len() - offset) / channels;
                 let room = (self.max_segment_frames - self.segment_frames) as usize;
                 let frames = remaining_frames.min(room.max(1));
                 let end_offset = offset + frames * channels;
-                self.writer
+                let result = self
+                    .writer
                     .as_mut()
                     .ok_or(RecordingError::NotRecording)?
-                    .write_interleaved(&chunk.samples[offset..end_offset])?;
-                let end = frame
-                    .checked_add(frames as u64)
-                    .ok_or(RecordingError::TooManyFrames)?;
-                self.controller
+                    .write_interleaved(&chunk.samples[offset..end_offset]);
+                self.fail_result(result)?;
+                let end = self.fail_result(
+                    frame
+                        .checked_add(frames as u64)
+                        .ok_or(RecordingError::TooManyFrames),
+                )?;
+                let result = self
+                    .controller
                     .advance(end)
-                    .map_err(RecordingError::Controller)?;
+                    .map_err(RecordingError::Controller);
+                self.fail_result(result)?;
                 self.next_frame = Some(end);
-                self.segment_frames = self
-                    .segment_frames
-                    .checked_add(frames as u64)
-                    .ok_or(RecordingError::TooManyFrames)?;
+                self.segment_frames = self.fail_result(
+                    self.segment_frames
+                        .checked_add(frames as u64)
+                        .ok_or(RecordingError::TooManyFrames),
+                )?;
                 offset = end_offset;
             }
-            self.writer
+            let result = self
+                .writer
                 .as_mut()
                 .ok_or(RecordingError::NotRecording)?
                 .output
-                .flush()?;
-            persist(&self.controller.checkpoint())?;
+                .flush()
+                .map_err(RecordingError::Io);
+            self.fail_result(result)?;
+            let result = persist(&self.controller.checkpoint());
+            self.fail_result(result)?;
             queue.recycle(chunk);
             drained += 1;
         }
@@ -2246,6 +2261,13 @@ impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRe
         self.segment_frames = 0;
         self.next_frame = Some(frame);
         Ok(())
+    }
+
+    fn fail_result<T>(&mut self, result: Result<T, RecordingError>) -> Result<T, RecordingError> {
+        if result.is_err() {
+            self.controller.fail();
+        }
+        result
     }
 }
 
@@ -3209,6 +3231,40 @@ mod tests {
             u64::MAX,
         );
         assert!(matches!(result, Err(RecordingError::TooManyFrames)));
+    }
+
+    #[test]
+    fn segmented_wav_recorder_fails_closed_on_segment_flush_error() {
+        let mut recorder = SegmentedWavRecorder::new(
+            FlushFails {
+                inner: Cursor::new(Vec::new()),
+            },
+            |_index| {
+                Ok(FlushFails {
+                    inner: Cursor::new(Vec::new()),
+                })
+            },
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            false,
+            2,
+        )
+        .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        let queue = RecordingQueue::new(1).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.25],
+            })
+            .unwrap();
+        assert!(matches!(
+            recorder.drain_queue(&queue, 1),
+            Err(RecordingError::Io(_))
+        ));
+        assert_eq!(recorder.state(), RecorderState::Failed);
     }
 
     #[test]

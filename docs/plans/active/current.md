@@ -7831,6 +7831,12 @@ live-driver evidence.
   Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
   driver, plugin registration, or persistent machine audio configuration
   changed.
+- Corrected segmented REC-08 failure containment on 2026-09-11. Rotation,
+  write, flush, arithmetic, controller, and checkpoint errors now transition
+  the segmented recorder to `Failed` before returning. A flush-failure
+  regression verifies the terminal state; recording tests (38), strict package
+  Clippy, formatting, and diff checks passed. Disk-recovery listing and native
+  graph attachment remain open.
 - Revalidated the locked workspace after the global recorder-capacity change
   at pushed head `ebf972f8` on 2026-09-11. Workspace tests passed, including
   control (111), recording (37), Windows-audio (62 with 11 expected native

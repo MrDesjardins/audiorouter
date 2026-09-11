@@ -850,6 +850,16 @@ checks pass. This closes the portable path-allocation slice, while durable
 session/API integration, UI size/time controls, realtime graph attachment,
 and native endpoint ownership remain open.
 
+## Segmented worker failure containment (2026-09-11)
+
+Segmented WAV queue draining now marks the recorder `Failed` for rotation,
+write, flush, arithmetic, controller, or checkpoint errors before returning
+the error. This aligns segmented behavior with the existing single-file
+workers and preserves the written prefix for recovery handling. A flush-failure
+regression verifies the terminal failed state; recording tests (38), strict
+Clippy, formatting, and diff checks pass. Disk-recovery listing and native
+graph attachment remain open.
+
 ## Global recorder capacity (2026-09-11)
 
 The control plane now enforces the REC-01 maximum of eight simultaneously
