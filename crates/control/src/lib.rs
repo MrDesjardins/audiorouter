@@ -3556,7 +3556,7 @@ impl ControlPlane {
             "build": self.build,
             "audio": "unavailable",
             "deviceDiscovery": "available",
-            "reason": "native realtime scheduler and endpoint routing are not implemented",
+            "reason": "native endpoint routing is implemented but not activated; exact bindings and a production driver are required",
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
             "sessionCount": session_count,
             "activeSessionCount": active_session_ids.len(),
@@ -4019,7 +4019,7 @@ impl ControlPlane {
                         "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
                         "audio": {
                             "state": "unavailable",
-                            "reason": "native realtime scheduler and endpoint routing are not implemented"
+                            "reason": "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
                         },
                         "nativeAdapter": "implemented-not-activated",
                         "privacyMute": {
@@ -8863,7 +8863,7 @@ mod tests {
         assert_eq!(result["activeSessionCount"], 0);
         assert_eq!(
             result["reason"],
-            "native realtime scheduler and endpoint routing are not implemented"
+            "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
         );
         assert_eq!(result["eventCursor"]["latestSequence"], 1);
     }

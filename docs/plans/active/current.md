@@ -7561,3 +7561,9 @@ stream, or machine configuration action occurred.
   audio stream, or persistent machine configuration occurred. Production
   driver activation, signing, installer, clean-machine, physical-latency,
   manual UI, and independent-plugin rights gates remain open.
+
+- Corrected the control-plane audio diagnostic wording on 2026-09-11: it now
+  distinguishes an implemented managed endpoint/native-bridge worker from an
+  unactivated control-plane session and the still-required production driver.
+  Control tests (107), strict Clippy, formatting, and diff checks passed. No
+  endpoint was opened or machine audio configuration changed.
