@@ -8695,6 +8695,7 @@ mod tests {
         let result = response.result.unwrap();
         assert_eq!(result["backend"], "control-plane");
         assert_eq!(result["storage"], "memory");
+        assert_eq!(result["nativeAdapter"], "implemented-not-activated");
         assert_eq!(result["redacted"], true);
         assert!(result.get("path").is_none());
     }
