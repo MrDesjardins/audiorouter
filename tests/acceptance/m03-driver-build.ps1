@@ -19,6 +19,8 @@ $copyHelper = $source.Substring($copyStart, $copyEnd - $copyStart)
 foreach ($required in @(
         'ExAcquireRundownProtection',
         'InterlockedCompareExchangePointer',
+        'InterlockedCompareExchange64',
+        'STATUS_RETRY',
         'ExReleaseRundownProtection')) {
     if (-not $copyHelper.Contains($required)) {
         throw "callback lease helper is missing required invariant: $required"

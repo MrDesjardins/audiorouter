@@ -272,6 +272,12 @@ audio from remaining callback-readable after lease expiry. The updated
 non-installing WDK build and source-contract acceptance passed with zero
 signability errors/warnings; loaded-driver behavior remains unverified.
 
+The callback copy helper also now observes the shared bridge seqlock: it rejects
+empty/in-progress state and returns `STATUS_RETRY` if the state changes during
+the bounded copy. This closes the driver-side torn-read gap while preserving
+the no-wait/no-allocation callback rule. The WDK build and source-contract
+acceptance passed; loaded endpoint data-path evidence remains open.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

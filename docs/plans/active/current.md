@@ -1991,6 +1991,11 @@ the lease spin lock, plus wait-before-unmap resource retirement. This is a
 regression guard only; it does not substitute for loaded-driver callback or
 signing evidence.
 
+Hardened `AudioRouterCopyLeaseBlock` against torn shared-memory reads on
+2026-09-10. It now rejects an empty or odd seqlock state and verifies the state
+word is unchanged after copying, returning `STATUS_RETRY` when the producer
+updates concurrently. The WDK build and source-contract acceptance passed.
+
 Closed an expiry teardown gap on 2026-09-10: a rejected maintenance request
 now detaches an expired mapped lease before returning, waits for callback
 readers, and retires the mapping instead of leaving stale audio readable until

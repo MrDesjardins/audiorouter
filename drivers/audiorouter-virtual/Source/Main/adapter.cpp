@@ -66,9 +66,22 @@ NTSTATUS AudioRouterCopyLeaseBlock(
     KeMemoryBarrier();
     NTSTATUS status = STATUS_DEVICE_NOT_READY;
     if (view != NULL && mappedBytes != 0 && generation != 0) {
+        volatile LONG64* state = reinterpret_cast<volatile LONG64*>(
+            static_cast<UCHAR*>(view) + AR_BRIDGE_STATE_OFFSET);
+        ULONGLONG stateBefore = static_cast<ULONGLONG>(
+            InterlockedCompareExchange64(state, 0, 0));
+        if (stateBefore == 0 || (stateBefore & 1) != 0) {
+            ExReleaseRundownProtection(&Lease->Rundown);
+            return STATUS_DEVICE_BUSY;
+        }
         status = AudioRouterCopyBridgeBlock(
             static_cast<const UCHAR*>(view), mappedBytes, generation,
             MinimumSequence, Destination, DestinationCapacitySamples, Header);
+        KeMemoryBarrier();
+        if (NT_SUCCESS(status) && static_cast<ULONGLONG>(
+                InterlockedCompareExchange64(state, 0, 0)) != stateBefore) {
+            status = STATUS_RETRY;
+        }
     }
     ExReleaseRundownProtection(&Lease->Rundown);
     return status;
