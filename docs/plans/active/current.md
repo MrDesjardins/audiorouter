@@ -7691,3 +7691,10 @@ stream, or machine configuration action occurred.
   destination-specific branch to reject an existing symbolic link with the
   correct diagnostic. The focused regression and all 80 storage tests pass;
   no user files or machine configuration were changed.
+- Connected inactive endpoint discovery to the UI on 2026-09-11: the live
+  adapter now exposes an explicit `includeInactive` option and the editor
+  requests it so disabled, unplugged, not-present, and unknown endpoints can
+  be shown with truthful format-unavailable state. The UI suite passed 122
+  tests, TypeScript typecheck and an alternate-output production build passed,
+  and the disposable build output was removed. No endpoint or machine audio
+  configuration changed.

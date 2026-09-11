@@ -266,7 +266,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     void backend.listApplications().then((items) => { setApplications(items); setApplicationsError(null); }).catch((error) => { setApplications([]); setApplicationsError(formatUiError(error, "Application inventory unavailable")); });
   };
   const refreshDevices = () => {
-    void backend.listDevices().then((items) => { setDevices(items); setDevicesError(null); }).catch((error) => { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); });
+    void backend.listDevices(true).then((items) => { setDevices(items); setDevicesError(null); }).catch((error) => { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); });
   };
   const refresh = () => {
     void snapshotCache.refresh(backend).then(setSnapshotState);
@@ -310,7 +310,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [backend]);
   useEffect(() => {
     let active = true;
-    void backend.listDevices().then((items) => { if (active) { setDevices(items); setDevicesError(null); } }).catch((error) => { if (active) { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); } });
+    void backend.listDevices(true).then((items) => { if (active) { setDevices(items); setDevicesError(null); } }).catch((error) => { if (active) { setDevices([]); setDevicesError(formatUiError(error, "Device inventory unavailable")); } });
     return () => { active = false; };
   }, [backend]);
   useEffect(() => {

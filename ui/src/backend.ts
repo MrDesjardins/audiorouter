@@ -79,7 +79,7 @@ export interface UiBackend {
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listSessions(): Promise<Session[]>;
   listApplications(): Promise<ApplicationRow[]>;
-  listDevices(): Promise<DeviceListItem[]>;
+  listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
@@ -400,10 +400,10 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     async listApplications() {
       return client.request("applications.list", undefined);
     },
-    async listDevices() {
+    async listDevices(includeInactive = false) {
       return collectPagedRows((cursor) => client.request("devices.list", cursor === null
-        ? { limit: 500 }
-        : { limit: 500, cursor }));
+        ? { limit: 500, ...(includeInactive ? { includeInactive: true } : {}) }
+        : { limit: 500, cursor, ...(includeInactive ? { includeInactive: true } : {}) }));
     },
     async listProcessors() {
       return client.request("processors.list", undefined);
