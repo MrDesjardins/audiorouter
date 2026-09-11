@@ -238,7 +238,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `adbfc1fe`; the native probe compile was
+The latest implementation checkpoint is `fe5e7a45`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -1939,13 +1939,13 @@ action occurred.
   PE architecture and format, then use the contained worker matrix for x64
   processing/state/editor evidence. Do not load AAX or execute Win32 variants.
 
-Next action: perform the administrator-authorized M07 shell RPC/WebView2
-acceptance when an interactive elevated desktop is available, or qualify a
-supplied rights-cleared independent x64 VST2/VST3 effect through the existing
-worker matrix. Preserve the production virtual-driver callback, signing,
-installer, clean-machine, physical-latency, and manual accessibility gates as
-separate prerequisites rather than claiming release completion. Do not install
-or register a driver, change signing mode, register plugins, or alter the
+Next action: implement and build-test the driver-side mapped callback ownership
+boundary for the render-source and capture-sink leases. Keep it non-installing
+and fail-closed until mapping lifetime, PortCls callback ownership, and loaded
+driver evidence are proven. Preserve the production signing, installer,
+clean-machine, physical-latency, and manual accessibility gates as separate
+prerequisites rather than claiming release completion. Do not install or
+register a driver, change signing mode, register plugins, or alter the
 machine's audio configuration as a substitute for those gates.
 
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
