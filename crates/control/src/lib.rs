@@ -2063,6 +2063,12 @@ fn device_item_schema() -> Value {
             "id": { "type": "string", "minLength": 1 },
             "direction": { "enum": ["capture", "render"] },
             "state": { "const": "active" },
+            "defaultRoles": {
+                "type": "array",
+                "items": { "enum": ["console", "multimedia", "communications"] },
+                "uniqueItems": true,
+                "maxItems": 3
+            },
             "format": {
                 "type": "object",
                 "properties": {
@@ -2085,7 +2091,7 @@ fn device_item_schema() -> Value {
                 "additionalProperties": false
             }
         },
-        "required": ["id", "direction", "state", "format", "periods"],
+        "required": ["id", "direction", "state", "defaultRoles", "format", "periods"],
         "additionalProperties": false
     })
 }
@@ -5631,10 +5637,20 @@ impl ControlPlane {
         }
         let endpoints =
             audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
+        let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
+            .map_err(audio_control_error)?;
         let mut devices = endpoints
             .into_iter()
             .map(|endpoint| {
                 let bytes_per_frame = endpoint.bytes_per_frame().map_err(audio_control_error)?;
+                let default_roles = defaults
+                    .iter()
+                    .filter(|binding| {
+                        binding.endpoint_id == endpoint.id
+                            && binding.direction == endpoint.direction
+                    })
+                    .map(|binding| binding.role.as_str())
+                    .collect::<Vec<_>>();
                 Ok(json!({
                     "id": endpoint.id,
                     "direction": match endpoint.direction {
@@ -5642,6 +5658,7 @@ impl ControlPlane {
                         audiorouter_windows_audio::EndpointDirection::Render => "render",
                     },
                     "state": "active",
+                    "defaultRoles": default_roles,
                     "format": {
                         "sampleRateHz": endpoint.sample_rate_hz,
                         "channels": endpoint.channels,

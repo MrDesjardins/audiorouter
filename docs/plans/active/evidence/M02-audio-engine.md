@@ -152,6 +152,21 @@ and virtual-cable runs are the current runtime evidence. Native graph-to-device
 scheduling, dual-device drift, failure recovery, and measured physical latency
 remain open.
 
+## 2026-09-11 — Explicit default-role observations
+
+The Windows adapter now exposes `enumerate_default_endpoint_bindings`, which
+queries `IMMDeviceEnumerator::GetDefaultAudioEndpoint` for console,
+multimedia, and communications roles in both render and capture directions.
+The operation only reads opaque endpoint IDs; it does not activate a client,
+start a stream, change defaults, or reserve an endpoint. Missing role
+assignments are omitted rather than substituted.
+
+`devices.list` includes the resulting `defaultRoles` array, with matching
+schema and TypeScript contract support. This is an observation for an explicit
+follow-default binding, not permission to replace a pinned endpoint. Focused
+Windows-audio (55) and control (106) tests plus strict Clippy passed; no
+endpoint stream or persistent machine audio configuration changed.
+
 The rebind failure path was hardened so endpoint objects are discarded after
 stop attempts even when one stop reports an error; repeated stop also resets
 staged bridge audio. The focused 54-test Windows-audio suite, strict Clippy,

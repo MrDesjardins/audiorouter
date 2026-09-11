@@ -7399,3 +7399,17 @@ stream, or machine configuration action occurred.
   --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff
   --check` passed. No runtime, audio, driver, plugin registration, or machine
   configuration action occurred.
+- Completed the portable CAP-01 default-role slice on 2026-09-11: the
+  read-only Windows adapter now enumerates exact endpoint IDs for the console,
+  multimedia, and communications default roles without activating a client;
+  `devices.list`, the JSON schema, TypeScript contract, and UI inventory now
+  expose the observed roles. A role with no assigned endpoint is omitted, and
+  pinned IDs remain distinct from follow-default observations. Windows-audio
+  (55) and control (106) tests, strict package Clippy, formatting, diff checks,
+  and the UI contract fixture passed. No endpoint stream or persistent audio
+  configuration changed.
+- Next M00/M02 task: add endpoint friendly names and active-state detail to the
+  same read-only inventory, then connect endpoint notifications to a bounded
+  control refresh. Keep exact-ID bindings, explicit follow-default selection,
+  production driver ownership, signing, installer, and physical-latency gates
+  open until their required evidence exists.

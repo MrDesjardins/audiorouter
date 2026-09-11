@@ -24,6 +24,36 @@ pub enum EndpointDirection {
     Render,
 }
 
+/// Windows default-device roles that can be selected by an explicit
+/// follow-default binding. The role is kept separate from the endpoint ID so
+/// a default-device change can be observed without silently replacing a
+/// pinned endpoint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DefaultEndpointRole {
+    Console,
+    Multimedia,
+    Communications,
+}
+
+impl DefaultEndpointRole {
+    pub const ALL: [Self; 3] = [Self::Console, Self::Multimedia, Self::Communications];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Console => "console",
+            Self::Multimedia => "multimedia",
+            Self::Communications => "communications",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DefaultEndpointBinding {
+    pub direction: EndpointDirection,
+    pub role: DefaultEndpointRole,
+    pub endpoint_id: String,
+}
+
 #[cfg(windows)]
 const IOCTL_AUDIOROUTER_BRIDGE_OPEN: u32 = (0x22 << 16) | (0x800 << 2) | (3 << 14) | 0x3;
 #[cfg(windows)]
@@ -3179,6 +3209,23 @@ pub fn enumerate_active_endpoints() -> Result<Vec<EndpointInfo>, AudioError> {
     }
 }
 
+/// Enumerate the current Windows default endpoint for every supported role.
+/// This is metadata-only: it does not activate an audio client, start a
+/// stream, change defaults, or reserve an endpoint. A role with no assigned
+/// device is omitted while the remaining roles are still reported.
+pub fn enumerate_default_endpoint_bindings() -> Result<Vec<DefaultEndpointBinding>, AudioError> {
+    unsafe {
+        let initialized = windows::Win32::System::Com::CoInitializeEx(
+            None,
+            windows::Win32::System::Com::COINIT_MULTITHREADED,
+        );
+        initialized.ok()?;
+        let result = enumerate_defaults_after_com_init();
+        windows::Win32::System::Com::CoUninitialize();
+        result
+    }
+}
+
 /// Enumerate process identities suitable for a later process-loopback binding.
 /// PID, executable name, verified executable path when available, and an
 /// optional creation timestamp are returned; command lines and other process
@@ -3519,6 +3566,42 @@ unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
         }
     }
     Ok(endpoints)
+}
+
+unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBinding>, AudioError> {
+    use windows::Win32::Media::Audio::{
+        eCapture, eCommunications, eConsole, eMultimedia, eRender, IMMDeviceEnumerator,
+        MMDeviceEnumerator,
+    };
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let mut bindings = Vec::new();
+    for (direction, flow) in [
+        (EndpointDirection::Capture, eCapture),
+        (EndpointDirection::Render, eRender),
+    ] {
+        for (role, windows_role) in [
+            (DefaultEndpointRole::Console, eConsole),
+            (DefaultEndpointRole::Multimedia, eMultimedia),
+            (DefaultEndpointRole::Communications, eCommunications),
+        ] {
+            let Ok(device) = enumerator.GetDefaultAudioEndpoint(flow, windows_role) else {
+                continue;
+            };
+            let id = device
+                .GetId()
+                .map_err(AudioError::Windows)?
+                .to_string()
+                .map_err(|_| AudioError::InvalidUtf16)?;
+            bindings.push(DefaultEndpointBinding {
+                direction,
+                role,
+                endpoint_id: id,
+            });
+        }
+    }
+    Ok(bindings)
 }
 
 const BRIDGE_STATE_OFFSET: usize = 0;
@@ -4174,6 +4257,17 @@ mod tests {
             encode_interleaved_float32(&block, &mut [0; 4]),
             Err(AudioError::BufferTooSmall { .. })
         ));
+    }
+
+    #[test]
+    fn default_endpoint_roles_have_stable_contract_names() {
+        assert_eq!(
+            DefaultEndpointRole::ALL
+                .iter()
+                .map(|role| role.as_str())
+                .collect::<Vec<_>>(),
+            vec!["console", "multimedia", "communications"]
+        );
     }
 
     #[test]

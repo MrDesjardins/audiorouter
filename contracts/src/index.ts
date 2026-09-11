@@ -198,6 +198,7 @@ export interface DeviceInfo {
   id: string;
   direction: "capture" | "render";
   state: "active";
+  defaultRoles: Array<"console" | "multimedia" | "communications">;
   format: {
     sampleRateHz: number;
     channels: number;
