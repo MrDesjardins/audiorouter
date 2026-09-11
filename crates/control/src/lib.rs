@@ -444,6 +444,55 @@ impl FileRecorderFormat {
     }
 }
 
+pub const FILE_RECORDER_CONFIG_VERSION: u32 = 1;
+
+/// Versioned, bounded configuration for lifecycle-owned file recorder
+/// creation. The destination root remains a separately approved policy.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FileRecorderConfig<'a> {
+    pub version: u32,
+    pub session_id: &'a str,
+    pub recorder_id: &'a str,
+    pub sequence: u64,
+    pub format: FileRecorderFormat,
+    pub channels: u16,
+    pub sample_rate: u32,
+    pub dither: bool,
+    pub queue_capacity: usize,
+    pub maximum_chunks_per_pass: usize,
+}
+
+impl FileRecorderConfig<'_> {
+    fn validate(&self) -> Result<(), String> {
+        if self.version != FILE_RECORDER_CONFIG_VERSION {
+            return Err("unsupported file recorder configuration version".into());
+        }
+        if self.session_id.is_empty()
+            || self.recorder_id.is_empty()
+            || self.session_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
+            || self.recorder_id.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
+        {
+            return Err("file recorder identity is empty or exceeds its bound".into());
+        }
+        if !matches!(self.channels, 1 | 2) || !matches!(self.sample_rate, 44_100 | 48_000) {
+            return Err("file recorder format shape is unsupported".into());
+        }
+        if !matches!(
+            self.queue_capacity,
+            1..=audiorouter_recording::MAX_RECORDING_QUEUE_CHUNKS
+        ) || self.maximum_chunks_per_pass == 0
+        {
+            return Err("file recorder queue limits are invalid".into());
+        }
+        if let FileRecorderFormat::Flac { bits_per_sample } = self.format {
+            if !matches!(bits_per_sample, 16 | 24) {
+                return Err("FLAC bit depth is unsupported".into());
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Creates a path-owned recorder on the lifecycle thread. The returned path
 /// is the exact path created by `RecordingPathPolicy`; the worker is already
 /// configured with the same explicit library identity before it is returned.
@@ -460,24 +509,51 @@ pub fn create_file_recorder(
     queue_capacity: usize,
     maximum_chunks_per_pass: usize,
 ) -> Result<(std::path::PathBuf, Box<dyn RecorderWorker>), String> {
+    create_file_recorder_with_config(
+        policy,
+        &FileRecorderConfig {
+            version: FILE_RECORDER_CONFIG_VERSION,
+            session_id,
+            recorder_id,
+            sequence,
+            format,
+            channels,
+            sample_rate,
+            dither,
+            queue_capacity,
+            maximum_chunks_per_pass,
+        },
+    )
+}
+
+pub fn create_file_recorder_with_config(
+    policy: &RecordingPathPolicy,
+    config: &FileRecorderConfig<'_>,
+) -> Result<(std::path::PathBuf, Box<dyn RecorderWorker>), String> {
+    config.validate()?;
     let (path, file) = policy
-        .create_file(session_id, recorder_id, sequence, format.extension())
+        .create_file(
+            config.session_id,
+            config.recorder_id,
+            config.sequence,
+            config.format.extension(),
+        )
         .map_err(format_path_policy_error)?;
     let identity = FileRecordingIdentity {
-        session_id: session_id.to_owned(),
-        recorder_id: recorder_id.to_owned(),
+        session_id: config.session_id.to_owned(),
+        recorder_id: config.recorder_id.to_owned(),
         path: path.clone(),
     };
-    let worker: Box<dyn RecorderWorker> = match format {
+    let worker: Box<dyn RecorderWorker> = match config.format {
         FileRecorderFormat::Wav(wav_format) => {
             let mut worker = WavRecorderWorker::new_with_dither(
                 file,
                 wav_format,
-                channels,
-                sample_rate,
-                dither,
-                queue_capacity,
-                maximum_chunks_per_pass,
+                config.channels,
+                config.sample_rate,
+                config.dither,
+                config.queue_capacity,
+                config.maximum_chunks_per_pass,
             )?;
             worker.set_library_identity(identity);
             Box::new(worker)
@@ -485,11 +561,11 @@ pub fn create_file_recorder(
         FileRecorderFormat::Flac { bits_per_sample } => {
             let mut worker = BufferedFlacRecorderWorker::new(
                 file,
-                usize::from(channels),
-                sample_rate,
+                usize::from(config.channels),
+                config.sample_rate,
                 bits_per_sample,
-                queue_capacity,
-                maximum_chunks_per_pass,
+                config.queue_capacity,
+                config.maximum_chunks_per_pass,
             )?;
             worker.set_library_identity(identity);
             Box::new(worker)
@@ -4038,6 +4114,23 @@ impl ControlPlane {
             maximum_chunks_per_pass,
         )
         .map_err(ControlError::InvalidRequest)?;
+        self.attach_recorder_worker(session_id, worker)?;
+        Ok(path)
+    }
+
+    pub fn create_and_attach_file_recorder_with_config(
+        &mut self,
+        policy: &RecordingPathPolicy,
+        session_id: EntityId,
+        config: &FileRecorderConfig<'_>,
+    ) -> Result<std::path::PathBuf, ControlError> {
+        if config.session_id != session_id.as_str() {
+            return Err(ControlError::InvalidRequest(
+                "file recorder session identity does not match attachment".into(),
+            ));
+        }
+        let (path, worker) = create_file_recorder_with_config(policy, config)
+            .map_err(ControlError::InvalidRequest)?;
         self.attach_recorder_worker(session_id, worker)?;
         Ok(path)
     }
@@ -11445,19 +11538,34 @@ mod tests {
         let mut plane = ControlPlane::with_storage("factory", Storage::open_memory().unwrap());
         let original = session();
         plane.insert_session(original.clone()).unwrap();
+        let invalid = FileRecorderConfig {
+            version: FILE_RECORDER_CONFIG_VERSION + 1,
+            session_id: original.id.as_str(),
+            recorder_id: "invalid",
+            sequence: 0,
+            format: FileRecorderFormat::Wav(WavFormat::Pcm16),
+            channels: 1,
+            sample_rate: 48_000,
+            dither: false,
+            queue_capacity: 8,
+            maximum_chunks_per_pass: 1,
+        };
+        assert!(create_file_recorder_with_config(&policy, &invalid).is_err());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        let config = FileRecorderConfig {
+            version: FILE_RECORDER_CONFIG_VERSION,
+            session_id: original.id.as_str(),
+            recorder_id: "voice",
+            sequence: 0,
+            format: FileRecorderFormat::Wav(WavFormat::Pcm16),
+            channels: 1,
+            sample_rate: 48_000,
+            dither: false,
+            queue_capacity: 8,
+            maximum_chunks_per_pass: 1,
+        };
         let path = plane
-            .create_and_attach_file_recorder(
-                &policy,
-                original.id.clone(),
-                "voice",
-                0,
-                FileRecorderFormat::Wav(WavFormat::Pcm16),
-                1,
-                48_000,
-                false,
-                8,
-                1,
-            )
+            .create_and_attach_file_recorder_with_config(&policy, original.id.clone(), &config)
             .unwrap();
         assert!(path.is_file());
 

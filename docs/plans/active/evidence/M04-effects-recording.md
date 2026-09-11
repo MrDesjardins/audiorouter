@@ -25,6 +25,11 @@ supports `ControlPlane::create_and_attach_file_recorder`. A control regression
 verifies creation, attachment, lifecycle stop, and one indexed row. No file
 operation is available from the realtime callback.
 
+The factory configuration is now represented by versioned
+`FileRecorderConfig` data. It rejects unsupported versions, identity sizes,
+channel/rate combinations, FLAC bit depths, and queue limits before path
+creation. The factory regression confirms an invalid version creates no file.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30

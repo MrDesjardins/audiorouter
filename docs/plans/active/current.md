@@ -7994,6 +7994,16 @@ live-driver evidence.
   Clippy, formatting, and diff checks passed. A versioned JSON-RPC recorder
   configuration payload, graph attachment, and native endpoint ownership
   remain open.
+- Added versioned `FileRecorderConfig` validation on 2026-09-11. The factory
+  now validates version, bounded identities, channel/rate shape, FLAC bit
+  depth, and queue limits before calling the exclusive path policy; invalid
+  configuration is proven not to create a file. The control factory regression,
+  strict Clippy, formatting, and diff checks passed.
+- Next M04/REC-10/API-01 task: persist an approved recording root in the
+  backend-owned configuration and expose the bounded factory configuration as
+  a permissioned, idempotent API operation. Raw paths remain rejected outside
+  the approved root; no API request may arm or start the new recorder
+  implicitly.
 - Next M04/REC-10/API-01 task: expose the bounded factory configuration as a
   discovered API operation with explicit format, channels, rate, dither,
   sequence, queue, and destination-policy fields. Validate all fields before
