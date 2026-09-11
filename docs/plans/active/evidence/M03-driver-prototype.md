@@ -158,6 +158,13 @@ The writer exclusively owns its Rust mapping; the region type is not globally
 marked `Sync`, so the Rust safety boundary does not pretend that raw mapped
 payload bytes are safe for arbitrary in-process concurrent mutation.
 
+`NativeBridgeSession::realtime_writer` and the controller facade now create
+the producer view directly from the negotiated mapping path and generation.
+The producer's independent mapping avoids sharing Rust mutable state with the
+session owner, while the controller continues to own lease heartbeat and close.
+A session-level regression proves the tap view publishes a block observed by a
+separate reader; this still does not prove consumption by a loaded driver.
+
 `Source/Inc/bridgeio.h` now also defines `AudioRouterCopyBridgeBlock`, which
 validates a mapped block and copies its bounded float payload into a
 caller-owned destination without waiting, allocating, logging, or issuing I/O.

@@ -275,6 +275,18 @@ impl NativeBridgeController {
             .map_err(NativeBridgeControllerError::Session)
     }
 
+    /// Create the realtime producer view for this negotiated bridge. The
+    /// returned writer owns an independent file mapping and may be shared as
+    /// an `AudioTap`; lease heartbeat and close remain owned by this
+    /// controller.
+    pub fn realtime_writer(
+        &self,
+    ) -> Result<NativeBridgeRealtimeWriter, NativeBridgeControllerError> {
+        self.session
+            .realtime_writer()
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
     pub fn close(mut self) -> Result<(), NativeBridgeControllerError> {
         if let Some(section) = &self.section {
             self.client
@@ -3557,6 +3569,7 @@ pub enum NativeBridgeSessionError {
 /// `write` and `read_into` only use caller-owned buffers and the bounded slot.
 pub struct NativeBridgeSession {
     hello: audiorouter_protocol::AudioBridgeHello,
+    mapping_path: std::path::PathBuf,
     region: NativeBridgeRegion,
     next_sequence: u64,
     last_heartbeat: std::time::Instant,
@@ -3570,10 +3583,13 @@ impl NativeBridgeSession {
         hello
             .validate()
             .map_err(NativeBridgeSessionError::InvalidHello)?;
-        let region = NativeBridgeRegion::create(path, hello.channels, hello.frames_per_quantum)
-            .map_err(NativeBridgeSessionError::Region)?;
+        let mapping_path = path.as_ref().to_path_buf();
+        let region =
+            NativeBridgeRegion::create(&mapping_path, hello.channels, hello.frames_per_quantum)
+                .map_err(NativeBridgeSessionError::Region)?;
         Ok(Self {
             hello,
+            mapping_path,
             region,
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
@@ -3587,10 +3603,13 @@ impl NativeBridgeSession {
         hello
             .validate()
             .map_err(NativeBridgeSessionError::InvalidHello)?;
-        let region = NativeBridgeRegion::open(path, hello.channels, hello.frames_per_quantum)
-            .map_err(NativeBridgeSessionError::Region)?;
+        let mapping_path = path.as_ref().to_path_buf();
+        let region =
+            NativeBridgeRegion::open(&mapping_path, hello.channels, hello.frames_per_quantum)
+                .map_err(NativeBridgeSessionError::Region)?;
         Ok(Self {
             hello,
+            mapping_path,
             region,
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
@@ -3603,6 +3622,20 @@ impl NativeBridgeSession {
 
     pub fn mapping_bytes(&self) -> usize {
         NativeBridgeRegion::buffer_len(self.hello.channels, self.hello.frames_per_quantum)
+    }
+
+    /// Open a separate producer mapping after negotiation. Preparation may
+    /// allocate and map; the returned writer's tap callback is bounded and
+    /// nonblocking.
+    pub fn realtime_writer(&self) -> Result<NativeBridgeRealtimeWriter, NativeBridgeSessionError> {
+        let region = NativeBridgeRegion::open(
+            &self.mapping_path,
+            self.hello.channels,
+            self.hello.frames_per_quantum,
+        )
+        .map_err(NativeBridgeSessionError::Region)?;
+        NativeBridgeRealtimeWriter::new(region, self.hello.generation)
+            .map_err(NativeBridgeSessionError::Region)
     }
 
     pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeSessionError> {
@@ -4714,6 +4747,43 @@ mod tests {
         assert_eq!(reader.hello().bus_id, "bus-main");
         drop(reader);
         drop(writer);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_session_exposes_a_second_realtime_producer_view() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-session-tap-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-tap".to_owned(),
+            generation: 11,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 4,
+            lease_ms: 1_000,
+        };
+        let session = NativeBridgeSession::create(&path, hello).unwrap();
+        let tap = session.realtime_writer().unwrap();
+        let reader = NativeBridgeRegion::open(&path, 2, 4).unwrap();
+        let mut block = audiorouter_engine::AudioBlock::new(2, 2).unwrap();
+        block.copy_from_interleaved(&[0.1, 0.2, 0.3, 0.4]).unwrap();
+        <NativeBridgeRealtimeWriter as audiorouter_engine::AudioTap>::on_processed_block(
+            &tap, 0, &block,
+        );
+        let mut output = [0.0; 4];
+        reader.read_into(11, &mut output).unwrap();
+        assert_eq!(output, [0.1, 0.2, 0.3, 0.4]);
+        drop(reader);
+        drop(tap);
+        drop(session);
         std::fs::remove_file(path).unwrap();
     }
 

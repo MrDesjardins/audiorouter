@@ -174,6 +174,13 @@ non-installing WDK build passed with zero signability errors/warnings. The
 helper is compiled contract evidence; no WaveRT callback invokes it yet because
 the reference sample has no safe broker-buffer ownership hook.
 
+`NativeBridgeSession::realtime_writer` and the controller forwarding method now
+expose that producer seam from the negotiated session. The producer uses an
+independent view of the exact session file while lease heartbeat/close remain
+control-plane responsibilities. A regression proves a session-created tap
+view publishes data that another mapped reader can consume; this remains
+user-mode bridge evidence, not loaded-driver endpoint evidence.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
