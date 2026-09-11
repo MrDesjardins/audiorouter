@@ -533,8 +533,12 @@ impl NativeBridgeDuplexController {
     }
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
-        self.render.heartbeat()?;
-        self.capture.heartbeat()
+        // Refresh both directional leases even when one side has already
+        // failed. The surviving direction must not be left to expire merely
+        // because its sibling reported an error first.
+        let render_result = self.render.heartbeat();
+        let capture_result = self.capture.heartbeat();
+        render_result.and(capture_result)
     }
 
     pub fn render_read_into(
@@ -560,8 +564,12 @@ impl NativeBridgeDuplexController {
 
     pub fn close(self) -> Result<(), NativeBridgeControllerError> {
         let NativeBridgeDuplexController { render, capture } = self;
-        capture.close()?;
-        render.close()
+        // Release both kernel leases on every close path. Evaluate the
+        // results separately so a failure on one direction cannot skip the
+        // other; retain the existing capture-first error precedence.
+        let capture_result = capture.close();
+        let render_result = render.close();
+        capture_result.and(render_result)
     }
 }
 

@@ -7622,3 +7622,9 @@ stream, or machine configuration action occurred.
   reported 11 intentionally ignored native-fixture tests. Workspace strict
   Clippy, formatting, and diff checks also passed. No endpoint, plugin,
   driver, or machine audio configuration was touched.
+- Fixed duplex bridge lease cleanup on 2026-09-11: heartbeat and close now
+  always attempt both render-source and capture-sink directions, preserving
+  capture-first error precedence instead of short-circuiting and leaving the
+  sibling lease to timeout. Windows-audio (61), strict Clippy, formatting, and
+  diff checks passed. This is lifecycle code only; no driver, endpoint, or
+  machine audio configuration was activated.
