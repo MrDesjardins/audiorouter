@@ -223,6 +223,7 @@ AudioRouterValidateBridgeOpenRequest(
         Request->LeaseMs == 0 ||
         Request->LeaseMs > AR_BRIDGE_MAX_LEASE_MS ||
         Request->Generation == 0 ||
+        Request->Reserved2 != 0 ||
         ((Request->SectionHandle == 0) != (Request->MappingBytes == 0)) ||
         (Request->SectionHandle != 0 && Request->MappingBytes < AR_BRIDGE_HEADER_BYTES)) {
         return STATUS_INVALID_PARAMETER;

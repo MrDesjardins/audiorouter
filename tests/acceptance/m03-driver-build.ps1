@@ -10,6 +10,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $source = Get-Content -LiteralPath $adapter -Raw
+$bridgeHeader = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Inc/bridgeio.h') -Raw
+if (-not $bridgeHeader.Contains('Request->Reserved2 != 0')) {
+    throw 'bridge request validation must reject non-zero reserved fields'
+}
 $copyStart = $source.IndexOf('NTSTATUS AudioRouterCopyLeaseBlock(')
 $copyEnd = $source.IndexOf('static void RetireBridgeResources(', $copyStart)
 if ($copyStart -lt 0 -or $copyEnd -le $copyStart) {

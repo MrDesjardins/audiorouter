@@ -7640,3 +7640,9 @@ stream, or machine configuration action occurred.
   non-installing x64 WDK build and guarded M03 acceptance passed with zero
   signability errors/warnings and catalog generation. No driver was installed
   or loaded and no audio configuration changed.
+- Tightened bridge ABI validation on 2026-09-11: non-zero reserved request
+  fields are now rejected before lease or mapping work, and M03 acceptance
+  checks that invariant in the authoritative header. The guarded
+  non-installing x64 WDK build passed with zero signability errors/warnings and
+  catalog generation. No driver was installed or loaded and no audio
+  configuration changed.
