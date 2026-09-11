@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `dd30eb14`; the native probe compile was
+The latest pushed checkpoint is `ae488ae7`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -45,6 +45,14 @@ qualification remains open.
   generation remains active. Windows-audio tests (41), strict Clippy,
   formatting, and diff checks passed; no endpoint or persistent machine
   configuration was changed.
+
+- Requalified `tests/acceptance/m08-release.ps1` on 2026-09-10 at the current
+  implementation: release Rust binaries, UI typecheck/Vite production
+  output, native shell release compilation, unsigned artifact preparation,
+  and artifact verification all passed. Temporary release/UI outputs were
+  removed by the acceptance cleanup. No installer, driver, signing,
+  registration, audio stream, or persistent machine configuration action
+  occurred.
 
 - Hardened unattended VST3-worker fault handling on 2026-09-10. The
   disposable worker now disables both legacy fault dialogs (`SetErrorMode`)
