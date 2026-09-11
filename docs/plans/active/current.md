@@ -7908,3 +7908,14 @@ live-driver evidence.
   maintenance requests from mapping acquisition. The guarded non-installing
   x64 WDK build/source acceptance passed with zero signability errors/warnings
   and catalog generation; no driver was installed or loaded.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `3089a578` on 2026-09-11. M00 toolchain/native checks, the
+  non-installing AudioRouter driver (including the new IOCTL handle-role
+  checks), disposable SysVAD x64 qualification, M01 CLI, M04 DSP/recording,
+  M05 UI (122 tests), M06 VST3 and VST2 workers, M07 headless, unsigned M08
+  artifacts, 159 traceability IDs, and documentation validation (52 Markdown
+  files/167 links) passed. Cleanup removed 13 run-owned temporary children.
+  No driver installation/loading, signing-mode change, plugin/startup
+  registration, live audio stream, or persistent machine configuration
+  occurred. Production driver activation/signing, installer, clean-machine,
+  physical-latency, and manual UI gates remain open.
