@@ -2402,12 +2402,21 @@ impl<W: Write + Seek> StreamingFlacRecorder<W> {
                 self.controller.fail();
                 return Err(RecordingError::Io(error));
             }
-            let end = expected
-                .checked_add(frames as u64)
-                .ok_or(RecordingError::TooManyFrames)?;
-            self.controller
+            let end = match expected.checked_add(frames as u64) {
+                Some(end) => end,
+                None => {
+                    self.controller.fail();
+                    return Err(RecordingError::TooManyFrames);
+                }
+            };
+            if let Err(error) = self
+                .controller
                 .advance(end)
-                .map_err(RecordingError::Controller)?;
+                .map_err(RecordingError::Controller)
+            {
+                self.controller.fail();
+                return Err(error);
+            }
             self.next_frame = Some(end);
             let checkpoint = self.controller.checkpoint();
             if let Err(error) = persist(&checkpoint) {
@@ -2546,12 +2555,21 @@ impl BufferedFlacRecorder {
                 self.controller.fail();
                 return Err(error);
             }
-            let end = expected
-                .checked_add(frames as u64)
-                .ok_or(RecordingError::TooManyFrames)?;
-            self.controller
+            let end = match expected.checked_add(frames as u64) {
+                Some(end) => end,
+                None => {
+                    self.controller.fail();
+                    return Err(RecordingError::TooManyFrames);
+                }
+            };
+            if let Err(error) = self
+                .controller
                 .advance(end)
-                .map_err(RecordingError::Controller)?;
+                .map_err(RecordingError::Controller)
+            {
+                self.controller.fail();
+                return Err(error);
+            }
             self.next_frame = Some(end);
             let checkpoint = self.controller.checkpoint();
             if let Err(error) = persist(&checkpoint) {
@@ -2706,12 +2724,21 @@ impl<W: Write + Seek> WavRecorder<W> {
                 self.controller.fail();
                 return Err(RecordingError::Io(error));
             }
-            let end = expected
-                .checked_add(frames as u64)
-                .ok_or(RecordingError::TooManyFrames)?;
-            self.controller
+            let end = match expected.checked_add(frames as u64) {
+                Some(end) => end,
+                None => {
+                    self.controller.fail();
+                    return Err(RecordingError::TooManyFrames);
+                }
+            };
+            if let Err(error) = self
+                .controller
                 .advance(end)
-                .map_err(RecordingError::Controller)?;
+                .map_err(RecordingError::Controller)
+            {
+                self.controller.fail();
+                return Err(error);
+            }
             self.next_frame = Some(end);
             let checkpoint = self.controller.checkpoint();
             if let Err(error) = persist(&checkpoint) {
@@ -3515,6 +3542,27 @@ mod tests {
             recorder.finish(),
             Err(RecordingError::NotRecording)
         ));
+    }
+
+    #[test]
+    fn recorder_arithmetic_failure_is_terminal() {
+        let writer =
+            WavWriter::new(Cursor::new(Vec::new()), WavFormat::Pcm16, 1, 48_000, false).unwrap();
+        let mut recorder = WavRecorder::new(writer);
+        recorder.arm().unwrap();
+        recorder.start(u64::MAX).unwrap();
+        let queue = RecordingQueue::new(1).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: u64::MAX,
+                samples: vec![0.0],
+            })
+            .unwrap();
+        assert!(matches!(
+            recorder.drain_queue(&queue, 1),
+            Err(RecordingError::TooManyFrames)
+        ));
+        assert_eq!(recorder.state(), RecorderState::Failed);
     }
 
     #[test]

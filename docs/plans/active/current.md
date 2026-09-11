@@ -406,6 +406,13 @@ qualification remains open.
   transport, and Windows-audio (41) coverage. Workspace all-target strict
   Clippy, formatting, and diff checks also passed. No endpoint, driver,
   plugin registration, or persistent machine audio configuration changed.
+- Hardened REC-08/REC-09 timeline failure handling on 2026-09-11. WAV,
+  buffered FLAC, and streaming FLAC workers now transition to `Failed` when
+  frame arithmetic or controller advancement fails, alongside existing I/O and
+  checkpoint failures. A terminal arithmetic-failure regression passes;
+  recording tests (39), strict package Clippy, formatting, and diff checks
+  passed. Partial-file recovery presentation and native graph attachment
+  remain open.
 
 - Requalified the installed-plugin boundary on 2026-09-10 with the supplied
   `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reacomp-standalone.dll`. ReaComp

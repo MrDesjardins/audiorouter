@@ -850,6 +850,16 @@ checks pass. This closes the portable path-allocation slice, while durable
 session/API integration, UI size/time controls, realtime graph attachment,
 and native endpoint ownership remain open.
 
+## Recorder timeline failure containment (2026-09-11)
+
+WAV, buffered FLAC, and streaming FLAC queue workers now mark the recorder
+`Failed` when frame-counter arithmetic or controller advancement fails, in
+addition to existing write/flush/checkpoint failures. This prevents an
+invalid timeline from remaining active after a bounded worker error. A
+terminal arithmetic-failure regression passes; recording tests (39), strict
+Clippy, formatting, and diff checks pass. Partial-file recovery presentation
+and native graph attachment remain open.
+
 ## Segmented worker failure containment (2026-09-11)
 
 Segmented WAV queue draining now marks the recorder `Failed` for rotation,
