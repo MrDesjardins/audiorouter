@@ -956,6 +956,16 @@ serialized snake_case checkpoint field names, and includes the bounded
 `stop_frame` recovery boundary. Control coverage passed 112 tests and strict
 Clippy; no audio endpoint or machine configuration was accessed.
 
+## REC-06 default segment boundary (2026-09-11)
+
+The recording layer now exposes the canonical default WAV segment boundary:
+the earlier of a 2 GiB RIFF-safe payload budget and 24 hours at the negotiated
+sample rate. `SegmentedWavRecorder::new_with_default_segment_frames` and the
+control worker companion use the shared calculation, while explicit limits
+remain available for deliberate configuration and tests. Recording tests (40),
+control tests (112), strict Clippy, formatting, and documentation validation
+pass. JSON-RPC recorder configuration and native graph attachment remain open.
+
 The shared TypeScript contracts and UI backend adapter now represent the
 single-item and paged recovery response shapes separately. UI tests (123),
 typecheck, and a disposable production build pass; no file or audio-device

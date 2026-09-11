@@ -7959,3 +7959,11 @@ live-driver evidence.
   machine audio configuration change occurred. Production driver activation,
   signing, installer, clean-machine, physical-latency, manual UI, and
   independent-plugin rights gates remain open.
+- Implemented the portable REC-06 default segment policy on 2026-09-11. The
+  recording layer now calculates the earlier of a 2 GiB RIFF-safe payload
+  budget and 24 hours at the negotiated sample rate, and exposes default-bound
+  constructors for both the segmented recorder and control worker. Explicit
+  thresholds remain supported. Recording tests (40), control tests (112),
+  strict Clippy, formatting, and documentation validation passed; JSON-RPC
+  recorder configuration, native graph attachment, and production endpoint
+  ownership remain open.

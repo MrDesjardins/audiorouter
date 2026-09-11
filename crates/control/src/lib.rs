@@ -266,6 +266,33 @@ pub struct SegmentedWavRecorderWorker {
 
 impl SegmentedWavRecorderWorker {
     #[allow(clippy::too_many_arguments)]
+    pub fn new_with_default_segment_frames(
+        policy: RecordingPathPolicy,
+        session: &str,
+        recorder_name: &str,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<Self, String> {
+        let max_segment_frames =
+            audiorouter_recording::default_wav_segment_frames(format, channels, sample_rate)
+                .map_err(|error| format!("invalid default WAV segment boundary: {error:?}"))?;
+        Self::new(
+            policy,
+            session,
+            recorder_name,
+            format,
+            channels,
+            sample_rate,
+            queue_capacity,
+            maximum_chunks_per_pass,
+            max_segment_frames,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         policy: RecordingPathPolicy,
         session: &str,

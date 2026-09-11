@@ -647,6 +647,27 @@ impl WavFormat {
     }
 }
 
+/// Default maximum size of one WAV segment before automatic rotation.
+pub const DEFAULT_WAV_SEGMENT_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Default maximum duration of one recording segment.
+pub const DEFAULT_WAV_SEGMENT_SECONDS: u64 = 24 * 60 * 60;
+
+/// Returns the REC-06 default segment boundary: the earlier of 2 GiB of RIFF
+/// payload capacity and 24 hours at the negotiated sample rate. The small
+/// RIFF header allowance keeps the configured boundary below the container
+/// limit, and validation is performed before any writer or file is created.
+pub fn default_wav_segment_frames(
+    format: WavFormat,
+    channels: u16,
+    sample_rate: u32,
+) -> Result<u64, RecordingError> {
+    validate_format(format, channels, sample_rate)?;
+    let bytes_per_frame = format.bytes_per_sample() * u64::from(channels);
+    let by_size = (DEFAULT_WAV_SEGMENT_BYTES - 36) / bytes_per_frame;
+    let by_duration = u64::from(sample_rate) * DEFAULT_WAV_SEGMENT_SECONDS;
+    Ok(by_size.min(by_duration).max(1))
+}
+
 #[derive(Debug)]
 pub enum RecordingError {
     InvalidSampleRate,
@@ -2014,6 +2035,29 @@ where
 }
 
 impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRecorder<W, F> {
+    /// Constructs a segmented recorder using the REC-06 default automatic
+    /// boundary. Callers may use [`Self::new`] when an explicit smaller limit
+    /// is required for a test or user-configured policy.
+    pub fn new_with_default_segment_frames(
+        output: W,
+        factory: F,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+    ) -> Result<Self, RecordingError> {
+        let max_segment_frames = default_wav_segment_frames(format, channels, sample_rate)?;
+        Self::new(
+            output,
+            factory,
+            format,
+            channels,
+            sample_rate,
+            dither,
+            max_segment_frames,
+        )
+    }
+
     pub fn new(
         output: W,
         factory: F,
@@ -3146,6 +3190,24 @@ mod tests {
         assert_eq!(recorder.state(), RecorderState::Completed);
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn default_wav_segment_frames_use_the_earlier_size_or_duration_limit() {
+        let pcm16_mono = default_wav_segment_frames(WavFormat::Pcm16, 1, 48_000).unwrap();
+        assert_eq!(pcm16_mono, (DEFAULT_WAV_SEGMENT_BYTES - 36) / 2);
+
+        let pcm24_stereo = default_wav_segment_frames(WavFormat::Pcm24, 2, 48_000).unwrap();
+        assert_eq!(pcm24_stereo, (DEFAULT_WAV_SEGMENT_BYTES - 36) / 6);
+
+        assert_eq!(
+            default_wav_segment_frames(WavFormat::Pcm16, 1, 44_100).unwrap(),
+            (DEFAULT_WAV_SEGMENT_BYTES - 36) / 2
+        );
+        assert!(matches!(
+            default_wav_segment_frames(WavFormat::Pcm16, 0, 48_000),
+            Err(RecordingError::InvalidChannels)
+        ));
     }
 
     #[test]
