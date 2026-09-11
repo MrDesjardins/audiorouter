@@ -837,3 +837,15 @@ two frames each and no duplicated/lost payload. Recording tests (35), strict
 Clippy, formatting, and diff checks pass. This is portable file-worker
 evidence; durable path allocation, UI/API automatic size/time configuration,
 realtime graph attachment, and native endpoint ownership remain open.
+
+## Segmented path-policy integration (2026-09-11)
+
+The segmented worker regression now opens the initial and rotated WAV files
+through `RecordingPathPolicy`, verifying sanitized names, root containment, and
+exclusive creation across all three segments. The test also caught and fixed a
+Windows compatibility defect where canonical local paths in the `\\?\C:\...`
+extended form were incorrectly rejected as network roots; extended UNC roots
+remain rejected. Recording tests (36), strict Clippy, formatting, and diff
+checks pass. This closes the portable path-allocation slice, while durable
+session/API integration, UI size/time controls, realtime graph attachment,
+and native endpoint ownership remain open.

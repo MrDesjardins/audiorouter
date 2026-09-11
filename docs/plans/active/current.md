@@ -7771,3 +7771,11 @@ live-driver evidence.
   and worker-process coverage. Workspace strict Clippy, formatting, and diff
   checks passed; no endpoint, plugin, driver, or machine audio configuration
   changed.
+- Integrated the segmented recorder with `RecordingPathPolicy` on 2026-09-11.
+  The new regression opens all initial/rotated files through the exclusive,
+  sanitized, root-contained path boundary and verifies three WAV outputs. It
+  exposed and fixed rejection of Windows extended local canonical paths
+  (`\\?\C:\...`) while preserving rejection of extended UNC roots. Recording
+  tests (36), strict package Clippy, formatting, and diff checks passed. The
+  remaining recorder gap is durable session/API and UI configuration wiring;
+  realtime graph attachment and native endpoint ownership remain open.

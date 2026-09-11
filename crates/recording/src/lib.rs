@@ -44,7 +44,15 @@ impl RecordingPathPolicy {
             return Err(PathPolicyError::RootNotAbsolute);
         }
         let text = root.as_os_str().to_string_lossy();
-        if text.starts_with("\\\\") || text.starts_with("//") {
+        let is_extended_local = text.starts_with("\\\\?\\");
+        let is_extended_unc = is_extended_local
+            && text
+                .get(4..8)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("UNC\\"));
+        if text.starts_with("//")
+            || (text.starts_with("\\\\") && !is_extended_local)
+            || is_extended_unc
+        {
             return Err(PathPolicyError::NetworkRoot);
         }
         let root_metadata =
@@ -3107,6 +3115,65 @@ mod tests {
                 .sum::<usize>(),
             3 * 48
         );
+    }
+
+    #[test]
+    fn segmented_wav_recorder_uses_exclusive_sanitized_path_policy_for_segments() {
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-segmented-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let (_, initial_file) = policy
+            .create_file("session:raw", "voice?raw", 0, "wav")
+            .unwrap();
+        let factory_root = policy.root().to_path_buf();
+        let mut recorder = SegmentedWavRecorder::new(
+            initial_file,
+            move |index| {
+                let policy = RecordingPathPolicy::new(&factory_root).unwrap();
+                let (_, file) = policy
+                    .create_file("session:raw", "voice?raw", u64::from(index), "wav")
+                    .unwrap();
+                Ok(file)
+            },
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            false,
+            2,
+        )
+        .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        let queue = RecordingQueue::new(1).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            })
+            .unwrap();
+        recorder.stop_and_drain(&queue, 6, 1).unwrap();
+        let outputs = recorder.finish().unwrap();
+        assert_eq!(outputs.len(), 3);
+        drop(outputs);
+
+        let mut paths = std::fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths.len(), 3);
+        assert!(paths.iter().all(|path| {
+            path.parent() == Some(root.as_path())
+                && path.extension().and_then(|extension| extension.to_str()) == Some("wav")
+                && !path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .contains([':', '?'])
+        }));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
