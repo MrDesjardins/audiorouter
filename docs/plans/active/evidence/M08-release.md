@@ -1,5 +1,19 @@
 # M08 release evidence
 
+## 2026-09-11 - Segmented library-row requalification at `d350b013`
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed at pushed
+head `d350b013` after the segmented WAV library-row handoff. M00/M03
+toolchain and non-installing driver build, read-only 31-endpoint inventory,
+disposable SysVAD qualification, M01, M04 (30 DSP and 40 recording tests),
+M05 (124 UI tests), M06 VST3/VST2 workers, M07, unsigned M08 artifacts, 159
+traceability IDs, and documentation validation (52 Markdown files/167 local
+links) all passed. Cleanup removed 14 run-owned temporary children. No driver
+installation/loading, signing or boot-policy change, plugin/startup
+registration, live stream, or persistent machine audio configuration change
+occurred. Production driver activation/signing, installer, clean-machine,
+physical-latency, manual UI, and independent-plugin rights gates remain open.
+
 ## 2026-09-11 - Endpoint identity requalification at `f578b073`
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed at pushed

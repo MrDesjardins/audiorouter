@@ -8015,3 +8015,13 @@ live-driver evidence.
   tests (113), strict Clippy, formatting, and diff checks passed. FLAC/simple
   file-worker metadata handoff, automatic recorder configuration, realtime
   graph attachment, and native endpoint ownership remain open.
+- Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
+  chain at pushed head `d350b013` after the segmented library-row handoff.
+  M00/M03, M04 (30 DSP and 40 recording tests), M05 (124 UI tests), M06, M07,
+  M08, 159 traceability IDs, documentation validation (52 Markdown files/167
+  local links), and cleanup of 14 run-owned temporary children passed. No
+  driver installation/loading, signing or boot-policy change, plugin/startup
+  registration, live stream, or persistent machine audio configuration change
+  occurred. Production driver activation/signing, installer, clean-machine,
+  physical-latency, manual UI, and independent-plugin rights gates remain
+  open.
