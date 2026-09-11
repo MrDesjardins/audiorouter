@@ -1541,6 +1541,14 @@ action occurred.
   Cleanup removed 13 run-owned temporary children. No driver installation or
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration occurred.
+- Closed the attached-worker lifecycle forwarding gap on 2026-09-11. The
+  `RecorderWorker` boundary now receives arm/start/pause/resume/split hooks
+  before the control checkpoint changes; unsupported worker splitting fails
+  closed. A dispatch regression verifies arm, start, and split forwarding with
+  the expected frame checkpoint. Control tests (109), strict package Clippy,
+  formatting, and diff checks passed. Durable recording rows, automatic
+  threshold configuration, graph attachment, and native endpoint ownership
+  remain open.
 
 - Requalified M00 toolchain compatibility on 2026-09-10 with
   `tests/acceptance/m00-toolchain.ps1`: Visual Studio Community 2026, MSVC

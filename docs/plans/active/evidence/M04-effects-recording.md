@@ -850,6 +850,17 @@ checks pass. This closes the portable path-allocation slice, while durable
 session/API integration, UI size/time controls, realtime graph attachment,
 and native endpoint ownership remain open.
 
+## Recorder lifecycle forwarding (2026-09-11)
+
+The control `RecorderWorker` boundary now exposes lifecycle hooks for arm,
+start, pause, resume, and split. Attached workers receive these operations
+before the authoritative controller is mutated; unsupported worker splitting
+fails closed. A dispatch regression verifies arm/start/split forwarding and
+the resulting frame checkpoint. Control tests (109), strict Clippy,
+formatting, and diff checks pass. Worker stop/finalization remains a separate
+bounded operation, and durable recording rows, automatic threshold
+configuration, graph attachment, and native endpoint ownership remain open.
+
 ## RIFF capacity guard (2026-09-11)
 
 The WAV writer now rejects a write whose data payload would exceed the RIFF

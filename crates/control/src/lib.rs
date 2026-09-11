@@ -94,6 +94,26 @@ pub struct RecorderFinalizationOutcome {
 /// decision and will stop a session only after this method reports a finalized
 /// file. The frame is the last committed control-plane boundary.
 pub trait RecorderWorker: Send {
+    fn arm(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn start(&mut self, _frame: u64) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn pause(&mut self, _frame: u64) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn resume(&mut self, _frame: u64) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn split(&mut self, _frame: u64) -> Result<(), String> {
+        Err("attached recorder worker does not support file splitting".into())
+    }
+
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String>;
 }
 
@@ -170,6 +190,30 @@ impl WavRecorderWorker {
 }
 
 impl RecorderWorker for WavRecorderWorker {
+    fn arm(&mut self) -> Result<(), String> {
+        WavRecorderWorker::arm(self)
+    }
+
+    fn start(&mut self, frame: u64) -> Result<(), String> {
+        WavRecorderWorker::start(self, frame)
+    }
+
+    fn pause(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "WAV recorder is already finalized".to_owned())?
+            .pause(frame)
+            .map_err(|error| format!("WAV recorder pause failed: {error:?}"))
+    }
+
+    fn resume(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "WAV recorder is already finalized".to_owned())?
+            .resume(frame)
+            .map_err(|error| format!("WAV recorder resume failed: {error:?}"))
+    }
+
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
         let mut recorder = self
             .recorder
@@ -296,6 +340,38 @@ impl SegmentedWavRecorderWorker {
 }
 
 impl RecorderWorker for SegmentedWavRecorderWorker {
+    fn arm(&mut self) -> Result<(), String> {
+        SegmentedWavRecorderWorker::arm(self)
+    }
+
+    fn start(&mut self, frame: u64) -> Result<(), String> {
+        SegmentedWavRecorderWorker::start(self, frame)
+    }
+
+    fn pause(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
+            .pause(frame)
+            .map_err(|error| format!("segmented WAV recorder pause failed: {error:?}"))
+    }
+
+    fn resume(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
+            .resume(frame)
+            .map_err(|error| format!("segmented WAV recorder resume failed: {error:?}"))
+    }
+
+    fn split(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
+            .split(frame)
+            .map_err(|error| format!("segmented WAV recorder split failed: {error:?}"))
+    }
+
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
         let mut recorder = self
             .recorder
@@ -404,6 +480,38 @@ impl BufferedFlacRecorderWorker {
 }
 
 impl RecorderWorker for BufferedFlacRecorderWorker {
+    fn arm(&mut self) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
+            .arm()
+            .map_err(|error| format!("FLAC recorder arm failed: {error:?}"))
+    }
+
+    fn start(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
+            .start(frame)
+            .map_err(|error| format!("FLAC recorder start failed: {error:?}"))
+    }
+
+    fn pause(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
+            .pause(frame)
+            .map_err(|error| format!("FLAC recorder pause failed: {error:?}"))
+    }
+
+    fn resume(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "FLAC recorder is already finalized".to_owned())?
+            .resume(frame)
+            .map_err(|error| format!("FLAC recorder resume failed: {error:?}"))
+    }
+
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
         let mut recorder = self
             .recorder
@@ -510,6 +618,38 @@ impl StreamingFlacRecorderWorker {
 }
 
 impl RecorderWorker for StreamingFlacRecorderWorker {
+    fn arm(&mut self) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
+            .arm()
+            .map_err(|error| format!("streaming FLAC recorder arm failed: {error:?}"))
+    }
+
+    fn start(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
+            .start(frame)
+            .map_err(|error| format!("streaming FLAC recorder start failed: {error:?}"))
+    }
+
+    fn pause(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
+            .pause(frame)
+            .map_err(|error| format!("streaming FLAC recorder pause failed: {error:?}"))
+    }
+
+    fn resume(&mut self, frame: u64) -> Result<(), String> {
+        self.recorder
+            .as_mut()
+            .ok_or_else(|| "streaming FLAC recorder is already finalized".to_owned())?
+            .resume(frame)
+            .map_err(|error| format!("streaming FLAC recorder resume failed: {error:?}"))
+    }
+
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String> {
         let mut recorder = self
             .recorder
@@ -5023,6 +5163,32 @@ impl ControlPlane {
             })?;
             self.recorders.insert(session_id.clone(), recorder);
         }
+        if let Some(worker) = self.recorder_workers.get_mut(&session_id) {
+            let worker_result = match method {
+                "recorders.arm" => worker.arm(),
+                "recorders.start" => worker.start(
+                    frame
+                        .ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+                ),
+                "recorders.pause" => worker.pause(
+                    frame
+                        .ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+                ),
+                "recorders.resume" => worker.resume(
+                    frame
+                        .ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+                ),
+                "recorders.split" => worker.split(
+                    frame
+                        .ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+                ),
+                "recorders.stop" => Ok(()),
+                _ => Err("method not found".into()),
+            };
+            worker_result.map_err(|error| {
+                ControlError::InvalidRequest(format!("recorder worker transition failed: {error}"))
+            })?;
+        }
         let recorder = self.recorders.entry(session_id.clone()).or_default();
         let result = match method {
             "recorders.arm" => recorder.arm(),
@@ -6996,6 +7162,35 @@ mod tests {
     struct TestRecorderWorker;
 
     impl RecorderWorker for TestRecorderWorker {
+        fn finalize(&mut self, _frame: u64) -> Result<RecorderFinalizationOutcome, String> {
+            Ok(RecorderFinalizationOutcome {
+                state: "completed".into(),
+                file_finalized: true,
+                recoverable: false,
+            })
+        }
+    }
+
+    struct HookRecorderWorker {
+        hooks: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl RecorderWorker for HookRecorderWorker {
+        fn arm(&mut self) -> Result<(), String> {
+            self.hooks.lock().unwrap().push("arm".into());
+            Ok(())
+        }
+
+        fn start(&mut self, frame: u64) -> Result<(), String> {
+            self.hooks.lock().unwrap().push(format!("start:{frame}"));
+            Ok(())
+        }
+
+        fn split(&mut self, frame: u64) -> Result<(), String> {
+            self.hooks.lock().unwrap().push(format!("split:{frame}"));
+            Ok(())
+        }
+
         fn finalize(&mut self, _frame: u64) -> Result<RecorderFinalizationOutcome, String> {
             Ok(RecorderFinalizationOutcome {
                 state: "completed".into(),
@@ -10394,6 +10589,54 @@ mod tests {
                 if message == "finalize the active recorder before stopping the session"
         ));
         assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Running);
+    }
+
+    #[test]
+    fn recorder_api_forwards_lifecycle_boundaries_to_attached_worker() {
+        let hooks = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        plane
+            .attach_recorder_worker(
+                original.id.clone(),
+                Box::new(HookRecorderWorker {
+                    hooks: hooks.clone(),
+                }),
+            )
+            .unwrap();
+
+        for (id, method, frame) in [
+            (1, "recorders.arm", None),
+            (2, "recorders.start", Some(0)),
+            (3, "recorders.split", Some(128)),
+        ] {
+            let params = match frame {
+                Some(frame) => json!({
+                    "sessionId": original.id,
+                    "frame": frame,
+                    "idempotencyKey": format!("hook-{id}")
+                }),
+                None => json!({
+                    "sessionId": original.id,
+                    "idempotencyKey": format!("hook-{id}")
+                }),
+            };
+            assert!(plane
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(id)),
+                    method: method.into(),
+                    params: Some(params),
+                })
+                .result
+                .is_some());
+        }
+        assert_eq!(*hooks.lock().unwrap(), vec!["arm", "start:0", "split:128"]);
+        assert_eq!(
+            plane.recorders[&original.id].checkpoint().last_frame,
+            Some(128)
+        );
     }
 
     #[test]
