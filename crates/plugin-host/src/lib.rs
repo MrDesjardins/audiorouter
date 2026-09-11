@@ -18,7 +18,7 @@ use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc::{self, Receiver},
-    Arc,
+    Arc, Mutex,
 };
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -42,6 +42,7 @@ pub const MAX_PARAMETER_DESCRIPTORS: usize = 256;
 pub const MAX_PARAMETER_TITLE_BYTES: usize = 128;
 pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
 pub const MAX_WORKER_FAILURE_CODE_BYTES: usize = 128;
+pub const MAX_WORKER_DIAGNOSTIC_BYTES: usize = 8 * 1024;
 pub const MAX_WORKER_STATE_BYTES: usize = 512 * 1024;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
@@ -2652,6 +2653,7 @@ pub struct WorkerProcess {
     channels: u16,
     shared: Option<SharedAudioTransport>,
     bus_layout: Option<WorkerAudioBusLayout>,
+    diagnostic: Arc<Mutex<String>>,
 }
 
 /// A worker process coupled to the bounded lifecycle policy. Successful
@@ -4003,7 +4005,7 @@ impl WorkerProcess {
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| WorkerProcessError::Spawn(error.to_string()))?;
         let sandbox = match WorkerSandbox::attach(&child) {
@@ -4027,6 +4029,22 @@ impl WorkerProcess {
                 return Err(WorkerProcessError::Exited);
             }
         };
+        let diagnostic = Arc::new(Mutex::new(String::new()));
+        if let Some(stderr) = child.stderr.take() {
+            let diagnostic_target = Arc::clone(&diagnostic);
+            std::thread::spawn(move || {
+                let mut bounded = stderr.take(MAX_WORKER_DIAGNOSTIC_BYTES as u64);
+                let mut bytes = Vec::new();
+                let _ = bounded.read_to_end(&mut bytes);
+                if bytes.is_empty() {
+                    return;
+                }
+                let value = String::from_utf8_lossy(&bytes).trim().to_owned();
+                if let Ok(mut target) = diagnostic_target.lock() {
+                    *target = value;
+                }
+            });
+        }
         let (reader_sender, reader) = mpsc::sync_channel(4);
         std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
@@ -4046,6 +4064,7 @@ impl WorkerProcess {
             channels,
             shared: shared.take(),
             bus_layout: bus_layout.cloned(),
+            diagnostic,
         };
         let hello = process.read().map_err(WorkerProcessError::Message)?;
         match (process.bus_layout.as_ref(), hello) {
@@ -4364,6 +4383,7 @@ impl WorkerProcess {
 
     fn read(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
         receive_worker_message(&self.reader, WORKER_RESPONSE_TIMEOUT)
+            .map_err(|error| self.with_diagnostic(error))
     }
 
     fn read_until_deadline(
@@ -4378,6 +4398,22 @@ impl WorkerProcess {
         }
         let remaining = Duration::from_millis(deadline_tick - now_tick);
         receive_worker_message(&self.reader, remaining.min(WORKER_RESPONSE_TIMEOUT))
+            .map_err(|error| self.with_diagnostic(error))
+    }
+
+    fn with_diagnostic(&self, error: WorkerMessageError) -> WorkerMessageError {
+        let Ok(diagnostic) = self.diagnostic.try_lock() else {
+            return error;
+        };
+        if diagnostic.is_empty() {
+            return error;
+        }
+        match error {
+            WorkerMessageError::Io(message) => {
+                WorkerMessageError::Io(format!("{message}; native worker diagnostic: {diagnostic}"))
+            }
+            other => other,
+        }
     }
 
     fn take_shared_transport(&mut self) -> Option<SharedAudioTransport> {
