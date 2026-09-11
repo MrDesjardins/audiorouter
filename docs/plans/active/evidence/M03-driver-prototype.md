@@ -19,6 +19,16 @@ package with zero signability errors and warnings. This is package metadata
 qualification only; dynamic bus provisioning, loaded-driver PortCls ownership,
 production signing, installation, and live endpoint evidence remain open.
 
+## 2026-09-11 - Explicit output ownership behavior
+
+An administrator-authorized, non-installing Release x64 build was run with the
+caller-provided temporary output directory
+`%TEMP%\audiorouter-explicit-output-ownership-test` and without
+`-KeepOutput`. The wrapper preserved that directory, the check verified its
+existence, and the test removed only that exact directory afterward. The build
+again reported zero signability errors and warnings; no driver, service,
+endpoint, or machine-audio configuration changed.
+
 Date: 2026-09-10
 Environment: Windows x64, Visual Studio 18.9.1 (Community 2026), WDK
 10.0.28000.0, PowerShell, repository `main`

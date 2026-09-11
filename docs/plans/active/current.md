@@ -7982,6 +7982,12 @@ live-driver evidence.
   occurred. Production driver activation/signing, installer, clean-machine,
   physical-latency, manual UI, and independent-plugin rights gates remain
   open.
+- Verified the M03 output-ownership behavior with an explicit caller-provided
+  temporary directory on 2026-09-11. A non-installing Release x64 WDK build
+  preserved the supplied directory without `-KeepOutput`; the test then
+  removed only that exact directory. Signability again reported zero errors
+  and warnings, and no driver, endpoint, service, or machine-audio state
+  changed.
 - Implemented the portable REC-06 default segment policy on 2026-09-11. The
   recording layer now calculates the earlier of a 2 GiB RIFF-safe payload
   budget and 24 hours at the negotiated sample rate, and exposes default-bound
