@@ -1404,3 +1404,14 @@ control, unsigned M08 artifacts, traceability, and documentation. The runner
 removed 13 run-owned temporary children. This is compile/portable/disposable
 evidence only; no driver was installed or loaded, no stream was opened, and no
 persistent audio configuration was changed.
+
+## 2026-09-11 â€” Opt-in format-optional inactive inventory
+
+`devices.list({includeInactive:true})` now merges the active monitor snapshot
+with the all-state identity inventory. Active items retain negotiated format
+and period metadata; disabled, unplugged, not-present, and unknown-state items
+omit those fields rather than inventing values or attempting activation. The
+response schema, TypeScript union, and UI presentation preserve this
+distinction. Focused control (106), Windows-audio (56), contracts/UI
+typechecks, UI (121), strict Clippy, formatting, and diff checks passed. No
+stream or persistent audio configuration changed.

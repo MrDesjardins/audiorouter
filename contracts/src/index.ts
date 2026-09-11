@@ -213,8 +213,18 @@ export interface DeviceInfo {
   };
 }
 
+export interface InactiveDeviceInfo {
+  id: string;
+  name: string;
+  direction: "capture" | "render";
+  state: "disabled" | "unplugged" | "notPresent" | "unknown";
+  defaultRoles: Array<"console" | "multimedia" | "communications">;
+}
+
+export type DeviceListItem = DeviceInfo | InactiveDeviceInfo;
+
 export interface DeviceListPage {
-  items: DeviceInfo[];
+  items: DeviceListItem[];
   nextCursor: string | null;
 }
 
@@ -755,7 +765,7 @@ export type MethodParams = {
   "startup.get": undefined;
   "startup.plan": { enabled: boolean };
   "startup.apply": { planId: EntityId; idempotencyKey: string };
-  "devices.list": { cursor?: string; limit?: number } | undefined;
+  "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
   "plugins.retry": { directory: string; idempotencyKey: string };

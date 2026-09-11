@@ -3671,7 +3671,7 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
 unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
     use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
     use windows::Win32::Media::Audio::{
-        eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
+        eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATEMASK_ALL,
     };
     use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToString};
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL, STGM_READ};
@@ -3682,7 +3682,10 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
         (EndpointDirection::Capture, eCapture),
         (EndpointDirection::Render, eRender),
     ] {
-        let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
+        let devices = enumerator.EnumAudioEndpoints(
+            flow,
+            windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
+        )?;
         for index in 0..devices.GetCount()? {
             let device = devices.Item(index)?;
             let id = device

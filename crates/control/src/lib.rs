@@ -738,7 +738,8 @@ fn method_input_schema(name: &str) -> Value {
         "devices.list" => object_schema(
             json!({
                 "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_DEVICE_LIST_ITEMS }
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_DEVICE_LIST_ITEMS },
+                "includeInactive": { "type": "boolean" }
             }),
             &[],
         ),
@@ -2058,6 +2059,12 @@ fn recording_item_schema() -> Value {
 
 fn device_item_schema() -> Value {
     json!({
+        "oneOf": [active_device_item_schema(), inactive_device_item_schema()]
+    })
+}
+
+fn active_device_item_schema() -> Value {
+    json!({
         "type": "object",
         "properties": {
             "id": { "type": "string", "minLength": 1 },
@@ -2093,6 +2100,26 @@ fn device_item_schema() -> Value {
             }
         },
         "required": ["id", "name", "direction", "state", "defaultRoles", "format", "periods"],
+        "additionalProperties": false
+    })
+}
+
+fn inactive_device_item_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+            "direction": { "enum": ["capture", "render"] },
+            "state": { "enum": ["disabled", "unplugged", "notPresent", "unknown"] },
+            "defaultRoles": {
+                "type": "array",
+                "items": { "enum": ["console", "multimedia", "communications"] },
+                "uniqueItems": true,
+                "maxItems": 3
+            }
+        },
+        "required": ["id", "name", "direction", "state", "defaultRoles"],
         "additionalProperties": false
     })
 }
@@ -5634,6 +5661,15 @@ impl ControlPlane {
             })
             .transpose()?;
         let limit = params.get("limit").and_then(Value::as_u64).unwrap_or(100);
+        let include_inactive = params
+            .get("includeInactive")
+            .map(|value| {
+                value.as_bool().ok_or_else(|| {
+                    ControlError::InvalidRequest("includeInactive must be a boolean".into())
+                })
+            })
+            .transpose()?
+            .unwrap_or(false);
         if !(1..=MAX_DEVICE_LIST_ITEMS as u64).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
@@ -5654,6 +5690,11 @@ impl ControlPlane {
             .map_err(audio_control_error)?;
         let display_info = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
             .map_err(audio_control_error)?;
+        let endpoint_states = include_inactive
+            .then(audiorouter_windows_audio::enumerate_endpoint_states)
+            .transpose()
+            .map_err(audio_control_error)?
+            .unwrap_or_default();
         let mut devices = endpoints
             .into_iter()
             .map(|endpoint| {
@@ -5694,6 +5735,54 @@ impl ControlPlane {
                 }))
             })
             .collect::<Result<Vec<_>, ControlError>>()?;
+        if include_inactive {
+            for endpoint in endpoint_states {
+                if matches!(
+                    endpoint.state,
+                    audiorouter_windows_audio::EndpointState::Active
+                ) || devices.iter().any(|device| {
+                    device["id"] == endpoint.id
+                        && device["direction"]
+                            == match endpoint.direction {
+                                audiorouter_windows_audio::EndpointDirection::Capture => "capture",
+                                audiorouter_windows_audio::EndpointDirection::Render => "render",
+                            }
+                }) {
+                    continue;
+                }
+                let direction = match endpoint.direction {
+                    audiorouter_windows_audio::EndpointDirection::Capture => "capture",
+                    audiorouter_windows_audio::EndpointDirection::Render => "render",
+                };
+                let default_roles = defaults
+                    .iter()
+                    .filter(|binding| {
+                        binding.endpoint_id == endpoint.id
+                            && binding.direction == endpoint.direction
+                    })
+                    .map(|binding| binding.role.as_str())
+                    .collect::<Vec<_>>();
+                let name = display_info
+                    .iter()
+                    .find(|info| info.id == endpoint.id && info.direction == endpoint.direction)
+                    .map(|info| info.name.as_str())
+                    .unwrap_or("Unknown audio endpoint");
+                let state = match endpoint.state {
+                    audiorouter_windows_audio::EndpointState::Disabled => "disabled",
+                    audiorouter_windows_audio::EndpointState::Unplugged => "unplugged",
+                    audiorouter_windows_audio::EndpointState::NotPresent => "notPresent",
+                    audiorouter_windows_audio::EndpointState::Unknown(_) => "unknown",
+                    audiorouter_windows_audio::EndpointState::Active => unreachable!(),
+                };
+                devices.push(json!({
+                    "id": endpoint.id,
+                    "name": name,
+                    "direction": direction,
+                    "state": state,
+                    "defaultRoles": default_roles,
+                }));
+            }
+        }
         devices.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
         if !paged && devices.len() > MAX_DEVICE_LIST_ITEMS {
             return Err(ControlError::InvalidRequest(
@@ -8078,8 +8167,8 @@ mod tests {
             500
         );
         assert_eq!(
-            devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
-                ["direction"]["enum"],
+            devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["oneOf"][0]
+                ["properties"]["direction"]["enum"],
             json!(["capture", "render"])
         );
         assert_eq!(
@@ -8095,8 +8184,8 @@ mod tests {
             audiorouter_domain::MAX_VIRTUAL_BUSES
         );
         assert_eq!(
-            devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
-                ["format"]["required"],
+            devices["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["oneOf"][0]
+                ["properties"]["format"]["required"],
             json!([
                 "sampleRateHz",
                 "channels",

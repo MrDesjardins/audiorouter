@@ -7467,3 +7467,15 @@ stream, or machine configuration action occurred.
 - Next M00/M02 task: implement the format-optional inactive `devices.list`
   records and bounded snapshot-change event contract before claiming full
   CAP-01 control-plane coverage.
+- Implemented the opt-in format-optional inactive device contract on
+  2026-09-11: `devices.list({includeInactive:true})` now combines negotiated
+  active records with disabled, unplugged, not-present, and unknown-state
+  records containing only truthful identity/presentation/default-role metadata.
+  The input/output schemas and TypeScript union distinguish active format data
+  from unavailable format data, and the UI renders the difference explicitly.
+  Control (106), Windows-audio (56), contracts/UI typechecks, UI (121), strict
+  Clippy, formatting, and diff checks passed. No endpoint stream or persistent
+  audio configuration changed.
+- Next M00/M02 task: emit bounded endpoint snapshot-change events from the
+  notification refresh path and test inactive-to-active transitions without
+  automatic route replacement.

@@ -2,7 +2,7 @@ import { AudioRouterRpcError, createAudioRouterClient } from "@audiorouter/contr
 import type {
   AudioRouterClient,
   ApplicationInfo,
-  DeviceInfo,
+  DeviceListItem,
   VirtualDeviceInfo,
   VirtualDeviceApplyResult,
   VirtualDeviceOperation,
@@ -79,7 +79,7 @@ export interface UiBackend {
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
   listSessions(): Promise<Session[]>;
   listApplications(): Promise<ApplicationRow[]>;
-  listDevices(): Promise<DeviceInfo[]>;
+  listDevices(): Promise<DeviceListItem[]>;
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
