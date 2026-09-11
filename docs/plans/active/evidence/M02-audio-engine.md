@@ -165,6 +165,13 @@ The focused Windows-audio suite passed 56 tests with strict Clippy,
 formatting, and diff checks. The control response remains active-only pending
 the format-optional all-state schema and notification-driven refresh slice.
 
+The all-state implementation was rechecked after correcting the Windows
+projection of `DEVICE_STATEMASK_ALL` to the generated `DEVICE_STATE` newtype.
+The focused Windows-audio suite passed 56 tests, including active/disabled,
+not-present/unplugged, and unknown-value mapping. This remains a metadata
+adapter result only; control-plane all-state response and notification refresh
+are not yet claimed.
+
 ## 2026-09-11 — Explicit default-role observations
 
 The Windows adapter now exposes `enumerate_default_endpoint_bindings`, which

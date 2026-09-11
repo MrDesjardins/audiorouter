@@ -7435,3 +7435,13 @@ stream, or machine configuration action occurred.
 - Next M00/M02 task: add a bounded all-state discovery response and wire the
   existing notification dirty flag to a control-thread refresh, preserving
   read-only behavior and exact-ID binding semantics.
+- Verified the endpoint-state adapter implementation on 2026-09-11 after a
+  Windows API type correction: `EnumAudioEndpoints` now receives the typed
+  all-state mask, while state mapping remains a pure forward-compatible
+  boundary. Windows-audio (56), strict Clippy, formatting, and diff checks
+  passed. The control response is intentionally still active-only because
+  disabled/unplugged records do not have guaranteed mix-format activation
+  metadata; no stream or machine audio configuration changed.
+- Next M00/M02 task: design and implement the bounded format-optional
+  all-state `devices.list` response, then consume notification dirtiness from
+  the control thread with explicit snapshot-diff events.
