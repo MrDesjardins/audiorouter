@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `05324a79`; the native probe compile was
+The latest pushed checkpoint is `85aa4067`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -60,6 +60,16 @@ qualification remains open.
   passed. The acceptance exercised control, persistence, automation, and
   contained plugin boundaries without opening audio devices or changing
   drivers, registration, or persistent machine configuration.
+
+- Requalified the guarded `tests/acceptance/m00-native-live.ps1` on
+  2026-09-10 with `-AllowLiveAudio -DurationMilliseconds 100` in the
+  approved native Windows context. The probe inventoried 13 capture and 18
+  render endpoints, completed bounded shared-capture and silent-render
+  lifecycle checks, and observed one occupied render endpoint through the
+  expected contention branch. Teardown and state comparison confirmed that
+  defaults, volume, mute, privacy, drivers, signing, and startup settings
+  were unchanged. This is existing-endpoint evidence, not managed-driver
+  production routing evidence.
 
 - Hardened unattended VST3-worker fault handling on 2026-09-10. The
   disposable worker now disables both legacy fault dialogs (`SetErrorMode`)
