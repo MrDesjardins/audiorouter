@@ -112,6 +112,13 @@ closes the lease before flushing the mapping, and attempts release on drop/error
 paths. The adapter still does not claim that the driver can access the file
 mapping; section-handle ownership is the next transport task.
 
+The bridge ABI now carries an optional section handle and mapping-size pair.
+Both kernel and user-mode validation reject mismatched zero/nonzero pairs and
+undersized mappings; the user-mode client exposes an explicit
+`open_bridge_with_mapping` entry point. Lease-only mode remains intentional
+while the broker-side section creation and kernel system mapping are developed.
+The updated elevated WDK build passed with zero signability errors/warnings.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

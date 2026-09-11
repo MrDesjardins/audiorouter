@@ -21,6 +21,7 @@
 #define AR_BRIDGE_MAX_CHANNELS 2
 #define AR_BRIDGE_MAX_FRAMES 4096
 #define AR_BRIDGE_MAX_LEASE_MS 60000
+#define AR_BRIDGE_HEADER_BYTES 32
 
 #define IOCTL_AUDIOROUTER_BRIDGE_OPEN \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
@@ -49,6 +50,9 @@ typedef struct _AR_BRIDGE_OPEN_REQUEST {
     ULONG SampleRateHz;
     ULONG LeaseMs;
     ULONGLONG Generation;
+    ULONGLONG SectionHandle;
+    ULONG MappingBytes;
+    ULONG Reserved2;
     WCHAR BusId[AR_BRIDGE_MAX_BUS_ID_BYTES / sizeof(WCHAR)];
 } AR_BRIDGE_OPEN_REQUEST, *PAR_BRIDGE_OPEN_REQUEST;
 
@@ -81,7 +85,9 @@ AudioRouterValidateBridgeOpenRequest(
         Request->SampleRateHz > 192000 ||
         Request->LeaseMs == 0 ||
         Request->LeaseMs > AR_BRIDGE_MAX_LEASE_MS ||
-        Request->Generation == 0) {
+        Request->Generation == 0 ||
+        ((Request->SectionHandle == 0) != (Request->MappingBytes == 0)) ||
+        (Request->SectionHandle != 0 && Request->MappingBytes < AR_BRIDGE_HEADER_BYTES)) {
         return STATUS_INVALID_PARAMETER;
     }
     return STATUS_SUCCESS;

@@ -118,6 +118,13 @@ paths. This is a user-mode lifecycle integration boundary. The kernel still
 does not receive the file mapping, so live shared-memory/audio transport and
 driver-loaded validation remain open.
 
+The fixed bridge ABI now includes an optional section handle and mapping byte
+count. Kernel and user-mode validators reject half-specified or undersized
+mapping descriptors, while the client exposes an explicit mapped-open method.
+The current lease-only path remains valid for control testing; no zero handle is
+interpreted as mapped audio. The updated elevated WDK build passed with zero
+signability errors/warnings and catalog generation.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded

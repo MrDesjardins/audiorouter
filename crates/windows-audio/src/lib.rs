@@ -44,6 +44,9 @@ struct NativeBridgeOpenRequest {
     sample_rate_hz: u32,
     lease_ms: u32,
     generation: u64,
+    section_handle: u64,
+    mapping_bytes: u32,
+    reserved2: u32,
     bus_id: [u16; 64],
 }
 
@@ -158,7 +161,7 @@ impl NativeBridgeControlClient {
         &self,
         hello: &audiorouter_protocol::AudioBridgeHello,
     ) -> Result<(), windows::core::Error> {
-        let request = native_bridge_open_request(hello).map_err(|_| {
+        let request = native_bridge_open_request(hello, 0, 0).map_err(|_| {
             windows::core::Error::new(
                 windows::core::HRESULT(0x80070057u32 as i32),
                 "invalid hello",
@@ -167,11 +170,27 @@ impl NativeBridgeControlClient {
         self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_OPEN, &request)
     }
 
+    pub fn open_bridge_with_mapping(
+        &self,
+        hello: &audiorouter_protocol::AudioBridgeHello,
+        section_handle: u64,
+        mapping_bytes: u32,
+    ) -> Result<(), windows::core::Error> {
+        let request =
+            native_bridge_open_request(hello, section_handle, mapping_bytes).map_err(|_| {
+                windows::core::Error::new(
+                    windows::core::HRESULT(0x80070057u32 as i32),
+                    "invalid hello or mapping",
+                )
+            })?;
+        self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_OPEN, &request)
+    }
+
     pub fn heartbeat(
         &self,
         hello: &audiorouter_protocol::AudioBridgeHello,
     ) -> Result<(), windows::core::Error> {
-        let request = native_bridge_open_request(hello).map_err(|_| {
+        let request = native_bridge_open_request(hello, 0, 0).map_err(|_| {
             windows::core::Error::new(
                 windows::core::HRESULT(0x80070057u32 as i32),
                 "invalid hello",
@@ -184,7 +203,7 @@ impl NativeBridgeControlClient {
         &self,
         hello: &audiorouter_protocol::AudioBridgeHello,
     ) -> Result<(), windows::core::Error> {
-        let request = native_bridge_open_request(hello).map_err(|_| {
+        let request = native_bridge_open_request(hello, 0, 0).map_err(|_| {
             windows::core::Error::new(
                 windows::core::HRESULT(0x80070057u32 as i32),
                 "invalid hello",
@@ -224,6 +243,8 @@ impl Drop for NativeBridgeControlClient {
 #[cfg(windows)]
 fn native_bridge_open_request(
     hello: &audiorouter_protocol::AudioBridgeHello,
+    section_handle: u64,
+    mapping_bytes: u32,
 ) -> Result<NativeBridgeOpenRequest, ()> {
     hello.validate().map_err(|_| ())?;
     let encoded: Vec<u16> = hello.bus_id.encode_utf16().collect();
@@ -232,6 +253,10 @@ fn native_bridge_open_request(
     }
     let mut bus_id = [0; 64];
     bus_id[..encoded.len()].copy_from_slice(&encoded);
+    if (section_handle == 0) != (mapping_bytes == 0) || (section_handle != 0 && mapping_bytes < 32)
+    {
+        return Err(());
+    }
     Ok(NativeBridgeOpenRequest {
         protocol_major: hello.protocol_major,
         protocol_minor: hello.protocol_minor,
@@ -241,6 +266,9 @@ fn native_bridge_open_request(
         sample_rate_hz: hello.sample_rate_hz,
         lease_ms: hello.lease_ms,
         generation: hello.generation,
+        section_handle,
+        mapping_bytes,
+        reserved2: 0,
         bus_id,
         reserved: 0,
     })
@@ -4423,21 +4451,25 @@ mod tests {
             frames_per_quantum: 128,
             lease_ms: 1_000,
         };
-        let request = native_bridge_open_request(&hello).unwrap();
-        assert_eq!(std::mem::size_of::<NativeBridgeOpenRequest>(), 160);
+        let request = native_bridge_open_request(&hello, 0, 0).unwrap();
+        assert_eq!(std::mem::size_of::<NativeBridgeOpenRequest>(), 176);
         assert_eq!(request.bus_id_bytes, 16);
         assert_eq!(
             &request.bus_id[..8],
             "bus-main".encode_utf16().collect::<Vec<_>>()
         );
         assert_eq!(request.generation, 11);
-        assert!(
-            native_bridge_open_request(&audiorouter_protocol::AudioBridgeHello {
+        assert!(native_bridge_open_request(
+            &audiorouter_protocol::AudioBridgeHello {
                 bus_id: "x".repeat(65),
-                ..hello
-            })
-            .is_err()
-        );
+                ..hello.clone()
+            },
+            0,
+            0,
+        )
+        .is_err());
+        assert!(native_bridge_open_request(&hello, 1, 31).is_err());
+        assert!(native_bridge_open_request(&hello, 1, 32).is_ok());
     }
 
     #[cfg(windows)]
