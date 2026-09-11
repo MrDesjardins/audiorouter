@@ -1031,6 +1031,60 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
 
 #[cfg(all(windows, feature = "test-fixtures"))]
 #[test]
+#[ignore = "requires an explicitly selected controller-less VST3 audio effect and native worker"]
+fn verified_native_vst3_worker_processes_a_controllerless_opt_in_fixture() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_FIXTURE")
+            .expect("set AUDIOROUTER_VST3_FIXTURE for controller-less VST3 acceptance"),
+    );
+    let worker_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER")
+            .expect("set AUDIOROUTER_VST3_NATIVE_WORKER for controller-less VST3 acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST3 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect controller-less VST3 fixture without loading it");
+    assert_eq!(identity.format, PluginFormat::Vst3);
+    assert_eq!(identity.architecture, PeArchitecture::X64);
+    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .expect("launch controller-less native VST3 worker");
+    assert!(worker
+        .describe_parameters(Instant::now())
+        .expect("controller-less parameter description response")
+        .is_empty());
+    let mut samples = vec![0.0; 256];
+    samples[2] = 0.1;
+    samples[3] = -0.1;
+    let input = samples.clone();
+    let frame = WorkerFrame::new(1, worker_clock_tick().saturating_add(10_000), 2, samples)
+        .expect("controller-less VST3 test frame");
+    let processed = worker
+        .process(frame, Vec::new(), Instant::now())
+        .expect("controller-less VST3 processing");
+    assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+    assert!(processed
+        .samples
+        .iter()
+        .zip(input)
+        .any(|(output, input)| (output - input).abs() > 1.0e-5));
+    assert!(worker
+        .shutdown()
+        .expect("reap controller-less VST3 worker")
+        .success());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
 #[ignore = "requires an explicitly selected VST3 fixture that is expected to fail in the worker"]
 fn verified_native_vst3_worker_contains_an_opt_in_fixture_failure() {
     let plugin_path = PathBuf::from(

@@ -72,6 +72,17 @@ qualification remains open.
   not make COMPER a full PLUG-04 qualification because its controller and
   parameter contract is absent.
 
+- Added the durable opt-in regression
+  `verified_native_vst3_worker_processes_a_controllerless_opt_in_fixture` on
+  2026-09-10. With the supplied COMPER x64 binary selected explicitly, the
+  test verified x64/VST3 inspection, supervised launch, an empty parameter
+  capability response, finite transformed audio, and clean worker shutdown.
+  The test remains ignored by default because the binary is user-supplied and
+  is not redistributed. The worker-process suite passed 35 tests with 11
+  expected fixture-gated tests ignored; strict Clippy, formatting, and diff
+  checks passed. COMPER's component-state restore limitation remains an
+  explicit unsupported capability rather than a qualification waiver.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded
