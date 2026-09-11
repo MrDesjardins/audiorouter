@@ -167,6 +167,18 @@ follow-default binding, not permission to replace a pinned endpoint. Focused
 Windows-audio (55) and control (106) tests plus strict Clippy passed; no
 endpoint stream or persistent machine audio configuration changed.
 
+## 2026-09-11 — Bounded endpoint friendly names
+
+The active endpoint adapter now reads `PKEY_Device_FriendlyName` through a
+read-only property store and returns a bounded display string alongside the
+opaque ID and direction. Property conversion failures use `Unknown audio
+endpoint`; names are never used for binding or replacement. `devices.list`,
+its schema, the shared TypeScript contract, and the UI inventory expose the
+presentation value. Focused Windows-audio (55), control (106), contracts/UI
+typechecks, UI (121), and strict Clippy passed without opening a stream or
+changing persistent audio configuration. Disabled/unplugged enumeration and
+notification-driven refresh remain open.
+
 The rebind failure path was hardened so endpoint objects are discarded after
 stop attempts even when one stop reports an error; repeated stop also resets
 staged bridge audio. The focused 54-test Windows-audio suite, strict Clippy,

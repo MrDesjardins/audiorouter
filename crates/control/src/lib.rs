@@ -2061,6 +2061,7 @@ fn device_item_schema() -> Value {
         "type": "object",
         "properties": {
             "id": { "type": "string", "minLength": 1 },
+            "name": { "type": "string", "minLength": 1, "maxLength": 512 },
             "direction": { "enum": ["capture", "render"] },
             "state": { "const": "active" },
             "defaultRoles": {
@@ -2091,7 +2092,7 @@ fn device_item_schema() -> Value {
                 "additionalProperties": false
             }
         },
-        "required": ["id", "direction", "state", "defaultRoles", "format", "periods"],
+        "required": ["id", "name", "direction", "state", "defaultRoles", "format", "periods"],
         "additionalProperties": false
     })
 }
@@ -5639,6 +5640,8 @@ impl ControlPlane {
             audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
+        let display_info = audiorouter_windows_audio::enumerate_active_endpoint_display_info()
+            .map_err(audio_control_error)?;
         let mut devices = endpoints
             .into_iter()
             .map(|endpoint| {
@@ -5651,8 +5654,14 @@ impl ControlPlane {
                     })
                     .map(|binding| binding.role.as_str())
                     .collect::<Vec<_>>();
+                let name = display_info
+                    .iter()
+                    .find(|info| info.id == endpoint.id && info.direction == endpoint.direction)
+                    .map(|info| info.name.as_str())
+                    .unwrap_or("Unknown audio endpoint");
                 Ok(json!({
                     "id": endpoint.id,
+                    "name": name,
                     "direction": match endpoint.direction {
                         audiorouter_windows_audio::EndpointDirection::Capture => "capture",
                         audiorouter_windows_audio::EndpointDirection::Render => "render",

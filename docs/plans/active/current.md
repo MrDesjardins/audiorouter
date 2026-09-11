@@ -7413,3 +7413,14 @@ stream, or machine configuration action occurred.
   control refresh. Keep exact-ID bindings, explicit follow-default selection,
   production driver ownership, signing, installer, and physical-latency gates
   open until their required evidence exists.
+- Completed the portable CAP-01 friendly-name slice on 2026-09-11: active
+  endpoint discovery now reads a bounded Windows `PKEY_Device_FriendlyName`
+  presentation value and `devices.list` exposes it alongside exact IDs and
+  default roles. Names remain display-only and the fallback is deterministic
+  when a property is missing or malformed. Windows-audio (55), control (106),
+  contracts/UI typechecks, UI (121), strict Clippy, formatting, and diff checks
+  passed. No endpoint stream or persistent audio configuration changed.
+- Next M00/M02 task: add explicit active/disabled/unplugged state discovery and
+  connect endpoint notifications to a bounded control refresh. Do not infer
+  disabled/unplugged state from an active-only enumeration, and preserve the
+  production driver, signing, installer, and physical-latency gates.

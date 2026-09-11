@@ -196,6 +196,7 @@ export interface RecordingListPage {
 
 export interface DeviceInfo {
   id: string;
+  name: string;
   direction: "capture" | "render";
   state: "active";
   defaultRoles: Array<"console" | "multimedia" | "communications">;

@@ -54,6 +54,13 @@ pub struct DefaultEndpointBinding {
     pub endpoint_id: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EndpointDisplayInfo {
+    pub id: String,
+    pub direction: EndpointDirection,
+    pub name: String,
+}
+
 #[cfg(windows)]
 const IOCTL_AUDIOROUTER_BRIDGE_OPEN: u32 = (0x22 << 16) | (0x800 << 2) | (3 << 14) | 0x3;
 #[cfg(windows)]
@@ -3226,6 +3233,21 @@ pub fn enumerate_default_endpoint_bindings() -> Result<Vec<DefaultEndpointBindin
     }
 }
 
+/// Read bounded friendly names for the active endpoint snapshot. Names are
+/// presentation only and never participate in endpoint identity or binding.
+pub fn enumerate_active_endpoint_display_info() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
+    unsafe {
+        let initialized = windows::Win32::System::Com::CoInitializeEx(
+            None,
+            windows::Win32::System::Com::COINIT_MULTITHREADED,
+        );
+        initialized.ok()?;
+        let result = enumerate_display_info_after_com_init();
+        windows::Win32::System::Com::CoUninitialize();
+        result
+    }
+}
+
 /// Enumerate process identities suitable for a later process-loopback binding.
 /// PID, executable name, verified executable path when available, and an
 /// optional creation timestamp are returned; command lines and other process
@@ -3602,6 +3624,49 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
         }
     }
     Ok(bindings)
+}
+
+unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayInfo>, AudioError> {
+    use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
+    use windows::Win32::Media::Audio::{
+        eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
+    };
+    use windows::Win32::System::Com::StructuredStorage::{PropVariantClear, PropVariantToString};
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL, STGM_READ};
+
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let mut result = Vec::new();
+    for (direction, flow) in [
+        (EndpointDirection::Capture, eCapture),
+        (EndpointDirection::Render, eRender),
+    ] {
+        let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
+        for index in 0..devices.GetCount()? {
+            let device = devices.Item(index)?;
+            let id = device
+                .GetId()?
+                .to_string()
+                .map_err(|_| AudioError::InvalidUtf16)?;
+            let store = device.OpenPropertyStore(STGM_READ)?;
+            let mut value = store.GetValue(&PKEY_Device_FriendlyName)?;
+            let mut buffer = [0_u16; 512];
+            let name = PropVariantToString(&value, &mut buffer)
+                .ok()
+                .and_then(|_| {
+                    let length = buffer.iter().position(|character| *character == 0)?;
+                    String::from_utf16(&buffer[..length]).ok()
+                })
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| "Unknown audio endpoint".to_owned());
+            PropVariantClear(&mut value).ok();
+            result.push(EndpointDisplayInfo {
+                id,
+                direction,
+                name,
+            });
+        }
+    }
+    Ok(result)
 }
 
 const BRIDGE_STATE_OFFSET: usize = 0;

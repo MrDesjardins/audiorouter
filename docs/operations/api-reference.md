@@ -86,7 +86,7 @@ after the initial 47-method reference.
 | `sessions.stop` | `sessionControl` | external operation; requires an idempotency key |
 
 `devices.list` returns active endpoint metadata without opening a stream. Each
-item includes `defaultRoles`, containing zero or more of `console`,
+item includes a bounded presentation `name` and `defaultRoles`, containing zero or more of `console`,
 `multimedia`, and `communications`; these are current Windows default-role
 observations, not persistent bindings. A pinned endpoint remains identified by
 its opaque ID, and follow-default behavior must be an explicit graph choice.
