@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `5a8fc574`; the native probe compile was
+The latest pushed checkpoint is `c1ab115f`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -41,15 +41,21 @@ qualification remains open.
   explicitly deactivates unused buses, reports class initialization and
   bus-layout failures precisely, and suppresses Windows crash-dialog UI in the
   disposable worker. SDK validation confirmed BUSTERse, COMPER, and TDR Nova
-  expose VST3 audio-effect classes. TDR Nova reached the Rust worker path and
-  completed the handshake, but its supplied build reports no controller
-  parameters and therefore does not satisfy the existing parameter/state
-  acceptance test. COMPER reaches a real controller-interface incompatibility;
-  BUSTERse crashes inside third-party code and now exits without an unattended
-  dialog. Hashes were checked before/after and supplied binaries remain
-  ignored. `safe-all.ps1` was attempted afterward but stopped at the existing
-  non-administrator `Get-PnpDevice` access-denied prerequisite; no audio or
-  persistent machine configuration was changed.
+  expose VST3 audio-effect classes. TDR Nova now reaches the corrected
+  component/controller handshake and exposes its real parameter set, but its
+  supplied build rejects component state restoration. COMPER processes through
+  the controller-less path; BUSTERse crashes inside third-party code and exits
+  without an unattended dialog. Hashes were checked before/after and supplied
+  binaries remain ignored. `safe-all.ps1` was attempted afterward but stopped
+  at the existing non-administrator `Get-PnpDevice` access-denied prerequisite;
+  no audio or persistent machine configuration was changed.
+
+- Requalified the locked workspace at `c1ab115f` on 2026-09-10 with
+  `cargo test --workspace --locked`: all workspace tests and doc-tests passed,
+  including 30 CLI, 105 control, 30 DSP, 93 engine, and 39 Windows-audio
+  tests. Workspace all-target Clippy with warnings denied, formatting, and diff
+  checks passed. No endpoint was opened and no driver, plugin registration, or
+  persistent machine audio configuration changed.
 
 - Implemented and pushed bounded native-worker diagnostics in `3577e36d`.
   The Rust supervisor now drains at most 8 KiB of worker stderr on a control
