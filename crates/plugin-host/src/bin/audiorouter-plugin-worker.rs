@@ -30,6 +30,7 @@ type WorkerArguments = (
 );
 
 fn main() -> ExitCode {
+    suppress_windows_fault_reporting_ui();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -38,6 +39,36 @@ fn main() -> ExitCode {
         }
     }
 }
+
+/// Prevent a third-party native plugin fault from leaving an interactive
+/// Windows crash dialog attached to this disposable worker. The supervisor
+/// observes the worker exit and applies the bounded failure policy instead.
+#[cfg(windows)]
+fn suppress_windows_fault_reporting_ui() {
+    const SEM_FAILCRITICALERRORS: u32 = 0x0001;
+    const SEM_NOGPFAULTERRORBOX: u32 = 0x0002;
+    const SEM_NOOPENFILEERRORBOX: u32 = 0x8000;
+    const WER_FAULT_REPORTING_NO_UI: u32 = 0x0001;
+
+    #[link(name = "kernel32")]
+    #[link(name = "wer")]
+    unsafe extern "system" {
+        fn SetErrorMode(mode: u32) -> u32;
+        fn WerSetFlags(flags: u32) -> i32;
+    }
+
+    // SAFETY: Both functions are process-wide Windows APIs with no borrowed
+    // pointers. They are called before any plugin DLL is loaded; failures are
+    // intentionally ignored because dialog suppression is best effort and
+    // worker supervision remains the containment boundary.
+    unsafe {
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+        let _ = WerSetFlags(WER_FAULT_REPORTING_NO_UI);
+    }
+}
+
+#[cfg(not(windows))]
+fn suppress_windows_fault_reporting_ui() {}
 
 fn run() -> Result<(), String> {
     let (
