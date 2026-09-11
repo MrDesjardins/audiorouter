@@ -91,7 +91,7 @@ fn session_id(state: State<'_, ShellState>) -> String {
 fn session_initialization_script(session_id: &str, frontend_probe: bool) -> String {
     let encoded = serde_json::to_string(session_id).expect("session id is serializable");
     let probe = if frontend_probe {
-        "window.addEventListener('DOMContentLoaded',()=>window.__TAURI_INTERNALS__.invoke('rpc_request',{request:{jsonrpc:'2.0',id:'shell-probe',method:'system.describe'}}),{once:true});"
+        "(()=>{let sent=false;const send=()=>{if(sent)return;sent=true;window.__TAURI_INTERNALS__.invoke('rpc_request',{request:{jsonrpc:'2.0',id:'shell-probe',method:'system.describe'}});};if(document.readyState==='loading'){window.addEventListener('DOMContentLoaded',send,{once:true});}else{send();}window.setTimeout(send,250);})();"
     } else {
         ""
     };
@@ -269,6 +269,8 @@ mod tests {
         assert!(script.contains("id:'shell-probe'"));
         assert!(script.contains("method:'system.describe'"));
         assert!(script.contains("DOMContentLoaded"));
+        assert!(script.contains("setTimeout(send,250)"));
+        assert!(script.contains("sent=false"));
     }
 
     #[test]

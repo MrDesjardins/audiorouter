@@ -243,6 +243,16 @@ invalid lease durations, and payload lengths that do not exactly match the
 declared f32 block shape. `cargo test -p audiorouter-protocol --locked` passed
 all 8 tests. Native shared-memory/IOCTL execution remains a separate gate.
 
+On 2026-09-10, the first elevated M07 shell attempt reached no probe marker
+because a plain Cargo-built executable had no Tauri frontend resource bundle;
+the standalone shell lockfile was also behind the current bridge dependencies.
+After rebuilding the UI and using `cargo tauri build --debug --no-bundle`, the
+disposable `tests/acceptance/m07-shell-rpc.ps1` acceptance passed. It verified
+WebView initialization, the native Tauri command, authenticated
+`system.describe`, and teardown without opening an audio endpoint or changing
+persistent machine configuration. The shell probe now also has a single-fire
+DOMContentLoaded/250 ms fallback for document timing differences.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

@@ -231,6 +231,8 @@ name = "audiorouter-windows-audio"
 version = "0.1.0"
 dependencies = [
  "audiorouter-engine",
+ "audiorouter-protocol",
+ "memmap2",
  "windows 0.62.2",
  "windows-core 0.62.2",
 ]

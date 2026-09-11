@@ -248,6 +248,14 @@ stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
 
+- Requalified the administrator-authorized M07 frontend-owned shell acceptance
+  on 2026-09-10 after rebuilding the UI and Tauri resource bundle. The
+  WebView-to-Tauri-to-authenticated-backend `system.describe` path passed and
+  disposable state/processes were cleaned up. A plain Cargo shell build had no
+  embedded frontend resources; the standalone shell lockfile was refreshed to
+  include current bridge dependencies. No audio endpoint or persistent machine
+  configuration changed.
+
 - Requalified the complete locked workspace after the directional and replay
   bridge changes on 2026-09-10 with `cargo test --workspace --locked
   -- --test-threads=1`: CLI/MCP, control, domain, DSP, engine, plugin host and
