@@ -7691,6 +7691,12 @@ stream, or machine configuration action occurred.
   Storage tests (81), control tests (112), strict targeted Clippy, formatting,
   and documentation validation passed. Recovery still does not claim native
   crash/power-loss guarantees or automatic file repair.
+- Aligned the shared contracts and UI backend adapter with REC-09 recovery
+  listing on 2026-09-11. The typed API now distinguishes single-checkpoint
+  inspection from bounded recovery pages, and the live adapter exposes the
+  500-entry listing without performing file or device operations. UI tests
+  (123), TypeScript typecheck, and a disposable production build passed; the
+  visual recovery-list presentation remains a separate UI task.
 - Improved bridge diagnostics on 2026-09-11: a live lease request from a
   different control handle now returns `STATUS_ACCESS_DENIED`, distinct from
   inactive, expired, or invalidated lease status. The guarded non-installing

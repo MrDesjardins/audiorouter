@@ -19,6 +19,8 @@ import type {
   RecordingRenameResult,
   RecordingPreviewResult,
   RecordingRecoveryResult,
+  RecordingRecoverySingleResult,
+  RecordingRecoveryList,
   RecordingRevealResult,
   RecordingRecycleResult,
   RecordingRemoveResult,
@@ -91,7 +93,8 @@ export interface UiBackend {
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
-  getRecordingRecovery(recordingId: string): Promise<RecordingRecoveryResult>;
+  getRecordingRecovery(recordingId: string): Promise<RecordingRecoverySingleResult>;
+  listRecordingRecovery(): Promise<RecordingRecoveryList>;
   revealRecording(recordingId: string): Promise<RecordingRevealResult>;
   setRecordingMetadata(recordingId: string, metadata: { title?: string | null; artist?: string | null; comment?: string | null; idempotencyKey?: string }): Promise<RecordingMetadataResult>;
   renameRecording(recordingId: string, newPath: string, idempotencyKey?: string): Promise<RecordingRenameResult>;
@@ -238,6 +241,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async getRecordingRecovery() {
       throw new Error("The backend is disconnected; recording recovery is unavailable.");
+    },
+    async listRecordingRecovery() {
+      return { items: [], nextCursor: null };
     },
     async revealRecording() {
       throw new Error("The backend is disconnected; recording reveal is unavailable.");
@@ -441,7 +447,10 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
       return client.request("recordings.preview", { recordingId });
     },
     async getRecordingRecovery(recordingId) {
-      return client.request("recordings.recovery", { recordingId });
+      return client.request("recordings.recovery", { recordingId }) as Promise<RecordingRecoverySingleResult>;
+    },
+    async listRecordingRecovery() {
+      return client.request("recordings.recovery", { limit: 500 }) as Promise<RecordingRecoveryList>;
     },
     async revealRecording(recordingId) {
       return client.request("recordings.reveal", { recordingId });

@@ -548,9 +548,22 @@ export interface RecordingCheckpoint {
   lastFrame: number | null;
 }
 
-export type RecordingRecoveryResult =
+export interface RecordingRecoveryItem {
+  recordingId: EntityId;
+  status: "missing" | "available" | "invalid";
+  checkpoint?: RecordingCheckpoint;
+}
+
+export interface RecordingRecoveryList {
+  items: RecordingRecoveryItem[];
+  nextCursor: EntityId | null;
+}
+
+export type RecordingRecoverySingleResult =
   | { recordingId: EntityId; status: "missing" }
   | { recordingId: EntityId; status: "available"; checkpoint: RecordingCheckpoint };
+
+export type RecordingRecoveryResult = RecordingRecoverySingleResult | RecordingRecoveryList;
 
 export type RecordingPreview =
   | {
@@ -747,7 +760,7 @@ export type MethodParams = {
   "recorders.split": { sessionId: EntityId; frame: number; idempotencyKey?: string };
   "recorders.stop": { sessionId: EntityId; frame: number; idempotencyKey?: string };
   "recordings.get": { recordingId: EntityId };
-  "recordings.recovery": { recordingId: EntityId };
+  "recordings.recovery": { recordingId?: EntityId; cursor?: EntityId; limit?: number } | undefined;
   "recordings.reveal": { recordingId: EntityId };
   "recordings.preview": { recordingId: EntityId };
   "recordings.setMetadata": {

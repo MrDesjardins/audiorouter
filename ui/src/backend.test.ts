@@ -77,6 +77,7 @@ describe("snapshot cache", () => {
       planGraph: async () => { throw new Error("not connected"); },
       commitGraph: async () => { throw new Error("not connected"); },
       listRecordings: async () => [],
+      listRecordingRecovery: async () => ({ items: [], nextCursor: null }),
       listSessions: async () => [],
       listApplications: async () => [],
       listDevices: async () => [],
@@ -415,6 +416,13 @@ describe("live event cursor", () => {
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { recordingId: "take-1", status: "missing" }; } } as never;
     await expect(createLiveBackend(client, demoSession.id).getRecordingRecovery("take-1")).resolves.toEqual({ recordingId: "take-1", status: "missing" });
     expect(received).toEqual({ method: "recordings.recovery", params: { recordingId: "take-1" } });
+  });
+
+  it("forwards bounded recording recovery listing", async () => {
+    let received: unknown;
+    const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { items: [], nextCursor: null }; } } as never;
+    await expect(createLiveBackend(client, demoSession.id).listRecordingRecovery()).resolves.toEqual({ items: [], nextCursor: null });
+    expect(received).toEqual({ method: "recordings.recovery", params: { limit: 500 } });
   });
 
   it("forwards recording reveal without opening the path in the UI adapter", async () => {

@@ -947,3 +947,8 @@ not hide other entries. Storage tests (81), control tests (112), strict
 Clippy, formatting, and documentation validation pass. This is durable
 checkpoint discovery only and does not claim native crash or power-loss
 recovery guarantees.
+
+The shared TypeScript contracts and UI backend adapter now represent the
+single-item and paged recovery response shapes separately. UI tests (123),
+typecheck, and a disposable production build pass; no file or audio-device
+operation is performed by the adapter.
