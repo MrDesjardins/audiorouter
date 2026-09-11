@@ -125,6 +125,11 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     if (NT_SUCCESS(status)) {
                         status = MmMapViewInSystemSpace(
                             sectionObject, &mappedView, &mappedBytes);
+                        if (NT_SUCCESS(status) && mappedBytes < requiredBytes) {
+                            MmUnmapViewInSystemSpace(mappedView);
+                            mappedView = NULL;
+                            status = STATUS_BUFFER_TOO_SMALL;
+                        }
                         if (!NT_SUCCESS(status)) {
                             ObDereferenceObject(sectionObject);
                             sectionObject = NULL;

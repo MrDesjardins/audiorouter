@@ -126,6 +126,11 @@ The updated WDK build passed with zero signability errors/warnings. No mapped
 open was sent to a loaded driver, so live kernel/audio transport evidence is
 still outstanding.
 
+Mapped opens now also verify the actual system-space view size returned by the
+kernel mapping API and unwind a truncated view before accepting the lease. The
+updated non-installing WDK build passed with zero signability errors/warnings;
+the focused Windows-audio suite passed 48 tests.
+
 The fixed bridge ABI now includes an optional section handle and mapping byte
 count. Kernel and user-mode validators reject half-specified or undersized
 mapping descriptors, while the client exposes an explicit mapped-open method.

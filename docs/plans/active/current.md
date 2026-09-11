@@ -120,6 +120,12 @@ opens remain explicitly unmapped. The WDK build passed with zero signability
 errors/warnings; live mapped-driver execution remains gated on deliberate
 isolated installation.
 
+The kernel mapped-open path now verifies the actual size returned by
+`MmMapViewInSystemSpace` after mapping, rejecting and unmapping a truncated
+view even when the request's declared size was large enough. The non-installing
+WDK build passed with zero signability errors/warnings; the 48-test
+Windows-audio suite and strict Clippy remain green.
+
 The bridge ABI now carries an optional section handle and mapping-size pair.
 Both kernel and user-mode validation reject mismatched zero/nonzero pairs and
 undersized mappings; the user-mode client exposes an explicit
