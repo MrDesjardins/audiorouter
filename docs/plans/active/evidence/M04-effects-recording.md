@@ -99,6 +99,11 @@ session, uses that node's controller/worker, and journals a request hash
 containing both identities. The two-sink regression drives arm/start/stop
 through JSON-RPC for both nodes. The create API remains session-worker based
 until node-targeted creation is implemented.
+Node-targeted `recorders.create` is now supported. It validates the enabled
+session node before creating a file, attaches the worker and controller to that
+node, and preserves exclusive-file rollback and idempotent replay. A control
+regression creates, replays, arms, starts, and stops a node-targeted recorder
+through JSON-RPC; the compatibility session-worker create path remains intact.
 
 ## 2026-09-09 limiter requalification
 

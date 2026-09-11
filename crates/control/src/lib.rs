@@ -1621,6 +1621,7 @@ fn method_input_schema(name: &str) -> Value {
         "recorders.create" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24"] },
                 "sequence": { "type": "integer", "minimum": 0 },
@@ -1633,6 +1634,7 @@ fn method_input_schema(name: &str) -> Value {
             }),
             &[
                 "sessionId",
+                "nodeId",
                 "recorderId",
                 "format",
                 "sequence",
@@ -1923,6 +1925,7 @@ fn method_output_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24"] },
                 "path": { "type": "string", "minLength": 1 },
@@ -4509,6 +4512,43 @@ impl ControlPlane {
         Ok(path)
     }
 
+    /// Create and attach a file recorder to one validated recorder node.
+    /// Exclusive file creation is rolled back if node attachment fails.
+    pub fn create_and_attach_configured_file_recorder_to_node(
+        &mut self,
+        session_id: EntityId,
+        node_id: EntityId,
+        config: &FileRecorderConfig<'_>,
+    ) -> Result<std::path::PathBuf, ControlError> {
+        if config.session_id != session_id.as_str() {
+            return Err(ControlError::InvalidRequest(
+                "file recorder session identity does not match attachment".into(),
+            ));
+        }
+        let node_is_valid = self
+            .get_session(&session_id)?
+            .nodes
+            .iter()
+            .any(|node| node.id == node_id && node.kind == NodeKind::Recorder && node.enabled);
+        if !node_is_valid {
+            return Err(ControlError::InvalidRequest(
+                "enabled recorder node is not in the session".into(),
+            ));
+        }
+        let (path, worker) = {
+            let policy = self.recording_policy.as_ref().ok_or_else(|| {
+                ControlError::InvalidRequest("recording root is not configured".into())
+            })?;
+            create_file_recorder_with_config(policy, config)
+                .map_err(ControlError::InvalidRequest)?
+        };
+        if let Err(error) = self.attach_recorder_worker_to_node(&session_id, node_id, worker) {
+            let _ = std::fs::remove_file(&path);
+            return Err(error);
+        }
+        Ok(path)
+    }
+
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
         let checkpoint = self.store.clone();
         self.store
@@ -6199,6 +6239,11 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let node_id = params
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new);
         let recorder_id = params
             .get("recorderId")
             .and_then(Value::as_str)
@@ -6280,9 +6325,18 @@ impl ControlPlane {
             queue_capacity,
             maximum_chunks_per_pass,
         };
-        let path = self.create_and_attach_configured_file_recorder(session, &config)?;
+        let path = if let Some(node_id) = node_id.as_ref() {
+            self.create_and_attach_configured_file_recorder_to_node(
+                session.clone(),
+                node_id.clone(),
+                &config,
+            )?
+        } else {
+            self.create_and_attach_configured_file_recorder(session, &config)?
+        };
         let result = json!({
             "sessionId": session_id,
+            "nodeId": node_id,
             "recorderId": recorder_id,
             "format": format_name,
             "path": path,
@@ -8168,6 +8222,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recorders.list" => &[],
         "recorders.create" => &[
             "sessionId",
+            "nodeId",
             "recorderId",
             "format",
             "sequence",
@@ -12372,6 +12427,78 @@ mod tests {
         let failed = plane.dispatch(duplicate);
         assert!(failed.error.is_some());
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recorder_create_api_can_target_a_recorder_node_and_replay_idempotently() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("audiorouter-control-node-create-{run_id}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut plane = ControlPlane::with_storage("node-create", Storage::open_memory().unwrap());
+        plane.configure_recording_root(&root).unwrap();
+        let mut original = session();
+        original.nodes.push(Node {
+            id: EntityId::new("capture-recorder"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Capture recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![],
+        });
+        plane.insert_session(original.clone()).unwrap();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "recorders.create".into(),
+            params: Some(json!({
+                "sessionId": original.id,
+                "nodeId": "capture-recorder",
+                "recorderId": "capture",
+                "format": "wavPcm16",
+                "sequence": 0,
+                "channels": 1,
+                "sampleRate": 48000,
+                "queueCapacity": 8,
+                "maximumChunksPerPass": 1,
+                "idempotencyKey": "node-create-1"
+            })),
+        };
+        let first = plane.dispatch(request.clone());
+        let first_result = first.result.clone().unwrap();
+        assert_eq!(first_result["nodeId"], "capture-recorder");
+        assert_eq!(first_result["state"], "idle");
+        assert_eq!(plane.recorder_node_workers.len(), 1);
+        assert_eq!(plane.dispatch(request).result.unwrap(), first_result);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+
+        for (index, method, frame) in [
+            (2, "recorders.arm", None),
+            (3, "recorders.start", Some(0)),
+            (4, "recorders.stop", Some(0)),
+        ] {
+            let mut params = json!({
+                "sessionId": original.id,
+                "nodeId": "capture-recorder",
+                "idempotencyKey": format!("node-create-{index}"),
+            });
+            if let Some(frame) = frame {
+                params["frame"] = json!(frame);
+            }
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(index)),
+                method: method.into(),
+                params: Some(params),
+            });
+            assert!(response.error.is_none(), "{method}: {response:?}");
+        }
+        assert!(plane.recorder_node_workers.is_empty());
         let _ = std::fs::remove_dir_all(root);
     }
 

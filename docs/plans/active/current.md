@@ -8188,3 +8188,11 @@ live-driver evidence.
 - Next M04/REC-01/API task: add node-targeted recorder creation and expose
   per-recorder state/library identities without regressing the compatibility
   session API.
+- Added node-targeted `recorders.create` on 2026-09-11. The API schema,
+  allowed-field validation, approved-root factory path, exclusive rollback,
+  node worker/controller attachment, idempotency replay, and JSON-RPC lifecycle
+  regression now cover creation through stop. Strict Clippy, formatting, diff,
+  and documentation checks pass.
+- Next M04/REC-01/API task: expose node-targeted recorder state and finalized
+  library rows through `recorders.list`/recording queries, preserving per-node
+  failure isolation and compatibility responses.
