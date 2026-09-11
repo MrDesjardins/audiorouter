@@ -30,6 +30,17 @@ qualification remains open.
   workspace tests/doc-tests, strict Clippy, formatting, and diff checks
   passed. No endpoint or persistent machine configuration was changed.
 
+- Requalified the guarded complete `tests/acceptance/safe-all.ps1` chain on
+  2026-09-10 at implementation checkpoint `832b81a8`. M00 VS2026/MSVC,
+  Windows SDK/WDK, native compile and 31-endpoint inventory, disposable
+  pinned SysVAD x64 compile/package/API/signability, M01 CLI, M04 DSP and
+  recording, M05 UI (17 files/121 tests), M06 pinned VST3/native VST2
+  fixtures, M07 headless, unsigned M08 artifacts, 159 traceability IDs, and
+  documentation validation (51 Markdown files/163 local links) passed.
+  Cleanup removed 13 run-owned temporary children. No driver installation or
+  loading, signing-mode change, plugin/startup registration, or persistent
+  machine audio configuration action occurred.
+
 - Closed the endpoint-recovery staging gap at pushed head `76e5224c` on
   2026-09-10. `WasapiSchedulerBridge::reset_stream` now discards partial
   capture packets, pending render carry, queued scheduler blocks, and the
