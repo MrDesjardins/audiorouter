@@ -1991,6 +1991,11 @@ the lease spin lock, plus wait-before-unmap resource retirement. This is a
 regression guard only; it does not substitute for loaded-driver callback or
 signing evidence.
 
+Closed an expiry teardown gap on 2026-09-10: a rejected maintenance request
+now detaches an expired mapped lease before returning, waits for callback
+readers, and retires the mapping instead of leaving stale audio readable until
+the next OPEN. The non-installing M03 WDK/source-contract acceptance passed.
+
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
   on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
   eight sections, SHA-256

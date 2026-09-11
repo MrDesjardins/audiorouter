@@ -264,6 +264,14 @@ The non-installing x64 WDK build passed with zero signability errors/warnings.
 The helper remains intentionally unwired to the reference sample timer, so
 loaded-driver callback ownership and endpoint data-path evidence remain open.
 
+Expiry handling was tightened on 2026-09-10. When a maintenance request finds
+an expired mapped lease, the driver now atomically detaches the view, marks the
+lease inactive, waits for rundown readers, and unmaps/dereferences the retired
+resources before completing the rejected request. This prevents stale mapped
+audio from remaining callback-readable after lease expiry. The updated
+non-installing WDK build and source-contract acceptance passed with zero
+signability errors/warnings; loaded-driver behavior remains unverified.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

@@ -263,6 +263,23 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                        RtlCompareMemory(&lease->Request, request,
                                         sizeof(AR_BRIDGE_OPEN_REQUEST)) !=
                            sizeof(AR_BRIDGE_OPEN_REQUEST)) {
+                // Expiry is terminal for the mapped callback view. Detach it
+                // before returning the rejected maintenance request, then
+                // wait for any callback reader before unmapping below.
+                if (expired && lease->Active && !lease->Retiring) {
+                    oldSectionObject = lease->SectionObject;
+                    oldMappedView = InterlockedExchangePointer(
+                        &lease->MappedView, NULL);
+                    oldRundownStarted = oldMappedView != NULL;
+                    lease->RundownStarted = oldRundownStarted;
+                    lease->SectionObject = NULL;
+                    lease->MappedBytes = 0;
+                    lease->Active = FALSE;
+                    lease->Retiring = oldRundownStarted;
+                    if (!oldRundownStarted) {
+                        RtlZeroMemory(&lease->Request, sizeof(lease->Request));
+                    }
+                }
                 status = STATUS_INVALID_DEVICE_STATE;
             } else if (code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE) {
                 oldSectionObject = lease->SectionObject;
