@@ -944,6 +944,11 @@ pub trait AudioTap: Send + Sync {
     fn on_processed_block(&self, start_frame: u64, block: &AudioBlock);
 }
 
+/// Maximum number of independent realtime observers supported by one
+/// processing boundary. Recorder nodes use one observer each; the bound
+/// keeps fan-out work explicit and matches the global recorder limit.
+pub const MAX_AUDIO_TAPS: usize = 8;
+
 /// Bounded per-frame gain transition for de-clicked parameter changes.
 /// Construction and target changes occur off the callback thread; applying a
 /// ramp only updates existing block samples and this small state object.
@@ -3713,9 +3718,25 @@ impl RuntimeProcessor {
         start_frame: u64,
         tap: &dyn AudioTap,
     ) -> Option<RuntimeGeneration> {
+        self.process_with_taps(block, start_frame, std::slice::from_ref(&tap))
+    }
+
+    /// Process one block and notify up to [`MAX_AUDIO_TAPS`] independent
+    /// realtime observers after the active graph completes. The slice is
+    /// borrowed by the caller and must contain no more than the declared
+    /// bound. Iteration is allocation-free and each observer owns its own
+    /// bounded, nonblocking handoff (for example a recorder queue).
+    pub fn process_with_taps(
+        &self,
+        block: &mut AudioBlock,
+        start_frame: u64,
+        taps: &[&dyn AudioTap],
+    ) -> Option<RuntimeGeneration> {
         let generation = self.process(block);
         if generation.is_some() {
-            tap.on_processed_block(start_frame, block);
+            for tap in taps.iter().take(MAX_AUDIO_TAPS) {
+                tap.on_processed_block(start_frame, block);
+            }
         }
         generation
     }
@@ -3753,16 +3774,6 @@ impl RuntimeProcessor {
         output: &AudioBlockRing,
     ) -> Result<Option<RuntimeGeneration>, BlockError> {
         self.process_ring_once_with_deadline(input, output, None)
-    }
-
-    fn process_ring_once_with_tap(
-        &self,
-        input: &AudioBlockRing,
-        output: &AudioBlockRing,
-        start_frame: u64,
-        tap: &dyn AudioTap,
-    ) -> Result<Option<RuntimeGeneration>, BlockError> {
-        self.process_ring_once_with_deadline_and_tap(input, output, None, Some((start_frame, tap)))
     }
 
     fn process_ring_once_with_deadline(
@@ -4006,8 +4017,52 @@ impl RealtimeScheduler {
         start_frame: u64,
         tap: &dyn AudioTap,
     ) -> Result<Option<RuntimeGeneration>, BlockError> {
-        self.processor
-            .process_ring_once_with_tap(&self.input, &self.output, start_frame, tap)
+        self.process_once_with_taps(start_frame, std::slice::from_ref(&tap))
+    }
+
+    /// Execute one nonblocking scheduler step and forward the processed
+    /// quantum to up to [`MAX_AUDIO_TAPS`] independent recorder/observer
+    /// sinks. The sinks are invoked sequentially after processing and must
+    /// obey the same allocation-free realtime callback contract.
+    pub fn process_once_with_taps(
+        &self,
+        start_frame: u64,
+        taps: &[&dyn AudioTap],
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        let Some(block) = self.input.try_receive() else {
+            return Ok(None);
+        };
+        let Some(mut destination) = self.output.try_acquire() else {
+            self.input
+                .try_recycle(block)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.processor.metrics.record_xrun();
+            return Ok(None);
+        };
+        if destination.copy_from(&block).is_err() {
+            self.input
+                .try_recycle(block)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.output
+                .try_recycle(destination)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            return Err(BlockError::ShapeMismatch);
+        }
+        self.input
+            .try_recycle(block)
+            .map_err(|_| BlockError::ShapeMismatch)?;
+        let generation = self
+            .processor
+            .process_with_taps(&mut destination, start_frame, taps);
+        destination.generation = generation.map_or(0, RuntimeGeneration::value);
+        if let Err(destination) = self.output.try_submit(destination) {
+            self.output
+                .try_recycle(destination)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.processor.metrics.record_xrun();
+            return Ok(None);
+        }
+        Ok(generation)
     }
 
     /// Execute one nonblocking scheduler step, forward the processed quantum
@@ -4463,6 +4518,42 @@ mod tests {
         );
         assert_eq!(tap.calls.load(Ordering::Relaxed), 1);
         assert_eq!(tap.last_frame.load(Ordering::Relaxed), 20);
+    }
+
+    #[test]
+    fn runtime_processor_fans_out_to_bounded_tap_slice() {
+        let processor = RuntimeProcessor::default();
+        processor.publish(RuntimeGraph::prepare(RuntimeGeneration::new(1), vec![]));
+        let taps = (0..MAX_AUDIO_TAPS)
+            .map(|_| CountingTap {
+                calls: AtomicU64::new(0),
+                last_frame: AtomicU64::new(0),
+            })
+            .collect::<Vec<_>>();
+        let references = taps
+            .iter()
+            .map(|tap| tap as &dyn AudioTap)
+            .collect::<Vec<_>>();
+        let mut block = AudioBlock::new(1, 4).unwrap();
+        assert_eq!(
+            processor.process_with_taps(&mut block, 64, &references),
+            Some(RuntimeGeneration::new(1))
+        );
+        assert!(taps
+            .iter()
+            .all(|tap| tap.calls.load(Ordering::Relaxed) == 1));
+        assert!(taps
+            .iter()
+            .all(|tap| tap.last_frame.load(Ordering::Relaxed) == 64));
+
+        let extra = CountingTap {
+            calls: AtomicU64::new(0),
+            last_frame: AtomicU64::new(0),
+        };
+        let mut over_bound = references;
+        over_bound.push(&extra);
+        processor.process_with_taps(&mut block, 128, &over_bound);
+        assert_eq!(extra.calls.load(Ordering::Relaxed), 0);
     }
 
     #[test]

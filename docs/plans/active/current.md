@@ -7886,3 +7886,13 @@ live-driver evidence.
   rejected request. Control tests (111), strict package Clippy, formatting,
   and diff checks passed. Independent recorder-node graph attachment and native
   resource qualification remain open.
+- Added the portable REC-01 multi-sink engine boundary on 2026-09-11.
+  `RuntimeProcessor::process_with_taps` and
+  `RealtimeScheduler::process_once_with_taps` fan out each processed quantum
+  to at most eight independent realtime observers, matching the recorder
+  capacity limit. The callback path only iterates borrowed observers and
+  preserves the existing no-allocation/nonblocking tap contract; a regression
+  proves all eight observers receive the boundary and a ninth is not invoked.
+  Engine tests (97), strict Clippy, and formatting passed. Control/native
+  attachment of recorder taps to a production endpoint-owned graph remains
+  open and is not claimed by this portable seam.

@@ -923,3 +923,12 @@ produced three two-frame WAV files from one six-frame queue item. Control tests
 (108), strict Clippy, formatting, and diff checks pass. JSON-RPC configuration
 for segment limits, durable recording-library rows, realtime graph attachment,
 and native endpoint ownership remain open.
+
+## Bounded recorder tap fan-out (2026-09-11)
+
+The engine now exposes `process_with_taps` and
+`process_once_with_taps`, allowing up to eight independent recorder/observer
+sinks to receive the same processed quantum. Fan-out is performed over
+borrowed observers after processing and retains the allocation-free,
+nonblocking callback contract. Engine tests (97), strict Clippy, and
+formatting pass. Native endpoint-owned graph attachment remains open.
