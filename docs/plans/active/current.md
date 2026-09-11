@@ -2,6 +2,37 @@
 
 Updated: 2026-09-10.
 
+## Priority shift: owned virtual-driver prototype
+
+The user has explicitly redirected execution from extended VST3 qualification to
+the core AudioRouter path. The next implementation slice is an AudioRouter-owned
+x64 WaveRT virtual-device prototype derived from Microsoft's Simple Audio Sample,
+with preserved MS-PL attribution, renamed product/identity strings, and a
+non-installing WDK build script. This advances M03/VDEV-01..08 and SEC-08 as
+buildable source, but does not claim VDEV-09 production signing, installation,
+managed bus lifecycle, or application-to-driver data bridging. Those remain
+documented gates pending the broker/bridge and isolated target validation.
+
+Ordered work for this slice:
+
+1. Rename the derivative's package/service/device identities and endpoint labels;
+   retain the upstream license and attribution and use a new AudioRouter GUID.
+2. Add a disposable x64 WDK/MSBuild build entry point that never installs,
+   signs, changes boot policy, or changes audio defaults.
+3. Build the derivative with the installed VS/WDK toolchain, capture artifacts and
+   failures in evidence, and add focused source/package checks.
+4. Commit and push the prototype, then continue with the user-mode driver bridge,
+   ownership lease, and bus lifecycle contracts before any installation work.
+
+Implementation checkpoint (2026-09-10): the prototype now builds successfully
+with VS 18.9.1 and WDK 10.0.28000.0 using `drivers/audiorouter-virtual/build.ps1`.
+Utilities, Filters, Main, Package, and Inc compile for x64; WDK signability
+reports zero errors and warnings and catalog generation succeeds. The build is
+explicitly unsigned (`SignMode=Off`) and disables only the local WDK verifier
+hooks that fail because this installation cannot load its x86 `InfVerif.dll`;
+this is not production signing or Universal-driver evidence. Details and the
+exact generated artifacts are in [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

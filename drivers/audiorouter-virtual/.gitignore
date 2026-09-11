@@ -1,0 +1,10 @@
+# WDK/MSBuild outputs are disposable and must not be committed.
+x64/
+Debug/
+Release/
+Source/**/x64/
+Source/**/Debug/
+Source/**/Release/
+*.tlog/
+*.lastbuildstate
+*.log
