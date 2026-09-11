@@ -7948,6 +7948,22 @@ live-driver evidence.
   snake_case names, and the `stop_frame` boundary. Control tests (112), strict
   Clippy, formatting, and documentation validation passed; no audio endpoint,
   driver, or machine configuration was accessed.
+- Implemented the next portable M04 file-worker slice on 2026-09-11. Both
+  buffered and streaming FLAC workers now support an explicit lifecycle-thread
+  `FileRecordingIdentity`; successful sync and FLAC inspection produce a
+  bounded durable library row, while legacy path-unaware constructors remain
+  intentionally row-free. A streaming regression verifies frame and byte
+  metadata against the finalized file. Control tests (113), strict Clippy,
+  formatting, and diff checks passed. Automatic JSON-RPC recorder
+  construction, graph attachment, and native endpoint ownership remain open.
+- Next M04/REC-10 task: route explicit FLAC worker identities through the
+  recorder factory/session configuration so API-created FLAC recorders can
+  publish rows without manual worker mutation. Keep path allocation and file
+  creation on the control/lifecycle thread; reject missing identity rather
+  than guessing ownership. Verification: control/storage regressions,
+  workspace checks, and guarded documentation acceptance. Rollback: remove
+  only the factory identity plumbing; existing path-unaware workers remain
+  compatible.
 - Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
   chain at the current head on 2026-09-11. VS/WDK discovery and the
   non-installing AudioRouter driver build, read-only 31-endpoint inventory,
