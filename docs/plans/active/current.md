@@ -94,6 +94,16 @@ qualification remains open.
   set, but still returns `kResultFalse` for component state restore and remains
   unsupported for full PLUG-04 qualification.
 
+- Revalidated the corrected handshake/build boundary with
+  `tests/acceptance/m06-vst3-worker.ps1` on 2026-09-10. The repository-owned
+  AGain single-bus, auxiliary-bus, asynchronous staging, bounded recovery,
+  repeated-quantum, and state-restoration cases all passed after linking the
+  SDK IID object. The supplied TDR Nova probe now exposes its controller
+  parameters and processes audio, then reports its own component-state
+  `kResultFalse` during restore; it remains an explicitly unsupported
+  full-state fixture rather than being mislabeled compatible. No plugin was
+  registered and no audio or persistent machine configuration changed.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded
