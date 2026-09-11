@@ -2068,19 +2068,7 @@ fn method_output_schema(name: &str) -> Value {
                 "properties": {
                 "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "status": { "enum": ["missing", "available"] },
-                "checkpoint": {
-                    "type": "object",
-                    "properties": {
-                        "version": { "const": 1 },
-                        "state": { "enum": ["Idle", "Armed", "Recording", "Paused", "Stopping", "Completed", "Failed"] },
-                        "parts": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PARTS, "items": { "type": "object" } },
-                        "pauses": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PAUSES, "items": { "type": "object" } },
-                        "pauseStart": { "type": ["integer", "null"], "minimum": 0 },
-                        "lastFrame": { "type": ["integer", "null"], "minimum": 0 }
-                    },
-                    "required": ["version", "state", "parts", "pauses", "pauseStart", "lastFrame"],
-                    "additionalProperties": false
-                }
+                "checkpoint": recorder_checkpoint_schema()
                 },
                 "required": ["recordingId", "status"],
                 "additionalProperties": false
@@ -2095,7 +2083,7 @@ fn method_output_schema(name: &str) -> Value {
                             "properties": {
                                 "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                                 "status": { "enum": ["missing", "available", "invalid"] },
-                                "checkpoint": { "type": "object" }
+                                "checkpoint": recorder_checkpoint_schema()
                             },
                             "required": ["recordingId", "status"],
                             "additionalProperties": false
@@ -2387,6 +2375,48 @@ fn recording_item_schema() -> Value {
             "sampleRate", "frames", "fileBytes", "startTime", "state",
             "missing", "title", "artist", "comment"
         ],
+        "additionalProperties": false
+    })
+}
+
+fn recorder_checkpoint_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "version": { "const": 1 },
+            "state": { "enum": ["Idle", "Armed", "Recording", "Paused", "Stopping", "Completed", "Failed"] },
+            "parts": {
+                "type": "array",
+                "maxItems": audiorouter_recording::MAX_CHECKPOINT_PARTS,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "index": { "type": "integer", "minimum": 0 },
+                        "start_frame": { "type": "integer", "minimum": 0 },
+                        "end_frame": { "type": ["integer", "null"], "minimum": 0 }
+                    },
+                    "required": ["index", "start_frame", "end_frame"],
+                    "additionalProperties": false
+                }
+            },
+            "pauses": {
+                "type": "array",
+                "maxItems": audiorouter_recording::MAX_CHECKPOINT_PAUSES,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "start_frame": { "type": "integer", "minimum": 0 },
+                        "end_frame": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["start_frame", "end_frame"],
+                    "additionalProperties": false
+                }
+            },
+            "pause_start": { "type": ["integer", "null"], "minimum": 0 },
+            "last_frame": { "type": ["integer", "null"], "minimum": 0 },
+            "stop_frame": { "type": ["integer", "null"], "minimum": 0 }
+        },
+        "required": ["version", "state", "parts", "pauses", "pause_start", "last_frame", "stop_frame"],
         "additionalProperties": false
     })
 }
@@ -8199,6 +8229,16 @@ mod tests {
             recovery["outputSchema"]["oneOf"][0]["properties"]["checkpoint"]["properties"]
                 ["pauses"]["maxItems"],
             audiorouter_recording::MAX_CHECKPOINT_PAUSES
+        );
+        assert_eq!(
+            recovery["outputSchema"]["oneOf"][0]["properties"]["checkpoint"]["properties"]
+                ["stop_frame"]["type"],
+            json!(["integer", "null"])
+        );
+        assert_eq!(
+            recovery["outputSchema"]["oneOf"][1]["properties"]["items"]["items"]["properties"]
+                ["checkpoint"]["properties"]["parts"]["maxItems"],
+            audiorouter_recording::MAX_CHECKPOINT_PARTS
         );
         let recorder_transition = description["methods"]
             .as_array()

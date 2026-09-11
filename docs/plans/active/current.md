@@ -7941,3 +7941,9 @@ live-driver evidence.
   a disposable alternate-output production build completed. No session, audio
   endpoint, driver, or machine configuration was accessed. Manual Narrator,
   scaling, and packaged-shell acceptance remain open.
+- Aligned the M04/M07 recovery contract on 2026-09-11. Single-ID and paginated
+  `recordings.recovery` responses now share one bounded checkpoint schema,
+  including concrete part/pause entry fields, the actual serialized
+  snake_case names, and the `stop_frame` boundary. Control tests (112), strict
+  Clippy, formatting, and documentation validation passed; no audio endpoint,
+  driver, or machine configuration was accessed.

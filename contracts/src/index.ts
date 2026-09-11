@@ -544,8 +544,9 @@ export interface RecordingCheckpoint {
   state: "Idle" | "Armed" | "Recording" | "Paused" | "Stopping" | "Completed" | "Failed";
   parts: Array<Record<string, unknown>>;
   pauses: Array<Record<string, unknown>>;
-  pauseStart: number | null;
-  lastFrame: number | null;
+  pause_start: number | null;
+  last_frame: number | null;
+  stop_frame: number | null;
 }
 
 export interface RecordingRecoveryItem {
