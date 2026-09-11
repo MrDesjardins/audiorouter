@@ -7549,3 +7549,15 @@ stream, or machine configuration action occurred.
   exercise worker start/stop/reset and two-direction pump telemetry without
   opening user endpoints; preserve the explicit production-driver and signing
   blockers.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-11 at pushed head `4b8c987d`: VS/WDK discovery and non-installing
+  AudioRouter driver build, read-only 31-endpoint inventory, disposable SysVAD
+  x64 package/API validation, M01/M04/M05, pinned VST3 SDK/native workers,
+  repository VST2 fixtures, M07, unsigned M08 artifacts, 159 traceability
+  mappings, and documentation validation (52 Markdown files/165 local links)
+  all passed. The runner removed 13 run-owned temporary children. No driver
+  installation/loading, signing-mode change, plugin/startup registration,
+  audio stream, or persistent machine configuration occurred. Production
+  driver activation, signing, installer, clean-machine, physical-latency,
+  manual UI, and independent-plugin rights gates remain open.
