@@ -147,6 +147,47 @@ fn finalized_flac_recording(
     })
 }
 
+fn finalized_wav_recording(
+    identity: &FileRecordingIdentity,
+    run_id: &str,
+    start_time: &str,
+) -> Result<FinalizedRecording, String> {
+    let info = audiorouter_recording::inspect_wav_file(&identity.path)
+        .map_err(|error| format!("WAV library inspection failed: {error:?}"))?;
+    let path = identity
+        .path
+        .to_str()
+        .ok_or_else(|| "WAV recording path is not valid Unicode".to_owned())?
+        .to_owned();
+    let id = format!(
+        "{}-{}-{}",
+        identity.session_id, identity.recorder_id, run_id
+    );
+    if id.len() > MAX_RECORDING_ID_BYTES
+        || identity.session_id.is_empty()
+        || identity.recorder_id.is_empty()
+    {
+        return Err("WAV recording identity exceeds its bound".into());
+    }
+    Ok(FinalizedRecording {
+        id,
+        session_id: identity.session_id.clone(),
+        recorder_id: identity.recorder_id.clone(),
+        path,
+        format: "wav".into(),
+        channels: info.channels,
+        sample_rate: info.sample_rate,
+        frames: info.frames,
+        file_bytes: info.file_bytes,
+        start_time: start_time.to_owned(),
+        state: "completed".into(),
+        missing: false,
+        title: None,
+        artist: None,
+        comment: None,
+    })
+}
+
 /// Backend-owned recording worker boundary. Implementations own their queue,
 /// encoder, and destination handle; the control plane owns the lifecycle
 /// decision and will stop a session only after this method reports a finalized
@@ -193,6 +234,10 @@ pub struct WavRecorderWorker {
     recorder: Option<WavRecorder<std::fs::File>>,
     queue: Arc<RecordingQueue>,
     maximum_chunks_per_pass: usize,
+    library_identity: Option<FileRecordingIdentity>,
+    started_at: Option<String>,
+    run_id: Option<String>,
+    finalized_recordings: Vec<FinalizedRecording>,
 }
 
 impl WavRecorderWorker {
@@ -219,7 +264,16 @@ impl WavRecorderWorker {
             recorder: Some(WavRecorder::new(writer)),
             queue: Arc::new(queue),
             maximum_chunks_per_pass,
+            library_identity: None,
+            started_at: None,
+            run_id: None,
+            finalized_recordings: Vec::new(),
         })
+    }
+
+    /// Enables explicit durable library publication for this file worker.
+    pub fn set_library_identity(&mut self, identity: FileRecordingIdentity) {
+        self.library_identity = Some(identity);
     }
 
     pub fn arm(&mut self) -> Result<(), String> {
@@ -235,7 +289,16 @@ impl WavRecorderWorker {
             .as_mut()
             .ok_or_else(|| "WAV recorder is already finalized".to_owned())?
             .start(frame)
-            .map_err(|error| format!("WAV recorder start failed: {error:?}"))
+            .map_err(|error| format!("WAV recorder start failed: {error:?}"))?;
+        self.started_at = Some(unix_epoch_seconds().to_string());
+        self.run_id = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+                .to_string(),
+        );
+        Ok(())
     }
 
     /// Enqueues caller-prepared samples. This method is intended for the
@@ -255,6 +318,10 @@ impl WavRecorderWorker {
 }
 
 impl RecorderWorker for WavRecorderWorker {
+    fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
+        self.finalized_recordings.clone()
+    }
+
     fn arm(&mut self) -> Result<(), String> {
         WavRecorderWorker::arm(self)
     }
@@ -308,6 +375,18 @@ impl RecorderWorker for WavRecorderWorker {
         output
             .sync_all()
             .map_err(|error| format!("WAV file sync failed: {error}"))?;
+        if let Some(identity) = &self.library_identity {
+            let start_time = self
+                .started_at
+                .as_deref()
+                .ok_or_else(|| "WAV finalized before start".to_owned())?;
+            let run_id = self
+                .run_id
+                .as_deref()
+                .ok_or_else(|| "WAV finalized without a run identity".to_owned())?;
+            self.finalized_recordings =
+                vec![finalized_wav_recording(identity, run_id, start_time)?];
+        }
         Ok(RecorderFinalizationOutcome {
             state: "completed".into(),
             file_finalized: true,
@@ -11231,6 +11310,11 @@ mod tests {
             .open(&path)
             .unwrap();
         let mut worker = WavRecorderWorker::new(file, WavFormat::Float32, 1, 48_000, 8, 1).unwrap();
+        worker.set_library_identity(FileRecordingIdentity {
+            session_id: "session".into(),
+            recorder_id: "voice".into(),
+            path: path.clone(),
+        });
         worker.arm().unwrap();
         worker.start(0).unwrap();
         let tap = worker.audio_tap();

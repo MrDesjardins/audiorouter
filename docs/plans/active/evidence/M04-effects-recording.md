@@ -2,9 +2,10 @@
 
 ## 2026-09-11 - Explicit FLAC library handoff
 
-`BufferedFlacRecorderWorker` and `StreamingFlacRecorderWorker` now accept an
-explicit `FileRecordingIdentity` on the lifecycle thread. After successful
-sync and FLAC inspection they publish one bounded library row with format,
+`WavRecorderWorker`, `BufferedFlacRecorderWorker`, and
+`StreamingFlacRecorderWorker` now accept an explicit `FileRecordingIdentity`
+on the lifecycle thread. After successful sync and format inspection they
+publish one bounded library row with format,
 channels, sample rate, frames, file bytes, start time, and present-file state.
 The default constructors remain path-unaware and therefore publish no
 inferred rows. A streaming-worker regression verifies the row matches the

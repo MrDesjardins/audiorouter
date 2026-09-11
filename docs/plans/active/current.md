@@ -7964,6 +7964,16 @@ live-driver evidence.
   workspace checks, and guarded documentation acceptance. Rollback: remove
   only the factory identity plumbing; existing path-unaware workers remain
   compatible.
+- Extended the same explicit library handoff to the non-segmented
+  `WavRecorderWorker` on 2026-09-11. Successful lifecycle finalization now
+  inspects the owned WAV and publishes bounded frame/byte metadata when an
+  identity is supplied; path-unaware callers remain compatible and row-free.
+  Control tests (113), strict Clippy, formatting, and diff checks passed.
+- Next M04/REC-10 task: route explicit WAV/FLAC worker identities through the
+  recorder factory/session configuration so API-created file recorders can
+  publish rows without manual worker mutation. Keep path allocation and file
+  creation on the control/lifecycle thread; reject missing identity rather
+  than guessing ownership.
 - Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
   chain at the current head on 2026-09-11. VS/WDK discovery and the
   non-installing AudioRouter driver build, read-only 31-endpoint inventory,
