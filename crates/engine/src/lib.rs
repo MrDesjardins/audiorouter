@@ -948,6 +948,7 @@ pub trait AudioTap: Send + Sync {
 /// processing boundary. Recorder nodes use one observer each; the bound
 /// keeps fan-out work explicit and matches the global recorder limit.
 pub const MAX_AUDIO_TAPS: usize = 8;
+pub const MAX_RECORDER_NODE_ID_BYTES: usize = 256;
 
 /// Prebuilt observer set for a realtime graph boundary. Construction and
 /// membership changes happen off the callback; notification only iterates the
@@ -998,6 +999,103 @@ impl AudioTapSet {
 }
 
 impl Default for AudioTapSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Control-plane binding between a validated recorder node and its realtime
+/// observer. Bindings are built or replaced before publication; the callback
+/// only receives the resulting [`AudioTapSet`].
+pub struct RecorderTapBindings {
+    bindings: Vec<RecorderTapBinding>,
+}
+
+struct RecorderTapBinding {
+    node_id: String,
+    generation: RuntimeGeneration,
+    tap: Arc<dyn AudioTap>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecorderTapBindingError {
+    InvalidNodeId,
+    DuplicateNode,
+    Capacity,
+    StaleGeneration,
+    UnattachedNode,
+}
+
+impl RecorderTapBindings {
+    pub fn new() -> Self {
+        Self {
+            bindings: Vec::new(),
+        }
+    }
+
+    pub fn add_shared(
+        &mut self,
+        node_id: &str,
+        generation: RuntimeGeneration,
+        tap: Arc<dyn AudioTap>,
+    ) -> Result<(), RecorderTapBindingError> {
+        if node_id.is_empty() || node_id.len() > MAX_RECORDER_NODE_ID_BYTES {
+            return Err(RecorderTapBindingError::InvalidNodeId);
+        }
+        if self.bindings.len() >= MAX_AUDIO_TAPS {
+            return Err(RecorderTapBindingError::Capacity);
+        }
+        if self
+            .bindings
+            .iter()
+            .any(|binding| binding.node_id == node_id)
+        {
+            return Err(RecorderTapBindingError::DuplicateNode);
+        }
+        self.bindings.push(RecorderTapBinding {
+            node_id: node_id.to_owned(),
+            generation,
+            tap,
+        });
+        Ok(())
+    }
+
+    pub fn len(&self) -> usize {
+        self.bindings.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bindings.is_empty()
+    }
+
+    /// Prepare the immutable callback set for exactly the validated node IDs.
+    /// A missing node or generation mismatch fails closed before publication.
+    pub fn tap_set_for_generation(
+        &self,
+        generation: RuntimeGeneration,
+        node_ids: &[&str],
+    ) -> Result<AudioTapSet, RecorderTapBindingError> {
+        if node_ids.len() > MAX_AUDIO_TAPS {
+            return Err(RecorderTapBindingError::Capacity);
+        }
+        let mut taps = AudioTapSet::new();
+        for node_id in node_ids {
+            let binding = self
+                .bindings
+                .iter()
+                .find(|binding| binding.node_id == *node_id)
+                .ok_or(RecorderTapBindingError::UnattachedNode)?;
+            if binding.generation != generation {
+                return Err(RecorderTapBindingError::StaleGeneration);
+            }
+            taps.add_shared(binding.tap.clone())
+                .map_err(|_| RecorderTapBindingError::Capacity)?;
+        }
+        Ok(taps)
+    }
+}
+
+impl Default for RecorderTapBindings {
     fn default() -> Self {
         Self::new()
     }
@@ -7452,6 +7550,40 @@ mod tests {
                 last_frame: AtomicU64::new(0),
             }),
             Err(AudioTapSetError::Capacity)
+        );
+    }
+
+    #[test]
+    fn recorder_tap_bindings_reject_duplicates_and_stale_or_missing_nodes() {
+        let tap = Arc::new(CountingTap {
+            calls: AtomicU64::new(0),
+            last_frame: AtomicU64::new(0),
+        });
+        let mut bindings = RecorderTapBindings::new();
+        let generation = RuntimeGeneration::new(41);
+        bindings
+            .add_shared("voice-recorder", generation, tap.clone())
+            .unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert!(!bindings.is_empty());
+        assert_eq!(
+            bindings.add_shared("voice-recorder", generation, tap.clone()),
+            Err(RecorderTapBindingError::DuplicateNode)
+        );
+        assert!(matches!(
+            bindings.tap_set_for_generation(RuntimeGeneration::new(42), &["voice-recorder"]),
+            Err(RecorderTapBindingError::StaleGeneration)
+        ));
+        assert!(matches!(
+            bindings.tap_set_for_generation(generation, &["missing"]),
+            Err(RecorderTapBindingError::UnattachedNode)
+        ));
+        assert_eq!(
+            bindings
+                .tap_set_for_generation(generation, &["voice-recorder"])
+                .unwrap()
+                .len(),
+            1
         );
     }
 }

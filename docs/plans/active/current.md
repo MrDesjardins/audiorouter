@@ -8137,3 +8137,13 @@ live-driver evidence.
 - Next M04/REC-01/GRAPH-10 task: bind each validated recorder node identity to
   exactly one attached recorder tap and generation, rejecting stale,
   unattached, or duplicate bindings while preserving sibling-route output.
+- Implemented the bounded `RecorderTapBindings` identity/generation boundary
+  on 2026-09-11. Each recorder node ID can bind once to one prebuilt tap and
+  generation; stale, missing, duplicate, oversized, and over-capacity bindings
+  fail before callback publication. The engine regression passed (101 tests),
+  with strict workspace Clippy, formatting, and diff checks. This remains
+  portable runtime evidence; native endpoint ownership and loaded-driver
+  activation are still separate gates.
+- Next M04/REC-01/GRAPH-10 task: connect validated session recorder-node IDs
+  to `RecorderTapBindings` in the control/runtime activation path, then prove
+  generation replacement removes stale taps without affecting sibling output.

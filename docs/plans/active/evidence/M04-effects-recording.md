@@ -58,6 +58,16 @@ processing stage; the runtime adapter supplies its actual queue tap through
 the prepared `AudioTapSet`. Registry and compiler regressions pass. This does
 not claim a loaded virtual endpoint or native device graph.
 
+## Recorder node identity and generation binding (2026-09-11)
+
+`RecorderTapBindings` now binds each validated recorder node ID to exactly one
+prebuilt tap and runtime generation. It rejects empty or oversized IDs,
+duplicate node bindings, capacity beyond eight observers, missing nodes, and
+stale generations before a callback tap set is prepared. The focused engine
+regression covers all rejection paths and successful preparation. This is
+portable graph/runtime binding evidence; it does not claim native endpoint
+ownership or loaded-driver activation.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30
