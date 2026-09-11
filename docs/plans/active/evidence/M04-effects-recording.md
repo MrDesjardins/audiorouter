@@ -87,6 +87,15 @@ Session stop now fails closed while a node-keyed worker is attached, because
 the session-scoped lifecycle cannot yet finalize that worker safely. The
 two-sink regression verifies this refusal; no recording is silently orphaned.
 
+Node-keyed workers now also own independent `RecorderController` state and can
+be driven through the control-plane `control_recorder_node` lifecycle boundary.
+Arm, start, pause, resume, split, and stop use the node's worker and checkpoint
+identity; successful stop persists finalized library rows when durable storage
+is configured and removes only that node's ownership. The two-sink regression
+arms, starts, and stops both workers independently before allowing session
+shutdown. JSON-RPC recorder addressing is still session-scoped and remains the
+next adapter integration task.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30

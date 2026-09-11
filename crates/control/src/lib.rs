@@ -3407,6 +3407,8 @@ pub struct ControlPlane {
     recorders: HashMap<EntityId, RecorderController>,
     recorder_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
     recorder_node_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
+    recorder_node_states: HashMap<EntityId, RecorderController>,
+    recorder_node_sessions: HashMap<EntityId, EntityId>,
     recording_policy: Option<RecordingPathPolicy>,
     storage: Option<Storage>,
     enrollments: HashMap<String, (ClientRole, bool)>,
@@ -3448,6 +3450,8 @@ impl ControlPlane {
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
             recorder_node_workers: HashMap::new(),
+            recorder_node_states: HashMap::new(),
+            recorder_node_sessions: HashMap::new(),
             recording_policy: None,
             storage: None,
             enrollments: HashMap::new(),
@@ -3576,6 +3580,8 @@ impl ControlPlane {
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
             recorder_node_workers: HashMap::new(),
+            recorder_node_states: HashMap::new(),
+            recorder_node_sessions: HashMap::new(),
             recording_policy,
             storage: Some(storage),
             enrollments: HashMap::new(),
@@ -4183,10 +4189,9 @@ impl ControlPlane {
         Ok(set)
     }
 
-    /// Bind the one control-owned recorder worker to the session's validated
-    /// recorder node. The current worker boundary supports one recorder sink
-    /// per session; multiple graph recorder nodes are rejected rather than
-    /// duplicating audio into one destination.
+    /// Bind control-owned recorder workers to the session's validated recorder
+    /// nodes. The compatibility session worker is accepted for one node;
+    /// multiple nodes require one independently attached node worker each.
     pub fn recorder_tap_bindings(
         &self,
         session_id: &EntityId,
@@ -4228,9 +4233,10 @@ impl ControlPlane {
         Ok(bindings)
     }
 
-    /// Attach a worker to one validated recorder node. Node-keyed workers are
-    /// the independent-sink path; lifecycle commands remain session-scoped
-    /// until the recorder API grows explicit recorder IDs.
+    /// Attach a worker and independent lifecycle state to one validated
+    /// recorder node. The node worker is the independent-sink path; JSON-RPC
+    /// lifecycle addressing remains session-scoped until recorder IDs are
+    /// promoted into that API.
     pub fn attach_recorder_worker_to_node(
         &mut self,
         session_id: &EntityId,
@@ -4256,8 +4262,154 @@ impl ControlPlane {
                 "recorder worker has no realtime tap".into(),
             ));
         }
-        self.recorder_node_workers.insert(node_id, worker);
+        self.recorder_node_workers.insert(node_id.clone(), worker);
+        self.recorder_node_states
+            .insert(node_id.clone(), RecorderController::new());
+        self.recorder_node_sessions
+            .insert(node_id, session_id.clone());
         Ok(())
+    }
+
+    /// Apply one lifecycle boundary to one node-owned recorder. All file and
+    /// checkpoint work stays on this control/lifecycle path, never the audio
+    /// callback. The returned shape mirrors the session recorder response but
+    /// identifies the independent node.
+    pub fn control_recorder_node(
+        &mut self,
+        node_id: &EntityId,
+        method: &str,
+        frame: Option<u64>,
+    ) -> Result<Value, ControlError> {
+        let session_id = self
+            .recorder_node_sessions
+            .get(node_id)
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("recorder node is not attached".into()))?;
+        let session_revision = self.get_session(&session_id)?.revision;
+        if method == "recorders.arm"
+            && !self
+                .recorder_node_states
+                .get(node_id)
+                .is_some_and(|recorder| recorder_is_active(recorder.state()))
+            && self
+                .recorders
+                .values()
+                .chain(self.recorder_node_states.values())
+                .filter(|recorder| recorder_is_active(recorder.state()))
+                .count()
+                >= MAX_ACTIVE_RECORDERS
+        {
+            return Err(ControlError::InvalidRequest(
+                "active recorder limit reached".into(),
+            ));
+        }
+        let frame = |required: bool| {
+            if required {
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))
+            } else {
+                Ok(frame.unwrap_or_default())
+            }
+        };
+        let mut finalized_recordings = Vec::new();
+        {
+            let worker = self.recorder_node_workers.get_mut(node_id).ok_or_else(|| {
+                ControlError::InvalidRequest("recorder node worker is not attached".into())
+            })?;
+            let result = match method {
+                "recorders.arm" => worker.arm(),
+                "recorders.start" => worker.start(frame(true)?),
+                "recorders.pause" => worker.pause(frame(true)?),
+                "recorders.resume" => worker.resume(frame(true)?),
+                "recorders.split" => worker.split(frame(true)?),
+                "recorders.stop" => {
+                    let outcome = worker.finalize(frame(true)?).map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "recorder finalization failed: {error}"
+                        ))
+                    })?;
+                    if outcome.state != "completed"
+                        || !outcome.file_finalized
+                        || outcome.recoverable
+                    {
+                        return Err(ControlError::InvalidRequest(
+                            "recorder finalization did not produce a completed file".into(),
+                        ));
+                    }
+                    finalized_recordings = worker.finalized_recordings();
+                    Ok(())
+                }
+                _ => return Err(ControlError::InvalidRequest("method not found".into())),
+            };
+            result.map_err(|error| {
+                ControlError::InvalidRequest(format!("recorder worker transition failed: {error}"))
+            })?;
+        }
+        let (checkpoint, state, parts, pauses) = {
+            let recorder = self.recorder_node_states.get_mut(node_id).ok_or_else(|| {
+                ControlError::InvalidRequest("recorder node state is not attached".into())
+            })?;
+            let result = match method {
+                "recorders.arm" => recorder.arm(),
+                "recorders.start" => recorder.start(frame(true)?),
+                "recorders.pause" => recorder.pause(frame(true)?),
+                "recorders.resume" => recorder.resume(frame(true)?),
+                "recorders.split" => recorder.split(frame(true)?),
+                "recorders.stop" => recorder.stop(frame(true)?),
+                _ => return Err(ControlError::InvalidRequest("method not found".into())),
+            };
+            result.map_err(|error| {
+                ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
+            })?;
+            let checkpoint = recorder.checkpoint();
+            let state = recorder_state_name(recorder.state());
+            let parts = checkpoint
+                .parts
+                .iter()
+                .map(|part| {
+                    json!({
+                        "index": part.index,
+                        "startFrame": part.start_frame,
+                        "endFrame": part.end_frame,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let pauses = checkpoint
+                .pauses
+                .iter()
+                .map(|pause| {
+                    json!({
+                        "startFrame": pause.start_frame,
+                        "endFrame": pause.end_frame,
+                    })
+                })
+                .collect::<Vec<_>>();
+            (checkpoint, state, parts, pauses)
+        };
+        if let Some(storage) = &self.storage {
+            storage
+                .save_recording_checkpoint(node_id.as_str(), &checkpoint)
+                .map_err(storage_error)?;
+            for recording in &finalized_recordings {
+                storage.save_recording(recording).map_err(storage_error)?;
+            }
+        }
+        let last_frame = checkpoint.last_frame;
+        let result = json!({
+            "nodeId": node_id,
+            "sessionId": session_id,
+            "state": state,
+            "parts": parts,
+            "pauses": pauses,
+            "lastFrame": last_frame,
+        });
+        self.events
+            .append(session_revision, None, "recorder.changed", Some(session_id));
+        if method == "recorders.stop" {
+            self.recorder_node_workers.remove(node_id);
+            self.recorder_node_states.remove(node_id);
+            self.recorder_node_sessions.remove(node_id);
+        }
+        Ok(result)
     }
 
     /// Attach a single-file worker and configure its durable library identity
@@ -12095,7 +12247,20 @@ mod tests {
             .tap_set_for_generation(RuntimeGeneration::new(9), &["recorder-a", "recorder-b"])
             .unwrap();
         assert_eq!(taps.len(), 2);
-        assert!(plane.session_stop(&session_id).is_err());
+        for node_id in ["recorder-a", "recorder-b"] {
+            plane
+                .control_recorder_node(&EntityId::new(node_id), "recorders.arm", None)
+                .unwrap();
+            plane
+                .control_recorder_node(&EntityId::new(node_id), "recorders.start", Some(0))
+                .unwrap();
+            let stopped = plane
+                .control_recorder_node(&EntityId::new(node_id), "recorders.stop", Some(0))
+                .unwrap();
+            assert_eq!(stopped["state"], "completed");
+        }
+        assert!(plane.recorder_node_workers.is_empty());
+        assert!(plane.session_stop(&session_id).is_ok());
         assert!(plane
             .attach_recorder_worker_to_node(
                 &session_id,

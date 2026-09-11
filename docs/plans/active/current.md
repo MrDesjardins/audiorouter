@@ -8170,3 +8170,12 @@ live-driver evidence.
   checks pass.
 - Next M04/REC-01 task: add explicit node-recorder lifecycle identities and
   finalize each worker independently during recorder/session stop.
+- Added independent node-recorder lifecycle state on 2026-09-11. Each
+  node-keyed worker now owns a `RecorderController`; direct control lifecycle
+  operations arm/start/pause/resume/split/stop that worker, persist its
+  checkpoint and finalized library rows, and remove only its ownership after
+  successful stop. The two-sink regression drives both recorders independently;
+  strict Clippy, formatting, diff, and documentation checks pass.
+- Next M04/REC-01/API task: expose recorder-node identity in the JSON-RPC
+  lifecycle schemas and dispatch, preserving idempotency and per-recorder
+  failure isolation.
