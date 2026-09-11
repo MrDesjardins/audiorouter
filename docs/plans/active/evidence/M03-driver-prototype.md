@@ -278,6 +278,14 @@ the bounded copy. This closes the driver-side torn-read gap while preserving
 the no-wait/no-allocation callback rule. The WDK build and source-contract
 acceptance passed; loaded endpoint data-path evidence remains open.
 
+The driver now also exposes a bounded `AudioRouterPublishLeaseBlock` producer
+for the capture-sink direction. It validates shape and finite input, claims the
+mapped slot with the seqlock, assigns a monotonic sequence, publishes the
+header/payload, and releases the slot without waiting or taking a lease lock.
+The updated WDK/source-contract acceptance passed with zero signability
+errors/warnings. The producer is not yet connected to the reference sample's
+simulated capture timer, so loaded endpoint transport remains unverified.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

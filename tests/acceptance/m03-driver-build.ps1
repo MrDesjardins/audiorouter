@@ -30,6 +30,25 @@ if ($copyHelper.Contains('KeAcquireSpinLock')) {
     throw 'callback lease helper must not acquire the lease spin lock'
 }
 
+$publishStart = $source.IndexOf('NTSTATUS AudioRouterPublishLeaseBlock(')
+$publishEnd = $source.IndexOf('static void RetireBridgeResources(', $publishStart)
+if ($publishStart -lt 0 -or $publishEnd -le $publishStart) {
+    throw 'capture callback publisher boundary is missing'
+}
+$publishHelper = $source.Substring($publishStart, $publishEnd - $publishStart)
+foreach ($required in @(
+        'AR_BRIDGE_DIRECTION_CAPTURE_SINK',
+        'InterlockedIncrement64',
+        'InterlockedCompareExchange64',
+        'ExReleaseRundownProtection')) {
+    if (-not $publishHelper.Contains($required)) {
+        throw "capture callback publisher is missing required invariant: $required"
+    }
+}
+if ($publishHelper.Contains('KeAcquireSpinLock')) {
+    throw 'capture callback publisher must not acquire the lease spin lock'
+}
+
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')
 $retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)
 if ($retireStart -lt 0 -or $retireEnd -le $retireStart) {

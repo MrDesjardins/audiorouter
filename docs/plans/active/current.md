@@ -1996,6 +1996,12 @@ Hardened `AudioRouterCopyLeaseBlock` against torn shared-memory reads on
 word is unchanged after copying, returning `STATUS_RETRY` when the producer
 updates concurrently. The WDK build and source-contract acceptance passed.
 
+Added the symmetric `AudioRouterPublishLeaseBlock` capture-sink seam on
+2026-09-10. It enforces the capture direction, finite bounded float32 input,
+seqlock ownership, and monotonic sequence publication under the same rundown
+boundary, without callback allocation or lease locking. The WDK build and
+source-contract acceptance passed; the sample capture timer remains unwired.
+
 Closed an expiry teardown gap on 2026-09-10: a rejected maintenance request
 now detaches an expired mapped lease before returning, waits for callback
 readers, and retires the mapping instead of leaving stale audio readable until

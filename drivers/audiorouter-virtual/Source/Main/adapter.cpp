@@ -40,6 +40,7 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
     PVOID SectionObject;
     volatile PVOID MappedView;
     volatile ULONG MappedBytes;
+    volatile LONG64 NextSequence;
 } AR_BRIDGE_LEASE_STATE;
 
 #define AR_BRIDGE_LEASE_SLOTS 2
@@ -61,11 +62,13 @@ NTSTATUS AudioRouterCopyLeaseBlock(
     }
     PVOID view = InterlockedCompareExchangePointer(&Lease->MappedView, NULL, NULL);
     ULONG mappedBytes = Lease->MappedBytes;
+    USHORT direction = Lease->Request.Direction;
     ULONGLONG generation = InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
     KeMemoryBarrier();
     NTSTATUS status = STATUS_DEVICE_NOT_READY;
-    if (view != NULL && mappedBytes != 0 && generation != 0) {
+    if (direction == AR_BRIDGE_DIRECTION_RENDER_SOURCE &&
+        view != NULL && mappedBytes != 0 && generation != 0) {
         volatile LONG64* state = reinterpret_cast<volatile LONG64*>(
             static_cast<UCHAR*>(view) + AR_BRIDGE_STATE_OFFSET);
         ULONGLONG stateBefore = static_cast<ULONGLONG>(
@@ -85,6 +88,75 @@ NTSTATUS AudioRouterCopyLeaseBlock(
     }
     ExReleaseRundownProtection(&Lease->Rundown);
     return status;
+}
+
+// Publish one capture quantum into the mapped capture-sink slot. The caller
+// supplies an already-interleaved float32 buffer; this routine performs no
+// allocation, waits, logging, endpoint access, or control I/O.
+NTSTATUS AudioRouterPublishLeaseBlock(
+    _In_ AR_BRIDGE_LEASE_STATE* Lease,
+    _In_ USHORT Frames,
+    _In_ USHORT Channels,
+    _In_reads_(SampleCapacity) const FLOAT* Samples,
+    _In_ SIZE_T SampleCapacity)
+{
+    if (Lease == NULL || Samples == NULL || Frames == 0 ||
+        Channels == 0 || Channels > AR_BRIDGE_MAX_CHANNELS ||
+        Frames > AR_BRIDGE_MAX_FRAMES) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    SIZE_T sampleCount = static_cast<SIZE_T>(Frames) * Channels;
+    if (SampleCapacity < sampleCount) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    if (!ExAcquireRundownProtection(&Lease->Rundown)) {
+        return STATUS_DEVICE_NOT_READY;
+    }
+    PVOID view = InterlockedCompareExchangePointer(&Lease->MappedView, NULL, NULL);
+    ULONG mappedBytes = Lease->MappedBytes;
+    USHORT direction = Lease->Request.Direction;
+    ULONGLONG generation = InterlockedCompareExchange64(
+        reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
+    NTSTATUS status = STATUS_DEVICE_NOT_READY;
+    if (direction != AR_BRIDGE_DIRECTION_CAPTURE_SINK || view == NULL || mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET +
+            sampleCount * sizeof(FLOAT) || generation == 0) {
+        ExReleaseRundownProtection(&Lease->Rundown);
+        return status;
+    }
+    for (SIZE_T index = 0; index < sampleCount; ++index) {
+        if (Samples[index] != Samples[index] ||
+            Samples[index] > 3.402823466e+38F ||
+            Samples[index] < -3.402823466e+38F) {
+            ExReleaseRundownProtection(&Lease->Rundown);
+            return STATUS_DATA_ERROR;
+        }
+    }
+    volatile LONG64* state = reinterpret_cast<volatile LONG64*>(
+        static_cast<UCHAR*>(view) + AR_BRIDGE_STATE_OFFSET);
+    ULONGLONG current = static_cast<ULONGLONG>(
+        InterlockedCompareExchange64(state, 0, 0));
+    if (current & 1) {
+        ExReleaseRundownProtection(&Lease->Rundown);
+        return STATUS_DEVICE_BUSY;
+    }
+    if (InterlockedCompareExchange64(
+            state, static_cast<LONG64>(current + 1),
+            static_cast<LONG64>(current)) != static_cast<LONG64>(current)) {
+        ExReleaseRundownProtection(&Lease->Rundown);
+        return STATUS_DEVICE_BUSY;
+    }
+    ULONGLONG sequence = static_cast<ULONGLONG>(
+        InterlockedIncrement64(&Lease->NextSequence));
+    AR_BRIDGE_BLOCK_HEADER header = { generation, sequence, Frames, Channels,
+        static_cast<ULONG>(sampleCount * sizeof(FLOAT)) };
+    RtlCopyMemory(static_cast<UCHAR*>(view) + AR_BRIDGE_HEADER_OFFSET,
+                  &header, sizeof(header));
+    RtlCopyMemory(static_cast<UCHAR*>(view) + AR_BRIDGE_PAYLOAD_OFFSET,
+                  Samples, sampleCount * sizeof(FLOAT));
+    KeMemoryBarrier();
+    InterlockedExchange64(state, static_cast<LONG64>(current + 2));
+    ExReleaseRundownProtection(&Lease->Rundown);
+    return STATUS_SUCCESS;
 }
 
 static void RetireBridgeResources(
@@ -267,6 +339,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                         lease->SectionObject = sectionObject;
                         lease->MappedView = mappedView;
                         lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
+                        InterlockedExchange64(&lease->NextSequence, 0);
                         sectionObject = NULL;
                         mappedView = NULL;
                         status = STATUS_SUCCESS;
@@ -323,6 +396,7 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 lease->LastHeartbeat100ns = now;
                 lease->SectionObject = sectionObject;
                 lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
+                InterlockedExchange64(&lease->NextSequence, 0);
                 KeMemoryBarrier();
                 lease->MappedView = mappedView;
                 lease->Active = TRUE;
