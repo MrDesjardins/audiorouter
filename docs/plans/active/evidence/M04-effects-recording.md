@@ -945,6 +945,8 @@ checkpoint IDs in addition to its existing single-ID lookup. Each entry is
 reported as `available`, `missing`, or `invalid`; corrupt checkpoint JSON does
 not hide other entries. Storage tests (81), control tests (112), strict
 Clippy, formatting, and documentation validation pass. This is durable
+checkpoint discovery only and does not claim native crash or power-loss
+recovery guarantees.
 
 ## Recovery checkpoint contract alignment (2026-09-11)
 
@@ -953,8 +955,6 @@ checkpoint schema. The schema describes part and pause entries, uses the actual
 serialized snake_case checkpoint field names, and includes the bounded
 `stop_frame` recovery boundary. Control coverage passed 112 tests and strict
 Clippy; no audio endpoint or machine configuration was accessed.
-checkpoint discovery only and does not claim native crash or power-loss
-recovery guarantees.
 
 The shared TypeScript contracts and UI backend adapter now represent the
 single-item and paged recovery response shapes separately. UI tests (123),
