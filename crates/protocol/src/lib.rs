@@ -6,6 +6,110 @@ pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 pub const MAX_METHOD_NAME_BYTES: usize = 128;
 pub const MAX_REQUEST_ID_BYTES: usize = 128;
 
+/// Version and size limits for the future native audio bridge. These values
+/// are deliberately independent of the JSON-RPC frame limits: audio transport
+/// must reject malformed headers before a driver or shared-memory view trusts
+/// any caller-provided length.
+pub const AUDIO_BRIDGE_PROTOCOL_MAJOR: u16 = 1;
+pub const AUDIO_BRIDGE_PROTOCOL_MINOR: u16 = 0;
+pub const MAX_AUDIO_BRIDGE_BUS_ID_BYTES: usize = 128;
+pub const MAX_AUDIO_BRIDGE_CHANNELS: u16 = 2;
+pub const MAX_AUDIO_BRIDGE_FRAMES: u16 = 4_096;
+pub const MAX_AUDIO_BRIDGE_LEASE_MS: u32 = 60_000;
+pub const MAX_AUDIO_BRIDGE_PAYLOAD_BYTES: usize =
+    MAX_AUDIO_BRIDGE_CHANNELS as usize * MAX_AUDIO_BRIDGE_FRAMES as usize * 4;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AudioBridgeContractError {
+    UnsupportedMajor(u16),
+    EmptyBusId,
+    BusIdTooLong,
+    ZeroGeneration,
+    InvalidSampleRate,
+    InvalidChannels,
+    InvalidFrames,
+    InvalidLease,
+    InvalidPayloadLength,
+    PayloadTooLarge,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AudioBridgeHello {
+    pub protocol_major: u16,
+    pub protocol_minor: u16,
+    pub bus_id: String,
+    pub generation: u64,
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+    pub frames_per_quantum: u16,
+    pub lease_ms: u32,
+}
+
+impl AudioBridgeHello {
+    pub fn validate(&self) -> Result<(), AudioBridgeContractError> {
+        if self.protocol_major != AUDIO_BRIDGE_PROTOCOL_MAJOR {
+            return Err(AudioBridgeContractError::UnsupportedMajor(
+                self.protocol_major,
+            ));
+        }
+        if self.bus_id.is_empty() {
+            return Err(AudioBridgeContractError::EmptyBusId);
+        }
+        if self.bus_id.len() > MAX_AUDIO_BRIDGE_BUS_ID_BYTES {
+            return Err(AudioBridgeContractError::BusIdTooLong);
+        }
+        if self.generation == 0 {
+            return Err(AudioBridgeContractError::ZeroGeneration);
+        }
+        if !(8_000..=192_000).contains(&self.sample_rate_hz) {
+            return Err(AudioBridgeContractError::InvalidSampleRate);
+        }
+        if !(1..=MAX_AUDIO_BRIDGE_CHANNELS).contains(&self.channels) {
+            return Err(AudioBridgeContractError::InvalidChannels);
+        }
+        if !(1..=MAX_AUDIO_BRIDGE_FRAMES).contains(&self.frames_per_quantum) {
+            return Err(AudioBridgeContractError::InvalidFrames);
+        }
+        if !(1..=MAX_AUDIO_BRIDGE_LEASE_MS).contains(&self.lease_ms) {
+            return Err(AudioBridgeContractError::InvalidLease);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AudioBridgeBlockHeader {
+    pub generation: u64,
+    pub sequence: u64,
+    pub frames: u16,
+    pub channels: u16,
+    pub payload_bytes: u32,
+}
+
+impl AudioBridgeBlockHeader {
+    pub fn validate(&self) -> Result<(), AudioBridgeContractError> {
+        if self.generation == 0 {
+            return Err(AudioBridgeContractError::ZeroGeneration);
+        }
+        if !(1..=MAX_AUDIO_BRIDGE_CHANNELS).contains(&self.channels) {
+            return Err(AudioBridgeContractError::InvalidChannels);
+        }
+        if self.frames == 0 || self.frames > MAX_AUDIO_BRIDGE_FRAMES {
+            return Err(AudioBridgeContractError::InvalidFrames);
+        }
+        let expected = usize::from(self.frames)
+            .saturating_mul(usize::from(self.channels))
+            .saturating_mul(std::mem::size_of::<f32>());
+        if expected > MAX_AUDIO_BRIDGE_PAYLOAD_BYTES {
+            return Err(AudioBridgeContractError::PayloadTooLarge);
+        }
+        if usize::try_from(self.payload_bytes).ok() != Some(expected) {
+            return Err(AudioBridgeContractError::InvalidPayloadLength);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FrameError {
     TooShort,
@@ -342,5 +446,70 @@ mod tests {
                 String::from_utf8_lossy(payload)
             );
         }
+    }
+
+    #[test]
+    fn audio_bridge_contract_bounds_identity_generation_and_format() {
+        let hello = AudioBridgeHello {
+            protocol_major: AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-1".into(),
+            generation: 7,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        assert_eq!(hello.validate(), Ok(()));
+        let mut invalid = hello.clone();
+        invalid.generation = 0;
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::ZeroGeneration)
+        );
+        invalid = hello.clone();
+        invalid.protocol_major += 1;
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::UnsupportedMajor(
+                AUDIO_BRIDGE_PROTOCOL_MAJOR + 1
+            ))
+        );
+        invalid = hello;
+        invalid.bus_id = "x".repeat(MAX_AUDIO_BRIDGE_BUS_ID_BYTES + 1);
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::BusIdTooLong)
+        );
+    }
+
+    #[test]
+    fn audio_bridge_block_header_rejects_length_and_generation_mismatch() {
+        let header = AudioBridgeBlockHeader {
+            generation: 3,
+            sequence: 4,
+            frames: 128,
+            channels: 2,
+            payload_bytes: 128 * 2 * 4,
+        };
+        assert_eq!(header.validate(), Ok(()));
+        let mut invalid = header;
+        invalid.payload_bytes -= 1;
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::InvalidPayloadLength)
+        );
+        invalid = header;
+        invalid.generation = 0;
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::ZeroGeneration)
+        );
+        invalid = header;
+        invalid.channels = MAX_AUDIO_BRIDGE_CHANNELS + 1;
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::InvalidChannels)
+        );
     }
 }

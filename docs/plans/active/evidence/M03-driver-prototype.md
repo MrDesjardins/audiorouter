@@ -53,6 +53,15 @@ state succeeds, delete removes the bridge and restores it on storage failure,
 and planned apply compensates bridge changes when its journal write fails. The
 focused `cargo test -p audiorouter-control --locked` run passed all 106 tests.
 
+## Native bridge contract
+
+`audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded
+`AudioBridgeBlockHeader`. Validation rejects incompatible protocol majors,
+overlong bus IDs, zero generations, unsupported rates/channels/quantum sizes,
+invalid lease durations, and payload lengths that do not exactly match the
+declared f32 block shape. `cargo test -p audiorouter-protocol --locked` passed
+all 8 tests. Native shared-memory/IOCTL execution remains a separate gate.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

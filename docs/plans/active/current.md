@@ -48,6 +48,13 @@ focused control suite passed 106 tests. Native endpoint IDs and actual driver
 transport remain unavailable by design until the signed/installable driver gate
 is solved.
 
+The future native bridge now has a versioned portable contract in
+`audiorouter-protocol`: hello validation bounds protocol major, stable bus ID,
+generation, negotiated PCM shape, and lease duration; block-header validation
+requires a live generation and an exact bounded f32 payload length. The focused
+protocol suite passed 8 tests. This is SEC-08/VDEV-12 contract evidence, not
+native shared-memory or IOCTL execution evidence.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
