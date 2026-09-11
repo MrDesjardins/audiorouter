@@ -60,6 +60,18 @@ qualification remains open.
   formatting/diff checks passed. No audio stream or machine configuration was
   touched.
 
+- Extended the native VST3 worker for controller-less audio effects on
+  2026-09-10. An effect that provides a valid audio component but no usable
+  edit-controller now remains processable with an explicit empty parameter
+  descriptor list and component-only opaque state; editor and generic-control
+  capabilities remain unavailable rather than being synthesized. The supplied
+  COMPER x64 binary negotiated, transformed audio, and shut down successfully
+  in a direct protocol smoke. The all-features plugin-host suite passed 67
+  unit and 35 non-ignored integration tests, strict Clippy and formatting
+  passed, and no audio or persistent machine configuration changed. This does
+  not make COMPER a full PLUG-04 qualification because its controller and
+  parameter contract is absent.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded

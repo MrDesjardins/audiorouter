@@ -548,12 +548,23 @@ public:
         }
         initialized_ = true;
         TUID controller_id{};
-        require_result("controller class id", component_->getControllerClassId(controller_id));
-        require_result("controller creation", factory_->createInstance(
-            controller_id, Vst::IEditController_iid,
-            reinterpret_cast<void**>(&controller_)));
-        require_result("controller initialize", controller_->initialize(nullptr));
-        controller_initialized_ = true;
+        const auto controller_id_result = component_->getControllerClassId(controller_id);
+        if (controller_id_result == kResultOk) {
+            const auto controller_result = factory_->createInstance(
+                controller_id, Vst::IEditController_iid,
+                reinterpret_cast<void**>(&controller_));
+            if (controller_result == kResultOk) {
+                const auto initialize_result = controller_->initialize(nullptr);
+                if (initialize_result == kResultOk) {
+                    controller_initialized_ = true;
+                } else {
+                    controller_->release();
+                    controller_ = nullptr;
+                }
+            }
+        } else if (controller_id_result != kNotImplemented && controller_id_result != kNoInterface) {
+            require_result("controller class id", controller_id_result);
+        }
         for (std::size_t bus = 0; bus < input_channels.size(); ++bus) {
             Vst::BusInfo info{};
             require_result("input bus info", component_->getBusInfo(
@@ -624,7 +635,7 @@ public:
         StateStream component_stream;
         StateStream controller_stream;
         require_result("VST3 component getState", component_->getState(&component_stream));
-        require_result("VST3 controller getState", controller_->getState(&controller_stream));
+        if (controller_) require_result("VST3 controller getState", controller_->getState(&controller_stream));
         const auto& component_state = component_stream.bytes();
         const auto& controller_state = controller_stream.bytes();
         if (component_state.size() > UINT32_MAX || controller_state.size() > UINT32_MAX ||
@@ -664,6 +675,7 @@ public:
         StateStream component_stream(component_state.data(), component_state.size());
         require_result("VST3 component setState", component_->setState(&component_stream));
         if (!controller_state.empty()) {
+            if (!controller_) throw protocol_error("VST3 controller state is unavailable");
             StateStream controller_stream(controller_state.data(), controller_state.size());
             require_result("VST3 controller setState", controller_->setState(&controller_stream));
         }
@@ -901,6 +913,7 @@ static std::string quote_vst3_title(const Vst::String128& title) {
 }
 
 static std::string parameter_descriptors_message(Vst::IEditController* controller) {
+    if (!controller) return "{\"type\":\"Parameters\",\"payload\":{\"descriptors\":[]}}";
     const auto count = controller->getParameterCount();
     if (count < 0 || count > static_cast<int32>(kMaxParameters)) {
         throw protocol_error("VST3 parameter descriptor count exceeds the bounded contract");
