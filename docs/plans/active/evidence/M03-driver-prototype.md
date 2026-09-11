@@ -154,6 +154,9 @@ uses a nonblocking atomic guard for accidental concurrent entry, and publishes
 through the bounded seqlock region. The focused Windows-audio suite passed 49
 tests and strict Clippy passed. This proves the application-side producer seam;
 the driver remains uninstalled, so mapped kernel consumption is still unproven.
+The writer exclusively owns its Rust mapping; the region type is not globally
+marked `Sync`, so the Rust safety boundary does not pretend that raw mapped
+payload bytes are safe for arbitrary in-process concurrent mutation.
 
 The driver ABI now includes `AudioRouterValidateBridgeBlock`, a pure bounded
 validator intended for the future mapped callback reader. It checks expected

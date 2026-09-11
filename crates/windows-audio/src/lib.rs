@@ -3177,13 +3177,6 @@ pub struct NativeBridgeRegion {
     max_frames: u16,
 }
 
-// The mapping metadata is immutable after construction. Payload writes are
-// serialized by the aligned state word, and readers accept only an even,
-// unchanged state value. This is the explicit invariant behind sharing a
-// region with one realtime producer and the driver reader.
-unsafe impl Send for NativeBridgeRegion {}
-unsafe impl Sync for NativeBridgeRegion {}
-
 impl NativeBridgeRegion {
     pub fn create(
         path: impl AsRef<std::path::Path>,
@@ -3461,7 +3454,7 @@ impl NativeBridgeRegion {
 /// owns a writer in normal operation; the atomic guard makes an accidental
 /// concurrent callback fail closed instead of racing the scratch buffer.
 pub struct NativeBridgeRealtimeWriter {
-    region: std::sync::Arc<NativeBridgeRegion>,
+    region: std::cell::UnsafeCell<NativeBridgeRegion>,
     generation: u64,
     next_sequence: AtomicU64,
     published_blocks: AtomicU64,
@@ -3469,12 +3462,15 @@ pub struct NativeBridgeRealtimeWriter {
     scratch: std::cell::UnsafeCell<Vec<f32>>,
 }
 
+// The writer's Rust mapping and scratch are exclusively owned by the writer;
+// `in_use` admits only one callback at a time. The other mapping participant
+// is the external kernel reader, coordinated by the bridge seqlock protocol.
 unsafe impl Send for NativeBridgeRealtimeWriter {}
 unsafe impl Sync for NativeBridgeRealtimeWriter {}
 
 impl NativeBridgeRealtimeWriter {
     pub fn new(
-        region: std::sync::Arc<NativeBridgeRegion>,
+        region: NativeBridgeRegion,
         generation: u64,
     ) -> Result<Self, NativeBridgeRegionError> {
         if generation == 0 {
@@ -3482,7 +3478,7 @@ impl NativeBridgeRealtimeWriter {
         }
         let sample_count = usize::from(region.channels) * usize::from(region.max_frames);
         Ok(Self {
-            region,
+            region: std::cell::UnsafeCell::new(region),
             generation,
             next_sequence: AtomicU64::new(0),
             published_blocks: AtomicU64::new(0),
@@ -3506,8 +3502,11 @@ impl audiorouter_engine::AudioTap for NativeBridgeRealtimeWriter {
             return;
         }
         (|| {
-            if block.channels() != usize::from(self.region.channels)
-                || block.frames() > usize::from(self.region.max_frames)
+            // SAFETY: `in_use` gives this callback exclusive access to the
+            // writer-owned mapping until the guard is released.
+            let region = unsafe { &*self.region.get() };
+            if block.channels() != usize::from(region.channels)
+                || block.frames() > usize::from(region.max_frames)
             {
                 return;
             }
@@ -3531,8 +3530,7 @@ impl audiorouter_engine::AudioTap for NativeBridgeRealtimeWriter {
             else {
                 return;
             };
-            if self
-                .region
+            if region
                 .write(self.generation, sequence, &scratch[..count])
                 .is_ok()
             {
@@ -4652,7 +4650,7 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let region = std::sync::Arc::new(NativeBridgeRegion::create(&path, 2, 128).unwrap());
+        let region = NativeBridgeRegion::create(&path, 2, 128).unwrap();
         let reader = NativeBridgeRegion::open(&path, 2, 128).unwrap();
         let writer = NativeBridgeRealtimeWriter::new(region, 9).unwrap();
         let mut block = audiorouter_engine::AudioBlock::new(2, 4).unwrap();

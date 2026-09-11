@@ -162,6 +162,11 @@ logging. The focused Windows-audio suite passes 49 tests and strict Clippy
 passes. This is a concrete broker-side producer seam; it does not claim that
 the uninstalled prototype driver has consumed a realtime block.
 
+Follow-up safety correction: the writer now exclusively owns its Rust mapping
+instead of marking `NativeBridgeRegion` globally `Sync`. This keeps Rust-side
+mapping ownership explicit while retaining the external kernel seqlock peer.
+The same 49-test focused suite and strict Clippy pass after the correction.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
