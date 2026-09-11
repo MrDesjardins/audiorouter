@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-11 - Build-output ownership hardening
+
+The build-only wrapper now removes only an automatically created disposable
+directory below `%TEMP%`. A caller-provided path, including a pre-existing
+directory, is preserved when `-KeepOutput` is omitted. The guarded M03
+acceptance checks this source contract and then completed the x64 WDK build,
+catalog generation, and signability test with zero errors and warnings at
+`c912256d`. No driver was installed or loaded, and no signing, boot-policy,
+service, endpoint, or machine-audio configuration changed.
+
 Date: 2026-09-10
 Environment: Windows x64, Visual Studio 18.9.1 (Community 2026), WDK
 10.0.28000.0, PowerShell, repository `main`
