@@ -261,6 +261,84 @@ pub enum NativeBridgeControllerError {
 }
 
 #[cfg(windows)]
+#[derive(Debug)]
+pub enum NativeBridgeOutputWorkerError {
+    Bridge(NativeBridgeControllerError),
+    Audio(AudioError),
+}
+
+#[cfg(windows)]
+/// Couples an already-prepared endpoint worker to one negotiated virtual
+/// capture sink. Construction is deliberately stopped-by-default: endpoint
+/// activation, driver installation, and default-device changes remain outside
+/// this type. The bridge writer is an independent mapped view, so heartbeat
+/// and lease ownership stay with the controller while the audio callback only
+/// copies into its preallocated slot.
+pub struct NativeBridgeOutputWorker {
+    endpoint: WasapiEndpointWorker,
+    controller: NativeBridgeController,
+    writer: NativeBridgeRealtimeWriter,
+}
+
+#[cfg(windows)]
+impl NativeBridgeOutputWorker {
+    pub fn new(
+        endpoint: WasapiEndpointWorker,
+        controller: NativeBridgeController,
+    ) -> Result<Self, NativeBridgeOutputWorkerError> {
+        let writer = controller
+            .realtime_writer()
+            .map_err(NativeBridgeOutputWorkerError::Bridge)?;
+        Ok(Self {
+            endpoint,
+            controller,
+            writer,
+        })
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.endpoint.is_running()
+    }
+
+    pub fn published_blocks(&self) -> u64 {
+        self.writer.published_blocks()
+    }
+
+    pub fn start(&mut self) -> Result<(), NativeBridgeOutputWorkerError> {
+        self.endpoint
+            .start()
+            .map_err(NativeBridgeOutputWorkerError::Audio)
+    }
+
+    pub fn stop(&mut self) -> Result<(), NativeBridgeOutputWorkerError> {
+        self.endpoint
+            .stop()
+            .map_err(NativeBridgeOutputWorkerError::Audio)
+    }
+
+    /// Refresh the kernel lease from the control/worker thread. This is not
+    /// called from the realtime callback.
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeOutputWorkerError> {
+        self.controller
+            .heartbeat()
+            .map_err(NativeBridgeOutputWorkerError::Bridge)
+    }
+
+    pub fn pump_available(
+        &mut self,
+        max_packets: u32,
+    ) -> Result<WasapiSchedulerPump, NativeBridgeOutputWorkerError> {
+        self.endpoint
+            .pump_available_with_tap(max_packets, &self.writer)
+            .map_err(NativeBridgeOutputWorkerError::Audio)
+    }
+
+    pub fn endpoint(&self) -> &WasapiEndpointWorker {
+        &self.endpoint
+    }
+}
+
+#[cfg(windows)]
 /// Explicit owner of the driver lease and its broker-side mapped session.
 ///
 /// Construction claims the kernel lease before callers can publish blocks.
@@ -1563,6 +1641,37 @@ impl WasapiEndpointWorker {
         let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
         for _ in 0..budget {
             let result = self.pump()?;
+            total.accumulate(result);
+            if result.packets == 0 {
+                break;
+            }
+        }
+        Ok(total)
+    }
+
+    /// Tap variant of [`Self::pump_available`] without imposing a deadline
+    /// policy. The caller supplies scheduling policy when it owns the wakeup;
+    /// this method retains the same bounded, non-waiting packet drain.
+    pub fn pump_available_with_tap(
+        &mut self,
+        max_packets: u32,
+        tap: &dyn audiorouter_engine::AudioTap,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        let mut total = WasapiSchedulerPump::default();
+        let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        for _ in 0..budget {
+            let capture = self
+                .capture
+                .as_ref()
+                .ok_or(AudioError::ProcessingStateUnavailable)?;
+            let render = self
+                .render
+                .as_ref()
+                .ok_or(AudioError::ProcessingStateUnavailable)?;
+            let result = self.bridge.pump_with_tap(capture, render, tap)?;
             total.accumulate(result);
             if result.packets == 0 {
                 break;

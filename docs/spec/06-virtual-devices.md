@@ -13,6 +13,14 @@ A virtual bus has a user-facing name and may expose two Windows endpoints:
 
 A bus may expose both sides. They are not implicitly connected. A pass-through template adds an explicit source-to-sink route. AudioRouter's driver bridge is distinct from the public endpoints: the engine reads the render stream and supplies the capture stream through a bounded native interface, not by opening a capture endpoint and pretending it can write to it.
 
+The Windows adapter's managed composition boundary is `NativeBridgeOutputWorker`.
+It combines an explicitly prepared physical endpoint worker with a negotiated
+capture-sink bridge. It is stopped by default, publishes through the bounded
+realtime writer, and keeps lease heartbeats on the worker/control thread.
+Construction does not activate endpoints or alter Windows defaults. The
+complementary render-source direction remains a separate integration gate until
+its stale-data and fail-closed behavior is qualified.
+
 Persistent endpoint identity and continuous processed audio are separate properties. Driver presence keeps endpoints enumerated; a running authorized backend supplies their live audio. Silence is the safe default when no owner exists.
 
 ## Requirements

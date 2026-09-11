@@ -7505,3 +7505,19 @@ stream, or machine configuration action occurred.
 - Next M00/M02 task: add live-to-control inactive transition observation only
   through the existing read-only notification path, then proceed to the
   managed driver callback integration gate.
+
+- Added the managed virtual-output composition boundary on 2026-09-11:
+  `NativeBridgeOutputWorker` couples an already-prepared physical
+  `WasapiEndpointWorker` to a negotiated capture-sink bridge using the
+  allocation-free `NativeBridgeRealtimeWriter`. Construction remains stopped
+  and performs no endpoint activation, driver installation, default-device
+  mutation, or event wait; bounded pumping and lease heartbeat are explicit
+  operations owned by the worker/control thread. Windows-audio (57), strict
+  Clippy, formatting, and diff checks passed. This is code-level integration
+  evidence only: the production driver is not installed/loaded and no live
+  virtual endpoint stream was opened.
+- Next M00/M02 task: add the complementary negotiated render-source adapter
+  (bridge-to-physical-render) with explicit stale/silence behavior, then test
+  both directions against a disposable bridge fixture. Keep installation,
+  signing, endpoint provisioning, physical-latency, and live-driver gates
+  open until their required evidence exists.
