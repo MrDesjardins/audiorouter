@@ -1,6 +1,6 @@
 # Active plan
 
-Updated: 2026-09-10.
+Updated: 2026-09-11.
 
 ## Current execution checkpoint: driver bridge data-path slice
 
@@ -26,7 +26,7 @@ Markdown files/165 links). The runner removed its 13 run-owned temporary
 children. No driver installation/loading, signing-mode change, plugin/startup
 registration, audio stream, or persistent machine configuration occurred.
 
-The chain was requalified again after `830152dc`, with the same M00-M08
+The chain was requalified again on 2026-09-11 after `830152dc`, with the same M00-M08
 coverage and successful cleanup of 13 run-owned temporary children. The new
 54-test Windows-audio package coverage, endpoint-worker lifecycle, exact
 rebind transaction, and bounded packet-drain APIs all compiled into the M07
