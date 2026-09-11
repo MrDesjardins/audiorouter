@@ -7831,6 +7831,13 @@ live-driver evidence.
   Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
   driver, plugin registration, or persistent machine audio configuration
   changed.
+- Revalidated the locked workspace after segmented failure containment at
+  pushed head `9dafe235` on 2026-09-11. Workspace tests passed, including
+  control (111), recording (38), Windows-audio (62 with 11 expected native
+  fixture skips), plugin-host (67), storage (80), and worker-process coverage.
+  Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
+  driver, plugin registration, or persistent machine audio configuration
+  changed.
 - Corrected segmented REC-08 failure containment on 2026-09-11. Rotation,
   write, flush, arithmetic, controller, and checkpoint errors now transition
   the segmented recorder to `Failed` before returning. A flush-failure
