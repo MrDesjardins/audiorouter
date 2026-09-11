@@ -3177,6 +3177,13 @@ pub struct NativeBridgeRegion {
     max_frames: u16,
 }
 
+// The mapping metadata is immutable after construction. Payload writes are
+// serialized by the aligned state word, and readers accept only an even,
+// unchanged state value. This is the explicit invariant behind sharing a
+// region with one realtime producer and the driver reader.
+unsafe impl Send for NativeBridgeRegion {}
+unsafe impl Sync for NativeBridgeRegion {}
+
 impl NativeBridgeRegion {
     pub fn create(
         path: impl AsRef<std::path::Path>,
@@ -3250,7 +3257,7 @@ impl NativeBridgeRegion {
     }
 
     pub fn write(
-        &mut self,
+        &self,
         generation: u64,
         sequence: u64,
         samples: &[f32],
@@ -3305,19 +3312,24 @@ impl NativeBridgeRegion {
             )
         }
         .map_err(|_| NativeBridgeRegionError::Busy)?;
-        self.map[BRIDGE_HEADER_OFFSET..BRIDGE_HEADER_OFFSET + 8]
+        // SAFETY: the successful state CAS grants this producer exclusive
+        // access to the payload until the release store below. The mapping
+        // remains alive through `self`, and all offsets are layout-checked.
+        let map =
+            unsafe { std::slice::from_raw_parts_mut(self.map.as_ptr() as *mut u8, self.map.len()) };
+        map[BRIDGE_HEADER_OFFSET..BRIDGE_HEADER_OFFSET + 8]
             .copy_from_slice(&header.generation.to_le_bytes());
-        self.map[BRIDGE_HEADER_OFFSET + 8..BRIDGE_HEADER_OFFSET + 16]
+        map[BRIDGE_HEADER_OFFSET + 8..BRIDGE_HEADER_OFFSET + 16]
             .copy_from_slice(&header.sequence.to_le_bytes());
-        self.map[BRIDGE_HEADER_OFFSET + 16..BRIDGE_HEADER_OFFSET + 18]
+        map[BRIDGE_HEADER_OFFSET + 16..BRIDGE_HEADER_OFFSET + 18]
             .copy_from_slice(&header.frames.to_le_bytes());
-        self.map[BRIDGE_HEADER_OFFSET + 18..BRIDGE_HEADER_OFFSET + 20]
+        map[BRIDGE_HEADER_OFFSET + 18..BRIDGE_HEADER_OFFSET + 20]
             .copy_from_slice(&header.channels.to_le_bytes());
-        self.map[BRIDGE_HEADER_OFFSET + 20..BRIDGE_HEADER_OFFSET + 24]
+        map[BRIDGE_HEADER_OFFSET + 20..BRIDGE_HEADER_OFFSET + 24]
             .copy_from_slice(&header.payload_bytes.to_le_bytes());
         for (index, sample) in samples.iter().enumerate() {
             let offset = BRIDGE_PAYLOAD_OFFSET + index * 4;
-            self.map[offset..offset + 4].copy_from_slice(&sample.to_le_bytes());
+            map[offset..offset + 4].copy_from_slice(&sample.to_le_bytes());
         }
         // SAFETY: the mapping remains owned by `self` until after this store.
         unsafe {
@@ -3440,6 +3452,94 @@ impl NativeBridgeRegion {
                     .unwrap(),
             ),
         }
+    }
+}
+
+/// Allocation-free `AudioTap` adapter for the broker's single mapped slot.
+///
+/// The scratch buffer is allocated at construction. A single engine callback
+/// owns a writer in normal operation; the atomic guard makes an accidental
+/// concurrent callback fail closed instead of racing the scratch buffer.
+pub struct NativeBridgeRealtimeWriter {
+    region: std::sync::Arc<NativeBridgeRegion>,
+    generation: u64,
+    next_sequence: AtomicU64,
+    published_blocks: AtomicU64,
+    in_use: AtomicBool,
+    scratch: std::cell::UnsafeCell<Vec<f32>>,
+}
+
+unsafe impl Send for NativeBridgeRealtimeWriter {}
+unsafe impl Sync for NativeBridgeRealtimeWriter {}
+
+impl NativeBridgeRealtimeWriter {
+    pub fn new(
+        region: std::sync::Arc<NativeBridgeRegion>,
+        generation: u64,
+    ) -> Result<Self, NativeBridgeRegionError> {
+        if generation == 0 {
+            return Err(NativeBridgeRegionError::InvalidFrame);
+        }
+        let sample_count = usize::from(region.channels) * usize::from(region.max_frames);
+        Ok(Self {
+            region,
+            generation,
+            next_sequence: AtomicU64::new(0),
+            published_blocks: AtomicU64::new(0),
+            in_use: AtomicBool::new(false),
+            scratch: std::cell::UnsafeCell::new(vec![0.0; sample_count]),
+        })
+    }
+
+    pub fn published_blocks(&self) -> u64 {
+        self.published_blocks.load(Ordering::Relaxed)
+    }
+}
+
+impl audiorouter_engine::AudioTap for NativeBridgeRealtimeWriter {
+    fn on_processed_block(&self, _start_frame: u64, block: &audiorouter_engine::AudioBlock) {
+        if self
+            .in_use
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return;
+        }
+        (|| {
+            if block.channels() != usize::from(self.region.channels)
+                || block.frames() > usize::from(self.region.max_frames)
+            {
+                return;
+            }
+            // SAFETY: `in_use` gives this callback exclusive access to the
+            // preallocated scratch vector until the guard is released.
+            let scratch = unsafe { &mut *self.scratch.get() };
+            let count = block.channels() * block.frames();
+            for frame in 0..block.frames() {
+                for channel in 0..block.channels() {
+                    scratch[frame * block.channels() + channel] =
+                        block.channel(channel).unwrap()[frame];
+                }
+            }
+            let Some(sequence) = self
+                .next_sequence
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                    value.checked_add(1)
+                })
+                .ok()
+                .and_then(|value| value.checked_add(1))
+            else {
+                return;
+            };
+            if self
+                .region
+                .write(self.generation, sequence, &scratch[..count])
+                .is_ok()
+            {
+                self.published_blocks.fetch_add(1, Ordering::Relaxed);
+            }
+        })();
+        self.in_use.store(false, Ordering::Release);
     }
 }
 
@@ -4521,7 +4621,7 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let mut writer = NativeBridgeRegion::create(&path, 2, 128).unwrap();
+        let writer = NativeBridgeRegion::create(&path, 2, 128).unwrap();
         let reader = NativeBridgeRegion::open(&path, 2, 128).unwrap();
         let input: Vec<f32> = (0..8).map(|value| value as f32 / 8.0).collect();
         writer.write(4, 1, &input).unwrap();
@@ -4539,6 +4639,34 @@ mod tests {
         ));
         drop(reader);
         drop(writer);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_realtime_writer_publishes_engine_tap_without_allocation() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-tap-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let region = std::sync::Arc::new(NativeBridgeRegion::create(&path, 2, 128).unwrap());
+        let reader = NativeBridgeRegion::open(&path, 2, 128).unwrap();
+        let writer = NativeBridgeRealtimeWriter::new(region, 9).unwrap();
+        let mut block = audiorouter_engine::AudioBlock::new(2, 4).unwrap();
+        block
+            .copy_from_interleaved(&[1.0, 10.0, 2.0, 20.0, 3.0, 30.0, 4.0, 40.0])
+            .unwrap();
+        <NativeBridgeRealtimeWriter as audiorouter_engine::AudioTap>::on_processed_block(
+            &writer, 0, &block,
+        );
+        assert_eq!(writer.published_blocks(), 1);
+        let mut output = [0.0; 8];
+        reader.read_into(9, &mut output).unwrap();
+        assert_eq!(output, [1.0, 10.0, 2.0, 20.0, 3.0, 30.0, 4.0, 40.0]);
+        drop(reader);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -4702,7 +4830,7 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let mut region = NativeBridgeRegion::create(&path, 2, 128).unwrap();
+        let region = NativeBridgeRegion::create(&path, 2, 128).unwrap();
         let mapping_bytes = region.mapping_bytes();
         let section = NativeBridgeSectionHandle::for_file(&path, mapping_bytes as u32).unwrap();
         assert_ne!(section.raw_handle(), 0);

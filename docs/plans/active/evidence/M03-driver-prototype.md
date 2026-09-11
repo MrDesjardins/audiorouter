@@ -29,7 +29,7 @@ signing evidence.
 This is source/build evidence for M03 VDEV-01..08 and SEC-08 only. The source
 currently exposes the derivative of the upstream sample's one render and one
 capture endpoint families. It does not yet implement AudioRouter bus count,
-ownership lease, broker/bridge IPC, graph-to-driver callback transport, managed
+managed endpoint provisioning, graph-to-driver callback consumption, managed
 create/rename/enable/disable/delete lifecycle, uninstall/restore, production
 signing, or clean-machine installation. VDEV-09 and M08 signing/release gates
 remain open.
@@ -147,6 +147,13 @@ deliberately loaded driver.
 The temporary section regression maps the section handle and observes generation
 bytes written through the broker region view, proving the two views share the
 expected file-backed bytes. It performs no device or audio access.
+
+The broker now also exposes `NativeBridgeRealtimeWriter`, an engine
+`AudioTap` adapter. It preallocates planar-to-interleaved conversion scratch,
+uses a nonblocking atomic guard for accidental concurrent entry, and publishes
+through the bounded seqlock region. The focused Windows-audio suite passed 49
+tests and strict Clippy passed. This proves the application-side producer seam;
+the driver remains uninstalled, so mapped kernel consumption is still unproven.
 
 The driver ABI now includes `AudioRouterValidateBridgeBlock`, a pure bounded
 validator intended for the future mapped callback reader. It checks expected

@@ -152,6 +152,16 @@ heartbeat, and close; a Windows-only regression created and released the
 temporary section successfully without opening an audio endpoint. This still
 requires a deliberately loaded driver for end-to-end proof.
 
+The Windows adapter now provides `NativeBridgeRealtimeWriter`, an
+`audiorouter_engine::AudioTap` implementation that publishes processed planar
+engine blocks into the bounded interleaved bridge slot. Its conversion scratch
+is allocated during construction; callback publication uses only a nonblocking
+atomic ownership guard, bounded copies, and the seqlock writer. Concurrent
+callback entry and shape/slot failures drop the block without waiting or
+logging. The focused Windows-audio suite passes 49 tests and strict Clippy
+passes. This is a concrete broker-side producer seam; it does not claim that
+the uninstalled prototype driver has consumed a realtime block.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
