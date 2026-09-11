@@ -83,6 +83,17 @@ qualification remains open.
   checks passed. COMPER's component-state restore limitation remains an
   explicit unsupported capability rather than a qualification waiver.
 
+- Corrected the native VST3 component/controller handshake on 2026-09-10 by
+  linking the pinned SDK IID definitions and connecting both VST3 connection
+  points after controller initialization. The native parameter ceiling now
+  matches the Rust limit of 256, and state restoration pauses processing and
+  activation before applying state. The repository AGain acceptance matrix
+  passed single-bus, auxiliary-bus, asynchronous staging, failure recovery,
+  repeated-quantum, and validated-state tests; the build cleanup now removes
+  the additional IID object. TDR Nova consequently exposes its real parameter
+  set, but still returns `kResultFalse` for component state restore and remains
+  unsupported for full PLUG-04 qualification.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded

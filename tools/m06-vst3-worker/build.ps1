@@ -22,10 +22,16 @@ $version = $kitRoot.Name
 $umLib = Join-Path $kits "Lib/$version/um/x64"
 $ucrtLib = Join-Path $kits "Lib/$version/ucrt/x64"
 $source = Join-Path $PSScriptRoot 'main.cpp'
+$iidSource = Join-Path $sdkInclude 'public.sdk\source\vst\vstinitiids.cpp'
 $output = [System.IO.Path]::GetFullPath($Output)
 $object = Join-Path $PSScriptRoot 'm06-vst3-worker.obj'
-foreach ($path in @($cl, "$sdkInclude/pluginterfaces/base/ipluginbase.h", "$include/um/Windows.h")) {
+$iidObject = Join-Path $PSScriptRoot 'vstinitiids.obj'
+foreach ($path in @($cl, "$sdkInclude/pluginterfaces/base/ipluginbase.h", $iidSource, "$include/um/Windows.h")) {
     if (-not (Test-Path -LiteralPath $path)) { throw "Required native toolchain path is missing: $path" }
 }
-& $cl /nologo /EHsc /std:c++20 "/I$vcInclude" "/I$sdkInclude" "/I$include/shared" "/I$include/um" "/I$include/ucrt" $source /Fo:$object /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib bcrypt.lib
+& $cl /nologo /EHsc /std:c++20 "/I$vcInclude" "/I$sdkInclude" "/I$include/shared" "/I$include/um" "/I$include/ucrt" /c $source /Fo:$object
+if ($LASTEXITCODE -ne 0) { throw "VST3 worker compile failed with exit code $LASTEXITCODE" }
+& $cl /nologo /EHsc /std:c++20 "/I$vcInclude" "/I$sdkInclude" "/I$include/shared" "/I$include/um" "/I$include/ucrt" /c $iidSource /Fo:$iidObject
+if ($LASTEXITCODE -ne 0) { throw "VST3 SDK IID compile failed with exit code $LASTEXITCODE" }
+& $cl /nologo $object $iidObject /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib bcrypt.lib
 if ($LASTEXITCODE -ne 0) { throw "VST3 worker build failed with exit code $LASTEXITCODE" }

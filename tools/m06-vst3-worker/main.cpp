@@ -29,6 +29,7 @@
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 
 namespace fs = std::filesystem;
@@ -37,7 +38,9 @@ using GetPluginFactoryProc = IPluginFactory* (PLUGIN_API*)();
 
 constexpr std::size_t kMaxMessageBytes = 4 * 1024 * 1024;
 constexpr std::size_t kMaxFrames = 4096;
-constexpr std::size_t kMaxParameters = 64;
+// Keep the native descriptor/event bound aligned with the Rust worker
+// contract. The bound remains finite and is enforced before queue growth.
+constexpr std::size_t kMaxParameters = 256;
 constexpr std::size_t kMaxStateBytes = 16 * 1024 * 1024;
 constexpr uint16_t kProtocolVersion = 1;
 
@@ -557,6 +560,15 @@ public:
                 const auto initialize_result = controller_->initialize(nullptr);
                 if (initialize_result == kResultOk) {
                     controller_initialized_ = true;
+                    component_->queryInterface(Vst::IConnectionPoint::iid,
+                                                reinterpret_cast<void**>(&component_connection_));
+                    controller_->queryInterface(Vst::IConnectionPoint::iid,
+                                                reinterpret_cast<void**>(&controller_connection_));
+                    if (component_connection_ && controller_connection_ &&
+                        component_connection_->connect(controller_connection_) == kResultTrue &&
+                        controller_connection_->connect(component_connection_) == kResultTrue) {
+                        components_connected_ = true;
+                    }
                 } else {
                     controller_->release();
                     controller_ = nullptr;
@@ -618,6 +630,12 @@ public:
     ~Vst3Effect() {
         if (processing_) processor_->setProcessing(false);
         if (active_) component_->setActive(false);
+        if (components_connected_) {
+            component_connection_->disconnect(controller_connection_);
+            controller_connection_->disconnect(component_connection_);
+        }
+        if (component_connection_) component_connection_->release();
+        if (controller_connection_) controller_connection_->release();
         if (processor_) processor_->release();
         if (controller_) {
             if (controller_initialized_) controller_->terminate();
@@ -672,12 +690,30 @@ public:
             component_state = bytes;
         }
         if (component_state.empty()) throw protocol_error("VST3 component state is empty");
+        const bool was_active = active_;
+        const bool was_processing = processing_;
+        if (was_processing) {
+            require_result("VST3 processor pause for state", processor_->setProcessing(false));
+            processing_ = false;
+        }
+        if (was_active) {
+            require_result("VST3 component pause for state", component_->setActive(false));
+            active_ = false;
+        }
         StateStream component_stream(component_state.data(), component_state.size());
         require_result("VST3 component setState", component_->setState(&component_stream));
         if (!controller_state.empty()) {
             if (!controller_) throw protocol_error("VST3 controller state is unavailable");
             StateStream controller_stream(controller_state.data(), controller_state.size());
             require_result("VST3 controller setState", controller_->setState(&controller_stream));
+        }
+        if (was_active) {
+            require_result("VST3 component resume after state", component_->setActive(true));
+            active_ = true;
+        }
+        if (was_processing) {
+            require_result("VST3 processor resume after state", processor_->setProcessing(true));
+            processing_ = true;
         }
     }
 
@@ -880,8 +916,11 @@ private:
     Vst::IComponent* component_ = nullptr;
     Vst::IAudioProcessor* processor_ = nullptr;
     Vst::IEditController* controller_ = nullptr;
+    Vst::IConnectionPoint* component_connection_ = nullptr;
+    Vst::IConnectionPoint* controller_connection_ = nullptr;
     bool initialized_ = false;
     bool controller_initialized_ = false;
+    bool components_connected_ = false;
     bool active_ = false;
     bool processing_ = false;
     std::vector<uint16_t> requested_input_channels_;

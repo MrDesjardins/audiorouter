@@ -7,6 +7,7 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $workerBuild = Join-Path $repositoryRoot 'tools\m06-vst3-worker\build.ps1'
 $worker = Join-Path $repositoryRoot 'tools\m06-vst3-worker\m06-vst3-worker.exe'
 $workerObject = Join-Path $repositoryRoot 'tools\m06-vst3-worker\m06-vst3-worker.obj'
+$iidObject = Join-Path $repositoryRoot 'tools\m06-vst3-worker\vstinitiids.obj'
 $fixture = Join-Path $repositoryRoot 'third_party\vst3sdk-build\VST3\Release\again.vst3'
 if (-not (Test-Path -LiteralPath $fixture -PathType Container)) {
     throw "AGain fixture is missing; run m06-vst3-sdk.ps1 first: $fixture"
@@ -38,7 +39,7 @@ try {
 } finally {
     if ($null -eq $previousFixture) { Remove-Item Env:AUDIOROUTER_VST3_FIXTURE -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_FIXTURE = $previousFixture }
     if ($null -eq $previousWorker) { Remove-Item Env:AUDIOROUTER_VST3_NATIVE_WORKER -ErrorAction SilentlyContinue } else { $env:AUDIOROUTER_VST3_NATIVE_WORKER = $previousWorker }
-    Remove-Item -LiteralPath $worker,$workerObject -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $worker,$workerObject,$iidObject -Force -ErrorAction SilentlyContinue
 }
 Write-Output 'M06 native VST3 worker acceptance passed: isolated AGain single-stream and auxiliary-bus processing, asynchronous graph staging, bounded restart/quarantine recovery, validated state restoration, repeated-quantum timing, finite transformed output, and bounded shutdown.'
 Write-Output 'Scope: repository-local native worker and AGain fixture; no plugin registration, audio stream, or machine audio configuration changes.'
