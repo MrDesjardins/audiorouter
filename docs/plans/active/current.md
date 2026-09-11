@@ -7807,3 +7807,12 @@ live-driver evidence.
   coverage. Workspace strict Clippy, formatting, and diff checks passed. No
   endpoint, driver, plugin registration, or persistent machine audio
   configuration changed.
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `4d527408` on 2026-09-11. VS/WDK discovery and AudioRouter driver
+  build/signability, read-only 31-endpoint inventory, disposable SysVAD x64
+  qualification, M01 CLI, M04 DSP/recording (37 recording tests), M05 UI (122
+  tests), M06 VST3/VST2 workers, M07 headless, unsigned M08 release preparation,
+  159 traceability IDs, and documentation validation (52 files/167 links)
+  passed. Cleanup removed 13 run-owned temporary children. No driver or plugin
+  registration, startup action, signing-mode change, live audio stream, or
+  persistent machine audio configuration occurred.
