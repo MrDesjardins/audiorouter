@@ -167,6 +167,13 @@ instead of marking `NativeBridgeRegion` globally `Sync`. This keeps Rust-side
 mapping ownership explicit while retaining the external kernel seqlock peer.
 The same 49-test focused suite and strict Clippy pass after the correction.
 
+The driver ABI now adds `AudioRouterCopyBridgeBlock`, a bounded callback-side
+copy helper that validates the mapped header, checks the caller-owned
+destination capacity, and copies only the negotiated float payload. The x64
+non-installing WDK build passed with zero signability errors/warnings. The
+helper is compiled contract evidence; no WaveRT callback invokes it yet because
+the reference sample has no safe broker-buffer ownership hook.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

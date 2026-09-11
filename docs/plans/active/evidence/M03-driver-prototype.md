@@ -158,6 +158,13 @@ The writer exclusively owns its Rust mapping; the region type is not globally
 marked `Sync`, so the Rust safety boundary does not pretend that raw mapped
 payload bytes are safe for arbitrary in-process concurrent mutation.
 
+`Source/Inc/bridgeio.h` now also defines `AudioRouterCopyBridgeBlock`, which
+validates a mapped block and copies its bounded float payload into a
+caller-owned destination without waiting, allocating, logging, or issuing I/O.
+The x64 WDK build passed with zero signability errors/warnings. The helper is
+not wired to the reference sample's simulated timer path; a loaded-driver
+callback ownership test is still required before claiming realtime transport.
+
 The driver ABI now includes `AudioRouterValidateBridgeBlock`, a pure bounded
 validator intended for the future mapped callback reader. It checks expected
 generation, nonzero sequence, PCM shape, exact float payload length, and view

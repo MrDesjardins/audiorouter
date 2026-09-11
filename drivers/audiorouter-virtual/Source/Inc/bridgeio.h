@@ -111,6 +111,48 @@ AudioRouterValidateBridgeBlock(
     return STATUS_SUCCESS;
 }
 
+// Copy one already-mapped block into a caller-owned PCM destination. This is
+// deliberately a bounded helper for a future PortCls-owned callback: it does
+// not acquire the lease, wait for a producer, allocate, log, or issue I/O.
+// Callers must keep the mapped view alive for the duration of this operation.
+__forceinline
+NTSTATUS
+AudioRouterCopyBridgeBlock(
+    _In_ const UCHAR* View,
+    _In_ SIZE_T ViewBytes,
+    _In_ ULONGLONG ExpectedGeneration,
+    _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
+    _In_ SIZE_T DestinationCapacitySamples,
+    _Out_ AR_BRIDGE_BLOCK_HEADER* Header
+)
+{
+    if (View == NULL || Header == NULL || Destination == NULL ||
+        ViewBytes < AR_BRIDGE_PAYLOAD_OFFSET) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    const AR_BRIDGE_BLOCK_HEADER* sourceHeader =
+        reinterpret_cast<const AR_BRIDGE_BLOCK_HEADER*>(
+            View + AR_BRIDGE_HEADER_OFFSET);
+    NTSTATUS status = AudioRouterValidateBridgeBlock(
+        sourceHeader, ExpectedGeneration, ViewBytes);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+    SIZE_T sampleCount = static_cast<SIZE_T>(sourceHeader->Frames) *
+        static_cast<SIZE_T>(sourceHeader->Channels);
+    if (DestinationCapacitySamples < sampleCount) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    for (SIZE_T index = 0; index < sampleCount; ++index) {
+        RtlCopyMemory(
+            &Destination[index],
+            View + AR_BRIDGE_PAYLOAD_OFFSET + index * sizeof(FLOAT),
+            sizeof(FLOAT));
+    }
+    *Header = *sourceHeader;
+    return STATUS_SUCCESS;
+}
+
 // Validation is deliberately pure and bounded so the eventual dispatch path
 // can reject malformed input before touching a device, mapping, or stream.
 __forceinline
