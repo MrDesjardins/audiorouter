@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `832b81a8`; the native probe compile was
+The latest implementation checkpoint is `21edfff5`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -29,6 +29,14 @@ qualification remains open.
   regression proves delayed audio history is discarded after reset; the full
   workspace tests/doc-tests, strict Clippy, formatting, and diff checks
   passed. No endpoint or persistent machine configuration was changed.
+
+- Re-ran the focused `tests/acceptance/m06-vst3-worker.ps1` acceptance on
+  2026-09-10 at pushed head `0963e739` after the WER hardening. Native AGain
+  single-stream and auxiliary-bus processing, asynchronous staging, bounded
+  failure recovery, repeated-quanta timing, validated state restoration, and
+  shutdown all passed (including the 23.63-second bounded repeated-quanta
+  case). The run changed no plugin registration, audio stream, or persistent
+  machine audio configuration.
 
 - Requalified the guarded complete `tests/acceptance/safe-all.ps1` chain on
   2026-09-10 at implementation checkpoint `832b81a8`. M00 VS2026/MSVC,
