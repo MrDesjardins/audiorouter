@@ -1416,6 +1416,14 @@ Windows-audio (56) tests, strict Clippy, formatting, and diff checks passed.
 An injected transition seam is still needed for deterministic inactive-to-active
 event tests without modifying live endpoint state.
 
+## 2026-09-11 — Pure endpoint-state transition seam
+
+`diff_endpoint_state_snapshots` now provides a deterministic identity/state
+diff without format activation. Tests cover unplugged-to-active recovery,
+removal, addition, and stable ordering. This supports future control event
+replay tests without mutating the user's live device state. Windows-audio
+coverage passed 57 tests with strict Clippy, formatting, and diff checks.
+
 ## 2026-09-11 â€” Opt-in format-optional inactive inventory
 
 `devices.list({includeInactive:true})` now merges the active monitor snapshot

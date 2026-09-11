@@ -77,6 +77,16 @@ pub struct EndpointStateInfo {
     pub state: EndpointState,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EndpointStateChange {
+    Added(EndpointStateInfo),
+    Removed(EndpointStateInfo),
+    Changed {
+        before: EndpointStateInfo,
+        after: EndpointStateInfo,
+    },
+}
+
 fn endpoint_state_from_raw(raw_state: u32) -> EndpointState {
     match raw_state {
         1 => EndpointState::Active,
@@ -831,6 +841,36 @@ pub fn diff_endpoint_snapshots(
     for after in &current {
         if !previous.iter().any(|before| before.id == after.id) {
             changes.push(EndpointChange::Added(after.clone()));
+        }
+    }
+    changes
+}
+
+/// Diff identity/state-only snapshots without requiring endpoint activation.
+/// This seam is used for deterministic transition tests and for unavailable
+/// devices whose format metadata cannot be queried.
+pub fn diff_endpoint_state_snapshots(
+    previous: &[EndpointStateInfo],
+    current: &[EndpointStateInfo],
+) -> Vec<EndpointStateChange> {
+    let mut previous = previous.to_vec();
+    let mut current = current.to_vec();
+    previous.sort_by(|left, right| left.id.cmp(&right.id));
+    current.sort_by(|left, right| left.id.cmp(&right.id));
+    let mut changes = Vec::new();
+    for before in &previous {
+        match current.iter().find(|after| after.id == before.id) {
+            Some(after) if after != before => changes.push(EndpointStateChange::Changed {
+                before: before.clone(),
+                after: after.clone(),
+            }),
+            Some(_) => {}
+            None => changes.push(EndpointStateChange::Removed(before.clone())),
+        }
+    }
+    for after in &current {
+        if !previous.iter().any(|before| before.id == after.id) {
+            changes.push(EndpointStateChange::Added(after.clone()));
         }
     }
     changes
@@ -4421,6 +4461,34 @@ mod tests {
         assert_eq!(endpoint_state_from_raw(4), EndpointState::NotPresent);
         assert_eq!(endpoint_state_from_raw(8), EndpointState::Unplugged);
         assert_eq!(endpoint_state_from_raw(16), EndpointState::Unknown(16));
+    }
+
+    #[test]
+    fn endpoint_state_diff_covers_inactive_activation_and_removal() {
+        let state = |id: &str, value| EndpointStateInfo {
+            id: id.into(),
+            direction: EndpointDirection::Capture,
+            state: value,
+        };
+        let before = [
+            state("reconnect", EndpointState::Unplugged),
+            state("gone", EndpointState::Disabled),
+        ];
+        let current = [
+            state("reconnect", EndpointState::Active),
+            state("new", EndpointState::Active),
+        ];
+        assert_eq!(
+            diff_endpoint_state_snapshots(&before, &current),
+            vec![
+                EndpointStateChange::Removed(state("gone", EndpointState::Disabled)),
+                EndpointStateChange::Changed {
+                    before: state("reconnect", EndpointState::Unplugged),
+                    after: state("reconnect", EndpointState::Active),
+                },
+                EndpointStateChange::Added(state("new", EndpointState::Active)),
+            ]
+        );
     }
 
     #[test]

@@ -7489,3 +7489,10 @@ stream, or machine configuration action occurred.
 - Next M00/M02 task: add a pure/injected snapshot transition seam for testing
   inactive-to-active and removal events, then expose explicit event replay
   coverage without touching live device state.
+- Added the pure `diff_endpoint_state_snapshots` seam on 2026-09-11. It
+  deterministically reports inactive-to-active changes, removals, additions,
+  and unknown-state transitions using identity/state metadata only. The
+  focused Windows-audio suite now passes 57 tests, with strict Clippy,
+  formatting, and diff checks passing; no live endpoint state was changed.
+- Next M00/M02 task: add control-level event replay coverage using an injected
+  transition source, then retain native notification/driver activation gates.
