@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `d93e3ca1`; the native probe compile was
+The latest pushed checkpoint is `5a8fc574`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -34,6 +34,22 @@ qualification remains open.
   SysVAD, an installed third-party cable, or the local ReaPlugs files for
   those requirements; retain the current fail-closed capability responses and
   rollback-safe user-mode bridge until the prerequisite is available.
+
+- Implemented and pushed native VST3 worker hardening in `5a8fc574` after
+  exercising the user-supplied bundles. The worker now accepts a requested
+  main bus when a plugin also exposes optional side-chain/auxiliary buses,
+  explicitly deactivates unused buses, reports class initialization and
+  bus-layout failures precisely, and suppresses Windows crash-dialog UI in the
+  disposable worker. SDK validation confirmed BUSTERse, COMPER, and TDR Nova
+  expose VST3 audio-effect classes. TDR Nova reached the Rust worker path and
+  completed the handshake, but its supplied build reports no controller
+  parameters and therefore does not satisfy the existing parameter/state
+  acceptance test. COMPER reaches a real controller-interface incompatibility;
+  BUSTERse crashes inside third-party code and now exits without an unattended
+  dialog. Hashes were checked before/after and supplied binaries remain
+  ignored. `safe-all.ps1` was attempted afterward but stopped at the existing
+  non-administrator `Get-PnpDevice` access-denied prerequisite; no audio or
+  persistent machine configuration was changed.
 
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
