@@ -129,6 +129,17 @@ qualification remains open.
   supervisor quarantine. No plugin registration, audio stream, or persistent
   machine audio configuration changed.
 
+- Re-ran the focused `tests/acceptance/m06-vst3-worker.ps1` acceptance on
+  2026-09-10 after the worker fault-dialog hardening. Repository-local AGain
+  single-stream, auxiliary-bus, asynchronous scheduler, bounded failure
+  silencing, repeated-quanta containment, validated state restoration, and
+  shutdown checks all passed. The generated native worker/object files were
+  removed and the VST3 environment variables were restored. This confirms
+  the worker path is unattended-safe at the process boundary; it does not
+  make arbitrary third-party crashes safe or close plugin rights/release
+  gates. No plugin registration, audio stream, or persistent machine audio
+  configuration changed.
+
 - Extended stream recovery at pushed head `832b81a8` on 2026-09-10 to reset
   stateful DSP history in the active graph (EQ, dynamics, delay, graphic EQ,
   and pitch) in addition to transport staging and queued blocks. Poisoned
