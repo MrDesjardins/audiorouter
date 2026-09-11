@@ -238,7 +238,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `ae34c9cd`; the native probe compile was
+The latest implementation checkpoint is `74e8d8cd`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -1961,6 +1961,16 @@ scaffold: rundown-protected callback snapshots, detach-before-unmap on CLOSE,
 expiry replacement, and unload, with replacement claims blocked while readers
 drain. The helper is still not wired to the reference sample timer; loaded
 PortCls callback ownership remains the next native gate.
+
+Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+`74e8d8cd` on 2026-09-10 after adding the project-owned M03 driver build step.
+Toolchain/native compile, AudioRouter x64 WDK build and signability/catalog,
+read-only endpoint inventory, reference SysVAD qualification, M01, M04, M05,
+M06 VST3/VST2 fixtures and workers, M07 headless, unsigned M08 artifacts,
+159 traceability mappings, and documentation validation all passed. Cleanup
+removed 13 run-owned temporary children. No driver installation/loading,
+signing-mode change, plugin/startup registration, audio stream, or persistent
+machine audio configuration occurred.
 
 Added `tests/acceptance/m03-driver-build.ps1` to the guarded `safe-all` chain
 on 2026-09-10. It runs the project-owned x64 WDK build and preserves the
