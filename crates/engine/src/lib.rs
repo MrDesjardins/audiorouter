@@ -4,6 +4,7 @@
 //! `AudioBlock` exists, the operations below reuse its storage and perform no
 //! heap allocation, locking, I/O, or logging.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -608,16 +609,17 @@ impl VirtualBusBridge {
 #[derive(Debug, Eq, PartialEq)]
 pub enum VirtualBusBridgeSetError {
     InvalidCapacity,
-    InvalidIndex,
+    MissingBus,
+    CapacityReached,
     Queue(QueueError),
 }
 
 /// Control-plane collection of the bounded bridge instances used by managed
-/// virtual buses. Slot indexes are assigned by the domain registry; the audio
-/// path receives an `Arc<VirtualBusBridge>` directly and never touches this
-/// collection or its allocation-bearing operations.
+/// virtual buses. Stable bus IDs, rather than mutable registry positions, own
+/// each bridge; the audio path receives an `Arc<VirtualBusBridge>` directly and
+/// never touches this collection or its allocation-bearing operations.
 pub struct VirtualBusBridgeSet {
-    bridges: Vec<Option<Arc<VirtualBusBridge>>>,
+    bridges: HashMap<audiorouter_domain::EntityId, Arc<VirtualBusBridge>>,
     capacity: usize,
     channels: usize,
     frames: usize,
@@ -634,7 +636,7 @@ impl VirtualBusBridgeSet {
         }
         AudioBlockRing::new(1, channels, frames).map_err(VirtualBusBridgeSetError::Queue)?;
         Ok(Self {
-            bridges: vec![None; capacity],
+            bridges: HashMap::with_capacity(capacity),
             capacity,
             channels,
             frames,
@@ -645,38 +647,37 @@ impl VirtualBusBridgeSet {
         self.capacity
     }
 
-    pub fn get(&self, index: usize) -> Option<Arc<VirtualBusBridge>> {
-        self.bridges.get(index).and_then(Clone::clone)
+    pub fn get(&self, id: &audiorouter_domain::EntityId) -> Option<Arc<VirtualBusBridge>> {
+        self.bridges.get(id).map(Arc::clone)
     }
 
     pub fn ensure(
         &mut self,
-        index: usize,
+        id: audiorouter_domain::EntityId,
     ) -> Result<Arc<VirtualBusBridge>, VirtualBusBridgeSetError> {
-        let slot = self
-            .bridges
-            .get_mut(index)
-            .ok_or(VirtualBusBridgeSetError::InvalidIndex)?;
-        if let Some(bridge) = slot {
+        if let Some(bridge) = self.bridges.get(&id) {
             return Ok(Arc::clone(bridge));
+        }
+        if self.bridges.len() >= self.capacity {
+            return Err(VirtualBusBridgeSetError::CapacityReached);
         }
         let bridge = Arc::new(
             VirtualBusBridge::new(self.capacity, self.channels, self.frames)
                 .map_err(VirtualBusBridgeSetError::Queue)?,
         );
-        *slot = Some(Arc::clone(&bridge));
+        self.bridges.insert(id, Arc::clone(&bridge));
         Ok(bridge)
     }
 
-    pub fn remove(&mut self, index: usize) -> Result<(), VirtualBusBridgeSetError> {
-        let slot = self
+    pub fn remove(
+        &mut self,
+        id: &audiorouter_domain::EntityId,
+    ) -> Result<(), VirtualBusBridgeSetError> {
+        let bridge = self
             .bridges
-            .get_mut(index)
-            .ok_or(VirtualBusBridgeSetError::InvalidIndex)?;
-        if let Some(bridge) = slot {
-            bridge.deactivate();
-        }
-        *slot = None;
+            .remove(id)
+            .ok_or(VirtualBusBridgeSetError::MissingBus)?;
+        bridge.deactivate();
         Ok(())
     }
 }
@@ -5005,17 +5006,21 @@ mod tests {
     fn virtual_bus_bridge_set_keeps_slots_bounded_and_deactivates_removed_bridges() {
         let mut set = VirtualBusBridgeSet::new(2, 1, 2).unwrap();
         assert_eq!(set.capacity(), 2);
-        assert!(set.get(0).is_none());
-        let first = set.ensure(0).unwrap();
+        let first_id = audiorouter_domain::EntityId::new("bus-z");
+        let second_id = audiorouter_domain::EntityId::new("bus-a");
+        assert!(set.get(&first_id).is_none());
+        let first = set.ensure(first_id.clone()).unwrap();
         first.activate(1).unwrap();
-        assert!(set.get(0).unwrap().is_active());
+        assert!(set.get(&first_id).unwrap().is_active());
+        set.ensure(second_id.clone()).unwrap();
         assert!(matches!(
-            set.ensure(2),
-            Err(VirtualBusBridgeSetError::InvalidIndex)
+            set.ensure(audiorouter_domain::EntityId::new("bus-overflow")),
+            Err(VirtualBusBridgeSetError::CapacityReached)
         ));
-        set.remove(0).unwrap();
+        set.remove(&first_id).unwrap();
         assert!(!first.is_active());
-        assert!(set.get(0).is_none());
+        assert!(set.get(&first_id).is_none());
+        assert!(set.get(&second_id).is_some());
     }
 
     #[test]
