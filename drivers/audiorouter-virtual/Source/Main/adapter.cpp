@@ -29,6 +29,15 @@ fnPcDriverUnload gPCDriverUnloadRoutine = NULL;
 extern "C" DRIVER_UNLOAD DriverUnload;
 PDEVICE_OBJECT g_BridgeControlDevice = NULL;
 
+typedef struct _AR_BRIDGE_LEASE_STATE {
+    KSPIN_LOCK Lock;
+    BOOLEAN Active;
+    ULONGLONG LastHeartbeat100ns;
+    AR_BRIDGE_OPEN_REQUEST Request;
+} AR_BRIDGE_LEASE_STATE;
+
+AR_BRIDGE_LEASE_STATE g_BridgeLease = {};
+
 //-----------------------------------------------------------------------------
 // Referenced forward.
 //-----------------------------------------------------------------------------
@@ -85,17 +94,48 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
     NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
     if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN ||
+        code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE ||
         code == IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT) {
         if (stack->Parameters.DeviceIoControl.InputBufferLength !=
             sizeof(AR_BRIDGE_OPEN_REQUEST) || Irp->AssociatedIrp.SystemBuffer == NULL) {
             return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
         }
-        status = AudioRouterValidateBridgeOpenRequest(
-            static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer));
+
+        PAR_BRIDGE_OPEN_REQUEST request =
+            static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer);
+        status = AudioRouterValidateBridgeOpenRequest(request);
         if (NT_SUCCESS(status)) {
-            // The secured endpoint is scaffolding until broker ownership and
-            // mapping lifetime are implemented; never accept a false session.
-            status = STATUS_NOT_IMPLEMENTED;
+            KIRQL oldIrql;
+            KeAcquireSpinLock(&g_BridgeLease.Lock, &oldIrql);
+            ULONGLONG now = KeQueryInterruptTime();
+            ULONGLONG leaseTicks = static_cast<ULONGLONG>(request->LeaseMs) * _100NS_PER_MILLISECOND;
+            BOOLEAN expired = g_BridgeLease.Active &&
+                (now - g_BridgeLease.LastHeartbeat100ns > leaseTicks);
+
+            if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN) {
+                if (g_BridgeLease.Active && !expired) {
+                    status = STATUS_DEVICE_BUSY;
+                } else {
+                    g_BridgeLease.Request = *request;
+                    g_BridgeLease.LastHeartbeat100ns = now;
+                    g_BridgeLease.Active = TRUE;
+                    status = STATUS_SUCCESS;
+                }
+            } else if (!g_BridgeLease.Active || expired ||
+                       RtlCompareMemory(&g_BridgeLease.Request, request,
+                                        sizeof(AR_BRIDGE_OPEN_REQUEST)) !=
+                           sizeof(AR_BRIDGE_OPEN_REQUEST)) {
+                status = STATUS_INVALID_DEVICE_STATE;
+            } else if (code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE) {
+                g_BridgeLease.Active = FALSE;
+                RtlZeroMemory(&g_BridgeLease.Request, sizeof(g_BridgeLease.Request));
+                g_BridgeLease.LastHeartbeat100ns = 0;
+                status = STATUS_SUCCESS;
+            } else {
+                g_BridgeLease.LastHeartbeat100ns = now;
+                status = STATUS_SUCCESS;
+            }
+            KeReleaseSpinLock(&g_BridgeLease.Lock, oldIrql);
         }
     }
 
@@ -379,6 +419,7 @@ Return Value:
         Done);
 
     WDF_DRIVER_CONFIG_INIT(&config, WDF_NO_EVENT_CALLBACK);
+    KeInitializeSpinLock(&g_BridgeLease.Lock);
     //
     // Set WdfDriverInitNoDispatchOverride flag to tell the framework
     // not to provide dispatch routines for the driver. In other words,

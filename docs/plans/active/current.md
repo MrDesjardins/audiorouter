@@ -85,26 +85,26 @@ lifecycle are implemented.
 The prototype now has a secured, non-installing control-device scaffold in
 `Source/Main/adapter.cpp`. It uses an explicit system/Administrators-only ACL,
 create/close/device-control dispatch, symbolic-link cleanup, and bounded open /
-heartbeat request validation; valid requests deliberately return
-`STATUS_NOT_IMPLEMENTED` until broker ownership and shared-memory lifetime are
-wired. The x64 WDK rebuild passed after linking `wdmsec.lib`, with zero
-signability errors/warnings and catalog generation. No device was registered or
-loaded on this machine.
+heartbeat request validation. The kernel now owns one exact-identity lease:
+open claims it, heartbeat refreshes it, close releases it, and expired ownership
+is reclaimed; shared-memory/audio transport remains separate. The x64 WDK
+rebuild passed after linking `wdmsec.lib`, with zero signability errors/warnings
+and catalog generation. No device was registered or loaded on this machine.
 
 Lease enforcement is now implemented in `NativeBridgeSession`: negotiated
 lease duration is checked on every read/write, heartbeats cannot revive an
 expired session, and expiry is testable with an injected `Instant` without
 subtracting from the monotonic clock. The focused Windows-audio suite passed
 46 tests with strict Clippy and formatting/diff checks. The driver scaffold
-still returns `STATUS_NOT_IMPLEMENTED` for valid open/heartbeat requests until
-the broker owns the mapping and lease state end to end.
+now owns the control lease for valid open/heartbeat/close requests; mapping and
+audio transport are not yet connected end to end.
 
 The Windows adapter now includes an explicit `NativeBridgeControlClient` for
 the secured driver path. It converts the negotiated hello into the fixed C ABI,
 opens the named device only on an explicit call, issues open/heartbeat/close
 IOCTLs, and closes the handle with RAII. Its layout and UTF-16 bound regression
-passes; valid requests still return `STATUS_NOT_IMPLEMENTED` in the prototype
-because live mapping ownership is not wired yet.
+passes; the client can now exercise the kernel lease once the driver is
+deliberately installed in an isolated validation environment.
 
 ## Current state
 

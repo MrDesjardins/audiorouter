@@ -89,8 +89,7 @@ The driver now contains the first secured control-device scaffold in
 `Source/Main/adapter.cpp`. `IoCreateDeviceSecure` uses the explicit
 `D:P(A;;GA;;;SY)(A;;GA;;;BA)` ACL, and create/close/device-control dispatch plus
 symbolic-link cleanup are defined. Open and heartbeat requests are validated
-against the bounded ABI but valid requests return `STATUS_NOT_IMPLEMENTED`
-until the broker owns mapping and lease state. The x64 WDK rebuild passed with
+against the bounded ABI. The x64 WDK rebuild passed with
 `wdmsec.lib`, zero signability errors/warnings, and catalog generation. The
 control device was not registered or loaded; this is compile evidence, not live
 driver evidence.
@@ -99,16 +98,18 @@ driver evidence.
 after expiry, and a late heartbeat cannot revive the old generation. The expiry
 regression uses a forward synthetic `Instant`, avoiding monotonic-clock
 underflow. The focused Windows-audio suite passed 46 tests and strict Clippy
-passed. The kernel scaffold has not yet connected this lease state to a live
-mapping or endpoint.
+passed. The kernel now owns one exact-identity lease: open claims it, heartbeat
+refreshes it, close releases it, and expired ownership is reclaimed. Shared
+memory and endpoint audio are still separate gates.
 
 The user-mode Windows adapter now contains an explicit
 `NativeBridgeControlClient` matching the driver's fixed request layout and
 IOCTL numbers. It validates the hello before encoding it, bounds the UTF-16 bus
 ID, opens the secured device only when requested, and closes the handle via
 RAII. The layout regression is included in the 47-test Windows-audio suite.
-Because valid lifecycle requests still return `STATUS_NOT_IMPLEMENTED`, no
-live control-device or audio-path claim is made.
+The client has not been run against a loaded driver because installation and
+loading remain outside this non-mutating validation scope; no live audio-path
+claim is made.
 
 ## Native bridge contract
 
