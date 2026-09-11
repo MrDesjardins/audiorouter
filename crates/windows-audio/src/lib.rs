@@ -281,6 +281,20 @@ enum NativeBridgeInputPumpError {
 }
 
 #[cfg(windows)]
+fn native_bridge_input_error_is_silence(error: &NativeBridgeControllerError) -> bool {
+    matches!(
+        error,
+        NativeBridgeControllerError::Session(NativeBridgeSessionError::Region(
+            NativeBridgeRegionError::Empty
+                | NativeBridgeRegionError::Busy
+                | NativeBridgeRegionError::TornRead
+                | NativeBridgeRegionError::SequenceRegression
+                | NativeBridgeRegionError::StaleGeneration,
+        ))
+    )
+}
+
+#[cfg(windows)]
 /// Consumes the negotiated virtual render-source bridge and renders its
 /// processed output to one explicitly selected physical endpoint.
 pub struct NativeBridgeInputWorker {
@@ -1430,13 +1444,7 @@ impl WasapiSchedulerBridge {
                     .map_err(|_| NativeBridgeInputPumpError::Audio(AudioError::InvalidFrameSize))?;
                 *last_sequence = header.sequence;
             }
-            Err(NativeBridgeControllerError::Session(NativeBridgeSessionError::Region(
-                NativeBridgeRegionError::Empty
-                | NativeBridgeRegionError::Busy
-                | NativeBridgeRegionError::TornRead
-                | NativeBridgeRegionError::SequenceRegression
-                | NativeBridgeRegionError::StaleGeneration,
-            ))) => input.clear(),
+            Err(error) if native_bridge_input_error_is_silence(&error) => input.clear(),
             Err(error) => {
                 input.clear();
                 return Err(NativeBridgeInputPumpError::Bridge(error));
@@ -4677,6 +4685,31 @@ impl NativeBridgeSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn native_render_source_transient_read_failures_fail_closed_to_silence() {
+        let transient = [
+            NativeBridgeRegionError::Empty,
+            NativeBridgeRegionError::Busy,
+            NativeBridgeRegionError::TornRead,
+            NativeBridgeRegionError::SequenceRegression,
+            NativeBridgeRegionError::StaleGeneration,
+        ];
+        for region_error in transient {
+            assert!(native_bridge_input_error_is_silence(
+                &NativeBridgeControllerError::Session(NativeBridgeSessionError::Region(
+                    region_error,
+                ))
+            ));
+        }
+        assert!(!native_bridge_input_error_is_silence(
+            &NativeBridgeControllerError::Session(NativeBridgeSessionError::LeaseExpired)
+        ));
+        assert!(!native_bridge_input_error_is_silence(
+            &NativeBridgeControllerError::Session(NativeBridgeSessionError::SequenceExhausted)
+        ));
+    }
 
     #[test]
     fn worker_packet_budget_and_telemetry_accumulation_are_bounded() {

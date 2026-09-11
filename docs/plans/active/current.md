@@ -7537,3 +7537,15 @@ stream, or machine configuration action occurred.
   Then qualify the managed worker against a non-installed driver test harness;
   installation, signing, provisioning, physical-latency, and clean-machine
   gates remain open.
+
+- Added the first render-source recovery regression on 2026-09-11: all
+  transient shared-slot read conditions (empty, busy, torn, repeated, and
+  stale-generation) are classified as silence, while lease expiry and
+  sequence exhaustion remain hard worker errors. Windows-audio (58), strict
+  Clippy, formatting, and diff checks passed. The remaining worker lifecycle
+  checks require an injected endpoint seam or a disposable driver harness and
+  are not claimed from this classification test.
+- Next M00/M02 task: introduce the injected endpoint lifecycle seam needed to
+  exercise worker start/stop/reset and two-direction pump telemetry without
+  opening user endpoints; preserve the explicit production-driver and signing
+  blockers.
