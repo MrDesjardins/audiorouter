@@ -8248,3 +8248,17 @@ live-driver evidence.
   with strict Clippy, formatting, diff, and documentation checks green.
 - Next M04/REC-01 task: continue node-aware checkpoint hydration and recovery
   semantics, then complete native-independent graph branch qualification.
+- Added the control-plane native endpoint lifecycle owner on 2026-09-11.
+  `ControlPlane` can now attach one caller-supplied, exact-binding
+  `WasapiEndpointWorker` to a validated session while requiring it to be
+  stopped, and exposes explicit start, stop, and stopped-only detach methods.
+  Diagnostics now distinguish `implemented-not-activated`,
+  `configured-stopped`, and `running`, including the bound session ID. No
+  endpoint is opened by discovery or ordinary session hydration. Control
+  diagnostics, formatting, and the full guarded safe chain pass; native
+  worker construction, graph pump ownership, PortCls ownership, signing,
+  installation, and physical latency remain separate gates.
+- Next M02/M03 task: add an explicit control-thread pump entry that binds the
+  attached worker to a validated runtime generation and prebuilt graph tap,
+  retaining bounded packet draining and fail-closed behavior without making
+  session start implicitly activate native audio.

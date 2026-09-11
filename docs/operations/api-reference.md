@@ -211,10 +211,13 @@ deadline-lateness distributions, including conservative p99.9 bucket upper
 bounds, for its processed engine quanta; these are probe evidence, not
 control-plane or production-driver callback telemetry.
 When no native adapter session is owned by the control plane,
-`system.diagnostics.nativeAdapter` is `implemented-not-activated`. The bounded
-endpoint and native-bridge workers exist, but exact endpoint bindings and a
-production driver are not yet owned by a control-plane session; this must not
-be interpreted as a zeroed live stream.
+`system.diagnostics.nativeAdapter` is `implemented-not-activated` and
+`nativeSessionId` is `null`. An explicitly attached but stopped worker reports
+`configured-stopped`; a deliberately started worker reports `running` and its
+bound session ID. Attachment requires a caller-supplied exact-binding worker,
+so discovery and ordinary session open cannot activate audio implicitly. These
+statuses do not claim a production driver, graph activation, or physical
+latency qualification.
 
 The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
 the enrolled client identity and cannot bypass the backend permission checks.

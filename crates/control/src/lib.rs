@@ -2938,7 +2938,8 @@ fn diagnostics_output_schema() -> Value {
                 "required": ["state", "reason"],
                 "additionalProperties": false
             },
-            "nativeAdapter": { "const": "implemented-not-activated" },
+            "nativeAdapter": { "enum": ["implemented-not-activated", "configured-stopped", "running"] },
+            "nativeSessionId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
             "privacyMute": {
                 "type": "object",
                 "properties": {
@@ -2969,7 +2970,7 @@ fn diagnostics_output_schema() -> Value {
             },
             "redacted": { "const": true }
         },
-        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "privacyMute", "recovery", "eventLog", "redacted"],
+        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeSessionId", "privacyMute", "recovery", "eventLog", "redacted"],
         "additionalProperties": false
     })
 }
@@ -3440,6 +3441,8 @@ pub struct ControlPlane {
     next_session_import_plan: u64,
     active_idempotency_scope: Option<String>,
     endpoint_monitor: Option<audiorouter_windows_audio::EndpointMonitor>,
+    native_endpoint_worker: Option<audiorouter_windows_audio::WasapiEndpointWorker>,
+    native_endpoint_session: Option<EntityId>,
 }
 
 impl Default for ControlPlane {
@@ -3488,7 +3491,77 @@ impl ControlPlane {
             next_session_import_plan: 1,
             active_idempotency_scope: None,
             endpoint_monitor: None,
+            native_endpoint_worker: None,
+            native_endpoint_session: None,
         }
+    }
+
+    /// Attach an already-opened, exact-binding endpoint worker to one known
+    /// session. Opening endpoints is outside this method and the worker stays
+    /// stopped until an explicit start call is made.
+    pub fn attach_native_endpoint_worker(
+        &mut self,
+        session_id: EntityId,
+        worker: audiorouter_windows_audio::WasapiEndpointWorker,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if self.native_endpoint_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is already attached".into(),
+            ));
+        }
+        if worker.is_running() {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker must be stopped before attachment".into(),
+            ));
+        }
+        self.native_endpoint_worker = Some(worker);
+        self.native_endpoint_session = Some(session_id);
+        Ok(())
+    }
+
+    /// Start the explicitly attached endpoint pair on the control thread.
+    pub fn start_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        self.native_endpoint_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?
+            .start()
+            .map_err(audio_control_error)
+    }
+
+    /// Stop the explicitly attached endpoint pair and clear staged bridge
+    /// audio. The worker remains attached and may be deliberately restarted.
+    pub fn stop_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        self.native_endpoint_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?
+            .stop()
+            .map_err(audio_control_error)
+    }
+
+    /// Detach only a stopped native worker; this never affects unrelated
+    /// endpoints or machine audio configuration.
+    pub fn detach_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        if self
+            .native_endpoint_worker
+            .as_ref()
+            .is_some_and(audiorouter_windows_audio::WasapiEndpointWorker::is_running)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker must be stopped before detachment".into(),
+            ));
+        }
+        if self.native_endpoint_worker.take().is_none() {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is not attached".into(),
+            ));
+        }
+        self.native_endpoint_session = None;
+        Ok(())
     }
 
     pub fn try_with_storage(
@@ -3618,6 +3691,8 @@ impl ControlPlane {
             next_session_import_plan: 1,
             active_idempotency_scope: None,
             endpoint_monitor: None,
+            native_endpoint_worker: None,
+            native_endpoint_session: None,
         })
     }
 
@@ -4989,6 +5064,14 @@ impl ControlPlane {
         }))
     }
 
+    fn native_adapter_state(&self) -> &'static str {
+        match self.native_endpoint_worker.as_ref() {
+            Some(worker) if worker.is_running() => "running",
+            Some(_) => "configured-stopped",
+            None => "implemented-not-activated",
+        }
+    }
+
     pub fn get_session(&self, id: &EntityId) -> Result<&Session, ControlError> {
         self.store
             .session(id)
@@ -5448,7 +5531,8 @@ impl ControlPlane {
                             "state": "unavailable",
                             "reason": "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
                         },
-                        "nativeAdapter": "implemented-not-activated",
+                        "nativeAdapter": self.native_adapter_state(),
+                        "nativeSessionId": self.native_endpoint_session.as_ref().map(EntityId::as_str),
                         "privacyMute": {
                             "muted": self.privacy_muted,
                             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
@@ -10608,6 +10692,7 @@ mod tests {
         assert_eq!(result["backend"], "control-plane");
         assert_eq!(result["storage"], "memory");
         assert_eq!(result["nativeAdapter"], "implemented-not-activated");
+        assert_eq!(result["nativeSessionId"], Value::Null);
         assert_eq!(result["redacted"], true);
         assert!(result.get("path").is_none());
     }
