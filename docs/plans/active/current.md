@@ -7824,3 +7824,10 @@ live-driver evidence.
   passed. Cleanup removed 13 run-owned temporary children. No driver or plugin
   registration, startup action, signing-mode change, live audio stream, or
   persistent machine audio configuration occurred.
+- Revalidated the locked workspace after recorder lifecycle forwarding at
+  pushed head `eec039f1` on 2026-09-11. Workspace tests passed, including
+  control (109), recording (37), Windows-audio (62 with 11 expected native
+  fixture skips), plugin-host (67), storage (80), and worker-process coverage.
+  Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
+  driver, plugin registration, or persistent machine audio configuration
+  changed.
