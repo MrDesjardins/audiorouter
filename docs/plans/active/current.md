@@ -238,7 +238,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `74e8d8cd`; the native probe compile was
+The latest implementation checkpoint is `4df24674`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -1968,6 +1968,14 @@ Toolchain/native compile, AudioRouter x64 WDK build and signability/catalog,
 read-only endpoint inventory, reference SysVAD qualification, M01, M04, M05,
 M06 VST3/VST2 fixtures and workers, M07 headless, unsigned M08 artifacts,
 159 traceability mappings, and documentation validation all passed. Cleanup
+removed 13 run-owned temporary children. No driver installation/loading,
+signing-mode change, plugin/startup registration, audio stream, or persistent
+machine audio configuration occurred.
+
+Requalified `safe-all.ps1` again at `4df24674` on 2026-09-10 after adding the
+M03 source-contract assertions. The project-owned driver build and callback
+invariant checks, all portable M00–M08 acceptance steps, unsigned release
+preparation, traceability, and documentation validation passed; cleanup again
 removed 13 run-owned temporary children. No driver installation/loading,
 signing-mode change, plugin/startup registration, audio stream, or persistent
 machine audio configuration occurred.
