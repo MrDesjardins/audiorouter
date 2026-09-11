@@ -502,23 +502,36 @@ public:
         if (!get_factory) throw std::runtime_error("VST3 GetPluginFactory export is missing");
         factory_ = get_factory();
         if (!factory_) throw std::runtime_error("VST3 factory is null");
+        std::ostringstream class_failures;
+        bool found_audio_class = false;
         for (int32 index = 0; index < factory_->countClasses(); ++index) {
             PClassInfo info{};
             require_result("getClassInfo", factory_->getClassInfo(index, &info));
             if (std::strcmp(info.category, kVstAudioEffectClass) != 0) continue;
+            found_audio_class = true;
             if (factory_->createInstance(info.cid, Vst::IComponent_iid,
                                          reinterpret_cast<void**>(&component_)) != kResultOk) {
+                class_failures << " class " << index << " (" << info.name
+                                << "): component creation rejected;";
                 continue;
             }
-            if (component_->initialize(nullptr) != kResultOk) {
+            const auto initialize_result = component_->initialize(nullptr);
+            if (initialize_result != kResultOk) {
+                class_failures << " class " << index << " (" << info.name
+                                << "): initialize returned 0x" << std::hex
+                                << static_cast<uint32>(initialize_result) << ";";
                 component_->release();
                 component_ = nullptr;
                 continue;
             }
-            if (component_->getBusCount(Vst::kAudio, Vst::kInput) !=
-                    static_cast<int32>(input_channels.size()) ||
-                component_->getBusCount(Vst::kAudio, Vst::kOutput) !=
-                    static_cast<int32>(output_channels.size())) {
+            const auto input_bus_count = component_->getBusCount(Vst::kAudio, Vst::kInput);
+            const auto output_bus_count = component_->getBusCount(Vst::kAudio, Vst::kOutput);
+            if (input_bus_count < static_cast<int32>(input_channels.size()) ||
+                output_bus_count < static_cast<int32>(output_channels.size())) {
+                class_failures << " class " << index << " (" << info.name
+                                << "): has " << input_bus_count << "/" << output_bus_count
+                                << " buses, requested " << input_channels.size() << "/"
+                                << output_channels.size() << ";";
                 component_->terminate();
                 component_->release();
                 component_ = nullptr;
@@ -526,7 +539,13 @@ public:
             }
             break;
         }
-        if (!component_) throw std::runtime_error("VST3 bundle has no audio effect class");
+        if (!component_) {
+            if (!found_audio_class) {
+                throw std::runtime_error("VST3 factory has no audio effect class");
+            }
+            throw std::runtime_error("VST3 audio effect classes were unusable:" +
+                                     class_failures.str());
+        }
         initialized_ = true;
         TUID controller_id{};
         require_result("controller class id", component_->getControllerClassId(controller_id));
@@ -557,6 +576,19 @@ public:
             }
             require_result("output bus activation", component_->activateBus(
                 Vst::kAudio, Vst::kOutput, static_cast<int32>(bus), true));
+        }
+        // A plugin may expose optional side-chain or auxiliary buses. The
+        // bounded transport carries the requested main buses only; explicitly
+        // disable the remainder so the component and ProcessData agree.
+        const auto input_bus_count = component_->getBusCount(Vst::kAudio, Vst::kInput);
+        for (int32 bus = static_cast<int32>(input_channels.size()); bus < input_bus_count; ++bus) {
+            require_result("optional input bus deactivation", component_->activateBus(
+                Vst::kAudio, Vst::kInput, bus, false));
+        }
+        const auto output_bus_count = component_->getBusCount(Vst::kAudio, Vst::kOutput);
+        for (int32 bus = static_cast<int32>(output_channels.size()); bus < output_bus_count; ++bus) {
+            require_result("optional output bus deactivation", component_->activateBus(
+                Vst::kAudio, Vst::kOutput, bus, false));
         }
         require_result("processor interface", component_->queryInterface(
             Vst::IAudioProcessor_iid, reinterpret_cast<void**>(&processor_)));
@@ -1019,6 +1051,10 @@ static Arguments parse_arguments(int argc, wchar_t** argv) {
 
 int wmain(int argc, wchar_t** argv) {
     try {
+        // Third-party plugin code runs in this disposable process. A plugin
+        // crash must terminate the worker for the supervisor to quarantine it;
+        // Windows Error Reporting UI would otherwise block unattended runs.
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
         if (_setmode(_fileno(stdin), _O_BINARY) == -1 ||
             _setmode(_fileno(stdout), _O_BINARY) == -1) {
             throw std::runtime_error("could not set worker pipes to binary mode");
