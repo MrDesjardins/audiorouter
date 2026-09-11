@@ -15,6 +15,15 @@ if (-not $bridgeHeader.Contains('Request->Reserved2 != 0')) {
     throw 'bridge request validation must reject non-zero reserved fields'
 }
 foreach ($required in @(
+        'IOCTL_AUDIOROUTER_BRIDGE_OPEN &&',
+        'request->SectionHandle == 0',
+        'code != IOCTL_AUDIOROUTER_BRIDGE_OPEN',
+        'request->SectionHandle != 0')) {
+    if (-not $source.Contains($required)) {
+        throw "driver IOCTL handle-role validation is missing: $required"
+    }
+}
+foreach ($required in @(
         'ReleaseLeasesOwnedByFileObject',
         'IRP_MJ_CLEANUP',
         'IRP_MJ_CLOSE',

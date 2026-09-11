@@ -7901,3 +7901,10 @@ live-driver evidence.
   now consumes the shared eight-observer constant rather than repeating a
   literal; engine tests (98), strict Clippy, formatting, and the locked
   workspace remain green. Native graph attachment is still open.
+- Hardened the M03 bridge IOCTL boundary on 2026-09-11. `OPEN` now rejects a
+  zero section handle, while `CLOSE` and `HEARTBEAT` reject non-zero section
+  handles; the shared request validator remains reusable for both roles. This
+  prevents an apparently active lease with no mapped view and distinguishes
+  maintenance requests from mapping acquisition. The guarded non-installing
+  x64 WDK build/source acceptance passed with zero signability errors/warnings
+  and catalog generation; no driver was installed or loaded.

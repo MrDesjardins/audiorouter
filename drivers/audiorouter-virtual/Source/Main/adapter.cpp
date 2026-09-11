@@ -364,6 +364,17 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
         PAR_BRIDGE_OPEN_REQUEST request =
             static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer);
         status = AudioRouterValidateBridgeOpenRequest(request);
+        // The common validator permits a zero section for CLOSE/HEARTBEAT,
+        // where the existing mapping is identified by the request fields.
+        // OPEN must carry a section, otherwise it could publish an active
+        // lease with no mapped view and fail only when audio first arrives.
+        if (NT_SUCCESS(status) &&
+            ((code == IOCTL_AUDIOROUTER_BRIDGE_OPEN &&
+              request->SectionHandle == 0) ||
+             (code != IOCTL_AUDIOROUTER_BRIDGE_OPEN &&
+              request->SectionHandle != 0))) {
+            status = STATUS_INVALID_PARAMETER;
+        }
         if (NT_SUCCESS(status)) {
             AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(request->Direction);
             if (lease == NULL) {
