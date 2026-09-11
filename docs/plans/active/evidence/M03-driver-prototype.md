@@ -95,6 +95,13 @@ until the broker owns mapping and lease state. The x64 WDK rebuild passed with
 control device was not registered or loaded; this is compile evidence, not live
 driver evidence.
 
+`NativeBridgeSession` now enforces the negotiated lease: reads and writes fail
+after expiry, and a late heartbeat cannot revive the old generation. The expiry
+regression uses a forward synthetic `Instant`, avoiding monotonic-clock
+underflow. The focused Windows-audio suite passed 46 tests and strict Clippy
+passed. The kernel scaffold has not yet connected this lease state to a live
+mapping or endpoint.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded

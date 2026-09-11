@@ -2983,6 +2983,7 @@ pub enum NativeBridgeSessionError {
     InvalidHello(audiorouter_protocol::AudioBridgeContractError),
     Region(NativeBridgeRegionError),
     SequenceExhausted,
+    LeaseExpired,
 }
 
 /// Negotiated owner of one native bridge slot.
@@ -2995,6 +2996,7 @@ pub struct NativeBridgeSession {
     hello: audiorouter_protocol::AudioBridgeHello,
     region: NativeBridgeRegion,
     next_sequence: u64,
+    last_heartbeat: std::time::Instant,
 }
 
 impl NativeBridgeSession {
@@ -3011,6 +3013,7 @@ impl NativeBridgeSession {
             hello,
             region,
             next_sequence: 0,
+            last_heartbeat: std::time::Instant::now(),
         })
     }
 
@@ -3027,6 +3030,7 @@ impl NativeBridgeSession {
             hello,
             region,
             next_sequence: 0,
+            last_heartbeat: std::time::Instant::now(),
         })
     }
 
@@ -3035,6 +3039,15 @@ impl NativeBridgeSession {
     }
 
     pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeSessionError> {
+        self.write_at(std::time::Instant::now(), samples)
+    }
+
+    fn write_at(
+        &mut self,
+        now: std::time::Instant,
+        samples: &[f32],
+    ) -> Result<u64, NativeBridgeSessionError> {
+        self.ensure_lease_at(now)?;
         let sequence = self
             .next_sequence
             .checked_add(1)
@@ -3050,6 +3063,15 @@ impl NativeBridgeSession {
         &self,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
+        self.read_into_at(std::time::Instant::now(), samples)
+    }
+
+    fn read_into_at(
+        &self,
+        now: std::time::Instant,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
+        self.ensure_lease_at(now)?;
         self.region
             .read_into(self.hello.generation, samples)
             .map_err(NativeBridgeSessionError::Region)
@@ -3059,6 +3081,37 @@ impl NativeBridgeSession {
         self.region
             .flush()
             .map_err(NativeBridgeSessionError::Region)
+    }
+
+    pub fn heartbeat(&mut self) -> Result<(), NativeBridgeSessionError> {
+        self.heartbeat_at(std::time::Instant::now())
+    }
+
+    pub fn heartbeat_at(
+        &mut self,
+        now: std::time::Instant,
+    ) -> Result<(), NativeBridgeSessionError> {
+        self.ensure_lease_at(now)?;
+        self.last_heartbeat = now;
+        Ok(())
+    }
+
+    pub fn is_lease_expired_at(&self, now: std::time::Instant) -> bool {
+        self.lease_elapsed_at(now).is_some_and(|elapsed| {
+            elapsed > std::time::Duration::from_millis(u64::from(self.hello.lease_ms))
+        })
+    }
+
+    fn ensure_lease_at(&self, now: std::time::Instant) -> Result<(), NativeBridgeSessionError> {
+        if self.is_lease_expired_at(now) {
+            Err(NativeBridgeSessionError::LeaseExpired)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn lease_elapsed_at(&self, now: std::time::Instant) -> Option<std::time::Duration> {
+        now.checked_duration_since(self.last_heartbeat)
     }
 }
 
@@ -4096,6 +4149,43 @@ mod tests {
             ))
         ));
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn native_bridge_session_expires_and_cannot_be_revived_by_a_late_heartbeat() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-expired-session-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-main".to_owned(),
+            generation: 10,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 4,
+            lease_ms: 1_000,
+        };
+        let mut session = NativeBridgeSession::create(&path, hello).unwrap();
+        let base = std::time::Instant::now();
+        session.heartbeat_at(base).unwrap();
+        let expired = base + std::time::Duration::from_millis(1_001);
+        assert!(session.is_lease_expired_at(expired));
+        assert!(matches!(
+            session.heartbeat_at(expired),
+            Err(NativeBridgeSessionError::LeaseExpired)
+        ));
+        assert!(matches!(
+            session.write_at(expired, &[0.0; 4]),
+            Err(NativeBridgeSessionError::LeaseExpired)
+        ));
+        drop(session);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[cfg(windows)]

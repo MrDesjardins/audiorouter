@@ -91,6 +91,14 @@ wired. The x64 WDK rebuild passed after linking `wdmsec.lib`, with zero
 signability errors/warnings and catalog generation. No device was registered or
 loaded on this machine.
 
+Lease enforcement is now implemented in `NativeBridgeSession`: negotiated
+lease duration is checked on every read/write, heartbeats cannot revive an
+expired session, and expiry is testable with an injected `Instant` without
+subtracting from the monotonic clock. The focused Windows-audio suite passed
+46 tests with strict Clippy and formatting/diff checks. The driver scaffold
+still returns `STATUS_NOT_IMPLEMENTED` for valid open/heartbeat requests until
+the broker owns the mapping and lease state end to end.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
