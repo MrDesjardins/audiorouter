@@ -7757,3 +7757,11 @@ live-driver evidence.
   skips), storage (80), plugin-host (67), and worker-process coverage.
   Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
   plugin, driver, or machine audio configuration was changed.
+- Added the portable M04/REC-06 segmented WAV worker on 2026-09-11 at pushed
+  head `17b3ca1a`. `SegmentedWavRecorder` rotates caller-owned destinations at
+  exact bounded frame thresholds, honors a queued manual split boundary, and
+  handles chunks crossing a boundary without losing or duplicating frames.
+  The regression verifies three finalized two-frame segments from one
+  six-frame input. Recording tests (35), strict package Clippy, formatting,
+  and diff checks passed. Durable path allocation, UI/API threshold settings,
+  realtime graph attachment, and native endpoint ownership remain open.

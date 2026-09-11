@@ -824,3 +824,16 @@ response vector covers peaking, low/high shelf, low/high pass, and notch shapes;
 29 DSP tests, doc-tests, formatting, and strict Clippy pass. This provides the
 portable response-vector evidence, but no UI curve transport or native timing
 claim is made.
+
+## Segmented WAV worker (2026-09-11)
+
+`SegmentedWavRecorder` now provides a worker-side file boundary for REC-06.
+It rotates caller-owned WAV destinations at a bounded frame threshold, accepts
+an explicit manual split boundary, finalizes each prior segment before opening
+the next, and processes a chunk crossing a boundary in exact frame slices.
+The regression creates one six-frame mono chunk, requests a split at frame 2,
+uses a two-frame automatic threshold, and verifies three finalized files with
+two frames each and no duplicated/lost payload. Recording tests (35), strict
+Clippy, formatting, and diff checks pass. This is portable file-worker
+evidence; durable path allocation, UI/API automatic size/time configuration,
+realtime graph attachment, and native endpoint ownership remain open.
