@@ -186,6 +186,13 @@ lease from being accidentally downgraded to a lease-only request. The focused
 Windows-audio suite passed 48 tests. End-to-end execution remains gated on a
 deliberately loaded driver.
 
+The driver control path now acquires and maps a section only for OPEN. CLOSE
+and HEARTBEAT validate the exact existing lease identity under its lock without
+reopening the caller's section handle, so lease maintenance cannot fail merely
+because a stale or otherwise unavailable user handle is no longer mappable.
+This keeps mapping work out of maintenance operations; the non-installing WDK
+build remains the validation evidence and loaded-driver behavior is still open.
+
 The temporary section regression maps the section handle and observes generation
 bytes written through the broker region view, proving the two views share the
 expected file-backed bytes. It performs no device or audio access.

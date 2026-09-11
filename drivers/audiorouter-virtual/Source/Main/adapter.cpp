@@ -127,7 +127,11 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
             PVOID sectionObject = NULL;
             PVOID mappedView = NULL;
             SIZE_T mappedBytes = request->MappingBytes;
-            if (request->SectionHandle != 0) {
+            // A section is acquired only for OPEN. CLOSE and HEARTBEAT are
+            // lease operations and must validate the existing identity under
+            // the lease lock without touching a user handle or mapping.
+            if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN &&
+                request->SectionHandle != 0) {
                 SIZE_T requiredBytes = AR_BRIDGE_HEADER_BYTES +
                     static_cast<SIZE_T>(request->Channels) *
                     static_cast<SIZE_T>(request->FramesPerQuantum) * sizeof(float);
