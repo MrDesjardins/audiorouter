@@ -76,6 +76,15 @@ real implementation must define the security descriptor, broker ownership,
 PnP/remove cleanup, bounded request validation, and mapping lifetime together;
 until then, the driver build remains a safe non-installing prototype.
 
+The prototype now includes `Source/Inc/bridgeio.h`, which defines the bounded
+versioned open/close/heartbeat IOCTL numbers and fixed request/block layouts.
+Its pure request validator rejects incompatible protocol versions, empty or
+odd-sized bus IDs, unsupported PCM shape/rate, zero generation, and invalid
+lease values before any future dispatch can touch a mapping or stream. An
+elevated WDK rebuild compiled the header into the x64 driver and again reported
+zero signability errors/warnings. No control device is registered and no
+IOCTL was sent to the system.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded

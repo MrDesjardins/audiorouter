@@ -20,6 +20,7 @@ Abstract:
 #define PUT_GUIDS_HERE
 
 #include "definitions.h"
+#include "bridgeio.h"
 #include "endpoints.h"
 #include "minipairs.h"
 

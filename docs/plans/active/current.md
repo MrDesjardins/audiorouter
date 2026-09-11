@@ -74,6 +74,14 @@ and adding an unsecured named device would violate SEC-08. The next driver task
 is a secured, lifecycle-owned control endpoint with matching IOCTL validation;
 installation, signing, and live activation remain gated.
 
+The driver prototype now compiles a bounded broker ABI in
+`Source/Inc/bridgeio.h`: versioned open/close/heartbeat IOCTL identifiers, fixed
+request/block layouts, and pure validation for bus identity, PCM shape, rate,
+generation, and lease limits. The elevated WDK rebuild passed with zero
+signability errors/warnings and catalog generation. The ABI is compile evidence
+only; no control device is registered until its security descriptor and PnP
+lifecycle are implemented.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
