@@ -8179,3 +8179,12 @@ live-driver evidence.
 - Next M04/REC-01/API task: expose recorder-node identity in the JSON-RPC
   lifecycle schemas and dispatch, preserving idempotency and per-recorder
   failure isolation.
+- Added optional `nodeId` recorder lifecycle addressing on 2026-09-11.
+  Schemas, allowed fields, dispatch validation, idempotency hashing, and the
+  two-sink JSON-RPC regression now cover independent node arm/start/stop. The
+  recorder-create API remains session-worker based until node-targeted creation
+  is implemented; strict Clippy, formatting, diff, and documentation checks
+  pass.
+- Next M04/REC-01/API task: add node-targeted recorder creation and expose
+  per-recorder state/library identities without regressing the compatibility
+  session API.

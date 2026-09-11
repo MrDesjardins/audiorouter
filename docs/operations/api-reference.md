@@ -54,6 +54,10 @@ after the initial 47-method reference.
 optional `cursor`/`limit` for a bounded recovery listing. Listing returns
 checkpoint IDs and `available`, `missing`, or `invalid` status without touching
 audio devices or recording files.
+
+Recorder lifecycle methods require `sessionId`; they may also receive
+`nodeId` to address an independently attached recorder node. Node-addressed
+operations use that node's own lifecycle state and idempotency request hash.
 | `startup.get` | `read` | read-only |
 | `startup.plan` | `sessionControl` | plan-only |
 | `startup.apply` | `sessionControl` | mutating; requires an idempotency key |

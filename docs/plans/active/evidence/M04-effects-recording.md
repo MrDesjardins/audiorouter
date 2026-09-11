@@ -93,8 +93,12 @@ Arm, start, pause, resume, split, and stop use the node's worker and checkpoint
 identity; successful stop persists finalized library rows when durable storage
 is configured and removes only that node's ownership. The two-sink regression
 arms, starts, and stops both workers independently before allowing session
-shutdown. JSON-RPC recorder addressing is still session-scoped and remains the
-next adapter integration task.
+shutdown. JSON-RPC lifecycle schemas and allowed-field validation now accept
+an optional `nodeId`. Dispatch verifies the node belongs to the supplied
+session, uses that node's controller/worker, and journals a request hash
+containing both identities. The two-sink regression drives arm/start/stop
+through JSON-RPC for both nodes. The create API remains session-worker based
+until node-targeted creation is implemented.
 
 ## 2026-09-09 limiter requalification
 

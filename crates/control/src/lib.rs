@@ -1904,6 +1904,7 @@ fn method_input_schema(name: &str) -> Value {
 fn recorder_input_schema(frame_required: bool) -> Value {
     let mut properties = json!({
         "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
     });
     if frame_required {
@@ -1950,6 +1951,7 @@ fn method_output_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "enum": ["idle", "armed", "recording", "paused", "stopping", "completed", "failed"] },
                 "parts": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PARTS },
                 "pauses": { "type": "array", "maxItems": audiorouter_recording::MAX_CHECKPOINT_PAUSES },
@@ -4395,7 +4397,7 @@ impl ControlPlane {
         }
         let last_frame = checkpoint.last_frame;
         let result = json!({
-            "nodeId": node_id,
+            "nodeId": node_id.as_str(),
             "sessionId": session_id,
             "state": state,
             "parts": parts,
@@ -6308,6 +6310,11 @@ impl ControlPlane {
         if self.store.session(&session_id).is_none() {
             return Err(ControlError::InvalidRequest("session not found".into()));
         }
+        let node_id = params
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .map(EntityId::new);
         let frame = params.get("frame").and_then(Value::as_u64);
         let idempotency = params
             .get("idempotencyKey")
@@ -6318,10 +6325,21 @@ impl ControlPlane {
         let request_hash = Self::request_hash(&json!({
             "method": method,
             "sessionId": session_id,
+            "nodeId": node_id,
             "frame": frame,
         }));
         let scoped_key = self.scoped_idempotency_key(method, &idempotency);
         if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+            return Ok(result);
+        }
+        if let Some(node_id) = node_id {
+            if self.recorder_node_sessions.get(&node_id) != Some(&session_id) {
+                return Err(ControlError::InvalidRequest(
+                    "recorder node is not attached to the session".into(),
+                ));
+            }
+            let result = self.control_recorder_node(&node_id, method, frame)?;
+            self.journal_idempotent_result(&scoped_key, method, &request_hash, &result)?;
             return Ok(result);
         }
         let restored = if self.recorders.contains_key(&session_id) {
@@ -8160,9 +8178,9 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             "maximumChunksPerPass",
             "idempotencyKey",
         ],
-        "recorders.arm" => &["sessionId", "idempotencyKey"],
+        "recorders.arm" => &["sessionId", "nodeId", "idempotencyKey"],
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
-        | "recorders.stop" => &["sessionId", "frame", "idempotencyKey"],
+        | "recorders.stop" => &["sessionId", "nodeId", "frame", "idempotencyKey"],
         "recordings.get" | "recordings.reveal" | "recordings.preview" => &["recordingId"],
         "recordings.recovery" => &["recordingId", "cursor", "limit"],
         "recordings.setMetadata" => &[
@@ -12248,16 +12266,30 @@ mod tests {
             .unwrap();
         assert_eq!(taps.len(), 2);
         for node_id in ["recorder-a", "recorder-b"] {
-            plane
-                .control_recorder_node(&EntityId::new(node_id), "recorders.arm", None)
-                .unwrap();
-            plane
-                .control_recorder_node(&EntityId::new(node_id), "recorders.start", Some(0))
-                .unwrap();
-            let stopped = plane
-                .control_recorder_node(&EntityId::new(node_id), "recorders.stop", Some(0))
-                .unwrap();
-            assert_eq!(stopped["state"], "completed");
+            for (index, method, frame) in [
+                (0, "recorders.arm", None),
+                (1, "recorders.start", Some(0)),
+                (2, "recorders.stop", Some(0)),
+            ] {
+                let mut params = json!({
+                    "sessionId": session_id,
+                    "nodeId": node_id,
+                    "idempotencyKey": format!("node-{node_id}-{index}"),
+                });
+                if let Some(frame) = frame {
+                    params["frame"] = json!(frame);
+                }
+                let response = plane.dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(format!("{node_id}-{index}"))),
+                    method: method.into(),
+                    params: Some(params),
+                });
+                assert!(response.error.is_none(), "{method}: {response:?}");
+                if method == "recorders.stop" {
+                    assert_eq!(response.result.unwrap()["state"], "completed");
+                }
+            }
         }
         assert!(plane.recorder_node_workers.is_empty());
         assert!(plane.session_stop(&session_id).is_ok());
