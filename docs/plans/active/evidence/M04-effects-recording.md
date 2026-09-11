@@ -117,6 +117,11 @@ the two-node control regression both pass.
 The global arm limit now counts legacy session controllers and node-keyed
 controllers through the same bounded eight-recorder calculation, preventing a
 mixed configuration from exceeding REC-01.
+The portable compiler now has an explicit `PhysicalInput -> Recorder ->
+PhysicalOutput` regression. It validates distinct recorder input/output ports,
+processes a sample block, and verifies the output samples are unchanged,
+proving the recorder stage does not gate the sibling output route. This remains
+portable graph evidence, not native endpoint fan-out or callback timing proof.
 Node worker finalization errors now mark only that node controller `failed` and
 retain its ownership for recovery, while a healthy sibling can finalize and be
 removed independently. A focused regression verifies this isolation.

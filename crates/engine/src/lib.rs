@@ -6697,6 +6697,84 @@ mod tests {
     }
 
     #[test]
+    fn compiler_preserves_output_when_recorder_is_on_the_validated_route() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let output_port = |direction| Port {
+            name: "main".into(),
+            direction,
+            channels: 1,
+        };
+        let node = |id: &str, kind, ports| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports,
+        };
+        let edge = |id: &str,
+                    source: &str,
+                    source_port: &str,
+                    destination: &str,
+                    destination_port: &str| {
+            Edge {
+                id: EntityId::new(id),
+                source_node: EntityId::new(source),
+                source_port: source_port.into(),
+                destination_node: EntityId::new(destination),
+                destination_port: destination_port.into(),
+                matrix: vec![1.0],
+                enabled: true,
+            }
+        };
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "recorder-route".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                node(
+                    "source",
+                    NodeKind::PhysicalInput,
+                    vec![output_port(PortDirection::Output)],
+                ),
+                node(
+                    "recorder",
+                    NodeKind::Recorder,
+                    vec![
+                        Port {
+                            name: "in".into(),
+                            direction: PortDirection::Input,
+                            channels: 1,
+                        },
+                        Port {
+                            name: "out".into(),
+                            direction: PortDirection::Output,
+                            channels: 1,
+                        },
+                    ],
+                ),
+                node(
+                    "sink",
+                    NodeKind::PhysicalOutput,
+                    vec![output_port(PortDirection::Input)],
+                ),
+            ],
+            edges: vec![
+                edge("source-recorder", "source", "main", "recorder", "in"),
+                edge("recorder-sink", "recorder", "out", "sink", "main"),
+            ],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(32)).unwrap();
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().copy_from_slice(&[0.25, -0.5]);
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.25, -0.5]);
+    }
+
+    #[test]
     fn compiler_rejects_an_isolated_enabled_node_alongside_a_linear_route() {
         use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
         let port = |name: &str, direction| Port {

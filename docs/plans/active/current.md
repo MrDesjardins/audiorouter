@@ -8227,6 +8227,13 @@ live-driver evidence.
   regressions, strict Clippy, formatting, and diff checks pass.
 - Next M04/REC-01 task: add mixed legacy/node capacity regression coverage and
   durable failed-node recovery/listing semantics.
+- Added native-independent recorder route qualification on 2026-09-11: the
+  compiler regression validates an explicit input-to-recorder-to-output route
+  and proves the recorder stage preserves output samples. Engine tests, strict
+  Clippy, formatting, and diff checks pass; native endpoint fan-out remains a
+  separate gate.
+- Next M04/REC-01 task: continue node-aware checkpoint hydration/recovery and
+  complete bounded branch fan-out integration with prepared recorder taps.
 - Added mixed-capacity and failed-node listing regressions on 2026-09-11. A
   failed node remains listed and retained for recovery, while mixed legacy and
   node controllers share the eight-active-recorder limit without mutating the
