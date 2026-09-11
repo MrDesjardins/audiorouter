@@ -88,6 +88,14 @@ qualification remains open.
   lifecycle evidence only; defaults, volume, mute, privacy, drivers, signing,
   and startup configuration were unchanged.
 
+- Requalified the existing-endpoint signal path on 2026-09-10 with a bounded
+  250 ms tone/capture run through the VB-Audio Cable pair. Capture received
+  nonzero payload (`7,022` bytes) and both render/capture lifecycle paths
+  completed successfully; endpoint media snapshots and defaults, volume,
+  mute, privacy, drivers, signing, and startup configuration were unchanged.
+  This remains user-mode existing-endpoint evidence, not managed-driver or
+  calibrated physical-latency evidence.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
