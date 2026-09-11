@@ -620,6 +620,7 @@ dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
  "audiorouter-engine",
+ "audiorouter-recording",
  "audiorouter-windows-audio",
  "windows",
  "windows-core",

@@ -8317,3 +8317,12 @@ live-driver evidence.
 - Next M02/M03 task: extend the harness to attach a recorder branch and verify
   prebuilt tap delivery through the control-owned native worker, then measure
   the guarded endpoint pair's before/after stream lifecycle counters.
+- Extended and reran the control-owned live harness on 2026-09-11 with an
+  actual recorder node and prebuilt tap set. The 500 ms run finalized a
+  4,140-byte WAV after 50 packets, 24,000 captured frames, 187 graph quanta,
+  and 23,936 rendered frames; worker stop/detach and media-state rollback
+  checks passed. This is live existing-endpoint evidence and leaves the
+  production driver, signing, installation, and physical-latency gates open.
+- Next M02/M03 task: add explicit stream-lifecycle telemetry (start/stop,
+  reset, and rejected/stale-generation counts) to the control-owned harness,
+  then continue native driver bridge qualification without changing defaults.

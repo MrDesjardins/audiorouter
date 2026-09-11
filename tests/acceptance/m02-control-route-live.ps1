@@ -29,14 +29,15 @@ try {
     $captured = [int]([regex]::Match($line, 'captured_frames=(\d+)').Groups[1].Value)
     $quanta = [int]([regex]::Match($line, 'processed_quanta=(\d+)').Groups[1].Value)
     $rendered = [int]([regex]::Match($line, 'rendered_frames=(\d+)').Groups[1].Value)
+    $recordingBytes = [long]([regex]::Match($line, 'recording_bytes=(\d+)').Groups[1].Value)
     $captureRate = [int]([regex]::Match($line, 'capture_rate_hz=(\d+)').Groups[1].Value)
     $renderRate = [int]([regex]::Match($line, 'render_rate_hz=(\d+)').Groups[1].Value)
-    if ($line -notmatch 'route=true' -or $generation -ne 1 -or $packets -le 0 -or $captured -le 0 -or $quanta -le 0 -or $rendered -le 0 -or $captureRate -le 0 -or $renderRate -le 0) {
+    if ($line -notmatch 'route=true' -or $generation -ne 1 -or $packets -le 0 -or $captured -le 0 -or $quanta -le 0 -or $rendered -le 0 -or $recordingBytes -le 44 -or $captureRate -le 0 -or $renderRate -le 0) {
         throw "control-owned route reported invalid telemetry: $line"
     }
     $after = Get-MediaSnapshot
     if (Compare-Object -ReferenceObject $before -DifferenceObject $after) { throw 'media-device identity/state changed during control-owned route acceptance' }
-    Write-Output "M02 control-owned route passed: generation=$generation packets=$packets captured_frames=$captured processed_quanta=$quanta rendered_frames=$rendered capture_rate_hz=$captureRate render_rate_hz=$renderRate"
+    Write-Output "M02 control-owned route passed: generation=$generation packets=$packets captured_frames=$captured processed_quanta=$quanta rendered_frames=$rendered recording_bytes=$recordingBytes capture_rate_hz=$captureRate render_rate_hz=$renderRate"
     Write-Output 'Scope: explicitly selected existing endpoints; worker was stopped/detached and defaults, volume, mute, privacy, drivers, signing, startup configuration, and endpoint registration were unchanged.'
 }
 finally {

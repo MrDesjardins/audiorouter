@@ -13,8 +13,11 @@ use audiorouter_engine::{
     histogram_upper_bound_ns, AudioBlock, AudioTap, DriftController, Pcm16QuantumAdapter,
     ProcessingStage, RealtimeScheduler, RuntimeGeneration, RuntimeGraph, StreamingResampler,
 };
-use audiorouter_control::{RecorderWorker, StreamingFlacRecorderWorker};
-use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session, Edge};
+use audiorouter_control::{
+    FileRecorderConfig, FileRecorderFormat, RecorderWorker, StreamingFlacRecorderWorker,
+};
+use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+use audiorouter_recording::WavFormat;
 use audiorouter_windows_audio::{
     enumerate_active_endpoints, AudioError, EndpointDirection, EndpointMonitor,
     ProcessLoopbackCapture, ProcessLoopbackMode, SharedCapture, SharedRender,
@@ -71,6 +74,14 @@ impl AudioTap for ProbeTap {
         });
         self.non_finite_samples
             .fetch_add(invalid, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+struct TemporaryRecordingRoot(std::path::PathBuf);
+
+impl Drop for TemporaryRecordingRoot {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -204,6 +215,7 @@ fn adapter_control_route(
     let worker = audiorouter_windows_audio::WasapiEndpointWorker::new(capture, render, bridge);
     let session_id = EntityId::new("native-control-probe");
     let input_id = EntityId::new("input");
+    let recorder_id = EntityId::new("recorder");
     let output_id = EntityId::new("output");
     let ports = |direction| {
         vec![Port {
@@ -229,6 +241,27 @@ fn adapter_control_route(
                 ports: ports(PortDirection::Output),
             },
             Node {
+                id: recorder_id.clone(),
+                kind: NodeKind::Recorder,
+                type_version: 1,
+                name: "probe recorder".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: channel_count,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: channel_count,
+                    },
+                ],
+            },
+            Node {
                 id: output_id.clone(),
                 kind: NodeKind::PhysicalOutput,
                 type_version: 1,
@@ -239,30 +272,77 @@ fn adapter_control_route(
                 ports: ports(PortDirection::Input),
             },
         ],
-        edges: vec![Edge {
-            id: EntityId::new("probe-edge"),
-            source_node: input_id,
-            source_port: "main".into(),
-            destination_node: output_id,
-            destination_port: "main".into(),
-            matrix: (0..channels)
-                .flat_map(|row| {
-                    (0..channels).map(move |column| {
-                        if row == column {
-                            1.0
-                        } else {
-                            0.0
-                        }
+        edges: vec![
+            Edge {
+                id: EntityId::new("probe-input-recorder"),
+                source_node: input_id,
+                source_port: "main".into(),
+                destination_node: recorder_id.clone(),
+                destination_port: "in".into(),
+                matrix: (0..channels)
+                    .flat_map(|row| {
+                        (0..channels).map(move |column| {
+                            if row == column { 1.0 } else { 0.0 }
+                        })
                     })
-                })
-                .collect(),
-            enabled: true,
-        }],
+                    .collect(),
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("probe-recorder-output"),
+                source_node: recorder_id,
+                source_port: "out".into(),
+                destination_node: output_id,
+                destination_port: "main".into(),
+                matrix: (0..channels)
+                    .flat_map(|row| {
+                        (0..channels).map(move |column| {
+                            if row == column { 1.0 } else { 0.0 }
+                        })
+                    })
+                    .collect(),
+                enabled: true,
+            },
+        ],
     };
     let mut control = audiorouter_control::ControlPlane::default();
+    let recording_root = std::env::temp_dir().join(format!(
+        "audiorouter-control-route-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&recording_root)
+        .map_err(|error| format!("recording root: {error}"))?;
+    let _recording_root = TemporaryRecordingRoot(recording_root.clone());
     control
         .insert_session(session)
         .map_err(|error| format!("session insert: {error:?}"))?;
+    control
+        .configure_recording_root(&recording_root)
+        .map_err(|error| format!("recording root configuration: {error:?}"))?;
+    let recording_path = control
+        .create_and_attach_configured_file_recorder_to_node(
+            session_id.clone(),
+            EntityId::new("recorder"),
+            &FileRecorderConfig {
+                version: audiorouter_control::FILE_RECORDER_CONFIG_VERSION,
+                session_id: session_id.as_str(),
+                recorder_id: "recorder",
+                sequence: 0,
+                format: FileRecorderFormat::Wav(WavFormat::Pcm16),
+                channels: capture_info.channels,
+                sample_rate: capture_info.sample_rate_hz,
+                dither: false,
+                queue_capacity: 8,
+                maximum_chunks_per_pass: 64,
+            },
+        )
+        .map_err(|error| format!("recorder creation: {error:?}"))?;
+    control
+        .control_recorder_node(&EntityId::new("recorder"), "recorders.arm", None)
+        .map_err(|error| format!("recorder arm: {error:?}"))?;
+    control
+        .control_recorder_node(&EntityId::new("recorder"), "recorders.start", Some(0))
+        .map_err(|error| format!("recorder start: {error:?}"))?;
     control
         .attach_native_endpoint_worker(session_id.clone(), worker)
         .map_err(|error| format!("worker attach: {error:?}"))?;
@@ -298,18 +378,33 @@ fn adapter_control_route(
         .stop_native_endpoint_worker()
         .map_err(|error| format!("endpoint stop: {error:?}"))?;
     control
+        .control_recorder_node(
+            &EntityId::new("recorder"),
+            "recorders.stop",
+            Some(captured_frames.max(128)),
+        )
+        .map_err(|error| format!("recorder stop: {error:?}"))?;
+    control
         .detach_native_endpoint_worker()
         .map_err(|error| format!("worker detach: {error:?}"))?;
     control
         .session_stop(&session_id)
         .map_err(|error| format!("session stop: {error:?}"))?;
+    let recording_bytes = std::fs::metadata(&recording_path)
+        .map_err(|error| format!("recording metadata: {error}"))?
+        .len();
+    if recording_bytes <= 44 {
+        return Err(format!(
+            "recorder tap produced an empty or header-only file: {recording_bytes} bytes"
+        ));
+    }
     if packets == 0 || captured_frames == 0 || processed_quanta == 0 || rendered_frames == 0 {
         return Err(format!(
             "control route reported no complete audio work: packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames}"
         ));
     }
     println!(
-        "adapter_control_route route=true generation={generation} packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames} capture_rate_hz={} render_rate_hz={}",
+        "adapter_control_route route=true generation={generation} packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames} recording_bytes={recording_bytes} capture_rate_hz={} render_rate_hz={}",
         capture_info.sample_rate_hz, render_info.sample_rate_hz
     );
     Ok(())
