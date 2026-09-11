@@ -6,12 +6,13 @@
 
 use audiorouter_domain::{
     format_validation_errors, inspect_routes, node_registry, validate_session, ApiMethodSpec,
-    CrashRecoveryTracker, EntityId, EventLog, EventReplayError, FakeRuntime, GraphStore,
+    CrashRecoveryTracker, EntityId, EventLog, EventReplayError, FakeRuntime, GraphStore, NodeKind,
     PermissionScope, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState, Session,
     VirtualBusRegistry, API_METHODS,
 };
 use audiorouter_engine::{
-    AudioBlock, AudioTap, AudioTapSet, VirtualBusBridgeSet, VirtualBusBridgeSetError,
+    AudioBlock, AudioTap, AudioTapSet, RecorderTapBindings, RuntimeGeneration, VirtualBusBridgeSet,
+    VirtualBusBridgeSetError,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -4177,6 +4178,40 @@ impl ControlPlane {
         set.add_shared(tap)
             .map_err(|_| ControlError::InvalidRequest("recorder tap capacity exceeded".into()))?;
         Ok(set)
+    }
+
+    /// Bind the one control-owned recorder worker to the session's validated
+    /// recorder node. The current worker boundary supports one recorder sink
+    /// per session; multiple graph recorder nodes are rejected rather than
+    /// duplicating audio into one destination.
+    pub fn recorder_tap_bindings(
+        &self,
+        session_id: &EntityId,
+        generation: RuntimeGeneration,
+    ) -> Result<RecorderTapBindings, ControlError> {
+        let session = self.get_session(session_id)?;
+        let recorder_nodes: Vec<&EntityId> = session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && node.kind == NodeKind::Recorder)
+            .map(|node| &node.id)
+            .collect();
+        if recorder_nodes.len() != 1 {
+            return Err(ControlError::InvalidRequest(
+                "session must contain exactly one enabled recorder node".into(),
+            ));
+        }
+        let worker = self.recorder_workers.get(session_id).ok_or_else(|| {
+            ControlError::InvalidRequest("recorder worker is not attached".into())
+        })?;
+        let tap = worker.shared_audio_tap().ok_or_else(|| {
+            ControlError::InvalidRequest("recorder worker has no realtime tap".into())
+        })?;
+        let mut bindings = RecorderTapBindings::new();
+        bindings
+            .add_shared(recorder_nodes[0].as_str(), generation, tap)
+            .map_err(|_| ControlError::InvalidRequest("recorder node binding is invalid".into()))?;
+        Ok(bindings)
     }
 
     /// Attach a single-file worker and configure its durable library identity
@@ -11887,6 +11922,53 @@ mod tests {
         assert!(plane
             .recorder_tap_set(&EntityId::new("missing-session"))
             .is_err());
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recorder_binding_requires_one_validated_node_and_matching_generation() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-binding-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        let worker = WavRecorderWorker::new(file, WavFormat::Pcm16, 1, 48_000, 4, 1).unwrap();
+        let mut graph = session();
+        graph.nodes.push(Node {
+            id: EntityId::new("recorder-node"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![],
+        });
+        let session_id = graph.id.clone();
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph).unwrap();
+        plane
+            .attach_recorder_worker(session_id.clone(), Box::new(worker))
+            .unwrap();
+
+        let bindings = plane
+            .recorder_tap_bindings(&session_id, RuntimeGeneration::new(7))
+            .unwrap();
+        let taps = bindings
+            .tap_set_for_generation(RuntimeGeneration::new(7), &["recorder-node"])
+            .unwrap();
+        assert_eq!(bindings.len(), 1);
+        assert_eq!(taps.len(), 1);
+        assert!(matches!(
+            bindings.tap_set_for_generation(RuntimeGeneration::new(8), &["recorder-node"]),
+            Err(audiorouter_engine::RecorderTapBindingError::StaleGeneration)
+        ));
 
         let _ = std::fs::remove_file(path);
     }

@@ -68,6 +68,13 @@ regression covers all rejection paths and successful preparation. This is
 portable graph/runtime binding evidence; it does not claim native endpoint
 ownership or loaded-driver activation.
 
+The control plane now derives that binding from the stored session graph through
+`ControlPlane::recorder_tap_bindings`. It requires exactly one enabled
+`Recorder` node and an attached worker, then binds the node ID to the requested
+generation. A control regression proves the prepared tap is available for the
+matching generation and stale-generation preparation fails closed. Multiple
+recorder nodes are rejected until independent worker ownership is implemented.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30
