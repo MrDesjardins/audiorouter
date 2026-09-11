@@ -1371,6 +1371,54 @@ impl Storage {
         )? == 1)
     }
 
+    /// Read a bounded, stable page of persisted recorder checkpoint IDs.
+    /// Checkpoint payloads are intentionally loaded separately so one corrupt
+    /// entry can remain visible to recovery UI without hiding other entries.
+    pub fn list_recording_checkpoint_ids(
+        &self,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> Result<(Vec<String>, bool), StorageError> {
+        if let Some(cursor) = cursor {
+            validate_recording_id(cursor)?;
+            let exists = self
+                .connection
+                .query_row(
+                    "SELECT 1 FROM recording_checkpoints WHERE recording_id = ?1",
+                    params![cursor],
+                    |_| Ok(()),
+                )
+                .optional()?;
+            if exists.is_none() {
+                return Err(StorageError::InvalidRecording(
+                    "invalid recording recovery cursor".into(),
+                ));
+            }
+        }
+        if !(1..=MAX_RECORDING_LIST_ITEMS).contains(&limit) {
+            return Err(StorageError::InvalidRecording(
+                "recording recovery page limit must be between 1 and 500".into(),
+            ));
+        }
+        let mut statement = self.connection.prepare(
+            "SELECT recording_id FROM recording_checkpoints
+             WHERE (?1 IS NULL OR recording_id > ?1)
+             ORDER BY recording_id ASC
+             LIMIT ?2",
+        )?;
+        let mut ids = statement
+            .query_map(params![cursor, (limit + 1) as i64], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let has_more = ids.len() > limit;
+        ids.truncate(limit);
+        for id in &ids {
+            validate_recording_id(id)?;
+        }
+        Ok((ids, has_more))
+    }
+
     pub fn list_recordings(
         &self,
         session_id: Option<&str>,
@@ -4525,6 +4573,31 @@ mod tests {
             None
         );
         assert!(!storage.remove_recording_entry("recording").unwrap());
+    }
+
+    #[test]
+    fn recording_checkpoint_ids_are_bounded_and_cursor_paginated() {
+        let storage = Storage::open_memory().unwrap();
+        let checkpoint = audiorouter_recording::RecorderController::new().checkpoint();
+        for id in ["checkpoint-a", "checkpoint-b", "checkpoint-c"] {
+            storage.save_recording_checkpoint(id, &checkpoint).unwrap();
+        }
+        let (first, more) = storage.list_recording_checkpoint_ids(None, 2).unwrap();
+        assert_eq!(first, vec!["checkpoint-a", "checkpoint-b"]);
+        assert!(more);
+        let (second, more) = storage
+            .list_recording_checkpoint_ids(first.last().map(String::as_str), 2)
+            .unwrap();
+        assert_eq!(second, vec!["checkpoint-c"]);
+        assert!(!more);
+        assert!(matches!(
+            storage.list_recording_checkpoint_ids(Some("unknown"), 2),
+            Err(StorageError::InvalidRecording(_))
+        ));
+        assert!(matches!(
+            storage.list_recording_checkpoint_ids(None, 0),
+            Err(StorageError::InvalidRecording(_))
+        ));
     }
 
     #[test]

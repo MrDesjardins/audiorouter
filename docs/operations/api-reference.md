@@ -48,6 +48,11 @@ after the initial 47-method reference.
 | `recordings.recycle` | `record` | preview is read-only; confirmed recycling requires an idempotency key |
 | `safety.setPrivacyMute` | `capture` | mutating; requires an idempotency key |
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
+
+`recordings.recovery` accepts either a `recordingId` for one checkpoint or an
+optional `cursor`/`limit` for a bounded recovery listing. Listing returns
+checkpoint IDs and `available`, `missing`, or `invalid` status without touching
+audio devices or recording files.
 | `startup.get` | `read` | read-only |
 | `startup.plan` | `sessionControl` | plan-only |
 | `startup.apply` | `sessionControl` | mutating; requires an idempotency key |

@@ -937,3 +937,13 @@ The control recorder capacity now consumes the engine's shared tap bound, and
 a scheduler regression verifies all eight sinks receive one processed
 quantum. This is portable attachment plumbing only; it does not claim native
 endpoint ownership or live-driver qualification.
+
+## Bounded recovery discovery (2026-09-11)
+
+`recordings.recovery` now supports a bounded cursor/limit listing of persisted
+checkpoint IDs in addition to its existing single-ID lookup. Each entry is
+reported as `available`, `missing`, or `invalid`; corrupt checkpoint JSON does
+not hide other entries. Storage tests (81), control tests (112), strict
+Clippy, formatting, and documentation validation pass. This is durable
+checkpoint discovery only and does not claim native crash or power-loss
+recovery guarantees.

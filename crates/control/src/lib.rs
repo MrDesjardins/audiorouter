@@ -1099,8 +1099,12 @@ fn method_input_schema(name: &str) -> Value {
             &["recordingId"],
         ),
         "recordings.recovery" => object_schema(
-            json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
-            &["recordingId"],
+            json!({
+                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
+                "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
+                "limit": { "type": "integer", "minimum": 1, "maximum": MAX_RECORDING_LIST_ITEMS }
+            }),
+            &[],
         ),
         "recordings.reveal" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
@@ -2059,8 +2063,9 @@ fn method_output_schema(name: &str) -> Value {
         }
         "recordings.get" => recording_item_schema(),
         "recordings.recovery" => json!({
-            "type": "object",
-            "properties": {
+            "oneOf": [{
+                "type": "object",
+                "properties": {
                 "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
                 "status": { "enum": ["missing", "available"] },
                 "checkpoint": {
@@ -2076,9 +2081,31 @@ fn method_output_schema(name: &str) -> Value {
                     "required": ["version", "state", "parts", "pauses", "pauseStart", "lastFrame"],
                     "additionalProperties": false
                 }
-            },
-            "required": ["recordingId", "status"],
-            "additionalProperties": false
+                },
+                "required": ["recordingId", "status"],
+                "additionalProperties": false
+            }, {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "maxItems": MAX_RECORDING_LIST_ITEMS,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES },
+                                "status": { "enum": ["missing", "available", "invalid"] },
+                                "checkpoint": { "type": "object" }
+                            },
+                            "required": ["recordingId", "status"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "nextCursor": { "type": ["string", "null"], "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES }
+                },
+                "required": ["items", "nextCursor"],
+                "additionalProperties": false
+            }]
         }),
         "recordings.preview" => json!({
             "type": "object",
@@ -5423,18 +5450,58 @@ impl ControlPlane {
     }
 
     fn dispatch_recording_recovery(&self, params: Option<Value>) -> Result<Value, ControlError> {
-        let recording_id = params
-            .and_then(|params| {
-                params
-                    .get("recordingId")
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_owned)
-            })
-            .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
         let storage = self.storage.as_ref().ok_or_else(|| {
             ControlError::InvalidRequest("recording recovery is unavailable".into())
         })?;
+        let params = params.unwrap_or_else(|| json!({}));
+        let recording_id_supplied = params.get("recordingId").is_some();
+        let recording_id = params
+            .get("recordingId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        if recording_id_supplied && recording_id.is_none() {
+            return Err(ControlError::InvalidRequest(
+                "recordingId must be a non-empty string".into(),
+            ));
+        }
+        if recording_id.is_none() {
+            let cursor = params
+                .get("cursor")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty());
+            let limit = params
+                .get("limit")
+                .and_then(Value::as_u64)
+                .map(|value| usize::try_from(value).unwrap_or(usize::MAX))
+                .unwrap_or(MAX_RECORDING_LIST_ITEMS);
+            let (ids, has_more) = storage
+                .list_recording_checkpoint_ids(cursor, limit)
+                .map_err(storage_error)?;
+            let mut items = Vec::with_capacity(ids.len());
+            for id in &ids {
+                let item = match storage.load_recording_checkpoint(id) {
+                    Ok(Some(checkpoint)) => json!({
+                        "recordingId": id,
+                        "status": "available",
+                        "checkpoint": checkpoint
+                    }),
+                    Ok(None) => json!({
+                        "recordingId": id,
+                        "status": "missing"
+                    }),
+                    Err(StorageError::InvalidRecording(_)) => json!({
+                        "recordingId": id,
+                        "status": "invalid"
+                    }),
+                    Err(error) => return Err(storage_error(error)),
+                };
+                items.push(item);
+            }
+            let next_cursor = has_more.then(|| ids.last().cloned()).flatten();
+            return Ok(json!({ "items": items, "nextCursor": next_cursor }));
+        }
+        let recording_id = recording_id.expect("recording ID checked above");
         let Some(checkpoint) = storage
             .load_recording_checkpoint(&recording_id)
             .map_err(storage_error)?
@@ -6930,9 +6997,8 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recorders.arm" => &["sessionId", "idempotencyKey"],
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => &["sessionId", "frame", "idempotencyKey"],
-        "recordings.get" | "recordings.recovery" | "recordings.reveal" | "recordings.preview" => {
-            &["recordingId"]
-        }
+        "recordings.get" | "recordings.reveal" | "recordings.preview" => &["recordingId"],
+        "recordings.recovery" => &["recordingId", "cursor", "limit"],
         "recordings.setMetadata" => &[
             "recordingId",
             "title",
@@ -8125,12 +8191,13 @@ mod tests {
             .find(|method| method["name"] == "recordings.recovery")
             .unwrap();
         assert_eq!(
-            recovery["outputSchema"]["properties"]["checkpoint"]["properties"]["parts"]["maxItems"],
+            recovery["outputSchema"]["oneOf"][0]["properties"]["checkpoint"]["properties"]["parts"]
+                ["maxItems"],
             audiorouter_recording::MAX_CHECKPOINT_PARTS
         );
         assert_eq!(
-            recovery["outputSchema"]["properties"]["checkpoint"]["properties"]["pauses"]
-                ["maxItems"],
+            recovery["outputSchema"]["oneOf"][0]["properties"]["checkpoint"]["properties"]
+                ["pauses"]["maxItems"],
             audiorouter_recording::MAX_CHECKPOINT_PAUSES
         );
         let recorder_transition = description["methods"]
@@ -9083,7 +9150,6 @@ mod tests {
                 .unwrap();
             let schema = &method["outputSchema"];
             let schema = if method_name == "recordings.get"
-                || method_name == "recordings.recovery"
                 || method_name == "recordings.preview"
                 || method_name == "recordings.setMetadata"
                 || method_name == "recordings.rename"
@@ -10187,6 +10253,42 @@ mod tests {
             params: Some(json!({ "recordingId": "missing" })),
         });
         assert_eq!(missing.result.unwrap()["status"], "missing");
+    }
+
+    #[test]
+    fn recording_recovery_without_id_lists_bounded_checkpoint_entries() {
+        let storage = Storage::open_memory().unwrap();
+        let mut recorder = audiorouter_recording::RecorderController::new();
+        recorder.arm().unwrap();
+        recorder.start(100).unwrap();
+        storage
+            .save_recording_checkpoint("recovery-a", &recorder.checkpoint())
+            .unwrap();
+        storage
+            .save_recording_checkpoint("recovery-b", &recorder.checkpoint())
+            .unwrap();
+        let mut plane = ControlPlane::with_storage("recovery-list", storage);
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "recordings.recovery".into(),
+            params: Some(json!({ "limit": 1 })),
+        });
+        let result = response.result.unwrap();
+        assert_eq!(result["items"].as_array().unwrap().len(), 1);
+        assert_eq!(result["items"][0]["recordingId"], "recovery-a");
+        assert_eq!(result["items"][0]["status"], "available");
+        let cursor = result["nextCursor"].as_str().unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "recordings.recovery".into(),
+            params: Some(json!({ "cursor": cursor, "limit": 1 })),
+        });
+        assert_eq!(
+            response.result.unwrap()["items"][0]["recordingId"],
+            "recovery-b"
+        );
     }
 
     #[test]

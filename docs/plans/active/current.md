@@ -7684,6 +7684,13 @@ stream, or machine configuration action occurred.
   registration, audio stream, or persistent machine audio configuration
   occurred. Production driver activation/signing, installer, clean-machine,
   physical-latency, and manual UI gates remain open.
+- Added bounded REC-09 recovery discovery on 2026-09-11. `recordings.recovery`
+  now supports optional cursor/limit listing of persisted checkpoint IDs and
+  reports each entry as available, missing, or invalid without aborting the
+  page on a corrupt checkpoint. Single-ID recovery remains backward compatible.
+  Storage tests (81), control tests (112), strict targeted Clippy, formatting,
+  and documentation validation passed. Recovery still does not claim native
+  crash/power-loss guarantees or automatic file repair.
 - Improved bridge diagnostics on 2026-09-11: a live lease request from a
   different control handle now returns `STATUS_ACCESS_DENIED`, distinct from
   inactive, expired, or invalidated lease status. The guarded non-installing
