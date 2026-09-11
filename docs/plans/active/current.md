@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `21edfff5`; the native probe compile was
+The latest implementation checkpoint is `d3fe5165`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -21,6 +21,18 @@ clean; no driver or startup/plugin registration, signing-mode change, audio
 stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
+
+- Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
+  2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
+  fault dialogs and WER UI before parsing/loading any third-party plugin,
+  covering the VST2 DLL path as well as worker startup failures. The focused
+  VST2 fixture acceptance passed processing, chunk state, legacy `main`,
+  non-finite output, native crash, and native hang containment at 44.1, 48,
+  and 96 kHz; plugin-host tests (67), strict Clippy, formatting, and diff
+  checks passed. This is process-local best-effort suppression; a crashed
+  third-party DLL still terminates its worker and remains subject to
+  supervisor quarantine. No plugin registration, audio stream, or persistent
+  machine audio configuration changed.
 
 - Extended stream recovery at pushed head `832b81a8` on 2026-09-10 to reset
   stateful DSP history in the active graph (EQ, dynamics, delay, graphic EQ,
