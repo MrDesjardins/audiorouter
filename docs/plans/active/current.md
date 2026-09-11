@@ -7744,3 +7744,10 @@ live-driver evidence.
   plugin registration, or persistent machine configuration was changed.
   Manual Narrator/scaling/usability checks and native audio/driver gates
   remain separate.
+- Corrected the recorder finalization bound on 2026-09-11: WAV and both FLAC
+  workers now require an actual successful `stop_and_drain` transition before
+  calling `finish`, even when the bounded pass budget is exhausted. This
+  prevents a drained-but-still-stopping controller from reaching file
+  finalization. Control tests (107), strict Clippy, formatting, and diff
+  checks passed; the full guarded chain remains recorded at `53dfe1b5` and
+  was not rerun for this follow-up-only correction.
