@@ -202,6 +202,12 @@ both sides, exposes the render reader and capture `AudioTap`, and closes both
 leases explicitly. This advances the two-ended application contract without
 claiming installed endpoint routing.
 
+The duplex API now also has `create_with_sections`, forwarding both exact
+broker-created section handles through the directional lease claims and
+retaining them for heartbeat/close. If the second mapped claim fails, the first
+controller is dropped to release its lease. The focused preflight regressions
+remain green; loaded-driver transport is still unverified.
+
 The duplex preflight now has regressions proving that direction and bus
 mismatches return before any device or mapping open. The Windows-audio suite
 passes 52 tests with strict Clippy; this closes the application-side validation

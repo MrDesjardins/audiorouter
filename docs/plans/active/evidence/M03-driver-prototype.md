@@ -51,6 +51,11 @@ Two Windows-only regressions prove that duplex direction and bus mismatches
 fail before device or mapping access. The focused Windows-audio suite passes 52
 tests and strict Clippy passes.
 
+`NativeBridgeDuplexController::create_with_sections` now provides the mapped
+two-ended construction path. Each child retains its section handle for the
+lease lifetime, and failure of the second claim releases the first. This is
+still user-mode API evidence because no driver was installed or loaded.
+
 No INF installation, service start, device registration, boot-policy change,
 test-signing change, audio-default change, stream open, or persistent machine
 configuration change occurred. The generated build directories are ignored and

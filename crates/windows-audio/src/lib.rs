@@ -213,6 +213,19 @@ pub struct NativeBridgeDuplexController {
 
 #[cfg(windows)]
 impl NativeBridgeDuplexController {
+    fn validate_hellos(
+        render_hello: &audiorouter_protocol::AudioBridgeHello,
+        capture_hello: &audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(), NativeBridgeControllerError> {
+        if render_hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource
+            || capture_hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink
+            || render_hello.bus_id != capture_hello.bus_id
+        {
+            return Err(NativeBridgeControllerError::InvalidDuplex);
+        }
+        Ok(())
+    }
+
     pub fn create(
         device_path: &str,
         render_mapping_path: impl AsRef<std::path::Path>,
@@ -220,15 +233,38 @@ impl NativeBridgeDuplexController {
         render_hello: audiorouter_protocol::AudioBridgeHello,
         capture_hello: audiorouter_protocol::AudioBridgeHello,
     ) -> Result<Self, NativeBridgeControllerError> {
-        if render_hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource
-            || capture_hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink
-            || render_hello.bus_id != capture_hello.bus_id
-        {
-            return Err(NativeBridgeControllerError::InvalidDuplex);
-        }
+        Self::validate_hellos(&render_hello, &capture_hello)?;
         let render =
             NativeBridgeController::create(device_path, render_mapping_path, render_hello)?;
         match NativeBridgeController::create(device_path, capture_mapping_path, capture_hello) {
+            Ok(capture) => Ok(Self { render, capture }),
+            Err(error) => {
+                drop(render);
+                Err(error)
+            }
+        }
+    }
+
+    /// Claim both directional leases with broker-created sections. The child
+    /// controllers retain their section handles through heartbeat and close.
+    pub fn create_with_sections(
+        device_path: &str,
+        render_mapping_path: impl AsRef<std::path::Path>,
+        capture_mapping_path: impl AsRef<std::path::Path>,
+        render_hello: audiorouter_protocol::AudioBridgeHello,
+        capture_hello: audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<Self, NativeBridgeControllerError> {
+        Self::validate_hellos(&render_hello, &capture_hello)?;
+        let render = NativeBridgeController::create_with_section(
+            device_path,
+            render_mapping_path,
+            render_hello,
+        )?;
+        match NativeBridgeController::create_with_section(
+            device_path,
+            capture_mapping_path,
+            capture_hello,
+        ) {
             Ok(capture) => Ok(Self { render, capture }),
             Err(error) => {
                 drop(render);
