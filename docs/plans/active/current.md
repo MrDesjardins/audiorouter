@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `64916ea9`; the native probe compile was
+The latest pushed checkpoint is `091e91ed`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -38,6 +38,13 @@ qualification remains open.
   checks. This includes the new engine scheduler reset regression and
   Windows-audio packet-reset regression. No endpoint, driver, plugin
   registration, or persistent machine configuration was changed.
+
+- Added direct `WasapiSchedulerBridge::reset_stream` coverage at pushed head
+  `091e91ed` on 2026-09-10. The regression queues a processed block, resets
+  the stream, verifies the queue is empty, and confirms the prepared graph
+  generation remains active. Windows-audio tests (41), strict Clippy,
+  formatting, and diff checks passed; no endpoint or persistent machine
+  configuration was changed.
 
 - Hardened unattended VST3-worker fault handling on 2026-09-10. The
   disposable worker now disables both legacy fault dialogs (`SetErrorMode`)
