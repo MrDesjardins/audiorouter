@@ -3,6 +3,14 @@ $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $build = Join-Path $workspace 'drivers/audiorouter-virtual/build.ps1'
 $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter.cpp'
+$infSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx') -Raw
+foreach ($required in @(
+        'AUDIOROUTERVIRTUAL.WaveSpeaker.szPname="AudioRouter - Desktop In"',
+        'AUDIOROUTERVIRTUAL.WaveMicArray1.szPname="AudioRouter - Voice Chat"')) {
+    if (-not $infSource.Contains($required)) {
+        throw "driver endpoint identity contract is missing: $required"
+    }
+}
 $buildScript = Get-Content -LiteralPath $build -Raw
 foreach ($required in @(
         '$outputWasProvided',

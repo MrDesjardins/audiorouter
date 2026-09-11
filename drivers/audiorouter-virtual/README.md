@@ -5,9 +5,10 @@ Audio Sample WDM/WaveRT virtual audio driver. The upstream source was pinned to
 Windows-driver-samples commit `197ba2156a60e2b76fcd4820bae594223e91a1e9` and is
 retained here with the Microsoft Public License in `LICENSE-MS-PL.txt`.
 
-The derivative currently exposes the sample's two endpoint families (one render
-speaker and one capture microphone array), with AudioRouter-owned package,
-service, device, endpoint labels, and GUID identities. It is a build target for
+The derivative currently exposes the sample's two endpoint families as
+`AudioRouter - Desktop In` (render) and `AudioRouter - Voice Chat` (capture),
+with AudioRouter-owned package, service, device, endpoint labels, and GUID
+identities. It is a build target for
 the M03 virtual-device work, not a production driver or a claim that the full
 AudioRouter bus lifecycle is implemented.
 

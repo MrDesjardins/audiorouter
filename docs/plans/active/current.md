@@ -7965,6 +7965,13 @@ live-driver evidence.
   `-KeepOutput` is omitted. The M03 acceptance now checks the guard source
   contract before the non-installing WDK build; no driver, endpoint, or audio
   configuration was touched.
+- Aligned the M03 prototype endpoint labels with the product contract on
+  2026-09-11: the render endpoint is `AudioRouter - Desktop In` and the
+  capture endpoint is `AudioRouter - Voice Chat`. Acceptance now checks the
+  INF identity strings before the non-installing WDK build. This changes
+  package metadata only; dynamic bus provisioning, loaded-driver PortCls
+  ownership, production signing, installation, and live endpoint evidence
+  remain open.
 - Implemented the portable REC-06 default segment policy on 2026-09-11. The
   recording layer now calculates the earlier of a 2 GiB RIFF-safe payload
   budget and 24 hours at the negotiated sample rate, and exposes default-bound

@@ -10,6 +10,15 @@ catalog generation, and signability test with zero errors and warnings at
 `c912256d`. No driver was installed or loaded, and no signing, boot-policy,
 service, endpoint, or machine-audio configuration changed.
 
+## 2026-09-11 - Product endpoint labels
+
+The prototype INF now names its render endpoint `AudioRouter - Desktop In` and
+its capture endpoint `AudioRouter - Voice Chat`, matching the virtual-device
+contract. The M03 acceptance checks these identity strings and rebuilt the x64
+package with zero signability errors and warnings. This is package metadata
+qualification only; dynamic bus provisioning, loaded-driver PortCls ownership,
+production signing, installation, and live endpoint evidence remain open.
+
 Date: 2026-09-10
 Environment: Windows x64, Visual Studio 18.9.1 (Community 2026), WDK
 10.0.28000.0, PowerShell, repository `main`
