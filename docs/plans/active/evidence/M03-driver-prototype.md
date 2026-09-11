@@ -331,3 +331,9 @@ The VS 18.9.1/.NET Framework MSBuild invocation also failed before compilation
 when the agent host exposed both case variants of `Path`. The build script now
 clears the duplicate spelling and supplies one temporary `PATH` only to the
 child build process; the system/user environment is not modified.
+
+After the capture-sink wiring was pushed as `07bd1810`, the administrator-
+authorized full safe acceptance chain passed. This rechecked the project
+driver build alongside the existing M00-M08 portable, plugin, shell, release,
+traceability, and documentation gates; no driver was installed or loaded and
+no persistent audio configuration changed.

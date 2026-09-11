@@ -17,9 +17,19 @@ still an evaluation-only sample derivative: no driver was installed or loaded,
 and production PortCls ownership, signed deployment, and live endpoint proof
 remain explicit gates. Evidence: [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
 
-Next action: commit/push this capture-sink data-path slice, then continue the
-next non-blocked core application/driver contract task while preserving the
-loaded-driver and signing gates.
+Verification after `07bd1810`: the administrator-authorized full
+`tests/acceptance/safe-all.ps1` chain passed. It covered the project driver
+build, 31-endpoint read-only inventory, pinned SysVAD qualification, M01/M04,
+M05 (17 files/121 tests), M06 VST3/VST2 fixtures and workers, M07, unsigned
+M08 preparation, 159 requirement mappings, and documentation validation (52
+Markdown files/165 links). The runner removed its 13 run-owned temporary
+children. No driver installation/loading, signing-mode change, plugin/startup
+registration, audio stream, or persistent machine configuration occurred.
+
+Next action: implement the next portable endpoint-worker lifecycle seam around
+the tested accumulator/scheduler boundary, with explicit start/stop/rebind
+state and no automatic replacement of invalidated endpoints. Preserve the
+loaded-driver, signing, installer, and physical-latency gates.
 
 ## Priority shift: owned virtual-driver prototype
 
