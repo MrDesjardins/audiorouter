@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `f88e352b`; the native probe compile was
+The latest implementation checkpoint is `7f7631fb`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -1688,13 +1688,14 @@ action occurred.
   PE architecture and format, then use the contained worker matrix for x64
   processing/state/editor evidence. Do not load AAX or execute Win32 variants.
 
-Next action: integrate a concrete WAV/FLAC recorder worker with the native graph
-and authoritative live recorder state, then repeat the runtime Tauri-shell-to-
-backend request check from an interactive elevated desktop. Do not add a tray
-quit action until worker finalization and runtime request evidence exist.
-Preserve the production driver callback, signing, installer, clean-machine,
-physical-latency, editor, and independent-plugin gates as separate prerequisites
-rather than claiming release completion.
+Next action: perform the administrator-authorized M07 shell RPC/WebView2
+acceptance when an interactive elevated desktop is available, or qualify a
+supplied rights-cleared independent x64 VST2/VST3 effect through the existing
+worker matrix. Preserve the production virtual-driver callback, signing,
+installer, clean-machine, physical-latency, and manual accessibility gates as
+separate prerequisites rather than claiming release completion. Do not install
+or register a driver, change signing mode, register plugins, or alter the
+machine's audio configuration as a substitute for those gates.
 
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
   on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
