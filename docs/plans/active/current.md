@@ -7736,3 +7736,11 @@ live-driver evidence.
   passed. Cleanup removed 13 run-owned temporary children. No driver or
   plugin/startup registration, audio stream, signing-mode change, or
   persistent machine audio configuration occurred.
+- Closed the previously blocked M07 frontend-owned shell RPC acceptance on
+  2026-09-11 with `tests/acceptance/m07-shell-rpc.ps1` in the authorized
+  administrator session. WebView2 initialization reached the authenticated
+  backend pipe and completed `system.describe`; temporary shell/process state
+  was isolated and cleaned. No audio endpoint, driver, startup registration,
+  plugin registration, or persistent machine configuration was changed.
+  Manual Narrator/scaling/usability checks and native audio/driver gates
+  remain separate.

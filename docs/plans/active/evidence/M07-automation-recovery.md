@@ -1198,3 +1198,14 @@ control-plane session owns endpoint bindings yet. Audio routing therefore
 remains unavailable and session commands retain their portable fake-runtime
 behavior. The control suite passed 107 tests and strict Clippy passed. No
 endpoint was opened and no machine audio configuration changed.
+
+## Frontend-owned shell RPC acceptance (2026-09-11)
+
+`tests/acceptance/m07-shell-rpc.ps1` passed in the administrator-authorized
+Windows session. The packaged Tauri shell initialized WebView2, reached the
+authenticated backend pipe, and completed the `system.describe` request.
+The test used temporary pipe and isolated shell/process state, and did not
+open an audio endpoint, install/load a driver, register startup, or change
+persistent machine configuration. This closes the previously blocked shell
+transport acceptance; manual Narrator/scaling/usability acceptance and the
+native audio/driver gates remain separate.
