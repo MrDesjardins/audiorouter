@@ -33,5 +33,5 @@ foreach ($path in @($cl, "$sdkInclude/pluginterfaces/base/ipluginbase.h", $iidSo
 if ($LASTEXITCODE -ne 0) { throw "VST3 worker compile failed with exit code $LASTEXITCODE" }
 & $cl /nologo /EHsc /std:c++20 "/I$vcInclude" "/I$sdkInclude" "/I$include/shared" "/I$include/um" "/I$include/ucrt" /c $iidSource /Fo:$iidObject
 if ($LASTEXITCODE -ne 0) { throw "VST3 SDK IID compile failed with exit code $LASTEXITCODE" }
-& $cl /nologo $object $iidObject /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib bcrypt.lib
+& $cl /nologo $object $iidObject /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib bcrypt.lib wer.lib
 if ($LASTEXITCODE -ne 0) { throw "VST3 worker build failed with exit code $LASTEXITCODE" }

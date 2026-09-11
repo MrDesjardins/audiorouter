@@ -22,6 +22,17 @@ stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
 
+- Hardened unattended VST3-worker fault handling on 2026-09-10. The
+  disposable worker now disables both legacy fault dialogs (`SetErrorMode`)
+  and Windows Error Reporting UI (`WerSetFlags(WER_FAULT_REPORTING_NO_UI)`)
+  before loading third-party code, and links the Windows WER library during
+  the native build. The M06 acceptance passed all repository-owned AGain
+  processing, recovery, timing, state, and shutdown checks afterward. A
+  third-party access violation can still terminate the worker, but it must
+  no longer wait for a person to dismiss an application-error dialog; the
+  supervisor remains responsible for observing termination and quarantining
+  the binary.
+
 - Completion audit on 2026-09-10: the remaining safe/testable evidence is
   exhausted at this host. User-mode native transformation, endpoint loopback,
   process loopback, rate conversion, recorder tapping, VST2/VST3 containment,

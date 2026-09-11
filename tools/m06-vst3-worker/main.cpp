@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <bcrypt.h>
+#include <werapi.h>
 
 #include <algorithm>
 #include <array>
@@ -1153,6 +1154,13 @@ int wmain(int argc, wchar_t** argv) {
         // crash must terminate the worker for the supervisor to quarantine it;
         // Windows Error Reporting UI would otherwise block unattended runs.
         SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+        // SetErrorMode covers the legacy fault dialog, while WER can still
+        // queue a consent/reporting UI on supported Windows builds. Disable
+        // all WER UI in this disposable worker so a plugin fault always
+        // reaches the supervisor as process termination.
+        if (FAILED(WerSetFlags(WER_FAULT_REPORTING_NO_UI))) {
+            throw std::runtime_error("could not disable Windows Error Reporting UI");
+        }
         if (_setmode(_fileno(stdin), _O_BINARY) == -1 ||
             _setmode(_fileno(stdout), _O_BINARY) == -1) {
             throw std::runtime_error("could not set worker pipes to binary mode");
