@@ -700,6 +700,11 @@ public:
             require_result("VST3 component pause for state", component_->setActive(false));
             active_ = false;
         }
+        if (controller_) {
+            StateStream controller_component_stream(component_state.data(), component_state.size());
+            require_result("VST3 controller component state", controller_->setComponentState(
+                &controller_component_stream));
+        }
         StateStream component_stream(component_state.data(), component_state.size());
         require_result("VST3 component setState", component_->setState(&component_stream));
         if (!controller_state.empty()) {

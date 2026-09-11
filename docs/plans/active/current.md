@@ -104,6 +104,15 @@ qualification remains open.
   full-state fixture rather than being mislabeled compatible. No plugin was
   registered and no audio or persistent machine configuration changed.
 
+- Investigated TDR Nova state restoration against the official VST3 hosting
+  sequence on 2026-09-10. The worker now also forwards component state through
+  `IEditController::setComponentState` before applying component/controller
+  state, and pauses processing during the operation. AGain's complete state
+  acceptance still passes. TDR Nova nevertheless returns `kResultFalse` from
+  `IComponent::setState`; the supervisor surfaces that native diagnostic and
+  rejects the full-state qualification. This is recorded as a binary-specific
+  compatibility limitation, not an E_INVALIDARG/device-contention issue.
+
 - Requalified the focused M07 startup boundary on 2026-09-10 with
   `cargo test -p audiorouter-control --locked startup_ -- --nocapture`: all
   four targeted tests passed. Durable startup-plan persistence, bounded
