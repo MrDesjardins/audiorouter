@@ -11,11 +11,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $driverRoot = (Resolve-Path (Join-Path $PSScriptRoot '.')).Path
 $solution = Join-Path $driverRoot 'AudioRouterVirtual.sln'
+$outputWasProvided = [bool]$Output
 
 if (-not $Output) {
     $Output = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-virtual-driver-' + [guid]::NewGuid().ToString('N'))
 }
 $output = [IO.Path]::GetFullPath($Output)
+$outputExistedBeforeBuild = Test-Path -LiteralPath $output
 New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 function Find-MSBuild {
@@ -73,6 +75,13 @@ Write-Host "Driver binary: $($sys[0].FullName)"
 Write-Host "Driver INF: $($inf[0].FullName)"
 Write-Host 'No installation, signing, boot-policy, service, or audio-device action was performed.'
 if (-not $KeepOutput) {
-    Remove-Item -LiteralPath $output -Recurse -Force
-    Write-Host 'Removed disposable build output.'
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $outputIsUnderTemp = $output.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase) -and
+        $output.TrimEnd('\') -ne $tempRoot.TrimEnd('\')
+    if (-not $outputWasProvided -and $outputIsUnderTemp -and -not $outputExistedBeforeBuild) {
+        Remove-Item -LiteralPath $output -Recurse -Force
+        Write-Host 'Removed disposable build output.'
+    } else {
+        Write-Host 'Preserved caller-owned build output; use an automatic temporary output for cleanup.'
+    }
 }

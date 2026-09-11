@@ -3,6 +3,16 @@ $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $build = Join-Path $workspace 'drivers/audiorouter-virtual/build.ps1'
 $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter.cpp'
+$buildScript = Get-Content -LiteralPath $build -Raw
+foreach ($required in @(
+        '$outputWasProvided',
+        '$outputExistedBeforeBuild',
+        '$outputIsUnderTemp',
+        'Preserved caller-owned build output')) {
+    if (-not $buildScript.Contains($required)) {
+        throw "driver build cleanup guard is missing: $required"
+    }
+}
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build
 if ($LASTEXITCODE -ne 0) {

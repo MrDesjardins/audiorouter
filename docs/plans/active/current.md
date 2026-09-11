@@ -7959,6 +7959,12 @@ live-driver evidence.
   machine audio configuration change occurred. Production driver activation,
   signing, installer, clean-machine, physical-latency, manual UI, and
   independent-plugin rights gates remain open.
+- Hardened the M03 build-only output cleanup on 2026-09-11. Automatically
+  generated temporary output is still removed after successful qualification,
+  while caller-provided or pre-existing directories are preserved even when
+  `-KeepOutput` is omitted. The M03 acceptance now checks the guard source
+  contract before the non-installing WDK build; no driver, endpoint, or audio
+  configuration was touched.
 - Implemented the portable REC-06 default segment policy on 2026-09-11. The
   recording layer now calculates the earlier of a 2 GiB RIFF-safe payload
   budget and 24 hours at the negotiated sample rate, and exposes default-bound
