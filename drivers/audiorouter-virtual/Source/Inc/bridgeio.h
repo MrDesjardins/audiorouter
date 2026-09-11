@@ -90,13 +90,14 @@ NTSTATUS
 AudioRouterValidateBridgeBlock(
     _In_ const AR_BRIDGE_BLOCK_HEADER* Header,
     _In_ ULONGLONG ExpectedGeneration,
+    _In_ ULONGLONG MinimumSequence,
     _In_ SIZE_T ViewBytes
 )
 {
     if (Header == NULL ||
         ExpectedGeneration == 0 ||
         Header->Generation != ExpectedGeneration ||
-        Header->Sequence == 0 ||
+        Header->Sequence <= MinimumSequence ||
         Header->Frames == 0 ||
         Header->Frames > AR_BRIDGE_MAX_FRAMES ||
         Header->Channels == 0 ||
@@ -123,6 +124,7 @@ AudioRouterCopyBridgeBlock(
     _In_ const UCHAR* View,
     _In_ SIZE_T ViewBytes,
     _In_ ULONGLONG ExpectedGeneration,
+    _In_ ULONGLONG MinimumSequence,
     _Out_writes_(DestinationCapacitySamples) FLOAT* Destination,
     _In_ SIZE_T DestinationCapacitySamples,
     _Out_ AR_BRIDGE_BLOCK_HEADER* Header
@@ -136,7 +138,7 @@ AudioRouterCopyBridgeBlock(
         reinterpret_cast<const AR_BRIDGE_BLOCK_HEADER*>(
             View + AR_BRIDGE_HEADER_OFFSET);
     NTSTATUS status = AudioRouterValidateBridgeBlock(
-        sourceHeader, ExpectedGeneration, ViewBytes);
+        sourceHeader, ExpectedGeneration, MinimumSequence, ViewBytes);
     if (!NT_SUCCESS(status)) {
         return status;
     }

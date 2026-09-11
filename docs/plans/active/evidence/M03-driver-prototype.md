@@ -40,6 +40,11 @@ to coexist while retaining independent ownership and cleanup. The WDK build
 passed with zero signability errors/warnings; no device was installed or
 loaded.
 
+The bounded driver block validator/copy helper now accepts a consumer sequence
+floor and rejects equal or older blocks, closing the replay case for a stalled
+or reconnecting producer. The updated x64 WDK build passed with zero
+signability errors/warnings. No callback invokes it yet.
+
 The Windows adapter now provides `NativeBridgeDuplexController`, which composes
 the render-source and capture-sink controllers for one matching bus. It rejects
 direction or bus mismatches before opening the device, compensates a successful

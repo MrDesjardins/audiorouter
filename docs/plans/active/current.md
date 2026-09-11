@@ -195,6 +195,11 @@ ownership concurrently without cross-direction contention. Cleanup still
 unmaps and dereferences both slots. The non-installing WDK build passed with
 zero signability errors/warnings.
 
+The callback-side bridge validator and copy helper now require a sequence
+strictly newer than the consumer's supplied floor. This prevents replaying a
+stale valid block after producer stalls or reconnects; the x64 non-installing
+WDK build passed with zero signability errors/warnings.
+
 `NativeBridgeDuplexController` now composes those two directional leases for
 one bus. It validates matching bus identity and required directions before any
 device open, rolls back the first lease if the second claim fails, heartbeats
