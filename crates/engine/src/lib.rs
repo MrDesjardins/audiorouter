@@ -1750,7 +1750,11 @@ impl RuntimeBusScheduler {
             }
         }
         slot.reset(generation, identity);
-        if self.input_ready.push(slot).is_err() {
+        if let Err(slot) = self.input_ready.push(slot) {
+            // A concurrent producer can reserve the last free slot while
+            // another producer fills the ready queue. Preserve the pool
+            // invariant instead of leaking the reserved slot.
+            let _ = self.input_free.push(slot);
             return Err(RuntimeBusSchedulerError::InputQueueFull);
         }
         Ok(())
@@ -1797,7 +1801,10 @@ impl RuntimeBusScheduler {
             }
         }
         slot.reset(generation, identity);
-        if self.output_ready.push(slot).is_err() {
+        if let Err(slot) = self.output_ready.push(slot) {
+            // See the corresponding input path: a failed publication must
+            // return the reserved slot to its pool for future quanta.
+            let _ = self.output_free.push(slot);
             return Err(RuntimeBusSchedulerError::OutputQueueFull);
         }
         Ok(())

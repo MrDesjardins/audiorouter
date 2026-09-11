@@ -1267,9 +1267,7 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
     main.channel_mut(0).unwrap().fill(0.1);
     main.channel_mut(1).unwrap().fill(-0.1);
     let sidechain = audiorouter_engine::AudioBlock::new(1, 4).unwrap();
-    scheduler
-        .try_submit_inputs(generation, identity, &[&main, &sidechain])
-        .expect("submit native VST3 recovery quantum");
+    submit_bus_quantum_with_retry(&scheduler, generation, identity, &[&main, &sidechain]);
     for _ in 0..500 {
         if scheduler.input_ready() == 0 {
             break;
@@ -1283,9 +1281,7 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
         4,
     )
     .unwrap();
-    scheduler
-        .try_submit_inputs(generation, identity, &[&main, &sidechain])
-        .expect("submit native VST3 graph quantum after recovery");
+    submit_bus_quantum_with_retry(&scheduler, generation, identity, &[&main, &sidechain]);
     for _ in 0..500 {
         if scheduler.output_ready() != 0 {
             break;
@@ -1313,6 +1309,27 @@ fn verified_native_vst3_async_bus_worker_bridges_the_graph_scheduler() {
         .zip([0.1; 4])
         .any(|(actual, input)| (actual - input).abs() > 1.0e-5));
     assert!(loop_owner.stop());
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+fn submit_bus_quantum_with_retry(
+    scheduler: &audiorouter_engine::RuntimeBusScheduler,
+    generation: audiorouter_engine::RuntimeGeneration,
+    identity: audiorouter_engine::RuntimeBusQuantumIdentity,
+    inputs: &[&audiorouter_engine::AudioBlock],
+) {
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        match scheduler.try_submit_inputs(generation, identity, inputs) {
+            Ok(()) => return,
+            Err(audiorouter_engine::RuntimeBusSchedulerError::InputQueueFull)
+                if Instant::now() < deadline =>
+            {
+                std::thread::yield_now()
+            }
+            Err(error) => panic!("submit native VST3 graph quantum: {error:?}"),
+        }
+    }
 }
 
 #[cfg(all(windows, feature = "test-fixtures"))]
