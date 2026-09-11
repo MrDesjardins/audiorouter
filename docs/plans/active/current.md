@@ -181,6 +181,13 @@ control-plane responsibilities. A regression proves a session-created tap
 view publishes data that another mapped reader can consume; this remains
 user-mode bridge evidence, not loaded-driver endpoint evidence.
 
+The negotiated hello/driver request now carries an explicit `RenderSource` or
+`CaptureSink` direction (using the existing fixed-layout reserved field). The
+protocol and Windows request encoder validate and preserve the direction, with
+regression coverage for both values. This removes endpoint-label guessing from
+the future two-ended driver handoff; it does not yet provision two live
+endpoints.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable

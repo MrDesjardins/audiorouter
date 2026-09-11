@@ -40,7 +40,7 @@ struct NativeBridgeOpenRequest {
     bus_id_bytes: u16,
     channels: u16,
     frames_per_quantum: u16,
-    reserved: u16,
+    direction: u16,
     sample_rate_hz: u32,
     lease_ms: u32,
     generation: u64,
@@ -493,7 +493,10 @@ fn native_bridge_open_request(
         mapping_bytes,
         reserved2: 0,
         bus_id,
-        reserved: 0,
+        direction: match hello.direction {
+            audiorouter_protocol::AudioBridgeDirection::RenderSource => 1,
+            audiorouter_protocol::AudioBridgeDirection::CaptureSink => 2,
+        },
     })
 }
 
@@ -4729,6 +4732,7 @@ mod tests {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
             bus_id: "bus-main".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
             generation: 9,
             sample_rate_hz: 48_000,
             channels: 2,
@@ -4764,6 +4768,7 @@ mod tests {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
             bus_id: "bus-tap".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
             generation: 11,
             sample_rate_hz: 48_000,
             channels: 2,
@@ -4801,6 +4806,7 @@ mod tests {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
             bus_id: String::new(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
             generation: 1,
             sample_rate_hz: 48_000,
             channels: 2,
@@ -4830,6 +4836,7 @@ mod tests {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
             bus_id: "bus-main".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
             generation: 10,
             sample_rate_hz: 48_000,
             channels: 2,
@@ -4860,6 +4867,7 @@ mod tests {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
             bus_id: "bus-main".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
             generation: 11,
             sample_rate_hz: 48_000,
             channels: 2,
@@ -4874,6 +4882,15 @@ mod tests {
             "bus-main".encode_utf16().collect::<Vec<_>>()
         );
         assert_eq!(request.generation, 11);
+        assert_eq!(request.direction, 2);
+        let mut render_hello = hello.clone();
+        render_hello.direction = audiorouter_protocol::AudioBridgeDirection::RenderSource;
+        assert_eq!(
+            native_bridge_open_request(&render_hello, 0, 0)
+                .unwrap()
+                .direction,
+            1
+        );
         assert!(native_bridge_open_request(
             &audiorouter_protocol::AudioBridgeHello {
                 bus_id: "x".repeat(65),

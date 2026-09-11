@@ -19,6 +19,12 @@ pub const MAX_AUDIO_BRIDGE_LEASE_MS: u32 = 60_000;
 pub const MAX_AUDIO_BRIDGE_PAYLOAD_BYTES: usize =
     MAX_AUDIO_BRIDGE_CHANNELS as usize * MAX_AUDIO_BRIDGE_FRAMES as usize * 4;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum AudioBridgeDirection {
+    RenderSource,
+    CaptureSink,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AudioBridgeContractError {
     UnsupportedMajor(u16),
@@ -29,6 +35,7 @@ pub enum AudioBridgeContractError {
     InvalidChannels,
     InvalidFrames,
     InvalidLease,
+    InvalidDirection,
     InvalidPayloadLength,
     PayloadTooLarge,
 }
@@ -38,6 +45,7 @@ pub struct AudioBridgeHello {
     pub protocol_major: u16,
     pub protocol_minor: u16,
     pub bus_id: String,
+    pub direction: AudioBridgeDirection,
     pub generation: u64,
     pub sample_rate_hz: u32,
     pub channels: u16,
@@ -57,6 +65,9 @@ impl AudioBridgeHello {
         }
         if self.bus_id.len() > MAX_AUDIO_BRIDGE_BUS_ID_BYTES {
             return Err(AudioBridgeContractError::BusIdTooLong);
+        }
+        match self.direction {
+            AudioBridgeDirection::RenderSource | AudioBridgeDirection::CaptureSink => {}
         }
         if self.generation == 0 {
             return Err(AudioBridgeContractError::ZeroGeneration);
@@ -454,6 +465,7 @@ mod tests {
             protocol_major: AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: AUDIO_BRIDGE_PROTOCOL_MINOR,
             bus_id: "bus-1".into(),
+            direction: AudioBridgeDirection::CaptureSink,
             generation: 7,
             sample_rate_hz: 48_000,
             channels: 2,

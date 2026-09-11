@@ -32,6 +32,8 @@ extern "C" NTKERNELAPI NTSTATUS MmUnmapViewInSystemSpace(
 #define AR_BRIDGE_MAX_CHANNELS 2
 #define AR_BRIDGE_MAX_FRAMES 4096
 #define AR_BRIDGE_MAX_LEASE_MS 60000
+#define AR_BRIDGE_DIRECTION_RENDER_SOURCE 1
+#define AR_BRIDGE_DIRECTION_CAPTURE_SINK 2
 #define AR_BRIDGE_HEADER_BYTES 32
 #define AR_BRIDGE_STATE_OFFSET 0
 #define AR_BRIDGE_HEADER_OFFSET 8
@@ -62,7 +64,7 @@ typedef struct _AR_BRIDGE_OPEN_REQUEST {
     USHORT BusIdBytes;
     USHORT Channels;
     USHORT FramesPerQuantum;
-    USHORT Reserved;
+    USHORT Direction;
     ULONG SampleRateHz;
     ULONG LeaseMs;
     ULONGLONG Generation;
@@ -176,6 +178,8 @@ AudioRouterValidateBridgeOpenRequest(
         (Request->BusIdBytes % sizeof(WCHAR)) != 0 ||
         Request->Channels == 0 ||
         Request->Channels > AR_BRIDGE_MAX_CHANNELS ||
+        (Request->Direction != AR_BRIDGE_DIRECTION_RENDER_SOURCE &&
+         Request->Direction != AR_BRIDGE_DIRECTION_CAPTURE_SINK) ||
         Request->FramesPerQuantum == 0 ||
         Request->FramesPerQuantum > AR_BRIDGE_MAX_FRAMES ||
         Request->SampleRateHz < 8000 ||

@@ -165,6 +165,12 @@ session owner, while the controller continues to own lease heartbeat and close.
 A session-level regression proves the tap view publishes a block observed by a
 separate reader; this still does not prove consumption by a loaded driver.
 
+The hello and fixed driver request now carry an explicit bridge direction:
+`RenderSource` or `CaptureSink`. The encoder regression covers both values, and
+the kernel validator rejects any other direction. This is contract evidence
+for separating the two virtual-device ends; it does not create or install the
+two endpoint families.
+
 `Source/Inc/bridgeio.h` now also defines `AudioRouterCopyBridgeBlock`, which
 validates a mapped block and copies its bounded float payload into a
 caller-owned destination without waiting, allocating, logging, or issuing I/O.
