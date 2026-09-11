@@ -2,9 +2,9 @@
 
   AudioRouter virtual-driver broker ABI.
 
-  This header intentionally defines the bounded request contract only. The
-  current prototype does not create a control device or expose these IOCTLs;
-  registration must arrive with a secured device ACL and PnP/remove ownership.
+  This header defines the bounded request contract used by the prototype's
+  secured control device. The device remains build-only until PnP/remove
+  ownership, installation, and production signing are separately qualified.
 --*/
 
 #ifndef _AUDIOROUTERVIRTUAL_BRIDGEIO_H_
