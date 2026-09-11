@@ -7708,3 +7708,9 @@ stream, or machine configuration action occurred.
   registration, audio stream, or persistent machine audio configuration
   occurred. Production driver activation/signing, installer, clean-machine,
   physical-latency, and manual UI gates remain open.
+- Corrected the endpoint inventory accessibility label on 2026-09-11 after
+  enabling inactive-device retrieval: the UI now describes the list as
+  `Audio devices` rather than `Active audio devices`, matching the displayed
+  disabled/unplugged/not-present states. UI tests (122), typecheck, and the
+  disposable alternate-output production build passed; no audio configuration
+  changed.
