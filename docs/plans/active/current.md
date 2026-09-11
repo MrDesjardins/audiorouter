@@ -8216,3 +8216,8 @@ live-driver evidence.
 - Next M04/REC-01 task: expose node identity in persisted library records and
   recording queries where the recorder ID alone is insufficient for graph
   rebinding, then continue per-recorder failure-isolation coverage.
+- Unified REC-01 active-recorder accounting on 2026-09-11: session and
+  node-keyed controllers now share the same eight-recorder arm limit, with
+  strict Clippy, formatting, diff, and documentation checks passing.
+- Next M04/REC-01 task: add mixed legacy/node limit and per-recorder failure
+  isolation regressions, then continue native-independent graph qualification.

@@ -110,6 +110,9 @@ The fixture now contains two node-targeted recorders with separate workers and
 identities, and verifies two independent finalized library rows after both
 JSON-RPC lifecycles complete. This confirms durable multi-sink metadata
 ownership without claiming native graph fan-out.
+The global arm limit now counts legacy session controllers and node-keyed
+controllers through the same bounded eight-recorder calculation, preventing a
+mixed configuration from exceeding REC-01.
 Node-targeted `recorders.create` is now supported. It validates the enabled
 session node before creating a file, attaches the worker and controller to that
 node, and preserves exclusive-file rollback and idempotent replay. A control

@@ -6424,6 +6424,7 @@ impl ControlPlane {
             && self
                 .recorders
                 .values()
+                .chain(self.recorder_node_states.values())
                 .filter(|recorder| recorder_is_active(recorder.state()))
                 .count()
                 >= MAX_ACTIVE_RECORDERS
