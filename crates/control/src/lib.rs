@@ -1937,11 +1937,12 @@ fn method_output_schema(name: &str) -> Value {
         }),
         "recorders.list" => json!({
             "type": "array",
-            "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+            "maxItems": MAX_ACTIVE_RECORDERS,
             "items": {
                 "type": "object",
                 "properties": {
                     "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                    "nodeId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                     "state": { "enum": ["idle", "armed", "recording", "paused", "stopping", "completed", "failed"] },
                     "lastFrame": { "type": ["integer", "null"], "minimum": 0 }
                 },
@@ -6634,8 +6635,26 @@ impl ControlPlane {
                 })
             })
             .collect::<Vec<_>>();
-        recorders
-            .sort_by(|left, right| left["sessionId"].as_str().cmp(&right["sessionId"].as_str()));
+        recorders.extend(
+            self.recorder_node_states
+                .iter()
+                .filter_map(|(node_id, recorder)| {
+                    let session_id = self.recorder_node_sessions.get(node_id)?;
+                    let checkpoint = recorder.checkpoint();
+                    Some(json!({
+                        "sessionId": session_id,
+                        "nodeId": node_id,
+                        "state": recorder_state_name(recorder.state()),
+                        "lastFrame": checkpoint.last_frame
+                    }))
+                }),
+        );
+        recorders.sort_by(|left, right| {
+            left["sessionId"]
+                .as_str()
+                .cmp(&right["sessionId"].as_str())
+                .then_with(|| left["nodeId"].as_str().cmp(&right["nodeId"].as_str()))
+        });
         Ok(Value::Array(recorders))
     }
 
@@ -12476,6 +12495,17 @@ mod tests {
         assert_eq!(plane.recorder_node_workers.len(), 1);
         assert_eq!(plane.dispatch(request).result.unwrap(), first_result);
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        let listed = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(10)),
+                method: "recorders.list".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert_eq!(listed.as_array().unwrap().len(), 1);
+        assert_eq!(listed[0]["nodeId"], "capture-recorder");
 
         for (index, method, frame) in [
             (2, "recorders.arm", None),

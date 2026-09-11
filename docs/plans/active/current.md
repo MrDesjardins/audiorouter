@@ -8196,3 +8196,9 @@ live-driver evidence.
 - Next M04/REC-01/API task: expose node-targeted recorder state and finalized
   library rows through `recorders.list`/recording queries, preserving per-node
   failure isolation and compatibility responses.
+- Extended `recorders.list` on 2026-09-11 with bounded node-targeted state and
+  deterministic ordering. Node-created recorders now appear with `nodeId`
+  before lifecycle control; the create/list/lifecycle regression passes, with
+  strict Clippy, formatting, diff, and documentation checks green.
+- Next M04/REC-01/API task: expose node-targeted finalized library rows and
+  recorder identity in recording queries, preserving compatibility responses.

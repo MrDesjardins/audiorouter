@@ -60,6 +60,9 @@ Recorder lifecycle methods require `sessionId`; they may also receive
 operations use that node's own lifecycle state and idempotency request hash.
 `recorders.create` likewise accepts optional `nodeId`; when supplied, the new
 file worker and lifecycle state are attached to that validated recorder node.
+`recorders.list` reports `nodeId` for node-targeted entries and keeps it absent
+for compatibility session entries; results are bounded and deterministically
+ordered.
 | `startup.get` | `read` | read-only |
 | `startup.plan` | `sessionControl` | plan-only |
 | `startup.apply` | `sessionControl` | mutating; requires an idempotency key |
