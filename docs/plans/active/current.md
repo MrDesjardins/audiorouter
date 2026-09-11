@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `21edfff5`; the native probe compile was
+The latest pushed checkpoint is `64916ea9`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -31,6 +31,13 @@ qualification remains open.
   queued-output recycling without graph deactivation. Focused engine (94)
   and Windows-audio (40) tests, strict Clippy, formatting, and diff checks
   passed. No endpoint or persistent machine configuration was changed.
+
+- Requalified the full locked Rust workspace after the endpoint-recovery
+  reset at pushed head `64916ea9`: all workspace unit/integration tests and
+  doc-tests passed, along with strict all-target Clippy, formatting, and diff
+  checks. This includes the new engine scheduler reset regression and
+  Windows-audio packet-reset regression. No endpoint, driver, plugin
+  registration, or persistent machine configuration was changed.
 
 - Hardened unattended VST3-worker fault handling on 2026-09-10. The
   disposable worker now disables both legacy fault dialogs (`SetErrorMode`)
