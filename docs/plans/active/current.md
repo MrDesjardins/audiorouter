@@ -54,6 +54,13 @@ qualification remains open.
   registration, audio stream, or persistent machine configuration action
   occurred.
 
+- Requalified `tests/acceptance/m07-headless.ps1` on 2026-09-10 at the current
+  implementation: 30 CLI tests, MCP stdio interoperability, 105 control
+  tests, 67 plugin-host tests, 13 worker-process tests, and strict Clippy
+  passed. The acceptance exercised control, persistence, automation, and
+  contained plugin boundaries without opening audio devices or changing
+  drivers, registration, or persistent machine configuration.
+
 - Hardened unattended VST3-worker fault handling on 2026-09-10. The
   disposable worker now disables both legacy fault dialogs (`SetErrorMode`)
   and Windows Error Reporting UI (`WerSetFlags(WER_FAULT_REPORTING_NO_UI)`)
