@@ -345,6 +345,13 @@ qualification remains open.
   embedded frontend resources; the standalone shell lockfile was refreshed to
   include current bridge dependencies. No audio endpoint or persistent machine
   configuration changed.
+- Requalified the non-installing AudioRouter virtual-driver build on 2026-09-11
+  with VS 18.9.1 and WDK 10.0.28000.0. Utilities, Filters, Main, catalog
+  generation, and signability completed with zero errors/warnings; disposable
+  output was removed afterward. No driver installation/loading, signing-mode
+  change, boot-policy change, service registration, endpoint activation, or
+  machine audio configuration occurred. Production signing, install/teardown,
+  clean-machine, and endpoint-owned callback gates remain open.
 - Added M04 RIFF capacity guards on 2026-09-11. `WavWriter` now rejects a
   payload that would exceed the RIFF 32-bit size boundary before writing it,
   and `SegmentedWavRecorder` rejects thresholds that cannot fit the selected
