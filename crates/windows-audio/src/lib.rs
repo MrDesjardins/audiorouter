@@ -1763,6 +1763,21 @@ fn stop_endpoint_pair<C: EndpointLifecycle, R: EndpointLifecycle>(
     render_result.and(capture_result)
 }
 
+fn stop_endpoint_pair_and_reset<C, R, F>(
+    capture: &mut C,
+    render: &mut R,
+    reset: F,
+) -> Result<(), AudioError>
+where
+    C: EndpointLifecycle,
+    R: EndpointLifecycle,
+    F: FnOnce() -> Result<(), AudioError>,
+{
+    let endpoint_result = stop_endpoint_pair(capture, render);
+    let reset_result = reset();
+    endpoint_result.and(reset_result)
+}
+
 impl WasapiEndpointWorker {
     /// Compose stopped, already-validated endpoint clients with their bridge.
     /// The clients must have matching shape validated by the bridge
@@ -1827,9 +1842,7 @@ impl WasapiEndpointWorker {
             .render
             .as_mut()
             .ok_or(AudioError::ProcessingStateUnavailable)?;
-        let endpoint_result = stop_endpoint_pair(capture, render);
-        let reset_result = self.bridge.reset_stream().map(|_| ());
-        endpoint_result.and(reset_result)
+        stop_endpoint_pair_and_reset(capture, render, || self.bridge.reset_stream().map(|_| ()))
     }
 
     /// Stop and discard both old clients, refresh the monitor, and open only
@@ -4905,7 +4918,13 @@ mod tests {
         render.fail_stop = true;
         assert!(start_endpoint_pair(&mut capture, &mut render).is_ok());
         assert_eq!((capture.starts, render.starts), (2, 2));
-        assert!(stop_endpoint_pair(&mut capture, &mut render).is_err());
+        let mut reset_called = false;
+        assert!(stop_endpoint_pair_and_reset(&mut capture, &mut render, || {
+            reset_called = true;
+            Ok(())
+        })
+        .is_err());
+        assert!(reset_called);
         assert_eq!((capture.stops, render.stops), (2, 1));
     }
 

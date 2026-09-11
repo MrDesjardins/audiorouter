@@ -7589,6 +7589,11 @@ stream, or machine configuration action occurred.
   failure rollback, both-stop attempts, and first-error preservation. The
   focused Windows-audio suite passes 60 tests, with strict Clippy, formatting,
   and diff checks passing. No endpoint or machine audio configuration changed.
+- Hardened the lifecycle transaction on 2026-09-11: stopping attempts both
+  endpoints and always invokes the bridge reset afterward, while preserving
+  the first endpoint failure. An injected regression proves reset still runs
+  when render stop fails. Windows-audio (60), strict Clippy, formatting, and
+  diff checks passed; no endpoint or machine audio configuration changed.
 - Next M00/M02 task: use the seam to add injected start/stop/reset failure
   tests and bounded telemetry assertions, then integrate the owner with the
   control session only after exact bindings and production driver activation
