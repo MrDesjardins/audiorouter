@@ -1719,6 +1719,50 @@ pub struct WasapiEndpointWorker {
 /// Waiting for the next event remains outside the pump loop.
 pub const MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE: u32 = 64;
 
+trait EndpointLifecycle {
+    fn start(&mut self) -> Result<(), AudioError>;
+    fn stop(&mut self) -> Result<(), AudioError>;
+}
+
+impl EndpointLifecycle for SharedCapture {
+    fn start(&mut self) -> Result<(), AudioError> {
+        SharedCapture::start(self)
+    }
+    fn stop(&mut self) -> Result<(), AudioError> {
+        SharedCapture::stop(self)
+    }
+}
+
+impl EndpointLifecycle for SharedRender {
+    fn start(&mut self) -> Result<(), AudioError> {
+        SharedRender::start(self)
+    }
+    fn stop(&mut self) -> Result<(), AudioError> {
+        SharedRender::stop(self)
+    }
+}
+
+fn start_endpoint_pair<C: EndpointLifecycle, R: EndpointLifecycle>(
+    capture: &mut C,
+    render: &mut R,
+) -> Result<(), AudioError> {
+    capture.start()?;
+    if let Err(error) = render.start() {
+        let _ = capture.stop();
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn stop_endpoint_pair<C: EndpointLifecycle, R: EndpointLifecycle>(
+    capture: &mut C,
+    render: &mut R,
+) -> Result<(), AudioError> {
+    let render_result = render.stop();
+    let capture_result = capture.stop();
+    render_result.and(capture_result)
+}
+
 impl WasapiEndpointWorker {
     /// Compose stopped, already-validated endpoint clients with their bridge.
     /// The clients must have matching shape validated by the bridge
@@ -1758,15 +1802,11 @@ impl WasapiEndpointWorker {
             .capture
             .as_mut()
             .ok_or(AudioError::ProcessingStateUnavailable)?;
-        capture.start()?;
         let render = self
             .render
             .as_mut()
             .ok_or(AudioError::ProcessingStateUnavailable)?;
-        if let Err(error) = render.start() {
-            let _ = capture.stop();
-            return Err(error);
-        }
+        start_endpoint_pair(capture, render)?;
         self.running = true;
         Ok(())
     }
@@ -1779,18 +1819,17 @@ impl WasapiEndpointWorker {
             return self.bridge.reset_stream().map(|_| ());
         }
         self.running = false;
-        let render_result = self
-            .render
-            .as_mut()
-            .ok_or(AudioError::ProcessingStateUnavailable)
-            .and_then(SharedRender::stop);
-        let capture_result = self
+        let capture = self
             .capture
             .as_mut()
-            .ok_or(AudioError::ProcessingStateUnavailable)
-            .and_then(SharedCapture::stop);
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
+        let render = self
+            .render
+            .as_mut()
+            .ok_or(AudioError::ProcessingStateUnavailable)?;
+        let endpoint_result = stop_endpoint_pair(capture, render);
         let reset_result = self.bridge.reset_stream().map(|_| ());
-        render_result.and(capture_result).and(reset_result)
+        endpoint_result.and(reset_result)
     }
 
     /// Stop and discard both old clients, refresh the monitor, and open only
@@ -4815,6 +4854,59 @@ mod tests {
         assert_eq!(result.packets, 1);
         assert_eq!(result.processed_quanta, 1);
         assert_eq!(last_sequence, 7);
+    }
+
+    #[test]
+    fn injected_endpoint_lifecycle_rolls_back_and_stops_both_clients() {
+        struct Probe {
+            starts: u8,
+            stops: u8,
+            fail_start: bool,
+            fail_stop: bool,
+        }
+
+        impl EndpointLifecycle for Probe {
+            fn start(&mut self) -> Result<(), AudioError> {
+                self.starts += 1;
+                if self.fail_start {
+                    Err(AudioError::ProcessingStateUnavailable)
+                } else {
+                    Ok(())
+                }
+            }
+
+            fn stop(&mut self) -> Result<(), AudioError> {
+                self.stops += 1;
+                if self.fail_stop {
+                    Err(AudioError::ProcessingStateUnavailable)
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let mut capture = Probe {
+            starts: 0,
+            stops: 0,
+            fail_start: false,
+            fail_stop: false,
+        };
+        let mut render = Probe {
+            starts: 0,
+            stops: 0,
+            fail_start: true,
+            fail_stop: false,
+        };
+        assert!(start_endpoint_pair(&mut capture, &mut render).is_err());
+        assert_eq!((capture.starts, capture.stops), (1, 1));
+        assert_eq!(render.starts, 1);
+
+        render.fail_start = false;
+        render.fail_stop = true;
+        assert!(start_endpoint_pair(&mut capture, &mut render).is_ok());
+        assert_eq!((capture.starts, render.starts), (2, 2));
+        assert!(stop_endpoint_pair(&mut capture, &mut render).is_err());
+        assert_eq!((capture.stops, render.stops), (2, 1));
     }
 
     #[test]

@@ -7583,6 +7583,12 @@ stream, or machine configuration action occurred.
   consumed as silence while the sequence floor remains unchanged. Windows-
   audio (59), strict Clippy, formatting, and diff checks passed. This is
   injected portable-path evidence, not live-driver evidence.
+- Added an injected endpoint lifecycle seam on 2026-09-11. Production
+  `SharedCapture` and `SharedRender` use the same pair-transition helpers as
+  disposable lifecycle probes; tests prove capture-first startup, render
+  failure rollback, both-stop attempts, and first-error preservation. The
+  focused Windows-audio suite passes 60 tests, with strict Clippy, formatting,
+  and diff checks passing. No endpoint or machine audio configuration changed.
 - Next M00/M02 task: use the seam to add injected start/stop/reset failure
   tests and bounded telemetry assertions, then integrate the owner with the
   control session only after exact bindings and production driver activation
