@@ -1453,6 +1453,9 @@ impl WasapiEndpointWorker {
     /// available packets. A packet-less pump ends the loop; this method never
     /// waits for a future packet or retries an invalidated endpoint.
     pub fn pump_available(&mut self, max_packets: u32) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
         let mut total = WasapiSchedulerPump::default();
         let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
         for _ in 0..budget {

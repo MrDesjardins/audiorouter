@@ -157,6 +157,11 @@ stop attempts even when one stop reports an error; repeated stop also resets
 staged bridge audio. The focused 54-test Windows-audio suite, strict Clippy,
 formatting, and diff checks passed. No endpoint was opened by the checks.
 
+The bounded packet-drain entry point was also hardened to reject stopped
+workers even when the requested packet budget is zero, keeping all pump APIs
+consistent with the fail-closed lifecycle contract. The focused 54-test suite,
+strict Clippy, formatting, and diff checks passed.
+
 The complete administrator-authorized safe acceptance chain was requalified at
 `830152dc` after this worker implementation. M00-M08 project, portable DSP,
 UI, plugin, headless, release, traceability, and documentation checks passed;

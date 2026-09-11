@@ -81,6 +81,10 @@ clients even when a stop/reset call reports an error, and an idempotent stop
 still clears staged bridge audio. Focused Windows-audio coverage remains 54
 tests, with strict package Clippy, formatting, and diff checks passing.
 
+Closed a consistency gap in `pump_available`: every worker pump entry point,
+including a zero-budget call, now rejects a stopped worker before doing any
+work. The focused 54-test suite and strict checks passed.
+
 ## Priority shift: owned virtual-driver prototype
 
 The user has explicitly redirected execution from extended VST3 qualification to
