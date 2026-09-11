@@ -7728,3 +7728,11 @@ production endpoint-owned callback, signed/installable driver, installer,
 clean-machine, physical-latency, manual UI, and independent plugin rights
 gates remain explicitly open; do not represent this portable progress as
 live-driver evidence.
+- Requalified the guarded `tests/acceptance/safe-all.ps1` chain at pushed
+  head `53dfe1b5` on 2026-09-11 after recorder finalization hardening. M00/M03
+  toolchain and non-installing driver build, M04 DSP/recording, M05 UI (122
+  tests), M06 VST3/VST2 workers, M07, unsigned M08 artifacts, 159 traceability
+  IDs, and documentation validation (52 Markdown files, 167 local links)
+  passed. Cleanup removed 13 run-owned temporary children. No driver or
+  plugin/startup registration, audio stream, signing-mode change, or
+  persistent machine audio configuration occurred.
