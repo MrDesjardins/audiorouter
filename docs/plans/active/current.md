@@ -85,6 +85,14 @@ qualification remains open.
   no administrator token; no audio endpoint, startup registration, or machine
   configuration was changed.
 
+- Retried `tests/acceptance/m07-shell-rpc.ps1` at the current head on
+  2026-09-10 through the approved elevated command context. The child still
+  reported the same medium-integrity token and stopped before WebView/backend
+  launch; this is an environment/UAC prerequisite, not a shell RPC failure.
+  The independent shell tests remain green, and no temporary database, pipe,
+  audio endpoint, startup registration, or persistent machine configuration
+  was changed.
+
 - Implemented and pushed bounded native-worker diagnostics in `3577e36d`.
   The Rust supervisor now drains at most 8 KiB of worker stderr on a control
   thread and appends it to startup/response I/O failures; realtime processing
