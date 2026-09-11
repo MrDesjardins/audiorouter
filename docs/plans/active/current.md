@@ -7967,3 +7967,12 @@ live-driver evidence.
   strict Clippy, formatting, and documentation validation passed; JSON-RPC
   recorder configuration, native graph attachment, and production endpoint
   ownership remain open.
+- Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
+  chain at pushed head `72c7b055` on 2026-09-11 after REC-06. The same M00,
+  M03, M04, M05, M06, M07, M08, traceability, documentation, and cleanup gates
+  passed: 31 read-only endpoints, 124 UI tests, 159 traceability IDs, and 52
+  Markdown files/167 local links. No driver installation/loading, signing or
+  boot-policy change, plugin/startup registration, live stream, or persistent
+  machine audio configuration change occurred. Production driver activation,
+  signing, installer, clean-machine, physical-latency, manual UI, and
+  independent-plugin rights gates remain open.

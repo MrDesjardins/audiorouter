@@ -1,5 +1,19 @@
 # M08 release evidence
 
+## 2026-09-11 - REC-06 requalification at `72c7b055`
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed at pushed
+head `72c7b055` after the REC-06 default segment-policy implementation. M00
+toolchain/native checks, the non-installing AudioRouter driver build,
+read-only 31-endpoint inventory, disposable SysVAD qualification, M01, M04,
+M05 (124 UI tests), M06 VST3 and VST2 workers, M07, unsigned M08 artifacts,
+159 traceability IDs, and documentation validation (52 Markdown files/167
+local links) all passed. Cleanup removed 13 run-owned temporary children. No
+driver installation/loading, signing or boot-policy change, plugin/startup
+registration, live stream, or persistent machine audio configuration change
+occurred. Production driver activation/signing, installer, clean-machine,
+physical-latency, manual UI, and independent-plugin rights gates remain open.
+
 ## 2026-09-08 - Full guarded chain at identity API head
 
 The complete `safe-all.ps1` chain passed at pushed head `4475a5d0`: VS/WDK
