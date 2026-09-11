@@ -471,6 +471,17 @@ pub struct NativeBridgeDuplexController {
 }
 
 #[cfg(windows)]
+fn run_duplex_operation<E, F, G>(first: F, second: G) -> Result<(), E>
+where
+    F: FnOnce() -> Result<(), E>,
+    G: FnOnce() -> Result<(), E>,
+{
+    let first_result = first();
+    let second_result = second();
+    first_result.and(second_result)
+}
+
+#[cfg(windows)]
 impl NativeBridgeDuplexController {
     fn validate_hellos(
         render_hello: &audiorouter_protocol::AudioBridgeHello,
@@ -536,9 +547,7 @@ impl NativeBridgeDuplexController {
         // Refresh both directional leases even when one side has already
         // failed. The surviving direction must not be left to expire merely
         // because its sibling reported an error first.
-        let render_result = self.render.heartbeat();
-        let capture_result = self.capture.heartbeat();
-        render_result.and(capture_result)
+        run_duplex_operation(|| self.render.heartbeat(), || self.capture.heartbeat())
     }
 
     pub fn render_read_into(
@@ -567,9 +576,7 @@ impl NativeBridgeDuplexController {
         // Release both kernel leases on every close path. Evaluate the
         // results separately so a failure on one direction cannot skip the
         // other; retain the existing capture-first error precedence.
-        let capture_result = capture.close();
-        let render_result = render.close();
-        capture_result.and(render_result)
+        run_duplex_operation(|| capture.close(), || render.close())
     }
 }
 
@@ -4913,6 +4920,40 @@ mod tests {
         assert!(bridge.render_pending[..bridge.bytes_per_frame]
             .iter()
             .all(|byte| *byte == 0x5a));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn duplex_operation_attempts_both_directions_and_keeps_first_error() {
+        let calls = std::cell::RefCell::new(Vec::new());
+        let result = run_duplex_operation(
+            || {
+                calls.borrow_mut().push("render");
+                Err::<(), _>("render failed")
+            },
+            || {
+                calls.borrow_mut().push("capture");
+                Ok::<(), &str>(())
+            },
+        );
+
+        assert_eq!(*calls.borrow(), ["render", "capture"]);
+        assert_eq!(result, Err("render failed"));
+
+        let calls = std::cell::RefCell::new(Vec::new());
+        let result = run_duplex_operation(
+            || {
+                calls.borrow_mut().push("capture");
+                Err::<(), _>("capture failed")
+            },
+            || {
+                calls.borrow_mut().push("render");
+                Err::<(), &str>("render failed")
+            },
+        );
+
+        assert_eq!(*calls.borrow(), ["capture", "render"]);
+        assert_eq!(result, Err("capture failed"));
     }
 
     #[test]

@@ -7628,3 +7628,8 @@ stream, or machine configuration action occurred.
   sibling lease to timeout. Windows-audio (61), strict Clippy, formatting, and
   diff checks passed. This is lifecycle code only; no driver, endpoint, or
   machine audio configuration was activated.
+- Added a focused duplex-operation regression on 2026-09-11 proving both
+  directional callbacks execute when either side fails and the first error is
+  preserved. The Windows-audio suite now passes 62 tests; strict Clippy,
+  formatting, and diff checks pass. No endpoint, driver, plugin, or machine
+  audio configuration was touched.
