@@ -7751,3 +7751,9 @@ live-driver evidence.
   finalization. Control tests (107), strict Clippy, formatting, and diff
   checks passed; the full guarded chain remains recorded at `53dfe1b5` and
   was not rerun for this follow-up-only correction.
+- Revalidated the full locked workspace at pushed head `34d60cb6` on
+  2026-09-11 after the recorder correction. All workspace test suites passed,
+  including control (107), Windows-audio (62, with 11 expected native-fixture
+  skips), storage (80), plugin-host (67), and worker-process coverage.
+  Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
+  plugin, driver, or machine audio configuration was changed.
