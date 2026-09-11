@@ -248,6 +248,13 @@ stream, or persistent machine audio configuration has been performed. The
 gated x64 VST2 boundary is implemented, but rights/editor/release
 qualification remains open.
 
+- Requalified the complete locked workspace after the directional and replay
+  bridge changes on 2026-09-10 with `cargo test --workspace --locked
+  -- --test-threads=1`: CLI/MCP, control, domain, DSP, engine, plugin host and
+  worker-process, protocol, recording, storage, transport, and Windows-audio
+  suites plus doc-tests passed. No endpoint, driver, plugin registration, or
+  persistent machine audio configuration changed.
+
 - Fixed and pushed `f88e352b` on 2026-09-10 after the complete guarded chain
   exposed a real asynchronous recovery race: the test observed
   `InputQueueFull` after the owner had emptied `input_ready` but before it had

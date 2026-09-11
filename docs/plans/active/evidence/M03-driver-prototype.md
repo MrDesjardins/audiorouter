@@ -61,6 +61,12 @@ sessions are producers and render sessions are consumers. Wrong-direction
 write, read, and producer-factory calls fail before touching the lease or
 mapping. The focused Windows-audio suite passes 53 tests.
 
+The complete locked workspace was then requalified sequentially with
+`cargo test --workspace --locked -- --test-threads=1`; all workspace suites and
+doc-tests passed. This confirms the bridge contract changes did not break the
+control, engine, DSP, plugin, recording, storage, transport, CLI, or MCP
+consumers. No endpoint or driver was opened.
+
 The render-source reader now accepts a caller-supplied last-consumed sequence
 through `read_into_after` at every adapter layer. Equal or older blocks return
 the existing sequence-regression error, matching the kernel replay policy.
