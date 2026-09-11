@@ -33,6 +33,11 @@ extern "C" NTKERNELAPI NTSTATUS MmUnmapViewInSystemSpace(
 #define AR_BRIDGE_MAX_FRAMES 4096
 #define AR_BRIDGE_MAX_LEASE_MS 60000
 #define AR_BRIDGE_HEADER_BYTES 32
+#define AR_BRIDGE_STATE_OFFSET 0
+#define AR_BRIDGE_HEADER_OFFSET 8
+#define AR_BRIDGE_PAYLOAD_OFFSET 32
+#define AR_BRIDGE_MAX_PAYLOAD_BYTES \
+    (AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES * sizeof(float))
 
 #define IOCTL_AUDIOROUTER_BRIDGE_OPEN \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
@@ -74,6 +79,37 @@ typedef struct _AR_BRIDGE_BLOCK_HEADER {
     USHORT Channels;
     ULONG PayloadBytes;
 } AR_BRIDGE_BLOCK_HEADER, *PAR_BRIDGE_BLOCK_HEADER;
+
+// This validator is safe to call from a future callback-owned mapped-view
+// reader: it performs only bounded arithmetic and scalar reads. It does not
+// acquire a lock, allocate, access an endpoint, or issue an IOCTL.
+__forceinline
+NTSTATUS
+AudioRouterValidateBridgeBlock(
+    _In_ const AR_BRIDGE_BLOCK_HEADER* Header,
+    _In_ ULONGLONG ExpectedGeneration,
+    _In_ SIZE_T ViewBytes
+)
+{
+    if (Header == NULL ||
+        ExpectedGeneration == 0 ||
+        Header->Generation != ExpectedGeneration ||
+        Header->Sequence == 0 ||
+        Header->Frames == 0 ||
+        Header->Frames > AR_BRIDGE_MAX_FRAMES ||
+        Header->Channels == 0 ||
+        Header->Channels > AR_BRIDGE_MAX_CHANNELS) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    SIZE_T payloadBytes = static_cast<SIZE_T>(Header->Frames) *
+        static_cast<SIZE_T>(Header->Channels) * sizeof(float);
+    if (payloadBytes > AR_BRIDGE_MAX_PAYLOAD_BYTES ||
+        Header->PayloadBytes != payloadBytes ||
+        ViewBytes < AR_BRIDGE_PAYLOAD_OFFSET + payloadBytes) {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    return STATUS_SUCCESS;
+}
 
 // Validation is deliberately pure and bounded so the eventual dispatch path
 // can reject malformed input before touching a device, mapping, or stream.

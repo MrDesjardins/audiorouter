@@ -148,6 +148,13 @@ The temporary section regression maps the section handle and observes generation
 bytes written through the broker region view, proving the two views share the
 expected file-backed bytes. It performs no device or audio access.
 
+The driver ABI now includes `AudioRouterValidateBridgeBlock`, a pure bounded
+validator intended for the future mapped callback reader. It checks expected
+generation, nonzero sequence, PCM shape, exact float payload length, and view
+bounds without locks, allocation, endpoint access, or IOCTLs. The updated WDK
+build passed with zero signability errors/warnings, and the Windows-audio suite
+passed 48 tests.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded

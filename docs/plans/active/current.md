@@ -138,6 +138,13 @@ verifies that it observes generation bytes written through the bounded region
 view. This proves file-backed section coherence without opening an audio
 endpoint; it does not prove loaded-driver realtime payload consumption.
 
+The driver ABI now includes `AudioRouterValidateBridgeBlock`, a callback-safe
+pure validator for mapped generation, sequence, frame/channel shape, exact
+float payload size, and view bounds. It takes no locks, allocates nothing, and
+does not issue IOCTLs. The updated WDK build passed with zero signability
+errors/warnings, while the 48-test Windows-audio suite and strict Clippy stayed
+green.
+
 `NativeBridgeSectionHandle` now creates and retains a bounded file-backed
 Windows section for the temporary bridge file. `NativeBridgeController` retains
 the handle and passes its exact value and mapping size through mapped open,
