@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `31fdc8de`; the native probe compile was
+The latest pushed checkpoint is `ae9c969a`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -75,6 +75,15 @@ qualification remains open.
   Cleanup removed 13 run-owned temporary children. No driver installation or
   loading, signing-mode change, plugin/startup registration, audio stream, or
   persistent machine audio configuration action occurred.
+
+- Requalified the independent native-shell contract at `ae9c969a` on
+  2026-09-10 with `cargo test --manifest-path src-tauri/Cargo.toml --locked`:
+  all 7 shell tests passed, including authenticated named-pipe forwarding,
+  session-script escaping, tray status, recording status, and probe-marker
+  containment. Shell all-target Clippy passed with warnings denied. The shell
+  acceptance script still stops before WebView launch because this process has
+  no administrator token; no audio endpoint, startup registration, or machine
+  configuration was changed.
 
 - Implemented and pushed bounded native-worker diagnostics in `3577e36d`.
   The Rust supervisor now drains at most 8 KiB of worker stderr on a control

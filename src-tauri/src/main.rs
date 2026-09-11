@@ -1,7 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
-use tauri::{menu::{Menu, MenuItem}, tray::TrayIconBuilder, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    Manager, State, WebviewUrl, WebviewWindowBuilder,
+};
 
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 
@@ -97,7 +101,10 @@ fn tray_status_text(response: &JsonRpcResponse) -> String {
         .and_then(|value| value.get("muted"))
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(true);
-    format!("Sessions: {active} active · Mic: {}", if muted { "muted" } else { "unmuted" })
+    format!(
+        "Sessions: {active} active · Mic: {}",
+        if muted { "muted" } else { "unmuted" }
+    )
 }
 
 fn tray_recording_text(response: &JsonRpcResponse) -> String {
@@ -143,18 +150,29 @@ fn main() {
             let session_script = session_script.clone();
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
             let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
-            let refresh_status = MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
-            let status = MenuItem::with_id(app, "status", "Status unavailable", false, None::<&str>)?;
-            let recordings = MenuItem::with_id(app, "recordings", "Live recorders: unavailable", false, None::<&str>)?;
+            let refresh_status =
+                MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
+            let status =
+                MenuItem::with_id(app, "status", "Status unavailable", false, None::<&str>)?;
+            let recordings = MenuItem::with_id(
+                app,
+                "recordings",
+                "Live recorders: unavailable",
+                false,
+                None::<&str>,
+            )?;
             let pipe_name = tray_pipe_name.clone();
             let status_for_handler = status.clone();
             let recordings_for_handler = recordings.clone();
-            let menu = Menu::with_items(app, &[&open, &close, &refresh_status, &status, &recordings])?;
+            let menu =
+                Menu::with_items(app, &[&open, &close, &refresh_status, &status, &recordings])?;
             TrayIconBuilder::with_id("audiorouter")
                 .menu(&menu)
                 .tooltip("AudioRouter")
                 .on_menu_event(move |app, event| {
-                    let Some(window) = app.get_webview_window("main") else { return; };
+                    let Some(window) = app.get_webview_window("main") else {
+                        return;
+                    };
                     match event.id().as_ref() {
                         "open" => {
                             let _ = window.show();
@@ -248,8 +266,14 @@ mod tests {
             result: Some(json!({ "activeSessionCount": 2, "privacyMute": { "muted": true } })),
             error: None,
         };
-        assert_eq!(tray_status_text(&response), "Sessions: 2 active · Mic: muted");
-        let unavailable = JsonRpcResponse { result: None, ..response };
+        assert_eq!(
+            tray_status_text(&response),
+            "Sessions: 2 active · Mic: muted"
+        );
+        let unavailable = JsonRpcResponse {
+            result: None,
+            ..response
+        };
         assert_eq!(tray_status_text(&unavailable), "Status unavailable");
     }
 
@@ -264,7 +288,10 @@ mod tests {
             ])),
             error: None,
         };
-        assert_eq!(tray_recording_text(&response), "Live recorders: 2 active · 1 paused · 1 armed · 1 failed");
+        assert_eq!(
+            tray_recording_text(&response),
+            "Live recorders: 2 active · 1 paused · 1 armed · 1 failed"
+        );
     }
 
     #[test]
