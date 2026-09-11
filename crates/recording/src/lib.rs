@@ -1965,6 +1965,261 @@ pub struct WavRecorder<W> {
     next_frame: Option<u64>,
 }
 
+/// Queue-backed WAV recorder that rotates caller-owned destinations at an
+/// exact frame boundary. The factory is invoked only on the worker thread;
+/// it may create the next exclusive file without involving the audio path.
+/// Each segment is finalized before the next one is opened, and the bounded
+/// frame policy prevents a WAV segment from approaching the RIFF size limit.
+pub struct SegmentedWavRecorder<W, F>
+where
+    F: FnMut(u32) -> Result<W, RecordingError>,
+{
+    writer: Option<WavWriter<W>>,
+    factory: F,
+    outputs: Vec<W>,
+    controller: RecorderController,
+    next_frame: Option<u64>,
+    segment_frames: u64,
+    max_segment_frames: u64,
+    format: WavFormat,
+    channels: u16,
+    sample_rate: u32,
+    dither: bool,
+    metadata: WavMetadata,
+    next_segment: u32,
+    manual_split: Option<u64>,
+}
+
+impl<W: Write + Seek, F: FnMut(u32) -> Result<W, RecordingError>> SegmentedWavRecorder<W, F> {
+    pub fn new(
+        output: W,
+        factory: F,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+        max_segment_frames: u64,
+    ) -> Result<Self, RecordingError> {
+        Self::new_with_metadata(
+            output,
+            factory,
+            format,
+            channels,
+            sample_rate,
+            dither,
+            max_segment_frames,
+            WavMetadata::default(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_metadata(
+        output: W,
+        factory: F,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+        max_segment_frames: u64,
+        metadata: WavMetadata,
+    ) -> Result<Self, RecordingError> {
+        if max_segment_frames == 0 {
+            return Err(RecordingError::TooManyFrames);
+        }
+        let writer = WavWriter::new(output, format, channels, sample_rate, dither)?;
+        metadata.validate()?;
+        Ok(Self {
+            writer: Some(writer),
+            factory,
+            outputs: Vec::new(),
+            controller: RecorderController::new(),
+            next_frame: None,
+            segment_frames: 0,
+            max_segment_frames,
+            format,
+            channels,
+            sample_rate,
+            dither,
+            metadata,
+            next_segment: 1,
+            manual_split: None,
+        })
+    }
+
+    pub fn state(&self) -> RecorderState {
+        self.controller.state()
+    }
+
+    pub fn checkpoint(&self) -> RecorderCheckpoint {
+        self.controller.checkpoint()
+    }
+
+    pub fn arm(&mut self) -> Result<(), RecorderError> {
+        self.controller.arm()
+    }
+
+    pub fn start(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.start(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    pub fn pause(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.pause(frame)
+    }
+
+    pub fn resume(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.resume(frame)?;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+
+    /// Requests a manual split. The actual file rotation occurs when the
+    /// worker reaches this frame, so queued audio before the boundary remains
+    /// in the correct segment.
+    pub fn split(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.split(frame)?;
+        self.manual_split = Some(frame);
+        Ok(())
+    }
+
+    pub fn stop(&mut self, frame: u64) -> Result<(), RecorderError> {
+        self.controller.stop(frame)
+    }
+
+    pub fn drain_queue(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        self.drain_queue_with_checkpoint(queue, maximum_chunks, |_| Ok(()))
+    }
+
+    pub fn drain_queue_with_checkpoint<P>(
+        &mut self,
+        queue: &RecordingQueue,
+        maximum_chunks: usize,
+        mut persist: P,
+    ) -> Result<usize, RecordingError>
+    where
+        P: FnMut(&RecorderCheckpoint) -> Result<(), RecordingError>,
+    {
+        if !matches!(
+            self.controller.state(),
+            RecorderState::Recording | RecorderState::Stopping
+        ) {
+            return Err(RecordingError::NotRecording);
+        }
+        let mut drained = 0;
+        while drained < maximum_chunks {
+            let Some(chunk) = queue.try_pop() else { break };
+            let channels = usize::from(self.channels);
+            let expected = self.next_frame.unwrap_or(chunk.start_frame);
+            if chunk.start_frame != expected || chunk.samples.len() % channels != 0 {
+                self.controller.fail();
+                return Err(RecordingError::FrameDiscontinuity {
+                    expected,
+                    actual: chunk.start_frame,
+                });
+            }
+            let mut offset = 0;
+            while offset < chunk.samples.len() {
+                let frame = self.next_frame.unwrap_or(expected);
+                if self.manual_split == Some(frame) {
+                    self.rotate(frame)?;
+                    self.manual_split = None;
+                } else if self.segment_frames == self.max_segment_frames {
+                    self.controller
+                        .split(frame)
+                        .map_err(RecordingError::Controller)?;
+                    self.rotate(frame)?;
+                }
+                let remaining_frames = (chunk.samples.len() - offset) / channels;
+                let room = (self.max_segment_frames - self.segment_frames) as usize;
+                let frames = remaining_frames.min(room.max(1));
+                let end_offset = offset + frames * channels;
+                self.writer
+                    .as_mut()
+                    .ok_or(RecordingError::NotRecording)?
+                    .write_interleaved(&chunk.samples[offset..end_offset])?;
+                let end = frame
+                    .checked_add(frames as u64)
+                    .ok_or(RecordingError::TooManyFrames)?;
+                self.controller
+                    .advance(end)
+                    .map_err(RecordingError::Controller)?;
+                self.next_frame = Some(end);
+                self.segment_frames = self
+                    .segment_frames
+                    .checked_add(frames as u64)
+                    .ok_or(RecordingError::TooManyFrames)?;
+                offset = end_offset;
+            }
+            self.writer
+                .as_mut()
+                .ok_or(RecordingError::NotRecording)?
+                .output
+                .flush()?;
+            persist(&self.controller.checkpoint())?;
+            queue.recycle(chunk);
+            drained += 1;
+        }
+        Ok(drained)
+    }
+
+    pub fn stop_and_drain(
+        &mut self,
+        queue: &RecordingQueue,
+        frame: u64,
+        maximum_chunks: usize,
+    ) -> Result<usize, RecordingError> {
+        let drained = self.drain_queue(queue, maximum_chunks)?;
+        if !queue.is_empty() {
+            return Err(RecordingError::QueueNotEmpty);
+        }
+        if self.controller.state() != RecorderState::Stopping {
+            self.controller
+                .request_stop(frame)
+                .map_err(RecordingError::Controller)?;
+        }
+        self.controller
+            .complete()
+            .map_err(RecordingError::Controller)?;
+        Ok(drained)
+    }
+
+    pub fn finish(mut self) -> Result<Vec<W>, RecordingError> {
+        if self.controller.state() != RecorderState::Completed {
+            return Err(RecordingError::NotRecording);
+        }
+        let writer = self.writer.take().ok_or(RecordingError::NotRecording)?;
+        self.outputs
+            .push(writer.finish_with_metadata(&self.metadata)?);
+        Ok(self.outputs)
+    }
+
+    fn rotate(&mut self, frame: u64) -> Result<(), RecordingError> {
+        let writer = self.writer.take().ok_or(RecordingError::NotRecording)?;
+        self.outputs
+            .push(writer.finish_with_metadata(&self.metadata)?);
+        let output = (self.factory)(self.next_segment)?;
+        self.next_segment = self
+            .next_segment
+            .checked_add(1)
+            .ok_or(RecordingError::TooManyFrames)?;
+        self.writer = Some(WavWriter::new(
+            output,
+            self.format,
+            self.channels,
+            self.sample_rate,
+            self.dither,
+        )?);
+        self.segment_frames = 0;
+        self.next_frame = Some(frame);
+        Ok(())
+    }
+}
+
 /// Queue-backed FLAC worker using the dependency's bounded batch encoder.
 /// This owns no path and emits bytes only at `finish`; a true incremental
 /// FLAC file worker remains a separate implementation requirement.
@@ -2813,6 +3068,45 @@ mod tests {
         assert_eq!(recorder.state(), RecorderState::Completed);
         let output = recorder.finish().unwrap().into_inner();
         assert_eq!(u32::from_le_bytes(output[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn segmented_wav_recorder_rotates_without_losing_or_duplicating_frames() {
+        let writer = Cursor::new(Vec::new());
+        let mut recorder = SegmentedWavRecorder::new(
+            writer,
+            |_index| Ok(Cursor::new(Vec::new())),
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            false,
+            2,
+        )
+        .unwrap();
+        recorder.arm().unwrap();
+        recorder.start(0).unwrap();
+        recorder.split(2).unwrap();
+        let queue = RecordingQueue::new(1).unwrap();
+        queue
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+            })
+            .unwrap();
+        assert_eq!(recorder.stop_and_drain(&queue, 6, 1).unwrap(), 1);
+        let outputs = recorder.finish().unwrap();
+        assert_eq!(outputs.len(), 3);
+        assert!(outputs.iter().all(|output| {
+            let bytes = output.get_ref();
+            u32::from_le_bytes(bytes[40..44].try_into().unwrap()) == 4
+        }));
+        assert_eq!(
+            outputs
+                .iter()
+                .map(|output| output.get_ref().len())
+                .sum::<usize>(),
+            3 * 48
+        );
     }
 
     #[test]
