@@ -127,6 +127,11 @@ undersized mappings; the user-mode client exposes an explicit
 while the broker-side section creation and kernel system mapping are developed.
 The updated elevated WDK build passed with zero signability errors/warnings.
 
+The section-handle regression maps the broker-created section independently and
+verifies that it observes generation bytes written through the bounded region
+view. This proves file-backed section coherence without opening an audio
+endpoint; it does not prove loaded-driver realtime payload consumption.
+
 `NativeBridgeSectionHandle` now creates and retains a bounded file-backed
 Windows section for the temporary bridge file. `NativeBridgeController` retains
 the handle and passes its exact value and mapping size through mapped open,

@@ -127,6 +127,46 @@ impl NativeBridgeSectionHandle {
     pub fn mapping_bytes(&self) -> u32 {
         self.mapping_bytes
     }
+
+    pub fn read_bytes(&self, offset: u32, length: u32) -> Result<Vec<u8>, windows::core::Error> {
+        use windows::Win32::System::Memory::{MapViewOfFile, UnmapViewOfFile, FILE_MAP_READ};
+        let end = offset.checked_add(length).ok_or_else(|| {
+            windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "mapping range overflow",
+            )
+        })?;
+        if end > self.mapping_bytes {
+            return Err(windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "mapping range outside section",
+            ));
+        }
+        let view = unsafe {
+            MapViewOfFile(
+                self.section,
+                FILE_MAP_READ,
+                0,
+                0,
+                self.mapping_bytes as usize,
+            )
+        };
+        if view.Value.is_null() {
+            return Err(windows::core::Error::from_thread());
+        }
+        let mut output = vec![0_u8; length as usize];
+        // SAFETY: the view is mapped for `mapping_bytes`, and the checked
+        // range is within that view. The destination owns `length` bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                (view.Value as *const u8).add(offset as usize),
+                output.as_mut_ptr(),
+                length as usize,
+            );
+            let _ = UnmapViewOfFile(view);
+        }
+        Ok(output)
+    }
 }
 
 #[cfg(windows)]
@@ -4662,11 +4702,14 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let region = NativeBridgeRegion::create(&path, 2, 128).unwrap();
+        let mut region = NativeBridgeRegion::create(&path, 2, 128).unwrap();
         let mapping_bytes = region.mapping_bytes();
         let section = NativeBridgeSectionHandle::for_file(&path, mapping_bytes as u32).unwrap();
         assert_ne!(section.raw_handle(), 0);
         assert_eq!(section.mapping_bytes(), mapping_bytes as u32);
+        region.write(12, 1, &[0.25, -0.25, 0.5, -0.5]).unwrap();
+        let generation = section.read_bytes(8, 8).unwrap();
+        assert_eq!(generation, 12_u64.to_le_bytes());
         drop(section);
         drop(region);
         std::fs::remove_file(path).unwrap();
