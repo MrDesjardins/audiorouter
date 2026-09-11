@@ -4970,6 +4970,62 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    fn native_bridge_duplex_rejects_mismatched_directions_before_device_open() {
+        let render = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-duplex".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 1,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let capture = render.clone();
+        assert!(matches!(
+            NativeBridgeDuplexController::create(
+                "\\\\.\\AudioRouterVirtualBridge",
+                "C:\\missing-render.slot",
+                "C:\\missing-capture.slot",
+                render,
+                capture,
+            ),
+            Err(NativeBridgeControllerError::InvalidDuplex)
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_duplex_rejects_mismatched_bus_before_device_open() {
+        let render = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-render".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 1,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let mut capture = render.clone();
+        capture.bus_id = "bus-capture".into();
+        capture.direction = audiorouter_protocol::AudioBridgeDirection::CaptureSink;
+        assert!(matches!(
+            NativeBridgeDuplexController::create(
+                "\\\\.\\AudioRouterVirtualBridge",
+                "C:\\missing-render.slot",
+                "C:\\missing-capture.slot",
+                render,
+                capture,
+            ),
+            Err(NativeBridgeControllerError::InvalidDuplex)
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
     fn native_bridge_section_handle_uses_only_the_temporary_bridge_file() {
         let path = std::env::temp_dir().join(format!(
             "audiorouter-section-{}-{}.slot",

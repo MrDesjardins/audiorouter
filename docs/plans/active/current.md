@@ -202,6 +202,11 @@ both sides, exposes the render reader and capture `AudioTap`, and closes both
 leases explicitly. This advances the two-ended application contract without
 claiming installed endpoint routing.
 
+The duplex preflight now has regressions proving that direction and bus
+mismatches return before any device or mapping open. The Windows-audio suite
+passes 52 tests with strict Clippy; this closes the application-side validation
+gap while live driver activation remains gated.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
