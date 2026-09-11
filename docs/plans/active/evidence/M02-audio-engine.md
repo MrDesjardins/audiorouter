@@ -152,6 +152,19 @@ and virtual-cable runs are the current runtime evidence. Native graph-to-device
 scheduling, dual-device drift, failure recovery, and measured physical latency
 remain open.
 
+## 2026-09-11 — Endpoint state enumeration boundary
+
+The adapter now provides `enumerate_endpoint_states`, which requests the
+Windows all-state endpoint collection and returns only opaque ID, direction,
+and mapped state. Active, disabled, unplugged, and not-present values are
+recognized; unknown numeric values are preserved instead of being treated as
+active. The path does not activate clients or request formats, so unavailable
+devices cannot make discovery fail merely because they cannot be opened.
+
+The focused Windows-audio suite passed 56 tests with strict Clippy,
+formatting, and diff checks. The control response remains active-only pending
+the format-optional all-state schema and notification-driven refresh slice.
+
 ## 2026-09-11 — Explicit default-role observations
 
 The Windows adapter now exposes `enumerate_default_endpoint_bindings`, which

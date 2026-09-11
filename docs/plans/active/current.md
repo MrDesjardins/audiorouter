@@ -7424,3 +7424,14 @@ stream, or machine configuration action occurred.
   connect endpoint notifications to a bounded control refresh. Do not infer
   disabled/unplugged state from an active-only enumeration, and preserve the
   production driver, signing, installer, and physical-latency gates.
+- Completed the portable endpoint-state adapter slice on 2026-09-11: the
+  Windows metadata boundary now enumerates all endpoint records and maps
+  active, disabled, unplugged, not-present, and unknown OS states without
+  activating clients or requesting mix formats. Unknown values remain visible
+  for forward compatibility. Focused Windows-audio coverage is now 56 tests,
+  with strict Clippy, formatting, and diff checks passing; `devices.list` stays
+  active-only until format-optional state records and notification refresh are
+  integrated together.
+- Next M00/M02 task: add a bounded all-state discovery response and wire the
+  existing notification dirty flag to a control-thread refresh, preserving
+  read-only behavior and exact-ID binding semantics.

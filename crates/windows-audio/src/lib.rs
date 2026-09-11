@@ -61,6 +61,32 @@ pub struct EndpointDisplayInfo {
     pub name: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EndpointState {
+    Active,
+    Disabled,
+    Unplugged,
+    NotPresent,
+    Unknown(u32),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EndpointStateInfo {
+    pub id: String,
+    pub direction: EndpointDirection,
+    pub state: EndpointState,
+}
+
+fn endpoint_state_from_raw(raw_state: u32) -> EndpointState {
+    match raw_state {
+        1 => EndpointState::Active,
+        2 => EndpointState::Disabled,
+        8 => EndpointState::Unplugged,
+        4 => EndpointState::NotPresent,
+        value => EndpointState::Unknown(value),
+    }
+}
+
 #[cfg(windows)]
 const IOCTL_AUDIOROUTER_BRIDGE_OPEN: u32 = (0x22 << 16) | (0x800 << 2) | (3 << 14) | 0x3;
 #[cfg(windows)]
@@ -3248,6 +3274,22 @@ pub fn enumerate_active_endpoint_display_info() -> Result<Vec<EndpointDisplayInf
     }
 }
 
+/// Enumerate endpoint identities and OS state for all known endpoint records.
+/// This metadata-only inventory deliberately does not activate clients or
+/// query mix formats, because disabled and unplugged devices may reject both.
+pub fn enumerate_endpoint_states() -> Result<Vec<EndpointStateInfo>, AudioError> {
+    unsafe {
+        let initialized = windows::Win32::System::Com::CoInitializeEx(
+            None,
+            windows::Win32::System::Com::COINIT_MULTITHREADED,
+        );
+        initialized.ok()?;
+        let result = enumerate_states_after_com_init();
+        windows::Win32::System::Com::CoUninitialize();
+        result
+    }
+}
+
 /// Enumerate process identities suitable for a later process-loopback binding.
 /// PID, executable name, verified executable path when available, and an
 /// optional creation timestamp are returned; command lines and other process
@@ -3663,6 +3705,40 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
                 id,
                 direction,
                 name,
+            });
+        }
+    }
+    Ok(result)
+}
+
+unsafe fn enumerate_states_after_com_init() -> Result<Vec<EndpointStateInfo>, AudioError> {
+    use windows::Win32::Media::Audio::{
+        eCapture, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATEMASK_ALL,
+    };
+    use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+    let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+    let mut result = Vec::new();
+    for (direction, flow) in [
+        (EndpointDirection::Capture, eCapture),
+        (EndpointDirection::Render, eRender),
+    ] {
+        let devices = enumerator.EnumAudioEndpoints(
+            flow,
+            windows::Win32::Media::Audio::DEVICE_STATE(DEVICE_STATEMASK_ALL),
+        )?;
+        for index in 0..devices.GetCount()? {
+            let device = devices.Item(index)?;
+            let id = device
+                .GetId()?
+                .to_string()
+                .map_err(|_| AudioError::InvalidUtf16)?;
+            let raw_state = device.GetState()?.0;
+            let state = endpoint_state_from_raw(raw_state);
+            result.push(EndpointStateInfo {
+                id,
+                direction,
+                state,
             });
         }
     }
@@ -4333,6 +4409,15 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["console", "multimedia", "communications"]
         );
+    }
+
+    #[test]
+    fn endpoint_state_mapping_preserves_unknown_os_values() {
+        assert_eq!(endpoint_state_from_raw(1), EndpointState::Active);
+        assert_eq!(endpoint_state_from_raw(2), EndpointState::Disabled);
+        assert_eq!(endpoint_state_from_raw(4), EndpointState::NotPresent);
+        assert_eq!(endpoint_state_from_raw(8), EndpointState::Unplugged);
+        assert_eq!(endpoint_state_from_raw(16), EndpointState::Unknown(16));
     }
 
     #[test]
