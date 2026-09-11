@@ -377,6 +377,7 @@ fn adapter_control_route(
     control
         .stop_native_endpoint_worker()
         .map_err(|error| format!("endpoint stop: {error:?}"))?;
+    let lifecycle = control.native_endpoint_lifecycle_telemetry();
     control
         .control_recorder_node(
             &EntityId::new("recorder"),
@@ -404,7 +405,13 @@ fn adapter_control_route(
         ));
     }
     println!(
-        "adapter_control_route route=true generation={generation} packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames} recording_bytes={recording_bytes} capture_rate_hz={} render_rate_hz={}",
+        "adapter_control_route route=true generation={generation} packets={packets} captured_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames} recording_bytes={recording_bytes} start_attempts={} successful_starts={} stop_attempts={} successful_stops={} reset_successes={} rejected_pumps={} capture_rate_hz={} render_rate_hz={}",
+        lifecycle["startAttempts"],
+        lifecycle["successfulStarts"],
+        lifecycle["stopAttempts"],
+        lifecycle["successfulStops"],
+        lifecycle["resetSuccesses"],
+        lifecycle["rejectedPumps"],
         capture_info.sample_rate_hz, render_info.sample_rate_hz
     );
     Ok(())

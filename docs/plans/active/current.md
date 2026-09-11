@@ -8326,3 +8326,11 @@ live-driver evidence.
 - Next M02/M03 task: add explicit stream-lifecycle telemetry (start/stop,
   reset, and rejected/stale-generation counts) to the control-owned harness,
   then continue native driver bridge qualification without changing defaults.
+- Added bounded lifecycle telemetry on 2026-09-11. The endpoint worker now
+  reports start/stop attempts and successes plus reset successes, while the
+  control plane counts rejected native pumps. The guarded recorder route
+  reported 1/1 start, 1/1 stop, 1 reset, and 0 rejected pumps, alongside the
+  finalized 4,140-byte WAV; media state remained unchanged.
+- Next M02/M03 task: add a deliberate stale-generation probe to the harness,
+  verify it increments the rejection counter without opening a second stream,
+  then continue driver bridge qualification.

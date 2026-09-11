@@ -3444,6 +3444,7 @@ pub struct ControlPlane {
     native_endpoint_worker: Option<audiorouter_windows_audio::WasapiEndpointWorker>,
     native_endpoint_session: Option<EntityId>,
     native_endpoint_taps: Option<AudioTapSet>,
+    native_endpoint_rejections: u64,
 }
 
 impl Default for ControlPlane {
@@ -3495,6 +3496,7 @@ impl ControlPlane {
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_taps: None,
+            native_endpoint_rejections: 0,
         }
     }
 
@@ -3557,6 +3559,7 @@ impl ControlPlane {
         tap: &dyn AudioTap,
     ) -> Result<Value, ControlError> {
         if self.native_endpoint_session.as_ref() != Some(session_id) {
+            self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is not bound to the session".into(),
             ));
@@ -3568,6 +3571,7 @@ impl ControlPlane {
             .map(FakeRuntime::generation)
             .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
         if runtime_generation != generation {
+            self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker generation is stale".into(),
             ));
@@ -3578,6 +3582,7 @@ impl ControlPlane {
         if worker.bridge().scheduler().telemetry().active_generation
             != Some(RuntimeGeneration::new(generation))
         {
+            self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker has no matching prepared graph".into(),
             ));
@@ -3672,11 +3677,30 @@ impl ControlPlane {
         max_packets: u32,
     ) -> Result<Value, ControlError> {
         let taps = self.native_endpoint_taps.take().ok_or_else(|| {
+            self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
             ControlError::InvalidRequest("native graph recorder taps are not prepared".into())
         })?;
         let result = self.pump_native_endpoint_worker(session_id, generation, max_packets, &taps);
         self.native_endpoint_taps = Some(taps);
         result
+    }
+
+    /// Return bounded native endpoint lifecycle and control rejection counts
+    /// without touching endpoint state.
+    pub fn native_endpoint_lifecycle_telemetry(&self) -> Value {
+        let worker = self
+            .native_endpoint_worker
+            .as_ref()
+            .map(audiorouter_windows_audio::WasapiEndpointWorker::telemetry)
+            .unwrap_or_default();
+        json!({
+            "startAttempts": worker.start_attempts,
+            "successfulStarts": worker.successful_starts,
+            "stopAttempts": worker.stop_attempts,
+            "successfulStops": worker.successful_stops,
+            "resetSuccesses": worker.reset_successes,
+            "rejectedPumps": self.native_endpoint_rejections,
+        })
     }
 
     /// Detach only a stopped native worker; this never affects unrelated
@@ -3831,6 +3855,7 @@ impl ControlPlane {
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_taps: None,
+            native_endpoint_rejections: 0,
         })
     }
 

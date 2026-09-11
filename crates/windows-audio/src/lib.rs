@@ -1736,6 +1736,19 @@ pub struct WasapiEndpointWorker {
     render: Option<SharedRender>,
     bridge: WasapiSchedulerBridge,
     running: bool,
+    telemetry: WasapiEndpointWorkerTelemetry,
+}
+
+/// Bounded control-thread lifecycle counters for one endpoint worker. These
+/// counters describe ownership operations; they are not realtime callback
+/// telemetry and never participate in audio processing.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct WasapiEndpointWorkerTelemetry {
+    pub start_attempts: u64,
+    pub successful_starts: u64,
+    pub stop_attempts: u64,
+    pub successful_stops: u64,
+    pub reset_successes: u64,
 }
 
 /// Maximum number of already-available packets drained by one worker wake.
@@ -1815,6 +1828,7 @@ impl WasapiEndpointWorker {
             render: Some(render),
             bridge,
             running: false,
+            telemetry: WasapiEndpointWorkerTelemetry::default(),
         }
     }
 
@@ -1830,9 +1844,14 @@ impl WasapiEndpointWorker {
         &mut self.bridge
     }
 
+    pub fn telemetry(&self) -> WasapiEndpointWorkerTelemetry {
+        self.telemetry
+    }
+
     /// Start capture first, then render. If render activation fails, capture
     /// is synchronously stopped before the failure is returned.
     pub fn start(&mut self) -> Result<(), AudioError> {
+        self.telemetry.start_attempts = self.telemetry.start_attempts.saturating_add(1);
         if self.running {
             return Ok(());
         }
@@ -1846,6 +1865,7 @@ impl WasapiEndpointWorker {
             .ok_or(AudioError::ProcessingStateUnavailable)?;
         start_endpoint_pair(capture, render)?;
         self.running = true;
+        self.telemetry.successful_starts = self.telemetry.successful_starts.saturating_add(1);
         Ok(())
     }
 
@@ -1853,8 +1873,13 @@ impl WasapiEndpointWorker {
     /// attempted even when the first one fails; the first endpoint/reset error
     /// is then returned to the control plane.
     pub fn stop(&mut self) -> Result<(), AudioError> {
+        self.telemetry.stop_attempts = self.telemetry.stop_attempts.saturating_add(1);
         if !self.running {
-            return self.bridge.reset_stream().map(|_| ());
+            let result = self.bridge.reset_stream().map(|_| ());
+            if result.is_ok() {
+                self.telemetry.reset_successes = self.telemetry.reset_successes.saturating_add(1);
+            }
+            return result;
         }
         self.running = false;
         let capture = self
@@ -1865,7 +1890,14 @@ impl WasapiEndpointWorker {
             .render
             .as_mut()
             .ok_or(AudioError::ProcessingStateUnavailable)?;
-        stop_endpoint_pair_and_reset(capture, render, || self.bridge.reset_stream().map(|_| ()))
+        let result = stop_endpoint_pair_and_reset(capture, render, || {
+            self.bridge.reset_stream().map(|_| ())
+        });
+        if result.is_ok() {
+            self.telemetry.successful_stops = self.telemetry.successful_stops.saturating_add(1);
+            self.telemetry.reset_successes = self.telemetry.reset_successes.saturating_add(1);
+        }
+        result
     }
 
     /// Stop and discard both old clients, refresh the monitor, and open only

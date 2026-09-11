@@ -300,6 +300,11 @@ remained identical. This qualifies bounded adapter-to-engine ownership and
 block processing, not complete graph activation, audible routing, or physical
 latency.
 
+The same run reported one start attempt/success, one stop attempt/success,
+one successful stream reset, and zero rejected pumps. These are bounded
+control-thread lifecycle counters; they are not a production callback timing
+claim.
+
 ## Rust process-loopback requalification (2026-09-08)
 
 The guarded Rust process-loopback acceptance passed both include and exclude
