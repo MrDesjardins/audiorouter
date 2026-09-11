@@ -174,9 +174,13 @@ impl RecorderWorker for WavRecorderWorker {
             .recorder
             .take()
             .ok_or_else(|| "WAV recorder was finalized more than once".to_owned())?;
+        let mut completed = false;
         for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
             match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
-                Ok(_) => break,
+                Ok(_) => {
+                    completed = true;
+                    break;
+                }
                 Err(RecordingError::QueueNotEmpty) => continue,
                 Err(error) => {
                     self.recorder = Some(recorder);
@@ -184,7 +188,7 @@ impl RecorderWorker for WavRecorderWorker {
                 }
             }
         }
-        if !self.queue.is_empty() {
+        if !completed {
             self.recorder = Some(recorder);
             return Err("WAV recorder finalization exceeded its bounded drain budget".into());
         }
@@ -272,9 +276,13 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
             .recorder
             .take()
             .ok_or_else(|| "FLAC recorder was finalized more than once".to_owned())?;
+        let mut completed = false;
         for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
             match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
-                Ok(_) => break,
+                Ok(_) => {
+                    completed = true;
+                    break;
+                }
                 Err(RecordingError::QueueNotEmpty) => continue,
                 Err(error) => {
                     self.recorder = Some(recorder);
@@ -282,7 +290,7 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
                 }
             }
         }
-        if !self.queue.is_empty() {
+        if !completed {
             self.recorder = Some(recorder);
             return Err("FLAC recorder finalization exceeded its bounded drain budget".into());
         }
@@ -374,9 +382,13 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
             .recorder
             .take()
             .ok_or_else(|| "streaming FLAC recorder was finalized more than once".to_owned())?;
+        let mut completed = false;
         for _ in 0..MAX_RECORDER_FINALIZATION_PASSES {
             match recorder.stop_and_drain(&self.queue, frame, self.maximum_chunks_per_pass) {
-                Ok(_) => break,
+                Ok(_) => {
+                    completed = true;
+                    break;
+                }
                 Err(RecordingError::QueueNotEmpty) => continue,
                 Err(error) => {
                     self.recorder = Some(recorder);
@@ -384,7 +396,7 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
                 }
             }
         }
-        if !self.queue.is_empty() {
+        if !completed {
             self.recorder = Some(recorder);
             return Err(
                 "streaming FLAC recorder finalization exceeded its bounded drain budget".into(),
