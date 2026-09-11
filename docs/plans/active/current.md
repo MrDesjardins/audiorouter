@@ -85,7 +85,8 @@ lifecycle are implemented.
 The prototype now has a secured, non-installing control-device scaffold in
 `Source/Main/adapter.cpp`. It uses an explicit system/Administrators-only ACL,
 create/close/device-control dispatch, symbolic-link cleanup, and bounded open /
-heartbeat request validation. The kernel now owns one exact-identity lease:
+heartbeat request validation. The kernel now owns one exact-identity lease per
+bridge direction:
 open claims it, heartbeat refreshes it, close releases it, and expired ownership
 is reclaimed; shared-memory/audio transport remains separate. The x64 WDK
 rebuild passed after linking `wdmsec.lib`, with zero signability errors/warnings
@@ -187,6 +188,12 @@ protocol and Windows request encoder validate and preserve the direction, with
 regression coverage for both values. This removes endpoint-label guessing from
 the future two-ended driver handoff; it does not yet provision two live
 endpoints.
+
+The driver control scaffold now keeps independent exclusive lease slots for the
+two directions, so one bus can negotiate render-source and capture-sink
+ownership concurrently without cross-direction contention. Cleanup still
+unmaps and dereferences both slots. The non-installing WDK build passed with
+zero signability errors/warnings.
 
 ## Current state
 

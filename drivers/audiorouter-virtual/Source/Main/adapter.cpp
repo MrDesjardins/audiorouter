@@ -39,7 +39,19 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
     SIZE_T MappedBytes;
 } AR_BRIDGE_LEASE_STATE;
 
-AR_BRIDGE_LEASE_STATE g_BridgeLease = {};
+#define AR_BRIDGE_LEASE_SLOTS 2
+AR_BRIDGE_LEASE_STATE g_BridgeLeases[AR_BRIDGE_LEASE_SLOTS] = {};
+
+static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(_In_ USHORT Direction)
+{
+    if (Direction == AR_BRIDGE_DIRECTION_RENDER_SOURCE) {
+        return &g_BridgeLeases[0];
+    }
+    if (Direction == AR_BRIDGE_DIRECTION_CAPTURE_SINK) {
+        return &g_BridgeLeases[1];
+    }
+    return NULL;
+}
 
 //-----------------------------------------------------------------------------
 // Referenced forward.
@@ -108,6 +120,10 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
             static_cast<PAR_BRIDGE_OPEN_REQUEST>(Irp->AssociatedIrp.SystemBuffer);
         status = AudioRouterValidateBridgeOpenRequest(request);
         if (NT_SUCCESS(status)) {
+            AR_BRIDGE_LEASE_STATE* lease = BridgeLeaseForDirection(request->Direction);
+            if (lease == NULL) {
+                return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
+            }
             PVOID sectionObject = NULL;
             PVOID mappedView = NULL;
             SIZE_T mappedBytes = request->MappingBytes;
@@ -150,48 +166,48 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
             PVOID oldSectionObject = NULL;
             PVOID oldMappedView = NULL;
             KIRQL oldIrql;
-            KeAcquireSpinLock(&g_BridgeLease.Lock, &oldIrql);
+            KeAcquireSpinLock(&lease->Lock, &oldIrql);
             ULONGLONG now = KeQueryInterruptTime();
             ULONGLONG leaseTicks = static_cast<ULONGLONG>(request->LeaseMs) * _100NS_PER_MILLISECOND;
-            BOOLEAN expired = g_BridgeLease.Active &&
-                (now - g_BridgeLease.LastHeartbeat100ns > leaseTicks);
+            BOOLEAN expired = lease->Active &&
+                (now - lease->LastHeartbeat100ns > leaseTicks);
 
             if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN) {
-                if (g_BridgeLease.Active && !expired) {
+                if (lease->Active && !expired) {
                     status = STATUS_DEVICE_BUSY;
                 } else {
-                    oldSectionObject = g_BridgeLease.SectionObject;
-                    oldMappedView = g_BridgeLease.MappedView;
-                    g_BridgeLease.Request = *request;
-                    g_BridgeLease.LastHeartbeat100ns = now;
-                    g_BridgeLease.Active = TRUE;
-                    g_BridgeLease.SectionObject = sectionObject;
-                    g_BridgeLease.MappedView = mappedView;
-                    g_BridgeLease.MappedBytes = mappedBytes;
+                    oldSectionObject = lease->SectionObject;
+                    oldMappedView = lease->MappedView;
+                    lease->Request = *request;
+                    lease->LastHeartbeat100ns = now;
+                    lease->Active = TRUE;
+                    lease->SectionObject = sectionObject;
+                    lease->MappedView = mappedView;
+                    lease->MappedBytes = mappedBytes;
                     sectionObject = NULL;
                     mappedView = NULL;
                     status = STATUS_SUCCESS;
                 }
-            } else if (!g_BridgeLease.Active || expired ||
-                       RtlCompareMemory(&g_BridgeLease.Request, request,
+            } else if (!lease->Active || expired ||
+                       RtlCompareMemory(&lease->Request, request,
                                         sizeof(AR_BRIDGE_OPEN_REQUEST)) !=
                            sizeof(AR_BRIDGE_OPEN_REQUEST)) {
                 status = STATUS_INVALID_DEVICE_STATE;
             } else if (code == IOCTL_AUDIOROUTER_BRIDGE_CLOSE) {
-                oldSectionObject = g_BridgeLease.SectionObject;
-                oldMappedView = g_BridgeLease.MappedView;
-                g_BridgeLease.Active = FALSE;
-                RtlZeroMemory(&g_BridgeLease.Request, sizeof(g_BridgeLease.Request));
-                g_BridgeLease.LastHeartbeat100ns = 0;
-                g_BridgeLease.SectionObject = NULL;
-                g_BridgeLease.MappedView = NULL;
-                g_BridgeLease.MappedBytes = 0;
+                oldSectionObject = lease->SectionObject;
+                oldMappedView = lease->MappedView;
+                lease->Active = FALSE;
+                RtlZeroMemory(&lease->Request, sizeof(lease->Request));
+                lease->LastHeartbeat100ns = 0;
+                lease->SectionObject = NULL;
+                lease->MappedView = NULL;
+                lease->MappedBytes = 0;
                 status = STATUS_SUCCESS;
             } else {
-                g_BridgeLease.LastHeartbeat100ns = now;
+                lease->LastHeartbeat100ns = now;
                 status = STATUS_SUCCESS;
             }
-            KeReleaseSpinLock(&g_BridgeLease.Lock, oldIrql);
+            KeReleaseSpinLock(&lease->Lock, oldIrql);
             if (oldMappedView != NULL) {
                 MmUnmapViewInSystemSpace(oldMappedView);
             }
@@ -241,25 +257,28 @@ void DeleteBridgeControlDevice()
     UNICODE_STRING dosName;
     RtlInitUnicodeString(&dosName, AUDIOROUTER_BRIDGE_DOS_NAME);
 
-    PVOID sectionObject = NULL;
-    PVOID mappedView = NULL;
-    KIRQL oldIrql;
-    KeAcquireSpinLock(&g_BridgeLease.Lock, &oldIrql);
-    sectionObject = g_BridgeLease.SectionObject;
-    mappedView = g_BridgeLease.MappedView;
-    g_BridgeLease.SectionObject = NULL;
-    g_BridgeLease.MappedView = NULL;
-    g_BridgeLease.MappedBytes = 0;
-    g_BridgeLease.Active = FALSE;
-    RtlZeroMemory(&g_BridgeLease.Request, sizeof(g_BridgeLease.Request));
-    g_BridgeLease.LastHeartbeat100ns = 0;
-    KeReleaseSpinLock(&g_BridgeLease.Lock, oldIrql);
+    for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
+        PVOID sectionObject = NULL;
+        PVOID mappedView = NULL;
+        KIRQL oldIrql;
+        KeAcquireSpinLock(&g_BridgeLeases[index].Lock, &oldIrql);
+        sectionObject = g_BridgeLeases[index].SectionObject;
+        mappedView = g_BridgeLeases[index].MappedView;
+        g_BridgeLeases[index].SectionObject = NULL;
+        g_BridgeLeases[index].MappedView = NULL;
+        g_BridgeLeases[index].MappedBytes = 0;
+        g_BridgeLeases[index].Active = FALSE;
+        RtlZeroMemory(&g_BridgeLeases[index].Request,
+                      sizeof(g_BridgeLeases[index].Request));
+        g_BridgeLeases[index].LastHeartbeat100ns = 0;
+        KeReleaseSpinLock(&g_BridgeLeases[index].Lock, oldIrql);
 
-    if (mappedView != NULL) {
-        MmUnmapViewInSystemSpace(mappedView);
-    }
-    if (sectionObject != NULL) {
-        ObDereferenceObject(sectionObject);
+        if (mappedView != NULL) {
+            MmUnmapViewInSystemSpace(mappedView);
+        }
+        if (sectionObject != NULL) {
+            ObDereferenceObject(sectionObject);
+        }
     }
     if (g_BridgeControlDevice != NULL) {
         IoDeleteSymbolicLink(&dosName);
@@ -508,7 +527,9 @@ Return Value:
         Done);
 
     WDF_DRIVER_CONFIG_INIT(&config, WDF_NO_EVENT_CALLBACK);
-    KeInitializeSpinLock(&g_BridgeLease.Lock);
+    for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
+        KeInitializeSpinLock(&g_BridgeLeases[index].Lock);
+    }
     //
     // Set WdfDriverInitNoDispatchOverride flag to tell the framework
     // not to provide dispatch routines for the driver. In other words,

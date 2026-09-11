@@ -34,12 +34,14 @@ procedure; do not use them on a development workstation.
 - The prototype is x64 build-qualified only until the installed WDK result is
   recorded in the active plan.
 - Production signing, catalog/release policy, clean-machine install,
-  ownership leases, broker/bridge IPC, managed bus creation/rename/enable/
+  managed bus creation/rename/enable/
   disable/delete, and endpoint teardown are not implemented here.
-- The driver does not yet carry the AudioRouter graph into its callback. The
-  user-mode engine remains the owner of EQ, gate, compressor, limiter, delay,
-  pitch, voice-chain, and meter processing; the next integration task is the
-  bounded bridge from that engine to managed virtual endpoints.
+- The secured control scaffold now has direction-aware ownership leases and a
+  bounded mapped-block ABI. The driver does not yet carry the AudioRouter graph
+  into its WaveRT callback. The user-mode engine remains the owner of EQ, gate,
+  compressor, limiter, delay, pitch, voice-chain, and meter processing; the
+  next integration task is binding the validated bridge helper to endpoint
+  buffer ownership.
 - No driver installation or live endpoint test is authorized by this build
   script. Those gates require a reversible isolated-target procedure and must
   preserve the user's existing audio configuration.

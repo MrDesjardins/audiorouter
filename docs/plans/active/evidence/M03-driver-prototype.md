@@ -34,6 +34,12 @@ create/rename/enable/disable/delete lifecycle, uninstall/restore, production
 signing, or clean-machine installation. VDEV-09 and M08 signing/release gates
 remain open.
 
+The kernel control scaffold now maintains one exclusive lease slot for each
+validated direction, allowing the render-source and capture-sink ends of a bus
+to coexist while retaining independent ownership and cleanup. The WDK build
+passed with zero signability errors/warnings; no device was installed or
+loaded.
+
 No INF installation, service start, device registration, boot-policy change,
 test-signing change, audio-default change, stream open, or persistent machine
 configuration change occurred. The generated build directories are ignored and
@@ -98,7 +104,7 @@ driver evidence.
 after expiry, and a late heartbeat cannot revive the old generation. The expiry
 regression uses a forward synthetic `Instant`, avoiding monotonic-clock
 underflow. The focused Windows-audio suite passed 46 tests and strict Clippy
-passed. The kernel now owns one exact-identity lease: open claims it, heartbeat
+passed. The kernel now owns one exact-identity lease per bridge direction: open claims it, heartbeat
 refreshes it, close releases it, and expired ownership is reclaimed. Shared
 memory and endpoint audio are still separate gates.
 
