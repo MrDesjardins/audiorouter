@@ -7567,3 +7567,10 @@ stream, or machine configuration action occurred.
   unactivated control-plane session and the still-required production driver.
   Control tests (107), strict Clippy, formatting, and diff checks passed. No
   endpoint was opened or machine audio configuration changed.
+
+- Fixed a render-source worker ownership defect on 2026-09-11: every bridge
+  read, shape-validation, and scheduler-submit failure now returns the
+  acquired input block to the bounded scheduler pool before reporting the
+  error. This prevents repeated invalid bridge data from exhausting reusable
+  audio storage. Windows-audio (58), strict Clippy, formatting, and diff checks
+  passed; no endpoint or machine audio configuration was touched.

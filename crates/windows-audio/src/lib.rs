@@ -1433,29 +1433,40 @@ impl WasapiSchedulerBridge {
                     || usize::from(header.frames) != input.frames()
                 {
                     input.clear();
+                    let _ = self.scheduler.input().try_recycle(input);
                     return Err(NativeBridgeInputPumpError::Audio(
                         AudioError::InvalidFrameSize,
                     ));
                 }
-                input
+                if input
                     .copy_from_interleaved(
                         &self.bridge_samples[..input.channels() * input.frames()],
                     )
-                    .map_err(|_| NativeBridgeInputPumpError::Audio(AudioError::InvalidFrameSize))?;
+                    .is_err()
+                {
+                    let _ = self.scheduler.input().try_recycle(input);
+                    return Err(NativeBridgeInputPumpError::Audio(
+                        AudioError::InvalidFrameSize,
+                    ));
+                }
                 *last_sequence = header.sequence;
             }
             Err(error) if native_bridge_input_error_is_silence(&error) => input.clear(),
             Err(error) => {
                 input.clear();
+                let _ = self.scheduler.input().try_recycle(input);
                 return Err(NativeBridgeInputPumpError::Bridge(error));
             }
         }
-        self.scheduler.submit_input(input).map_err(|_| {
-            NativeBridgeInputPumpError::Audio(AudioError::BufferTooSmall {
-                required: self.quantum_frames * self.bytes_per_frame,
-                available: 0,
-            })
-        })?;
+        if let Err(input) = self.scheduler.submit_input(input) {
+            let _ = self.scheduler.input().try_recycle(input);
+            return Err(NativeBridgeInputPumpError::Audio(
+                AudioError::BufferTooSmall {
+                    required: self.quantum_frames * self.bytes_per_frame,
+                    available: 0,
+                },
+            ));
+        }
         result.packets = 1;
         let generation = self
             .scheduler
