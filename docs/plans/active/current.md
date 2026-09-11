@@ -1948,6 +1948,14 @@ prerequisites rather than claiming release completion. Do not install or
 register a driver, change signing mode, register plugins, or alter the
 machine's audio configuration as a substitute for those gates.
 
+Callback-ownership design note (2026-09-10): a standalone callback reader was
+reviewed and rejected before commit because adding `EX_RUNDOWN_REF` without
+atomically integrating OPEN, CLOSE, expiry replacement, and unload would leave
+a mapped-view use-after-unmap race. The next implementation must publish and
+detach the mapped view atomically, wait for rundown readers before unmapping,
+and reinitialize rundown before republishing a replacement; the sample timer
+must remain unwired until that lifecycle is build- and review-validated.
+
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
   on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
   eight sections, SHA-256
