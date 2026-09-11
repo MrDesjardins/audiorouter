@@ -24,6 +24,150 @@ pub enum EndpointDirection {
     Render,
 }
 
+#[cfg(windows)]
+const IOCTL_AUDIOROUTER_BRIDGE_OPEN: u32 = (0x22 << 16) | (0x800 << 2) | (3 << 14) | 0x3;
+#[cfg(windows)]
+const IOCTL_AUDIOROUTER_BRIDGE_CLOSE: u32 = (0x22 << 16) | (0x801 << 2) | (3 << 14) | 0x3;
+#[cfg(windows)]
+const IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT: u32 = (0x22 << 16) | (0x802 << 2) | (3 << 14) | 0x3;
+
+#[cfg(windows)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct NativeBridgeOpenRequest {
+    protocol_major: u16,
+    protocol_minor: u16,
+    bus_id_bytes: u16,
+    channels: u16,
+    frames_per_quantum: u16,
+    reserved: u16,
+    sample_rate_hz: u32,
+    lease_ms: u32,
+    generation: u64,
+    bus_id: [u16; 64],
+}
+
+#[cfg(windows)]
+pub struct NativeBridgeControlClient {
+    handle: windows::Win32::Foundation::HANDLE,
+}
+
+#[cfg(windows)]
+impl NativeBridgeControlClient {
+    /// Opens the secured driver endpoint explicitly; discovery never opens it.
+    pub fn open(path: &str) -> Result<Self, windows::core::Error> {
+        use windows::core::PCWSTR;
+        use windows::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE};
+        use windows::Win32::Storage::FileSystem::{
+            CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING,
+        };
+        let mut wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        let handle = unsafe {
+            CreateFileW(
+                PCWSTR(wide.as_mut_ptr()),
+                GENERIC_READ.0 | GENERIC_WRITE.0,
+                FILE_SHARE_NONE,
+                None,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                None,
+            )?
+        };
+        Ok(Self { handle })
+    }
+
+    pub fn open_bridge(
+        &self,
+        hello: &audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(), windows::core::Error> {
+        let request = native_bridge_open_request(hello).map_err(|_| {
+            windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "invalid hello",
+            )
+        })?;
+        self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_OPEN, &request)
+    }
+
+    pub fn heartbeat(
+        &self,
+        hello: &audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(), windows::core::Error> {
+        let request = native_bridge_open_request(hello).map_err(|_| {
+            windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "invalid hello",
+            )
+        })?;
+        self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_HEARTBEAT, &request)
+    }
+
+    pub fn close(
+        &self,
+        hello: &audiorouter_protocol::AudioBridgeHello,
+    ) -> Result<(), windows::core::Error> {
+        let request = native_bridge_open_request(hello).map_err(|_| {
+            windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "invalid hello",
+            )
+        })?;
+        self.ioctl(IOCTL_AUDIOROUTER_BRIDGE_CLOSE, &request)
+    }
+
+    fn ioctl<T>(&self, code: u32, request: &T) -> Result<(), windows::core::Error> {
+        use windows::Win32::System::IO::DeviceIoControl;
+        let mut returned = 0;
+        unsafe {
+            DeviceIoControl(
+                self.handle,
+                code,
+                Some(request as *const T as *const std::ffi::c_void),
+                std::mem::size_of::<T>() as u32,
+                None,
+                0,
+                Some(&mut returned),
+                None,
+            )?
+        };
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for NativeBridgeControlClient {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self.handle);
+        }
+    }
+}
+
+#[cfg(windows)]
+fn native_bridge_open_request(
+    hello: &audiorouter_protocol::AudioBridgeHello,
+) -> Result<NativeBridgeOpenRequest, ()> {
+    hello.validate().map_err(|_| ())?;
+    let encoded: Vec<u16> = hello.bus_id.encode_utf16().collect();
+    if encoded.len() > 64 || encoded.len() * std::mem::size_of::<u16>() > 128 {
+        return Err(());
+    }
+    let mut bus_id = [0; 64];
+    bus_id[..encoded.len()].copy_from_slice(&encoded);
+    Ok(NativeBridgeOpenRequest {
+        protocol_major: hello.protocol_major,
+        protocol_minor: hello.protocol_minor,
+        bus_id_bytes: (encoded.len() * 2) as u16,
+        channels: hello.channels,
+        frames_per_quantum: hello.frames_per_quantum,
+        sample_rate_hz: hello.sample_rate_hz,
+        lease_ms: hello.lease_ms,
+        generation: hello.generation,
+        bus_id,
+        reserved: 0,
+    })
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EndpointInfo {
     pub id: String,
@@ -4186,6 +4330,36 @@ mod tests {
         ));
         drop(session);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_control_request_matches_bounded_driver_layout() {
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-main".to_owned(),
+            generation: 11,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let request = native_bridge_open_request(&hello).unwrap();
+        assert_eq!(std::mem::size_of::<NativeBridgeOpenRequest>(), 160);
+        assert_eq!(request.bus_id_bytes, 16);
+        assert_eq!(
+            &request.bus_id[..8],
+            "bus-main".encode_utf16().collect::<Vec<_>>()
+        );
+        assert_eq!(request.generation, 11);
+        assert!(
+            native_bridge_open_request(&audiorouter_protocol::AudioBridgeHello {
+                bus_id: "x".repeat(65),
+                ..hello
+            })
+            .is_err()
+        );
     }
 
     #[cfg(windows)]

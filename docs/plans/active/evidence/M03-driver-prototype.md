@@ -102,6 +102,14 @@ underflow. The focused Windows-audio suite passed 46 tests and strict Clippy
 passed. The kernel scaffold has not yet connected this lease state to a live
 mapping or endpoint.
 
+The user-mode Windows adapter now contains an explicit
+`NativeBridgeControlClient` matching the driver's fixed request layout and
+IOCTL numbers. It validates the hello before encoding it, bounds the UTF-16 bus
+ID, opens the secured device only when requested, and closes the handle via
+RAII. The layout regression is included in the 47-test Windows-audio suite.
+Because valid lifecycle requests still return `STATUS_NOT_IMPLEMENTED`, no
+live control-device or audio-path claim is made.
+
 ## Native bridge contract
 
 `audiorouter-protocol` now defines a versioned `AudioBridgeHello` and bounded

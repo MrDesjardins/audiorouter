@@ -99,6 +99,13 @@ subtracting from the monotonic clock. The focused Windows-audio suite passed
 still returns `STATUS_NOT_IMPLEMENTED` for valid open/heartbeat requests until
 the broker owns the mapping and lease state end to end.
 
+The Windows adapter now includes an explicit `NativeBridgeControlClient` for
+the secured driver path. It converts the negotiated hello into the fixed C ABI,
+opens the named device only on an explicit call, issues open/heartbeat/close
+IOCTLs, and closes the handle with RAII. Its layout and UTF-16 bound regression
+passes; valid requests still return `STATUS_NOT_IMPLEMENTED` in the prototype
+because live mapping ownership is not wired yet.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
