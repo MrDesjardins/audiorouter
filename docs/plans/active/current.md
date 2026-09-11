@@ -71,6 +71,15 @@ qualification remains open.
   machine configuration changed. Independent rights-cleared VST2
   qualification remains open.
 
+- Requalified the bounded native process-loopback adapter on 2026-09-10 with
+  `-AllowLiveAudio -DurationMilliseconds 100`: include mode captured 3,969
+  frames with 8,264 nonzero payload bytes, and exclude mode captured 4,410
+  frames. Both disposable child-process lifecycles activated, captured,
+  stopped, reset, and exited successfully; media snapshots were unchanged.
+  This is API/lifecycle evidence only, not a production cross-process
+  isolation or physical-latency gate. No persistent audio configuration
+  changed.
+
 - Hardened the shared Rust plugin worker at pushed head `d3fe5165` on
   2026-09-10. `audiorouter-plugin-worker.exe` now disables legacy Windows
   fault dialogs and WER UI before parsing/loading any third-party plugin,
