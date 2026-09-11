@@ -7686,3 +7686,8 @@ stream, or machine configuration action occurred.
   non-installing x64 WDK build/source acceptance passed with zero signability
   errors/warnings and catalog generation; no driver or audio configuration was
   activated.
+- Fixed a Windows storage-path regression on 2026-09-11: backup validation
+  now checks reparse ancestors from the parent only, allowing the
+  destination-specific branch to reject an existing symbolic link with the
+  correct diagnostic. The focused regression and all 80 storage tests pass;
+  no user files or machine configuration were changed.

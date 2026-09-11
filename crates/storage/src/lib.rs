@@ -206,7 +206,12 @@ pub const IDEMPOTENCY_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 #[cfg(windows)]
 fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    // `file_attributes` is the authoritative Windows check, while the
+    // file-type bit covers metadata produced by alternate Windows filesystem
+    // providers that do not preserve the attribute through Rust's metadata
+    // conversion. Keep both checks so dangling links are rejected too.
     metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        || metadata.file_type().is_symlink()
 }
 
 #[cfg(not(windows))]
@@ -214,9 +219,16 @@ fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
 }
 
+fn path_is_symbolic_link(path: &std::path::Path) -> bool {
+    std::fs::read_link(path).is_ok()
+}
+
 fn path_has_reparse_ancestor(path: &std::path::Path) -> bool {
     let mut current = Some(path);
     while let Some(component) = current {
+        if path_is_symbolic_link(component) {
+            return true;
+        }
         if let Ok(metadata) = std::fs::symlink_metadata(component) {
             if is_reparse_point(&metadata) {
                 return true;
@@ -562,7 +574,7 @@ impl Storage {
         let parent_metadata = std::fs::symlink_metadata(parent)?;
         if !parent_metadata.is_dir()
             || is_reparse_point(&parent_metadata)
-            || path_has_reparse_ancestor(destination)
+            || path_has_reparse_ancestor(parent)
         {
             return Err(StorageError::InvalidBackupPath(
                 "backup destination parent must be a regular non-reparse directory".into(),
@@ -570,7 +582,7 @@ impl Storage {
         }
         match std::fs::symlink_metadata(destination) {
             Ok(metadata) => {
-                if is_reparse_point(&metadata) {
+                if is_reparse_point(&metadata) || path_is_symbolic_link(destination) {
                     return Err(StorageError::InvalidBackupPath(
                         "backup destination cannot be a symbolic link or reparse point".into(),
                     ));
@@ -701,7 +713,7 @@ impl Storage {
         let parent_metadata = std::fs::symlink_metadata(parent)?;
         if !parent_metadata.is_dir()
             || is_reparse_point(&parent_metadata)
-            || path_has_reparse_ancestor(destination)
+            || path_has_reparse_ancestor(parent)
         {
             return Err(StorageError::InvalidBackupPath(
                 "restore destination parent must be a regular non-reparse directory".into(),

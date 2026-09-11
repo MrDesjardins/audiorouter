@@ -54,6 +54,12 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- 2026-09-11 - Check backup parents separately from the destination. Evidence:
+  [storage backup regression](crates/storage/src/lib.rs). Scope: Windows
+  SQLite backup destination validation. Consequence: reparse-ancestor checks
+  must stop at the parent so an existing destination link reaches the
+  destination-specific no-overwrite diagnostic.
+
 - 2026-09-11 - Bridge lease identity must follow the control handle. Evidence: [M03 driver evidence](docs/plans/active/evidence/M03-driver-prototype.md). Scope: project-driver bridge ownership and teardown. Consequence: bind heartbeat/close to the claiming file object, return authorization failures distinctly, and release only that owner during IRP_MJ_CLEANUP/IRP_MJ_CLOSE before mapped-view retirement.
 
 - 2026-09-09 - Official VST3 validator success is not AudioRouter activation evidence. Evidence: [plugin compatibility snapshot](docs/operations/plugin-compatibility.md). Scope: x64 VST3 fixture qualification. Consequence: run the AudioRouter offline loader/worker path after vendor validation and record `E_NOTIMPL` or other activation failures as unsupported instead of claiming multi-vendor compatibility.
