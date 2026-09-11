@@ -957,6 +957,18 @@ pub struct WasapiSchedulerPump {
     pub dropped_render_frames: u32,
 }
 
+impl WasapiSchedulerPump {
+    fn accumulate(&mut self, other: Self) {
+        self.packets = self.packets.saturating_add(other.packets);
+        self.captured_frames = self.captured_frames.saturating_add(other.captured_frames);
+        self.processed_quanta = self.processed_quanta.saturating_add(other.processed_quanta);
+        self.rendered_frames = self.rendered_frames.saturating_add(other.rendered_frames);
+        self.dropped_render_frames = self
+            .dropped_render_frames
+            .saturating_add(other.dropped_render_frames);
+    }
+}
+
 /// Endpoint-owned composition boundary for the portable realtime scheduler.
 /// The caller owns client activation, event waits, start/stop, graph
 /// publication, and any tap. `pump` only performs bounded packet copying,
@@ -1298,6 +1310,10 @@ pub struct WasapiEndpointWorker {
     running: bool,
 }
 
+/// Maximum number of already-available packets drained by one worker wake.
+/// Waiting for the next event remains outside the pump loop.
+pub const MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE: u32 = 64;
+
 impl WasapiEndpointWorker {
     /// Compose stopped, already-validated endpoint clients with their bridge.
     /// The clients must have matching shape validated by the bridge
@@ -1432,6 +1448,22 @@ impl WasapiEndpointWorker {
         self.bridge.pump(capture, render)
     }
 
+    /// Drain at most the caller-selected bounded number of currently
+    /// available packets. A packet-less pump ends the loop; this method never
+    /// waits for a future packet or retries an invalidated endpoint.
+    pub fn pump_available(&mut self, max_packets: u32) -> Result<WasapiSchedulerPump, AudioError> {
+        let mut total = WasapiSchedulerPump::default();
+        let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        for _ in 0..budget {
+            let result = self.pump()?;
+            total.accumulate(result);
+            if result.packets == 0 {
+                break;
+            }
+        }
+        Ok(total)
+    }
+
     /// Pump one bounded packet with the allocation-free graph tap and the
     /// rate-aware deadline observation used by the live adapter acceptance.
     pub fn pump_with_tap_and_quantum_deadline(
@@ -1458,6 +1490,31 @@ impl WasapiEndpointWorker {
             first_deadline,
             quantum_duration,
         )
+    }
+
+    /// Tap/deadline variant of [`Self::pump_available`], with the same hard
+    /// packet budget and no wait or implicit recovery.
+    pub fn pump_available_with_tap_and_quantum_deadline(
+        &mut self,
+        max_packets: u32,
+        tap: &dyn audiorouter_engine::AudioTap,
+        first_deadline: std::time::Instant,
+        quantum_duration: std::time::Duration,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        let mut total = WasapiSchedulerPump::default();
+        let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        for _ in 0..budget {
+            let result =
+                self.pump_with_tap_and_quantum_deadline(tap, first_deadline, quantum_duration)?;
+            total.accumulate(result);
+            if result.packets == 0 {
+                break;
+            }
+        }
+        Ok(total)
     }
 }
 
@@ -4056,6 +4113,30 @@ impl NativeBridgeSession {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn worker_packet_budget_and_telemetry_accumulation_are_bounded() {
+        assert_eq!(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE, 64);
+        let mut total = WasapiSchedulerPump {
+            packets: u32::MAX,
+            captured_frames: u32::MAX,
+            processed_quanta: u32::MAX,
+            rendered_frames: u32::MAX,
+            dropped_render_frames: u32::MAX,
+        };
+        total.accumulate(WasapiSchedulerPump {
+            packets: 1,
+            captured_frames: 1,
+            processed_quanta: 1,
+            rendered_frames: 1,
+            dropped_render_frames: 1,
+        });
+        assert_eq!(total.packets, u32::MAX);
+        assert_eq!(total.captured_frames, u32::MAX);
+        assert_eq!(total.processed_quanta, u32::MAX);
+        assert_eq!(total.rendered_frames, u32::MAX);
+        assert_eq!(total.dropped_render_frames, u32::MAX);
+    }
 
     #[test]
     fn float32_boundary_converts_interleaved_and_planar_without_allocating() {

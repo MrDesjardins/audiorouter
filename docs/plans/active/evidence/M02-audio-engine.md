@@ -152,6 +152,17 @@ and virtual-cable runs are the current runtime evidence. Native graph-to-device
 scheduling, dual-device drift, failure recovery, and measured physical latency
 remain open.
 
+## Bounded endpoint-worker packet drain (2026-09-10)
+
+`WasapiEndpointWorker` now drains a caller-selected packet budget per event
+wake, capped at 64 packets. It stops on an empty packet read, aggregates
+telemetry with saturating arithmetic, and keeps event waits, endpoint
+activation, stop, and rebind outside the pump. The tap/deadline path uses the
+same bound and never retries an invalidated endpoint. The focused
+Windows-audio suite passed 54 tests, strict package Clippy passed, and
+formatting/diff checks passed. No endpoint was opened by these checks; managed
+driver ownership and production callback timing remain open.
+
 ## 2026-09-06 — Prepared session activation boundary
 
 `RuntimeProcessor::activate_session` now compiles a complete session candidate

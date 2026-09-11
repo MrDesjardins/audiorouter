@@ -57,6 +57,17 @@ packet budget per event wake while retaining the existing nonblocking graph,
 render-carry, and drop telemetry semantics. Keep event waits and endpoint
 start/stop outside the pump and preserve fail-closed behavior on invalidation.
 
+Implemented bounded packet draining through `WasapiEndpointWorker::pump_available`
+and its tap/deadline variant. Each wake drains at most 64 already-available
+packets, stops when no packet is available, and saturates aggregate telemetry;
+it never waits, allocates, retries an invalidated endpoint, or moves endpoint
+activation into the pump. Focused Windows-audio coverage is now 54 tests, with
+strict package Clippy, formatting, and diff checks passing.
+
+Next action: connect this worker owner to the control-plane session lifecycle
+and recovery state without opening endpoints implicitly; preserve explicit
+authorization, exact binding, and fail-closed protected-path behavior.
+
 ## Priority shift: owned virtual-driver prototype
 
 The user has explicitly redirected execution from extended VST3 qualification to
