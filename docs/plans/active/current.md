@@ -1977,6 +1977,12 @@ on 2026-09-10. It runs the project-owned x64 WDK build and preserves the
 non-installing/signability-only boundary, preventing the full qualification
 chain from validating only the external reference-driver checkout.
 
+The M03 acceptance now also checks the source-level callback invariants after
+the WDK build: rundown acquisition/release and atomic view snapshots without
+the lease spin lock, plus wait-before-unmap resource retirement. This is a
+regression guard only; it does not substitute for loaded-driver callback or
+signing evidence.
+
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
   on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
   eight sections, SHA-256

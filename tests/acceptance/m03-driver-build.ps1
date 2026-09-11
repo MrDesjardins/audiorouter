@@ -2,10 +2,42 @@ $ErrorActionPreference = 'Stop'
 
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $build = Join-Path $workspace 'drivers/audiorouter-virtual/build.ps1'
+$adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter.cpp'
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $build
 if ($LASTEXITCODE -ne 0) {
     throw "AudioRouter virtual-driver build failed with exit code $LASTEXITCODE"
+}
+
+$source = Get-Content -LiteralPath $adapter -Raw
+$copyStart = $source.IndexOf('NTSTATUS AudioRouterCopyLeaseBlock(')
+$copyEnd = $source.IndexOf('static void RetireBridgeResources(', $copyStart)
+if ($copyStart -lt 0 -or $copyEnd -le $copyStart) {
+    throw 'driver callback lease helper boundary is missing'
+}
+$copyHelper = $source.Substring($copyStart, $copyEnd - $copyStart)
+foreach ($required in @(
+        'ExAcquireRundownProtection',
+        'InterlockedCompareExchangePointer',
+        'ExReleaseRundownProtection')) {
+    if (-not $copyHelper.Contains($required)) {
+        throw "callback lease helper is missing required invariant: $required"
+    }
+}
+if ($copyHelper.Contains('KeAcquireSpinLock')) {
+    throw 'callback lease helper must not acquire the lease spin lock'
+}
+
+$retireStart = $source.IndexOf('static void RetireBridgeResources(')
+$retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)
+if ($retireStart -lt 0 -or $retireEnd -le $retireStart) {
+    throw 'driver resource-retirement helper boundary is missing'
+}
+$retireHelper = $source.Substring($retireStart, $retireEnd - $retireStart)
+$waitOffset = $retireHelper.IndexOf('ExWaitForRundownProtectionRelease')
+$unmapOffset = $retireHelper.IndexOf('MmUnmapViewInSystemSpace')
+if ($waitOffset -lt 0 -or $unmapOffset -lt 0 -or $waitOffset -ge $unmapOffset) {
+    throw 'mapped-view retirement must wait for rundown before unmapping'
 }
 
 Write-Output 'M03 AudioRouter virtual-driver build acceptance passed'
