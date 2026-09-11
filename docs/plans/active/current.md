@@ -1962,6 +1962,11 @@ expiry replacement, and unload, with replacement claims blocked while readers
 drain. The helper is still not wired to the reference sample timer; loaded
 PortCls callback ownership remains the next native gate.
 
+Added `tests/acceptance/m03-driver-build.ps1` to the guarded `safe-all` chain
+on 2026-09-10. It runs the project-owned x64 WDK build and preserves the
+non-installing/signability-only boundary, preventing the full qualification
+chain from validating only the external reference-driver checkout.
+
 - Performed read-only identity inspection of the installed Pitchproof x64 DLL
   on 2026-09-09: the file is 1,077,760 bytes, PE machine `0x8664` (x64),
   eight sections, SHA-256
