@@ -285,6 +285,14 @@ impl NativeBridgeDuplexController {
         self.render.read_into(samples)
     }
 
+    pub fn render_read_into_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
+        self.render.read_into_after(minimum_sequence, samples)
+    }
+
     pub fn capture_writer(
         &self,
     ) -> Result<NativeBridgeRealtimeWriter, NativeBridgeControllerError> {
@@ -372,6 +380,16 @@ impl NativeBridgeController {
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
         self.session
             .read_into(samples)
+            .map_err(NativeBridgeControllerError::Session)
+    }
+
+    pub fn read_into_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
+        self.session
+            .read_into_after(minimum_sequence, samples)
             .map_err(NativeBridgeControllerError::Session)
     }
 
@@ -3454,6 +3472,17 @@ impl NativeBridgeRegion {
         expected_generation: u64,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeRegionError> {
+        self.read_into_after(expected_generation, 0, samples)
+    }
+
+    /// Read only a block newer than the caller's last consumed sequence.
+    /// Supplying the floor is required for replay-safe render consumption.
+    pub fn read_into_after(
+        &self,
+        expected_generation: u64,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeRegionError> {
         let state = self.state();
         let before = state.load(std::sync::atomic::Ordering::Acquire);
         if before == 0 {
@@ -3468,6 +3497,9 @@ impl NativeBridgeRegion {
             .map_err(NativeBridgeRegionError::Contract)?;
         if header.generation != expected_generation {
             return Err(NativeBridgeRegionError::StaleGeneration);
+        }
+        if header.sequence <= minimum_sequence {
+            return Err(NativeBridgeRegionError::SequenceRegression);
         }
         let sample_count = usize::from(header.frames) * usize::from(header.channels);
         if samples.len() < sample_count {
@@ -3773,12 +3805,23 @@ impl NativeBridgeSession {
         &self,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
-        self.read_into_at(std::time::Instant::now(), samples)
+        self.read_into_after(0, samples)
+    }
+
+    /// Read a render-source block newer than the caller's last consumed
+    /// sequence. This makes reconnect/polling replay policy explicit.
+    pub fn read_into_after(
+        &self,
+        minimum_sequence: u64,
+        samples: &mut [f32],
+    ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
+        self.read_into_at(std::time::Instant::now(), minimum_sequence, samples)
     }
 
     fn read_into_at(
         &self,
         now: std::time::Instant,
+        minimum_sequence: u64,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
         if self.hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource {
@@ -3786,7 +3829,7 @@ impl NativeBridgeSession {
         }
         self.ensure_lease_at(now)?;
         self.region
-            .read_into(self.hello.generation, samples)
+            .read_into_after(self.hello.generation, minimum_sequence, samples)
             .map_err(NativeBridgeSessionError::Region)
     }
 
@@ -4778,6 +4821,10 @@ mod tests {
             Err(NativeBridgeRegionError::StaleGeneration)
         ));
         assert!(matches!(
+            reader.read_into_after(4, 1, &mut output),
+            Err(NativeBridgeRegionError::SequenceRegression)
+        ));
+        assert!(matches!(
             writer.write(4, 1, &input),
             Err(NativeBridgeRegionError::SequenceRegression)
         ));
@@ -4859,6 +4906,12 @@ mod tests {
         let mut output = [0.0; 4];
         let header = reader.read_into(&mut output).unwrap();
         assert_eq!(header.sequence, 2);
+        assert!(matches!(
+            reader.read_into_after(2, &mut output),
+            Err(NativeBridgeSessionError::Region(
+                NativeBridgeRegionError::SequenceRegression
+            ))
+        ));
         assert_eq!(output, input);
         assert_eq!(reader.hello().bus_id, "bus-main");
         drop(reader);

@@ -61,6 +61,10 @@ sessions are producers and render sessions are consumers. Wrong-direction
 write, read, and producer-factory calls fail before touching the lease or
 mapping. The focused Windows-audio suite passes 53 tests.
 
+The render-source reader now accepts a caller-supplied last-consumed sequence
+through `read_into_after` at every adapter layer. Equal or older blocks return
+the existing sequence-regression error, matching the kernel replay policy.
+
 `NativeBridgeDuplexController::create_with_sections` now provides the mapped
 two-ended construction path. Each child retains its section handle for the
 lease lifetime, and failure of the second claim releases the first. This is

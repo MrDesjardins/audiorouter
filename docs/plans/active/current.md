@@ -218,6 +218,11 @@ Directional role enforcement is now active in `NativeBridgeSession`: only a
 `RenderSource` may read. Wrong-direction calls fail before lease or mapping
 access. The focused Windows-audio suite passes 53 tests with strict Clippy.
 
+Render consumption now also exposes an explicit `read_into_after` sequence
+floor through the region, session, controller, and duplex APIs. Equal or older
+blocks are rejected, preventing replay during polling or reconnect recovery.
+The focused suite remains green after this addition.
+
 The duplex preflight now has regressions proving that direction and bus
 mismatches return before any device or mapping open. The Windows-audio suite
 passes 52 tests with strict Clippy; this closes the application-side validation
