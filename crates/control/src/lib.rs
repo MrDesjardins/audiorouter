@@ -2419,6 +2419,7 @@ pub struct ControlPlane {
     session_import_plans: HashMap<EntityId, (Session, Instant)>,
     next_session_import_plan: u64,
     active_idempotency_scope: Option<String>,
+    endpoint_monitor: Option<audiorouter_windows_audio::EndpointMonitor>,
 }
 
 impl Default for ControlPlane {
@@ -2462,6 +2463,7 @@ impl ControlPlane {
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
+            endpoint_monitor: None,
         }
     }
 
@@ -2578,6 +2580,7 @@ impl ControlPlane {
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
+            endpoint_monitor: None,
         })
     }
 
@@ -5617,7 +5620,7 @@ impl ControlPlane {
         }))
     }
 
-    fn dispatch_devices_list(&self, params: Option<Value>) -> Result<Value, ControlError> {
+    fn dispatch_devices_list(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
         let params = params.unwrap_or_else(|| json!({}));
         let paged = params.get("cursor").is_some() || params.get("limit").is_some();
         let cursor = params
@@ -5636,8 +5639,17 @@ impl ControlPlane {
                 "limit must be between 1 and 500".into(),
             ));
         }
-        let endpoints =
-            audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
+        if self.endpoint_monitor.is_none() {
+            self.endpoint_monitor = Some(
+                audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
+            );
+        }
+        let monitor = self
+            .endpoint_monitor
+            .as_mut()
+            .expect("endpoint monitor initialized above");
+        monitor.poll_changes().map_err(audio_control_error)?;
+        let endpoints = monitor.snapshot().to_vec();
         let defaults = audiorouter_windows_audio::enumerate_default_endpoint_bindings()
             .map_err(audio_control_error)?;
         let display_info = audiorouter_windows_audio::enumerate_active_endpoint_display_info()

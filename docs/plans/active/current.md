@@ -7445,3 +7445,13 @@ stream, or machine configuration action occurred.
 - Next M00/M02 task: design and implement the bounded format-optional
   all-state `devices.list` response, then consume notification dirtiness from
   the control thread with explicit snapshot-diff events.
+- Connected the existing endpoint monitor to the control-plane `devices.list`
+  lifecycle on 2026-09-11: the first discovery request creates one RAII
+  notification subscription, later requests consume its coalesced dirty flag
+  and refresh the control-thread snapshot, and the monitor is dropped with
+  callback unregistration. No callback enumerates, allocates, locks, or opens
+  a stream. Control/windows-audio tests (106/56), strict Clippy, formatting,
+  and diff checks passed; all-state records remain a separate pending schema.
+- Next M00/M02 task: add explicit format-optional inactive records to
+  `devices.list`, then emit bounded endpoint snapshot-change events without
+  silently rebinding routes.

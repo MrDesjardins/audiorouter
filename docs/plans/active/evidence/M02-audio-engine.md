@@ -1381,3 +1381,15 @@ Windows-audio suite passed 53 tests, strict package Clippy passed, and
 formatting/diff checks passed. No endpoint was opened by these checks; managed
 driver ownership, production callback timing, signing, and physical latency
 remain open.
+
+## 2026-09-11 — Control-thread notification refresh
+
+`ControlPlane` now lazily owns one `EndpointMonitor` after the first
+`devices.list` request. The monitor consumes the atomic notification dirty bit
+on the control thread and refreshes its active endpoint snapshot only when a
+notification is pending; destruction unregisters the callback. Discovery
+errors remain structured and no route is automatically rebound. The callback
+still performs only an atomic store, preserving the realtime and callback
+invariants. Focused control (106) and Windows-audio (56) tests, strict Clippy,
+formatting, and diff checks passed. Inactive format-optional records and
+public snapshot-change events remain open.
