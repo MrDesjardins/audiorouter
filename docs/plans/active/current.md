@@ -7932,3 +7932,12 @@ live-driver evidence.
   registration, live audio stream, or persistent machine configuration
   occurred. Production driver activation/signing, installer, clean-machine,
   physical-latency, and manual UI gates remain open.
+- Completed the portable M05 recovery presentation slice on 2026-09-11. The
+  application now renders the bounded persisted `recordings.recovery` listing
+  in a dedicated read-only `Recovery checkpoints` panel, including recording
+  identity, status, unavailable/error handling, and explicit no-file-operation
+  safety copy. The connected-backend regression covers an invalid checkpoint;
+  the full UI suite passed (17 files/124 tests), TypeScript typecheck passed, and
+  a disposable alternate-output production build completed. No session, audio
+  endpoint, driver, or machine configuration was accessed. Manual Narrator,
+  scaling, and packaged-shell acceptance remain open.

@@ -81,6 +81,22 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByLabelText("Voice gain in input")).toBeTruthy();
   });
 
+  it("renders the read-only persisted recovery checkpoint panel", async () => {
+    const backend = {
+      ...createDisconnectedBackend(),
+      connected: true,
+      listRecordingRecovery: async () => ({
+        items: [{ recordingId: "take-recovery", status: "invalid" as const }],
+        nextCursor: null,
+      }),
+    };
+    render(<App backend={backend} />);
+    expect(await screen.findByRole("heading", { name: "Recovery checkpoints" })).toBeTruthy();
+    expect(await screen.findByText("take-recovery")).toBeTruthy();
+    expect(await screen.findByText(/invalid/)).toBeTruthy();
+    expect(screen.getByText("This list is read-only. Recovery inspection does not open, repair, play, or delete audio files.")).toBeTruthy();
+  });
+
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {
     const processor: ProcessorDescriptor = {
       id: "gain",

@@ -766,3 +766,16 @@ dedicated component regression covers both states. UI typecheck, 15 Vitest
 files/93 tests, and a temporary production build passed. This is display and
 discovery evidence only; durable process capture still requires the managed
 native owner.
+
+## Read-only recovery checkpoint panel (2026-09-11)
+
+The UI now presents the bounded persisted recovery discovery result as a dedicated,
+read-only `Recovery checkpoints` panel. It displays recording IDs and checkpoint
+status, reports an unavailable/error state without inventing recovery actions, and
+explicitly states that inspection does not open, repair, play, or delete audio files.
+The connected-backend regression supplies an invalid checkpoint and verifies the
+heading, identity, status, and safety copy. The full UI suite passed with 17 test
+files/124 tests, TypeScript typecheck passed, and a disposable Vite production build
+completed in an alternate output directory. No session, audio endpoint, driver, or
+machine configuration was accessed. Manual Narrator, scaling, and packaged-shell
+acceptance remain open.
