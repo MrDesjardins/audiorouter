@@ -18,6 +18,13 @@ configures that identity before attachment and rejects workers that cannot
 own one file. The WAV session-stop regression exercises this boundary; no
 path or session ownership is inferred from an unconfigured worker.
 
+The lifecycle-owned `create_file_recorder` factory now reuses
+`RecordingPathPolicy` for exclusive WAV/FLAC creation, carries the requested
+WAV dither setting into the writer, configures identity before attachment, and
+supports `ControlPlane::create_and_attach_file_recorder`. A control regression
+verifies creation, attachment, lifecycle stop, and one indexed row. No file
+operation is available from the realtime callback.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30

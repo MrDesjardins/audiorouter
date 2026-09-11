@@ -256,10 +256,31 @@ impl WavRecorderWorker {
         queue_capacity: usize,
         maximum_chunks_per_pass: usize,
     ) -> Result<Self, String> {
+        Self::new_with_dither(
+            output,
+            format,
+            channels,
+            sample_rate,
+            false,
+            queue_capacity,
+            maximum_chunks_per_pass,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_dither(
+        output: std::fs::File,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<Self, String> {
         if maximum_chunks_per_pass == 0 {
             return Err("maximum recorder drain pass must be positive".into());
         }
-        let writer = WavWriter::new(output, format, channels, sample_rate, false)
+        let writer = WavWriter::new(output, format, channels, sample_rate, dither)
             .map_err(|error| format!("WAV writer initialization failed: {error:?}"))?;
         let queue = RecordingQueue::new_pooled(
             queue_capacity,
@@ -405,6 +426,76 @@ impl RecorderWorker for WavRecorderWorker {
             recoverable: false,
         })
     }
+}
+
+/// File formats supported by the lifecycle-owned recorder factory.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FileRecorderFormat {
+    Wav(WavFormat),
+    Flac { bits_per_sample: u8 },
+}
+
+impl FileRecorderFormat {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Wav(_) => "wav",
+            Self::Flac { .. } => "flac",
+        }
+    }
+}
+
+/// Creates a path-owned recorder on the lifecycle thread. The returned path
+/// is the exact path created by `RecordingPathPolicy`; the worker is already
+/// configured with the same explicit library identity before it is returned.
+#[allow(clippy::too_many_arguments)]
+pub fn create_file_recorder(
+    policy: &RecordingPathPolicy,
+    session_id: &str,
+    recorder_id: &str,
+    sequence: u64,
+    format: FileRecorderFormat,
+    channels: u16,
+    sample_rate: u32,
+    dither: bool,
+    queue_capacity: usize,
+    maximum_chunks_per_pass: usize,
+) -> Result<(std::path::PathBuf, Box<dyn RecorderWorker>), String> {
+    let (path, file) = policy
+        .create_file(session_id, recorder_id, sequence, format.extension())
+        .map_err(format_path_policy_error)?;
+    let identity = FileRecordingIdentity {
+        session_id: session_id.to_owned(),
+        recorder_id: recorder_id.to_owned(),
+        path: path.clone(),
+    };
+    let worker: Box<dyn RecorderWorker> = match format {
+        FileRecorderFormat::Wav(wav_format) => {
+            let mut worker = WavRecorderWorker::new_with_dither(
+                file,
+                wav_format,
+                channels,
+                sample_rate,
+                dither,
+                queue_capacity,
+                maximum_chunks_per_pass,
+            )?;
+            worker.set_library_identity(identity);
+            Box::new(worker)
+        }
+        FileRecorderFormat::Flac { bits_per_sample } => {
+            let mut worker = BufferedFlacRecorderWorker::new(
+                file,
+                usize::from(channels),
+                sample_rate,
+                bits_per_sample,
+                queue_capacity,
+                maximum_chunks_per_pass,
+            )?;
+            worker.set_library_identity(identity);
+            Box::new(worker)
+        }
+    };
+    Ok((path, worker))
 }
 
 type SegmentedWavFactory = Box<dyn FnMut(u32) -> Result<std::fs::File, RecordingError> + Send>;
@@ -3915,6 +4006,40 @@ impl ControlPlane {
             .set_library_identity(identity)
             .map_err(ControlError::InvalidRequest)?;
         self.attach_recorder_worker(session_id, worker)
+    }
+
+    /// Create and attach a path-owned WAV/FLAC recorder before any lifecycle
+    /// command can arm it. File allocation and worker construction happen on
+    /// this control/lifecycle boundary, never in the audio callback.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_and_attach_file_recorder(
+        &mut self,
+        policy: &RecordingPathPolicy,
+        session_id: EntityId,
+        recorder_id: &str,
+        sequence: u64,
+        format: FileRecorderFormat,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<std::path::PathBuf, ControlError> {
+        let (path, worker) = create_file_recorder(
+            policy,
+            session_id.as_str(),
+            recorder_id,
+            sequence,
+            format,
+            channels,
+            sample_rate,
+            dither,
+            queue_capacity,
+            maximum_chunks_per_pass,
+        )
+        .map_err(ControlError::InvalidRequest)?;
+        self.attach_recorder_worker(session_id, worker)?;
+        Ok(path)
     }
 
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
@@ -11306,6 +11431,71 @@ mod tests {
             RecorderState::Completed
         );
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recorder_factory_creates_attaches_and_indexes_a_wav_before_arm() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("audiorouter-control-factory-{run_id}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let mut plane = ControlPlane::with_storage("factory", Storage::open_memory().unwrap());
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let path = plane
+            .create_and_attach_file_recorder(
+                &policy,
+                original.id.clone(),
+                "voice",
+                0,
+                FileRecorderFormat::Wav(WavFormat::Pcm16),
+                1,
+                48_000,
+                false,
+                8,
+                1,
+            )
+            .unwrap();
+        assert!(path.is_file());
+
+        for (id, method, frame) in [
+            (1, "recorders.arm", None),
+            (2, "recorders.start", Some(0)),
+            (3, "recorders.stop", Some(0)),
+        ] {
+            let params = match frame {
+                Some(frame) => json!({
+                    "sessionId": original.id,
+                    "frame": frame,
+                    "idempotencyKey": format!("factory-{id}")
+                }),
+                None => json!({
+                    "sessionId": original.id,
+                    "idempotencyKey": format!("factory-{id}")
+                }),
+            };
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(id)),
+                method: method.into(),
+                params: Some(params),
+            });
+            assert!(response.result.is_some(), "{method}: {response:?}");
+        }
+        let rows = plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .list_recordings(Some(original.id.as_str()))
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].format, "wav");
+        assert_eq!(rows[0].path, path.to_str().unwrap());
+        assert_eq!(rows[0].frames, 0);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

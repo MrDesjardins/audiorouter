@@ -7985,6 +7985,20 @@ live-driver evidence.
   and lifecycle-owned factory that allocates the approved path, creates the
   WAV/FLAC worker, and attaches it atomically before `recorders.arm`. Do not
   expose raw file handles or perform file creation from the audio callback.
+- Implemented the lifecycle-owned WAV/FLAC file factory on 2026-09-11.
+  `create_file_recorder` and `ControlPlane::create_and_attach_file_recorder`
+  reuse `RecordingPathPolicy` for exclusive creation, preserve the requested
+  WAV dither setting, configure identity before attachment, and leave the
+  worker unarmed until the caller explicitly transitions it. A control
+  regression verifies creation, attachment, stop, and one indexed row; strict
+  Clippy, formatting, and diff checks passed. A versioned JSON-RPC recorder
+  configuration payload, graph attachment, and native endpoint ownership
+  remain open.
+- Next M04/REC-10/API-01 task: expose the bounded factory configuration as a
+  discovered API operation with explicit format, channels, rate, dither,
+  sequence, queue, and destination-policy fields. Validate all fields before
+  path creation, preserve idempotency, and never accept a raw path outside the
+  approved root policy.
 - Requalified the complete elevated guarded `tests/acceptance/safe-all.ps1`
   chain at the current head on 2026-09-11. VS/WDK discovery and the
   non-installing AudioRouter driver build, read-only 31-endpoint inventory,
