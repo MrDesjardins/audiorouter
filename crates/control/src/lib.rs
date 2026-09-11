@@ -1459,6 +1459,7 @@ fn method_description(name: &str) -> &'static str {
         "operations.cancel" => "Cancel a pending operation when it has not completed.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
         "recorders.list" => "List live in-memory recorder states and frame boundaries.",
+        "recorders.create" => "Create and attach an unarmed file recorder under the approved root.",
         "recorders.arm" => "Arm a session recorder without opening an audio device.",
         "recorders.start" => "Start a recorder at an explicit engine frame boundary.",
         "recorders.pause" => "Pause a recorder at an explicit engine frame boundary.",
@@ -1592,6 +1593,31 @@ fn method_input_schema(name: &str) -> Value {
             &[],
         ),
         "recorders.list" => object_schema(json!({}), &[]),
+        "recorders.create" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24"] },
+                "sequence": { "type": "integer", "minimum": 0 },
+                "channels": { "type": "integer", "enum": [1, 2] },
+                "sampleRate": { "type": "integer", "enum": [44100, 48000] },
+                "dither": { "type": "boolean" },
+                "queueCapacity": { "type": "integer", "minimum": 1, "maximum": audiorouter_recording::MAX_RECORDING_QUEUE_CHUNKS },
+                "maximumChunksPerPass": { "type": "integer", "minimum": 1 },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &[
+                "sessionId",
+                "recorderId",
+                "format",
+                "sequence",
+                "channels",
+                "sampleRate",
+                "queueCapacity",
+                "maximumChunksPerPass",
+                "idempotencyKey",
+            ],
+        ),
         "recorders.arm" => recorder_input_schema(false),
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => recorder_input_schema(true),
@@ -1867,6 +1893,19 @@ fn recorder_input_schema(frame_required: bool) -> Value {
 
 fn method_output_schema(name: &str) -> Value {
     match name {
+        "recorders.create" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "recorderId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24"] },
+                "path": { "type": "string", "minLength": 1 },
+                "state": { "const": "idle" },
+                "armed": { "const": false }
+            },
+            "required": ["sessionId", "recorderId", "format", "path", "state", "armed"],
+            "additionalProperties": false
+        }),
         "recorders.list" => json!({
             "type": "array",
             "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
@@ -4162,7 +4201,10 @@ impl ControlPlane {
         }
         let (path, worker) = create_file_recorder_with_config(policy, config)
             .map_err(ControlError::InvalidRequest)?;
-        self.attach_recorder_worker(session_id, worker)?;
+        if let Err(error) = self.attach_recorder_worker(session_id, worker) {
+            let _ = std::fs::remove_file(&path);
+            return Err(error);
+        }
         Ok(path)
     }
 
@@ -4185,7 +4227,10 @@ impl ControlPlane {
             create_file_recorder_with_config(policy, config)
                 .map_err(ControlError::InvalidRequest)?
         };
-        self.attach_recorder_worker(session_id, worker)?;
+        if let Err(error) = self.attach_recorder_worker(session_id, worker) {
+            let _ = std::fs::remove_file(&path);
+            return Err(error);
+        }
         Ok(path)
     }
 
@@ -5088,6 +5133,7 @@ impl ControlPlane {
                     "operations.cancel" => self.dispatch_operation_cancel(request.params),
                     "recordings.list" => self.dispatch_recordings_list(request.params),
                     "recorders.list" => self.dispatch_recorders_list(request.params),
+                    "recorders.create" => self.dispatch_recorder_create(request.params),
                     "recorders.arm" | "recorders.start" | "recorders.pause"
                     | "recorders.resume" | "recorders.split" | "recorders.stop" => {
                         self.dispatch_recorder(request.method.as_str(), request.params)
@@ -5848,6 +5894,109 @@ impl ControlPlane {
             .ok_or_else(|| ControlError::InvalidRequest("baseRevision is required".into()))?;
         let plan_id = self.graph_undo_plan(&session_id, base_revision)?;
         Ok(json!({ "planId": plan_id, "baseRevision": base_revision, "expiresInMs": 300000 }))
+    }
+
+    fn dispatch_recorder_create(&mut self, params: Option<Value>) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("recorder creation parameters are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let recorder_id = params
+            .get("recorderId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("recorderId is required".into()))?;
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let request_hash = Self::request_hash(&params);
+        let scoped_key = self.scoped_idempotency_key("recorders.create", idempotency_key);
+        if let Some(result) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+            return Ok(result);
+        }
+        let sequence = params
+            .get("sequence")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| ControlError::InvalidRequest("sequence is required".into()))?;
+        let channels = params
+            .get("channels")
+            .and_then(Value::as_u64)
+            .and_then(|value| u16::try_from(value).ok())
+            .ok_or_else(|| ControlError::InvalidRequest("channels is required".into()))?;
+        let sample_rate = params
+            .get("sampleRate")
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .ok_or_else(|| ControlError::InvalidRequest("sampleRate is required".into()))?;
+        let queue_capacity = params
+            .get("queueCapacity")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or_else(|| ControlError::InvalidRequest("queueCapacity is required".into()))?;
+        let maximum_chunks_per_pass = params
+            .get("maximumChunksPerPass")
+            .and_then(Value::as_u64)
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("maximumChunksPerPass is required".into())
+            })?;
+        let dither = params
+            .get("dither")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let format_name = params
+            .get("format")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("format is required".into()))?;
+        let format = match format_name {
+            "wavPcm16" => FileRecorderFormat::Wav(WavFormat::Pcm16),
+            "wavPcm24" => FileRecorderFormat::Wav(WavFormat::Pcm24),
+            "wavFloat32" => FileRecorderFormat::Wav(WavFormat::Float32),
+            "flac16" => FileRecorderFormat::Flac {
+                bits_per_sample: 16,
+            },
+            "flac24" => FileRecorderFormat::Flac {
+                bits_per_sample: 24,
+            },
+            _ => {
+                return Err(ControlError::InvalidRequest(
+                    "unsupported recorder format".into(),
+                ))
+            }
+        };
+        let session = EntityId::new(session_id);
+        if self.store.session(&session).is_none() {
+            return Err(ControlError::InvalidRequest("session not found".into()));
+        }
+        let config = FileRecorderConfig {
+            version: FILE_RECORDER_CONFIG_VERSION,
+            session_id,
+            recorder_id,
+            sequence,
+            format,
+            channels,
+            sample_rate,
+            dither,
+            queue_capacity,
+            maximum_chunks_per_pass,
+        };
+        let path = self.create_and_attach_configured_file_recorder(session, &config)?;
+        let result = json!({
+            "sessionId": session_id,
+            "recorderId": recorder_id,
+            "format": format_name,
+            "path": path,
+            "state": "idle",
+            "armed": false,
+        });
+        self.journal_idempotent_result(&scoped_key, "recorders.create", &request_hash, &result)?;
+        Ok(result)
     }
 
     fn dispatch_recorder(
@@ -7707,6 +7856,18 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "operations.cancel" => &["operationId", "idempotencyKey"],
         "recordings.list" => &["sessionId", "cursor", "limit"],
         "recorders.list" => &[],
+        "recorders.create" => &[
+            "sessionId",
+            "recorderId",
+            "format",
+            "sequence",
+            "channels",
+            "sampleRate",
+            "dither",
+            "queueCapacity",
+            "maximumChunksPerPass",
+            "idempotencyKey",
+        ],
         "recorders.arm" => &["sessionId", "idempotencyKey"],
         "recorders.start" | "recorders.pause" | "recorders.resume" | "recorders.split"
         | "recorders.stop" => &["sessionId", "frame", "idempotencyKey"],
@@ -11658,6 +11819,66 @@ mod tests {
         assert_eq!(rows[0].format, "wav");
         assert_eq!(rows[0].path, path.to_str().unwrap());
         assert_eq!(rows[0].frames, 0);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recorder_create_api_is_idempotent_and_does_not_arm() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("audiorouter-control-create-api-{run_id}"));
+        std::fs::create_dir_all(&root).unwrap();
+        let mut plane = ControlPlane::with_storage("create-api", Storage::open_memory().unwrap());
+        plane.configure_recording_root(&root).unwrap();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "recorders.create".into(),
+            params: Some(json!({
+                "sessionId": original.id,
+                "recorderId": "voice",
+                "format": "wavPcm24",
+                "sequence": 0,
+                "channels": 1,
+                "sampleRate": 48000,
+                "dither": true,
+                "queueCapacity": 8,
+                "maximumChunksPerPass": 1,
+                "idempotencyKey": "create-api-1"
+            })),
+        };
+        let first = plane.dispatch(request.clone());
+        let first_result = first.result.clone().unwrap();
+        assert_eq!(first_result["state"], "idle");
+        assert_eq!(first_result["armed"], false);
+        assert_eq!(first_result["format"], "wavPcm24");
+        let second = plane.dispatch(request);
+        assert_eq!(second.result.unwrap(), first_result);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        assert_eq!(plane.recorders.len(), 0);
+        let duplicate = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "recorders.create".into(),
+            params: Some(json!({
+                "sessionId": original.id,
+                "recorderId": "voice",
+                "format": "wavPcm24",
+                "sequence": 1,
+                "channels": 1,
+                "sampleRate": 48000,
+                "queueCapacity": 8,
+                "maximumChunksPerPass": 1,
+                "idempotencyKey": "create-api-duplicate"
+            })),
+        };
+        let failed = plane.dispatch(duplicate);
+        assert!(failed.error.is_some());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
         let _ = std::fs::remove_dir_all(root);
     }
 

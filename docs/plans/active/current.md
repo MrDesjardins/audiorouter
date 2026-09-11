@@ -8103,3 +8103,17 @@ live-driver evidence.
   occurred. Production driver activation/signing, installer, clean-machine,
   physical-latency, manual UI, and independent-plugin rights gates remain
   open.
+- Implemented permissioned `recorders.create` on 2026-09-11. The method is
+  registered in the authoritative API catalog and discovery contracts,
+  validates bounded versioned format configuration, uses the persisted root,
+  attaches an unarmed worker, and journals idempotent replay. The JSON-RPC
+  regression proves one path is returned on repeated requests and no recorder
+  state is armed; workspace Clippy, formatting, and diff checks passed.
+- Next M04/REC-01/GRAPH-10 task: attach created recorder taps to prepared graph
+  branches and enforce independent-sink ownership, keeping fan-out bounded
+  and callback work allocation-free/nonblocking. Native endpoint attachment
+  remains a separate M03/M08 gate.
+- Hardened recorder-create rollback on 2026-09-11. If worker attachment fails
+  after exclusive file creation, only that newly created path is removed; a
+  duplicate-attachment regression proves the original destination remains
+  intact. The API remains unarmed and does not implicitly start a graph.

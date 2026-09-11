@@ -36,6 +36,15 @@ non-reparse local directory, and a regression proves round-trip plus failure
 when the root disappears. `ControlPlane::configure_recording_root` replaces
 the active policy only after durable save succeeds.
 
+`recorders.create` is now an authoritative Record-scoped API method. It
+accepts only the bounded versioned format configuration, creates under the
+hydrated root, returns an unarmed recorder, and journals the result for
+idempotent replay. The control regression confirms replay returns the same
+path without creating a second file or arming recorder state.
+If attachment fails after exclusive creation, the factory removes only that
+newly created file; the regression also verifies duplicate attachment leaves
+the original file as the sole destination.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30
