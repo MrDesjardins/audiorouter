@@ -8262,3 +8262,12 @@ live-driver evidence.
   attached worker to a validated runtime generation and prebuilt graph tap,
   retaining bounded packet draining and fail-closed behavior without making
   session start implicitly activate native audio.
+- Added the explicit native pump boundary on 2026-09-11. The control plane
+  now requires the attached session, a running matching fake-runtime
+  generation, and a caller-owned graph tap before invoking bounded endpoint
+  packet draining. Stale generations, stopped/missing sessions, and unrelated
+  session IDs fail closed. Control tests (121), strict Clippy, formatting,
+  diff checks, and documentation validation pass; no endpoint was opened.
+- Next M02/M03 task: replace the fake-runtime generation check with the
+  prepared native graph generation once graph activation is wired, then add a
+  guarded Windows integration test for one explicit endpoint-worker pump.

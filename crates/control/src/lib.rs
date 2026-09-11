@@ -3543,6 +3543,53 @@ impl ControlPlane {
             .map_err(audio_control_error)
     }
 
+    /// Pump already-available endpoint packets through a caller-owned graph
+    /// tap for the exact running session generation. The bounded Windows
+    /// worker performs no wait or implicit recovery here; endpoint wakeup and
+    /// graph publication remain owned by the native scheduler.
+    pub fn pump_native_endpoint_worker(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        max_packets: u32,
+        tap: &dyn AudioTap,
+    ) -> Result<Value, ControlError> {
+        if self.native_endpoint_session.as_ref() != Some(session_id) {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is not bound to the session".into(),
+            ));
+        }
+        let runtime_generation = self
+            .runtimes
+            .get(session_id)
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .map(FakeRuntime::generation)
+            .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
+        if runtime_generation != generation {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker generation is stale".into(),
+            ));
+        }
+        let pump = self
+            .native_endpoint_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native endpoint worker is not attached".into())
+            })?
+            .pump_available_with_tap(max_packets, tap)
+            .map_err(audio_control_error)?;
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "packets": pump.packets,
+            "capturedFrames": pump.captured_frames,
+            "processedQuanta": pump.processed_quanta,
+            "renderedFrames": pump.rendered_frames,
+            "droppedRenderFrames": pump.dropped_render_frames,
+            "renderBackpressureEvents": pump.render_backpressure_events,
+        }))
+    }
+
     /// Detach only a stopped native worker; this never affects unrelated
     /// endpoints or machine audio configuration.
     pub fn detach_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
