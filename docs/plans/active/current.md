@@ -12,7 +12,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest pushed checkpoint is `c1ab115f`; the native probe compile was
+The latest pushed checkpoint is `8ee7d4e6`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features
@@ -56,6 +56,14 @@ qualification remains open.
   tests. Workspace all-target Clippy with warnings denied, formatting, and diff
   checks passed. No endpoint was opened and no driver, plugin registration, or
   persistent machine audio configuration changed.
+
+- Requalified standalone M08 unsigned release preparation at `8ee7d4e6` on
+  2026-09-10 with `tests/acceptance/m08-release.ps1`. Rust release binaries,
+  UI typecheck and Vite production output, native shell release compilation,
+  unsigned artifact preparation, SBOM structure checks, and artifact
+  verification all passed. The acceptance removed its temporary release and
+  UI output; no installer, driver, signing, plugin registration, audio stream,
+  or persistent machine configuration action occurred.
 
 - Implemented and pushed bounded native-worker diagnostics in `3577e36d`.
   The Rust supervisor now drains at most 8 KiB of worker stderr on a control
