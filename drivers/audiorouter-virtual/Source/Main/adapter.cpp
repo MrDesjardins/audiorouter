@@ -185,6 +185,45 @@ static void RetireBridgeResources(
     }
 }
 
+static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
+{
+    if (FileObject == NULL) {
+        return;
+    }
+
+    for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
+        AR_BRIDGE_LEASE_STATE* lease = &g_BridgeLeases[index];
+        PVOID sectionObject = NULL;
+        PVOID mappedView = NULL;
+        BOOLEAN rundownStarted = FALSE;
+        KIRQL oldIrql;
+
+        KeAcquireSpinLock(&lease->Lock, &oldIrql);
+        if (lease->Active && lease->OwnerFileObject == FileObject) {
+            sectionObject = lease->SectionObject;
+            mappedView = InterlockedExchangePointer(&lease->MappedView, NULL);
+            rundownStarted = mappedView != NULL;
+            lease->RundownStarted = rundownStarted;
+            lease->Retiring = rundownStarted;
+            lease->SectionObject = NULL;
+            lease->MappedBytes = 0;
+            lease->Active = FALSE;
+            lease->OwnerFileObject = NULL;
+            lease->LastHeartbeat100ns = 0;
+        }
+        KeReleaseSpinLock(&lease->Lock, oldIrql);
+
+        if (mappedView != NULL || sectionObject != NULL) {
+            RetireBridgeResources(lease, mappedView, sectionObject,
+                                  rundownStarted);
+            KeAcquireSpinLock(&lease->Lock, &oldIrql);
+            RtlZeroMemory(&lease->Request, sizeof(lease->Request));
+            lease->Retiring = FALSE;
+            KeReleaseSpinLock(&lease->Lock, oldIrql);
+        }
+    }
+}
+
 static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(_In_ USHORT Direction)
 {
     if (Direction == AR_BRIDGE_DIRECTION_RENDER_SOURCE) {
@@ -292,8 +331,17 @@ static NTSTATUS CompleteBridgeIrp(_In_ PIRP Irp, _In_ NTSTATUS Status)
     return Status;
 }
 
+static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject);
+
 NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
 {
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    if (stack != NULL && stack->MajorFunction == IRP_MJ_CLOSE) {
+        // A client can terminate without sending the close IOCTL. Release
+        // only leases claimed by this file object; other bridge owners remain
+        // independent and are not disturbed.
+        ReleaseLeasesOwnedByFileObject(stack->FileObject);
+    }
     return CompleteBridgeIrp(Irp, STATUS_SUCCESS);
 }
 

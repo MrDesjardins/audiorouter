@@ -7662,3 +7662,10 @@ stream, or machine configuration action occurred.
   M03 x64 WDK build/source acceptance passed with zero signability
   errors/warnings and catalog generation. No driver was installed or loaded;
   machine audio configuration was unchanged.
+- Added handle-loss recovery on 2026-09-11: the driver handles
+  `IRP_MJ_CLOSE` by detaching and retiring only leases owned by that control
+  file object, waiting for callback rundown before unmapping, and preserving
+  other directional owners. The guarded non-installing M03 x64 WDK
+  build/source acceptance passed with zero signability errors/warnings and
+  catalog generation. No driver was installed or loaded and no machine audio
+  configuration changed.

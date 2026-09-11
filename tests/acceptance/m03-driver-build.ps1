@@ -14,6 +14,15 @@ $bridgeHeader = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorou
 if (-not $bridgeHeader.Contains('Request->Reserved2 != 0')) {
     throw 'bridge request validation must reject non-zero reserved fields'
 }
+foreach ($required in @(
+        'ReleaseLeasesOwnedByFileObject',
+        'IRP_MJ_CLOSE',
+        'OwnerFileObject == FileObject',
+        'RetireBridgeResources(lease, mappedView, sectionObject')) {
+    if (-not $source.Contains($required)) {
+        throw "driver close cleanup is missing required ownership invariant: $required"
+    }
+}
 $copyStart = $source.IndexOf('NTSTATUS AudioRouterCopyLeaseBlock(')
 $copyEnd = $source.IndexOf('static void RetireBridgeResources(', $copyStart)
 if ($copyStart -lt 0 -or $copyEnd -le $copyStart) {
