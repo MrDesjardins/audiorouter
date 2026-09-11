@@ -7838,6 +7838,13 @@ live-driver evidence.
   Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
   driver, plugin registration, or persistent machine audio configuration
   changed.
+- Revalidated the locked workspace after recorder timeline failure handling at
+  pushed head `9a47f7cb` on 2026-09-11. Workspace tests passed, including
+  control (111), recording (39), Windows-audio (62 with 11 expected native
+  fixture skips), plugin-host (67), storage (80), and worker-process coverage.
+  Workspace strict Clippy, formatting, and diff checks passed. No endpoint,
+  driver, plugin registration, or persistent machine audio configuration
+  changed.
 - Revalidated the locked workspace after segmented failure containment at
   pushed head `9dafe235` on 2026-09-11. Workspace tests passed, including
   control (111), recording (38), Windows-audio (62 with 11 expected native
