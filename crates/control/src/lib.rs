@@ -21,8 +21,8 @@ use audiorouter_recording::{
     StreamingFlacRecorder, StreamingFlacWriter, WavFormat, WavRecorder, WavWriter,
 };
 use audiorouter_storage::{
-    GraphPlanRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS, MAX_PENDING_PLAN_RECORDS,
-    MAX_RECORDING_LIST_ITEMS,
+    GraphPlanRecord, RecordingRecord, Storage, StorageError, GRAPH_PLAN_RETENTION_SECONDS,
+    MAX_PENDING_PLAN_RECORDS, MAX_RECORDING_ID_BYTES, MAX_RECORDING_LIST_ITEMS,
 };
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -91,6 +91,11 @@ pub struct RecorderFinalizationOutcome {
     pub recoverable: bool,
 }
 
+/// A finalized file discovered by a recorder worker on the lifecycle thread.
+/// The control plane persists this metadata separately from the recorder
+/// checkpoint; the realtime tap never constructs or touches library rows.
+pub type FinalizedRecording = RecordingRecord;
+
 /// Backend-owned recording worker boundary. Implementations own their queue,
 /// encoder, and destination handle; the control plane owns the lifecycle
 /// decision and will stop a session only after this method reports a finalized
@@ -114,6 +119,13 @@ pub trait RecorderWorker: Send {
 
     fn split(&mut self, _frame: u64) -> Result<(), String> {
         Err("attached recorder worker does not support file splitting".into())
+    }
+
+    /// Return durable file metadata produced by the most recent successful
+    /// finalization. Implementations that do not own a path may return an
+    /// empty list; callers must never infer a library row from that absence.
+    fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
+        Vec::new()
     }
 
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String>;
@@ -262,6 +274,14 @@ pub struct SegmentedWavRecorderWorker {
     recorder: Option<SegmentedWavRecorder<std::fs::File, SegmentedWavFactory>>,
     queue: Arc<RecordingQueue>,
     maximum_chunks_per_pass: usize,
+    session_id: String,
+    recorder_id: String,
+    format: WavFormat,
+    channels: u16,
+    sample_rate: u32,
+    paths: Arc<std::sync::Mutex<Vec<std::path::PathBuf>>>,
+    started_at: Option<String>,
+    finalized_recordings: Vec<FinalizedRecording>,
 }
 
 impl SegmentedWavRecorderWorker {
@@ -307,17 +327,27 @@ impl SegmentedWavRecorderWorker {
         if maximum_chunks_per_pass == 0 {
             return Err("maximum recorder drain pass must be positive".into());
         }
-        let (_, initial_file) = policy
+        let (initial_path, initial_file) = policy
             .create_file(session, recorder_name, 0, "wav")
             .map_err(format_path_policy_error)?;
-        let session = session.to_owned();
-        let recorder_name = recorder_name.to_owned();
+        let session_id = session.to_owned();
+        let recorder_id = recorder_name.to_owned();
+        let paths = Arc::new(std::sync::Mutex::new(vec![initial_path]));
+        let factory_paths = paths.clone();
+        let factory_session = session_id.clone();
+        let factory_recorder = recorder_id.clone();
         let factory: SegmentedWavFactory = Box::new(move |index| {
-            let (_, file) = policy
-                .create_file(&session, &recorder_name, u64::from(index), "wav")
+            let (path, file) = policy
+                .create_file(&factory_session, &factory_recorder, u64::from(index), "wav")
                 .map_err(|error| {
                     RecordingError::Io(std::io::Error::other(format_path_policy_error(error)))
                 })?;
+            factory_paths
+                .lock()
+                .map_err(|_| {
+                    RecordingError::Io(std::io::Error::other("recording path registry poisoned"))
+                })?
+                .push(path);
             Ok(file)
         });
         let recorder = SegmentedWavRecorder::new(
@@ -340,6 +370,14 @@ impl SegmentedWavRecorderWorker {
             recorder: Some(recorder),
             queue: Arc::new(queue),
             maximum_chunks_per_pass,
+            session_id,
+            recorder_id,
+            format,
+            channels,
+            sample_rate,
+            paths,
+            started_at: None,
+            finalized_recordings: Vec::new(),
         })
     }
 
@@ -356,7 +394,9 @@ impl SegmentedWavRecorderWorker {
             .as_mut()
             .ok_or_else(|| "segmented WAV recorder is already finalized".to_owned())?
             .start(frame)
-            .map_err(|error| format!("segmented WAV recorder start failed: {error:?}"))
+            .map_err(|error| format!("segmented WAV recorder start failed: {error:?}"))?;
+        self.started_at = Some(unix_epoch_seconds().to_string());
+        Ok(())
     }
 
     pub fn try_push(&self, chunk: RecordingChunk) -> Result<(), RecordingChunk> {
@@ -375,6 +415,10 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
 
     fn start(&mut self, frame: u64) -> Result<(), String> {
         SegmentedWavRecorderWorker::start(self, frame)
+    }
+
+    fn finalized_recordings(&self) -> Vec<FinalizedRecording> {
+        self.finalized_recordings.clone()
     }
 
     fn pause(&mut self, frame: u64) -> Result<(), String> {
@@ -427,11 +471,66 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
         let outputs = recorder
             .finish()
             .map_err(|error| format!("segmented WAV file finalization failed: {error:?}"))?;
-        for output in outputs {
+        let paths = self
+            .paths
+            .lock()
+            .map_err(|_| "recording path registry poisoned".to_owned())?
+            .clone();
+        if outputs.len() != paths.len() {
+            return Err("segmented WAV output metadata count mismatch".into());
+        }
+        let bytes_per_sample = match self.format {
+            WavFormat::Pcm16 => 2,
+            WavFormat::Pcm24 => 3,
+            WavFormat::Float32 => 4,
+        };
+        let bytes_per_frame = bytes_per_sample * u64::from(self.channels);
+        let start_time = self
+            .started_at
+            .clone()
+            .ok_or_else(|| "segmented WAV finalized before start".to_owned())?;
+        let mut finalized = Vec::with_capacity(outputs.len());
+        for (index, output) in outputs.into_iter().enumerate() {
             output
                 .sync_all()
                 .map_err(|error| format!("segmented WAV file sync failed: {error}"))?;
+            let file_bytes = output
+                .metadata()
+                .map_err(|error| format!("segmented WAV metadata failed: {error}"))?
+                .len();
+            let data_bytes = file_bytes
+                .checked_sub(44)
+                .ok_or_else(|| "segmented WAV file is shorter than its header".to_owned())?;
+            if data_bytes % bytes_per_frame != 0 {
+                return Err("segmented WAV data is not frame aligned".into());
+            }
+            let id = format!("{}-{}-{}", self.session_id, self.recorder_id, index);
+            if id.len() > MAX_RECORDING_ID_BYTES {
+                return Err("segmented WAV recording identity exceeds its bound".into());
+            }
+            let path = paths[index]
+                .to_str()
+                .ok_or_else(|| "segmented WAV path is not valid Unicode".to_owned())?
+                .to_owned();
+            finalized.push(FinalizedRecording {
+                id,
+                session_id: self.session_id.clone(),
+                recorder_id: self.recorder_id.clone(),
+                path,
+                format: "wav".into(),
+                channels: self.channels,
+                sample_rate: self.sample_rate,
+                frames: data_bytes / bytes_per_frame,
+                file_bytes,
+                start_time: start_time.clone(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+            });
         }
+        self.finalized_recordings = finalized;
         Ok(RecorderFinalizationOutcome {
             state: "completed".into(),
             file_finalized: true,
@@ -4321,6 +4420,7 @@ impl ControlPlane {
                     "recorder finalization did not produce a completed file".into(),
                 ));
             }
+            let finalized_recordings = worker.finalized_recordings();
             let recorder = self.recorders.get_mut(id).ok_or_else(|| {
                 ControlError::InvalidRequest("active recorder state disappeared".into())
             })?;
@@ -4339,6 +4439,9 @@ impl ControlPlane {
                 storage
                     .save_recording_checkpoint(id.as_str(), &checkpoint)
                     .map_err(storage_error)?;
+                for recording in &finalized_recordings {
+                    storage.save_recording(recording).map_err(storage_error)?;
+                }
             }
             self.events.append(
                 self.get_session(id)?.revision,
@@ -5268,6 +5371,7 @@ impl ControlPlane {
             ));
         }
         let mut worker_finalized = false;
+        let mut finalized_recordings = Vec::new();
         if let Some(worker) = self.recorder_workers.get_mut(&session_id) {
             let worker_result = match method {
                 "recorders.arm" => worker.arm(),
@@ -5304,6 +5408,7 @@ impl ControlPlane {
                         ));
                     }
                     worker_finalized = true;
+                    finalized_recordings = worker.finalized_recordings();
                     Ok(())
                 }
                 _ => Err("method not found".into()),
@@ -5354,6 +5459,9 @@ impl ControlPlane {
             storage
                 .save_recording_checkpoint(session_id.as_str(), &checkpoint)
                 .map_err(storage_error)?;
+            for recording in &finalized_recordings {
+                storage.save_recording(recording).map_err(storage_error)?;
+            }
         }
         self.journal_idempotent_result(&scoped_key, method, &request_hash, &result)?;
         let revision = self
@@ -11036,6 +11144,16 @@ mod tests {
         let outcome = worker.finalize(6).unwrap();
         assert_eq!(outcome.state, "completed");
         assert!(outcome.file_finalized);
+        let recordings = worker.finalized_recordings();
+        assert_eq!(recordings.len(), 3);
+        assert!(recordings.iter().all(|recording| {
+            recording.session_id == "session:raw"
+                && recording.recorder_id == "voice?raw"
+                && recording.state == "completed"
+                && !recording.missing
+                && recording.frames == 2
+                && recording.file_bytes > 44
+        }));
         drop(worker);
         let mut paths = std::fs::read_dir(&root)
             .unwrap()
@@ -11052,6 +11170,87 @@ mod tests {
             );
         }
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn segmented_wav_worker_stop_persists_finalized_library_rows() {
+        let run_id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-control-library-root-{}-{run_id}",
+            std::process::id()
+        ));
+        let database = std::env::temp_dir().join(format!(
+            "audiorouter-control-library-{}-{run_id}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_file(&database);
+        std::fs::create_dir(&root).unwrap();
+        let policy = RecordingPathPolicy::new(&root).unwrap();
+        let worker = SegmentedWavRecorderWorker::new(
+            policy,
+            "session",
+            "voice",
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            2,
+            1,
+            2,
+        )
+        .unwrap();
+        worker
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.25, -0.25],
+            })
+            .unwrap();
+
+        let original = session();
+        let mut plane =
+            ControlPlane::with_storage("library-test", Storage::open(&database).unwrap());
+        plane.insert_session(original.clone()).unwrap();
+        plane
+            .attach_recorder_worker(original.id.clone(), Box::new(worker))
+            .unwrap();
+        for (id, method, frame) in [
+            (1, "recorders.arm", None),
+            (2, "recorders.start", Some(0)),
+            (3, "recorders.stop", Some(2)),
+        ] {
+            let params = match frame {
+                Some(frame) => json!({
+                    "sessionId": original.id,
+                    "frame": frame,
+                    "idempotencyKey": format!("library-{id}")
+                }),
+                None => json!({
+                    "sessionId": original.id,
+                    "idempotencyKey": format!("library-{id}")
+                }),
+            };
+            let response = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(id)),
+                method: method.into(),
+                params: Some(params),
+            });
+            assert!(response.result.is_some(), "{method}: {response:?}");
+        }
+        drop(plane);
+
+        let storage = Storage::open(&database).unwrap();
+        let records = storage.list_recordings(Some("session")).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].id, "session-voice-0");
+        assert_eq!(records[0].frames, 2);
+        assert!(!records[0].missing);
+        assert!(std::path::Path::new(&records[0].path).is_file());
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_file(&database);
     }
 
     #[test]

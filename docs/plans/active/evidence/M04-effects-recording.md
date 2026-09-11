@@ -970,3 +970,14 @@ The shared TypeScript contracts and UI backend adapter now represent the
 single-item and paged recovery response shapes separately. UI tests (123),
 typecheck, and a disposable production build pass; no file or audio-device
 operation is performed by the adapter.
+
+## Finalized segmented library rows (2026-09-11)
+
+Policy-owned segmented WAV workers now return bounded finalized-file metadata
+on the lifecycle thread. `recorders.stop` and session-stop finalization persist
+one library row per completed segment after all outputs are synced; the realtime audio tap remains
+independent of storage. A storage-backed JSON-RPC regression verified the
+completed row, frame count, path, and present-file state. Control coverage
+passed 113 tests with strict Clippy, formatting, and diff checks. FLAC/simple
+file-worker metadata handoff, automatic recorder configuration, realtime graph
+attachment, and native endpoint ownership remain open.

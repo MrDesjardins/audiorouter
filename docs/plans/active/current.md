@@ -8005,3 +8005,13 @@ live-driver evidence.
   machine audio configuration change occurred. Production driver activation,
   signing, installer, clean-machine, physical-latency, manual UI, and
   independent-plugin rights gates remain open.
+- Added finalized recording-library handoff for policy-owned segmented WAV
+  workers on 2026-09-11. The lifecycle worker now retains bounded paths and
+  finalized file metadata; `recorders.stop` and session-stop finalization
+  persist one row per completed segment after successful sync, while workers
+  without owned paths remain
+  explicit no-row implementations. A storage-backed JSON-RPC regression
+  verified a finalized row, frame count, path, and present-file state. Control
+  tests (113), strict Clippy, formatting, and diff checks passed. FLAC/simple
+  file-worker metadata handoff, automatic recorder configuration, realtime
+  graph attachment, and native endpoint ownership remain open.
