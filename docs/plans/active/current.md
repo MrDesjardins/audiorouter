@@ -33,6 +33,13 @@ hooks that fail because this installation cannot load its x86 `InfVerif.dll`;
 this is not production signing or Universal-driver evidence. Details and the
 exact generated artifacts are in [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
 
+The next bridge groundwork is also implemented in `audiorouter-engine`:
+`VirtualBusBridgeSet` bounds bridge slots to the eight-bus fan-out limit,
+allocates only during control-plane `ensure`, returns an `Arc` handle for the
+callback-owned path, and deactivates/drains before removal. The focused engine
+suite passed 96 tests after this change. This is still portable bridge evidence;
+the native shared-memory/driver transport and control-plane wiring remain open.
+
 ## Current state
 
 The specification baseline has been implemented incrementally on `main`. Portable
@@ -43,7 +50,7 @@ recorded below; production routing, owned-driver distribution, signing,
 installer, clean-machine, and manual UI gates remain open. Read the
 [documentation index](../../README.md) and [delivery map](../../spec/15-delivery.md).
 
-The latest implementation checkpoint is `7f7631fb`; the native probe compile was
+The latest implementation checkpoint is `7e8ece96`; the native probe compile was
 requalified at `214fc678`, and the follow-up handoff records the current
 acceptance-transcript limitation. The focused native auxiliary-bus
 transformation, validated state restoration, recording-worker, and all-features

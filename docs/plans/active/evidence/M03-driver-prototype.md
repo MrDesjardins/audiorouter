@@ -39,6 +39,14 @@ test-signing change, audio-default change, stream open, or persistent machine
 configuration change occurred. The generated build directories are ignored and
 disposable.
 
+## Bridge groundwork
+
+`audiorouter-engine` now provides `VirtualBusBridgeSet`, a bounded eight-slot
+control-plane collection. It creates bridges lazily, exposes `Arc` handles for
+the realtime path, and deactivates/drains a bridge before removal. The focused
+`cargo test -p audiorouter-engine --locked` run passed all 96 tests. This does
+not claim native shared-memory transport or driver callback integration.
+
 ## Failed attempts and fixes
 
 The first build attempt failed because forcing `OutDir` and `IntDir` into one

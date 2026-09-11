@@ -5,6 +5,7 @@
 //! heap allocation, locking, I/O, or logging.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 
 pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const MIN_GRAPH_SAMPLE_RATE_HZ: u32 = 8_000;
@@ -601,6 +602,82 @@ impl VirtualBusBridge {
         while let Some(block) = self.capture.try_receive() {
             let _ = self.capture.try_recycle(block);
         }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum VirtualBusBridgeSetError {
+    InvalidCapacity,
+    InvalidIndex,
+    Queue(QueueError),
+}
+
+/// Control-plane collection of the bounded bridge instances used by managed
+/// virtual buses. Slot indexes are assigned by the domain registry; the audio
+/// path receives an `Arc<VirtualBusBridge>` directly and never touches this
+/// collection or its allocation-bearing operations.
+pub struct VirtualBusBridgeSet {
+    bridges: Vec<Option<Arc<VirtualBusBridge>>>,
+    capacity: usize,
+    channels: usize,
+    frames: usize,
+}
+
+impl VirtualBusBridgeSet {
+    pub fn new(
+        capacity: usize,
+        channels: usize,
+        frames: usize,
+    ) -> Result<Self, VirtualBusBridgeSetError> {
+        if !(1..=MAX_FANOUT_BRANCHES).contains(&capacity) {
+            return Err(VirtualBusBridgeSetError::InvalidCapacity);
+        }
+        AudioBlockRing::new(1, channels, frames).map_err(VirtualBusBridgeSetError::Queue)?;
+        Ok(Self {
+            bridges: vec![None; capacity],
+            capacity,
+            channels,
+            frames,
+        })
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
+    pub fn get(&self, index: usize) -> Option<Arc<VirtualBusBridge>> {
+        self.bridges.get(index).and_then(Clone::clone)
+    }
+
+    pub fn ensure(
+        &mut self,
+        index: usize,
+    ) -> Result<Arc<VirtualBusBridge>, VirtualBusBridgeSetError> {
+        let slot = self
+            .bridges
+            .get_mut(index)
+            .ok_or(VirtualBusBridgeSetError::InvalidIndex)?;
+        if let Some(bridge) = slot {
+            return Ok(Arc::clone(bridge));
+        }
+        let bridge = Arc::new(
+            VirtualBusBridge::new(self.capacity, self.channels, self.frames)
+                .map_err(VirtualBusBridgeSetError::Queue)?,
+        );
+        *slot = Some(Arc::clone(&bridge));
+        Ok(bridge)
+    }
+
+    pub fn remove(&mut self, index: usize) -> Result<(), VirtualBusBridgeSetError> {
+        let slot = self
+            .bridges
+            .get_mut(index)
+            .ok_or(VirtualBusBridgeSetError::InvalidIndex)?;
+        if let Some(bridge) = slot {
+            bridge.deactivate();
+        }
+        *slot = None;
+        Ok(())
     }
 }
 
@@ -4922,6 +4999,23 @@ mod tests {
         assert_eq!(ring.ready(), 0);
         assert!(ring.try_receive().is_none());
         assert_eq!(ring.underruns(), 1);
+    }
+
+    #[test]
+    fn virtual_bus_bridge_set_keeps_slots_bounded_and_deactivates_removed_bridges() {
+        let mut set = VirtualBusBridgeSet::new(2, 1, 2).unwrap();
+        assert_eq!(set.capacity(), 2);
+        assert!(set.get(0).is_none());
+        let first = set.ensure(0).unwrap();
+        first.activate(1).unwrap();
+        assert!(set.get(0).unwrap().is_active());
+        assert!(matches!(
+            set.ensure(2),
+            Err(VirtualBusBridgeSetError::InvalidIndex)
+        ));
+        set.remove(0).unwrap();
+        assert!(!first.is_active());
+        assert!(set.get(0).is_none());
     }
 
     #[test]
