@@ -208,6 +208,11 @@ retaining them for heartbeat/close. If the second mapped claim fails, the first
 controller is dropped to release its lease. The focused preflight regressions
 remain green; loaded-driver transport is still unverified.
 
+Directional role enforcement is now active in `NativeBridgeSession`: only a
+`CaptureSink` may publish/write or create a realtime writer, and only a
+`RenderSource` may read. Wrong-direction calls fail before lease or mapping
+access. The focused Windows-audio suite passes 53 tests with strict Clippy.
+
 The duplex preflight now has regressions proving that direction and bus
 mismatches return before any device or mapping open. The Windows-audio suite
 passes 52 tests with strict Clippy; this closes the application-side validation

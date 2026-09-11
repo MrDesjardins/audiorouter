@@ -51,6 +51,11 @@ Two Windows-only regressions prove that duplex direction and bus mismatches
 fail before device or mapping access. The focused Windows-audio suite passes 52
 tests and strict Clippy passes.
 
+`NativeBridgeSession` now enforces the directional roles at runtime: capture
+sessions are producers and render sessions are consumers. Wrong-direction
+write, read, and producer-factory calls fail before touching the lease or
+mapping. The focused Windows-audio suite passes 53 tests.
+
 `NativeBridgeDuplexController::create_with_sections` now provides the mapped
 two-ended construction path. Each child retains its section handle for the
 lease lifetime, and failure of the second claim releases the first. This is

@@ -3662,6 +3662,7 @@ pub enum NativeBridgeSessionError {
     Region(NativeBridgeRegionError),
     SequenceExhausted,
     LeaseExpired,
+    WrongDirection,
 }
 
 /// Negotiated owner of one native bridge slot.
@@ -3731,6 +3732,9 @@ impl NativeBridgeSession {
     /// allocate and map; the returned writer's tap callback is bounded and
     /// nonblocking.
     pub fn realtime_writer(&self) -> Result<NativeBridgeRealtimeWriter, NativeBridgeSessionError> {
+        if self.hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink {
+            return Err(NativeBridgeSessionError::WrongDirection);
+        }
         let region = NativeBridgeRegion::open(
             &self.mapping_path,
             self.hello.channels,
@@ -3750,6 +3754,9 @@ impl NativeBridgeSession {
         now: std::time::Instant,
         samples: &[f32],
     ) -> Result<u64, NativeBridgeSessionError> {
+        if self.hello.direction != audiorouter_protocol::AudioBridgeDirection::CaptureSink {
+            return Err(NativeBridgeSessionError::WrongDirection);
+        }
         self.ensure_lease_at(now)?;
         let sequence = self
             .next_sequence
@@ -3774,6 +3781,9 @@ impl NativeBridgeSession {
         now: std::time::Instant,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeSessionError> {
+        if self.hello.direction != audiorouter_protocol::AudioBridgeDirection::RenderSource {
+            return Err(NativeBridgeSessionError::WrongDirection);
+        }
         self.ensure_lease_at(now)?;
         self.region
             .read_into(self.hello.generation, samples)
@@ -4840,7 +4850,9 @@ mod tests {
             lease_ms: 1_000,
         };
         let mut writer = NativeBridgeSession::create(&path, hello.clone()).unwrap();
-        let reader = NativeBridgeSession::open(&path, hello).unwrap();
+        let mut reader_hello = hello;
+        reader_hello.direction = audiorouter_protocol::AudioBridgeDirection::RenderSource;
+        let reader = NativeBridgeSession::open(&path, reader_hello).unwrap();
         let input = [0.25_f32, -0.25, 0.5, -0.5];
         assert_eq!(writer.write(&input).unwrap(), 1);
         assert_eq!(writer.write(&input).unwrap(), 2);
@@ -4889,6 +4901,39 @@ mod tests {
         drop(reader);
         drop(tap);
         drop(session);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_session_enforces_directional_read_write_roles() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-direction-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-direction".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::RenderSource,
+            generation: 12,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 4,
+            lease_ms: 1_000,
+        };
+        let mut session = NativeBridgeSession::create(&path, hello).unwrap();
+        assert!(matches!(
+            session.write(&[0.0, 0.0]),
+            Err(NativeBridgeSessionError::WrongDirection)
+        ));
+        assert!(matches!(
+            session.realtime_writer(),
+            Err(NativeBridgeSessionError::WrongDirection)
+        ));
         std::fs::remove_file(path).unwrap();
     }
 
