@@ -8156,3 +8156,10 @@ live-driver evidence.
 - Next M04/REC-01 task: promote node-keyed workers into recorder identities
   for arm/start/pause/resume/split/stop and durable library rows, preserving
   per-recorder failure isolation and the eight-recorder global limit.
+- Closed the stopped-session cleanup hole on 2026-09-11: deleting a stopped
+  session now removes its node-keyed recorder workers, with the independent
+  two-sink regression proving no worker ownership survives deletion. Clippy,
+  formatting, diff, and documentation checks passed.
+- Next M04/REC-01 task: promote node-keyed workers into recorder identities
+  for lifecycle/API commands and durable library rows, preserving per-recorder
+  failure isolation and the eight-recorder global limit.

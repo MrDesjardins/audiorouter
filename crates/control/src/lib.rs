@@ -4429,6 +4429,13 @@ impl ControlPlane {
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
         self.runtimes.remove(id);
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Recorder)
+        {
+            self.recorder_node_workers.remove(&node.id);
+        }
         self.events
             .append(session.revision, None, "session.deleted", Some(id.clone()));
         Ok(json!({ "sessionId": id, "deleted": true }))
@@ -12086,6 +12093,9 @@ mod tests {
                 )),
             )
             .is_err());
+
+        plane.delete_session(&session_id).unwrap();
+        assert!(plane.recorder_node_workers.is_empty());
 
         for path in paths {
             let _ = std::fs::remove_file(path);

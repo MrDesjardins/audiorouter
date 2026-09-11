@@ -81,6 +81,8 @@ The control boundary now supports independent node-keyed workers through
 the binding builder returns two distinct taps and rejects a node absent from
 the validated session. Node-keyed workers are currently a realtime attachment
 boundary only; recorder lifecycle/API identity remains session-scoped.
+Deletion now removes node-keyed workers for the deleted stopped session, and
+the regression verifies no node-worker ownership remains after deletion.
 
 ## 2026-09-09 limiter requalification
 
