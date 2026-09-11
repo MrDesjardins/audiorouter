@@ -45,6 +45,13 @@ If attachment fails after exclusive creation, the factory removes only that
 newly created file; the regression also verifies duplicate attachment leaves
 the original file as the sole destination.
 
+The engine now provides a prebuilt bounded `AudioTapSet` and processor/
+scheduler methods that notify it without constructing callback-time storage.
+Control workers expose their queue tap through the worker boundary, and
+`ControlPlane::recorder_tap_set` returns the prepared set for a runtime
+adapter. Engine fan-out and tap-set regressions pass; this is portable graph
+attachment evidence, not loaded-driver or native endpoint ownership evidence.
+
 ## 2026-09-09 limiter requalification
 
 The guarded `safe-all.ps1` chain passed at pushed head `6d8e6ad2`. M04 ran 30

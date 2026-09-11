@@ -949,6 +949,60 @@ pub trait AudioTap: Send + Sync {
 /// keeps fan-out work explicit and matches the global recorder limit.
 pub const MAX_AUDIO_TAPS: usize = 8;
 
+/// Prebuilt observer set for a realtime graph boundary. Construction and
+/// membership changes happen off the callback; notification only iterates the
+/// bounded shared taps.
+pub struct AudioTapSet {
+    taps: Vec<Arc<dyn AudioTap>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AudioTapSetError {
+    Capacity,
+}
+
+impl AudioTapSet {
+    pub fn new() -> Self {
+        Self { taps: Vec::new() }
+    }
+
+    pub fn add<T: AudioTap + 'static>(&mut self, tap: T) -> Result<(), AudioTapSetError> {
+        if self.taps.len() >= MAX_AUDIO_TAPS {
+            return Err(AudioTapSetError::Capacity);
+        }
+        self.taps.push(Arc::new(tap));
+        Ok(())
+    }
+
+    pub fn add_shared(&mut self, tap: Arc<dyn AudioTap>) -> Result<(), AudioTapSetError> {
+        if self.taps.len() >= MAX_AUDIO_TAPS {
+            return Err(AudioTapSetError::Capacity);
+        }
+        self.taps.push(tap);
+        Ok(())
+    }
+
+    pub fn len(&self) -> usize {
+        self.taps.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.taps.is_empty()
+    }
+
+    fn notify(&self, start_frame: u64, block: &AudioBlock) {
+        for tap in &self.taps {
+            tap.on_processed_block(start_frame, block);
+        }
+    }
+}
+
+impl Default for AudioTapSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Bounded per-frame gain transition for de-clicked parameter changes.
 /// Construction and target changes occur off the callback thread; applying a
 /// ramp only updates existing block samples and this small state object.
@@ -3741,6 +3795,21 @@ impl RuntimeProcessor {
         generation
     }
 
+    /// Process one block and notify a prebuilt bounded tap set. The set must
+    /// be prepared before entering the callback boundary.
+    pub fn process_with_tap_set(
+        &self,
+        block: &mut AudioBlock,
+        start_frame: u64,
+        taps: &AudioTapSet,
+    ) -> Option<RuntimeGeneration> {
+        let generation = self.process(block);
+        if generation.is_some() {
+            taps.notify(start_frame, block);
+        }
+        generation
+    }
+
     /// Consume one queued block into caller-owned output storage. This helper
     /// is for the control/worker path: dropping the popped block may reclaim
     /// its backing allocation, so a realtime callback must use a reusable
@@ -4054,6 +4123,49 @@ impl RealtimeScheduler {
         let generation = self
             .processor
             .process_with_taps(&mut destination, start_frame, taps);
+        destination.generation = generation.map_or(0, RuntimeGeneration::value);
+        if let Err(destination) = self.output.try_submit(destination) {
+            self.output
+                .try_recycle(destination)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.processor.metrics.record_xrun();
+            return Ok(None);
+        }
+        Ok(generation)
+    }
+
+    /// Execute one nonblocking scheduler step using a prebuilt bounded tap
+    /// set. Membership changes must occur outside the realtime boundary.
+    pub fn process_once_with_tap_set(
+        &self,
+        start_frame: u64,
+        taps: &AudioTapSet,
+    ) -> Result<Option<RuntimeGeneration>, BlockError> {
+        let Some(block) = self.input.try_receive() else {
+            return Ok(None);
+        };
+        let Some(mut destination) = self.output.try_acquire() else {
+            self.input
+                .try_recycle(block)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.processor.metrics.record_xrun();
+            return Ok(None);
+        };
+        if destination.copy_from(&block).is_err() {
+            self.input
+                .try_recycle(block)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            self.output
+                .try_recycle(destination)
+                .map_err(|_| BlockError::ShapeMismatch)?;
+            return Err(BlockError::ShapeMismatch);
+        }
+        self.input
+            .try_recycle(block)
+            .map_err(|_| BlockError::ShapeMismatch)?;
+        let generation = self
+            .processor
+            .process_with_tap_set(&mut destination, start_frame, taps);
         destination.generation = generation.map_or(0, RuntimeGeneration::value);
         if let Err(destination) = self.output.try_submit(destination) {
             self.output
@@ -7272,5 +7384,43 @@ mod tests {
         block.channel_mut(0).unwrap().fill(2.0);
         delay.process(&mut block).unwrap();
         assert_eq!(block.channel(0).unwrap(), &[0.0, 2.0]);
+    }
+
+    #[test]
+    fn prebuilt_tap_set_notifies_bounded_observers_without_rebuilding_membership() {
+        let processor = RuntimeProcessor::default();
+        processor.publish(RuntimeGraph::prepare(RuntimeGeneration::new(7), vec![]));
+        let tap = Arc::new(CountingTap {
+            calls: AtomicU64::new(0),
+            last_frame: AtomicU64::new(0),
+        });
+        let mut set = AudioTapSet::new();
+        set.add_shared(tap.clone()).unwrap();
+        assert_eq!(set.len(), 1);
+        let mut block = AudioBlock::new(1, 2).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        assert_eq!(
+            processor
+                .process_with_tap_set(&mut block, 512, &set)
+                .map(RuntimeGeneration::value),
+            Some(7)
+        );
+        assert_eq!(tap.calls.load(Ordering::Relaxed), 1);
+        assert_eq!(tap.last_frame.load(Ordering::Relaxed), 512);
+        for _ in 1..MAX_AUDIO_TAPS {
+            set.add(CountingTap {
+                calls: AtomicU64::new(0),
+                last_frame: AtomicU64::new(0),
+            })
+            .unwrap();
+        }
+        assert_eq!(set.len(), MAX_AUDIO_TAPS);
+        assert_eq!(
+            set.add(CountingTap {
+                calls: AtomicU64::new(0),
+                last_frame: AtomicU64::new(0),
+            }),
+            Err(AudioTapSetError::Capacity)
+        );
     }
 }

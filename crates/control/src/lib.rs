@@ -10,7 +10,9 @@ use audiorouter_domain::{
     PermissionScope, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState, Session,
     VirtualBusRegistry, API_METHODS,
 };
-use audiorouter_engine::{AudioBlock, AudioTap, VirtualBusBridgeSet, VirtualBusBridgeSetError};
+use audiorouter_engine::{
+    AudioBlock, AudioTap, AudioTapSet, VirtualBusBridgeSet, VirtualBusBridgeSetError,
+};
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
     MAX_METHOD_NAME_BYTES, MAX_REQUEST_ID_BYTES,
@@ -193,6 +195,12 @@ fn finalized_wav_recording(
 /// decision and will stop a session only after this method reports a finalized
 /// file. The frame is the last committed control-plane boundary.
 pub trait RecorderWorker: Send {
+    /// Exposes the worker's preallocated queue observer for a prepared engine
+    /// tap set. The control plane never invokes it from the audio callback.
+    fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+        None
+    }
+
     /// Supplies explicit file ownership metadata before lifecycle start.
     /// Workers that do not own a single file reject this configuration rather
     /// than allowing the control plane to guess a library path.
@@ -346,6 +354,10 @@ impl WavRecorderWorker {
 }
 
 impl RecorderWorker for WavRecorderWorker {
+    fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+        Some(Arc::new(self.audio_tap()))
+    }
+
     fn set_library_identity(&mut self, identity: FileRecordingIdentity) -> Result<(), String> {
         WavRecorderWorker::set_library_identity(self, identity);
         Ok(())
@@ -726,6 +738,10 @@ impl SegmentedWavRecorderWorker {
 }
 
 impl RecorderWorker for SegmentedWavRecorderWorker {
+    fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+        Some(Arc::new(self.audio_tap()))
+    }
+
     fn arm(&mut self) -> Result<(), String> {
         SegmentedWavRecorderWorker::arm(self)
     }
@@ -954,6 +970,10 @@ impl BufferedFlacRecorderWorker {
 }
 
 impl RecorderWorker for BufferedFlacRecorderWorker {
+    fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+        Some(Arc::new(self.audio_tap()))
+    }
+
     fn set_library_identity(&mut self, identity: FileRecordingIdentity) -> Result<(), String> {
         BufferedFlacRecorderWorker::set_library_identity(self, identity);
         Ok(())
@@ -1144,6 +1164,10 @@ impl StreamingFlacRecorderWorker {
 }
 
 impl RecorderWorker for StreamingFlacRecorderWorker {
+    fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+        Some(Arc::new(self.audio_tap()))
+    }
+
     fn set_library_identity(&mut self, identity: FileRecordingIdentity) -> Result<(), String> {
         StreamingFlacRecorderWorker::set_library_identity(self, identity);
         Ok(())
@@ -4137,6 +4161,22 @@ impl ControlPlane {
         }
         self.recorder_workers.insert(session_id, worker);
         Ok(())
+    }
+
+    /// Build the bounded engine observer set for one attached recorder. The
+    /// returned set is immutable by convention after construction and can be
+    /// handed to the realtime scheduler's tap-set method.
+    pub fn recorder_tap_set(&self, session_id: &EntityId) -> Result<AudioTapSet, ControlError> {
+        let worker = self.recorder_workers.get(session_id).ok_or_else(|| {
+            ControlError::InvalidRequest("recorder worker is not attached".into())
+        })?;
+        let tap = worker.shared_audio_tap().ok_or_else(|| {
+            ControlError::InvalidRequest("recorder worker has no realtime tap".into())
+        })?;
+        let mut set = AudioTapSet::new();
+        set.add_shared(tap)
+            .map_err(|_| ControlError::InvalidRequest("recorder tap capacity exceeded".into()))?;
+        Ok(set)
     }
 
     /// Attach a single-file worker and configure its durable library identity

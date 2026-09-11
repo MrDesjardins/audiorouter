@@ -8117,3 +8117,14 @@ live-driver evidence.
   after exclusive file creation, only that newly created path is removed; a
   duplicate-attachment regression proves the original destination remains
   intact. The API remains unarmed and does not implicitly start a graph.
+- Added the portable recorder graph-attachment seam on 2026-09-11. The engine
+  now owns a prebuilt bounded `AudioTapSet` with processor and scheduler
+  notification methods; control workers expose their preallocated queue taps,
+  and `ControlPlane::recorder_tap_set` supplies the set to a runtime adapter.
+  Engine tests (99), control tests (115), workspace Clippy, formatting, and
+  diff checks passed. This does not claim graph-node routing, loaded-driver
+  endpoint ownership, or native callback timing.
+- Next M04/REC-01/GRAPH-10 task: bind tap-set construction to validated graph
+  recorder-node branches and generation changes, rejecting stale or
+  unattached branches while preserving independent-sink fan-out. Native
+  endpoint attachment remains a separate M03/M08 gate.
