@@ -1540,3 +1540,9 @@ Validation: `cargo fmt --all -- --check` and
 regressions. This proves the portable graph-to-bridge boundary only; loaded
 driver, PortCls ownership, endpoint activation, signing, and physical latency
 remain separate gates.
+
+The follow-up `cargo test --workspace --locked -- --test-threads=1` passed on
+2026-09-12 after control integration: all workspace unit/integration suites
+and doc-tests passed, including 105 engine, 121 control, 63 Windows-audio,
+and 67 plugin-host tests. No endpoint was opened and no machine audio or
+driver configuration changed.
