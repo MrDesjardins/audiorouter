@@ -8343,6 +8343,15 @@ live-driver evidence.
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
 
+- Requalified the complete elevated `safe-all.ps1` chain on 2026-09-12 after
+  reboot. Toolchain/native compile, 34-endpoint read-only inventory, pinned
+  SysVAD, M01/M04/M05/M06/M07, unsigned M08 preparation, 159 traceability IDs,
+  and documentation validation all passed; cleanup removed 14 run-owned
+  temporary children. No driver installation/loading, signing-mode change,
+  plugin/startup registration, stream activation, or persistent audio
+  configuration occurred. This strengthens portable and build evidence only;
+  loaded-driver/PortCls and physical-latency gates remain open.
+
 ## Latest execution checkpoint — 2026-09-12
 
 - Added the bounded serializable `VirtualBusRouteRegistry` domain boundary
