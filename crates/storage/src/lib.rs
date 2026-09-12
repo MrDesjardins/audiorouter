@@ -1123,6 +1123,42 @@ impl Storage {
         Ok((routes, revision))
     }
 
+    /// Commit route state and its idempotent mutation result as one durable
+    /// change. A replay record must never be absent after route state advances.
+    pub fn save_virtual_bus_route_state_and_journal(
+        &self,
+        routes: &VirtualBusRouteRegistry,
+        revision: u64,
+        idempotency_key: &str,
+        request_hash: &str,
+        result: &Value,
+    ) -> Result<(), StorageError> {
+        validate_idempotency_key(idempotency_key)?;
+        validate_request_hash(request_hash)?;
+        let state = serde_json::to_string(&serde_json::json!({
+            "revision": revision,
+            "routes": routes
+        }))?;
+        let result = serde_json::to_string(result)?;
+        validate_journal_fields("virtualRoutes.replace", &result, 0)?;
+        self.prune_expired_journal()?;
+        self.ensure_journal_capacity(idempotency_key)?;
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('virtualBusRoutes', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![state],
+        )?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO operation_journal
+             (idempotency_key, operation, result, committed_revision, request_hash)
+             VALUES (?1, 'virtualRoutes.replace', ?2, 0, ?3)",
+            params![idempotency_key, result, request_hash],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn save_virtual_device_plan(
         &self,
         id: &EntityId,

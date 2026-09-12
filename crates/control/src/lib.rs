@@ -4167,6 +4167,21 @@ impl ControlPlane {
         routes: VirtualBusRouteRegistry,
         revision: u64,
     ) -> Result<(), ControlError> {
+        self.validate_virtual_bus_routes(&routes)?;
+        if let Some(storage) = &self.storage {
+            storage
+                .save_virtual_bus_route_state(&routes, revision)
+                .map_err(storage_error)?;
+        }
+        self.virtual_bus_routes = routes;
+        self.virtual_bus_route_revision = revision;
+        Ok(())
+    }
+
+    fn validate_virtual_bus_routes(
+        &self,
+        routes: &VirtualBusRouteRegistry,
+    ) -> Result<(), ControlError> {
         for route in routes.list() {
             if !self
                 .virtual_buses
@@ -4184,13 +4199,6 @@ impl ControlPlane {
             .map_err(|errors| {
                 ControlError::InvalidRequest(format!("invalid virtual-bus routes: {errors:?}"))
             })?;
-        if let Some(storage) = &self.storage {
-            storage
-                .save_virtual_bus_route_state(&routes, revision)
-                .map_err(storage_error)?;
-        }
-        self.virtual_bus_routes = routes;
-        self.virtual_bus_route_revision = revision;
         Ok(())
     }
 
@@ -8419,14 +8427,27 @@ impl ControlPlane {
             .virtual_bus_route_revision
             .checked_add(1)
             .ok_or_else(|| ControlError::InvalidRequest("route revision exhausted".into()))?;
-        self.replace_virtual_bus_routes_at_revision(routes.clone(), revision)?;
+        self.validate_virtual_bus_routes(&routes)?;
         let result = json!({ "state": "applied", "revision": revision, "routes": routes.list() });
-        self.journal_idempotent_result(
+        if let Some(storage) = &self.storage {
+            storage
+                .save_virtual_bus_route_state_and_journal(
+                    &routes,
+                    revision,
+                    &storage_key,
+                    &request_hash,
+                    &result,
+                )
+                .map_err(storage_error)?;
+        }
+        self.virtual_bus_routes = routes;
+        self.virtual_bus_route_revision = revision;
+        self.remember_operation_outcome(
             &storage_key,
+            result.clone(),
             "virtualRoutes.replace",
-            &request_hash,
-            &result,
-        )?;
+            Some(&request_hash),
+        );
         Ok(result)
     }
 

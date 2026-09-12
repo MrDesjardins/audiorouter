@@ -900,6 +900,10 @@ exposes the current revision so a client can construct the next request.
 Control (124) and storage (83) tests pass after formatting; no endpoint, driver,
 or machine audio configuration was accessed.
 
+The route mutation persistence path now writes the revisioned route state and
+`virtualRoutes.replace` journal result in one SQLite transaction, preventing a
+durable state advance without an idempotent replay record.
+
 Validation: domain/control tests passed (60/123), strict Clippy, formatting,
 diff, and documentation checks passed. Authorized route replacement with
 revision and idempotency remains the next API slice.

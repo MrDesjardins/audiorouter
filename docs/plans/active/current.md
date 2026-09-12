@@ -8385,6 +8385,13 @@ live-driver evidence.
   endpoint qualification remain blocked gates. Next: add a guarded control
   regression proving selected-route-only bridge binding and generation cleanup.
 
+- Closed the route persistence atomicity gap on 2026-09-12: route state and the
+  `virtualRoutes.replace` journal result are now committed in one SQLite
+  transaction. Control (124), storage (83), strict Clippy, formatting, and
+  diff checks pass. No endpoint or machine configuration was accessed. Next:
+  add the selected-route control regression, then continue the next uncompleted
+  M02/M03 execution item.
+
 ## Latest execution checkpoint — 2026-09-12
 
 - Added the reusable allocation-free processed-graph handoff to
