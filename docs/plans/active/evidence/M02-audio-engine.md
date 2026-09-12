@@ -1491,3 +1491,10 @@ Validation: `cargo test -p audiorouter-dsp -p audiorouter-engine --locked`
 passed 32 DSP tests and 102 engine tests. This is portable built-in processing
 evidence for DSP-03; native driver callback timing and endpoint activation
 remain separate gates.
+
+The compiler-level follow-up `cargo test -p audiorouter-engine
+compiler_uses_one_stereo_detector_for_dynamics_nodes --locked` passed on
+2026-09-12 for both compressor and gate nodes. It verifies that the graph
+compiler selects the shared two-channel detector for stereo ports and preserves
+the asymmetric channel ratio. Native callback and endpoint activation remain
+separate gates.

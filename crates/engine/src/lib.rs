@@ -6556,6 +6556,43 @@ mod tests {
     }
 
     #[test]
+    fn compiler_uses_one_stereo_detector_for_dynamics_nodes() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session};
+        for kind in [NodeKind::Compressor, NodeKind::Gate] {
+            let session = Session {
+                id: EntityId::new(format!("stereo-{kind:?}")),
+                name: "stereo dynamics".into(),
+                schema_version: 1,
+                revision: 1,
+                nodes: vec![Node {
+                    id: EntityId::new("dynamics"),
+                    kind,
+                    type_version: 1,
+                    name: "Stereo dynamics".into(),
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 2,
+                    }],
+                }],
+                edges: vec![],
+            };
+            let graph = compile_session(&session, RuntimeGeneration::new(90)).unwrap();
+            let mut block = AudioBlock::new(2, 128).unwrap();
+            block.channel_mut(0).unwrap().fill(1.0);
+            block.channel_mut(1).unwrap().fill(0.25);
+            graph.process(&mut block);
+            let left = block.channel(0).unwrap()[127];
+            let right = block.channel(1).unwrap()[127];
+            assert!(left.is_finite() && right.is_finite());
+            assert!((left / right - 4.0).abs() < 1.0e-4);
+        }
+    }
+
+    #[test]
     fn compiler_rejects_sample_rates_outside_the_bounded_graph_contract() {
         use audiorouter_domain::{EntityId, Node, NodeKind, Session};
         let session = Session {

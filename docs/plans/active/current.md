@@ -8343,6 +8343,10 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Added a compiler-level DSP-03 regression on 2026-09-12 proving both stereo
+  compressor and gate nodes select the shared two-channel detector path and
+  preserve the channel ratio under asymmetric input. The focused test passed;
+  native driver activation remains an independent gate.
 - Revalidated the interrupted post-reboot acceptance run on 2026-09-12 from
   its captured terminal log: the complete guarded safe chain passed, including
   M03 WDK compile/package, portable DSP/engine/control, UI build, plugin
