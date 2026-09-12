@@ -8342,6 +8342,28 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+
+## Latest execution checkpoint — 2026-09-12
+
+- The native graph activation boundary now includes enabled virtual-bus
+  bridges in its prebuilt bounded tap set, with generation ordering and total
+  observer-capacity validation. The processed graph-to-bridge handoff and
+  control integration are covered by engine (105) and control (121) tests;
+  strict relevant Clippy, formatting, diff, and documentation checks pass.
+- Exact next task: add a guarded control-owned bridge-worker probe that drains
+  an activated bridge and records lease/generation plus before/after endpoint
+  evidence. Do not install/load the driver, change signing or boot policy, or
+  change machine audio defaults.
+
+- Integrated enabled virtual-bus bridges into control-owned native graph
+  activation on 2026-09-12. Activation now validates bounded recorder-plus-
+  bridge observer capacity and generation ordering, activates eligible bridge
+  generations, and publishes one prebuilt tap set for the native pump. Control
+  tests (121), strict Clippy, formatting, and diff checks pass; no endpoint
+  was opened and the loaded-driver/PortCls/signing gates remain open.
+- Next M02/M03 task: add a guarded control-owned bridge worker probe that
+  drains the activated virtual-bus bridge and records explicit lease,
+  generation, and before/after endpoint evidence without changing defaults.
 - Added the allocation-free processed-graph handoff to `VirtualBusBridge` on
   2026-09-12. The bridge now implements `AudioTap`, copies only matching
   active-generation blocks into its bounded render ring, and drops inactive,
