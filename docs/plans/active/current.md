@@ -8345,25 +8345,19 @@ live-driver evidence.
 
 ## Latest execution checkpoint — 2026-09-12
 
-- The native graph activation boundary now includes enabled virtual-bus
-  bridges in its prebuilt bounded tap set, with generation ordering and total
-  observer-capacity validation. The processed graph-to-bridge handoff and
-  control integration are covered by engine (105) and control (121) tests;
-  strict relevant Clippy, formatting, diff, and documentation checks pass.
-- Exact next task: add a guarded control-owned bridge-worker probe that drains
-  an activated bridge and records lease/generation plus before/after endpoint
-  evidence. Do not install/load the driver, change signing or boot policy, or
-  change machine audio defaults.
-
-- Integrated enabled virtual-bus bridges into control-owned native graph
-  activation on 2026-09-12. Activation now validates bounded recorder-plus-
-  bridge observer capacity and generation ordering, activates eligible bridge
-  generations, and publishes one prebuilt tap set for the native pump. Control
-  tests (121), strict Clippy, formatting, and diff checks pass; no endpoint
-  was opened and the loaded-driver/PortCls/signing gates remain open.
-- Next M02/M03 task: add a guarded control-owned bridge worker probe that
-  drains the activated virtual-bus bridge and records explicit lease,
-  generation, and before/after endpoint evidence without changing defaults.
+- Added the reusable allocation-free processed-graph handoff to
+  `VirtualBusBridge`, but removed a provisional control binding that attached
+  every enabled bus to every native graph because that would create an
+  invisible pass-through. Explicit `VirtualCaptureSink` topology must select
+  bridge taps before control activation can bind them.
+- The corrected tree passes the full locked workspace suite (including 105
+  engine, 121 control, and 63 Windows-audio tests), strict relevant Clippy,
+  formatting, diff, and documentation checks. No endpoint was opened and no
+  machine audio configuration changed.
+- Exact next task: extend graph compilation/runtime output ownership for an
+  explicit virtual capture-sink route, then bind only those selected bridge
+  taps and add guarded lease/generation evidence. Do not install/load the
+  driver, change signing or boot policy, or change machine audio defaults.
 - Added the allocation-free processed-graph handoff to `VirtualBusBridge` on
   2026-09-12. The bridge now implements `AudioTap`, copies only matching
   active-generation blocks into its bounded render ring, and drops inactive,

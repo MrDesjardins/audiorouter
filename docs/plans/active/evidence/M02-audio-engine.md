@@ -1492,19 +1492,19 @@ passed 32 DSP tests and 102 engine tests. This is portable built-in processing
 evidence for DSP-03; native driver callback timing and endpoint activation
 remain separate gates.
 
-## 2026-09-12 — Native graph activation includes virtual-bus taps
+## 2026-09-12 — Topology correction for virtual-bus taps
 
-The control-owned native graph activation boundary now adds every enabled,
-managed virtual-bus bridge to the same prebuilt bounded `AudioTapSet` used by
-recorders. It validates observer capacity and bridge generation ordering
-before activation, rejects newer or non-reusable generations, and publishes
-the prepared graph only after the tap set is ready. The bridge's control-side
-drain remains separate from endpoint/driver ownership.
+A provisional control integration that attached every enabled virtual bus to
+every native graph was removed after review because it created an invisible
+pass-through, contrary to the graph-authority and explicit-topology rules.
+The reusable allocation-free `VirtualBusBridge` `AudioTap` remains; selecting
+it must wait for an explicit `VirtualCaptureSink` route in the compiled graph.
+No implicit bus activation is shipped.
 
-Validation: `cargo test -p audiorouter-control --locked` passed 121 tests,
-strict all-target Clippy passed, and formatting/diff checks passed. No native
-worker was opened by these checks; loaded driver, PortCls ownership, signing,
-and physical-latency evidence remain open.
+Validation after removal: the full locked workspace suite passed, including
+121 control and 105 engine tests, with strict relevant Clippy, formatting,
+and diff checks. No endpoint was opened and no machine audio configuration
+changed.
 
 The compiler-level follow-up `cargo test -p audiorouter-engine
 compiler_uses_one_stereo_detector_for_dynamics_nodes --locked` passed on

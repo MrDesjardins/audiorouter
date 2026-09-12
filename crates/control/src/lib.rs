@@ -3635,7 +3635,7 @@ impl ControlPlane {
             .filter(|node| node.enabled && node.kind == NodeKind::Recorder)
             .map(|node| node.id.as_str())
             .collect::<Vec<_>>();
-        let mut recorder_taps = if recorder_node_ids.is_empty() {
+        let recorder_taps = if recorder_node_ids.is_empty() {
             AudioTapSet::new()
         } else {
             let bindings =
@@ -3655,56 +3655,6 @@ impl ControlPlane {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
         })?;
 
-        // Add enabled virtual buses to the same prebuilt observer set as
-        // recorders. The bridge is activated only after graph preparation
-        // succeeds; repeated activation of the same generation is idempotent,
-        // while attempting to move a bridge backwards is rejected.
-        let virtual_bridge_taps = self
-            .virtual_buses
-            .list()
-            .iter()
-            .filter(|bus| bus.enabled())
-            .map(|bus| {
-                self.virtual_bridges.get(bus.id()).ok_or_else(|| {
-                    ControlError::InvalidRequest("enabled virtual bus has no managed bridge".into())
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        if recorder_taps.len() + virtual_bridge_taps.len() > audiorouter_engine::MAX_AUDIO_TAPS {
-            return Err(ControlError::InvalidRequest(
-                "native graph observer capacity exceeded by recorder and virtual-bus taps".into(),
-            ));
-        }
-        for bridge in &virtual_bridge_taps {
-            let bridge_generation = bridge.generation();
-            if bridge.is_active() {
-                if bridge_generation > generation {
-                    return Err(ControlError::InvalidRequest(
-                        "virtual-bus bridge generation is newer than native graph".into(),
-                    ));
-                }
-                if bridge_generation < generation {
-                    bridge.activate(generation).map_err(|_| {
-                        ControlError::InvalidRequest(
-                            "virtual-bus bridge generation could not advance".into(),
-                        )
-                    })?;
-                }
-            } else {
-                if bridge_generation >= generation {
-                    return Err(ControlError::InvalidRequest(
-                        "inactive virtual-bus bridge cannot reuse its generation".into(),
-                    ));
-                }
-                bridge.activate(generation).map_err(|_| {
-                    ControlError::InvalidRequest("virtual-bus bridge activation failed".into())
-                })?;
-            }
-            let tap: Arc<dyn AudioTap> = bridge.clone();
-            recorder_taps.add_shared(tap).map_err(|_| {
-                ControlError::InvalidRequest("virtual-bus tap capacity exceeded".into())
-            })?;
-        }
         self.native_endpoint_worker
             .as_mut()
             .ok_or_else(|| {
