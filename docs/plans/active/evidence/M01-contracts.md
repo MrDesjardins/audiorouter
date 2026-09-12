@@ -925,5 +925,5 @@ The CLI now provides `virtual-routes list` and `virtual-routes replace` as
 typed convenience commands over the same control dispatcher. Replacement
 reads a bounded absolute JSON route-array file, requires a base revision and
 idempotency key, and uses the existing `DeviceAdministration` grant; listing requires an
-explicit database and performs no audio activation. CLI tests (30), strict
+explicit database and performs no audio activation. CLI tests (31), strict
 Clippy, formatting, and diff checks passed.

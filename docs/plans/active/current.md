@@ -8346,7 +8346,7 @@ live-driver evidence.
   list` and revisioned `virtual-routes replace` use the shared control
   dispatcher, bounded absolute JSON input, and the existing
   `DeviceAdministration` grant.
-  CLI tests (30), strict Clippy, formatting, and diff checks passed; no audio
+  CLI tests (31), strict Clippy, formatting, and diff checks passed; no audio
   endpoint or machine configuration was accessed. Next: inspect remaining
   adapter/catalog drift and then advance the M02/M03 bridge publication gate.
 - Added the UI virtual-route adapter on 2026-09-12. The live backend now
