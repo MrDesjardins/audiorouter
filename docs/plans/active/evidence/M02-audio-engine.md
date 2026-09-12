@@ -1555,3 +1555,8 @@ only matching enabled bus bridge taps; graphs without the node cannot publish
 virtual-bus output implicitly. Engine (106) and control (124) tests pass,
 including formatting and strict Clippy. This remains user-mode ownership
 evidence; the managed driver and physical endpoint gates are still open.
+
+The control regression `virtual_route_taps_require_an_explicit_sink_and_select_only_matching_enabled_buses`
+passed on 2026-09-12. It proves that no virtual tap is built without an
+explicit capture-sink marker and that a sink-owned producer receives only its
+matching enabled route bridge; unrelated producer routes are excluded.

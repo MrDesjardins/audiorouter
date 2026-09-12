@@ -8342,6 +8342,11 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Added the selected-route control regression on 2026-09-12. It proves that
+  graphs without an explicit virtual capture sink receive no virtual taps and
+  that sink-owned producers receive only their matching enabled bridge. The
+  focused control test, strict Clippy, formatting, and diff checks passed;
+  loaded-driver/PortCls and physical-latency qualification remain open.
 
 - Requalified the complete elevated `safe-all.ps1` chain on 2026-09-12 after
   reboot. Toolchain/native compile, 34-endpoint read-only inventory, pinned

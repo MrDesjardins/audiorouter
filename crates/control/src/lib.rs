@@ -3701,28 +3701,11 @@ impl ControlPlane {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
         })?;
 
-        if graph.has_virtual_capture_sink() {
-            for route in self
-                .virtual_bus_routes
-                .list()
-                .iter()
-                .filter(|route| route.producer_session_id == *session_id)
-            {
-                let enabled = self
-                    .virtual_buses
-                    .list()
-                    .iter()
-                    .any(|bus| bus.id() == &route.bus_id && bus.enabled());
-                if enabled {
-                    let bridge = self.virtual_bridges.get(&route.bus_id).ok_or_else(|| {
-                        ControlError::InvalidRequest("route bridge is not prepared".into())
-                    })?;
-                    recorder_taps.add_shared(bridge).map_err(|_| {
-                        ControlError::InvalidRequest("native graph tap capacity exceeded".into())
-                    })?;
-                }
-            }
-        }
+        let virtual_taps =
+            self.virtual_route_tap_set(session_id, graph.has_virtual_capture_sink())?;
+        recorder_taps.append(&virtual_taps).map_err(|_| {
+            ControlError::InvalidRequest("native graph tap capacity exceeded".into())
+        })?;
 
         self.native_endpoint_worker
             .as_mut()
@@ -3734,6 +3717,38 @@ impl ControlPlane {
             .publish(graph);
         self.native_endpoint_taps = Some(recorder_taps);
         Ok(())
+    }
+
+    fn virtual_route_tap_set(
+        &self,
+        producer_session_id: &EntityId,
+        has_capture_sink: bool,
+    ) -> Result<AudioTapSet, ControlError> {
+        let mut taps = AudioTapSet::new();
+        if !has_capture_sink {
+            return Ok(taps);
+        }
+        for route in self
+            .virtual_bus_routes
+            .list()
+            .iter()
+            .filter(|route| route.producer_session_id == *producer_session_id)
+        {
+            let enabled = self
+                .virtual_buses
+                .list()
+                .iter()
+                .any(|bus| bus.id() == &route.bus_id && bus.enabled());
+            if enabled {
+                let bridge = self.virtual_bridges.get(&route.bus_id).ok_or_else(|| {
+                    ControlError::InvalidRequest("route bridge is not prepared".into())
+                })?;
+                taps.add_shared(bridge).map_err(|_| {
+                    ControlError::InvalidRequest("native graph tap capacity exceeded".into())
+                })?;
+            }
+        }
+        Ok(taps)
     }
 
     /// Pump using the recorder taps prepared by the last native graph
@@ -14009,6 +14024,45 @@ mod tests {
         assert!(plane.virtual_bridges.get(&id).is_some());
         plane.delete_virtual_bus(&id).unwrap();
         assert!(plane.virtual_bridges.get(&id).is_none());
+    }
+
+    #[test]
+    fn virtual_route_taps_require_an_explicit_sink_and_select_only_matching_enabled_buses() {
+        let mut plane = ControlPlane::default();
+        let first_bus = EntityId::new("route-bus-1");
+        let second_bus = EntityId::new("route-bus-2");
+        plane
+            .create_virtual_bus(first_bus.clone(), "First")
+            .unwrap();
+        plane
+            .create_virtual_bus(second_bus.clone(), "Second")
+            .unwrap();
+        let routes = VirtualBusRouteRegistry::new(vec![
+            audiorouter_domain::VirtualBusRoute {
+                bus_id: first_bus,
+                producer_session_id: EntityId::new("producer"),
+                consumer_session_id: EntityId::new("consumer"),
+            },
+            audiorouter_domain::VirtualBusRoute {
+                bus_id: second_bus,
+                producer_session_id: EntityId::new("other-producer"),
+                consumer_session_id: EntityId::new("consumer"),
+            },
+        ])
+        .unwrap();
+        plane.virtual_bus_routes = routes;
+        plane.virtual_bus_route_revision = 1;
+        assert!(plane
+            .virtual_route_tap_set(&EntityId::new("producer"), false)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            plane
+                .virtual_route_tap_set(&EntityId::new("producer"), true)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]

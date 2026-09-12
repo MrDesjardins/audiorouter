@@ -1024,6 +1024,16 @@ impl AudioTapSet {
         self.taps.is_empty()
     }
 
+    /// Append another prebuilt set without rebuilding its membership. The
+    /// caller remains responsible for the aggregate tap bound.
+    pub fn append(&mut self, other: &AudioTapSet) -> Result<(), AudioTapSetError> {
+        if self.taps.len().saturating_add(other.taps.len()) > MAX_AUDIO_TAPS {
+            return Err(AudioTapSetError::Capacity);
+        }
+        self.taps.extend(other.taps.iter().cloned());
+        Ok(())
+    }
+
     fn notify(&self, start_frame: u64, block: &AudioBlock) {
         for tap in &self.taps {
             tap.on_processed_block(start_frame, block);
