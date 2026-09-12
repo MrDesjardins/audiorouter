@@ -1510,3 +1510,19 @@ endpoint stop is attempted even when staged scheduler reset fails, and the
 first cleanup error remains visible. The focused
 `cargo test -p audiorouter-windows-audio --locked` suite passed 63 tests;
 strict package Clippy and `git diff --check` passed. No endpoint was opened.
+
+## 2026-09-12 — Processed graph handoff to virtual-bus bridge
+
+`VirtualBusBridge` now implements the engine's allocation-free `AudioTap`
+boundary. Each processed block is copied into a bounded render handoff only
+when the active generation matches; inactive, shape-invalid, or full handoffs
+are dropped without waiting and remain fail-closed. The bridge's existing
+control-side `process_once` then transfers accepted blocks to the bounded
+capture side for the future virtual capture endpoint.
+
+Validation: `cargo fmt --all -- --check` and
+`cargo test -p audiorouter-engine --locked` passed; the engine suite reported
+105 passing tests, including processed-audio handoff and inactive/full-drop
+regressions. This proves the portable graph-to-bridge boundary only; loaded
+driver, PortCls ownership, endpoint activation, signing, and physical latency
+remain separate gates.

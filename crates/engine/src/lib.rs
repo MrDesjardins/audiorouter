@@ -455,6 +455,32 @@ impl VirtualBusBridge {
         self.render.try_submit(block)
     }
 
+    /// Copy one processed block into the bounded render handoff without
+    /// allocating or waiting. This is the callback-safe bridge entry used by
+    /// [`AudioTap`]; the caller-owned block remains available to other taps.
+    /// A full or unavailable handoff is dropped and counted rather than
+    /// blocking the graph.
+    pub fn submit_render_copy(&self, generation: u64, source: &AudioBlock) -> bool {
+        if !self.is_active() || self.generation() != generation {
+            return false;
+        }
+        let Some(mut block) = self.render.try_acquire() else {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return false;
+        };
+        if block.copy_from(source).is_err() {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            let _ = self.render.try_recycle(block);
+            return false;
+        }
+        block.generation = generation;
+        if self.render.try_submit(block).is_err() {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+            return false;
+        }
+        true
+    }
+
     /// Move as many render blocks as possible into the capture ring. The
     /// returned count is the number of captured blocks, not the number
     /// received from the producer; overflow is counted and recycled.
@@ -603,6 +629,13 @@ impl VirtualBusBridge {
         while let Some(block) = self.capture.try_receive() {
             let _ = self.capture.try_recycle(block);
         }
+    }
+}
+
+impl AudioTap for VirtualBusBridge {
+    fn on_processed_block(&self, _start_frame: u64, block: &AudioBlock) {
+        let generation = self.generation();
+        let _ = self.submit_render_copy(generation, block);
     }
 }
 
@@ -5420,6 +5453,41 @@ mod tests {
             bridge.activate(1),
             Err(VirtualBusBridgeError::InvalidGeneration)
         );
+    }
+
+    #[test]
+    fn processed_audio_tap_hands_off_to_virtual_bus_without_copying_owner() {
+        let bridge = VirtualBusBridge::new(2, 1, 4).unwrap();
+        bridge.activate(1).unwrap();
+        let processor = RuntimeProcessor::default();
+        processor.publish(RuntimeGraph::prepare(
+            RuntimeGeneration::new(1),
+            vec![ProcessingStage::Gain { linear: 2.0 }],
+        ));
+        let mut source = AudioBlock::new(1, 4).unwrap();
+        source.channel_mut(0).unwrap().fill(0.25);
+        assert_eq!(
+            processor.process_with_tap(&mut source, 0, &bridge),
+            Some(RuntimeGeneration::new(1))
+        );
+        assert_eq!(source.channel(0).unwrap(), &[0.5; 4]);
+        assert_eq!(bridge.process_once(), 1);
+        let mut captured = AudioBlock::new(1, 4).unwrap();
+        assert!(bridge.receive_capture_into(&mut captured).unwrap());
+        assert_eq!(captured.generation(), 1);
+        assert_eq!(captured.channel(0).unwrap(), &[0.5; 4]);
+    }
+
+    #[test]
+    fn virtual_bus_audio_tap_drops_when_inactive_or_full() {
+        let bridge = VirtualBusBridge::new(1, 1, 2).unwrap();
+        let source = AudioBlock::new(1, 2).unwrap();
+        bridge.on_processed_block(0, &source);
+        assert_eq!(bridge.dropped(), 0);
+        bridge.activate(1).unwrap();
+        bridge.on_processed_block(0, &source);
+        bridge.on_processed_block(2, &source);
+        assert_eq!(bridge.dropped(), 1);
     }
 
     #[test]

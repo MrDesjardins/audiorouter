@@ -8342,6 +8342,17 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Added the allocation-free processed-graph handoff to `VirtualBusBridge` on
+  2026-09-12. The bridge now implements `AudioTap`, copies only matching
+  active-generation blocks into its bounded render ring, and drops inactive,
+  malformed, or full submissions without waiting. Engine validation passed
+  105 tests; this is portable graph-to-bridge evidence and does not qualify a
+  loaded driver or Windows virtual endpoint.
+- Next M02/M03 task: connect the prebuilt bridge tap to the control-owned
+  native graph activation boundary, then qualify the corresponding bridge
+  worker with explicit lease/generation and before/after endpoint evidence;
+  installation, signing, and production PortCls ownership remain separate
+  gates.
 - Re-ran the M03 driver source-contract acceptance after reboot on 2026-09-12
   with VS 18.9.1 and WDK 10.0.28000.0. The AudioRouter x64 prototype built,
   generated its catalog, and reported zero signability errors and warnings;
