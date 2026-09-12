@@ -8377,6 +8377,14 @@ live-driver evidence.
   audio configuration changed. Next: add durable route-state plus journal
   atomicity coverage, then advance the next uncompleted plan item.
 
+- Advanced M02/M03 explicit sink ownership on 2026-09-12: compiled graphs now
+  retain an immutable enabled-`VirtualCaptureSink` marker, and native graph
+  activation adds only matching enabled route bridges to the prebuilt tap set.
+  Engine (106) and control (124) tests pass with strict Clippy and formatting.
+  This is still user-mode graph ownership evidence; driver loading and physical
+  endpoint qualification remain blocked gates. Next: add a guarded control
+  regression proving selected-route-only bridge binding and generation cleanup.
+
 ## Latest execution checkpoint — 2026-09-12
 
 - Added the reusable allocation-free processed-graph handoff to

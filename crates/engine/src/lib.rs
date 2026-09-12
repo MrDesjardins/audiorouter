@@ -3535,11 +3535,12 @@ pub fn compile_session_at_sample_rate(
         }
         previous_node = Some(node_id);
     }
-    Ok(RuntimeGraph::prepare_at_sample_rate(
-        generation,
-        stages,
-        sample_rate_hz,
-    ))
+    let mut graph = RuntimeGraph::prepare_at_sample_rate(generation, stages, sample_rate_hz);
+    graph.has_virtual_capture_sink = session
+        .nodes
+        .iter()
+        .any(|node| node.enabled && node.kind == NodeKind::VirtualCaptureSink);
+    Ok(graph)
 }
 
 /// Compile the supported mixer-convergence topology. This intentionally has a
@@ -3740,6 +3741,7 @@ pub struct RuntimeGraph {
     generation: RuntimeGeneration,
     sample_rate_hz: u32,
     meters: Vec<BlockMeter>,
+    has_virtual_capture_sink: bool,
 }
 
 /// Publication point for prepared immutable graphs. Preparation and stores
@@ -4371,6 +4373,7 @@ impl RuntimeGraph {
             generation,
             sample_rate_hz,
             meters: (0..meter_count).map(|_| BlockMeter::default()).collect(),
+            has_virtual_capture_sink: false,
         }
     }
 
@@ -4383,6 +4386,11 @@ impl RuntimeGraph {
     /// realtime snapshot without consulting control-plane state.
     pub fn sample_rate_hz(&self) -> u32 {
         self.sample_rate_hz
+    }
+
+    /// Whether this graph owns an explicit virtual capture-sink node.
+    pub fn has_virtual_capture_sink(&self) -> bool {
+        self.has_virtual_capture_sink
     }
 
     /// Return the lock-free meter for a prepared Meter node. Meter storage is
@@ -6493,6 +6501,30 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(graph.generation().value(), 31);
         assert_eq!(block.channel(0).unwrap(), &[0.75; 2]);
+    }
+
+    #[test]
+    fn compiler_marks_only_explicit_virtual_capture_sink_graphs() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Session};
+        let session = Session {
+            id: EntityId::new("session"),
+            name: "virtual-capture-boundary".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: EntityId::new("sink"),
+                kind: NodeKind::VirtualCaptureSink,
+                type_version: 1,
+                name: "Virtual capture sink".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![],
+            }],
+            edges: vec![],
+        };
+        let graph = compile_session(&session, RuntimeGeneration::new(32)).unwrap();
+        assert!(graph.has_virtual_capture_sink());
     }
 
     #[test]

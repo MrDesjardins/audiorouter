@@ -1546,3 +1546,12 @@ The follow-up `cargo test --workspace --locked -- --test-threads=1` passed on
 and doc-tests passed, including 105 engine, 121 control, 63 Windows-audio,
 and 67 plugin-host tests. No endpoint was opened and no machine audio or
 driver configuration changed.
+## 2026-09-12 - Explicit virtual capture-sink ownership marker
+
+Compiled runtime graphs now retain an immutable `has_virtual_capture_sink`
+marker when an enabled `VirtualCaptureSink` node is present. Native graph
+activation uses that marker together with the explicit route registry to add
+only matching enabled bus bridge taps; graphs without the node cannot publish
+virtual-bus output implicitly. Engine (106) and control (124) tests pass,
+including formatting and strict Clippy. This remains user-mode ownership
+evidence; the managed driver and physical endpoint gates are still open.

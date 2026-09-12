@@ -3681,7 +3681,7 @@ impl ControlPlane {
             .filter(|node| node.enabled && node.kind == NodeKind::Recorder)
             .map(|node| node.id.as_str())
             .collect::<Vec<_>>();
-        let recorder_taps = if recorder_node_ids.is_empty() {
+        let mut recorder_taps = if recorder_node_ids.is_empty() {
             AudioTapSet::new()
         } else {
             let bindings =
@@ -3700,6 +3700,29 @@ impl ControlPlane {
         .map_err(|error| {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
         })?;
+
+        if graph.has_virtual_capture_sink() {
+            for route in self
+                .virtual_bus_routes
+                .list()
+                .iter()
+                .filter(|route| route.producer_session_id == *session_id)
+            {
+                let enabled = self
+                    .virtual_buses
+                    .list()
+                    .iter()
+                    .any(|bus| bus.id() == &route.bus_id && bus.enabled());
+                if enabled {
+                    let bridge = self.virtual_bridges.get(&route.bus_id).ok_or_else(|| {
+                        ControlError::InvalidRequest("route bridge is not prepared".into())
+                    })?;
+                    recorder_taps.add_shared(bridge).map_err(|_| {
+                        ControlError::InvalidRequest("native graph tap capacity exceeded".into())
+                    })?;
+                }
+            }
+        }
 
         self.native_endpoint_worker
             .as_mut()
