@@ -8363,6 +8363,12 @@ live-driver evidence.
   (122), strict Clippy, formatting, and diff checks pass. Next: expose this
   boundary through authorized revision/idempotent RPC operations.
 
+- Added the read-only `virtualRoutes.list` method to API discovery, schema,
+  and dispatch on 2026-09-12. It exposes only explicit durable route records
+  and performs no endpoint/driver action; domain/control tests (60/123),
+  strict Clippy, formatting, diff, and documentation checks pass. Next: add
+  the authorized revisioned/idempotent route replacement operation.
+
 ## Latest execution checkpoint — 2026-09-12
 
 - Added the reusable allocation-free processed-graph handoff to

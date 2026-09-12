@@ -881,3 +881,14 @@ Validation: `cargo test -p audiorouter-control --locked` passed 122 tests,
 including known-bus and referenced-deletion regressions; strict Clippy,
 formatting, and diff checks passed. Authorized revisioned RPC mutation is
 still a follow-up task.
+
+## 2026-09-12 - Explicit route list API
+
+`virtualRoutes.list` is now part of method discovery and the shared control
+dispatcher. It returns only the bounded durable `VirtualBusRouteRegistry`,
+uses the read permission, and has an exact output schema for bus, producer,
+and consumer session identities. It performs no endpoint or driver action.
+
+Validation: domain/control tests passed (60/123), strict Clippy, formatting,
+diff, and documentation checks passed. Authorized route replacement with
+revision and idempotency remains the next API slice.

@@ -1522,6 +1522,7 @@ fn method_description(name: &str) -> &'static str {
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
+        "virtualRoutes.list" => "List explicit cross-session virtual-bus routes without activating audio.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities and observed Windows audio-session activity for binding."
         }
@@ -2580,6 +2581,11 @@ fn method_output_schema(name: &str) -> Value {
             "required": ["planId", "state", "availability", "operation"],
             "additionalProperties": false
         }),
+        "virtualRoutes.list" => json!({
+            "type": "array",
+            "maxItems": audiorouter_domain::MAX_VIRTUAL_BUS_ROUTES,
+            "items": virtual_bus_route_schema()
+        }),
         "nodes.types" | "nodes.describe" => json!({
             "type": "array",
             "maxItems": audiorouter_domain::node_registry().len(),
@@ -3171,6 +3177,19 @@ fn virtual_device_item_schema() -> Value {
             "leaseOwner": { "type": ["string", "null"] }
         },
         "required": ["id", "name", "direction", "channels", "enabled", "availability", "endpointIds", "capabilities", "privilege", "restartRequired", "clientImpacts", "leaseOwner"],
+        "additionalProperties": false
+    })
+}
+
+fn virtual_bus_route_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "busId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+            "producerSessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+            "consumerSessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+        },
+        "required": ["busId", "producerSessionId", "consumerSessionId"],
         "additionalProperties": false
     })
 }
@@ -5801,6 +5820,7 @@ impl ControlPlane {
                     "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
                     "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
+                    "virtualRoutes.list" => self.dispatch_virtual_routes_list(),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
@@ -8279,6 +8299,11 @@ impl ControlPlane {
         Ok(json!({ "items": buses, "nextCursor": next_cursor }))
     }
 
+    fn dispatch_virtual_routes_list(&self) -> Result<Value, ControlError> {
+        serde_json::to_value(self.virtual_bus_routes.list())
+            .map_err(|error| ControlError::Json(error.to_string()))
+    }
+
     fn dispatch_apps_list(&mut self) -> Result<Value, ControlError> {
         if let Some((captured_at, snapshot)) = &self.application_snapshot {
             if captured_at.elapsed() < APPLICATION_SNAPSHOT_TTL {
@@ -8589,6 +8614,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
+        "virtualRoutes.list" => &[],
         "startup.plan" => &["enabled"],
         "startup.apply" => &["planId", "idempotencyKey"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
@@ -9115,6 +9141,23 @@ mod tests {
             .result
             .unwrap_or_else(|| panic!("unexpected paged response error: {:?}", paged.error));
         assert_eq!(paged_result, json!({ "items": [], "nextCursor": null }));
+    }
+
+    #[test]
+    fn virtual_routes_list_exposes_only_explicit_durable_routes() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(8)),
+            method: "virtualRoutes.list".into(),
+            params: None,
+        });
+        assert_eq!(response.result.unwrap(), json!([]));
+        assert!(plane.describe()["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|method| method["name"] == "virtualRoutes.list"));
     }
 
     #[test]

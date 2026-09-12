@@ -38,6 +38,7 @@ M01 shall produce machine-readable method and node schemas, golden request/respo
 | `graph.plan/commit`, `graph.history`, `graph.undoPlan` | Atomic graph edit/inspection/revision history |
 | `routes.inspect`, `nodes.describe` | Source provenance and complete type/parameter schemas |
 | `virtualDevices.list/plan/apply` | Bus lifecycle as explicit privileged operations, separate from graph commits |
+| `virtualRoutes.list` | Explicit cross-session bus routes; read-only until route mutation is authorized and revisioned |
 | `plugins.scan/list/inspect`, `plugins.retry` | Isolated discovery, compatibility/quarantine, deliberate retry |
 | `presets.list/save/import/export` | Versioned parameter/subgraph presets; apply through graph.plan |
 | `recorders.list` | Live in-memory recorder state and last frame boundary; does not imply persisted file finalization |
