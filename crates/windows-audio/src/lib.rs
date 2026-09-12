@@ -335,11 +335,7 @@ impl NativeBridgeInputWorker {
 
     pub fn stop(&mut self) -> Result<(), NativeBridgeInputWorkerError> {
         self.running = false;
-        self.bridge
-            .reset_stream()
-            .map_err(NativeBridgeInputWorkerError::Audio)?;
-        self.render
-            .stop()
+        stop_endpoint_and_reset(&mut self.render, || self.bridge.reset_stream().map(|_| ()))
             .map_err(NativeBridgeInputWorkerError::Audio)
     }
 
@@ -1812,6 +1808,18 @@ where
     let endpoint_result = stop_endpoint_pair(capture, render);
     let reset_result = reset();
     endpoint_result.and(reset_result)
+}
+
+/// Stop one endpoint and always run its associated staged-audio reset. The
+/// endpoint error wins, but reset is attempted even when stop fails.
+fn stop_endpoint_and_reset<E, F>(endpoint: &mut E, reset: F) -> Result<(), AudioError>
+where
+    E: EndpointLifecycle,
+    F: FnOnce() -> Result<(), AudioError>,
+{
+    let stop_result = endpoint.stop();
+    let reset_result = reset();
+    stop_result.and(reset_result)
 }
 
 impl WasapiEndpointWorker {
@@ -5046,6 +5054,37 @@ mod tests {
         assert!(matches!(stop_error, AudioError::ProcessingStateUnavailable));
         assert!(reset_called);
         assert_eq!((capture.stops, render.stops), (2, 1));
+    }
+
+    #[test]
+    fn single_endpoint_stop_attempts_reset_after_stop_failure() {
+        struct Probe {
+            stopped: bool,
+        }
+
+        impl EndpointLifecycle for Probe {
+            fn start(&mut self) -> Result<(), AudioError> {
+                Ok(())
+            }
+
+            fn stop(&mut self) -> Result<(), AudioError> {
+                self.stopped = true;
+                Err(AudioError::ProcessingStateUnavailable)
+            }
+        }
+
+        let mut endpoint = Probe { stopped: false };
+        let mut reset_called = false;
+        let result = stop_endpoint_and_reset(&mut endpoint, || {
+            reset_called = true;
+            Ok(())
+        });
+        assert!(matches!(
+            result,
+            Err(AudioError::ProcessingStateUnavailable)
+        ));
+        assert!(endpoint.stopped);
+        assert!(reset_called);
     }
 
     #[test]

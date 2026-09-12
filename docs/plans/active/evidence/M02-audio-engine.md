@@ -1504,3 +1504,9 @@ The sequential workspace requalification
 the updated engine suite reported 103 passing tests and the updated DSP suite
 32 passing tests, with all other workspace suites also green. Documentation
 validation passed separately with 52 Markdown files and 167 local links.
+
+The native render-source worker teardown path was hardened on 2026-09-12:
+endpoint stop is attempted even when staged scheduler reset fails, and the
+first cleanup error remains visible. The focused
+`cargo test -p audiorouter-windows-audio --locked` suite passed 63 tests;
+strict package Clippy and `git diff --check` passed. No endpoint was opened.
