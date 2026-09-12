@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 61 methods, including the session portability,
+The current catalog contains 65 methods, including the session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
 
@@ -76,6 +76,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `virtualDevices.list` | `read` | read-only |
 | `virtualDevices.plan` | `deviceAdministration` | plan-only |
 | `virtualDevices.apply` | `deviceAdministration` | mutating; requires an idempotency key |
+| `virtualRoutes.list` | `read` | read-only; returns explicit durable cross-session routes |
 | `apps.list` | `read` | read-only |
 | `applications.list` | `read` | read-only; returns bounded process identity, including nullable executable path and creation timestamp |
 | `nodes.types` | `read` | read-only |
