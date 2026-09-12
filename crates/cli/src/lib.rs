@@ -83,6 +83,7 @@ where
         "diagnostics" => diagnostics_command(&command_args)?,
         "devices" => list_subcommand(&command_args, "devices")?,
         "virtual-devices" => virtual_devices_command(&command_args)?,
+        "virtual-routes" => virtual_routes_command(&command_args)?,
         "plugins" => plugins_command(&command_args)?,
         "presets" => presets_command(&command_args)?,
         "processors" => list_subcommand(&command_args, "processors")?,
@@ -779,6 +780,63 @@ fn virtual_devices_command(args: &[&str]) -> Result<Value, CliError> {
     }
 }
 
+fn virtual_routes_command(args: &[&str]) -> Result<Value, CliError> {
+    match args.get(1).copied() {
+        Some("list") => {
+            let response = ControlPlane::with_storage("cli", database(args)?)
+                .dispatch(request("virtualRoutes.list"));
+            response.result.ok_or_else(|| {
+                CliError::InvalidArguments(
+                    response
+                        .error
+                        .map_or_else(|| "virtual route list failed".into(), |error| error.message),
+                )
+            })
+        }
+        Some("replace") => {
+            let base_revision = option_value(args, "--base-revision")?
+                .parse::<u64>()
+                .map_err(|_| {
+                    CliError::InvalidArguments("--base-revision must be an integer".into())
+                })?;
+            let routes = read_json_value(&absolute_option(args, "--file")?)?;
+            if !routes.is_array() {
+                return Err(CliError::InvalidArguments(
+                    "route file must contain a JSON array".into(),
+                ));
+            }
+            let idempotency_key = option_value(args, "--idempotency-key")?;
+            if idempotency_key.len() > 256 {
+                return Err(CliError::InvalidArguments(
+                    "--idempotency-key must contain at most 256 characters".into(),
+                ));
+            }
+            let response = ControlPlane::with_storage("cli", database(args)?).dispatch_authorized(
+                audiorouter_protocol::JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: "virtualRoutes.replace".into(),
+                    params: Some(json!({
+                        "baseRevision": base_revision,
+                        "routes": routes,
+                        "idempotencyKey": idempotency_key,
+                    })),
+                },
+                &ClientGrant::with_scopes([PermissionScope::GraphWrite]),
+            );
+            response.result.ok_or_else(|| {
+                CliError::InvalidArguments(response.error.map_or_else(
+                    || "virtual route replacement failed".into(),
+                    |error| error.message,
+                ))
+            })
+        }
+        _ => Err(CliError::InvalidArguments(
+            "usage: virtual-routes <list|replace> [options]".into(),
+        )),
+    }
+}
+
 fn api_subcommand(args: &[&str]) -> Result<Value, CliError> {
     match args.get(1).copied() {
         Some("methods") => list_subcommand(args, "api"),
@@ -1277,6 +1335,12 @@ fn read_json_object(path: &std::path::Path) -> Result<Value, CliError> {
     Ok(value)
 }
 
+fn read_json_value(path: &std::path::Path) -> Result<Value, CliError> {
+    let document = read_bounded_file(path, MAX_CLI_API_DOCUMENT_BYTES, "JSON document")?;
+    serde_json::from_str(&document)
+        .map_err(|error| CliError::InvalidArguments(format!("invalid JSON: {error}")))
+}
+
 fn write_new_file(path: &std::path::Path, contents: &[u8]) -> Result<(), CliError> {
     use std::fs::OpenOptions;
     if !path.is_absolute() {
@@ -1578,6 +1642,10 @@ fn help_value() -> Value {
     value["commands"].as_array_mut().unwrap().insert(
         7,
         json!("virtual-devices apply <plan-id> --idempotency-key KEY --database <path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        8,
+        json!("virtual-routes list|replace --database <path> [--base-revision N --file <routes.json> --idempotency-key KEY]"),
     );
     value["commands"]
         .as_array_mut()
@@ -2300,6 +2368,7 @@ mod tests {
         assert!(help.contains("virtual-devices list"));
         assert!(help.contains("virtual-devices plan"));
         assert!(help.contains("virtual-devices apply"));
+        assert!(help.contains("virtual-routes list|replace"));
         assert!(help.contains("plugins scan"));
         assert!(help.contains("operation get"));
         assert!(help.contains("operation cancel"));

@@ -920,3 +920,10 @@ idempotency key through the shared RPC client; the disconnected demo backend
 returns an empty revision-zero view and rejects mutation. Contract drift,
 contract/UI typechecks, UI tests (125), and diff checks passed. This slice did
 not open endpoints or change driver or machine audio configuration.
+
+The CLI now provides `virtual-routes list` and `virtual-routes replace` as
+typed convenience commands over the same control dispatcher. Replacement
+reads a bounded absolute JSON route-array file, requires a base revision and
+idempotency key, and uses the existing `GraphWrite` grant; listing requires an
+explicit database and performs no audio activation. CLI tests (30), strict
+Clippy, formatting, and diff checks passed.

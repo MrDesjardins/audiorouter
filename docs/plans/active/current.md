@@ -8342,6 +8342,12 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Added CLI convenience parity for virtual routes on 2026-09-12. `virtual-routes
+  list` and revisioned `virtual-routes replace` use the shared control
+  dispatcher, bounded absolute JSON input, and the existing `GraphWrite` grant.
+  CLI tests (30), strict Clippy, formatting, and diff checks passed; no audio
+  endpoint or machine configuration was accessed. Next: inspect remaining
+  adapter/catalog drift and then advance the M02/M03 bridge publication gate.
 - Added the UI virtual-route adapter on 2026-09-12. The live backend now
   forwards typed `virtualRoutes.list` and revisioned `virtualRoutes.replace`
   requests, while the disconnected backend remains safe and mutation-free.
