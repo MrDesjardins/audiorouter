@@ -411,3 +411,12 @@ package, catalog, and include targets completed; signability reported zero
 errors and warnings. Disposable output was removed and no installation,
 loading, signing-mode, boot-policy, service, endpoint, or audio configuration
 action was performed.
+## 2026-09-12 — Non-installing WDK refresh
+
+`tests/acceptance/m03-driver-build.ps1` passed with Visual Studio 18.9.1 and
+WDK 10.0.28000.0. Utilities, Filters, Main, package/catalog, and include
+targets built for x64; the catalog signability check reported zero errors and
+zero warnings. The script removed disposable output afterward. No driver was
+installed or loaded, and no signing mode, boot policy, service, endpoint, or
+machine audio configuration was changed. Native bridge publication and
+physical endpoint qualification remain open.

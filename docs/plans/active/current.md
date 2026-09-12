@@ -8349,6 +8349,12 @@ live-driver evidence.
   CLI tests (31), strict Clippy, formatting, and diff checks passed; no audio
   endpoint or machine configuration was accessed. Next: inspect remaining
   adapter/catalog drift and then advance the M02/M03 bridge publication gate.
+- Refreshed the non-installing M03 WDK qualification on 2026-09-12 with VS
+  18.9.1 and WDK 10.0.28000.0. All x64 driver/package targets and catalog
+  signability passed with zero errors and warnings; disposable output was
+  removed. No installation, loading, signing-mode, boot-policy, service,
+  endpoint, or audio configuration action occurred. Native bridge publication
+  and physical endpoint qualification remain open.
 - Added the UI virtual-route adapter on 2026-09-12. The live backend now
   forwards typed `virtualRoutes.list` and revisioned `virtualRoutes.replace`
   requests, while the disconnected backend remains safe and mutation-free.
