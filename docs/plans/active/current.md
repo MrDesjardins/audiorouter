@@ -8343,6 +8343,11 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Requalified the latest tree on 2026-09-12 with
+  `cargo test --workspace --locked -- --test-threads=1`; every workspace suite
+  passed, including 103 engine, 32 DSP, 121 control, and the plugin-worker
+  integration tests. `tests/acceptance/docs.ps1` also passed with 52 Markdown
+  files and 167 local links. No machine audio or driver configuration changed.
 - Added a compiler-level DSP-03 regression on 2026-09-12 proving both stereo
   compressor and gate nodes select the shared two-channel detector path and
   preserve the channel ratio under asymmetric input. The focused test passed;

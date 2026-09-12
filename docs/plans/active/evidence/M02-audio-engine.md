@@ -1498,3 +1498,9 @@ compiler_uses_one_stereo_detector_for_dynamics_nodes --locked` passed on
 compiler selects the shared two-channel detector for stereo ports and preserves
 the asymmetric channel ratio. Native callback and endpoint activation remain
 separate gates.
+
+The sequential workspace requalification
+`cargo test --workspace --locked -- --test-threads=1` passed on 2026-09-12;
+the updated engine suite reported 103 passing tests and the updated DSP suite
+32 passing tests, with all other workspace suites also green. Documentation
+validation passed separately with 52 Markdown files and 167 local links.
