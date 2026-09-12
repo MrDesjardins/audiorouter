@@ -1,6 +1,6 @@
 # Active plan
 
-Updated: 2026-09-11.
+Updated: 2026-09-12.
 
 ## Current execution checkpoint: driver bridge data-path slice
 
@@ -34,11 +34,10 @@ and M08 binaries. No driver installation/loading, signing-mode change,
 plugin/startup registration, audio stream, or persistent machine configuration
 occurred.
 
-Next action: connect the tested endpoint-worker lifecycle owner to the
-control-plane session lifecycle and recovery state without opening endpoints
-implicitly. Preserve exact persisted bindings, explicit authorization,
-fail-closed invalidation, and the loaded-driver, signing, installer, and
-physical-latency gates.
+Next action: qualify the render-source/capture-sink bridge publication against
+the AudioRouter driver prototype's source-contract and lease/generation
+boundaries. Keep installation, production signing, PortCls ownership, clean
+machine, compatibility, and physical-latency evidence as explicit gates.
 
 Implemented the first lifecycle slice in `audiorouter-windows-audio` as
 `WasapiEndpointWorker`. It owns the selected capture/render clients and the
