@@ -21,7 +21,8 @@ export type NodeKind =
   | "limiter"
   | "delay"
   | "graphicEq"
-  | "pitch";
+  | "pitch"
+  | "recorder";
 
 export type PortDirection = "input" | "output";
 
@@ -189,6 +190,18 @@ export interface RecorderLifecycleResult {
   lastFrame?: number | null;
 }
 
+export type RecorderFileFormat = "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24";
+
+export interface RecorderCreateResult {
+  sessionId: EntityId;
+  nodeId?: EntityId | null;
+  recorderId: EntityId;
+  format: RecorderFileFormat;
+  path: string;
+  state: "idle";
+  armed: false;
+}
+
 export interface RecordingListPage {
   items: RecordingRow[];
   nextCursor: string | null;
@@ -256,6 +269,23 @@ export interface VirtualDeviceInfo {
 export interface VirtualDeviceListPage {
   items: VirtualDeviceInfo[];
   nextCursor: string | null;
+}
+
+export interface VirtualBusRoute {
+  busId: EntityId;
+  producerSessionId: EntityId;
+  consumerSessionId: EntityId;
+}
+
+export interface VirtualRouteListResult {
+  revision: number;
+  routes: VirtualBusRoute[];
+}
+
+export interface VirtualRouteReplaceResult {
+  state: "applied";
+  revision: number;
+  routes: VirtualBusRoute[];
 }
 
 export type VirtualDeviceOperation =
@@ -687,6 +717,7 @@ export type ImplementedMethod =
   | "operations.cancel"
   | "recordings.list"
   | "recorders.list"
+  | "recorders.create"
   | "recorders.arm"
   | "recorders.start"
   | "recorders.pause"
@@ -714,6 +745,8 @@ export type ImplementedMethod =
   | "virtualDevices.list"
   | "virtualDevices.plan"
   | "virtualDevices.apply"
+  | "virtualRoutes.list"
+  | "virtualRoutes.replace"
   | "apps.list"
   | "applications.list"
   | "nodes.types"
@@ -754,6 +787,19 @@ export type MethodParams = {
     | { sessionId?: EntityId | null; cursor?: string | null; limit?: number }
     | undefined;
   "recorders.list": undefined;
+  "recorders.create": {
+    sessionId: EntityId;
+    nodeId?: EntityId | null;
+    recorderId: EntityId;
+    format: RecorderFileFormat;
+    sequence: number;
+    channels: 1 | 2;
+    sampleRate: 44100 | 48000;
+    dither?: boolean;
+    queueCapacity?: number;
+    maximumChunksPerPass?: number;
+    idempotencyKey: string;
+  };
   "recorders.arm": { sessionId: EntityId; idempotencyKey?: string };
   "recorders.start": { sessionId: EntityId; frame: number; idempotencyKey?: string };
   "recorders.pause": { sessionId: EntityId; frame: number; idempotencyKey?: string };
@@ -787,6 +833,12 @@ export type MethodParams = {
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
   "virtualDevices.apply": { planId: EntityId; idempotencyKey: string };
+  "virtualRoutes.list": undefined;
+  "virtualRoutes.replace": {
+    baseRevision: number;
+    routes: VirtualBusRoute[];
+    idempotencyKey: string;
+  };
   "apps.list": undefined;
   "applications.list": undefined;
   "nodes.types": undefined;
@@ -853,6 +905,7 @@ export type MethodResult = {
   "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
   "recorders.list": Array<{ sessionId: EntityId; state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"; lastFrame: number | null }>;
+  "recorders.create": RecorderCreateResult;
   "recorders.arm": RecorderLifecycleResult;
   "recorders.start": RecorderLifecycleResult;
   "recorders.pause": RecorderLifecycleResult;
@@ -880,6 +933,8 @@ export type MethodResult = {
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;
   "virtualDevices.apply": VirtualDeviceApplyResult;
+  "virtualRoutes.list": VirtualRouteListResult;
+  "virtualRoutes.replace": VirtualRouteReplaceResult;
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];
   "nodes.types": DiscoveryDocument["nodeTypes"];

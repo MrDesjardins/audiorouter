@@ -8357,6 +8357,12 @@ live-driver evidence.
   configuration occurred. This strengthens portable and build evidence only;
   loaded-driver/PortCls and physical-latency gates remain open.
 
+- Corrected shared TypeScript contract drift on 2026-09-12. Added the missing
+  `recorders.create` API, `Recorder` node kind, and revisioned virtual-route
+  list/replace types. The contract drift check now passes with 66 methods, 18
+  node kinds, and 7 processors; contracts/UI typechecks and diff checks pass.
+  No audio or machine configuration was accessed.
+
 ## Latest execution checkpoint — 2026-09-12
 
 - Added the bounded serializable `VirtualBusRouteRegistry` domain boundary

@@ -907,3 +907,9 @@ durable state advance without an idempotent replay record.
 Validation: domain/control tests passed (60/123), strict Clippy, formatting,
 diff, and documentation checks passed. Authorized route replacement with
 revision and idempotency remains the next API slice.
+
+The TypeScript contract drift correction on 2026-09-12 added the missing
+`recorders.create` method, `Recorder` node kind, and `virtualRoutes.list` /
+`virtualRoutes.replace` request/result types. `contracts` drift and typechecks,
+UI typecheck, and the authoritative CLI catalog now agree on 66 methods, 18
+node kinds, and 7 processors.
