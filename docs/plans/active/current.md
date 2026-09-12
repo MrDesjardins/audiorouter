@@ -8392,6 +8392,14 @@ live-driver evidence.
   add the selected-route control regression, then continue the next uncompleted
   M02/M03 execution item.
 
+- Requalified the non-installing M03 x64 WDK driver build on 2026-09-12 after
+  reboot with Visual Studio 18.9.1 and WDK 10.0.28000.0. Utilities, Filters,
+  Main, package/catalog, and include targets passed with zero signability
+  errors or warnings; disposable output was removed. No driver installation,
+  loading, signing-mode, boot-policy, service, endpoint, or audio configuration
+  action occurred. Loaded-driver/PortCls bridge evidence remains intentionally
+  gated.
+
 ## Latest execution checkpoint — 2026-09-12
 
 - Added the reusable allocation-free processed-graph handoff to

@@ -404,3 +404,10 @@ or mapping work. The guarded x64 WDK build/source acceptance passed with zero
 signability errors/warnings and catalog generation. This remains compile and
 source-contract evidence; no driver was installed or loaded, and live PnP,
 PortCls ownership, endpoint transport, and production signing remain open.
+
+The non-installing M03 acceptance was re-run on 2026-09-12 after reboot with
+Visual Studio 18.9.1 and WDK 10.0.28000.0. The x64 Utilities, Filters, Main,
+package, catalog, and include targets completed; signability reported zero
+errors and warnings. Disposable output was removed and no installation,
+loading, signing-mode, boot-policy, service, endpoint, or audio configuration
+action was performed.
