@@ -1546,6 +1546,18 @@ The follow-up `cargo test --workspace --locked -- --test-threads=1` passed on
 and doc-tests passed, including 105 engine, 121 control, 63 Windows-audio,
 and 67 plugin-host tests. No endpoint was opened and no machine audio or
 driver configuration changed.
+
+## 2026-09-12 — Guarded live adapter bridge
+
+With explicit live-audio authorization, `tests/acceptance/m02-rust-adapter-bridge-live.ps1`
+completed one 500 ms cycle against the existing VB-Audio render/capture
+endpoints. Telemetry reported 24,480 captured frames, 191 processed quanta
+and tap calls, 24,448 rendered frames, zero non-finite samples, dropped frames,
+scheduler xruns, or deadline misses, and a 25,072-byte temporary recording.
+The harness verified unchanged media identity/state before and after and
+removed its temporary executable/object/recording outputs. This is native
+user-mode adapter evidence only; no managed driver was installed or loaded and
+no default device, volume, mute, privacy, or persistent audio setting changed.
 ## 2026-09-12 - Explicit virtual capture-sink ownership marker
 
 Compiled runtime graphs now retain an immutable `has_virtual_capture_sink`

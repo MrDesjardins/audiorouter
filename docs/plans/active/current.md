@@ -8349,6 +8349,13 @@ live-driver evidence.
   CLI tests (31), strict Clippy, formatting, and diff checks passed; no audio
   endpoint or machine configuration was accessed. Next: inspect remaining
   adapter/catalog drift and then advance the M02/M03 bridge publication gate.
+- Ran the explicitly authorized guarded M02 live adapter bridge on 2026-09-12
+  for one 500 ms cycle using the existing VB-Audio endpoints. It captured
+  24,480 frames, processed 191 quanta, rendered 24,448 frames, and reported
+  zero non-finite samples, drops, xruns, or deadline misses; media identity and
+  state matched before/after and temporary outputs were removed. This advances
+  native user-mode adapter evidence only; the managed driver remains neither
+  installed nor loaded, and machine audio configuration was unchanged.
 - Refreshed the non-installing M03 WDK qualification on 2026-09-12 with VS
   18.9.1 and WDK 10.0.28000.0. All x64 driver/package targets and catalog
   signability passed with zero errors and warnings; disposable output was
