@@ -8352,6 +8352,11 @@ live-driver evidence.
 - Domain validation passed 60 tests with strict Clippy, formatting, and diff
   checks. Next: persist the route registry and expose revision/idempotent
   control operations, then select bridge taps only from explicit routes.
+- Persisted the bounded route registry through SQLite control settings on
+  2026-09-12. Storage validates the registry again on load and keeps runtime
+  leases/driver handles out of durable state; storage tests (83), strict
+  Clippy, formatting, and diff checks pass. Next: expose authorized,
+  revision/idempotent route mutation operations and bind only selected routes.
 
 ## Latest execution checkpoint — 2026-09-12
 

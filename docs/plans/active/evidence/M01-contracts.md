@@ -844,7 +844,7 @@ rejects admission above the shared 100-plan ceiling with typed
 covers both the full active set and expiry-pruning behavior; the domain suite
 passes 55 tests with strict Clippy. No audio or machine configuration was
 accessed.
-## 2026-09-12 — Bounded explicit virtual-bus route collection
+## 2026-09-12 - Bounded explicit virtual-bus route collection
 
 The domain now provides `VirtualBusRouteRegistry`, a serializable bounded
 collection for explicit cross-session bus routes. It rejects duplicate route
@@ -856,3 +856,16 @@ Validation: `cargo fmt --all -- --check`,
 Clippy, and `git diff --check` passed. Storage/control persistence and native
 driver endpoint activation are follow-up work; no machine configuration
 changed.
+
+## 2026-09-12 - Durable virtual-bus route state
+
+The storage boundary now saves and loads the bounded route registry through
+the existing control-settings table. JSON is validated back through the
+registry constructor on read, so malformed or oversized persisted routes fail
+closed before entering control state; runtime leases and driver handles are
+not serialized.
+
+Validation: `cargo test -p audiorouter-storage --locked` passed 83 tests,
+strict all-target Clippy, formatting, and `git diff --check` passed. This is
+durable route-state evidence; route mutation API wiring and native endpoint
+activation remain follow-up gates.

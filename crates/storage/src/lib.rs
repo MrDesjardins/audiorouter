@@ -2,7 +2,7 @@
 
 use audiorouter_domain::{
     format_validation_errors, node_registry, validate_session, EntityId, Session,
-    VirtualBusRegistry, VirtualBusSnapshot, RECOVERY_CRASH_WINDOW_SECONDS,
+    VirtualBusRegistry, VirtualBusRouteRegistry, VirtualBusSnapshot, RECOVERY_CRASH_WINDOW_SECONDS,
     RECOVERY_SAFE_MODE_CRASHES,
 };
 use audiorouter_recording::RecorderCheckpoint;
@@ -1036,6 +1036,42 @@ impl Storage {
         VirtualBusRegistry::from_snapshots(snapshots).map_err(|error| {
             StorageError::InvalidSession(format!("invalid virtual bus: {error:?}"))
         })
+    }
+
+    /// Persist the bounded explicit cross-session virtual-bus route registry.
+    /// Runtime leases and driver handles are intentionally not serialized.
+    pub fn save_virtual_bus_routes(
+        &self,
+        routes: &VirtualBusRouteRegistry,
+    ) -> Result<(), StorageError> {
+        let value = serde_json::to_string(routes)?;
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('virtualBusRoutes', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![value],
+        )?;
+        Ok(())
+    }
+
+    /// Load explicit virtual-bus routes, rejecting malformed or oversized
+    /// persisted state before it reaches the control plane.
+    pub fn load_virtual_bus_routes(&self) -> Result<VirtualBusRouteRegistry, StorageError> {
+        let value = self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'virtualBusRoutes'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        value
+            .map(|value| {
+                let routes: VirtualBusRouteRegistry = serde_json::from_str(&value)?;
+                VirtualBusRouteRegistry::new(routes.list().to_vec())
+                    .map_err(|error| StorageError::InvalidSession(error.into()))
+            })
+            .transpose()
+            .map(|routes| routes.unwrap_or_default())
     }
 
     pub fn save_virtual_device_plan(
@@ -3717,6 +3753,19 @@ mod tests {
             .list()
             .iter()
             .all(|bus| bus.lease().owner().is_none()));
+    }
+
+    #[test]
+    fn virtual_bus_routes_round_trip_without_runtime_state() {
+        let storage = Storage::open_memory().unwrap();
+        let route = audiorouter_domain::VirtualBusRoute {
+            bus_id: EntityId::new("bus-1"),
+            producer_session_id: EntityId::new("producer"),
+            consumer_session_id: EntityId::new("consumer"),
+        };
+        let registry = VirtualBusRouteRegistry::new(vec![route.clone()]).unwrap();
+        storage.save_virtual_bus_routes(&registry).unwrap();
+        assert_eq!(storage.load_virtual_bus_routes().unwrap().list(), &[route]);
     }
 
     #[test]
