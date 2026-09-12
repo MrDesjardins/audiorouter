@@ -91,6 +91,8 @@ describe("snapshot cache", () => {
       listVirtualDevices: async () => [],
       planVirtualDevice: async () => { throw new Error("not connected"); },
       applyVirtualDevice: async () => { throw new Error("not connected"); },
+      listVirtualRoutes: async () => ({ revision: 0, routes: [] }),
+      replaceVirtualRoutes: async () => { throw new Error("not connected"); },
       previewRecording: async () => { throw new Error("not connected"); },
       setPrivacyMute: async () => { throw new Error("not connected"); },
       clearRecoverySafeMode: async () => { throw new Error("not connected"); },
@@ -353,6 +355,29 @@ describe("live event cursor", () => {
     expect(calls).toEqual([
       { method: "virtualDevices.plan", params: { operation } },
       { method: "virtualDevices.apply", params: { planId: "plan-1", idempotencyKey: "key-1" } },
+    ]);
+  });
+
+  it("forwards revisioned virtual-route list and replacement through the shared API", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      request: async (method: string, params: unknown) => {
+        calls.push({ method, params });
+        return method === "virtualRoutes.list"
+          ? { revision: 3, routes: [] }
+          : { state: "applied", revision: 4, routes: [] };
+      },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.listVirtualRoutes()).resolves.toEqual({ revision: 3, routes: [] });
+    await expect(backend.replaceVirtualRoutes(3, [], "route-key")).resolves.toEqual({
+      state: "applied",
+      revision: 4,
+      routes: [],
+    });
+    expect(calls).toEqual([
+      { method: "virtualRoutes.list", params: undefined },
+      { method: "virtualRoutes.replace", params: { baseRevision: 3, routes: [], idempotencyKey: "route-key" } },
     ]);
   });
 

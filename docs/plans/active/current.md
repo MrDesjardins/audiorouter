@@ -8342,6 +8342,13 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Added the UI virtual-route adapter on 2026-09-12. The live backend now
+  forwards typed `virtualRoutes.list` and revisioned `virtualRoutes.replace`
+  requests, while the disconnected backend remains safe and mutation-free.
+  Contract drift, contract/UI typechecks, 125 UI tests, and diff checks passed;
+  no endpoint or machine audio configuration was touched. Next: inspect and
+  implement equivalent CLI/MCP adapter parity where the existing plans require
+  it, then return to the separately gated M02/M03 bridge publication work.
 - Added the selected-route control regression on 2026-09-12. It proves that
   graphs without an explicit virtual capture sink receive no virtual taps and
   that sink-owned producers receive only their matching enabled bridge. The

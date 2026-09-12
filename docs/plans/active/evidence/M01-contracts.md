@@ -913,3 +913,10 @@ The TypeScript contract drift correction on 2026-09-12 added the missing
 `virtualRoutes.replace` request/result types. `contracts` drift and typechecks,
 UI typecheck, and the authoritative CLI catalog now agree on 66 methods, 18
 node kinds, and 7 processors.
+
+The UI backend adapter now exposes typed `listVirtualRoutes` and
+`replaceVirtualRoutes` methods. The live adapter forwards the revision and
+idempotency key through the shared RPC client; the disconnected demo backend
+returns an empty revision-zero view and rejects mutation. Contract drift,
+contract/UI typechecks, UI tests (125), and diff checks passed. This slice did
+not open endpoints or change driver or machine audio configuration.

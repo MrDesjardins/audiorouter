@@ -7,6 +7,9 @@ import type {
   VirtualDeviceApplyResult,
   VirtualDeviceOperation,
   VirtualDevicePlanResult,
+  VirtualBusRoute,
+  VirtualRouteListResult,
+  VirtualRouteReplaceResult,
   DiscoveryDocument,
   EventsSubscribeResult,
   GraphCommitResult,
@@ -92,6 +95,8 @@ export interface UiBackend {
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
+  listVirtualRoutes(): Promise<VirtualRouteListResult>;
+  replaceVirtualRoutes(baseRevision: number, routes: VirtualBusRoute[], idempotencyKey: string): Promise<VirtualRouteReplaceResult>;
   previewRecording(recordingId: string): Promise<RecordingPreviewResult>;
   getRecordingRecovery(recordingId: string): Promise<RecordingRecoverySingleResult>;
   listRecordingRecovery(): Promise<RecordingRecoveryList>;
@@ -235,6 +240,12 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async applyVirtualDevice() {
       throw new Error("demo backend has no managed virtual driver");
+    },
+    async listVirtualRoutes() {
+      return { revision: 0, routes: [] };
+    },
+    async replaceVirtualRoutes() {
+      throw new Error("demo backend has no managed virtual route control");
     },
     async previewRecording() {
       throw new Error("The backend is disconnected; recording preview is unavailable.");
@@ -442,6 +453,12 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async applyVirtualDevice(planId, idempotencyKey) {
       return client.request("virtualDevices.apply", { planId, idempotencyKey });
+    },
+    async listVirtualRoutes() {
+      return client.request("virtualRoutes.list", undefined);
+    },
+    async replaceVirtualRoutes(baseRevision, routes, idempotencyKey) {
+      return client.request("virtualRoutes.replace", { baseRevision, routes, idempotencyKey });
     },
     async previewRecording(recordingId) {
       return client.request("recordings.preview", { recordingId });
