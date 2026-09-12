@@ -26,6 +26,7 @@ pub const MAX_GRAPH_HISTORY_ENTRIES: usize = 100;
 pub const MAX_ACTIVE_SESSIONS: usize = 2;
 pub const MAX_ROUTE_PATHS: usize = 500;
 pub const MAX_VIRTUAL_BUSES: usize = 8;
+pub const MAX_VIRTUAL_BUS_ROUTES: usize = MAX_VIRTUAL_BUSES * MAX_VIRTUAL_BUSES;
 pub const MAX_VIRTUAL_BUS_NAME_CHARS: usize = 120;
 pub const MAX_RETAINED_EVENTS: usize = 10_000;
 pub const MAX_ENTITY_ID_BYTES: usize = 128;
@@ -945,6 +946,52 @@ pub struct VirtualBusRoute {
     pub bus_id: EntityId,
     pub producer_session_id: EntityId,
     pub consumer_session_id: EntityId,
+}
+
+/// Bounded ownership of explicit cross-session virtual-bus routes. Session
+/// existence and cycle rules are checked by [`validate_global_graph`]; this
+/// collection only prevents duplicate route records and unbounded growth at
+/// the control/storage boundary.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct VirtualBusRouteRegistry {
+    routes: Vec<VirtualBusRoute>,
+}
+
+impl VirtualBusRouteRegistry {
+    pub fn new(routes: Vec<VirtualBusRoute>) -> Result<Self, &'static str> {
+        if routes.len() > MAX_VIRTUAL_BUS_ROUTES {
+            return Err("virtual-bus route limit exceeded");
+        }
+        let mut registry = Self::default();
+        for route in routes {
+            registry.add(route)?;
+        }
+        Ok(registry)
+    }
+
+    pub fn list(&self) -> &[VirtualBusRoute] {
+        &self.routes
+    }
+
+    pub fn add(&mut self, route: VirtualBusRoute) -> Result<(), &'static str> {
+        if self.routes.len() >= MAX_VIRTUAL_BUS_ROUTES {
+            return Err("virtual-bus route limit exceeded");
+        }
+        if self.routes.iter().any(|existing| existing == &route) {
+            return Err("duplicate virtual-bus route");
+        }
+        self.routes.push(route);
+        Ok(())
+    }
+
+    pub fn remove(&mut self, route: &VirtualBusRoute) -> bool {
+        let Some(index) = self.routes.iter().position(|existing| existing == route) else {
+            return false;
+        };
+        self.routes.remove(index);
+        true
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3143,6 +3190,33 @@ mod tests {
             registry.create(EntityId::new("bus-overflow"), "Overflow"),
             Err(VirtualBusError::LimitReached)
         );
+    }
+
+    #[test]
+    fn virtual_bus_route_registry_is_bounded_and_duplicate_safe() {
+        let route = VirtualBusRoute {
+            bus_id: EntityId::new("bus"),
+            producer_session_id: EntityId::new("producer"),
+            consumer_session_id: EntityId::new("consumer"),
+        };
+        let mut registry = VirtualBusRouteRegistry::new(vec![route.clone()]).unwrap();
+        assert_eq!(registry.list(), std::slice::from_ref(&route));
+        assert_eq!(
+            registry.add(route.clone()),
+            Err("duplicate virtual-bus route")
+        );
+        assert!(registry.remove(&route));
+        assert!(!registry.remove(&route));
+        assert!(VirtualBusRouteRegistry::new(
+            (0..=MAX_VIRTUAL_BUS_ROUTES)
+                .map(|index| VirtualBusRoute {
+                    bus_id: EntityId::new(format!("bus-{index}")),
+                    producer_session_id: EntityId::new("producer"),
+                    consumer_session_id: EntityId::new("consumer"),
+                })
+                .collect(),
+        )
+        .is_err());
     }
 
     #[test]

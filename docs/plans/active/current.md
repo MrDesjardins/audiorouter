@@ -8345,6 +8345,16 @@ live-driver evidence.
 
 ## Latest execution checkpoint — 2026-09-12
 
+- Added the bounded serializable `VirtualBusRouteRegistry` domain boundary
+  for explicit cross-session route records. Duplicate routes and capacity
+  overflow are rejected before unbounded growth; existing global validation
+  remains authoritative for session existence, writer ownership, and cycles.
+- Domain validation passed 60 tests with strict Clippy, formatting, and diff
+  checks. Next: persist the route registry and expose revision/idempotent
+  control operations, then select bridge taps only from explicit routes.
+
+## Latest execution checkpoint — 2026-09-12
+
 - Added the reusable allocation-free processed-graph handoff to
   `VirtualBusBridge`, but removed a provisional control binding that attached
   every enabled bus to every native graph because that would create an

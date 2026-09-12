@@ -844,3 +844,15 @@ rejects admission above the shared 100-plan ceiling with typed
 covers both the full active set and expiry-pruning behavior; the domain suite
 passes 55 tests with strict Clippy. No audio or machine configuration was
 accessed.
+## 2026-09-12 — Bounded explicit virtual-bus route collection
+
+The domain now provides `VirtualBusRouteRegistry`, a serializable bounded
+collection for explicit cross-session bus routes. It rejects duplicate route
+records and caps the collection before growth; session existence, one-writer,
+and cycle constraints remain enforced by `validate_global_graph`.
+
+Validation: `cargo fmt --all -- --check`,
+`cargo test -p audiorouter-domain --locked` (60 tests), strict all-target
+Clippy, and `git diff --check` passed. Storage/control persistence and native
+driver endpoint activation are follow-up work; no machine configuration
+changed.
