@@ -889,6 +889,17 @@ dispatcher. It returns only the bounded durable `VirtualBusRouteRegistry`,
 uses the read permission, and has an exact output schema for bus, producer,
 and consumer session identities. It performs no endpoint or driver action.
 
+## 2026-09-12 - Revisioned route replacement
+
+`virtualRoutes.replace` adds an authorized, idempotent mutation boundary. The
+request supplies `baseRevision`, a bounded route array, and an idempotency key;
+the control plane validates bus references and the global graph before writing
+the route registry and its monotonically increasing revision. Replays return
+the original result, while a stale base revision fails closed. The list result
+exposes the current revision so a client can construct the next request.
+Control (124) and storage (83) tests pass after formatting; no endpoint, driver,
+or machine audio configuration was accessed.
+
 Validation: domain/control tests passed (60/123), strict Clippy, formatting,
 diff, and documentation checks passed. Authorized route replacement with
 revision and idempotency remains the next API slice.

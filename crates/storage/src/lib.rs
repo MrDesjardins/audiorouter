@@ -1074,6 +1074,55 @@ impl Storage {
             .map(|routes| routes.unwrap_or_default())
     }
 
+    /// Persist routes together with their control-plane revision. The object
+    /// wrapper is forward-compatible with the earlier raw-registry format.
+    pub fn save_virtual_bus_route_state(
+        &self,
+        routes: &VirtualBusRouteRegistry,
+        revision: u64,
+    ) -> Result<(), StorageError> {
+        let value = serde_json::json!({ "revision": revision, "routes": routes });
+        let value = serde_json::to_string(&value)?;
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('virtualBusRoutes', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![value],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_virtual_bus_route_state(
+        &self,
+    ) -> Result<(VirtualBusRouteRegistry, u64), StorageError> {
+        let value = self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'virtualBusRoutes'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        let Some(value) = value else {
+            return Ok((VirtualBusRouteRegistry::default(), 0));
+        };
+        let value: Value = serde_json::from_str(&value)?;
+        let (routes, revision) = if value.get("routes").is_some() {
+            let revision = value
+                .get("revision")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| {
+                    StorageError::InvalidSession("invalid virtual-bus route revision".into())
+                })?;
+            (value["routes"].clone(), revision)
+        } else {
+            (value, 0)
+        };
+        let routes: VirtualBusRouteRegistry = serde_json::from_value(routes)?;
+        let routes = VirtualBusRouteRegistry::new(routes.list().to_vec())
+            .map_err(|error| StorageError::InvalidSession(error.into()))?;
+        Ok((routes, revision))
+    }
+
     pub fn save_virtual_device_plan(
         &self,
         id: &EntityId,
@@ -3765,7 +3814,14 @@ mod tests {
         };
         let registry = VirtualBusRouteRegistry::new(vec![route.clone()]).unwrap();
         storage.save_virtual_bus_routes(&registry).unwrap();
-        assert_eq!(storage.load_virtual_bus_routes().unwrap().list(), &[route]);
+        assert_eq!(
+            storage.load_virtual_bus_routes().unwrap().list(),
+            std::slice::from_ref(&route)
+        );
+        storage.save_virtual_bus_route_state(&registry, 7).unwrap();
+        let (restored, revision) = storage.load_virtual_bus_route_state().unwrap();
+        assert_eq!(restored.list(), &[route]);
+        assert_eq!(revision, 7);
     }
 
     #[test]

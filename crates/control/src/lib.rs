@@ -1523,6 +1523,7 @@ fn method_description(name: &str) -> &'static str {
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
         "virtualRoutes.list" => "List explicit cross-session virtual-bus routes without activating audio.",
+        "virtualRoutes.replace" => "Atomically replace explicit cross-session routes using a revision and idempotency key.",
         "apps.list" | "applications.list" => {
             "List discoverable application identities and observed Windows audio-session activity for binding."
         }
@@ -1701,6 +1702,14 @@ fn method_input_schema(name: &str) -> Value {
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["planId", "idempotencyKey"],
+        ),
+        "virtualRoutes.replace" => object_schema(
+            json!({
+                "baseRevision": { "type": "integer", "minimum": 0 },
+                "routes": { "type": "array", "maxItems": audiorouter_domain::MAX_VIRTUAL_BUS_ROUTES, "items": virtual_bus_route_schema() },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["baseRevision", "routes", "idempotencyKey"],
         ),
         "recordings.get" => object_schema(
             json!({ "recordingId": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_RECORDING_ID_BYTES } }),
@@ -2582,9 +2591,23 @@ fn method_output_schema(name: &str) -> Value {
             "additionalProperties": false
         }),
         "virtualRoutes.list" => json!({
-            "type": "array",
-            "maxItems": audiorouter_domain::MAX_VIRTUAL_BUS_ROUTES,
-            "items": virtual_bus_route_schema()
+            "type": "object",
+            "properties": {
+                "revision": { "type": "integer", "minimum": 0 },
+                "routes": { "type": "array", "maxItems": audiorouter_domain::MAX_VIRTUAL_BUS_ROUTES, "items": virtual_bus_route_schema() }
+            },
+            "required": ["revision", "routes"],
+            "additionalProperties": false
+        }),
+        "virtualRoutes.replace" => json!({
+            "type": "object",
+            "properties": {
+                "state": { "type": "string", "const": "applied" },
+                "revision": { "type": "integer", "minimum": 1 },
+                "routes": { "type": "array", "maxItems": audiorouter_domain::MAX_VIRTUAL_BUS_ROUTES, "items": virtual_bus_route_schema() }
+            },
+            "required": ["state", "revision", "routes"],
+            "additionalProperties": false
         }),
         "nodes.types" | "nodes.describe" => json!({
             "type": "array",
@@ -3452,6 +3475,7 @@ pub struct ControlPlane {
     recovery_tracker: CrashRecoveryTracker,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
+    virtual_bus_route_revision: u64,
     virtual_bridges: VirtualBusBridgeSet,
     virtual_bus_plans: HashMap<EntityId, VirtualBusPlan>,
     next_virtual_bus_plan: u64,
@@ -3500,6 +3524,7 @@ impl ControlPlane {
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
+            virtual_bus_route_revision: 0,
             virtual_bridges: VirtualBusBridgeSet::new(
                 8,
                 2,
@@ -3764,7 +3789,8 @@ impl ControlPlane {
                 ))
             })?;
         let virtual_buses = storage.load_virtual_buses()?;
-        let virtual_bus_routes = storage.load_virtual_bus_routes()?;
+        let (virtual_bus_routes, virtual_bus_route_revision) =
+            storage.load_virtual_bus_route_state()?;
         let mut persisted_sessions = Vec::new();
         let mut session_cursor = None;
         loop {
@@ -3862,6 +3888,7 @@ impl ControlPlane {
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
             virtual_bus_routes,
+            virtual_bus_route_revision,
             virtual_bridges: VirtualBusBridgeSet::new(
                 8,
                 2,
@@ -3934,6 +3961,7 @@ impl ControlPlane {
                 vec![
                     format!("{client}\0graph.commit\0{operation_id}"),
                     format!("{client}\0virtualDevices.apply\0{operation_id}"),
+                    format!("{client}\0virtualRoutes.replace\0{operation_id}"),
                     format!("{client}\0recordings.setMetadata\0{operation_id}"),
                     format!("{client}\0recordings.rename\0{operation_id}"),
                     format!("{client}\0recordings.removeEntry\0{operation_id}"),
@@ -4104,6 +4132,18 @@ impl ControlPlane {
         &mut self,
         routes: VirtualBusRouteRegistry,
     ) -> Result<(), ControlError> {
+        let revision = self
+            .virtual_bus_route_revision
+            .checked_add(1)
+            .ok_or_else(|| ControlError::InvalidRequest("route revision exhausted".into()))?;
+        self.replace_virtual_bus_routes_at_revision(routes, revision)
+    }
+
+    fn replace_virtual_bus_routes_at_revision(
+        &mut self,
+        routes: VirtualBusRouteRegistry,
+        revision: u64,
+    ) -> Result<(), ControlError> {
         for route in routes.list() {
             if !self
                 .virtual_buses
@@ -4123,10 +4163,11 @@ impl ControlPlane {
             })?;
         if let Some(storage) = &self.storage {
             storage
-                .save_virtual_bus_routes(&routes)
+                .save_virtual_bus_route_state(&routes, revision)
                 .map_err(storage_error)?;
         }
         self.virtual_bus_routes = routes;
+        self.virtual_bus_route_revision = revision;
         Ok(())
     }
 
@@ -5821,6 +5862,7 @@ impl ControlPlane {
                     "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
                     "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
                     "virtualRoutes.list" => self.dispatch_virtual_routes_list(),
+                    "virtualRoutes.replace" => self.dispatch_virtual_routes_replace(request.params),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
@@ -8300,8 +8342,69 @@ impl ControlPlane {
     }
 
     fn dispatch_virtual_routes_list(&self) -> Result<Value, ControlError> {
-        serde_json::to_value(self.virtual_bus_routes.list())
-            .map_err(|error| ControlError::Json(error.to_string()))
+        serde_json::to_value(json!({
+            "revision": self.virtual_bus_route_revision,
+            "routes": self.virtual_bus_routes.list()
+        }))
+        .map_err(|error| ControlError::Json(error.to_string()))
+    }
+
+    fn dispatch_virtual_routes_replace(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("params are required".into()))?;
+        let base_revision = params
+            .get("baseRevision")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| ControlError::InvalidRequest("baseRevision is required".into()))?;
+        let idempotency_key = params
+            .get("idempotencyKey")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
+        let routes_value = params
+            .get("routes")
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("routes are required".into()))?;
+        let decoded: VirtualBusRouteRegistry = serde_json::from_value(routes_value)
+            .map_err(|error| ControlError::InvalidRequest(format!("invalid routes: {error}")))?;
+        let routes = VirtualBusRouteRegistry::new(decoded.list().to_vec())
+            .map_err(|error| ControlError::InvalidRequest(error.into()))?;
+        let request_hash = Self::request_hash(&json!({
+            "baseRevision": base_revision,
+            "routes": routes.list()
+        }));
+        let storage_key = self.scoped_idempotency_key("virtualRoutes.replace", idempotency_key);
+        if let Some(previous) = self.lookup_idempotent_result(&storage_key, &request_hash)? {
+            self.remember_operation_outcome(
+                &storage_key,
+                previous.clone(),
+                "virtualRoutes.replace",
+                Some(&request_hash),
+            );
+            return Ok(previous);
+        }
+        if base_revision != self.virtual_bus_route_revision {
+            return Err(ControlError::InvalidRequest(format!(
+                "baseRevision {base_revision} does not match current revision {}",
+                self.virtual_bus_route_revision
+            )));
+        }
+        let revision = self
+            .virtual_bus_route_revision
+            .checked_add(1)
+            .ok_or_else(|| ControlError::InvalidRequest("route revision exhausted".into()))?;
+        self.replace_virtual_bus_routes_at_revision(routes.clone(), revision)?;
+        let result = json!({ "state": "applied", "revision": revision, "routes": routes.list() });
+        self.journal_idempotent_result(
+            &storage_key,
+            "virtualRoutes.replace",
+            &request_hash,
+            &result,
+        )?;
+        Ok(result)
     }
 
     fn dispatch_apps_list(&mut self) -> Result<Value, ControlError> {
@@ -8615,6 +8718,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "virtualDevices.plan" => &["operation"],
         "virtualDevices.apply" => &["planId", "idempotencyKey"],
         "virtualRoutes.list" => &[],
+        "virtualRoutes.replace" => &["baseRevision", "routes", "idempotencyKey"],
         "startup.plan" => &["enabled"],
         "startup.apply" => &["planId", "idempotencyKey"],
         "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
@@ -9152,12 +9256,47 @@ mod tests {
             method: "virtualRoutes.list".into(),
             params: None,
         });
-        assert_eq!(response.result.unwrap(), json!([]));
+        assert_eq!(
+            response.result.unwrap(),
+            json!({ "revision": 0, "routes": [] })
+        );
         assert!(plane.describe()["methods"]
             .as_array()
             .unwrap()
             .iter()
             .any(|method| method["name"] == "virtualRoutes.list"));
+    }
+
+    #[test]
+    fn virtual_routes_replace_is_revision_checked_and_idempotent() {
+        let mut plane = ControlPlane::default();
+        let request = |key: &str, base_revision| JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "virtualRoutes.replace".into(),
+            params: Some(json!({
+                "baseRevision": base_revision,
+                "routes": [],
+                "idempotencyKey": key
+            })),
+        };
+        let first = plane.dispatch(request("route-1", 0));
+        assert_eq!(
+            first.result,
+            Some(json!({ "state": "applied", "revision": 1, "routes": [] }))
+        );
+        assert_eq!(plane.dispatch(request("route-1", 0)).result, first.result);
+        assert!(plane.dispatch(request("route-2", 0)).error.is_some());
+        let listed = plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "virtualRoutes.list".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert_eq!(listed["revision"], 1);
     }
 
     #[test]

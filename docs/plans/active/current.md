@@ -8366,8 +8366,16 @@ live-driver evidence.
 - Added the read-only `virtualRoutes.list` method to API discovery, schema,
   and dispatch on 2026-09-12. It exposes only explicit durable route records
   and performs no endpoint/driver action; domain/control tests (60/123),
-  strict Clippy, formatting, diff, and documentation checks pass. Next: add
-  the authorized revisioned/idempotent route replacement operation.
+  strict Clippy, formatting, diff, and documentation checks pass.
+
+- Implemented M01 revisioned virtual-route replacement on 2026-09-12:
+  `virtualRoutes.list` now returns `{revision, routes}`, and the new
+  `virtualRoutes.replace` operation validates bounded routes, checks
+  `baseRevision`, persists the route revision, and replays idempotent results.
+  Control (124) and storage (83) tests passed with formatting. The native
+  driver/endpoint activation and physical audio gates remain open; no machine
+  audio configuration changed. Next: add durable route-state plus journal
+  atomicity coverage, then advance the next uncompleted plan item.
 
 ## Latest execution checkpoint — 2026-09-12
 
