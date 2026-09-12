@@ -8376,6 +8376,11 @@ live-driver evidence.
   temporary children. No driver installation/loading, signing-mode change,
   plugin/startup registration, stream activation, or persistent machine audio
   configuration occurred.
+- Independently rechecked the completed acceptance log on 2026-09-12: it
+  contains `Safe acceptance chain passed.` and reports cleanup of 14 run-owned
+  temporary children. M08 release preparation and traceability now have
+  current post-reboot evidence; driver activation, signing, and physical
+  latency remain separate gates.
 - Next M02/M03 task: qualify native render-source/capture-sink bridge
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls

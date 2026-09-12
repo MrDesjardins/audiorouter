@@ -1093,3 +1093,17 @@ change signing or boot policy, register plugins/startup actions, open a live
 audio stream, or change persistent machine audio configuration. Production
 driver activation, signing, installer, clean-machine, physical-latency,
 manual UI, and independent-plugin rights gates remain open.
+
+## Full guarded chain requalification after reboot (2026-09-12)
+
+The elevated `tests/acceptance/safe-all.ps1` chain was re-run after the
+workspace reboot and passed through its final marker. It covered M03 WDK
+source-contract compilation/package qualification, portable M01/M04/M05/M07,
+M06 VST3/VST2 SDK and worker checks, unsigned M08 release preparation, 159
+normative traceability mappings, and documentation validation (52 Markdown
+files/167 local links). Cleanup removed 14 run-owned temporary children. The
+chain did not install/load a driver, change signing or boot policy, register
+plugins/startup actions, activate a stream, or change persistent machine audio
+configuration. Production driver activation, signing, installer,
+clean-machine, physical-latency, manual UI, and independent-plugin rights
+gates remain open.
