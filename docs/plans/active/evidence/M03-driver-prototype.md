@@ -14,6 +14,19 @@ test-signing or boot policy changed, and no service, endpoint, default-device,
 volume, mute, privacy, startup, or persistent machine-audio configuration was
 modified.
 
+## 2026-09-12 - Rebooted WDK source-contract qualification
+
+`tests/acceptance/m03-driver-build.ps1` was rerun after reboot with Visual
+Studio 18.9.1 and WDK 10.0.28000.0. The AudioRouter-owned x64 prototype built
+through the driver and package targets, generated its catalog, and reported
+zero signability errors and warnings. The wrapper removed its disposable build
+output and exited with code 0.
+
+This verifies project-owned source/build/lease-generation contracts only. The
+driver was not installed or loaded, and no signing mode, boot policy, service,
+endpoint, default-device, volume, mute, privacy, startup, or persistent
+machine-audio configuration changed.
+
 ## 2026-09-11 - Build-output ownership hardening
 
 The build-only wrapper now removes only an automatically created disposable

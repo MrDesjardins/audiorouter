@@ -8342,6 +8342,15 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Re-ran the M03 driver source-contract acceptance after reboot on 2026-09-12
+  with VS 18.9.1 and WDK 10.0.28000.0. The AudioRouter x64 prototype built,
+  generated its catalog, and reported zero signability errors and warnings;
+  disposable output was removed. No installation, loading, signing-mode,
+  service, boot-policy, endpoint, or audio configuration action occurred.
+- Next M02/M03 task: qualify native render-source/capture-sink bridge
+  publication through the AudioRouter driver prototype using the same explicit
+  lease/generation checks; installation, signing, and production PortCls
+  ownership remain separate gates.
 - Fixed native render-source worker teardown on 2026-09-12. A scheduler reset
   failure no longer prevents the physical render endpoint stop attempt; both
   cleanup actions run and the first failure is returned. The focused
