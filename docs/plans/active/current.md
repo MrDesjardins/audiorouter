@@ -8344,7 +8344,8 @@ live-driver evidence.
   ownership remain separate gates.
 - Added CLI convenience parity for virtual routes on 2026-09-12. `virtual-routes
   list` and revisioned `virtual-routes replace` use the shared control
-  dispatcher, bounded absolute JSON input, and the existing `GraphWrite` grant.
+  dispatcher, bounded absolute JSON input, and the existing
+  `DeviceAdministration` grant.
   CLI tests (30), strict Clippy, formatting, and diff checks passed; no audio
   endpoint or machine configuration was accessed. Next: inspect remaining
   adapter/catalog drift and then advance the M02/M03 bridge publication gate.

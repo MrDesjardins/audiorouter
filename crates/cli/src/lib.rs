@@ -822,7 +822,7 @@ fn virtual_routes_command(args: &[&str]) -> Result<Value, CliError> {
                         "idempotencyKey": idempotency_key,
                     })),
                 },
-                &ClientGrant::with_scopes([PermissionScope::GraphWrite]),
+                &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
             );
             response.result.ok_or_else(|| {
                 CliError::InvalidArguments(response.error.map_or_else(
@@ -2592,6 +2592,60 @@ mod tests {
         assert_eq!(applied["operation"]["action"], "create");
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(operation);
+    }
+
+    #[test]
+    fn virtual_route_commands_use_revisioned_shared_api() {
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let database = std::env::temp_dir().join(format!("audiorouter-cli-routes-{suffix}.sqlite"));
+        let routes = std::env::temp_dir().join(format!("audiorouter-cli-routes-{suffix}.json"));
+        let _ = std::fs::remove_file(&database);
+        let _ = std::fs::remove_file(&routes);
+        std::fs::write(&routes, "[]").unwrap();
+
+        let listed: Value = serde_json::from_str(
+            &run([
+                "virtual-routes",
+                "list",
+                "--database",
+                database.to_str().unwrap(),
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(listed, json!({ "revision": 0, "routes": [] }));
+
+        let replaced: Value = serde_json::from_str(
+            &run([
+                "virtual-routes",
+                "replace",
+                "--base-revision",
+                "0",
+                "--file",
+                routes.to_str().unwrap(),
+                "--idempotency-key",
+                "cli-route-replace",
+                "--database",
+                database.to_str().unwrap(),
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(replaced["state"], "applied");
+        assert_eq!(replaced["revision"], 1);
+        assert_eq!(replaced["routes"], json!([]));
+
+        let _ = std::fs::remove_file(database);
+        let _ = std::fs::remove_file(routes);
     }
 
     #[test]
