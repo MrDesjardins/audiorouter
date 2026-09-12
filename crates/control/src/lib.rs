@@ -8,7 +8,7 @@ use audiorouter_domain::{
     format_validation_errors, inspect_routes, node_registry, validate_session, ApiMethodSpec,
     CrashRecoveryTracker, EntityId, EventLog, EventReplayError, FakeRuntime, GraphStore, NodeKind,
     PermissionScope, RecoveryDecision, RecoveryMode, RuntimeError, RuntimeState, Session,
-    VirtualBusRegistry, API_METHODS,
+    VirtualBusRegistry, VirtualBusRouteRegistry, API_METHODS,
 };
 use audiorouter_engine::{
     AudioBlock, AudioTap, AudioTapSet, RecorderTapBindings, RuntimeGeneration, VirtualBusBridgeSet,
@@ -3432,6 +3432,7 @@ pub struct ControlPlane {
     privacy_muted: bool,
     recovery_tracker: CrashRecoveryTracker,
     virtual_buses: VirtualBusRegistry,
+    virtual_bus_routes: VirtualBusRouteRegistry,
     virtual_bridges: VirtualBusBridgeSet,
     virtual_bus_plans: HashMap<EntityId, VirtualBusPlan>,
     next_virtual_bus_plan: u64,
@@ -3479,6 +3480,7 @@ impl ControlPlane {
             privacy_muted: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses: VirtualBusRegistry::default(),
+            virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bridges: VirtualBusBridgeSet::new(
                 8,
                 2,
@@ -3743,6 +3745,7 @@ impl ControlPlane {
                 ))
             })?;
         let virtual_buses = storage.load_virtual_buses()?;
+        let virtual_bus_routes = storage.load_virtual_bus_routes()?;
         let mut persisted_sessions = Vec::new();
         let mut session_cursor = None;
         loop {
@@ -3839,6 +3842,7 @@ impl ControlPlane {
             privacy_muted,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
+            virtual_bus_routes,
             virtual_bridges: VirtualBusBridgeSet::new(
                 8,
                 2,
@@ -4074,7 +4078,54 @@ impl ControlPlane {
         Ok(())
     }
 
+    /// Replace the explicit cross-session virtual-bus route set. Validation
+    /// covers bus references and the global session graph before durable state
+    /// is changed; no endpoint or bridge is activated by this method.
+    pub fn replace_virtual_bus_routes(
+        &mut self,
+        routes: VirtualBusRouteRegistry,
+    ) -> Result<(), ControlError> {
+        for route in routes.list() {
+            if !self
+                .virtual_buses
+                .list()
+                .iter()
+                .any(|bus| bus.id() == &route.bus_id)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "virtual-bus route references an unknown bus".into(),
+                ));
+            }
+        }
+        self.store
+            .validate_global_graph(routes.list())
+            .map_err(|errors| {
+                ControlError::InvalidRequest(format!("invalid virtual-bus routes: {errors:?}"))
+            })?;
+        if let Some(storage) = &self.storage {
+            storage
+                .save_virtual_bus_routes(&routes)
+                .map_err(storage_error)?;
+        }
+        self.virtual_bus_routes = routes;
+        Ok(())
+    }
+
+    pub fn virtual_bus_routes(&self) -> &VirtualBusRouteRegistry {
+        &self.virtual_bus_routes
+    }
+
     pub fn delete_virtual_bus(&mut self, id: &EntityId) -> Result<(), ControlError> {
+        if self
+            .virtual_bus_routes
+            .list()
+            .iter()
+            .any(|route| &route.bus_id == id)
+        {
+            return Err(ControlError::InvalidRequest(
+                "virtual bus is referenced by an active route".into(),
+            ));
+        }
         let checkpoint = self.virtual_buses.clone();
         self.virtual_buses
             .delete(id)
@@ -13732,6 +13783,43 @@ mod tests {
         assert!(plane.virtual_bridges.get(&id).is_some());
         plane.delete_virtual_bus(&id).unwrap();
         assert!(plane.virtual_bridges.get(&id).is_none());
+    }
+
+    #[test]
+    fn virtual_bus_routes_require_known_buses_and_protect_referenced_deletion() {
+        let mut plane = ControlPlane::default();
+        plane.insert_session(session()).unwrap();
+        let mut consumer = session();
+        consumer.id = EntityId::new("consumer");
+        plane.insert_session(consumer).unwrap();
+        let bus_id = EntityId::new("bus-route");
+        plane
+            .create_virtual_bus(bus_id.clone(), "Route bus")
+            .unwrap();
+        let route = audiorouter_domain::VirtualBusRoute {
+            bus_id: bus_id.clone(),
+            producer_session_id: EntityId::new("session"),
+            consumer_session_id: EntityId::new("consumer"),
+        };
+        plane
+            .replace_virtual_bus_routes(
+                audiorouter_domain::VirtualBusRouteRegistry::new(vec![route]).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(plane.virtual_bus_routes().list().len(), 1);
+        assert!(plane.delete_virtual_bus(&bus_id).is_err());
+        assert!(plane
+            .replace_virtual_bus_routes(
+                audiorouter_domain::VirtualBusRouteRegistry::new(vec![
+                    audiorouter_domain::VirtualBusRoute {
+                        bus_id: EntityId::new("missing"),
+                        producer_session_id: EntityId::new("session"),
+                        consumer_session_id: EntityId::new("consumer"),
+                    },
+                ])
+                .unwrap(),
+            )
+            .is_err());
     }
 
     #[test]

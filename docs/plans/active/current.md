@@ -8357,6 +8357,11 @@ live-driver evidence.
   leases/driver handles out of durable state; storage tests (83), strict
   Clippy, formatting, and diff checks pass. Next: expose authorized,
   revision/idempotent route mutation operations and bind only selected routes.
+- Wired the durable route registry into `ControlPlane` on 2026-09-12:
+  replacements now validate known buses plus global session topology, persist
+  accepted state, and protect referenced buses from deletion. Control tests
+  (122), strict Clippy, formatting, and diff checks pass. Next: expose this
+  boundary through authorized revision/idempotent RPC operations.
 
 ## Latest execution checkpoint — 2026-09-12
 

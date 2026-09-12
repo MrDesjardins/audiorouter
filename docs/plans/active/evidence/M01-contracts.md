@@ -869,3 +869,15 @@ Validation: `cargo test -p audiorouter-storage --locked` passed 83 tests,
 strict all-target Clippy, formatting, and `git diff --check` passed. This is
 durable route-state evidence; route mutation API wiring and native endpoint
 activation remain follow-up gates.
+
+## 2026-09-12 - Control ownership and deletion safety
+
+`ControlPlane` now hydrates the durable route registry, validates replacement
+sets against known buses and the global session graph, persists accepted sets,
+and refuses deletion of a bus still referenced by a route. Route replacement
+does not open endpoints or activate a driver.
+
+Validation: `cargo test -p audiorouter-control --locked` passed 122 tests,
+including known-bus and referenced-deletion regressions; strict Clippy,
+formatting, and diff checks passed. Authorized revisioned RPC mutation is
+still a follow-up task.
