@@ -1,5 +1,19 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - Post-reboot guarded acceptance chain
+
+The captured administrator-authorized `tests/acceptance/safe-all.ps1` run
+completed after the reboot and ended with `Safe acceptance chain passed`.
+The chain included the x64 WDK compile/package gate, portable DSP/engine/
+control tests, UI build, plugin workers, M07, unsigned M08 preparation,
+traceability, and documentation validation (52 Markdown files and 167 local
+links). It removed 14 run-owned temporary children.
+
+This remains non-installing evidence. No driver was installed or loaded, no
+test-signing or boot policy changed, and no service, endpoint, default-device,
+volume, mute, privacy, startup, or persistent machine-audio configuration was
+modified.
+
 ## 2026-09-11 - Build-output ownership hardening
 
 The build-only wrapper now removes only an automatically created disposable

@@ -8343,6 +8343,18 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+- Revalidated the interrupted post-reboot acceptance run on 2026-09-12 from
+  its captured terminal log: the complete guarded safe chain passed, including
+  M03 WDK compile/package, portable DSP/engine/control, UI build, plugin
+  workers, M07, unsigned M08, 159 requirement mappings, and documentation
+  validation (52 Markdown files, 167 links). It removed 14 run-owned
+  temporary children. No driver installation/loading, signing-mode change,
+  plugin/startup registration, stream activation, or persistent machine audio
+  configuration occurred.
+- Next M02/M03 task: qualify native render-source/capture-sink bridge
+  publication through the AudioRouter driver prototype using the same explicit
+  lease/generation checks; installation, signing, and production PortCls
+  ownership remain separate gates.
 - Corrected DSP-03 stereo linking on 2026-09-11. Stereo compressor and gate
   nodes now use one two-channel detector and allocation-free planar processing,
   with regressions proving common gain across asymmetric stereo inputs while
