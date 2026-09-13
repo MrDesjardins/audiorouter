@@ -1,5 +1,15 @@
 # Native adapter route requalification (2026-09-12)
 
+## Bridge identity encoding contract
+
+The shared `AudioBridgeHello` validator now bounds both its portable UTF-8
+identity and the UTF-16 byte representation required by the fixed native
+request buffer. This prevents a 65-character ASCII identity (or an equivalent
+UTF-16 expansion) from passing portable validation and failing only at the
+Windows encoder boundary. Protocol and focused Windows-audio tests passed; no
+driver was installed or loaded and no audio endpoint or persistent machine
+configuration was changed.
+
 ## Explicit CABLE adapter route
 
 The bounded post-reboot `m02-rust-adapter-route-live.ps1` acceptance passed

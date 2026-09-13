@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Aligned bridge identity validation across portable and native layers on
+2026-09-12. `AudioBridgeHello::validate` now bounds the UTF-16 representation
+used by the fixed Windows request buffer, rejecting IDs that would otherwise
+pass the UTF-8 byte limit and fail later during native request encoding. A
+65-character ASCII regression was added.
+
 Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
 at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
 catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,

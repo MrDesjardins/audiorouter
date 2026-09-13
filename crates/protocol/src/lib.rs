@@ -66,6 +66,14 @@ impl AudioBridgeHello {
         if self.bus_id.len() > MAX_AUDIO_BRIDGE_BUS_ID_BYTES {
             return Err(AudioBridgeContractError::BusIdTooLong);
         }
+        // The native bridge ABI carries the identity as a fixed UTF-16
+        // buffer. Validate that representation here so a valid portable
+        // hello cannot be rejected later by the Windows encoder.
+        if self.bus_id.encode_utf16().count() * std::mem::size_of::<u16>()
+            > MAX_AUDIO_BRIDGE_BUS_ID_BYTES
+        {
+            return Err(AudioBridgeContractError::BusIdTooLong);
+        }
         match self.direction {
             AudioBridgeDirection::RenderSource | AudioBridgeDirection::CaptureSink => {}
         }
@@ -487,8 +495,14 @@ mod tests {
                 AUDIO_BRIDGE_PROTOCOL_MAJOR + 1
             ))
         );
-        invalid = hello;
+        invalid = hello.clone();
         invalid.bus_id = "x".repeat(MAX_AUDIO_BRIDGE_BUS_ID_BYTES + 1);
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::BusIdTooLong)
+        );
+        invalid = hello;
+        invalid.bus_id = "a".repeat(65);
         assert_eq!(
             invalid.validate(),
             Err(AudioBridgeContractError::BusIdTooLong)
