@@ -12,6 +12,16 @@ Updated: 2026-09-13.
   signing-mode, plugin-registration, startup, or persistent audio action was
   performed.
 
+- Requalified the explicitly selected installed x64 legacy VST2 effect
+  `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reacomp-standalone.dll` on
+  2026-09-13. Audio processing passed at 44.1, 48, and 96 kHz; bounded editor
+  containment checks passed; and the before/after SHA-256
+  `4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0` was
+  unchanged. The wrapper restored its environment and did not copy, register,
+  modify, or load the plugin outside the isolated worker. This strengthens the
+  approved VST2 extension evidence but does not establish redistribution
+  rights or release qualification.
+
 - Closed the shell authorization gap for the VB-Cable delivery slice on
   2026-09-13. The Tauri shell now keeps its default persisted Operator grant
   least-privilege, while `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` supplies a
