@@ -3699,6 +3699,41 @@ mod tests {
         let content = response["result"]["content"][0]["text"].as_str().unwrap();
         let payload: Value = serde_json::from_str(content).unwrap();
         assert_eq!(payload["id"], 7);
+        let routes = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 17,
+                "params": { "name": "list_virtual_routes", "arguments": {} }
+            }),
+        );
+        assert_eq!(routes["result"]["isError"], false);
+        let routes_text = routes["result"]["content"][0]["text"].as_str().unwrap();
+        let routes_payload: Value = serde_json::from_str(routes_text).unwrap();
+        assert_eq!(
+            routes_payload["result"],
+            json!({ "revision": 0, "routes": [] })
+        );
+        let denied_route_replace = mcp_tool_call(
+            &mut plane,
+            "mcp-test",
+            &grant,
+            None,
+            &json!({
+                "id": 18,
+                "params": {
+                    "name": "replace_virtual_routes",
+                    "arguments": { "baseRevision": 0, "routes": [], "idempotencyKey": "mcp-routes-1" }
+                }
+            }),
+        );
+        assert_eq!(denied_route_replace["result"]["isError"], true);
+        assert_eq!(
+            denied_route_replace["result"]["structuredContent"]["error"]["data"]["code"],
+            "permissionDenied"
+        );
         let denied_generic = mcp_tool_call(
             &mut plane,
             "mcp-test",

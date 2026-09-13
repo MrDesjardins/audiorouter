@@ -122,6 +122,10 @@ unit tests and 3 stdio integration tests), strict Clippy and formatting passed,
 and the catalog contains 47 tools. No endpoint or machine audio configuration
 was accessed. Evidence: [M07 automation evidence](evidence/M07-automation-recovery.md).
 
+The MCP regression also executes both tools through the dispatcher, proving a
+read-only grant can list the revisioned route document and cannot replace it;
+the denial remains structured as `permissionDenied`.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability

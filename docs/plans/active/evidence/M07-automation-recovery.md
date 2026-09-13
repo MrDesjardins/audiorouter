@@ -10,6 +10,10 @@ tests and 3 stdio integration tests, strict Clippy and formatting passed, and
 the tool catalog now contains 47 tools. No audio endpoint or machine
 configuration was accessed.
 
+The same regression invokes both tools through the MCP dispatcher: a
+read-only grant receives the empty revisioned route document, while the same
+grant receives a structured `permissionDenied` response for replacement.
+
 ## 2026-09-08 - Graph-plan restart timestamp hardening
 
 `graph.commit` now uses checked, positive, five-minute-capped expiry
