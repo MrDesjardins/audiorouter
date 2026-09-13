@@ -44,6 +44,13 @@ and the temporary database/root are removed by the test. This is
 control-plane and recording-path evidence; it does not activate audio or a
 driver.
 
+MCP recorder creation now has the matching success-path regression. A
+disposable storage-backed control plane is configured with an approved
+temporary root, `create_recorder` is invoked through the Record grant, and the
+test verifies the idle/unarmed response plus exclusive file creation. CLI
+tests (32), MCP stdio integration (3), strict Clippy, formatting, and diff
+checks passed; temporary root data is removed and no audio endpoint is opened.
+
 M03 bridge qualification was tightened on 2026-09-12: the non-installing
 acceptance now checks the actual callback source for generation validity,
 minimum-sequence replay protection, bounded bridge-copy/publish seams, and

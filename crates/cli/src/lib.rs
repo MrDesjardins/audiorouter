@@ -4039,6 +4039,60 @@ mod tests {
     }
 
     #[test]
+    fn mcp_create_recorder_uses_the_authorized_recording_path() {
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(format!("audiorouter-mcp-recording-root-{suffix}"));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let storage = Storage::open_memory().unwrap();
+        storage.save_recording_root(&root).unwrap();
+        let mut plane = ControlPlane::with_storage("mcp-create", storage);
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session).unwrap();
+        let grant = audiorouter_control::ClientGrant::with_scopes([PermissionScope::Record]);
+        let response = mcp_tool_call(
+            &mut plane,
+            "mcp-create-test",
+            &grant,
+            None,
+            &json!({
+                "id": 1,
+                "params": {
+                    "name": "create_recorder",
+                    "arguments": {
+                        "sessionId": "session-fixture",
+                        "recorderId": "mcp-recorder",
+                        "format": "wavPcm16",
+                        "sequence": 0,
+                        "channels": 1,
+                        "sampleRate": 48000,
+                        "queueCapacity": 8,
+                        "maximumChunksPerPass": 1,
+                        "idempotencyKey": "mcp-create-1"
+                    }
+                }
+            }),
+        );
+        assert_eq!(response["result"]["isError"], false);
+        let content = response["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: Value = serde_json::from_str(content).unwrap();
+        assert_eq!(payload["result"]["state"], "idle");
+        assert_eq!(payload["result"]["armed"], false);
+        assert_eq!(payload["result"]["format"], "wavPcm16");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn recorder_commands_use_database_backed_control_dispatch() {
         let suffix = format!(
             "{}-{}",

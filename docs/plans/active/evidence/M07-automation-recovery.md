@@ -1234,3 +1234,13 @@ new recording entry. It then runs the existing arm/start path against the same
 database. The 31-test CLI suite, 3-test MCP stdio integration, strict CLI
 Clippy, formatting, and diff checks passed. Temporary database/root data is
 removed by the test; no live audio endpoint is opened.
+
+## 2026-09-12 - MCP recorder-create success regression
+
+The focused CLI/MCP suite now invokes `create_recorder` through the real MCP
+adapter with a Record-scoped grant and a storage-backed control plane whose
+recording root is an explicitly created temporary directory. The test verifies
+the structured response is idle and unarmed, retains the requested format,
+and creates exactly one exclusive output. CLI unit tests passed 32, MCP stdio
+integration passed 3, and strict Clippy, formatting, and diff checks passed.
+The temporary root is removed by the test; no live endpoint is opened.
