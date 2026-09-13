@@ -2529,6 +2529,64 @@ impl Storage {
         Ok(inserted == 1)
     }
 
+    /// Atomically persist the desired startup preference, journal the
+    /// fail-closed apply result, and consume its one-shot authorization plan.
+    /// The control plane uses this boundary so a storage failure cannot leave
+    /// the preference, idempotency record, and plan at different lifecycle
+    /// stages.
+    pub fn commit_startup_apply(
+        &mut self,
+        plan_id: &EntityId,
+        enabled: bool,
+        key: &str,
+        operation: &str,
+        result: &str,
+        request_hash: &str,
+    ) -> Result<(), StorageError> {
+        validate_plan_id(plan_id.as_str())?;
+        validate_idempotency_key(key)?;
+        validate_request_hash(request_hash)?;
+        validate_journal_fields(operation, result, 0)?;
+
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM operation_journal
+             WHERE created_at < datetime('now', ?1)",
+            params![format!("-{} seconds", IDEMPOTENCY_RETENTION_SECONDS)],
+        )?;
+        let exists: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM operation_journal WHERE idempotency_key = ?1)",
+            params![key],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            let count: usize =
+                transaction.query_row("SELECT COUNT(*) FROM operation_journal", [], |row| {
+                    row.get(0)
+                })?;
+            if count >= MAX_OPERATION_JOURNAL_ENTRIES {
+                return Err(StorageError::JournalLimitReached);
+            }
+        }
+        transaction.execute(
+            "INSERT OR IGNORE INTO operation_journal
+             (idempotency_key, operation, result, committed_revision, request_hash)
+             VALUES (?1, ?2, ?3, 0, ?4)",
+            params![key, operation, result, request_hash],
+        )?;
+        transaction.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('startupEnabled', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![if enabled { "true" } else { "false" }],
+        )?;
+        transaction.execute(
+            "DELETE FROM startup_plans WHERE id = ?1",
+            params![plan_id.as_str()],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn journal_result_checked(
         &self,
         key: &str,
@@ -3268,6 +3326,34 @@ mod tests {
         }));
         storage.delete_startup_plan(&plan_id).unwrap();
         assert!(storage.load_startup_plans().unwrap().is_empty());
+    }
+
+    #[test]
+    fn startup_apply_commit_atomically_persists_and_consumes_state() {
+        let mut storage = Storage::open_memory().unwrap();
+        let plan_id = EntityId::new("startup-transaction");
+        storage.save_startup_plan(&plan_id, true, i64::MAX).unwrap();
+
+        storage
+            .commit_startup_apply(
+                &plan_id,
+                true,
+                "startup.apply:transaction",
+                "startup.apply",
+                r#"{"state":"unavailable"}"#,
+                "request-hash",
+            )
+            .unwrap();
+
+        assert!(storage.load_startup_enabled().unwrap());
+        assert!(storage.load_startup_plans().unwrap().is_empty());
+        assert_eq!(
+            storage
+                .journal_result_checked("startup.apply:transaction", "request-hash")
+                .unwrap()
+                .as_deref(),
+            Some(r#"{"state":"unavailable"}"#)
+        );
     }
 
     #[test]

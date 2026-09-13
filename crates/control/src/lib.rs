@@ -8370,9 +8370,19 @@ impl ControlPlane {
             "registration": "unavailable",
             "reason": "sign-in startup registration is not implemented in this build"
         });
-        if let Some(storage) = &self.storage {
+        if let Some(storage) = self.storage.as_mut() {
+            // Keep desired state, idempotency, and one-shot plan consumption
+            // in one durable transaction. The in-memory fields are updated
+            // only after the durable commit succeeds.
             storage
-                .save_startup_enabled(enabled)
+                .commit_startup_apply(
+                    &plan_id_value,
+                    enabled,
+                    &scoped_key,
+                    "startup.apply",
+                    &result.to_string(),
+                    &request_hash,
+                )
                 .map_err(storage_error)?;
         }
         self.startup_enabled = enabled;
@@ -8383,11 +8393,6 @@ impl ControlPlane {
         // a stale plan from being replayed after a backend restart while the
         // idempotency journal still provides the documented retry result.
         self.startup_plans.remove(&plan_id_value);
-        if let Some(storage) = &self.storage {
-            storage
-                .delete_startup_plan(&plan_id_value)
-                .map_err(storage_error)?;
-        }
         Ok(result)
     }
 

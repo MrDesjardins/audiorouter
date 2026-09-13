@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Closed an M07 persistence consistency gap on 2026-09-13. `startup.apply`
+  now atomically commits the desired startup flag, idempotency result, and
+  one-shot plan deletion in SQLite. Control (128) and storage (85) tests pass,
+  including direct atomic-commit coverage, with formatting and diff checks
+  clean. OS sign-in registration remains unavailable and untouched.
+
 - Hardened M03 lease identity comparison on 2026-09-13. Maintenance requests
   now compare explicit negotiated fields and the complete UTF-16 bus ID,
   excluding ABI padding and process-relative mapping fields. The

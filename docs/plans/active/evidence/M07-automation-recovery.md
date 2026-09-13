@@ -1,5 +1,15 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - atomic startup apply persistence
+
+`startup.apply` now commits the desired startup flag, idempotency result, and
+one-shot plan consumption in one SQLite transaction. This prevents a storage
+failure between those writes from leaving a durable preference, journal, and
+authorization plan at different lifecycle stages. The control suite passed 128
+tests and the storage suite passed 85 tests, including direct atomic-commit
+coverage. Windows sign-in registration remains explicitly unavailable and no
+OS startup or audio configuration was changed.
+
 ## 2026-09-12 - frontend-owned shell RPC acceptance
 
 The administrator-authorized `tests/acceptance/m07-shell-rpc.ps1` run passed
