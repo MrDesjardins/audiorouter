@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Closed another WaveRT counter-overflow path on 2026-09-13. `UpdatePosition`
+now rejects a displacement that would wrap either the monotonic presentation
+position or linear position, resets the time/carry anchor, and returns before
+publishing audio or a backwards position. The non-installing x64 WDK/source
+acceptance passed with zero signability errors/warnings and catalog generation.
+No driver was installed or loaded and no machine audio configuration changed.
+
 Hardened WaveRT presentation-position arithmetic on 2026-09-13. The byte
 position-to-sample conversion now checks the 64-bit multiplication against the
 negotiated sample rate and returns `STATUS_INTEGER_OVERFLOW` instead of

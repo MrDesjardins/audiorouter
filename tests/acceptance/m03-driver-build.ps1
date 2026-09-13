@@ -179,6 +179,12 @@ if (-not $stream.Contains('byteDisplacementWide > MAXULONG')) {
 if (-not $stream.Contains('static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp')) {
     throw 'WaveRT timer callback must reject a backwards QPC sample before conversion'
 }
+if (-not $stream.Contains('ByteDisplacement > MAXULONGLONG - m_ullPresentationPosition')) {
+    throw 'WaveRT position callback must reject presentation-position overflow'
+}
+if (-not $stream.Contains('ByteDisplacement > MAXULONGLONG - m_ullLinearPosition')) {
+    throw 'WaveRT position callback must reject linear-position overflow'
+}
 if (-not $stream.Contains('ULONGLONG intervalHns = static_cast<ULONGLONG>(_this->m_ulNotificationIntervalMs) * 10000')) {
     throw 'WaveRT timer notification arithmetic must widen before interval multiplication'
 }

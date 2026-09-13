@@ -1498,6 +1498,20 @@ VOID CMiniportWaveRTStream::UpdatePosition
     ULONG ByteDisplacement = static_cast<ULONG>(byteDisplacementWide);
     m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % 1000);
 
+    // These counters are monotonic and are consumed by PortCls position
+    // queries.  Do not let a long-lived stream wrap either counter and expose
+    // a position that moves backwards.  Update the time anchor so a later
+    // callback can recover from the invalid sample without repeating the same
+    // overflowing displacement forever.
+    if (ByteDisplacement > MAXULONGLONG - m_ullPresentationPosition ||
+        ByteDisplacement > MAXULONGLONG - m_ullLinearPosition)
+    {
+        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
+        m_hnsElapsedTimeCarryForward = 0;
+        m_byteDisplacementCarryForward = 0;
+        return;
+    }
+
     // Increment presentation position even after last buffer is rendered.
     m_ullPresentationPosition += ByteDisplacement;
 
