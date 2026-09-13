@@ -16,7 +16,13 @@ Updated: 2026-09-13.
   a verified x64 VST2/VST3 result adds its fingerprinted node to the real draft
   graph through the existing plan/commit path. Placeholders are disabled by
   default and clearly remain unavailable until an isolated worker is bound;
-  unsupported/error entries remain inspection-only. UI typecheck and 155 tests
+  unsupported/error entries remain inspection-only. UI typecheck and 156 tests
+  passed; no plugin was loaded and no audio or machine configuration changed.
+
+- Added a connected UI regression on 2026-09-13 proving that a verified scan
+  result becomes a visible stopped plugin node in the draft list, while the
+  existing plan/commit boundary remains responsible for backend validation.
+  The focused accessibility suite passed 29 tests and TypeScript typecheck
   passed; no plugin was loaded and no audio or machine configuration changed.
 
 - Added the first graph-facing plugin contract slice on 2026-09-13. Domain

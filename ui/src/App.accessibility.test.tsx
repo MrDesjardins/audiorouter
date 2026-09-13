@@ -41,6 +41,39 @@ describe("VB-Cable endpoint selection", () => {
     expect(within(quickRoute).getByRole("link", { name: "Start the session" }).getAttribute("href")).toBe("#native-endpoint-panel");
   });
 
+  it("adds a verified scanned plugin as a stopped draft placeholder", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      scanPlugins: async () => ({
+        directory: "C:\\Plugins",
+        entries: [{
+          path: "C:\\Plugins\\Effect.dll",
+          identity: {
+            path: "C:\\Plugins\\Effect.dll",
+            binaryPath: "C:\\Plugins\\Effect.dll",
+            format: "vst2" as const,
+            architecture: "x64" as const,
+            fileBytes: 4096,
+            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            vendor: "Test Vendor",
+            version: "1.0",
+            classIds: ["test-class"],
+            compatibility: "supportedVst2X64Gated" as const,
+          },
+          error: null,
+          errorCode: null,
+        }],
+      }),
+    };
+    render(<App backend={backend} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Absolute plugin directory" }), { target: { value: "C:\\Plugins" } });
+    fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Select for inspection" }));
+    fireEvent.click(screen.getByRole("button", { name: "List view" }));
+    expect(await screen.findByRole("button", { name: /Test Vendor.*plugin/ })).toBeTruthy();
+    expect(screen.getByText(/added a stopped plugin placeholder/i)).toBeTruthy();
+  });
+
   it("returns exact IDs only for one active, unambiguous pair", () => {
     const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
     expect(findVbCableEndpointPair([
