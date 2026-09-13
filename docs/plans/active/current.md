@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Strengthened UI-06/UI-11 route explanation on 2026-09-13. The connected
+  editor now renders `routes.inspect` results as an accessible ordered path
+  list, preserving backend-reported path count/completeness while showing
+  node state annotations, estimated latency, and channel maps. Refresh is
+  disabled offline. The new regression and the complete UI suite pass (140
+  tests), with TypeScript typecheck and diff checks passing. No route or
+  audio state is mutated by inspection.
+
 - Improved the human-testable VB-Cable setup path on 2026-09-13. The endpoint
   binding panel now places explicit Start session/Stop session beside the
   selected capture and render endpoints, shows the session state, and locks

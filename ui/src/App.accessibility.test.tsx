@@ -364,4 +364,21 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Insert mixer on Microphone to Voice gain" }));
     expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
   });
+
+  it("renders backend route provenance as an accessible path list", async () => {
+    const inspectRoute = vi.fn(async () => ({
+      destinationNode: "voice",
+      reachable: true,
+      complete: true,
+      paths: [{ nodes: ["mic", "voice"], edges: ["edge-1"], channelMaps: [[1]], latencySamples: 48 }],
+    }));
+    render(<App backend={{ ...connectedPreviewBackend(), inspectRoute }} />);
+
+    const routePanel = screen.getByRole("region", { name: "Receives audio from" });
+    fireEvent.click(within(routePanel).getByRole("button", { name: "Refresh" }));
+    await waitFor(() => expect(inspectRoute).toHaveBeenCalledWith("mic"));
+    expect(await within(routePanel).findByRole("list", { name: "Reported audio paths" })).toBeTruthy();
+    expect(within(routePanel).getByText(/Path 1: Microphone \[enabled\] → Voice gain \[enabled\]/)).toBeTruthy();
+    expect(within(routePanel).getByText(/Channel map: \[1\]/)).toBeTruthy();
+  });
 });
