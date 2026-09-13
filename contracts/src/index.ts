@@ -22,7 +22,8 @@ export type NodeKind =
   | "delay"
   | "graphicEq"
   | "pitch"
-  | "recorder";
+  | "recorder"
+  | "plugin";
 
 export type PortDirection = "input" | "output";
 

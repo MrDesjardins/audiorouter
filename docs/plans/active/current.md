@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Added the first graph-facing plugin contract slice on 2026-09-13. Domain
+  sessions now validate a bounded `plugin` node identity (`path`, `format`,
+  SHA-256 `fingerprint`, and `classId`), the shared TypeScript contract
+  exposes the 19th node kind, and the engine rejects an enabled unbound
+  placeholder before publication. A UI draft helper creates stopped,
+  disabled placeholders only from supported x64 scan identities. Domain (61),
+  engine (108), and control (134) tests, strict Clippy, UI typecheck/tests
+  (154), and contract drift passed. Worker binding, parameter descriptors,
+  and actual plugin processing remain the next implementation slice; no
+  plugin was loaded or machine audio configuration changed.
+
 - Requalified the user-installed ReaPlugs VST2 matrix on 2026-09-13 using
   disposable native workers. Six x64 audio-effect DLLs passed at 44.1, 48,
   and 96 kHz with parameter-offset processing, state/integrity checks, and

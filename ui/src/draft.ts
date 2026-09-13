@@ -1,4 +1,4 @@
-import type { EntityId, NodeKind, Session } from "@audiorouter/contracts";
+import type { EntityId, NodeKind, PluginScanEntry, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 
 export type DraftChange = {
@@ -147,6 +147,41 @@ export function appendLibraryNode(
         ports: definition.ports.map((port) => ({ ...port })),
       },
     ],
+  };
+}
+
+/** Adds a verified scan result as an explicit, stopped plugin placeholder. */
+export function appendPluginPlaceholderNode(session: Session, entry: PluginScanEntry): Session {
+  const identity = entry.identity;
+  if (!identity || !["supportedVst2X64Gated", "supportedVst3X64"].includes(identity.compatibility)) {
+    throw new Error("Only a supported x64 scan result can be added to the graph");
+  }
+  let suffix = 1;
+  let id = `plugin-${suffix}`;
+  while (session.nodes.some((node) => node.id === id)) {
+    suffix += 1;
+    id = `plugin-${suffix}`;
+  }
+  return {
+    ...session,
+    nodes: [...session.nodes, {
+      id,
+      kind: "plugin",
+      typeVersion: 1,
+      name: `${identity.vendor ?? "Plugin"} ${suffix}`,
+      enabled: false,
+      bypass: false,
+      parameters: {
+        path: identity.binaryPath,
+        format: identity.format,
+        fingerprint: identity.sha256,
+        classId: identity.classIds[0] ?? "default",
+      },
+      ports: [
+        { name: "in", direction: "input", channels: 1 },
+        { name: "out", direction: "output", channels: 1 },
+      ],
+    }],
   };
 }
 

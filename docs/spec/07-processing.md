@@ -70,6 +70,13 @@ and open/closed state per channel. A callback-owned state lock is never waited
 on by a telemetry reader, so a busy read returns unavailable and the audio path
 continues unchanged.
 
+An inspected x64 VST2/VST3 result may be retained in a graph as a stopped,
+disabled plugin placeholder carrying its binary path, format, fingerprint, and
+class identity. A placeholder is authoring state only: activation must reject
+it until an isolated worker is bound and its identity is revalidated. It must
+never be treated as a transparent processor or silently replaced with dry
+protected-path audio.
+
 ## Initial parameter contract
 
 These ranges are product decisions, subject to signal tests; defaults are normative unless M04 records a justified revision.

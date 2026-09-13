@@ -3222,6 +3222,11 @@ pub fn compile_session_at_sample_rate(
             previous_node = Some(node_id);
             continue;
         }
+        // A placeholder must never be treated as a transparent processor:
+        // until its isolated worker is bound, activation fails closed.
+        if node.kind == NodeKind::Plugin {
+            return Err(GraphCompileError::UnsupportedTopology);
+        }
         if node.bypass {
             // Surrounding edge matrix stages preserve the dry signal.
             previous_node = Some(node_id);
@@ -3576,6 +3581,7 @@ pub fn compile_session_at_sample_rate(
                     right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
                 });
             }
+            NodeKind::Plugin => return Err(GraphCompileError::UnsupportedTopology),
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -6880,6 +6886,89 @@ mod tests {
                 Err(GraphCompileError::InvalidSampleRate)
             ));
         }
+    }
+
+    #[test]
+    fn compiler_rejects_an_enabled_unbound_plugin_placeholder() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 1,
+        };
+        let plugin = Node {
+            id: EntityId::new("plugin"),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            name: "Missing effect".into(),
+            enabled: true,
+            bypass: false,
+            parameters: [
+                ("path".into(), serde_json::json!("C:\\Plugins\\effect.dll")),
+                ("format".into(), serde_json::json!("vst2")),
+                (
+                    "fingerprint".into(),
+                    serde_json::json!(
+                        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                    ),
+                ),
+                ("classId".into(), serde_json::json!("effect-class")),
+            ]
+            .into_iter()
+            .collect(),
+            ports: vec![
+                port("in", PortDirection::Input),
+                port("out", PortDirection::Output),
+            ],
+        };
+        let source = Node {
+            id: EntityId::new("source"),
+            kind: NodeKind::PhysicalInput,
+            type_version: 1,
+            name: "Source".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![port("main", PortDirection::Output)],
+        };
+        let sink = Node {
+            id: EntityId::new("sink"),
+            kind: NodeKind::PhysicalOutput,
+            type_version: 1,
+            name: "Sink".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![port("main", PortDirection::Input)],
+        };
+        let edge = |id: &str,
+                    source_node: &str,
+                    source_port: &str,
+                    destination_node: &str,
+                    destination_port: &str| Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(source_node),
+            source_port: source_port.into(),
+            destination_node: EntityId::new(destination_node),
+            destination_port: destination_port.into(),
+            matrix: vec![1.0],
+            enabled: true,
+        };
+        let session = Session {
+            id: EntityId::new("plugin-placeholder"),
+            name: "plugin-placeholder".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![source, plugin, sink],
+            edges: vec![
+                edge("source-plugin", "source", "main", "plugin", "in"),
+                edge("plugin-sink", "plugin", "out", "sink", "main"),
+            ],
+        };
+        assert!(matches!(
+            compile_session(&session, RuntimeGeneration::new(50)),
+            Err(GraphCompileError::UnsupportedTopology)
+        ));
     }
 
     #[test]

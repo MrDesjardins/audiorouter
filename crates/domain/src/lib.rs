@@ -38,6 +38,9 @@ pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 pub const MAX_PARAMETERS_PER_NODE: usize = 64;
 pub const MAX_PARAMETER_NAME_BYTES: usize = 128;
+pub const MAX_PLUGIN_PATH_BYTES: usize = 512;
+pub const MAX_PLUGIN_FINGERPRINT_BYTES: usize = 64;
+pub const MAX_PLUGIN_CLASS_ID_BYTES: usize = 64;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
 pub const RECOVERY_SAFE_MODE_CRASHES: usize = 3;
@@ -76,10 +79,11 @@ pub enum NodeKind {
     GraphicEq,
     Pitch,
     Recorder,
+    Plugin,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 19] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -98,6 +102,7 @@ impl NodeKind {
         Self::GraphicEq,
         Self::Pitch,
         Self::Recorder,
+        Self::Plugin,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -120,6 +125,7 @@ impl NodeKind {
             Self::GraphicEq => "graphic-eq",
             Self::Pitch => "pitch",
             Self::Recorder => "recorder",
+            Self::Plugin => "plugin",
         }
     }
 }
@@ -174,7 +180,7 @@ fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> boo
     }
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 18] {
+pub fn node_registry() -> [NodeTypeSpec; 19] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -200,6 +206,9 @@ pub fn node_registry() -> [NodeTypeSpec; 18] {
             NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink => {
                 CapabilityAvailability::Unavailable("requires M03 managed virtual driver")
             }
+            NodeKind::Plugin => {
+                CapabilityAvailability::Unavailable("requires a bound isolated plugin worker")
+            }
         },
         realtime_cost_class: match kind {
             NodeKind::Mixer | NodeKind::Gain | NodeKind::Mute | NodeKind::Meter => "low",
@@ -210,6 +219,7 @@ pub fn node_registry() -> [NodeTypeSpec; 18] {
             NodeKind::Delay => "medium",
             NodeKind::GraphicEq => "medium",
             NodeKind::Pitch => "high",
+            NodeKind::Plugin => "worker-bound",
             _ => "device-bound",
         },
         latency_samples: match kind {
@@ -1362,6 +1372,19 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Pitch, "cents") => value
                     .as_f64()
                     .is_some_and(|cents| cents.is_finite() && (-100.0..=100.0).contains(&cents)),
+                (NodeKind::Plugin, "path") => value
+                    .as_str()
+                    .is_some_and(|path| !path.is_empty() && path.len() <= MAX_PLUGIN_PATH_BYTES),
+                (NodeKind::Plugin, "format") => value
+                    .as_str()
+                    .is_some_and(|format| matches!(format, "vst2" | "vst3")),
+                (NodeKind::Plugin, "fingerprint") => value.as_str().is_some_and(|fingerprint| {
+                    fingerprint.len() == MAX_PLUGIN_FINGERPRINT_BYTES
+                        && fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
+                }),
+                (NodeKind::Plugin, "classId") => value.as_str().is_some_and(|class_id| {
+                    !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
+                }),
                 _ => false,
             };
             if !valid {
@@ -2561,6 +2584,40 @@ mod tests {
     }
 
     #[test]
+    fn validates_plugin_placeholder_identity_parameters() {
+        let mut plugin = node("plugin", NodeKind::Plugin, PortDirection::Input);
+        plugin.ports.push(Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 1,
+        });
+        plugin.parameters = [
+            ("path".into(), serde_json::json!("C:\\Plugins\\effect.dll")),
+            ("format".into(), serde_json::json!("vst2")),
+            (
+                "fingerprint".into(),
+                serde_json::json!(
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                ),
+            ),
+            ("classId".into(), serde_json::json!("effect-class")),
+        ]
+        .into_iter()
+        .collect();
+        assert!(validate_session(&session(vec![plugin.clone()], vec![])).is_ok());
+
+        plugin
+            .parameters
+            .insert("format".into(), serde_json::json!("vst1"));
+        let errors = validate_session(&session(vec![plugin], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::InvalidParameter { path }
+                if path == "nodes[0].parameters.format"
+        )));
+    }
+
+    #[test]
     fn validates_dynamics_controls_exposed_by_the_dsp_contract() {
         let mut compressor = node("compressor", NodeKind::Compressor, PortDirection::Input);
         compressor
@@ -3058,7 +3115,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 18);
+        assert_eq!(registry.len(), 19);
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)
