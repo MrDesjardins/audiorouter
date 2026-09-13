@@ -8,12 +8,11 @@ VS2026/WDK toolchain. The complete guarded chain passed at pushed head
 `4a2b48ff`: M00 toolchain/native compile/inventory, non-installing M03 x64
 driver build and catalog signability, disposable SysVAD, M01/M04/M05, M06
 VST3/VST2 workers, M07, unsigned M08 artifacts, 159 requirement mappings, and
-documentation validation (52 Markdown files, 179 local links). Cleanup
+documentation validation (52 Markdown files, 180 local links). Cleanup
 removed 15 run-owned temporary children.
 
-The current UI stage contained 146 tests and the documentation validator
-reported 180 local links; the values above are retained as the exact captured
-counts for that acceptance invocation.
+The current UI stage contained 146 tests; the documentation validator reported
+180 local links.
 
 This is qualification evidence only. The driver was not installed or loaded;
 no signing mode, startup or plugin registration, endpoint default, volume,

@@ -49,7 +49,7 @@ surface is green:
   verification, and cleanup pass in a disposable output directory.
 - M00 native validation is compile-only on this machine. Visual Studio
   Community 2026, MSVC 14.51.36231, Windows SDK 10.0.28000.0, and WDK
-  10.1.28000.2526 are available; the SysVAD sample also passes x64 package/API
+  10.0.28000.0 are available; the SysVAD sample also passes x64 package/API
   validation through the 64-bit MSBuild host. No probe executable or driver is
   run by this gate.
 
