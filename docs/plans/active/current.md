@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Closed a UI-02/UI-03 canvas placement gap on 2026-09-13. Dropping a library
+  processor now records its bounded canvas position in presentation-only
+  layout storage while adding the node through the existing draft mutation
+  boundary. Missing/non-finite coordinates from synthetic or unusual drag
+  events fall back safely instead of silently discarding the placement. The
+  regression covers the drag path; UI tests pass (143), TypeScript typecheck
+  and diff checks pass. No graph revision, audio state, or machine setting is
+  changed by placement.
+
 - Attempted the attended shell launch gate on 2026-09-13 using a disposable
   enrolled SQLite database and named pipe. The built shell and backend started
   successfully, but the Windows automation surface returned zero applications

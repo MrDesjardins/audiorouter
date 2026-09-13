@@ -41,8 +41,9 @@ describe("keyboard connection dialog", () => {
       getData: (type: string) => values.get(type) ?? "",
     };
     fireEvent.dragStart(dropSource, { dataTransfer });
-    fireEvent.drop(canvas, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
     await waitFor(() => expect(screen.getByText("Gain 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy());
+    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({ "gain-1": { x: 0, y: 0 } });
   });
 
   it("binds only explicitly selected active endpoints and preserves the no-defaults boundary", async () => {
