@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+Rechecked strict workspace lint at pushed head `08f38422` on 2026-09-13:
+`cargo clippy --workspace --all-targets --locked -- -D warnings` completed
+without warnings or errors. This is static portable-code evidence only; it
+does not close the production driver, signing, installer, physical-latency,
+or interactive/manual acceptance gates.
+
 Requalified the complete guarded M00-M08 acceptance chain at the current
 head on 2026-09-13. Project driver build/source signability, portable
 milestone suites, UI build/tests, VST3/VST2 workers, M07, unsigned M08
