@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Closed an M03 unload teardown race on 2026-09-13. Driver unload now clears
+  negotiated lease identity only after mapped-view detachment and rundown
+  reader drain, matching the close/expiry ordering. The administrator-
+  authorized non-installing x64 WDK build and source-contract acceptance
+  passed with zero signability errors/warnings and catalog generation. No
+  driver was installed or loaded. Next: continue portable backlog work while
+  preserving production PortCls ownership/deployment as an explicit gate.
+
 - Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain on
   2026-09-13 after the M03 mapped-maintenance fix. M00/M03/M04/M05/M06/M07/M08
   acceptance, 159 traceability mappings, and documentation validation (52

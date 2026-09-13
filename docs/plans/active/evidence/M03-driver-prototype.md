@@ -1,5 +1,14 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - unload rundown ordering
+
+Driver unload now clears each lease's negotiated request only after detaching
+the mapped view and waiting for rundown-protected callback readers to drain.
+This closes a teardown data race in which an in-flight callback could read the
+request while unload zeroed it. The non-installing x64 WDK build and
+source-contract acceptance passed with zero signability errors/warnings and
+catalog generation. No driver was installed or loaded.
+
 ## 2026-09-13 - post-fix guarded acceptance chain
 
 The elevated `tests/acceptance/safe-all.ps1` chain passed after the mapped

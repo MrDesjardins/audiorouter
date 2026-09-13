@@ -68,6 +68,17 @@ foreach ($required in @(
 if ($source.Contains('if (lease->Retiring)')) {
     throw 'bridge retirement cleanup must use captured state after rundown, not an unlocked lease read'
 }
+$deleteStart = $source.IndexOf('void DeleteBridgeControlDevice()')
+$deleteEnd = $source.IndexOf('#pragma code_seg("PAGE")', $deleteStart)
+if ($deleteStart -lt 0 -or $deleteEnd -le $deleteStart) {
+    throw 'bridge unload cleanup boundary is missing'
+}
+$deleteSource = $source.Substring($deleteStart, $deleteEnd - $deleteStart)
+$retireIndex = $deleteSource.IndexOf('RetireBridgeResources(')
+$clearIndex = $deleteSource.IndexOf('RtlZeroMemory(&g_BridgeLeases[index].Request')
+if ($retireIndex -lt 0 -or $clearIndex -le $retireIndex) {
+    throw 'bridge unload must clear request identity after rundown retirement'
+}
 $copyStart = $source.IndexOf('NTSTATUS AudioRouterCopyLeaseBlock(')
 $copyEnd = $source.IndexOf('static void RetireBridgeResources(', $copyStart)
 if ($copyStart -lt 0 -or $copyEnd -le $copyStart) {

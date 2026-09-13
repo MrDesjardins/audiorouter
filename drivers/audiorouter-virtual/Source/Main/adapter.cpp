@@ -653,13 +653,20 @@ void DeleteBridgeControlDevice()
         g_BridgeLeases[index].MappedBytes = 0;
         g_BridgeLeases[index].Active = FALSE;
         g_BridgeLeases[index].OwnerFileObject = NULL;
-        RtlZeroMemory(&g_BridgeLeases[index].Request,
-                      sizeof(g_BridgeLeases[index].Request));
         g_BridgeLeases[index].LastHeartbeat100ns = 0;
         KeReleaseSpinLock(&g_BridgeLeases[index].Lock, oldIrql);
 
         RetireBridgeResources(&g_BridgeLeases[index], mappedView,
                               sectionObject, rundownStarted);
+
+        // A callback that acquired rundown before detachment may still be
+        // reading Request. Clear the contract only after that reader has
+        // drained; this is the unload equivalent of close/expiry cleanup.
+        KeAcquireSpinLock(&g_BridgeLeases[index].Lock, &oldIrql);
+        RtlZeroMemory(&g_BridgeLeases[index].Request,
+                      sizeof(g_BridgeLeases[index].Request));
+        g_BridgeLeases[index].Retiring = FALSE;
+        KeReleaseSpinLock(&g_BridgeLeases[index].Lock, oldIrql);
     }
     if (g_BridgeControlDevice != NULL) {
         IoDeleteSymbolicLink(&dosName);
