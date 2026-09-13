@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use audiorouter_control::{ClientRole, ControlPlane};
-use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+use audiorouter_control::{ClientGrant, ClientRole, ControlPlane};
+use audiorouter_domain::{Edge, EntityId, Node, NodeKind, PermissionScope, Port, PortDirection, Session};
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
 use audiorouter_storage::Storage;
 use tauri::{
@@ -270,8 +270,33 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             Err(error) => eprintln!("AudioRouter native endpoint worker unavailable: {error}"),
                         }
                     }
-                    audiorouter_transport::serve_control_connections_forever_for_current_user(
-                        &pipe_name, plane,
+                    let grant = if std::env::var_os("AUDIOROUTER_ALLOW_DEVICE_ADMIN")
+                        .is_some_and(|value| value == "1")
+                    {
+                        if !enrollment
+                            .as_ref()
+                            .is_some_and(|(role, revoked)| role == "operator" && !revoked)
+                        {
+                            return Err(
+                                "device-administration opt-in requires a non-revoked operator enrollment"
+                                    .into(),
+                            );
+                        }
+                        eprintln!("AudioRouter device-administration process grant enabled by explicit opt-in");
+                        ClientGrant::with_scopes([
+                            PermissionScope::Read,
+                            PermissionScope::GraphWrite,
+                            PermissionScope::SessionControl,
+                            PermissionScope::DeviceAdministration,
+                        ])
+                    } else {
+                        plane
+                            .grant_for_client(&sid)
+                            .map_err(|error| format!("current user enrollment lookup failed: {error:?}"))?
+                            .ok_or_else(|| "current user is not enrolled".to_owned())?
+                    };
+                    audiorouter_transport::serve_control_connections_forever_with_grant(
+                        &pipe_name, plane, grant,
                     )
                     .map_err(|error| format!("control backend stopped: {error:?}"))
                 })();

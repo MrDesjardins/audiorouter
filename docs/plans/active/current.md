@@ -2,6 +2,18 @@
 
 Updated: 2026-09-13.
 
+- Closed the shell authorization gap for the VB-Cable delivery slice on
+  2026-09-13. The Tauri shell now keeps its default persisted Operator grant
+  least-privilege, while `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` supplies a
+  non-persisted device-administration process grant only when the current user
+  already has a non-revoked Operator enrollment. The grant is passed directly
+  to the lifetime pipe server; it does not mutate enrollment or Windows audio
+  configuration. Added the exact endpoint test recipe to the headless runbook.
+  `cargo fmt --all -- --check`, transport tests (19), shell tests (8), shell
+  check, and diff checks passed. The next action is to run the guarded UI
+  acceptance with the known VB-Cable IDs, then wire the first built-in EQ/gate
+  editing path through the same graph commit surface.
+
 - Requalified the focused M03 driver bridge acceptance at pushed head on
   2026-09-13 with VS 18.9.1 and WDK 10.0.28000.0. The x64 driver compiled,
   catalog generation/signability reported zero errors and warnings, and the

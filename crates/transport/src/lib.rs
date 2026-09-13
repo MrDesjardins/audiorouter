@@ -732,13 +732,25 @@ pub fn serve_control_connections_for_current_user(
 /// until the process exits or the pipe reports a terminal error.
 pub fn serve_control_connections_forever_for_current_user(
     name: &str,
-    mut plane: audiorouter_control::ControlPlane,
+    plane: audiorouter_control::ControlPlane,
 ) -> Result<(), TransportError> {
     let sid = current_user_sid()?;
     let grant = plane
         .grant_for_client(&sid)
         .map_err(|error| TransportError::Protocol(format!("enrollment lookup failed: {error:?}")))?
         .ok_or_else(|| TransportError::Windows("current user is not enrolled".into()))?;
+    serve_control_connections_forever_with_grant(name, plane, grant)
+}
+
+#[cfg(windows)]
+/// Serve the current-user pipe with an explicitly selected process grant.
+/// The grant is not persisted; callers must perform any durable enrollment
+/// checks before entering this lifetime-serving loop.
+pub fn serve_control_connections_forever_with_grant(
+    name: &str,
+    mut plane: audiorouter_control::ControlPlane,
+    grant: audiorouter_control::ClientGrant,
+) -> Result<(), TransportError> {
     let _singleton = acquire_server_singleton(name)?;
     loop {
         serve_once_with_client_optional(name, |client_pid, frame| {

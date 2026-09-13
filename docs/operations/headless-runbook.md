@@ -58,6 +58,27 @@ backend after a read-only refresh. It does not open an audio stream, install a
 driver, or change persistent audio settings. Do not use the normal user
 database for diagnosis.
 
+### Existing VB-Cable endpoint test
+
+The desktop shell uses the least-privilege enrolled grant by default. Preparing
+exact capture/render endpoints from the UI requires the separate device
+administration scope, so a human test must opt in for that process explicitly:
+
+```powershell
+$env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = "1"
+$env:AUDIOROUTER_CAPTURE_ENDPOINT_ID = "{capture endpoint id}"
+$env:AUDIOROUTER_RENDER_ENDPOINT_ID = "{render endpoint id}"
+.\target\debug\audiorouter-shell.exe
+Remove-Item Env:AUDIOROUTER_ALLOW_DEVICE_ADMIN, Env:AUDIOROUTER_CAPTURE_ENDPOINT_ID, Env:AUDIOROUTER_RENDER_ENDPOINT_ID -ErrorAction SilentlyContinue
+```
+
+Use endpoint IDs from the read-only inventory command or the UI selectors,
+including the direction-specific exact IDs. The shell only opens stopped shared
+clients for those exact endpoints and starts them when the user starts the
+session. It does not change the Windows default device, volume, mute, privacy,
+startup, or driver state. The process grant is not persisted and is rejected
+unless the current user has a non-revoked Operator enrollment.
+
 ## Plan and apply a graph change
 
 Create a plan against the observed revision, inspect it, then apply it once with a unique idempotency key:
