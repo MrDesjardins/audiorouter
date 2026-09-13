@@ -5869,12 +5869,32 @@ impl ControlPlane {
                 "recoverable": false
             }));
         }
+
+        // A session stop is also the native endpoint shutdown boundary. The
+        // worker is deliberately stopped only after recorder finalization so
+        // a failed recorder operation leaves the session and its endpoint
+        // available for explicit recovery. Once this point is reached, stop
+        // the exact bound worker before retiring the runtime generation; even
+        // a worker stop error must not leave an audio client running against
+        // a session that is reported stopped.
+        let native_stop_error = if self.native_endpoint_session.as_ref() == Some(id) {
+            self.native_endpoint_worker
+                .as_mut()
+                .map(audiorouter_windows_audio::WasapiEndpointWorker::stop)
+                .transpose()
+                .err()
+        } else {
+            None
+        };
         let revision = self.get_session(id)?.revision;
         if let Some(runtime) = self.runtimes.get_mut(id) {
             runtime.stop();
         }
         self.events
             .append(revision, None, "runtime.stopped", Some(id.clone()));
+        if let Some(error) = native_stop_error {
+            return Err(audio_control_error(error));
+        }
         Ok(json!({
             "sessionId": id,
             "state": "stopped",

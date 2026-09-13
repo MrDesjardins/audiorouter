@@ -1,5 +1,20 @@
 # Native adapter route requalification (2026-09-12)
 
+## Session shutdown ownership correction
+
+The control-plane session stop path now treats an attached native endpoint
+worker as part of the session's owned runtime resources. After recorder
+finalization succeeds, it stops the worker before stopping the runtime. A stop
+failure is surfaced with the existing structured `AudioError` mapping, but the
+runtime is still transitioned to stopped so a client cannot continue pumping a
+session that the control plane reports as stopped. Recorder failures still
+precede this boundary and leave the session available for deliberate recovery.
+
+Verification: control tests (125) and doctests passed, strict control Clippy,
+workspace formatting, and `git diff --check` passed. This is a control-plane
+lifecycle regression fix; it does not qualify a loaded virtual driver or alter
+machine audio settings.
+
 The administrator-authorized Rust adapter route was rerun against the named
 CABLE endpoints for 500 ms. Negotiation selected 48,000 Hz on both sides with
 the 128-frame graph quantum and a 2,666,667 ns graph deadline. It captured

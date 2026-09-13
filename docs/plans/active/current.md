@@ -55,6 +55,14 @@ workspace tests passed, strict workspace Clippy passed, and formatting/diff
 checks passed. This is portable engine evidence only; no endpoint, driver,
 plugin, or persistent machine-audio configuration was accessed.
 
+Closed a native lifecycle safety gap on 2026-09-12: `session_stop` now stops
+the attached exact-session WASAPI worker after recorder finalization and before
+retiring the runtime generation. If endpoint shutdown reports an error, the
+runtime is still stopped and the structured audio error is returned, preventing
+a running client from being orphaned behind a stopped session. Control tests
+(125), strict Clippy, formatting, and diff checks passed. No endpoint was
+opened by these checks; loaded-driver and physical-device gates remain open.
+
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite
 database and explicitly approved temporary recording root. It verifies an
