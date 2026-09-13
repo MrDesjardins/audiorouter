@@ -2,6 +2,16 @@
 
 Updated: 2026-09-12.
 
+Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
+at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
+catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,
+M06 VST3/VST2 workers, M07, unsigned M08 artifacts, 159 traceability IDs, and
+documentation validation all passed. Cleanup removed 15 run-owned temporary
+children. No driver installation/loading, signing-mode or boot-policy change,
+plugin/startup registration, stream activation, or persistent machine-audio
+configuration occurred. Next: continue the remaining implementation slices;
+loaded-driver/PortCls and production-signing gates remain explicitly open.
+
 Hardened the bridge broker IRP boundary on 2026-09-12: device-control
 dispatch now rejects a null IRP, missing stack, or missing control file object
 before reading the IOCTL or entering lease ownership logic. This prevents a
