@@ -1,5 +1,22 @@
 # M08 release evidence
 
+## 2026-09-13 - shell packaging smoke and current safe acceptance
+
+The guarded safe-all chain passed after the shell-owned backend, persistent
+serving, and bounded UI retry changes. It covered the VS2026/WDK driver build
+and signability, native compile/inventory, DSP/recording, UI (129 tests/build),
+VST3/VST2 workers, M07 headless, unsigned M08 artifacts, 159 requirement IDs,
+and documentation validation (52 Markdown files/179 local links). Fifteen
+temporary children were removed.
+
+The documented unsigned NSIS smoke also produced
+`AudioRouter_0.1.0_x64-setup.exe` successfully. The installer output was
+removed immediately after verification; it was not run or installed. No
+driver was installed or loaded, and no signing/boot policy, plugin/startup
+registration, endpoint, or persistent machine-audio configuration changed.
+Production signing, clean-machine installation, native routing, and manual UI
+gates remain open.
+
 ## 2026-09-13 - guarded M00-M08 requalification at `f0ada080`
 
 The complete guarded acceptance chain passed at the pushed head. It covered

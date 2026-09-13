@@ -61,6 +61,12 @@ Updated: 2026-09-13.
   signing or startup policy changed, and no endpoint or persistent audio
   configuration was touched.
 
+- Requalified the current shell package path on 2026-09-13. The documented
+  unsigned NSIS smoke produced `AudioRouter_0.1.0_x64-setup.exe` successfully;
+  the output was removed without running or installing it. This adds packaging
+  generation evidence only; production signing, driver installation, clean
+  machine qualification, and native virtual-endpoint routing remain open.
+
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
   invoke API, and Vite emits relative assets for the Tauri app protocol. Shell

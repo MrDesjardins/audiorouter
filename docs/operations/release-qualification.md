@@ -1,10 +1,10 @@
 # Release qualification and recovery checklist
 
 AudioRouter is not a releasable Windows installer yet. The portable control
-plane, CLI, MCP adapter, DSP, recording, plugin-worker, and crash-recovery
-orchestration boundaries are implemented and tested, but native routing, the
-owned virtual-device driver, production signing, packaging, and clean-machine
-qualification remain open.
+plane, CLI, MCP adapter, DSP, recording, plugin-worker, crash-recovery
+orchestration boundaries, and the shell-owned control backend are implemented
+and tested, but native routing, the owned virtual-device driver, production
+signing, and clean-machine qualification remain open.
 
 ## Current verified artifacts
 
@@ -34,16 +34,16 @@ qualification.
 At the current repository revision, the safe, repository-local qualification
 surface is green:
 
-- The locked Rust workspace passes 466 unit/integration tests and all doc-tests,
+- The locked Rust workspace passes the current workspace suites and all doc-tests,
   formatting,
   and strict workspace Clippy.
-- M04 passes 30 DSP and 30 recording tests, including the 60-second pitch
+- M04 passes 32 DSP and 40 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 113 UI tests, and a disposable production
+- M05 passes TypeScript typecheck, 129 UI tests, and a disposable production
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
-- M07 passes 30 CLI tests, MCP stdio/named-pipe interoperability, 99 control
+- M07 passes 32 CLI tests, MCP stdio/named-pipe interoperability, 128 control
   tests, 67 plugin-host tests, 13 worker-process tests, and strict Clippy.
 - M08 unsigned artifact preparation, provenance/SBOM, checksums, exact-content
   verification, and cleanup pass in a disposable output directory.
@@ -55,8 +55,10 @@ surface is green:
 
 The VST3 SDK is source-distributed and installed only at the ignored local
 path `third_party/vst3sdk`; it is not a system SDK or plugin registration.
-These checks do not establish native end-to-end routing, a production driver,
-production signing, an installer, or clean-machine qualification.
+The documented unsigned NSIS smoke also produces and verifies a debug x64
+installer bundle without installing it; the output is removed afterward. These
+checks do not establish native end-to-end routing, a production driver,
+production signing, or clean-machine qualification.
 
 ## Before any installation
 
