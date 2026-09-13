@@ -50,9 +50,10 @@ audio** action when finished; the launcher removes its database and restores
 the caller's environment. It does not change Windows defaults, endpoint
 volume/mute, driver state, or startup registration.
 
-The default render is `CABLE Input (VB-Audio Virtual Cable)` for deliberate
-loopback testing. To use the normal VB-Cable-capture-to-physical-output route,
-pass one exact active render endpoint ID selected from `devices list --json`:
+The defaults are `CABLE Output (VB-Audio Virtual Cable)` capture and `CABLE
+Input (VB-Audio Virtual Cable)` render for deliberate loopback testing. To use
+the normal VB-Cable-capture-to-physical-output route, pass one exact active
+render endpoint ID selected from `devices list --json`:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop.ps1 -RenderEndpointId '{0.0.0.00000000}.{endpoint-guid}'
@@ -61,6 +62,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop
 The override refuses missing, inactive, ambiguous, or non-render IDs. An
 occupied endpoint remains an explicit backend `deviceInUse` failure; the
 launcher never substitutes another output.
+
+Both directions can be selected explicitly when qualifying another deliberate
+pair:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop.ps1 -CaptureEndpointId '{0.0.1.00000000}.{capture-guid}' -RenderEndpointId '{0.0.0.00000000}.{render-guid}'
+```
+
+Each ID must match exactly one active endpoint of its requested direction.
 
 The same `run-vb-cable-desktop.ps1` file is included beside the executables in
 the prepared unsigned release directory, so an extracted development artifact

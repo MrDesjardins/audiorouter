@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Extended the disposable VB-Cable launcher on 2026-09-13 with exact
+  `-CaptureEndpointId` and `-RenderEndpointId` overrides. Safe defaults still
+  select the active CABLE Output/Input pair, while deliberate users can
+  launch another exact active capture/render pair for qualification. Each
+  override is direction-checked, missing or ambiguous IDs fail closed, and no
+  endpoint substitution or Windows audio configuration mutation was added.
+
 - Validated the launcher’s explicit render-ID branch on 2026-09-13 with the
   active Focusrite render ID. It reached the real Tauri shell and printed the
   exact CABLE Output capture/Focusrite render selection. An initial smoke

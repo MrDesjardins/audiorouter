@@ -1,5 +1,6 @@
 param(
     [switch]$Build,
+    [string]$CaptureEndpointId = '',
     [string]$RenderEndpointId = ''
 )
 
@@ -58,11 +59,19 @@ try {
         throw "read-only endpoint inventory failed: $($inventoryText -join "`n")"
     }
     $inventory = ($inventoryText -join "`n") | ConvertFrom-Json
-    $capture = @($inventory | Where-Object {
-        $_.state -eq 'active' -and
-        $_.direction -eq 'capture' -and
-        $_.name -eq 'CABLE Output (VB-Audio Virtual Cable)'
-    })
+    if ([string]::IsNullOrWhiteSpace($CaptureEndpointId)) {
+        $capture = @($inventory | Where-Object {
+            $_.state -eq 'active' -and
+            $_.direction -eq 'capture' -and
+            $_.name -eq 'CABLE Output (VB-Audio Virtual Cable)'
+        })
+    } else {
+        $capture = @($inventory | Where-Object {
+            $_.state -eq 'active' -and
+            $_.direction -eq 'capture' -and
+            $_.id -eq $CaptureEndpointId
+        })
+    }
     if ([string]::IsNullOrWhiteSpace($RenderEndpointId)) {
         $render = @($inventory | Where-Object {
             $_.state -eq 'active' -and
@@ -77,8 +86,9 @@ try {
         })
     }
     if ($capture.Count -ne 1 -or $render.Count -ne 1) {
+        $captureDescription = if ([string]::IsNullOrWhiteSpace($CaptureEndpointId)) { 'VB-Cable capture' } else { "capture ID '$CaptureEndpointId'" }
         $renderDescription = if ([string]::IsNullOrWhiteSpace($RenderEndpointId)) { 'VB-Cable render' } else { "render ID '$RenderEndpointId'" }
-        throw "refusing to launch: expected exactly one active VB-Cable capture and $renderDescription (found capture=$($capture.Count), render=$($render.Count))"
+        throw "refusing to launch: expected exactly one active $captureDescription and $renderDescription (found capture=$($capture.Count), render=$($render.Count))"
     }
 
     $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
