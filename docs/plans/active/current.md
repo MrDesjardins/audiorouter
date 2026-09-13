@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+Closed a control-plane activation ordering gap on 2026-09-13. Native graph
+activation now rejects a missing endpoint worker before compiling the graph or
+mutating virtual-route bridge state. A focused regression passed, followed by
+the full control suite (128 tests), strict package Clippy, formatting, and
+diff checks. No endpoint or machine-audio configuration was accessed.
+
 Rechecked strict workspace lint at pushed head `08f38422` on 2026-09-13:
 `cargo clippy --workspace --all-targets --locked -- -D warnings` completed
 without warnings or errors. This is static portable-code evidence only; it

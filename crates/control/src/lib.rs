@@ -3739,6 +3739,11 @@ impl ControlPlane {
                 "native endpoint worker is not bound to the session".into(),
             ));
         }
+        if self.native_endpoint_worker.is_none() {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is not attached".into(),
+            ));
+        }
         let runtime_generation = self
             .runtimes
             .get(session_id)
@@ -9820,6 +9825,27 @@ mod tests {
         ));
         plane.session_stop(&running.id).unwrap();
         assert_eq!(plane.delete_session(&running.id).unwrap()["deleted"], true);
+    }
+
+    #[test]
+    fn native_graph_activation_rejects_missing_worker_before_graph_work() {
+        let mut plane = ControlPlane::default();
+        let mut owned = session();
+        owned.id = EntityId::new("native-graph-without-worker");
+        plane.create_session(owned.clone()).unwrap();
+        let started = plane.session_start(&owned.id).unwrap();
+        let generation = started["generation"].as_u64().unwrap();
+        plane.native_endpoint_session = Some(owned.id.clone());
+
+        let error = plane
+            .activate_native_graph(&owned.id, generation, 48_000)
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message == "native endpoint worker is not attached"
+        ));
+        assert!(plane.native_endpoint_taps.is_none());
     }
 
     #[test]
