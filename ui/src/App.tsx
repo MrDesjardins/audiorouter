@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Node, RecordingRecoveryItem, RouteInspection } from "@audiorouter/contracts";
-import { SessionFlowCanvas } from "./SessionFlowCanvas";
+import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, insertDraftMixer, removeDraftConnection, removeDraftNode, removeSinglePathDraftMixer, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type LibraryNodeKind } from "./draft";
@@ -575,6 +575,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const addConnection = () => { const source = decodePort(connectionSource); const destination = decodePort(connectionDestination); if (!source || !destination) { setActionMessage("Choose an output and input port first."); return false; } try { const next = appendDraftConnection(draft, source.nodeId, source.portName, destination.nodeId, destination.portName); recordDraftChange(next); setActionMessage("Connection added to the draft. Review and plan the changes before committing."); return true; } catch (error) { setActionMessage(formatUiError(error, "Unable to add connection.")); return false; } };
   const connectCanvas = (connection: Connection) => {
     if (!backend.connected) { setActionMessage("Connect the backend before adding a canvas connection."); return; }
+    if (connection.source === LIBRARY_DROP_SOURCE && connection.sourceHandle) {
+      addLibraryNode(connection.sourceHandle as LibraryNodeKind);
+      return;
+    }
     if (!connection.source || !connection.sourceHandle || !connection.target || !connection.targetHandle) { setActionMessage("Choose a named output and input port."); return; }
     try {
       recordDraftChange(appendDraftConnection(draft, connection.source, connection.sourceHandle, connection.target, connection.targetHandle));

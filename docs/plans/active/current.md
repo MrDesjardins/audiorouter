@@ -29,6 +29,15 @@ Updated: 2026-09-13.
   lifetime independent of the WebView, production callback timing, and the
   managed driver remain open gates.
 
+- Added the first drag-and-drop graph interaction on 2026-09-13. The signal
+  canvas now exposes a bounded shelf of advertised built-in processors;
+  dragging one onto the canvas inserts it through the same draft mutation path
+  as the existing library and inspector controls. The resulting node is part
+  of the session candidate and still requires backend plan/commit validation;
+  it is not canvas-only state. UI coverage verifies a dropped Gain becomes a
+  real draft node. Endpoint identity binding remains explicit in the native
+  panel and is not inferred from a dropped visual node.
+
 - New delivery gate: a guarded human run must be able to select the existing
   VB-Cable capture/render pair in the UI, commit a visible graph change, start
   and stop the session, and observe backend status/telemetry while preserving

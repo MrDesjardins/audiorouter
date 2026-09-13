@@ -29,6 +29,22 @@ beforeAll(() => {
 afterEach(() => cleanup());
 
 describe("keyboard connection dialog", () => {
+  it("adds a real processor draft through the canvas drag-and-drop shelf", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    const dropSource = await screen.findByRole("button", { name: /^Gain$/ });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      effectAllowed: "copy",
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    };
+    fireEvent.dragStart(dropSource, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer });
+    await waitFor(() => expect(screen.getByText("Gain 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy());
+  });
+
   it("binds only explicitly selected active endpoints and preserves the no-defaults boundary", async () => {
     const capture = {
       id: "capture-active",

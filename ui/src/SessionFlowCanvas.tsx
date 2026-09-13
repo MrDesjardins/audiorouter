@@ -14,6 +14,10 @@ import { useEffect, useState } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { clearLayout, readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels, relatedNodeIds } from "./graphView";
+import { libraryEntries } from "./library";
+import type { LibraryNodeKind } from "./draft";
+
+export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
 
 type SessionFlowCanvasProps = {
   session: Session;
@@ -79,7 +83,8 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
   }));
 
   return (
-    <div className="session-flow-canvas" aria-label="Signal-flow graph">
+    <div className="session-flow-canvas" aria-label="Signal-flow graph" onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-audiorouter-library-kind")) event.preventDefault(); }} onDrop={(event) => { const kind = event.dataTransfer.getData("application/x-audiorouter-library-kind") as LibraryNodeKind; if (!kind) return; event.preventDefault(); onConnect({ source: LIBRARY_DROP_SOURCE, sourceHandle: kind, target: "__drop__", targetHandle: null }); }}>
+      <div className="canvas-library" aria-label="Drag processors to canvas"><strong>Drag to canvas</strong>{libraryEntries.filter((entry): entry is typeof entry & { kind: LibraryNodeKind } => entry.kind !== null).map((entry) => <button type="button" key={`drag-${entry.id}`} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData("application/x-audiorouter-library-kind", entry.kind); }}>{entry.label}</button>)}</div>
       <div className="session-flow-toolbar"><span className="muted">Positions are presentation-only.</span><span className="muted" role="status" aria-live="polite">{selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected</span><button type="button" className="secondary" onClick={tidyLayout}>Tidy layout</button><button type="button" className="secondary" onClick={() => { clearLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey); setPositions({}); }}>Reset layout</button></div>
       <ReactFlow
         nodes={nodes}

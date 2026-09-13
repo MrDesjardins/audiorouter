@@ -31,6 +31,10 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 @media (forced-colors: active) { button, .session-picker select { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; } .node-card.selected, .session-item.selected { outline: 2px solid Highlight; outline-offset: 2px; } .status-dot { forced-color-adjust: none; background: Highlight; } }
 @media (max-width: 760px) { .topbar, .workspace-title { align-items: flex-start; flex-direction: column; } .workspace-grid { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid #293344; } .main-content { padding: 1rem; } .lower-grid { grid-template-columns: 1fr; } }
 .session-flow-canvas { position: relative; height: 520px; min-height: 360px; margin-top: 1rem; border: 1px solid #293344; border-radius: 8px; overflow: hidden; background: #101722; }
+.canvas-library { position: absolute; z-index: 5; top: .75rem; left: .75rem; display: flex; flex-wrap: wrap; gap: .35rem; max-width: 42%; padding: .45rem; border: 1px solid #293344; border-radius: 8px; background: rgba(16, 23, 34, .94); }
+.canvas-library strong { width: 100%; font-size: .75rem; color: var(--muted, #9aa7b8); }
+.canvas-library button { cursor: grab; padding: .25rem .45rem; font-size: .75rem; }
+.canvas-library button:active { cursor: grabbing; }
 .session-flow-toolbar { position: absolute; z-index: 5; display: flex; align-items: center; gap: .75rem; padding: .5rem; }
 .session-flow-canvas .react-flow__node { font-size: .85rem; }
 .session-flow-canvas .react-flow__handle { width: .55rem; height: .55rem; opacity: .85; background: var(--accent, #65d1b5); border: 1px solid var(--panel, #162132); }
