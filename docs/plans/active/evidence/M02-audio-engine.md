@@ -14,6 +14,18 @@ This is shared-mode user-space lifecycle evidence only; it does not qualify
 physical acoustic latency, a loaded managed driver, or routed playback through
 the default endpoint.
 
+## Post-reboot CABLE bridge cycle
+
+One authorized 500 ms cycle through freshly enumerated CABLE endpoints passed
+with 24,480 captured frames, 191 processed quanta, 191 tap calls, and 24,448
+rendered frames. Tap samples were finite; dropped render frames, scheduler
+xruns, and deadline misses were all zero. The probe stopped and removed its
+temporary streams/recording and verified unchanged media-device identity/state.
+
+This strengthens digital user-space bridge evidence only. It does not qualify
+physical acoustic latency, a loaded managed driver, or PortCls callback
+ownership.
+
 ## Session shutdown ownership correction
 
 The control-plane session stop path now treats an attached native endpoint

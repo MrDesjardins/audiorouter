@@ -92,6 +92,14 @@ and state were unchanged after stream stop/reset. This is fresh shared-mode
 user-space evidence only; it does not claim routed playback, physical latency,
 or managed-driver callback ownership.
 
+The authorized one-cycle CABLE bridge check also passed on 2026-09-12 using
+freshly enumerated existing endpoint identities. It captured 24,480 frames,
+processed 191 quanta and taps, rendered 24,448 frames, and reported zero
+non-finite tap samples, drops, xruns, or deadline misses. The temporary streams
+and recording were stopped/removed and media identity/state remained unchanged.
+This is user-space digital bridge evidence, not physical latency or loaded
+driver callback evidence.
+
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite
 database and explicitly approved temporary recording root. It verifies an
