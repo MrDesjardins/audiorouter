@@ -23,6 +23,13 @@ user-space onset of 73.71 ms. Temporary raw audio/log artifacts were removed.
 The result is useful for repeatability and signal-path correlation, but is not
 calibrated physical p95 latency or loaded-driver timing evidence.
 
+The event-driven WASAPI probe passed on the same named CABLE pair for 500 ms:
+24,480 capture frames and 28,320 submitted silent-render frames were observed,
+and both clients completed initialize, event registration, start, stop, and
+reset successfully. Media identity/state remained unchanged and temporary
+artifacts were removed. This is event-callback user-space evidence only; it
+does not establish managed-driver callback ownership or physical latency.
+
 # M00 WASAPI probe
 
 ## 2026-09-09 - Current guarded live requalification

@@ -200,6 +200,13 @@ The bounded CABLE impulse correlation probe also passed on 2026-09-12:
 an estimated user-space onset of 73.71 ms. The raw capture and logs were
 temporary and removed by the wrapper. This is repeatable signal-correlation
 evidence only; calibrated physical p95 latency and driver timing remain open.
+
+The event-driven WASAPI CABLE check also passed on 2026-09-12: 24,480 capture
+frames and 28,320 submitted render frames over 500 ms, with initialize/event/
+start/stop/reset lifecycle success on both clients. It used silent render data,
+verified unchanged media state, and restored all temporary resources. This
+closes the current event-callback user-space evidence slice; managed-driver
+callback ownership and calibrated physical latency remain separate gates.
 stopped/reset by the probes and no persistent audio configuration changed.
 
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
