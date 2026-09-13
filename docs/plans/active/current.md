@@ -2,6 +2,19 @@
 
 Updated: 2026-09-13.
 
+- Requalified the full guarded M00-M08 acceptance chain at pushed head
+  `061b49fc` on 2026-09-13 after the direct processor-insertion delivery.
+  Elevated Windows execution passed toolchain/native compile, project-driver
+  WDK compile/signability, 34-endpoint read-only inventory, disposable SysVAD,
+  M01, M04, M05 (135 UI tests/typecheck/production build), M06 VST3/VST2,
+  M07, unsigned M08 preparation, 159 traceability mappings, and documentation
+  validation for 52 Markdown files and 180 local links. Fifteen run-owned
+  temporary children were cleaned up. No driver installation/loading,
+  signing-mode, plugin-registration, startup, or persistent audio action was
+  performed. The first non-elevated attempt was correctly stopped at the
+  read-only PnP inventory with `Access denied`; the elevated rerun is the
+  authoritative result.
+
 - Added direct built-in processor insertion on 2026-09-13. Each connected draft
   path now exposes Gate and Parametric EQ actions; insertion removes only the
   selected draft edge, creates a real processor node, reconnects both sides,
