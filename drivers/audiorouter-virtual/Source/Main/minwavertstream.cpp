@@ -1390,6 +1390,18 @@ NTSTATUS CMiniportWaveRTStream::SetFormat
 
 #pragma code_seg()
 
+static ULONG AdvanceDmaOffset(
+    _In_ ULONGLONG Position,
+    _In_ ULONG Displacement,
+    _In_ ULONG BufferSize)
+{
+    ULONG offset = static_cast<ULONG>(Position % BufferSize);
+    ULONG delta = Displacement % BufferSize;
+    return offset >= BufferSize - delta
+        ? offset - (BufferSize - delta)
+        : offset + delta;
+}
+
 //=============================================================================
 #pragma code_seg()
 VOID CMiniportWaveRTStream::UpdatePosition
@@ -1480,6 +1492,8 @@ VOID CMiniportWaveRTStream::UpdatePosition
     }
     else
     {
+        ULONG nextWritePosition = AdvanceDmaOffset(
+            m_ullWritePosition, ByteDisplacement, m_ulDmaBufferSize);
 
         if (m_bEoSReceived)
         {
@@ -1491,18 +1505,22 @@ VOID CMiniportWaveRTStream::UpdatePosition
             }
             // If our current position is ahead of EoS position and we'll wrap around after new position then adjust
             // new position if it crosses EoS.
-            else if ((m_ullWritePosition + ByteDisplacement) % m_ulDmaBufferSize < m_ullWritePosition)
+            else if (nextWritePosition < m_ullWritePosition)
             {
-                if ((m_ullWritePosition + ByteDisplacement) % m_ulDmaBufferSize > m_ulCurrentWritePosition)
+                if (nextWritePosition > m_ulCurrentWritePosition)
                 {
-                    ByteDisplacement = ByteDisplacement - (((ULONG)m_ullWritePosition + ByteDisplacement) % m_ulDmaBufferSize - m_ulCurrentWritePosition);
+                    ByteDisplacement = ByteDisplacement -
+                        (nextWritePosition - m_ulCurrentWritePosition);
                 }
             }
         }
 
+        nextWritePosition = AdvanceDmaOffset(
+            m_ullWritePosition, ByteDisplacement, m_ulDmaBufferSize);
+
         // If the last packet was rendered(read in the sample driver's case), send out an etw event.
         if (m_bEoSReceived && !m_bLastBufferRendered
-            && (m_ullWritePosition + ByteDisplacement) % m_ulDmaBufferSize == m_ulCurrentWritePosition)
+            && nextWritePosition == m_ulCurrentWritePosition)
         {
             m_bLastBufferRendered = TRUE;
         }
@@ -1515,8 +1533,8 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // Increment the DMA position by the number of bytes displaced since the last
     // call to UpdatePosition() and ensure we properly wrap at buffer length.
     //
-    m_ullPlayPosition = m_ullWritePosition =
-        (m_ullWritePosition + ByteDisplacement) % m_ulDmaBufferSize;
+    m_ullPlayPosition = m_ullWritePosition = AdvanceDmaOffset(
+        m_ullWritePosition, ByteDisplacement, m_ulDmaBufferSize);
 
     // m_ullDmaTimeStamp is updated in both GetPostion and GetLinearPosition calls
     // so m_ullLinearPosition needs to be updated accordingly here

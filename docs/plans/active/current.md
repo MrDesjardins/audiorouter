@@ -27,6 +27,11 @@ unexpected scratch-frame counts are reset before the publish-quantum
 subtraction. This keeps malformed internal state from becoming an unsigned
 underflow even outside the normal lease-shape transition.
 
+Hardened WaveRT position advancement on 2026-09-13. EOS boundary checks and
+the final DMA position update now use bounded modular advancement rather than
+adding the displacement before modulo, preventing pre-modulo integer wrap in
+the callback while preserving the existing buffer-position semantics.
+
 Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
 at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
 catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,
