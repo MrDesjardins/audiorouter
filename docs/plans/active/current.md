@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the VB-Cable-first delivery on 2026-09-13 with the authorized
+  guarded command `tests/acceptance/m02-control-native-live.ps1
+  -AllowLiveAudio`. The exact active CABLE Output/CABLE Input pair carried
+  24,000 captured frames through the control-owned graph, 187 processed
+  quanta, and 23,936 rendered frames; the in-house EQ, gate, compressor, and
+  limiter chain was included. The harness restored process environment and
+  temporary worker state, and no persistent audio configuration changed.
+
 - Added the first VB-Cable-first human setup affordance on 2026-09-13. The
   endpoint panel now detects exactly one active `CABLE Output (VB-Audio...)`
   capture endpoint and one active `CABLE Input (VB-Audio...)` render endpoint,

@@ -1,5 +1,23 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - VB-Cable-first selection and guarded route
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio`.
+
+The harness read the active endpoint inventory, selected the exact
+`CABLE Output (VB-Audio Virtual Cable)` capture and `CABLE Input (VB-Audio
+Virtual Cable)` render IDs, and ran the control-owned native lifecycle for
+500 ms. The graph delivered 24,000 captured frames, 187 processed quanta, and
+23,936 rendered frames. The built-in EQ, gate, compressor, and limiter chain
+was active in the graph. The harness restored its process environment and
+temporary worker state; no endpoint defaults, volume, mute, driver, or other
+persistent machine-audio configuration changed.
+
+This is guarded user-mode existing-endpoint evidence. It does not qualify the
+managed driver, production signing, physical latency, or unattended visual
+WebView gate.
+
 ## 2026-09-13 - guarded lifecycle with the built-in voice chain
 
 The ignored Windows control test was extended to the full one-channel
