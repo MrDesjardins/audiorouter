@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Repeated the transient shell launch acceptance on 2026-09-13 with the exact
+  existing VB-Cable capture/render IDs and `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1`.
+  The shell process remained responsive for the test interval. The available
+  desktop-control surface again reported no targetable app or browser window,
+  so no UI click or endpoint mutation was attempted. The parent environment was
+  restored and the single test-launched shell process was terminated and
+  verified absent. This confirms launch/prepare viability but leaves the
+  interactive WebView acceptance as a user-desktop gate.
+
 - Requalified the complete guarded M00-M08 acceptance chain at pushed head
   `8390906c` on 2026-09-13. VS/WDK and project-driver compile/signability,
   34-endpoint read-only inventory, disposable SysVAD compile/package/API,
