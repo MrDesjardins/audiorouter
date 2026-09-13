@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Strengthened the guarded native delivery evidence on 2026-09-13 by changing
+  the live acceptance graph from direct pass-through to a validated one-channel
+  built-in Gate with explicit dynamics parameters and two graph edges. Exact
+  VB-Cable start/pump/stop passed with 24,000 captured frames, 187 processed
+  quanta, and 23,936 rendered frames. The graph was disposable and in-memory;
+  the live wrapper restored its environment. This proves processor-bearing
+  native graph activation, not acoustic response measurement or managed-driver
+  qualification. Evidence: [M02 audio engine](evidence/M02-audio-engine.md).
+
 - Repeated the transient shell launch acceptance on 2026-09-13 with the exact
   existing VB-Cable capture/render IDs and `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1`.
   The shell process remained responsive for the test interval. The available

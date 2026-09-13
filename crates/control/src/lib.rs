@@ -10219,6 +10219,60 @@ mod tests {
         let mut plane = ControlPlane::default();
         let mut owned = session();
         owned.id = EntityId::new("guarded-live-native");
+        owned.nodes.insert(
+            1,
+            Node {
+                id: EntityId::new("gate"),
+                kind: NodeKind::Gate,
+                type_version: 1,
+                name: "Live Gate".into(),
+                enabled: true,
+                bypass: false,
+                parameters: [
+                    ("thresholdDb".into(), json!(-45.0)),
+                    ("rangeDb".into(), json!(60.0)),
+                    ("hysteresisDb".into(), json!(3.0)),
+                    ("ratio".into(), json!(4.0)),
+                    ("attackMs".into(), json!(5.0)),
+                    ("holdMs".into(), json!(50.0)),
+                    ("releaseMs".into(), json!(150.0)),
+                ]
+                .into_iter()
+                .collect(),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 1,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    },
+                ],
+            },
+        );
+        owned.edges = vec![
+            Edge {
+                id: EntityId::new("edge-in-gate"),
+                source_node: EntityId::new("in"),
+                source_port: "main".into(),
+                destination_node: EntityId::new("gate"),
+                destination_port: "in".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("edge-gate-out"),
+                source_node: EntityId::new("gate"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("out"),
+                destination_port: "main".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            },
+        ];
         plane.insert_session(owned.clone()).unwrap();
         plane
             .prepare_native_endpoint_worker(owned.id.clone(), &capture, &render, 0, 3, 100)

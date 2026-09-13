@@ -22,6 +22,20 @@ This is control-owned native worker and processed graph-delivery evidence. It
 does not prove managed virtual-driver ownership, PortCls integration, signing,
 or physical acoustic latency.
 
+## 2026-09-13 - guarded lifecycle with built-in Gate
+
+The same ignored live test now uses a validated one-channel Gate node between
+the exact capture and render endpoints, with threshold `-45 dB`, range `60 dB`,
+hysteresis `3 dB`, ratio `4:1`, attack `5 ms`, hold `50 ms`, and release
+`150 ms`. The existing CABLE pair was opened only after exact active-endpoint
+matching. Native start, 500 ms bounded pumping, and stop passed with 24,000
+captured frames, 187 processed quanta, and 23,936 rendered frames.
+
+The test graph is disposable and in-memory; the wrapper restores its opt-in
+environment. This proves that a processor-bearing graph reaches native runtime
+activation and delivery. It does not claim acoustic transformation measurement,
+managed-driver ownership, PortCls integration, signing, or physical latency.
+
 ## Guarded same-process control lifecycle harness
 
 The control crate now contains an ignored Windows test,
