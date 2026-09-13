@@ -7,7 +7,7 @@ bridge sequence/shape guards and MCP virtual-route parity changes. It rebuilt
 the AudioRouter x64 WDK driver prototype, passed portable M01/M04/M05/M06/M07
 including 32 CLI tests and 3 MCP stdio tests, prepared unsigned M08 artifacts,
 covered 159 normative requirement IDs, and validated 52 Markdown files with
-170 local links. Cleanup removed 15 run-owned temporary children. No driver
+171 local links. Cleanup removed 15 run-owned temporary children. No driver
 was installed or loaded; no signing mode, boot policy, plugin/startup
 registration, stream, default device, volume, mute, privacy, or persistent
 machine-audio configuration changed.

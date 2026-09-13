@@ -130,7 +130,7 @@ also mirrors the backend route shape and bounded 128-byte identifiers.
 The combined tree was requalified on 2026-09-12 with the elevated guarded
 `safe-all.ps1` chain after the bridge and MCP changes. Driver/catalog build,
 portable M01/M04/M05/M06/M07, unsigned M08 preparation, 159 traceability IDs,
-and documentation validation (52 Markdown files/170 local links) passed;
+and documentation validation (52 Markdown files/171 local links) passed;
 cleanup removed 15 run-owned temporary children. No driver was installed or
 loaded and no signing, startup, plugin registration, stream, default-device,
 or persistent machine-audio configuration changed. Evidence: [M08 release
