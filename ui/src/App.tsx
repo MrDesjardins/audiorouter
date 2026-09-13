@@ -227,6 +227,57 @@ function VirtualDeviceLifecyclePanel({ backend }: { backend: UiBackend }) {
   return <section className="panel virtual-device-lifecycle" aria-labelledby="virtual-device-lifecycle-heading"><div className="section-heading"><div><p className="eyebrow">Managed buses</p><h2 id="virtual-device-lifecycle-heading">Virtual-device lifecycle</h2></div><button type="button" className="secondary" onClick={refresh} disabled={!backend.connected}>Refresh</button></div>{devices.length === 0 ? <p className="muted">No managed virtual buses are currently listed.</p> : <ul aria-label="Managed virtual devices">{devices.map((device) => <li key={device.id}><strong>{device.name}</strong> <small>{device.enabled ? "enabled" : "disabled"} · {device.availability.reason} · lease {device.leaseOwner ?? "none"}</small></li>)}</ul>}<fieldset disabled={!backend.connected}><legend>Desired-state operation</legend><label>Action<select aria-label="Virtual-device action" value={action} onChange={(event) => chooseAction(event.target.value as typeof action)}><option value="create">Create</option><option value="rename" disabled={!selected}>Rename</option><option value="setEnabled" disabled={!selected}>Enable/disable</option><option value="delete" disabled={!selected}>Delete</option></select></label>{action !== "create" && <label>Existing bus<select aria-label="Existing virtual-device target" value={selectedId} onChange={(event) => { const next = devices.find((device) => device.id === event.target.value); setSelectedId(event.target.value); setBusName(next?.name ?? ""); }}>{devices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}</select></label>}<label>Bus ID<input value={busId} maxLength={64} disabled={action !== "create"} onChange={(event) => setBusId(event.target.value)} /></label>{action !== "delete" && <label>Bus name<input value={busName} maxLength={120} disabled={action === "setEnabled"} onChange={(event) => setBusName(event.target.value)} /></label>}<button type="button" className="secondary" onClick={() => void createPlan()}>Plan {action}</button>{plan && <button type="button" className="secondary" onClick={() => void applyPlan()}>Apply planned state</button>}</fieldset>{message && <p className="muted" role="status">{message}</p>}<p className="muted">Every change requires explicit plan/apply and <code>deviceAdministration</code>. The unavailable managed driver means no endpoint is synthesized or activated.</p></section>;
 }
 
+function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
+  const [state, setState] = useState<import("@audiorouter/contracts").VirtualRouteListResult | null>(null);
+  const [routeText, setRouteText] = useState("[]");
+  const [revisionText, setRevisionText] = useState("0");
+  const [message, setMessage] = useState<string | null>(null);
+  const refresh = () => {
+    void backend.listVirtualRoutes().then((result) => {
+      setState(result);
+      setRouteText(JSON.stringify(result.routes, null, 2));
+      setRevisionText(String(result.revision));
+      setMessage(null);
+    }).catch((error) => setMessage(formatUiError(error, "Virtual-route inventory unavailable.")));
+  };
+  useEffect(() => {
+    if (backend.connected) refresh();
+    else {
+      setState(null);
+      setRouteText("[]");
+      setRevisionText("0");
+      setMessage(null);
+    }
+  }, [backend]);
+  const replace = async () => {
+    const baseRevision = Number.parseInt(revisionText, 10);
+    if (!Number.isSafeInteger(baseRevision) || baseRevision < 0) {
+      setMessage("Base revision must be a non-negative integer.");
+      return;
+    }
+    let routes: import("@audiorouter/contracts").VirtualBusRoute[];
+    try {
+      const parsed: unknown = JSON.parse(routeText);
+      if (!Array.isArray(parsed)) throw new Error("route JSON must be an array");
+      routes = parsed as import("@audiorouter/contracts").VirtualBusRoute[];
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Route JSON is invalid.");
+      return;
+    }
+    setMessage("Replacing explicit virtual-bus routes...");
+    try {
+      const result = await backend.replaceVirtualRoutes(baseRevision, routes, uiIdempotencyKey("virtual-routes-replace"));
+      setState({ revision: result.revision, routes: result.routes });
+      setRouteText(JSON.stringify(result.routes, null, 2));
+      setRevisionText(String(result.revision));
+      setMessage(`Virtual routes ${result.state} at revision ${result.revision}.`);
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to replace virtual-bus routes."));
+    }
+  };
+  return <section className="panel virtual-route-panel" aria-labelledby="virtual-route-heading"><div className="section-heading"><div><p className="eyebrow">Explicit cross-session routing</p><h2 id="virtual-route-heading">Virtual-bus routes</h2></div><div className="actions"><span className="badge">rev {state?.revision ?? "-"}</span><button type="button" className="secondary" onClick={refresh} disabled={!backend.connected}>Refresh</button></div></div><p className="muted">Routes are replaced as one revisioned document. The backend validates bus identities, sessions, cycles, authorization, and idempotency before changing desired state.</p>{state?.routes.length ? <ul aria-label="Explicit virtual-bus routes">{state.routes.map((route) => <li key={`${route.busId}-${route.producerSessionId}-${route.consumerSessionId}`}><code>{route.busId}</code> · {route.producerSessionId} → {route.consumerSessionId}</li>)}</ul> : <p className="muted">No explicit cross-session routes are currently listed.</p>}<fieldset disabled={!backend.connected}><legend>Revisioned replacement</legend><label>Base revision<input aria-label="Virtual-route base revision" inputMode="numeric" value={revisionText} onChange={(event) => setRevisionText(event.target.value)} /></label><label>Routes JSON<textarea aria-label="Virtual-route JSON" value={routeText} onChange={(event) => setRouteText(event.target.value)} rows={6} spellCheck={false} /></label><button type="button" className="secondary" onClick={() => void replace()}>Replace routes</button></fieldset>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Disconnected preview mode never mutates route state. Replacement requires the backend’s <code>deviceAdministration</code> permission and does not activate endpoints by itself.</p></section>;
+}
+
 function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean; onSelect: () => void }) {
   return <article className={`node-card${selected ? " selected" : ""}`} tabIndex={0} aria-label={`${node.name}, ${node.kind}`} aria-current={selected ? "true" : undefined} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); } }}><span className="node-kind">{node.kind}</span><h3>{node.name}</h3><p>{node.ports.length} port{node.ports.length === 1 ? "" : "s"} - {node.enabled ? "enabled" : "disabled"}</p><div className="port-list">{node.ports.map((port) => <span key={port.name} className={`port ${port.direction}`}>{port.direction}: {port.name} - {port.channels}ch</span>)}</div></article>;
 }
@@ -501,7 +552,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const duplicateSelectedNode = () => { try { const next = duplicateDraftNode(draft, selectedNode.id); const copy = next.nodes[next.nodes.length - 1]; recordDraftChange(next); setSelectedNodeId(copy.id); setActionMessage(`${copy.name} added to the draft without connections. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to duplicate node.")); } };
   const applyTemplate = () => { const next = templateSession(selectedTemplate); recordDraftChange({ ...next, id: draft.id, revision: draft.revision }); setSelectedNodeId(next.nodes[0]?.id ?? ""); setActionMessage("Template loaded into the draft. Review device bindings and plan the changes before committing."); };
   const lifecycleActions = <section className="panel lifecycle-panel" aria-labelledby="lifecycle-heading"><h2 id="lifecycle-heading">Session lifecycle</h2><p className="muted">Starting a session uses the shared authorized backend lifecycle API.</p><button type="button" className="secondary" onClick={() => void (sessionRunning ? stopSession() : startSession())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></section>;
-  return <div className={`app-shell theme-${theme}`}>{lifecycleActions}<RecorderActions backend={backend} sessionId={session.id} connected={backend.connected} /><RecordingActions recordings={recordings} connected={backend.connected} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><VirtualDeviceLifecyclePanel backend={backend} />
+  return <div className={`app-shell theme-${theme}`}>{lifecycleActions}<RecorderActions backend={backend} sessionId={session.id} connected={backend.connected} /><RecordingActions recordings={recordings} connected={backend.connected} onRename={renameRecording} onReveal={revealRecording} onRecycle={recycleRecording} /><VirtualDeviceLifecyclePanel backend={backend} /><VirtualRoutePanel backend={backend} />
     <header className="topbar"><div><p className="eyebrow">AudioRouter</p><h1>Routing workspace</h1></div><div className="status-cluster" aria-live="polite"><span className={`status-dot${backend.connected ? "" : " disconnected"}`} aria-hidden="true" /><span>{connectionLabel}</span><span className="status-detail">{statusSummary}</span><label className="theme-picker">Theme<select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value as ThemeMode)}><option value="dark">Dark</option><option value="light">Light</option><option value="high-contrast">High contrast</option></select></label><button type="button" onClick={refresh}>Reconnect</button></div></header>
       <section className="panel shortcut-panel" aria-labelledby="shortcut-heading"><div className="section-heading"><h2 id="shortcut-heading">Keyboard shortcuts</h2><span className="badge">local</span></div><p className="muted">Shortcuts work while the workspace is focused and never capture text-field typing. They call the same authorized API actions as the buttons.</p><label>Start/stop session<input aria-label="Start or stop session shortcut" value={shortcuts.sessionToggle} readOnly onKeyDown={(event) => captureShortcut("sessionToggle", event)} /></label><label>Privacy mute<input aria-label="Privacy mute shortcut" value={shortcuts.privacyMute} readOnly onKeyDown={(event) => captureShortcut("privacyMute", event)} /></label>{shortcutMessage && <p className="muted" role="alert">{shortcutMessage}</p>}<small>Native tray and OS-wide registration remain platform validation work.</small></section>
       <div className="workspace-grid"><aside className="sidebar" aria-label="Sessions"><div className="section-heading"><h2>Sessions</h2><button type="button" aria-label="Create session" onClick={() => void createSession()} disabled={!backend.connected} title="Session creation requires the connected backend">+</button></div>{sessionInventoryError && <p className="muted" role="status">Session inventory unavailable: {sessionInventoryError}</p>}<label className="session-picker">Preview session<select value={session.id} onChange={(event) => setSelectedSessionId(event.target.value)}>{availableSessions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{availableSessions.map((item) => { const running = snapshot?.status.activeSessionIds.includes(item.id) ?? false; return <button type="button" key={item.id} className={`session-item${item.id === session.id ? " selected" : ""}`} aria-current={item.id === session.id ? "true" : undefined} onClick={() => setSelectedSessionId(item.id)}><span>{item.name}</span><small>{running ? "Running" : "Stopped"} - rev {item.revision}</small></button>; })}<div className="sidebar-note"><strong>Safe startup</strong><p>Monitoring is muted and recording is unarmed until you explicitly start them.</p></div></aside>

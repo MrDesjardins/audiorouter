@@ -8349,6 +8349,12 @@ live-driver evidence.
   CLI tests (31), strict Clippy, formatting, and diff checks passed; no audio
   endpoint or machine configuration was accessed. Next: inspect remaining
   adapter/catalog drift and then advance the M02/M03 bridge publication gate.
+- Added a connected UI virtual-route panel on 2026-09-12. It displays the
+  authoritative revision/routes and supports explicit JSON-array replacement
+  with local revision validation and generated idempotency keys; disconnected
+  mode remains read-only and mutation-disabled. UI typecheck, 125 UI tests,
+  and diff checks passed. The backend remains authoritative for route shape,
+  authorization, graph safety, and endpoint activation.
 - Ran the explicitly authorized guarded M02 live adapter bridge on 2026-09-12
   for one 500 ms cycle using the existing VB-Audio endpoints. It captured
   24,480 frames, processed 191 quanta, rendered 24,448 frames, and reported

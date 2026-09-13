@@ -779,3 +779,13 @@ files/124 tests, TypeScript typecheck passed, and a disposable Vite production b
 completed in an alternate output directory. No session, audio endpoint, driver, or
 machine configuration was accessed. Manual Narrator, scaling, and packaged-shell
 acceptance remain open.
+## 2026-09-12 — Virtual-route editor surface
+
+The connected UI now exposes the typed virtual-route list and replacement
+operations through a dedicated panel. It displays the current revision and
+routes, refreshes the authoritative backend state, validates non-negative
+revision input and JSON-array shape locally, and sends replacement with a
+unique idempotency key. Disconnected mode clears the view and disables all
+mutations. UI typecheck, the 125-test suite, and diff checks passed. Backend
+validation and device administration authorization remain authoritative; the
+panel does not activate endpoints or change machine audio settings.
