@@ -437,7 +437,7 @@ Return Value:
         // This interface is supported only on capture streams
         *Object = PVOID(PMINIPORTWAVERTINPUTSTREAM(this));
     }
-    else if (IsEqualGUIDAligned(Interface, IID_IMiniportWaveRTOutputStream))
+    else if (IsEqualGUIDAligned(Interface, IID_IMiniportWaveRTOutputStream) && (!this->m_bCapture))
     {
         // This interface is supported only on host render streams
         *Object = PVOID(PMINIPORTWAVERTOUTPUTSTREAM(this));

@@ -509,3 +509,14 @@ zero warnings. The script removed disposable output afterward. No driver was
 installed or loaded, and no signing mode, boot policy, service, endpoint, or
 machine audio configuration was changed. Native bridge publication and
 physical endpoint qualification remain open.
+# 2026-09-12 - direction-specific WaveRT interface exposure
+
+The WaveRT stream query boundary now exposes `IMiniportWaveRTOutputStream`
+only for render streams. Capture streams retain the capture interface and
+return the existing invalid-parameter result for the render-only interface,
+preventing a directionally invalid client contract.
+
+The administrator-authorized `tests/acceptance/m03-driver-build.ps1` source
+contract and non-installing x64 WDK build passed. Signability reported zero
+errors and warnings and catalog generation completed. No driver was installed
+or loaded and no machine audio configuration changed.

@@ -119,6 +119,9 @@ foreach ($required in @(
 if (-not $stream.Contains('ReadBytes(ByteDisplacement);')) {
     throw 'WaveRT render consumption must run the bridge publisher even when file diagnostics are disabled'
 }
+if (-not $stream.Contains('IID_IMiniportWaveRTOutputStream) && (!this->m_bCapture)')) {
+    throw 'WaveRT capture streams must not advertise the render-stream interface'
+}
 
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')
 $retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)

@@ -13,6 +13,14 @@ media state; no default, volume, mute, privacy, driver, signing, startup, or
 persistent machine-audio configuration changed. Evidence: [M02 audio
 evidence](evidence/M02-audio-engine.md).
 
+Hardened the driver stream interface boundary on 2026-09-12: capture WaveRT
+streams no longer advertise `IMiniportWaveRTOutputStream`; the render-only
+interface is now exposed only when the stream is not marked capture. The M03
+source-contract and administrator-authorized non-installing WDK build passed
+with zero signability errors/warnings and catalog generation. No driver was
+installed or loaded and no machine audio configuration changed. Evidence:
+[M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+
 Post-reboot guarded requalification after `fc7f4256` passed on 2026-09-12.
 The chain built the project x64 WDK driver with zero signability errors and
 warnings, inventoried 31 endpoints read-only, compiled/qualified disposable
