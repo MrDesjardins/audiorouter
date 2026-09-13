@@ -1,5 +1,49 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - guarded control-owned native lifecycle
+
+The ignored Windows control test
+`guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane` was
+run with explicit opt-in and the existing pair:
+
+- capture: `CABLE Output (VB-Audio Virtual Cable)`
+- render: `CABLE Input (VB-Audio Virtual Cable)`
+
+The test enumerated and exact-matched both active IDs, prepared stopped WASAPI
+clients, started the session through the same `ControlPlane`, observed one
+successful native start, stopped the session, and observed one successful
+native stop. It used no durable database and the temporary opt-in environment
+variables were removed after the run. No defaults, volume, mute, privacy, or
+other persistent audio configuration was changed.
+
+This is the first control-owned native worker lifecycle evidence. It does not
+prove processed audio delivery, managed virtual-driver ownership, PortCls
+integration, signing, or physical acoustic latency.
+
+## Guarded same-process control lifecycle harness
+
+The control crate now contains an ignored Windows test,
+`guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane`.
+It requires `AUDIOROUTER_ALLOW_LIVE_AUDIO=1`,
+`AUDIOROUTER_CAPTURE_ENDPOINT_ID`, and `AUDIOROUTER_RENDER_ENDPOINT_ID`, then
+enumerates and exact-matches both active endpoint descriptors before opening
+stopped clients. It starts and stops the native session through the same
+`ControlPlane` instance and checks native runtime/lifecycle telemetry. The
+test is never run by ordinary workspace acceptance; it is a deliberate live
+qualification command:
+
+```powershell
+$env:AUDIOROUTER_ALLOW_LIVE_AUDIO = '1'
+$env:AUDIOROUTER_CAPTURE_ENDPOINT_ID = '<exact-capture-id>'
+$env:AUDIOROUTER_RENDER_ENDPOINT_ID = '<exact-render-id>'
+cargo test -p audiorouter-control --offline guarded_live_native_endpoint_session_lifecycle -- --ignored --nocapture
+Remove-Item Env:AUDIOROUTER_ALLOW_LIVE_AUDIO,Env:AUDIOROUTER_CAPTURE_ENDPOINT_ID,Env:AUDIOROUTER_RENDER_ENDPOINT_ID -ErrorAction SilentlyContinue
+```
+
+The harness owns no durable database and does not select defaults or alter
+volume/mute/privacy state. Production PortCls ownership and managed-driver
+activation remain separate gates.
+
 ## Current-tip guarded Rust adapter route
 
 Command:

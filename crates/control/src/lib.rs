@@ -10122,6 +10122,55 @@ mod tests {
         assert!(plane.endpoint_monitor.is_none());
     }
 
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires explicit live endpoint IDs and AUDIOROUTER_ALLOW_LIVE_AUDIO=1"]
+    fn guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane() {
+        if std::env::var("AUDIOROUTER_ALLOW_LIVE_AUDIO").as_deref() != Ok("1") {
+            return;
+        }
+        let capture_id = std::env::var("AUDIOROUTER_CAPTURE_ENDPOINT_ID")
+            .expect("AUDIOROUTER_CAPTURE_ENDPOINT_ID is required");
+        let render_id = std::env::var("AUDIOROUTER_RENDER_ENDPOINT_ID")
+            .expect("AUDIOROUTER_RENDER_ENDPOINT_ID is required");
+        let endpoints = audiorouter_windows_audio::enumerate_active_endpoints().unwrap();
+        let capture = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == capture_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture
+            })
+            .expect("configured capture endpoint is not an active exact match")
+            .clone();
+        let render = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == render_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+            })
+            .expect("configured render endpoint is not an active exact match")
+            .clone();
+        let mut plane = ControlPlane::default();
+        let mut owned = session();
+        owned.id = EntityId::new("guarded-live-native");
+        plane.insert_session(owned.clone()).unwrap();
+        plane
+            .prepare_native_endpoint_worker(owned.id.clone(), &capture, &render, 0, 3, 100)
+            .unwrap();
+        let started = plane.session_start(&owned.id).unwrap();
+        assert_eq!(started["runtime"], "native");
+        assert_eq!(
+            plane.native_endpoint_lifecycle_telemetry()["successfulStarts"],
+            1
+        );
+        let stopped = plane.session_stop(&owned.id).unwrap();
+        assert_eq!(stopped["runtime"], "native");
+        assert_eq!(
+            plane.native_endpoint_lifecycle_telemetry()["successfulStops"],
+            1
+        );
+    }
+
     #[test]
     fn ephemeral_plan_maps_bound_pending_entries_and_prune_expired_entries() {
         let mut plane = ControlPlane::default();

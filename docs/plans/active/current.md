@@ -2,6 +2,21 @@
 
 Updated: 2026-09-13.
 
+- Ran the guarded same-process native lifecycle harness on 2026-09-13
+  against the existing VB-Audio CABLE Output capture and CABLE Input render
+  endpoints. Exact inventory matching, stopped-client preparation, native
+  session start, successful stop, and lifecycle counters passed in one
+  `ControlPlane`; temporary environment variables were cleared afterward.
+  This proves control-owned shared WASAPI lifecycle only, not managed-driver
+  routing or physical latency.
+
+- Added a guarded same-process Windows control-plane lifecycle harness for
+  exact native endpoints. It requires `AUDIOROUTER_ALLOW_LIVE_AUDIO=1` plus
+  both endpoint IDs and verifies native start/stop telemetry; without the
+  opt-in it cannot access endpoints. This closes the test-shape gap exposed by
+  the rejected one-shot CLI experiment while retaining the production-driver
+  and live routing gates.
+
 - Requalified the full guarded `safe-all.ps1` chain at pushed head
   `22e55c43` on 2026-09-13. VS2026/WDK discovery, x64 driver
   compile/signability/catalog, 31-endpoint read-only inventory, SysVAD,
