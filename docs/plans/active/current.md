@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Added authoritative post-open bridge-size validation on 2026-09-13.
+`NativeBridgeSectionHandle::for_file` now rechecks the actual size returned by
+`GetFileSizeEx` after opening the file and before creating the section, so a
+truncate/replace race cannot bypass the mapping-size contract. Windows-audio
+tests (70), formatting, and diff checks passed. No endpoint, driver, or
+persistent audio configuration was accessed.
+
 Made the native bridge section-size contract explicit on 2026-09-13.
 `NativeBridgeSectionHandle::for_file` now rejects a regular file smaller than
 the requested mapping before `CreateFileMappingW`; a focused undersized-file

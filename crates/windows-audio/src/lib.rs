@@ -146,8 +146,8 @@ impl NativeBridgeSectionHandle {
         use windows::core::PCWSTR;
         use windows::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE};
         use windows::Win32::Storage::FileSystem::{
-            CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE,
-            FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+            CreateFileW, GetFileSizeEx, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_OPEN_REPARSE_POINT,
+            FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
         };
         use windows::Win32::System::Memory::{CreateFileMappingW, PAGE_READWRITE};
         if mapping_bytes == 0 {
@@ -192,6 +192,23 @@ impl NativeBridgeSectionHandle {
                 None,
             )?
         };
+        let mut file_size = 0_i64;
+        let size_result = unsafe { GetFileSizeEx(file, &mut file_size) };
+        if let Err(error) = size_result {
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(file);
+            }
+            return Err(error);
+        }
+        if file_size < 0 || (file_size as u64) < u64::from(mapping_bytes) {
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(file);
+            }
+            return Err(windows::core::Error::new(
+                windows::core::HRESULT(0x8007007au32 as i32),
+                "mapping file is smaller than the requested section",
+            ));
+        }
         let size_high = 0;
         let section = unsafe {
             match CreateFileMappingW(
