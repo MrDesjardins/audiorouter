@@ -215,6 +215,12 @@ frames, xruns, or deadline misses. Every cycle stopped and removed its
 temporary stream/recording and preserved the media snapshot. This strengthens
 user-space restart and repeated-quantum evidence; it is not an eight-hour
 runtime or production-driver soak.
+
+The control-owned route passed again at its two-second bound on 2026-09-12:
+200 packets, 96,000 captured and rendered frames, 750 processed quanta, and
+one successful start/stop/reset with one stale-pump rejection. Exact endpoint
+binding, cleanup, and unchanged media state were verified; no persistent audio
+configuration changed.
 stopped/reset by the probes and no persistent audio configuration changed.
 
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit

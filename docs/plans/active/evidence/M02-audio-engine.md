@@ -24,6 +24,11 @@ streams and recordings were stopped/removed after each cycle and media state
 remained unchanged. This is repeated user-space lifecycle evidence, not the
 required long-duration or loaded-driver soak.
 
+At the two-second control-route bound, the exact endpoint pair produced 200
+packets, 96,000 captured frames, 750 processed quanta, and 96,000 rendered
+frames. Start/stop/reset each succeeded once and one stale-generation pump was
+rejected. The worker detached cleanly and media state remained unchanged.
+
 Two additional 500 ms Rust adapter bridge cycles passed against the exact CABLE
 pair. Each cycle captured 24,480 frames, processed 191 quanta/tap calls, and
 rendered 24,448 frames. Both reported zero non-finite tap samples, dropped
