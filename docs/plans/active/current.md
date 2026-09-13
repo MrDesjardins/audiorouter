@@ -15,6 +15,13 @@ Updated: 2026-09-13.
   read-only PnP inventory with `Access denied`; the elevated rerun is the
   authoritative result.
 
+- Expanded the human-testable connected-path processor actions on 2026-09-13.
+  Draft connections now expose Gate, Parametric EQ, Compressor, and Limiter
+  insertion actions; all use the same backend-bound draft topology operation
+  and remain subject to plan/commit validation. The App accessibility flow
+  verifies the four actions after creating a real connection. This adds no
+  audio or machine side effect until an authorized session graph commit/start.
+
 - Added direct built-in processor insertion on 2026-09-13. Each connected draft
   path now exposes Gate and Parametric EQ actions; insertion removes only the
   selected draft edge, creates a real processor node, reconnects both sides,

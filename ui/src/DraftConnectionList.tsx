@@ -35,7 +35,7 @@ export function DraftConnectionList({ session, onRemove, onToggle, onInsertProce
       <button type="button" className="secondary" onClick={() => onToggle(edge.id, !edge.enabled)}>{edge.enabled ? "Disable" : "Enable"}</button>
       <button type="button" className="secondary" onClick={() => onRemove(edge.id)}>Remove</button>
       <button type="button" className="secondary" disabled={!connected} aria-label={`Insert mixer on ${names.get(edge.sourceNode) ?? edge.sourceNode} to ${names.get(edge.destinationNode) ?? edge.destinationNode}`} onClick={() => onRemove(insertMixerActionId(edge.id))}>Insert mixer</button>
-      <button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "gate")}>Insert Gate</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "parametricEq")}>Insert Parametric EQ</button>
+      <button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "gate")}>Insert Gate</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "parametricEq")}>Insert Parametric EQ</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "compressor")}>Insert Compressor</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "limiter")}>Insert Limiter</button>
     </li>)}</ul>}
     {mixers.length > 0 && <div className="mixer-topology-actions" aria-label="Mixer topology actions">{mixers.map((mixer) => <div key={mixer.id}>
       <span>{mixer.name}</span>

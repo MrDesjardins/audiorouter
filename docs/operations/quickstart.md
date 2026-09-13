@@ -142,10 +142,11 @@ implemented and qualified; it is not a failed installation.
 
 The UI can inspect the disconnected/demo state, edit a local draft, inspect
 routes, and display device/application/recording metadata when connected to a
-backend. Use the Gate or Parametric EQ action on any connected draft path to
-insert that processor between the existing nodes; the insertion and its
-parameters are real draft changes, not canvas-only decoration. Draft changes
-are not committed until an authorized plan/apply flow.
+backend. Use the Gate, Parametric EQ, Compressor, or Limiter action on any
+connected draft path to insert that processor between the existing nodes; the
+insertion and its parameters are real draft changes, not canvas-only
+decoration. Draft changes are not committed until an authorized plan/apply
+flow.
 If another client changes the session before commit, the UI reports the typed
 revision conflict and structured remediation, refreshes the authoritative
 session, and clears the stale warning/commit state. Review the refreshed draft
