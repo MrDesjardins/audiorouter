@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Requalified the Windows process-binding restart regression on 2026-09-13:
+  `tests::restarted_process_cannot_inherit_a_stale_binding` passed after
+  compiling the current adapter. The test proves stale PID/creation identity
+  cannot bind a replacement process, but does not claim full reboot, PID reuse
+  under adversarial timing, or production process-loopback runtime evidence.
+  No audio stream or machine configuration was accessed.
+
 - Extracted and tested the canvas library-drop coordinate conversion on
   2026-09-13. Viewport coordinates are converted to bounded canvas positions,
   while missing/non-finite drag coordinates fall back to the canvas origin.
