@@ -381,4 +381,22 @@ describe("keyboard connection dialog", () => {
     expect(within(routePanel).getByText(/Path 1: Microphone \[enabled\] → Voice gain \[enabled\]/)).toBeTruthy();
     expect(within(routePanel).getByText(/Channel map: \[1\]/)).toBeTruthy();
   });
+
+  it("validates and explicitly commits a stopped session import", async () => {
+    const imported = { ...demoSession, id: "imported-session", name: "Imported voice setup" };
+    const planSessionImport = vi.fn(async () => ({ planId: "import-plan", expiresInMs: 300000, session: imported }));
+    const commitSessionImport = vi.fn(async () => ({ session: imported, state: "stopped" as const, imported: true as const }));
+    const backend = { ...connectedPreviewBackend(), planSessionImport, commitSessionImport };
+    render(<App backend={backend} />);
+
+    const transferPanel = screen.getByRole("region", { name: "Session transfer" });
+    const file = new File([JSON.stringify(demoSession)], "voice.audiorouter.json", { type: "application/json" });
+    fireEvent.change(within(transferPanel).getByLabelText("Import session configuration"), { target: { files: [file] } });
+    await waitFor(() => expect(planSessionImport).toHaveBeenCalledWith(demoSession));
+    expect(await within(transferPanel).findByText(/Validated import: Imported voice setup/)).toBeTruthy();
+
+    fireEvent.click(within(transferPanel).getByRole("button", { name: "Commit stopped import" }));
+    await waitFor(() => expect(commitSessionImport).toHaveBeenCalledWith("import-plan", expect.any(String)));
+    expect(await within(transferPanel).findByText(/Imported stopped session Imported voice setup/)).toBeTruthy();
+  });
 });

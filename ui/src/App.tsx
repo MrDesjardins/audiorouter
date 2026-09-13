@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { Node, RecordingRecoveryItem, RouteInspection } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
@@ -161,6 +161,49 @@ function PresetCatalog({ presets, error }: { presets: import("@audiorouter/contr
     </ul>}
     <p className="muted">Presets expand into ordinary draft nodes; all actions remain subject to Plan changes.</p>
   </section>;
+}
+
+function SessionTransferPanel({ backend, session, onImported }: { backend: UiBackend; session: import("@audiorouter/contracts").Session; onImported: (session: import("@audiorouter/contracts").Session) => void }) {
+  const [message, setMessage] = useState<string | null>(null);
+  const [plan, setPlan] = useState<import("@audiorouter/contracts").SessionImportPlanResult | null>(null);
+  const readFileText = (file: File) => typeof file.text === "function" ? file.text() : new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result ?? "")); reader.onerror = () => reject(reader.error ?? new Error("Unable to read import file.")); reader.readAsText(file); });
+  const exportSession = async () => {
+    setMessage("Exporting the selected stopped-session configuration...");
+    try {
+      const exported = await backend.exportSession(session.id);
+      const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${exported.name.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "audiorouter-session"}.audiorouter.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage(`Exported ${exported.name}. Credentials, grants, recordings, and plugin binaries are not included.`);
+    } catch (error) { setMessage(formatUiError(error, "Unable to export session.")); }
+  };
+  const inspectImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setMessage("Validating the selected session import...");
+    try {
+      const candidate = JSON.parse(await readFileText(file)) as import("@audiorouter/contracts").Session;
+      const next = await backend.planSessionImport(candidate);
+      setPlan(next);
+      setMessage(`Import validated for ${next.session.name}; it will remain stopped until you commit it.`);
+    } catch (error) { setPlan(null); setMessage(formatUiError(error, "Unable to validate session import.")); }
+  };
+  const commitImport = async () => {
+    if (!plan) return;
+    setMessage("Committing the validated stopped-session import...");
+    try {
+      const result = await backend.commitSessionImport(plan.planId, uiIdempotencyKey("session-import"));
+      setPlan(null);
+      onImported(result.session);
+      setMessage(`Imported stopped session ${result.session.name}. Review bindings before starting it.`);
+    } catch (error) { setMessage(formatUiError(error, "Unable to commit session import.")); }
+  };
+  return <section className="panel session-transfer-panel" aria-labelledby="session-transfer-heading"><div className="section-heading"><div><p className="eyebrow">Portable configuration</p><h2 id="session-transfer-heading">Session transfer</h2></div><span className="badge">stopped only</span></div><p className="muted">Export the selected configuration or validate an import. Imports never start audio, arm recorders, enable startup, or include credentials, recordings, plugin binaries, or machine-specific authorization.</p><div className="actions"><button type="button" className="secondary" onClick={() => void exportSession()} disabled={!backend.connected}>Export session</button><label className="file-picker">Import session<input aria-label="Import session configuration" type="file" accept=".json,.audiorouter,application/json" onChange={(event) => void inspectImport(event)} disabled={!backend.connected} /></label>{plan && <button type="button" className="primary" onClick={() => void commitImport()}>Commit stopped import</button>}</div>{plan && <p className="muted" role="status">Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Explicit commit is required.</p>}{message && <p className="muted" role="status" aria-live="polite">{message}</p>}</section>;
 }
 
 function PluginScanPanel({ backend }: { backend: UiBackend }) {
@@ -679,7 +722,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         {actionMessage && <p className="muted" role="status" aria-live="polite">{actionMessage}</p>}{pendingWarnings.length > 0 && <section className="warning-panel" aria-labelledby="warning-heading"><h2 id="warning-heading">Plan warnings</h2>{pendingWarnings.map((warning) => <label key={warning}><input type="checkbox" checked={acknowledgedWarnings.has(warning)} onChange={(event) => setAcknowledgedWarnings((current) => { const next = new Set(current); if (event.target.checked) next.add(warning); else next.delete(warning); return next; })} /> I acknowledge: {warning}</label>)}<button type="button" className="primary" disabled={acknowledgedWarnings.size !== pendingWarnings.length} onClick={() => void commitAcknowledgedPlan()}>Commit acknowledged plan</button></section>}{snapshotState.stale && snapshotState.error && <p className="muted" role="status">Last known backend state is stale: {snapshotState.error}</p>}
         <section className="notice" role="status"><strong>{backend.connected ? "Connected editor" : "Read-only preview"}</strong><span>{backend.connected ? "Drafts are validated and committed through the authoritative backend." : "The control backend is disconnected. No route, device, or recording action can be applied."}</span></section>
         <section className="panel setup-panel" aria-labelledby="setup-heading"><div className="section-heading"><div><p className="eyebrow">Guided setup</p><h2 id="setup-heading">Readiness checklist</h2></div><span className="badge">{setupSteps.filter((step) => step.state === "ready").length}/{setupSteps.length} ready</span></div><ul aria-label="Guided setup readiness">{setupSteps.map((step) => <li key={step.id} className={`setup-step ${step.state}`}><strong>{step.label}</strong><span>{step.detail}</span></li>)}</ul><p className="muted">External applications such as Discord and OBS must be pointed to AudioRouter through their own settings; this checklist never changes them automatically.</p></section>
-        <ProcessorCatalog processors={processors} error={processorError} node={selectedNode} backend={backend} /><PresetCatalog presets={presets} error={presetError} /><PluginScanPanel backend={backend} /><StartupPanel backend={backend} />
+        <ProcessorCatalog processors={processors} error={processorError} node={selectedNode} backend={backend} /><PresetCatalog presets={presets} error={presetError} /><SessionTransferPanel backend={backend} session={session} onImported={(imported) => { setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]); setSelectedSessionId(imported.id); void refresh(); }} /><PluginScanPanel backend={backend} /><StartupPanel backend={backend} />
         <ApplicationIdentityPanel applications={applications} />
         <section className="panel recovery-panel" aria-labelledby="recovery-heading"><div className="section-heading"><div><p className="eyebrow">Crash recovery</p><h2 id="recovery-heading">{snapshot?.status.recovery.safeMode ? "Safe mode is active" : "Normal startup mode"}</h2></div><span className="badge">{snapshot?.status.recovery.recentCrashes ?? 0} recent crash{(snapshot?.status.recovery.recentCrashes ?? 0) === 1 ? "" : "es"}</span></div><p className="muted">{snapshot?.status.recovery.persistence === "durable" ? "Recovery state is persisted by the backend." : "Recovery state is held in memory for this preview."}</p><button type="button" className="secondary" onClick={() => void clearRecoverySafeMode()} disabled={!backend.connected || !snapshot?.status.recovery.safeMode}>Clear safe mode</button></section>
         <RecoveryCheckpointPanel backend={backend} />

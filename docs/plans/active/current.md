@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Added the UI-09 session-transfer slice on 2026-09-13. The editor now
+  exports the selected session configuration as a local `.audiorouter.json`
+  download and validates imported JSON through `sessions.importPlan`; a
+  separate explicit commit action calls `sessions.importCommit`, selects the
+  returned stopped session, and refreshes inventory. The UI states that
+  credentials, grants, recordings, plugin binaries, and machine authorization
+  are excluded. Full UI coverage passes (141 tests), TypeScript typecheck and
+  diff checks pass. No import starts audio, arms a recorder, enables startup,
+  or changes machine configuration.
+
 - Strengthened UI-06/UI-11 route explanation on 2026-09-13. The connected
   editor now renders `routes.inspect` results as an accessible ordered path
   list, preserving backend-reported path count/completeness while showing
