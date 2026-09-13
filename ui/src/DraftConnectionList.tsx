@@ -1,6 +1,7 @@
 import { useContext } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { BackendConnectionContext } from "./backendConnectionContext";
+import type { InsertableProcessorKind } from "./draft";
 
 const INSERT_MIXER_ACTION = "__audiorouter_insert_mixer__";
 const REMOVE_MIXER_ACTION = "__audiorouter_remove_mixer__";
@@ -19,10 +20,14 @@ export function decodeTopologyAction(value: string): { kind: "insertMixer" | "re
   return null;
 }
 
-export function DraftConnectionList({ session, onRemove, onToggle }: { session: Session; onRemove: (id: string) => void; onToggle: (id: string, enabled: boolean) => void }) {
+export function DraftConnectionList({ session, onRemove, onToggle, onInsertProcessor }: { session: Session; onRemove: (id: string) => void; onToggle: (id: string, enabled: boolean) => void; onInsertProcessor?: (edgeId: string, kind: InsertableProcessorKind) => void }) {
   const connected = useContext(BackendConnectionContext);
   const names = new Map(session.nodes.map((node) => [node.id, node.name]));
   const mixers = session.nodes.filter((node) => node.kind === "mixer");
+  const requestInsertProcessor = (edgeId: string, kind: InsertableProcessorKind) => {
+    if (onInsertProcessor) onInsertProcessor(edgeId, kind);
+    else globalThis.dispatchEvent(new CustomEvent("audiorouter:insert-processor", { detail: { edgeId, kind } }));
+  };
   return <section className="draft-connections" aria-labelledby="draft-connections-heading">
     <h3 id="draft-connections-heading">Draft connections</h3>
     {session.edges.length === 0 ? <p className="muted">No draft connections.</p> : <ul aria-label="Draft connections">{session.edges.map((edge) => <li key={edge.id}>
@@ -30,6 +35,7 @@ export function DraftConnectionList({ session, onRemove, onToggle }: { session: 
       <button type="button" className="secondary" onClick={() => onToggle(edge.id, !edge.enabled)}>{edge.enabled ? "Disable" : "Enable"}</button>
       <button type="button" className="secondary" onClick={() => onRemove(edge.id)}>Remove</button>
       <button type="button" className="secondary" disabled={!connected} aria-label={`Insert mixer on ${names.get(edge.sourceNode) ?? edge.sourceNode} to ${names.get(edge.destinationNode) ?? edge.destinationNode}`} onClick={() => onRemove(insertMixerActionId(edge.id))}>Insert mixer</button>
+      <button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "gate")}>Insert Gate</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "parametricEq")}>Insert Parametric EQ</button>
     </li>)}</ul>}
     {mixers.length > 0 && <div className="mixer-topology-actions" aria-label="Mixer topology actions">{mixers.map((mixer) => <div key={mixer.id}>
       <span>{mixer.name}</span>

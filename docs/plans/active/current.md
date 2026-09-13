@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Added direct built-in processor insertion on 2026-09-13. Each connected draft
+  path now exposes Gate and Parametric EQ actions; insertion removes only the
+  selected draft edge, creates a real processor node, reconnects both sides,
+  preserves the original downstream channel matrix, and selects the new node
+  for inspection. The model regression and connected-App accessibility flow
+  passed; UI coverage is now 135 tests and TypeScript typecheck passes. This
+  remains a draft until the existing authorized graph plan/commit flow runs.
+  Evidence: `ui/src/draft-connection.test.ts` and
+  `ui/src/App.accessibility.test.tsx`.
+
 - Strengthened the guarded native delivery evidence on 2026-09-13 by changing
   the live acceptance graph from direct pass-through to a validated one-channel
   built-in Gate with explicit dynamics parameters and two graph edges. Exact

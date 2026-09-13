@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, insertDraftMixer, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
+import { appendDraftConnection, appendLibraryNode, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendDraftConnection", () => {
@@ -69,6 +69,24 @@ describe("appendDraftConnection", () => {
     const inserted = insertDraftMixer(custom, "edge-1");
     expect(inserted.edges.at(-1)?.matrix).toEqual([0.5]);
     expect(removeSinglePathDraftMixer(inserted, "mixer-1").edges[0].matrix).toEqual([0.5]);
+  });
+
+  it("inserts a built-in processor on an existing path and preserves its downstream map", () => {
+    const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+    const custom = { ...connected, edges: connected.edges.map((edge) => ({ ...edge, matrix: [0.5] })) };
+    const inserted = insertDraftProcessor(custom, "edge-1", "gate");
+
+    expect(inserted.nodes.find((node) => node.kind === "gate")).toMatchObject({
+      id: "gate-1",
+      name: "Gate 1",
+      parameters: expect.objectContaining({ thresholdDb: -45 }),
+    });
+    expect(inserted.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([
+      ["mic", "gate-1"],
+      ["gate-1", "voice"],
+    ]);
+    expect(inserted.edges.at(-1)?.matrix).toEqual([0.5]);
+    expect(inserted.revision).toBe(demoSession.revision);
   });
 
   it("refuses to remove a mixer with ambiguous topology", () => {

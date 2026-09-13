@@ -11,6 +11,7 @@ export const GAIN_MIN_DB = -60;
 export const GAIN_MAX_DB = 24;
 
 export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
+export type InsertableProcessorKind = Exclude<LibraryNodeKind, "mixer" | "meter">;
 
 const parametricEqDefaults: Record<string, boolean | number | string> = {
   frequencyHz: 1000,
@@ -209,6 +210,41 @@ export function insertDraftMixer(session: Session, edgeId: EntityId): Session {
   const upstream = appendDraftConnection(widthMatched, edge.sourceNode, edge.sourcePort, mixer.id, "in");
   const split = appendDraftConnection(upstream, mixer.id, "out", edge.destinationNode, edge.destinationPort);
   return { ...split, edges: split.edges.map((candidate) => candidate.sourceNode === mixer.id && candidate.destinationNode === edge.destinationNode ? { ...candidate, matrix: [...edge.matrix] } : candidate) };
+}
+
+/** Inserts a built-in processor directly into one draft connection. */
+export function insertDraftProcessor(
+  session: Session,
+  edgeId: EntityId,
+  kind: InsertableProcessorKind,
+): Session {
+  const edge = session.edges.find((candidate) => candidate.id === edgeId);
+  if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
+  const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
+  const destinationNode = session.nodes.find((node) => node.id === edge.destinationNode);
+  const sourcePort = sourceNode?.ports.find((port) => port.name === edge.sourcePort);
+  const destinationPort = destinationNode?.ports.find((port) => port.name === edge.destinationPort);
+  if (!sourcePort || sourcePort.direction !== "output" || !destinationPort || destinationPort.direction !== "input") {
+    throw new Error("Inserted processor requires valid source and destination ports");
+  }
+  const withoutEdge = removeDraftConnection(session, edgeId);
+  const withProcessor = appendLibraryNode(withoutEdge, kind);
+  const processor = withProcessor.nodes.at(-1);
+  if (!processor) throw new Error("Unable to create an inserted processor");
+  const resized = {
+    ...withProcessor,
+    nodes: withProcessor.nodes.map((node) => node.id === processor.id
+      ? { ...node, ports: node.ports.map((port) => ({ ...port, channels: sourcePort.channels })) }
+      : node),
+  };
+  const upstream = appendDraftConnection(resized, edge.sourceNode, edge.sourcePort, processor.id, "in");
+  const downstream = appendDraftConnection(upstream, processor.id, "out", edge.destinationNode, edge.destinationPort);
+  return {
+    ...downstream,
+    edges: downstream.edges.map((candidate) => candidate.sourceNode === processor.id && candidate.destinationNode === edge.destinationNode
+      ? { ...candidate, matrix: [...edge.matrix] }
+      : candidate),
+  };
 }
 
 /** Removes a mixer only when it has exactly one incoming and one outgoing path. */

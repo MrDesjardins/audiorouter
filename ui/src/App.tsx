@@ -3,7 +3,7 @@ import type { Node, RecordingRecoveryItem, RouteInspection } from "@audiorouter/
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
-import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, insertDraftMixer, removeDraftConnection, removeDraftNode, removeSinglePathDraftMixer, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type LibraryNodeKind } from "./draft";
+import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeDraftNode, removeSinglePathDraftMixer, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type InsertableProcessorKind, type LibraryNodeKind } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
 import { recordDraft, redoDraft as redoDraftHistory, undoDraft as undoDraftHistory, type DraftHistory } from "./history";
 import { templateSession, type TemplateId } from "./templates";
@@ -580,6 +580,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const addLibraryNode = (kind: LibraryNodeKind) => { const next = appendLibraryNode(draft, kind); recordDraftChange(next); setSelectedNodeId(next.nodes[next.nodes.length - 1].id); setActionMessage(`${next.nodes[next.nodes.length - 1].name} added to the draft. Review and plan the changes before committing.`); };
   const addConnection = () => { const source = decodePort(connectionSource); const destination = decodePort(connectionDestination); if (!source || !destination) { setActionMessage("Choose an output and input port first."); return false; } try { const next = appendDraftConnection(draft, source.nodeId, source.portName, destination.nodeId, destination.portName); recordDraftChange(next); setActionMessage("Connection added to the draft. Review and plan the changes before committing."); return true; } catch (error) { setActionMessage(formatUiError(error, "Unable to add connection.")); return false; } };
+  const insertProcessor = (edgeId: string, kind: InsertableProcessorKind) => { if (!backend.connected) { setActionMessage("Connect the backend before changing draft topology."); return; } try { const next = insertDraftProcessor(draft, edgeId, kind); const inserted = next.nodes.at(-1); recordDraftChange(next); if (inserted) setSelectedNodeId(inserted.id); setActionMessage(`${inserted?.name ?? kind} inserted into the draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to insert processor.")); } };
+  useEffect(() => {
+    const handleInsertProcessor = (event: Event) => {
+      const detail = (event as CustomEvent<{ edgeId?: string; kind?: InsertableProcessorKind }>).detail;
+      if (detail.edgeId && detail.kind) insertProcessor(detail.edgeId, detail.kind);
+    };
+    globalThis.addEventListener("audiorouter:insert-processor", handleInsertProcessor);
+    return () => globalThis.removeEventListener("audiorouter:insert-processor", handleInsertProcessor);
+  }, [backend, draft]);
   const connectCanvas = (connection: Connection) => {
     if (!backend.connected) { setActionMessage("Connect the backend before adding a canvas connection."); return; }
     if (connection.source === LIBRARY_DROP_SOURCE && connection.sourceHandle) {

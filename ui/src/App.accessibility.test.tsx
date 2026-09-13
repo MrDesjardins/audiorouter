@@ -297,6 +297,19 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByText("Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing.")).toBeTruthy();
   });
 
+  it("inserts a built-in processor directly from a connected draft path", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Keyboard connection dialog" }));
+    const dialog = await screen.findByRole("dialog", { name: "Keyboard connection" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard source output port" }), { target: { value: "mic::out" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Insert Gate" }));
+    expect(screen.getByText("Gate 1 inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
+  });
+
   it("disables topology mutations when no backend connection context exists", () => {
     const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
     const inserted = insertDraftMixer(connected, "edge-1");
