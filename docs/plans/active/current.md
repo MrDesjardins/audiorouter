@@ -44,6 +44,14 @@ Updated: 2026-09-13.
   bounded-generation behavior, and no-rebind/no-defaults guarantees; the
   documentation validator then passed for 52 Markdown files and 179 links.
 
+- Attempted the human shell acceptance on 2026-09-13 using the existing
+  release binary with no live-endpoint environment variables. The process
+  launched and remained responsive, but the available Windows UI capture
+  surface returned no targetable app/window, so no clicks or endpoint actions
+  were made. The test-launched shell process was then stopped. Interactive
+  WebView acceptance remains an explicit user-desktop gate; this is not
+  evidence of audio activation.
+
 - New delivery gate: a guarded human run must be able to select the existing
   VB-Cable capture/render pair in the UI, commit a visible graph change, start
   and stop the session, and observe backend status/telemetry while preserving
