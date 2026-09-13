@@ -13,6 +13,15 @@ Updated: 2026-09-13.
   agent desktop does not execute the frontend. This slice opens no endpoint,
   installs no driver, and changes no machine audio configuration.
 
+- Corrected the shell startup snapshot boundary on 2026-09-13. The owned
+  backend now creates or reuses one stable `desktop-session` with a stopped
+  stereo physical-input-to-physical-output graph, so the UI's initial
+  `sessions.get` request is valid after a fresh launch and across restarts.
+  The session is never started automatically, and first-launch enrollment
+  remains observer-only. Shell check/tests (7), formatting, and diff checks
+  pass; interactive WebView execution is still the only unverified part of
+  this desktop slice.
+
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
   invoke API, and Vite emits relative assets for the Tauri app protocol. Shell

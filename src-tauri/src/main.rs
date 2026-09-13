@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use audiorouter_control::{ClientRole, ControlPlane};
+use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
 use audiorouter_storage::Storage;
 use tauri::{
@@ -12,6 +13,7 @@ use tauri::{
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
 const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
+const DESKTOP_SESSION_ID: &str = "desktop-session";
 
 #[derive(Clone)]
 struct ShellState {
@@ -113,6 +115,54 @@ fn default_database_path() -> Result<std::path::PathBuf, String> {
         .join(DEFAULT_DATABASE_FILE))
 }
 
+fn default_desktop_session() -> Session {
+    Session {
+        id: EntityId::new(DESKTOP_SESSION_ID),
+        name: "AudioRouter desktop".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            Node {
+                id: EntityId::new("desktop-input"),
+                kind: NodeKind::PhysicalInput,
+                type_version: 1,
+                name: "Physical input".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![Port {
+                    name: "main".into(),
+                    direction: PortDirection::Output,
+                    channels: 2,
+                }],
+            },
+            Node {
+                id: EntityId::new("desktop-output"),
+                kind: NodeKind::PhysicalOutput,
+                type_version: 1,
+                name: "Physical output".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![Port {
+                    name: "main".into(),
+                    direction: PortDirection::Input,
+                    channels: 2,
+                }],
+            },
+        ],
+        edges: vec![Edge {
+            id: EntityId::new("desktop-edge"),
+            source_node: EntityId::new("desktop-input"),
+            source_port: "main".into(),
+            destination_node: EntityId::new("desktop-output"),
+            destination_port: "main".into(),
+            matrix: vec![1.0, 0.0, 0.0, 1.0],
+            enabled: true,
+        }],
+    }
+}
+
 fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle<()>>, String> {
     if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_some() {
         return Ok(None);
@@ -159,6 +209,14 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             .enroll_client(&sid, ClientRole::Observer)
                             .map_err(|error| {
                                 format!("initial observer enrollment failed: {error:?}")
+                            })?;
+                    }
+                    let session_id = EntityId::new(DESKTOP_SESSION_ID);
+                    if plane.get_session(&session_id).is_err() {
+                        plane
+                            .insert_session(default_desktop_session())
+                            .map_err(|error| {
+                                format!("default desktop session creation failed: {error:?}")
                             })?;
                     }
                     audiorouter_transport::serve_control_connections_for_current_user(
@@ -224,7 +282,7 @@ fn main() {
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
     let state = ShellState {
         pipe_name,
-        session_id: format!("tauri-shell-{}", std::process::id()),
+        session_id: DESKTOP_SESSION_ID.to_owned(),
         probe_file: std::env::var_os("AUDIOROUTER_SHELL_PROBE_FILE").map(std::path::PathBuf::from),
     };
     let _backend = start_owned_backend(&state.pipe_name).unwrap_or_else(|error| {

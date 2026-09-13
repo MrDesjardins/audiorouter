@@ -11,6 +11,7 @@ tauri-build = "2.6.3"
 
 [dependencies]
 audiorouter-control = { path = "../crates/control" }
+audiorouter-domain = { path = "../crates/domain" }
 audiorouter-protocol = { path = "../crates/protocol" }
 audiorouter-storage = { path = "../crates/storage" }
 audiorouter-transport = { path = "../crates/transport" }

@@ -13,6 +13,16 @@ no audio endpoint, driver, plugin registration, or persistent machine-audio
 setting was changed. Interactive WebView execution remains unverified in the
 agent desktop session.
 
+## 2026-09-13 - stable shell session snapshot
+
+The shell-owned backend now creates or reuses the stable `desktop-session`
+resource with a stopped stereo physical-input-to-physical-output graph. This
+matches the UI's initial `sessions.get` request after a fresh database and
+prevents a PID-based missing-session failure across restarts. The session is
+not started automatically, and the current user remains observer-only on
+first launch. Shell check/tests (7), formatting, and diff checks passed; no
+audio endpoint or machine configuration was accessed.
+
 ## 2026-09-13 - Tauri shell asset and probe hardening
 
 The Tauri shell initialization probe now delegates through the loaded UI
