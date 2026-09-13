@@ -4,13 +4,16 @@ export function nodePortLabels(node: Node): string[] {
   return node.ports.map((port) => `${port.direction}: ${port.name} (${port.channels}ch)`);
 }
 
+export function nodeStateLabel(node: Node): "muted" | "bypassed" | "enabled" | "disabled" {
+  return node.parameters.muted === true ? "muted" : node.bypass ? "bypassed" : node.enabled ? "enabled" : "disabled";
+}
+
 export function routeNodeLabels(session: Session, nodeIds: string[]): string[] {
   const nodes = new Map(session.nodes.map((node) => [node.id, node]));
   return nodeIds.map((id) => {
     const node = nodes.get(id);
     if (!node) return id;
-    const state = node.parameters.muted === true ? "muted" : node.bypass ? "bypassed" : node.enabled ? "enabled" : "disabled";
-    return `${node.name} [${state}]`;
+    return `${node.name} [${nodeStateLabel(node)}]`;
   });
 }
 

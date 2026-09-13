@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Closed a UI-04 state-visibility gap on 2026-09-13. Canvas cards and the
+  keyboard-accessible structured graph list now use one shared state helper to
+  display muted, bypassed, enabled, or disabled explicitly; muted takes
+  precedence over bypassed, matching route labels. The new helper regression,
+  full UI suite (143 tests), TypeScript typecheck, and diff checks pass. This
+  is presentation-only and does not alter graph or audio state.
+
 - Requalified the full guarded M00-M08 acceptance chain at pushed head
   `38ab5436` on 2026-09-13. Elevated Windows execution passed toolchain/native
   compile, project-driver WDK compile/signability, 34-endpoint read-only

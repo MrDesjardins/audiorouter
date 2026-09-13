@@ -8,7 +8,7 @@ import { demoSession, demoSessions } from "./fixtures";
 import { recordDraft, redoDraft as redoDraftHistory, undoDraft as undoDraftHistory, type DraftHistory } from "./history";
 import { templateSession, type TemplateId } from "./templates";
 import { filterLibraryEntries, libraryEntries, libraryEntryAccessibleLabel } from "./library";
-import { nodePortLabels, routeLatencyText, routeNodeLabels } from "./graphView";
+import { nodePortLabels, nodeStateLabel, routeLatencyText, routeNodeLabels } from "./graphView";
 import { readShortcuts, readTheme, writeShortcuts, writeTheme, type ThemeMode } from "./preferences";
 import { defaultShortcutBinding, isEditableShortcutTarget, shortcutConflicts, shortcutFromKeyboardEvent, type ShortcutAction, type ShortcutBinding } from "./shortcuts";
 import { ApplicationIdentityPanel } from "./ApplicationIdentityPanel";
@@ -386,7 +386,7 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
 }
 
 function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean; onSelect: () => void }) {
-  return <article className={`node-card${selected ? " selected" : ""}`} tabIndex={0} aria-label={`${node.name}, ${node.kind}`} aria-current={selected ? "true" : undefined} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); } }}><span className="node-kind">{node.kind}</span><h3>{node.name}</h3><p>{node.ports.length} port{node.ports.length === 1 ? "" : "s"} - {node.enabled ? "enabled" : "disabled"}</p><div className="port-list">{node.ports.map((port) => <span key={port.name} className={`port ${port.direction}`}>{port.direction}: {port.name} - {port.channels}ch</span>)}</div></article>;
+  return <article className={`node-card${selected ? " selected" : ""}`} tabIndex={0} aria-label={`${node.name}, ${node.kind}`} aria-current={selected ? "true" : undefined} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); } }}><span className="node-kind">{node.kind}</span><h3>{node.name}</h3><p>{node.ports.length} port{node.ports.length === 1 ? "" : "s"} - {nodeStateLabel(node)}</p><div className="port-list">{node.ports.map((port) => <span key={port.name} className={`port ${port.direction}`}>{port.direction}: {port.name} - {port.channels}ch</span>)}</div></article>;
 }
 
 function LegacyNodeList({ session, selectedNodeId, onSelect, onRemoveConnection, onToggleConnection }: { session: import("@audiorouter/contracts").Session; selectedNodeId: string; onSelect: (id: string) => void; onRemoveConnection: (id: string) => void; onToggleConnection: (id: string, enabled: boolean) => void }) {

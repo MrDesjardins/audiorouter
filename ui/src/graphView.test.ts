@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 import { appendDraftConnection, setDraftConnectionEnabled } from "./draft";
 import { demoSession } from "./fixtures";
 import { relatedNodeIds } from "./graphView";
-import { nodePortLabels, routeLatencyText, routeNodeLabels } from "./graphView";
+import { nodePortLabels, nodeStateLabel, routeLatencyText, routeNodeLabels } from "./graphView";
 
 describe("graph path highlighting", () => {
+  it("prioritizes explicit muted and bypassed state labels", () => {
+    expect(nodeStateLabel({ ...demoSession.nodes[0], parameters: { muted: true }, bypass: true, enabled: false })).toBe("muted");
+    expect(nodeStateLabel({ ...demoSession.nodes[0], parameters: {}, bypass: true, enabled: true })).toBe("bypassed");
+    expect(nodeStateLabel({ ...demoSession.nodes[0], parameters: {}, bypass: false, enabled: false })).toBe("disabled");
+  });
   it("describes each port with direction, role, and channels", () => {
     expect(nodePortLabels(demoSession.nodes[1])).toEqual(["input: in (1ch)", "output: out (1ch)"]);
   });
