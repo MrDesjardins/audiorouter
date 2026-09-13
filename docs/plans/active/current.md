@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Extended the disposable VB-Cable desktop launcher on 2026-09-13 with an
+  explicit `-RenderEndpointId` override. The default remains the exact active
+  CABLE Input loopback render, while the override lets a human launch the
+  normal CABLE Output capture-to-physical-render route from a read-only,
+  exact active endpoint ID. Missing/inactive/non-render IDs fail before
+  authorization or shell launch; no endpoint substitution or machine-audio
+  mutation was added. The invalid-ID acceptance returned `capture=1,
+  render=0` and cleaned its temporary directory.
+
 - Added a connected UI regression for occupied physical render endpoints on
   2026-09-13. When native preparation returns structured
   `deviceInUse`/`0x8889000A`, the endpoint panel preserves the ownership

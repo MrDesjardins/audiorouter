@@ -1,5 +1,6 @@
 param(
-    [switch]$Build
+    [switch]$Build,
+    [string]$RenderEndpointId = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -62,13 +63,22 @@ try {
         $_.direction -eq 'capture' -and
         $_.name -eq 'CABLE Output (VB-Audio Virtual Cable)'
     })
-    $render = @($inventory | Where-Object {
-        $_.state -eq 'active' -and
-        $_.direction -eq 'render' -and
-        $_.name -eq 'CABLE Input (VB-Audio Virtual Cable)'
-    })
+    if ([string]::IsNullOrWhiteSpace($RenderEndpointId)) {
+        $render = @($inventory | Where-Object {
+            $_.state -eq 'active' -and
+            $_.direction -eq 'render' -and
+            $_.name -eq 'CABLE Input (VB-Audio Virtual Cable)'
+        })
+    } else {
+        $render = @($inventory | Where-Object {
+            $_.state -eq 'active' -and
+            $_.direction -eq 'render' -and
+            $_.id -eq $RenderEndpointId
+        })
+    }
     if ($capture.Count -ne 1 -or $render.Count -ne 1) {
-        throw "refusing to launch: expected exactly one active VB-Cable capture and render endpoint (found capture=$($capture.Count), render=$($render.Count))"
+        $renderDescription = if ([string]::IsNullOrWhiteSpace($RenderEndpointId)) { 'VB-Cable render' } else { "render ID '$RenderEndpointId'" }
+        throw "refusing to launch: expected exactly one active VB-Cable capture and $renderDescription (found capture=$($capture.Count), render=$($render.Count))"
     }
 
     $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
@@ -94,7 +104,11 @@ try {
     Write-Output "Launching disposable AudioRouter desktop with:"
     Write-Output "  capture: $($capture[0].name)"
     Write-Output "  render:  $($render[0].name)"
-    Write-Output 'Use Select VB-Cable capture or Select VB-Cable loopback pair, then Prepare native endpoints, Plan changes, and Start session.'
+    if ([string]::IsNullOrWhiteSpace($RenderEndpointId)) {
+        Write-Output 'Use Select VB-Cable capture or Select VB-Cable loopback pair, then Prepare native endpoints, Plan changes, and Start session.'
+    } else {
+        Write-Output 'The render endpoint was explicitly selected by ID; review the graph, then Prepare native endpoints, Plan changes, and Start session.'
+    }
     Write-Output 'Use the tray Quit and stop audio action when finished, or press Ctrl+C here.'
     $shellProcess = Start-Process -FilePath $shell -WorkingDirectory $workspace -PassThru
     $shellProcess.WaitForExit()
