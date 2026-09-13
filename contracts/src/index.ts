@@ -508,13 +508,13 @@ export interface SessionStartResult {
   sessionId: EntityId;
   state: "running";
   generation: number;
-  runtime: "fake";
+  runtime: "fake" | "native";
 }
 
 export interface SessionStopResult {
   sessionId: EntityId;
   state: "stopped";
-  runtime: "fake";
+  runtime: "fake" | "native";
   recorders: Array<{
     sessionId: EntityId;
     state: "completed";

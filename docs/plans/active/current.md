@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Fixed the native session-start lifecycle boundary on 2026-09-13. When a
+  session has an explicitly attached endpoint worker, `session_start` now
+  publishes the validated graph, activates the worker, reports `runtime:
+  native`, and rolls back the runtime/bridge generation if either preparation
+  or endpoint start fails. Sessions without an attached worker retain the
+  portable fake-runtime path. Control tests (128), formatting, and the
+  relevant build checks pass; this does not install/load a driver or claim
+  production PortCls ownership. Next: wire an authorized endpoint-worker
+  construction path and guarded live evidence to this lifecycle.
+
 - Implemented the first real desktop vertical slice on 2026-09-13. The Tauri
   shell now owns a per-user control backend on its default launch path, opens
   `%LOCALAPPDATA%\\AudioRouter\\state.sqlite` (or an explicit absolute test

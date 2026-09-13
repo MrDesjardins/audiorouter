@@ -2313,7 +2313,7 @@ fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "running" },
                 "generation": { "type": "integer", "minimum": 1 },
-                "runtime": { "const": "fake" }
+                "runtime": { "enum": ["fake", "native"] }
             },
             "required": ["sessionId", "state", "generation", "runtime"],
             "additionalProperties": false
@@ -2323,7 +2323,7 @@ fn method_output_schema(name: &str) -> Value {
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "stopped" },
-                "runtime": { "const": "fake" },
+                "runtime": { "enum": ["fake", "native"] },
                 "recorders": {
                     "type": "array",
                     "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
@@ -5897,11 +5897,48 @@ impl ControlPlane {
         let generation = runtime
             .start()
             .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
+
+        // A session with an explicitly attached endpoint pair must cross the
+        // native boundary as part of the same start operation.  Previously we
+        // left the native worker stopped and reported the fake runtime as
+        // running, which made the control plane appear healthy while no
+        // samples could reach the endpoint.  Prepare and publish the graph
+        // before starting the worker; any failure rolls back the runtime and
+        // selected bridge generation so the session cannot be half-started.
+        let native_attached = self.native_endpoint_session.as_ref() == Some(id)
+            && self.native_endpoint_worker.is_some();
+        if native_attached {
+            if let Err(error) = self.activate_native_graph(id, generation, 48_000) {
+                if let Some(runtime) = self.runtimes.get_mut(id) {
+                    runtime.stop();
+                }
+                self.deactivate_virtual_route_bridges(id);
+                self.native_endpoint_taps = None;
+                return Err(error);
+            }
+            let start_result = self
+                .native_endpoint_worker
+                .as_mut()
+                .expect("native_attached implies an endpoint worker")
+                .start()
+                .map_err(audio_control_error);
+            if let Err(error) = start_result {
+                if let Some(runtime) = self.runtimes.get_mut(id) {
+                    runtime.stop();
+                }
+                self.deactivate_virtual_route_bridges(id);
+                self.native_endpoint_taps = None;
+                return Err(error);
+            }
+        }
         self.events
             .append(session.revision, None, "runtime.started", Some(id.clone()));
-        Ok(
-            json!({ "sessionId": id, "state": "running", "generation": generation, "runtime": "fake" }),
-        )
+        Ok(json!({
+            "sessionId": id,
+            "state": "running",
+            "generation": generation,
+            "runtime": if native_attached { "native" } else { "fake" }
+        }))
     }
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
@@ -5986,6 +6023,8 @@ impl ControlPlane {
         // the exact bound worker before retiring the runtime generation; even
         // a worker stop error must not leave an audio client running against
         // a session that is reported stopped.
+        let native_attached = self.native_endpoint_session.as_ref() == Some(id)
+            && self.native_endpoint_worker.is_some();
         let native_stop_error = if self.native_endpoint_session.as_ref() == Some(id) {
             self.native_endpoint_worker
                 .as_mut()
@@ -6008,7 +6047,7 @@ impl ControlPlane {
         Ok(json!({
             "sessionId": id,
             "state": "stopped",
-            "runtime": "fake",
+            "runtime": if native_attached { "native" } else { "fake" },
             "recorders": recorder_outcomes
         }))
     }
