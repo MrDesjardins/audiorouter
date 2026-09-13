@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added a connected UI regression for occupied physical render endpoints on
+  2026-09-13. When native preparation returns structured
+  `deviceInUse`/`0x8889000A`, the endpoint panel preserves the ownership
+  remediation and retry guidance instead of presenting a generic failure.
+  UI typecheck and all 154 UI tests pass; this adds no retry, endpoint
+  substitution, or machine-audio mutation.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `08c1ab74` on 2026-09-13. VS/WDK discovery, native compile,
   AudioRouter driver compile/catalog signability, read-only 31-endpoint

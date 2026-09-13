@@ -10,6 +10,7 @@ import { demoSession } from "./fixtures";
 import { BackendConnectionContext } from "./backendConnectionContext";
 import { GraphList } from "./GraphList";
 import type { ProcessorDescriptor } from "./processorCatalog";
+import { AudioRouterRpcError } from "@audiorouter/contracts";
 
 function connectedPreviewBackend() {
   return { ...createDisconnectedBackend(), connected: true };
@@ -80,6 +81,28 @@ describe("VB-Cable endpoint selection", () => {
     await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-vb"));
     expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("");
     expect(screen.getByText("VB-Cable capture selected. Choose the physical render output, then prepare and start the session.")).toBeTruthy();
+  });
+
+  it("keeps a physical render ownership failure actionable", async () => {
+    const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
+    const devices = [
+      { id: "capture-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+      { id: "render-focusrite", name: "Speakers (Focusrite USB Audio)", direction: "render" as const, state: "active" as const, defaultRoles: ["console" as const], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+    ];
+    const prepareNativeEndpoint = vi.fn(async () => {
+      throw new AudioRouterRpcError({
+        code: -32010,
+        message: "IAudioClient::Initialize(render) failed.",
+        data: { code: "deviceInUse", fieldPath: null, resourceIds: ["render-focusrite"], retryable: true, remediation: "Identify the owning stream, select another endpoint, or close it and retry.", hresult: 0x8889000A },
+      });
+    });
+    render(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices, prepareNativeEndpoint }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable capture" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Native render endpoint" }), { target: { value: "render-focusrite" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
+    await waitFor(() => expect(prepareNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-vb", "render-focusrite"));
+    expect(await screen.findByText(/\[deviceInUse, HRESULT 0x8889000A\]/)).toBeTruthy();
+    expect(screen.getByText(/select another endpoint, or close it and retry/i)).toBeTruthy();
   });
 });
 
