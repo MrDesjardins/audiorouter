@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { appendDraftConnection, appendLibraryNode, appendPluginPlaceholderNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -26,6 +26,32 @@ describe("appendLibraryNode", () => {
     const once = appendLibraryNode(demoSession, "meter");
     const twice = appendLibraryNode(once, "meter");
     expect(twice.nodes.slice(-2).map((node) => node.id)).toEqual(["meter-1", "meter-2"]);
+  });
+
+  it("adds supported scan identity as a stopped plugin placeholder", () => {
+    const next = appendPluginPlaceholderNode(demoSession, {
+      path: "C:\\Plugins\\effect.dll",
+      identity: {
+        path: "C:\\Plugins\\effect.dll",
+        binaryPath: "C:\\Plugins\\effect.dll",
+        format: "vst2",
+        architecture: "x64",
+        fileBytes: 10,
+        sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        vendor: "Test vendor",
+        version: "1.0",
+        classIds: ["test-class"],
+        compatibility: "supportedVst2X64Gated",
+      },
+      error: null,
+      errorCode: null,
+    });
+    expect(next.nodes.at(-1)).toMatchObject({
+      kind: "plugin",
+      enabled: false,
+      parameters: { format: "vst2", fingerprint: expect.any(String), classId: "test-class" },
+    });
+    expect(next.edges).toEqual(demoSession.edges);
   });
 
   it("renames without changing identity, revision, or topology", () => {
