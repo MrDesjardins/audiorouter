@@ -207,6 +207,14 @@ start/stop/reset lifecycle success on both clients. It used silent render data,
 verified unchanged media state, and restored all temporary resources. This
 closes the current event-callback user-space evidence slice; managed-driver
 callback ownership and calibrated physical latency remain separate gates.
+
+The maximum five-cycle Rust adapter bridge soak passed on 2026-09-12 at 48
+kHz. Each one-second cycle processed 378 quanta/tap calls, captured 48,480
+frames, rendered 48,384 frames, and reported zero non-finite samples, dropped
+frames, xruns, or deadline misses. Every cycle stopped and removed its
+temporary stream/recording and preserved the media snapshot. This strengthens
+user-space restart and repeated-quantum evidence; it is not an eight-hour
+runtime or production-driver soak.
 stopped/reset by the probes and no persistent audio configuration changed.
 
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
