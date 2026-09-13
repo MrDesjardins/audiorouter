@@ -2,6 +2,18 @@
 
 Updated: 2026-09-13.
 
+- Requalified the full guarded M00-M08 acceptance chain at pushed head
+  `85bbe8d5` on 2026-09-13. Elevated Windows execution passed toolchain/native
+  compile, project-driver WDK compile/signability, 34-endpoint read-only
+  inventory, disposable SysVAD, M01, M04 (32 DSP and 40 recording tests),
+  M05 (139 UI tests, typecheck, and production build), M06 VST3/VST2 SDK and
+  worker acceptance, M07, unsigned M08 preparation, 159 traceability
+  mappings, and documentation validation for 52 Markdown files and 180 local
+  links. Fifteen run-owned temporary children were cleaned up. No driver
+  installation/loading, signing-mode, plugin-registration, startup, or
+  persistent audio action was performed. This is the authoritative safe-chain
+  result for the current delivery state.
+
 - Closed the UI-05 inspector effect-summary gap on 2026-09-13. The selected
   node inspector now compares the draft node with the authoritative session
   node and reports bounded parameter, name, enabled, and bypass changes before
@@ -14,10 +26,10 @@ Updated: 2026-09-13.
   2026-09-13. The voiceNeutral, hum50Hz, and hum60Hz IDs now map to bounded
   Parametric EQ band settings in the draft model; the connected Presets panel
   exposes an Add EQ to draft action and selects the new node for inspection.
-  Voice-chain entries remain informational until their topology insertion
-  policy is explicit. Model and connected-App regressions pass; UI coverage is
-  137 tests with TypeScript typecheck passing. No preset action commits,
-  starts audio, or changes machine configuration.
+  Voice-chain entries now also have an explicit topology insertion policy and
+  are delivered by the following entry. Model and connected-App regressions
+  pass; UI coverage is 137 tests with TypeScript typecheck passing. No preset
+  action commits, starts audio, or changes machine configuration.
 
 - Completed voice-chain preset delivery on 2026-09-13. The model expands
   voiceNeutral to a Limiter and voiceGateAndCompression to Gate → Compressor →
@@ -111,9 +123,9 @@ Updated: 2026-09-13.
   to the lifetime pipe server; it does not mutate enrollment or Windows audio
   configuration. Added the exact endpoint test recipe to the headless runbook.
   `cargo fmt --all -- --check`, transport tests (19), shell tests (8), shell
-  check, and diff checks passed. The next action is to run the guarded UI
-  acceptance with the known VB-Cable IDs, then wire the first built-in EQ/gate
-  editing path through the same graph commit surface.
+  check, and diff checks passed. That next action has since been completed by
+  the connected visual graph, built-in processor insertion, EQ/voice-chain
+  draft actions, and the later full acceptance recorded above.
 
 - Re-ran the guarded VB-Cable lifecycle acceptance after the shell delivery
   change on 2026-09-13 using the exact existing CABLE Output capture and CABLE
