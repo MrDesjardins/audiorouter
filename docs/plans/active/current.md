@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Requalified the full guarded M00-M08 acceptance chain at pushed head
+  `38ab5436` on 2026-09-13. Elevated Windows execution passed toolchain/native
+  compile, project-driver WDK compile/signability, 34-endpoint read-only
+  inventory, disposable SysVAD, M01, M04 (32 DSP and 40 recording tests),
+  M05 (142 UI tests, typecheck, and production build), M06 VST3/VST2 SDK and
+  worker acceptance, M07, unsigned M08 preparation, 159 traceability
+  mappings, and documentation validation for 52 Markdown files and 180 local
+  links. Fifteen run-owned temporary children were cleaned up. No driver
+  installation/loading, signing-mode, plugin-registration, startup, or
+  persistent audio action was performed.
+
 - Added data-driven UI-03 regression coverage on 2026-09-13 for all nine
   advertised in-house processor insertions. Each processor is inserted on a
   real connected draft path and the test verifies its one-channel ports plus
