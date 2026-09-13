@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - checked elapsed-time displacement arithmetic
+
+`UpdatePosition` now widens elapsed-time and byte-rate multiplication before
+computing DMA displacement, checks intermediate additions, and rejects values
+that cannot fit the callback's bounded displacement type. Overflow or an
+unrepresentable long gap resets timestamp/carry state and returns, preventing
+an oversized loop or corrupted position arithmetic. The non-installing x64
+WDK build/source-contract acceptance passed with zero signability
+errors/warnings and catalog generation. No driver was installed or loaded.
+
 ## 2026-09-12 - callback clock validation
 
 `UpdatePosition` now returns before time conversion and DMA displacement when

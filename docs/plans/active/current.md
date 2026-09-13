@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Hardened WaveRT elapsed-time and DMA displacement arithmetic on 2026-09-12.
+Position updates now use checked 64-bit intermediates; unrepresentable
+elapsed intervals or displacements fail closed while resynchronizing the DMA
+timestamp/carry state. The non-installing x64 WDK build/source-contract
+acceptance passed with zero signability errors/warnings and catalog generation.
+No driver was installed or loaded.
+
 Hardened WaveRT callback clock validation on 2026-09-12. Position updates now
 fail closed before elapsed-time/DMA arithmetic when the performance-counter
 frequency is zero, the sampled QPC is negative, or the clock moves backwards.

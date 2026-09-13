@@ -131,6 +131,12 @@ if (-not $stream.Contains('m_ullPerformanceCounterFrequency.QuadPart == 0')) {
 if (-not $stream.Contains('static_cast<ULONGLONG>(ilQPC.QuadPart) < m_ullDmaTimeStamp')) {
     throw 'WaveRT position callback must reject a backwards performance-counter sample'
 }
+if (-not $stream.Contains('ULONGLONG byteNumerator = static_cast<ULONGLONG>(m_ulDmaMovementRate)')) {
+    throw 'WaveRT DMA displacement arithmetic must widen before multiplication'
+}
+if (-not $stream.Contains('byteDisplacementWide > MAXULONG')) {
+    throw 'WaveRT DMA displacement must fail closed when it exceeds ULONG capacity'
+}
 if (-not $stream.Contains('PacketNumber == NULL || Flags == NULL')) {
     throw 'WaveRT packet query must validate output pointers'
 }

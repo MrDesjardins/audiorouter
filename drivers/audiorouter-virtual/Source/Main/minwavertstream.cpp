@@ -1406,11 +1406,33 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // may cause us to lose some of the time, so we will carry the remainder forward
     // to the next GetPosition() call.
     //
-    ULONG TimeElapsedInMS = (ULONG)(hnsCurrentTime - m_ullDmaTimeStamp + m_hnsElapsedTimeCarryForward)/10000;
+    LONGLONG elapsedHnsSigned = hnsCurrentTime - m_ullDmaTimeStamp;
+    if (elapsedHnsSigned < 0)
+    {
+        return;
+    }
+    ULONGLONG elapsedHns = static_cast<ULONGLONG>(elapsedHnsSigned);
+    if (elapsedHns > MAXULONGLONG - m_hnsElapsedTimeCarryForward)
+    {
+        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
+        m_hnsElapsedTimeCarryForward = 0;
+        m_byteDisplacementCarryForward = 0;
+        return;
+    }
+    elapsedHns += m_hnsElapsedTimeCarryForward;
+    ULONGLONG elapsedMilliseconds = elapsedHns / 10000;
+    if (elapsedMilliseconds > MAXULONG)
+    {
+        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
+        m_hnsElapsedTimeCarryForward = elapsedHns % 10000;
+        m_byteDisplacementCarryForward = 0;
+        return;
+    }
+    ULONG TimeElapsedInMS = static_cast<ULONG>(elapsedMilliseconds);
 
     // Carry forward the remainder of this division so we don't fall behind with our position too much.
     //
-    m_hnsElapsedTimeCarryForward = (hnsCurrentTime - m_ullDmaTimeStamp + m_hnsElapsedTimeCarryForward) % 10000;
+    m_hnsElapsedTimeCarryForward = elapsedHns % 10000;
 
     // Calculate how many bytes in the DMA buffer would have been processed in the elapsed
     // time.  Note that the division by 1000 to convert to milliseconds may cause us to
@@ -1418,8 +1440,24 @@ VOID CMiniportWaveRTStream::UpdatePosition
     //
     // need to divide by 1000 because m_ulDmaMovementRate is average bytes per sec.
 
-    ULONG ByteDisplacement = ((m_ulDmaMovementRate * TimeElapsedInMS) + m_byteDisplacementCarryForward) / 1000 ;
-    m_byteDisplacementCarryForward = ((m_ulDmaMovementRate * TimeElapsedInMS) + m_byteDisplacementCarryForward) % 1000;
+    ULONGLONG byteNumerator = static_cast<ULONGLONG>(m_ulDmaMovementRate) *
+        static_cast<ULONGLONG>(TimeElapsedInMS);
+    if (byteNumerator > MAXULONGLONG - m_byteDisplacementCarryForward)
+    {
+        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
+        m_byteDisplacementCarryForward = 0;
+        return;
+    }
+    byteNumerator += m_byteDisplacementCarryForward;
+    ULONGLONG byteDisplacementWide = byteNumerator / 1000;
+    if (byteDisplacementWide > MAXULONG)
+    {
+        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
+        m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % 1000);
+        return;
+    }
+    ULONG ByteDisplacement = static_cast<ULONG>(byteDisplacementWide);
+    m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % 1000);
 
     // Increment presentation position even after last buffer is rendered.
     m_ullPresentationPosition += ByteDisplacement;
