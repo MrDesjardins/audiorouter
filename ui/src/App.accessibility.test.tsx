@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, findVbCableEndpointPair } from "./App";
+import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -39,6 +39,9 @@ describe("VB-Cable endpoint selection", () => {
       { id: "render-vb", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render", state: "active", defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
       { id: "inactive-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture", state: "unplugged", defaultRoles: [] },
     ])).toEqual({ captureEndpointId: "capture-vb", renderEndpointId: "render-vb" });
+    expect(findVbCableCaptureEndpointId([
+      { id: "capture-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture", state: "active", defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+    ])).toBe("capture-vb");
     expect(findVbCableEndpointPair([{ id: "duplicate", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture", state: "active", defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } }])).toBeNull();
   });
 
@@ -49,7 +52,7 @@ describe("VB-Cable endpoint selection", () => {
       { id: "render-vb", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
     ];
     render(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices }} />);
-    const button = await screen.findByRole("button", { name: "Select VB-Cable pair" });
+    const button = await screen.findByRole("button", { name: "Select VB-Cable loopback pair" });
     expect(button).toHaveProperty("disabled", false);
     fireEvent.click(button);
     await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-vb"));

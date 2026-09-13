@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - VB-Cable normal-route semantics correction
+
+The endpoint panel now distinguishes the normal route from a cable loopback:
+`CABLE Output` can be selected alone as the capture input, while selecting
+both CABLE Input and CABLE Output is explicitly labeled a loopback test. The
+panel advises choosing a physical render endpoint for ordinary monitoring.
+Helper and UI integration coverage remains green: 18 files, 151 tests, plus
+TypeScript typecheck. No endpoint or machine configuration was changed.
+
 ## 2026-09-13 - readiness negative-path regression
 
 Added coverage proving that a connected inventory with no unambiguous active

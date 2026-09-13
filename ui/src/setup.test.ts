@@ -14,7 +14,7 @@ describe("guided setup checklist", () => {
 
   it("marks the VB-Cable gate for deliberate setup when no exact pair is present", () => {
     const vbCable = setupChecklist({ connected: true, audio: "available", storage: "sqlite", deviceCount: 4, applicationCount: 1, vbCablePairAvailable: false }).find((step) => step.id === "vb-cable");
-    expect(vbCable).toMatchObject({ state: "needs-attention", detail: "Select the exact VB-Cable pair before preparing native audio" });
+    expect(vbCable).toMatchObject({ state: "needs-attention", detail: "Select the exact pair only for a deliberate loopback test" });
   });
 
   it("does not claim readiness while disconnected", () => {

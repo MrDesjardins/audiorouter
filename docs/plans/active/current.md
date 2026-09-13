@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Corrected VB-Cable routing semantics on 2026-09-13. `CABLE Output` is now
+  selectable independently as the normal VB-Cable capture input; the paired
+  CABLE Input/Output action is explicitly labeled as a deliberate loopback
+  test. The UI warns users to choose a physical render endpoint for ordinary
+  monitoring, preventing an accidental cable-to-cable monitor loop. UI
+  typecheck and all 151 tests pass. No endpoint or machine configuration was
+  changed.
+
 - Added a regression for the VB-Cable readiness gate on 2026-09-13. A
   connected inventory without one exact active CABLE Output/Input pair now
   remains `needs-attention`, while disconnected state remains unavailable;
