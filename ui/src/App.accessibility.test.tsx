@@ -261,6 +261,20 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText("Committed revision 8. Reconnect to refresh the authoritative view.")).toBeTruthy();
   });
 
+  it("expands an authoritative EQ preset into a draft node", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      listPresets: async () => ({
+        voiceChains: [],
+        eq: [{ id: "hum50Hz", version: 1, name: "50 Hz hum notch", description: "Narrow 50 Hz notch starting point for mains hum." }],
+      }),
+    };
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add EQ to draft" }));
+    expect(screen.getByText("Parametric EQ 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Parametric EQ 1" })).toBeTruthy();
+  });
+
   it("persists tidy layout positions as presentation state", async () => {
     render(<App backend={connectedPreviewBackend()} />);
 

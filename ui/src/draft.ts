@@ -12,6 +12,7 @@ export const GAIN_MAX_DB = 24;
 
 export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
 export type InsertableProcessorKind = Exclude<LibraryNodeKind, "mixer" | "meter">;
+export type EqPresetId = "voiceNeutral" | "hum50Hz" | "hum60Hz";
 
 const parametricEqDefaults: Record<string, boolean | number | string> = {
   frequencyHz: 1000,
@@ -145,6 +146,30 @@ export function appendLibraryNode(
         ports: definition.ports.map((port) => ({ ...port })),
       },
     ],
+  };
+}
+
+/** Expands one authoritative EQ preset into an ordinary, inspectable draft node. */
+export function appendEqPresetNode(session: Session, presetId: EqPresetId): Session {
+  const next = appendLibraryNode(session, "parametricEq");
+  const node = next.nodes.at(-1);
+  if (!node) throw new Error("Unable to create an EQ preset node");
+  const frequencyHz = presetId === "hum50Hz" ? 50 : presetId === "hum60Hz" ? 60 : 1000;
+  return {
+    ...next,
+    nodes: next.nodes.map((candidate) => candidate.id === node.id
+      ? {
+        ...candidate,
+        parameters: {
+          ...candidate.parameters,
+          band0Enabled: presetId !== "voiceNeutral",
+          band0Type: presetId === "voiceNeutral" ? "peaking" : "notch",
+          band0FrequencyHz: frequencyHz,
+          band0Q: presetId === "voiceNeutral" ? 1 : 8,
+          band0GainDb: 0,
+        },
+      }
+      : candidate),
   };
 }
 

@@ -3,7 +3,7 @@ import type { Node, RecordingRecoveryItem, RouteInspection } from "@audiorouter/
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
-import { appendDraftConnection, appendLibraryNode, applyGraphDraft, duplicateDraftNode, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeDraftNode, removeSinglePathDraftMixer, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type InsertableProcessorKind, type LibraryNodeKind } from "./draft";
+import { appendDraftConnection, appendEqPresetNode, appendLibraryNode, applyGraphDraft, duplicateDraftNode, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeDraftNode, removeSinglePathDraftMixer, resetNodeDraftParameters, setDraftConnectionEnabled, setNodeDraftFlag, setNodeDraftName, setNodeDraftParameter, setSessionDraftName, type EqPresetId, type InsertableProcessorKind, type LibraryNodeKind } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
 import { recordDraft, redoDraft as redoDraftHistory, undoDraft as undoDraftHistory, type DraftHistory } from "./history";
 import { templateSession, type TemplateId } from "./templates";
@@ -151,7 +151,8 @@ function EqResponsePreview({ node, backend }: { node: Node; backend: UiBackend }
 
 function PresetCatalog({ presets, error }: { presets: import("@audiorouter/contracts").DiscoveryDocument["presets"] | null; error: string | null }) {
   const entries = presets ? [...presets.voiceChains.map((preset) => ({ ...preset, category: "Voice chain" })), ...presets.eq.map((preset) => ({ ...preset, category: "EQ" }))] : [];
-  return <section className="panel preset-catalog" aria-labelledby="preset-catalog-heading"><div className="section-heading"><div><p className="eyebrow">Saved starting points</p><h2 id="preset-catalog-heading">Presets</h2></div><span className="badge">{entries.length}</span></div>{error ? <p className="muted" role="status">Preset catalog unavailable: {error}</p> : presets === null ? <p className="muted">Connect to the backend to load the authoritative preset catalog.</p> : entries.length === 0 ? <p className="muted">No presets are advertised.</p> : <ul aria-label="Available presets">{entries.map((preset) => <li key={`${preset.category}-${preset.id}`}><strong>{preset.name}</strong> <small>{preset.category} · {preset.description}</small></li>)}</ul>}<p className="muted">This catalog is read-only. Loading a preset does not change the current session draft.</p></section>;
+  const requestEqPreset = (presetId: EqPresetId) => globalThis.dispatchEvent(new CustomEvent("audiorouter:append-eq-preset", { detail: { presetId } }));
+  return <section className="panel preset-catalog" aria-labelledby="preset-catalog-heading"><div className="section-heading"><div><p className="eyebrow">Saved starting points</p><h2 id="preset-catalog-heading">Presets</h2></div><span className="badge">{entries.length}</span></div>{error ? <p className="muted" role="status">Preset catalog unavailable: {error}</p> : presets === null ? <p className="muted">Connect to the backend to load the authoritative preset catalog.</p> : entries.length === 0 ? <p className="muted">No presets are advertised.</p> : <ul aria-label="Available presets">{entries.map((preset) => <li key={`${preset.category}-${preset.id}`}><strong>{preset.name}</strong> <small>{preset.category} · {preset.description}</small>{preset.category === "EQ" && <button type="button" className="secondary" onClick={() => requestEqPreset(preset.id as EqPresetId)}>Add EQ to draft</button>}</li>)}</ul>}<p className="muted">EQ presets expand into ordinary draft nodes; other preset actions remain informational until their topology policy is defined.</p></section>;
 }
 
 function PluginScanPanel({ backend }: { backend: UiBackend }) {
@@ -600,6 +601,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const addLibraryNode = (kind: LibraryNodeKind) => { const next = appendLibraryNode(draft, kind); recordDraftChange(next); setSelectedNodeId(next.nodes[next.nodes.length - 1].id); setActionMessage(`${next.nodes[next.nodes.length - 1].name} added to the draft. Review and plan the changes before committing.`); };
   const addConnection = () => { const source = decodePort(connectionSource); const destination = decodePort(connectionDestination); if (!source || !destination) { setActionMessage("Choose an output and input port first."); return false; } try { const next = appendDraftConnection(draft, source.nodeId, source.portName, destination.nodeId, destination.portName); recordDraftChange(next); setActionMessage("Connection added to the draft. Review and plan the changes before committing."); return true; } catch (error) { setActionMessage(formatUiError(error, "Unable to add connection.")); return false; } };
   const insertProcessor = (edgeId: string, kind: InsertableProcessorKind) => { if (!backend.connected) { setActionMessage("Connect the backend before changing draft topology."); return; } try { const next = insertDraftProcessor(draft, edgeId, kind); const inserted = next.nodes.at(-1); recordDraftChange(next); if (inserted) setSelectedNodeId(inserted.id); setActionMessage(`${inserted?.name ?? kind} inserted into the draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to insert processor.")); } };
+  const appendPreset = (presetId: EqPresetId) => { if (!backend.connected) { setActionMessage("Connect the backend before adding a preset."); return; } try { const next = appendEqPresetNode(draft, presetId); const inserted = next.nodes.at(-1); recordDraftChange(next); if (inserted) setSelectedNodeId(inserted.id); setActionMessage(`${inserted?.name ?? "EQ preset"} added to the draft. Review and plan the changes before committing.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to add preset.")); } };
   useEffect(() => {
     const handleInsertProcessor = (event: Event) => {
       const detail = (event as CustomEvent<{ edgeId?: string; kind?: InsertableProcessorKind }>).detail;
@@ -607,6 +609,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     };
     globalThis.addEventListener("audiorouter:insert-processor", handleInsertProcessor);
     return () => globalThis.removeEventListener("audiorouter:insert-processor", handleInsertProcessor);
+  }, [backend, draft]);
+  useEffect(() => {
+    const handleAppendEqPreset = (event: Event) => {
+      const detail = (event as CustomEvent<{ presetId?: EqPresetId }>).detail;
+      if (detail.presetId) appendPreset(detail.presetId);
+    };
+    globalThis.addEventListener("audiorouter:append-eq-preset", handleAppendEqPreset);
+    return () => globalThis.removeEventListener("audiorouter:append-eq-preset", handleAppendEqPreset);
   }, [backend, draft]);
   const connectCanvas = (connection: Connection) => {
     if (!backend.connected) { setActionMessage("Connect the backend before adding a canvas connection."); return; }

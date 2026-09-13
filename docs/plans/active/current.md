@@ -10,6 +10,15 @@ Updated: 2026-09-13.
   gainDb: 0 → -6 summary. UI coverage remains 135 tests and TypeScript
   typecheck passes. Rollback is limited to inspector presentation and tests.
 
+- Expanded the authoritative EQ presets into ordinary UI draft nodes on
+  2026-09-13. The voiceNeutral, hum50Hz, and hum60Hz IDs now map to bounded
+  Parametric EQ band settings in the draft model; the connected Presets panel
+  exposes an Add EQ to draft action and selects the new node for inspection.
+  Voice-chain entries remain informational until their topology insertion
+  policy is explicit. Model and connected-App regressions pass; UI coverage is
+  137 tests with TypeScript typecheck passing. No preset action commits,
+  starts audio, or changes machine configuration.
+
 - Requalified the full guarded M00-M08 acceptance chain at pushed head
   `061b49fc` on 2026-09-13 after the direct processor-insertion delivery.
   Elevated Windows execution passed toolchain/native compile, project-driver

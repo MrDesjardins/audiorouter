@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
+import { appendDraftConnection, appendEqPresetNode, appendLibraryNode, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendDraftConnection", () => {
@@ -87,6 +87,22 @@ describe("appendDraftConnection", () => {
     ]);
     expect(inserted.edges.at(-1)?.matrix).toEqual([0.5]);
     expect(inserted.revision).toBe(demoSession.revision);
+  });
+
+  it("expands each EQ preset into an inspectable ordinary node", () => {
+    const hum = appendEqPresetNode(demoSession, "hum50Hz");
+    const humNode = hum.nodes.at(-1);
+    expect(humNode).toMatchObject({
+      kind: "parametricEq",
+      parameters: expect.objectContaining({ band0Enabled: true, band0Type: "notch", band0FrequencyHz: 50, band0Q: 8 }),
+    });
+    const neutral = appendEqPresetNode(demoSession, "voiceNeutral").nodes.at(-1);
+    expect(neutral).toMatchObject({
+      kind: "parametricEq",
+      parameters: expect.objectContaining({ band0Enabled: false, band0Type: "peaking", band0FrequencyHz: 1000, band0Q: 1 }),
+    });
+    expect(hum.edges).toEqual(demoSession.edges);
+    expect(hum.revision).toBe(demoSession.revision);
   });
 
   it("refuses to remove a mixer with ambiguous topology", () => {
