@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+Requalified the complete guarded M00-M08 acceptance chain at the current
+head on 2026-09-13. Project driver build/source signability, portable
+milestone suites, UI build/tests, VST3/VST2 workers, M07, unsigned M08
+artifacts, 159 normative requirement mappings, and documentation validation
+all passed. The chain removed 15 run-owned temporary children. No driver was
+installed or loaded, no signing or boot policy changed, and no plugin/startup
+registration, stream, default, volume, mute, privacy, or persistent machine
+audio configuration was changed. Production driver/signing, installer,
+physical-latency, and interactive/manual gates remain explicit blockers.
+
 Verified the process-loopback activation allocation fix on 2026-09-13. The
 CoTaskMem-backed activation blob is owned by an RAII guard through completion
 or immediate failure, while the timeout path retains its documented complete
