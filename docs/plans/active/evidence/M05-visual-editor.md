@@ -1,5 +1,12 @@
 # M05 visual editor evidence
 
+## 2026-09-12 - UI acceptance requalification
+
+The M05 acceptance passed with TypeScript typecheck, all 17 UI test files and
+128 tests, and a disposable production Vite build transforming 213 modules.
+The runner removed its three temporary output files. This is UI-only evidence;
+no audio endpoint, driver, or persistent machine configuration was accessed.
+
 ## 2026-09-08 - Application contract requalification
 
 After the application inventory gained nullable `executablePath`, the UI

@@ -2,6 +2,11 @@
 
 Updated: 2026-09-12.
 
+Fresh M05 UI acceptance passed on 2026-09-12: TypeScript typecheck, 17 test
+files/128 tests, and a disposable production Vite build of 213 modules all
+completed successfully. The three temporary build files were removed; no
+audio endpoint, driver, or machine configuration changed.
+
 Closed the interactive M07 shell transport gate on 2026-09-12. In the
 current Windows desktop session, the disposable Tauri/WebView2 shell reached
 the frontend initialization script, invoked `rpc_request`, and received an
