@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Extracted and tested the canvas library-drop coordinate conversion on
+  2026-09-13. Viewport coordinates are converted to bounded canvas positions,
+  while missing/non-finite drag coordinates fall back to the canvas origin.
+  This keeps presentation persistence deterministic and leaves draft graph
+  mutation behind the existing connected/backend boundary. UI tests pass
+  (146), TypeScript typecheck and diff checks pass; no audio or machine state
+  changes.
+
 - Corrected canvas layout ownership on 2026-09-13. The App now returns the
   inserted draft node identity without writing presentation storage; the
   canvas alone merges the dropped position with existing layout entries. This
