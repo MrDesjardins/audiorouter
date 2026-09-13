@@ -134,6 +134,9 @@ if (-not $stream.Contains('if (Position_ == NULL)')) {
 if (-not $stream.Contains('m_pDmaBuffer == NULL')) {
     throw 'WaveRT DMA allocation must reject a failed mapping'
 }
+if (-not $stream.Contains('m_pPortStream == NULL')) {
+    throw 'WaveRT DMA allocation must reject a missing PortCls stream owner'
+}
 if (-not $stream.Contains('m_pPortStream->FreePagesFromMdl(pBufferMdl)')) {
     throw 'WaveRT DMA mapping failure must release allocated pages'
 }

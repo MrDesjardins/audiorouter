@@ -36,6 +36,12 @@ fails instead of exposing a successful stream with a null buffer. The M03
 source-contract and non-installing WDK build passed with zero signability
 errors/warnings and catalog generation. No driver was installed or loaded.
 
+Completed the allocation-owner guard on 2026-09-12: WaveRT buffer setup now
+also rejects a missing PortCls stream owner before invoking MDL allocation or
+mapping. The M03 source-contract and non-installing WDK build passed with zero
+signability errors/warnings and catalog generation. No driver was installed or
+loaded.
+
 Fresh post-reboot native adapter qualification after `ce5c3fcc` passed on
 2026-09-12. The bounded system-selected adapter smoke processed 51 capture
 packets/24,480 frames through 191 graph blocks at 48 kHz with 24,448 scheduler

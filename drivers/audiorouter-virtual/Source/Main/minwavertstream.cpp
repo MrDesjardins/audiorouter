@@ -478,7 +478,8 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
 
     if (AudioBufferMdl_ == NULL || ActualSize_ == NULL ||
         OffsetFromFirstPage_ == NULL || CacheType_ == NULL ||
-        m_pWfExt == NULL || m_pWfExt->Format.nBlockAlign == 0 ||
+        m_pPortStream == NULL || m_pWfExt == NULL ||
+        m_pWfExt->Format.nBlockAlign == 0 ||
         m_ulDmaMovementRate == 0 ||
         (0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign))
     {
@@ -741,7 +742,8 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
 
     if (AudioBufferMdl_ == NULL || ActualSize_ == NULL ||
         OffsetFromFirstPage_ == NULL || CacheType_ == NULL ||
-        m_pWfExt == NULL || m_pWfExt->Format.nBlockAlign == 0 ||
+        m_pPortStream == NULL || m_pWfExt == NULL ||
+        m_pWfExt->Format.nBlockAlign == 0 ||
         (0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign))
     {
         return STATUS_UNSUCCESSFUL;

@@ -555,6 +555,15 @@ The administrator-authorized M03 source-contract and non-installing x64 WDK
 build passed with zero signability errors/warnings and catalog generation. No
 driver was installed or loaded and no machine audio configuration changed.
 
+The same allocation boundary now rejects a missing PortCls stream owner before
+any MDL operation. This keeps the failure path explicit when stream lifetime
+ordering is invalid and complements the existing format, byte-rate, mapping,
+and MDL cleanup checks.
+
+The administrator-authorized M03 source-contract and non-installing x64 WDK
+build passed with zero signability errors/warnings and catalog generation. No
+driver was installed or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - WaveRT query pointer validation
 
 WaveRT position, packet, packet-count, and presentation-position queries now
