@@ -63,6 +63,9 @@ foreach ($required in @(
         throw "driver close cleanup is missing required ownership invariant: $required"
     }
 }
+if ($source.Contains('if (lease->Retiring)')) {
+    throw 'bridge retirement cleanup must use captured state after rundown, not an unlocked lease read'
+}
 $copyStart = $source.IndexOf('NTSTATUS AudioRouterCopyLeaseBlock(')
 $copyEnd = $source.IndexOf('static void RetireBridgeResources(', $copyStart)
 if ($copyStart -lt 0 -or $copyEnd -le $copyStart) {

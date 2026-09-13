@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Removed an unlocked bridge-retirement state read on 2026-09-13. Cleanup now
+uses the `oldRundownStarted` state captured under the lease lock after waiting
+for callback readers, instead of rereading mutable `lease->Retiring` state
+without synchronization. The M03 non-installing WDK/source acceptance passed
+with zero signability errors/warnings and catalog generation. No driver was
+installed or loaded.
+
 Hardened WaveRT write-position teardown on 2026-09-13. The internal write
 position helper now rejects a missing miniport or adapter-common owner before
 emitting diagnostics or updating position state, preventing a late packet

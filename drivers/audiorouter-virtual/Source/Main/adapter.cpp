@@ -566,7 +566,10 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
             } else if (oldMappedView != NULL || oldSectionObject != NULL) {
                 RetireBridgeResources(lease, oldMappedView, oldSectionObject,
                                       oldRundownStarted);
-                if (lease->Retiring) {
+                // `oldRundownStarted` is the state captured while holding
+                // the lease lock; do not inspect the mutable lease flag after
+                // releasing the lock and waiting for callback readers.
+                if (oldRundownStarted) {
                     KeAcquireSpinLock(&lease->Lock, &oldIrql);
                     RtlZeroMemory(&lease->Request, sizeof(lease->Request));
                     lease->Retiring = FALSE;
