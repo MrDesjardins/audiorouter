@@ -1,5 +1,22 @@
 # M06 VST3 SDK boundary
 
+## Local ReaPlugs VST2 requalification (2026-09-12)
+
+`tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates` qualified
+the six ignored local x64 ReaPlugs audio effects (`ReaComp`, `ReaDelay`,
+`ReaEQ`, `ReaFIR`, `ReaGate`, and `ReaXComp`) through disposable worker
+processes. Each DLL passed load, processing, and bounded state/parameter
+coverage at 44.1, 48, and 96 kHz: 18 effect/rate combinations passed.
+
+The wrapper captured each candidate's length and SHA-256 before execution and
+verified both afterward. It also restored the pre-existing
+`AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE` environment
+values. No plugin registration, editor window, audio stream, driver, or
+persistent machine-audio configuration was used. This strengthens the gated
+legacy VST2 processing evidence for PLUG-07; it does not establish vendor
+redistribution rights, native editor ownership, arbitrary-plugin compatibility,
+or production release qualification.
+
 ## Runtime multi-bus quantum-shape hardening (2026-09-09)
 
 `RuntimeBusGeneration::process` now validates that every present input bus and

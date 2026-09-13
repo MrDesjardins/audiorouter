@@ -143,6 +143,17 @@ state. The process tree and temporary state were cleaned up; no audio endpoint
 or persistent machine configuration was accessed. Evidence: [M07 automation
 evidence](evidence/M07-automation-recovery.md).
 
+The local ReaPlugs VST2 qualification was rerun on 2026-09-12 with
+`tests/acceptance/m06-vst2-reaplugs.ps1 -SkipIncompatibleCandidates`. All six
+ignored x64 audio-effect DLLs passed the bounded worker load/process matrix at
+44.1, 48, and 96 kHz (18 combinations). The wrapper restored the pre-existing
+`AUDIOROUTER_VST2_FIXTURE` and `AUDIOROUTER_VST2_SAMPLE_RATE` values and every
+DLL's size/SHA-256 matched its before-test fingerprint. No plugin registration,
+audio stream, or machine configuration changed. This closes the current local
+PLUG-07 processing evidence slice; rights, native editor ownership, release
+qualification, and production VST3/driver gates remain open. Evidence: [M06
+plugin evidence](evidence/M06-vst3-sdk.md), [plugin compatibility snapshot](../../operations/plugin-compatibility.md).
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability

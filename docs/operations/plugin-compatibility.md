@@ -1,5 +1,13 @@
 # Plugin compatibility snapshot
 
+The local ReaPlugs VST2 matrix was independently rerun on 2026-09-12. All six
+ignored x64 audio-effect DLLs passed the contained worker load/process checks at
+44.1, 48, and 96 kHz (18 combinations); each binary retained its original
+length and SHA-256, and the wrapper restored its temporary environment values.
+This is bounded processing evidence only. It does not grant redistribution
+rights, qualify native editor windows, or change the release-qualified VST3
+boundary.
+
 AudioRouter's release-qualified plugin boundary remains VST3 x64. A gated
 Windows-only VST2 x64 worker adapter is available for explicitly selected
 user-installed audio-effect DLLs; x86, arbitrary binary execution, and a
