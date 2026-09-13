@@ -1,5 +1,20 @@
 # M08 release evidence
 
+## 2026-09-13 - current pushed head safe acceptance
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/safe-all.ps1` from `C:\code\audiorouter`, using the installed
+VS2026/WDK toolchain. The complete guarded chain passed at pushed head
+`22e55c43`: M00 toolchain/native compile/inventory, non-installing M03 x64
+driver build and catalog signability, disposable SysVAD, M01/M04/M05, M06
+VST3/VST2 workers, M07, unsigned M08 artifacts, 159 requirement mappings, and
+documentation validation (52 Markdown files, 179 local links). Cleanup
+removed 15 run-owned temporary children.
+
+This is qualification evidence only. The driver was not installed or loaded;
+no signing mode, startup or plugin registration, endpoint default, volume,
+mute, privacy state, or persistent machine-audio configuration was changed.
+
 ## 2026-09-13 - shell packaging smoke and current safe acceptance
 
 The guarded safe-all chain passed after the shell-owned backend, persistent

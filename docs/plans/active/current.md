@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the full guarded `safe-all.ps1` chain at pushed head
+  `22e55c43` on 2026-09-13. VS2026/WDK discovery, x64 driver
+  compile/signability/catalog, 31-endpoint read-only inventory, SysVAD,
+  M01/M04/M05, VST3/VST2 workers, M07, unsigned M08 artifacts, 159
+  traceability IDs, and documentation validation passed. Cleanup removed 15
+  run-owned temporary children. No driver was installed or loaded, and no
+  signing, startup, plugin-registration, or persistent audio configuration
+  changed.
+
 - Added a control-plane regression proving `nativeEndpoints.prepare` rejects
   the default Operator grant before parsing parameters or opening endpoint
   resources. This preserves the separate device-administration gate while the
