@@ -1714,3 +1714,15 @@ These are shared-mode user-space adapter and digital-bridge checks. They do
 not qualify physical acoustic latency, PortCls callback ownership, a loaded
 managed driver, or production signing. No persistent machine-audio setting
 was changed.
+## 2026-09-12 - default bridge constructor ABI alignment
+
+The default `NativeBridgeController::create` path now delegates to the
+section-backed constructor. The secured driver broker requires a mapped
+section on `OPEN`; the previous unmapped request would have been rejected by
+the intentionally fail-closed driver boundary. This preserves the public
+compatibility entry point while giving it the same section lifetime and lease
+ownership as the explicit path.
+
+The focused Windows-audio suite passed 67 tests with formatting and diff
+checks. No driver was installed or loaded and no audio endpoint or persistent
+machine configuration was changed.

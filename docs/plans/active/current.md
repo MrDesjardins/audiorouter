@@ -12,6 +12,13 @@ plugin/startup registration, stream activation, or persistent machine-audio
 configuration occurred. Next: continue the remaining implementation slices;
 loaded-driver/PortCls and production-signing gates remain explicitly open.
 
+Aligned the default native bridge controller constructor on 2026-09-12 with
+the secured driver broker: `NativeBridgeController::create` now opens the
+section-backed path required by the driver instead of sending an unmapped
+`OPEN` request. This removes a constructor/driver ABI mismatch while retaining
+the explicit section constructor and lease ownership rules. Windows-audio
+tests and the guarded acceptance chain remain required for verification.
+
 Hardened the bridge broker IRP boundary on 2026-09-12: device-control
 dispatch now rejects a null IRP, missing stack, or missing control file object
 before reading the IOCTL or entering lease ownership logic. This prevents a

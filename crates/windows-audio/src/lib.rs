@@ -599,18 +599,11 @@ impl NativeBridgeController {
         mapping_path: impl AsRef<std::path::Path>,
         hello: audiorouter_protocol::AudioBridgeHello,
     ) -> Result<Self, NativeBridgeControllerError> {
-        let client = NativeBridgeControlClient::open(device_path)
-            .map_err(NativeBridgeControllerError::Windows)?;
-        let session = NativeBridgeSession::create(mapping_path, hello.clone())
-            .map_err(NativeBridgeControllerError::Session)?;
-        client
-            .open_bridge(&hello)
-            .map_err(NativeBridgeControllerError::Windows)?;
-        Ok(Self {
-            client,
-            session,
-            section: None,
-        })
+        // The secured broker requires an actual section for OPEN. Keep this
+        // constructor as the compatibility entry point, but use the same
+        // mapped-file ownership path as the explicit constructor so it cannot
+        // create a user-mode session that the native driver must reject.
+        Self::create_with_section(device_path, mapping_path, hello)
     }
 
     pub fn create_with_section(
