@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Closed the UI-03/UI-11 structured-list parity gap on 2026-09-13. Graph-list
+  connections now expose the same nine in-house processor insertion actions as
+  the canvas, using the shared processor catalog and existing draft event
+  boundary; disconnected state disables every mutation. List-view regression,
+  full UI coverage (143 tests), TypeScript typecheck, and diff checks pass.
+  No graph, audio, or machine state changes occur until the normal plan/commit
+  flow.
+
 - Closed a UI-04 state-visibility gap on 2026-09-13. Canvas cards and the
   keyboard-accessible structured graph list now use one shared state helper to
   display muted, bypassed, enabled, or disabled explicitly; muted takes

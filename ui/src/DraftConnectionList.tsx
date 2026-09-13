@@ -5,7 +5,7 @@ import type { InsertableProcessorKind } from "./draft";
 
 const INSERT_MIXER_ACTION = "__audiorouter_insert_mixer__";
 const REMOVE_MIXER_ACTION = "__audiorouter_remove_mixer__";
-const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: string }> = [
+export const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: string }> = [
   { kind: "gain", label: "Gain" },
   { kind: "mute", label: "Mute" },
   { kind: "parametricEq", label: "Parametric EQ" },

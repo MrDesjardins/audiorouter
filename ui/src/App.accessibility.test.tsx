@@ -363,6 +363,9 @@ describe("keyboard connection dialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Insert mixer on Microphone to Voice gain" }));
     expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
+    for (const label of ["Gain", "Mute", "Parametric EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
+      expect(screen.getByRole("button", { name: `Insert ${label}` })).toBeTruthy();
+    }
   });
 
   it("renders backend route provenance as an accessible path list", async () => {
