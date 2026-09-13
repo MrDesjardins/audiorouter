@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Closed a WaveRT callback arithmetic gap on 2026-09-13. Both simulated stream
+data paths now fail closed when the DMA buffer is missing or zero-sized before
+computing a modulo offset; the M03 acceptance also asserts the `ReadBytes`
+guard. The rebuilt x64 prototype driver passed source-contract checks,
+catalog generation, and signability with zero errors/warnings. No driver was
+installed or loaded and no machine audio configuration changed.
+
 Hardened both WaveRT `WriteBytes` and `ReadBytes` callbacks on 2026-09-13:
 they now return before DMA-buffer modulo arithmetic when the buffer is absent
 or its size is zero, preventing a partial stream setup from reaching a
