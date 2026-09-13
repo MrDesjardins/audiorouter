@@ -14,6 +14,13 @@ Updated: 2026-09-13.
   acceptance with the known VB-Cable IDs, then wire the first built-in EQ/gate
   editing path through the same graph commit surface.
 
+- Re-ran the guarded VB-Cable lifecycle acceptance after the shell delivery
+  change on 2026-09-13 using the exact existing CABLE Output capture and CABLE
+  Input render IDs. The same-process control path passed with 23,520 captured
+  frames, 183 processed quanta, and 23,424 rendered frames; the wrapper restored
+  all three live-test environment variables. This is evidence for the existing
+  endpoint backend path, not yet the unavailable interactive WebView gate.
+
 - Requalified the focused M03 driver bridge acceptance at pushed head on
   2026-09-13 with VS 18.9.1 and WDK 10.0.28000.0. The x64 driver compiled,
   catalog generation/signability reported zero errors and warnings, and the
