@@ -12,6 +12,15 @@ Updated: 2026-09-13.
   production PortCls ownership. Next: wire an authorized endpoint-worker
   construction path and guarded live evidence to this lifecycle.
 
+- Added the explicit native endpoint-worker preparation boundary on
+  2026-09-13. Control can now build a stopped worker only from two exact
+  inventory descriptors after format/direction compatibility validation and
+  bounded refresh/reopen checks; partial capture preparation is released when
+  render preparation fails. The worker still requires a separate deliberate
+  start, and no RPC or shell startup path invokes this method automatically.
+  Control tests (128), formatting, and strict Clippy pass. Native endpoint
+  activation and managed-driver qualification remain open.
+
 - Implemented the first real desktop vertical slice on 2026-09-13. The Tauri
   shell now owns a per-user control backend on its default launch path, opens
   `%LOCALAPPDATA%\\AudioRouter\\state.sqlite` (or an explicit absolute test

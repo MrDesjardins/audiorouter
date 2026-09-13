@@ -3648,6 +3648,75 @@ impl ControlPlane {
         Ok(())
     }
 
+    /// Prepare a stopped native worker from two endpoint descriptors returned
+    /// by the authoritative device inventory. This is an explicit control
+    /// operation: it refreshes and revalidates the exact persisted identities,
+    /// opens clients in stopped state, and never selects a replacement. The
+    /// caller must still invoke `start_native_endpoint_worker` (normally via
+    /// `session_start`) to begin moving audio.
+    pub fn prepare_native_endpoint_worker(
+        &mut self,
+        session_id: EntityId,
+        capture: &audiorouter_windows_audio::EndpointInfo,
+        render: &audiorouter_windows_audio::EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if self.native_endpoint_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is already attached".into(),
+            ));
+        }
+        let bridge = audiorouter_windows_audio::WasapiSchedulerBridge::new_for_endpoints(
+            2,
+            capture,
+            render,
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            audiorouter_windows_audio::MAX_FLOAT32_ACCUMULATOR_FRAMES,
+        )
+        .map_err(audio_control_error)?;
+        if self.endpoint_monitor.is_none() {
+            self.endpoint_monitor = Some(
+                audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
+            );
+        }
+        let monitor = self
+            .endpoint_monitor
+            .as_mut()
+            .expect("endpoint monitor initialized above");
+        let capture_client =
+            audiorouter_windows_audio::SharedCapture::open_refreshed_bound_with_retry(
+                monitor,
+                capture,
+                buffer_duration_100ns,
+                max_attempts,
+                retry_delay_ms,
+            )
+            .map_err(audio_control_error)?;
+        let render_client =
+            match audiorouter_windows_audio::SharedRender::open_refreshed_bound_with_retry(
+                monitor,
+                render,
+                buffer_duration_100ns,
+                max_attempts,
+                retry_delay_ms,
+            ) {
+                Ok(render_client) => render_client,
+                Err(error) => {
+                    drop(capture_client);
+                    return Err(audio_control_error(error));
+                }
+            };
+        let worker = audiorouter_windows_audio::WasapiEndpointWorker::new(
+            capture_client,
+            render_client,
+            bridge,
+        );
+        self.attach_native_endpoint_worker(session_id, worker)
+    }
+
     /// Start the explicitly attached endpoint pair on the control thread.
     pub fn start_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
         self.native_endpoint_worker
