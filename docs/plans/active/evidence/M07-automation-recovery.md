@@ -1222,3 +1222,15 @@ The focused MCP recorder-create schema now advertises the authoritative 2,048
 chunk maximum for `queueCapacity`, alongside its required queue and pass-limit
 fields. The CLI catalog regression and MCP stdio integration test verify the
 catalog count and bound; no recorder or audio endpoint was opened.
+
+## 2026-09-12 - CLI recorder-create success regression
+
+`crates/cli/src/lib.rs` now verifies the complete `recorder create` convenience
+command, not only argument rejection. The regression seeds a disposable
+database with the valid session fixture and an explicitly approved temporary
+recording root, invokes the command through the authorized Record grant, and
+checks that the response is idle/unarmed with the requested WAV format and one
+new recording entry. It then runs the existing arm/start path against the same
+database. The 31-test CLI suite, 3-test MCP stdio integration, strict CLI
+Clippy, formatting, and diff checks passed. Temporary database/root data is
+removed by the test; no live audio endpoint is opened.

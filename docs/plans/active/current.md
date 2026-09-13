@@ -34,6 +34,16 @@ and M08 binaries. No driver installation/loading, signing-mode change,
 plugin/startup registration, audio stream, or persistent machine configuration
 occurred.
 
+Portable follow-up on 2026-09-12: the CLI recorder-create regression now
+executes the authorized `recorders.create` path against a disposable SQLite
+database and explicitly approved temporary recording root. It verifies an
+unarmed idle result, selected WAV format, and exclusive file creation before
+exercising the existing arm/start path. The focused CLI suite passed 31 tests,
+MCP stdio integration passed 3 tests, strict CLI Clippy and formatting passed,
+and the temporary database/root are removed by the test. This is
+control-plane and recording-path evidence; it does not activate audio or a
+driver.
+
 Next action: qualify the render-source/capture-sink bridge publication against
 the AudioRouter driver prototype's source-contract and lease/generation
 boundaries. Keep installation, production signing, PortCls ownership, clean

@@ -4040,19 +4040,53 @@ mod tests {
 
     #[test]
     fn recorder_commands_use_database_backed_control_dispatch() {
-        let database = std::env::temp_dir().join(format!(
-            "audiorouter-cli-recorder-{}.sqlite",
-            std::process::id()
-        ));
+        let suffix = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let database =
+            std::env::temp_dir().join(format!("audiorouter-cli-recorder-{suffix}.sqlite"));
+        let recording_root =
+            std::env::temp_dir().join(format!("audiorouter-cli-recording-root-{suffix}"));
         let _ = std::fs::remove_file(&database);
+        let _ = std::fs::remove_dir_all(&recording_root);
+        std::fs::create_dir_all(&recording_root).unwrap();
         let session: audiorouter_domain::Session =
             serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
                 .unwrap();
-        Storage::open(&database)
-            .unwrap()
-            .save_session(&session)
-            .unwrap();
+        let storage = Storage::open(&database).unwrap();
+        storage.save_recording_root(&recording_root).unwrap();
+        storage.save_session(&session).unwrap();
         let database_arg = database.to_string_lossy().into_owned();
+        let created: Value = serde_json::from_str(
+            &run([
+                "recorder",
+                "create",
+                "session-fixture",
+                "cli-recorder",
+                "--format",
+                "wavPcm16",
+                "--channels",
+                "1",
+                "--sample-rate",
+                "48000",
+                "--database",
+                &database_arg,
+                "--idempotency-key",
+                "create-cli",
+                "--json",
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(created["state"], "idle");
+        assert_eq!(created["armed"], false);
+        assert_eq!(created["format"], "wavPcm16");
+        assert_eq!(std::fs::read_dir(&recording_root).unwrap().count(), 1);
         let armed: Value = serde_json::from_str(
             &run([
                 "recorder",
@@ -4085,5 +4119,6 @@ mod tests {
         .unwrap();
         assert_eq!(started["state"], "recording");
         let _ = std::fs::remove_file(database);
+        let _ = std::fs::remove_dir_all(recording_root);
     }
 }
