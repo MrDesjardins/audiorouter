@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Requalified the full locked workspace after virtual-route lifecycle changes on
+2026-09-12. CLI/MCP, control (127), domain, DSP (32), engine (107), recording,
+storage, transport, Windows-audio (67), plugin-worker, and all doc-tests
+passed with `cargo test --workspace --locked -- --test-threads=1`. No driver,
+endpoint, or persistent machine-audio configuration was accessed.
+
 Closed the remaining virtual-route retirement leak on 2026-09-12: runtime
 crash recovery and successful session deletion now deactivate all bridges
 owned by the retired producer session. The control suite passed 127 tests,

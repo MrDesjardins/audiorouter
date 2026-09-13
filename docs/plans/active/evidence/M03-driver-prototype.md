@@ -1,5 +1,13 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - workspace requalification
+
+After the route-generation and retirement changes, the full locked workspace
+test suite passed, including control (127), engine (107), DSP (32), and
+Windows-audio (67) tests plus all doc-tests. This confirms the control-plane
+bridge lifecycle change does not regress the portable engine, storage,
+protocol, recorder, or adapter contracts. No driver or endpoint was activated.
+
 ## 2026-09-12 - route retirement cleanup
 
 Bridge teardown is now also enforced after successful session deletion and for
