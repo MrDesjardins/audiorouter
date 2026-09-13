@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Re-ran the frontend-owned shell RPC acceptance on 2026-09-13. The
+  disposable Tauri/WebView initialization reached the native `rpc_request`
+  command and authenticated backend `system.describe` successfully. This
+  strengthens transport evidence but does not replace an interactive visual
+  UI/accessibility observation; no audio endpoint or persistent machine
+  configuration was touched.
+
 - Rechecked the manual WebView2 shell gate on 2026-09-13 with the Windows UI
   automation surface. It returned no targetable applications or windows, so
   no shell launch, click, or audio action was attempted and `rpc_request`
