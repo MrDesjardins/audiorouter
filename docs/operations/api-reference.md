@@ -70,6 +70,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `startup.apply` | `sessionControl` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
+| `nativeEndpoints.pump` | `sessionControl` | external operation; drains a bounded packet budget for the exact running native generation |
 | `plugins.scan` | `pluginScan` | read-only |
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
@@ -116,6 +117,13 @@ its opaque ID, and follow-default behavior must be an explicit graph choice.
 When endpoint notifications produce a non-empty snapshot diff, the control
 plane retains a bounded `devices.changed` state event; clients should refetch
 `devices.list` rather than expect endpoint details in the event payload.
+
+`nativeEndpoints.prepare` requires exact active capture and render endpoint IDs
+and opens both clients stopped; it never changes the system default endpoint,
+volume, or mute state. `nativeEndpoints.pump` requires the prepared session's
+current positive runtime generation and drains only already-available packets,
+up to the documented per-wake bound. It does not wait, rebind, select a
+replacement endpoint, or activate a stopped session.
 
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls

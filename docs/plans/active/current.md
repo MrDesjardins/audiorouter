@@ -38,6 +38,12 @@ Updated: 2026-09-13.
   real draft node. Endpoint identity binding remains explicit in the native
   panel and is not inferred from a dropped visual node.
 
+- The guarded full acceptance run on 2026-09-13 caught documentation drift
+  after the pump API addition: `docs.ps1` reported the missing
+  `nativeEndpoints.pump` entry in the API reference. Added the method's scope,
+  bounded-generation behavior, and no-rebind/no-defaults guarantees; the
+  documentation validator then passed for 52 Markdown files and 179 links.
+
 - New delivery gate: a guarded human run must be able to select the existing
   VB-Cable capture/render pair in the UI, commit a visible graph change, start
   and stop the session, and observe backend status/telemetry while preserving
