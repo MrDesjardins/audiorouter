@@ -544,6 +544,17 @@ The administrator-authorized M03 source-contract and non-installing x64 WDK
 build passed with zero signability errors/warnings and catalog generation. No
 driver was installed or loaded and no machine audio configuration changed.
 
+## 2026-09-12 - WaveRT DMA allocation fail-closed behavior
+
+Both WaveRT buffer allocation paths now validate their required arguments and
+format/byte-rate prerequisites. If page mapping returns `NULL`, the path
+releases the allocated MDL and returns `STATUS_INSUFFICIENT_RESOURCES` before
+publishing buffer state to the stream.
+
+The administrator-authorized M03 source-contract and non-installing x64 WDK
+build passed with zero signability errors/warnings and catalog generation. No
+driver was installed or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - WaveRT query pointer validation
 
 WaveRT position, packet, packet-count, and presentation-position queries now

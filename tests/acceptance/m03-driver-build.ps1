@@ -131,6 +131,12 @@ if (-not $stream.Contains('PacketNumber == NULL || Flags == NULL')) {
 if (-not $stream.Contains('if (Position_ == NULL)')) {
     throw 'WaveRT position query must validate its output pointer'
 }
+if (-not $stream.Contains('m_pDmaBuffer == NULL')) {
+    throw 'WaveRT DMA allocation must reject a failed mapping'
+}
+if (-not $stream.Contains('m_pPortStream->FreePagesFromMdl(pBufferMdl)')) {
+    throw 'WaveRT DMA mapping failure must release allocated pages'
+}
 
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')
 $retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)

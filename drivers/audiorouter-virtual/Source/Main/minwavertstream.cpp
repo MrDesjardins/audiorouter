@@ -476,7 +476,11 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
 
     ULONG ulBufferDurationMs = 0;
 
-    if ( (0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign) )
+    if (AudioBufferMdl_ == NULL || ActualSize_ == NULL ||
+        OffsetFromFirstPage_ == NULL || CacheType_ == NULL ||
+        m_pWfExt == NULL || m_pWfExt->Format.nBlockAlign == 0 ||
+        m_ulDmaMovementRate == 0 ||
+        (0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign))
     {
         return STATUS_UNSUCCESSFUL;
     }
@@ -528,6 +532,11 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
     //  A WaveRT miniport driver should not require software access to the audio buffer itself."
     //
     m_pDmaBuffer = (BYTE*)m_pPortStream->MapAllocatedPages(pBufferMdl, MmCached);
+    if (m_pDmaBuffer == NULL)
+    {
+        m_pPortStream->FreePagesFromMdl(pBufferMdl);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
     m_ulNotificationsPerBuffer = NotificationCount_;
     m_ulDmaBufferSize = RequestedSize_;
     ulBufferDurationMs = (RequestedSize_ * 1000) / m_ulDmaMovementRate;
@@ -730,7 +739,10 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
 {
     PAGED_CODE();
 
-    if ((0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign))
+    if (AudioBufferMdl_ == NULL || ActualSize_ == NULL ||
+        OffsetFromFirstPage_ == NULL || CacheType_ == NULL ||
+        m_pWfExt == NULL || m_pWfExt->Format.nBlockAlign == 0 ||
+        (0 == RequestedSize_) || (RequestedSize_ < m_pWfExt->Format.nBlockAlign))
     {
         return STATUS_UNSUCCESSFUL;
     }
@@ -764,6 +776,11 @@ _Out_   MEMORY_CACHING_TYPE    *CacheType_
     //  A WaveRT miniport driver should not require software access to the audio buffer itself."
     //
     m_pDmaBuffer = (BYTE*)m_pPortStream->MapAllocatedPages(pBufferMdl, MmCached);
+    if (m_pDmaBuffer == NULL)
+    {
+        m_pPortStream->FreePagesFromMdl(pBufferMdl);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
 
     m_ulDmaBufferSize = RequestedSize_;
     m_ulNotificationsPerBuffer = 0;
