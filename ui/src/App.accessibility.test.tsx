@@ -46,6 +46,20 @@ describe("keyboard connection dialog", () => {
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({ "gain-1": { x: 0, y: 0 } });
   });
 
+  it("rejects canvas library drops while disconnected", async () => {
+    render(<App backend={createDisconnectedBackend()} />);
+    const dropSource = await screen.findByRole("button", { name: /^Gain$/ });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      setData: vi.fn(),
+      getData: (type: string) => type === "application/x-audiorouter-library-kind" ? "gain" : "",
+    };
+    fireEvent.drop(canvas, { dataTransfer });
+    expect(screen.queryByText("Gain 1 added to the draft. Review and plan the changes before committing.")).toBeNull();
+    expect(await screen.findByText("Connect the backend before changing the draft.")).toBeTruthy();
+  });
+
   it("binds only explicitly selected active endpoints and preserves the no-defaults boundary", async () => {
     const capture = {
       id: "capture-active",

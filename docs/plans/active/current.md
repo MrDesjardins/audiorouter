@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Fixed a UI-08/UI-13 disconnected-mutation regression on 2026-09-13. The
+  direct canvas library-drop callback now fails closed when the backend is
+  unavailable, matching the existing connected guards for library buttons,
+  topology edits, and plan/commit actions. A jsdom regression proves a
+  disconnected drag cannot add a draft processor or persist layout. UI tests
+  pass (144), TypeScript typecheck and diff checks pass; no audio or machine
+  state is changed.
+
 - Closed a UI-02/UI-03 canvas placement gap on 2026-09-13. Dropping a library
   processor now records its bounded canvas position in presentation-only
   layout storage while adding the node through the existing draft mutation
