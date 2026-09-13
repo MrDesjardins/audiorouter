@@ -1,5 +1,15 @@
 # M08 release evidence
 
+## 2026-09-13 - full safe-chain requalification at `fbba7134`
+
+The elevated safe acceptance chain passed after the guided Quick route UI
+slice. M05 reported 153 tests and a disposable production build; M06 VST2/
+VST3, M07 headless, unsigned release preparation, 159 traceability mappings,
+and documentation validation also passed. Temporary output was removed.
+The release remains explicitly unsigned and not publication-ready; driver
+installation/loading, production signing, and clean-machine acceptance were
+not attempted.
+
 ## 2026-09-13 - launcher packaged at `82c96e1c`
 
 The clean-tree `tests/acceptance/m08-release.ps1` run passed after adding

@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - full safe-chain requalification at `fbba7134`
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed at the
+pushed head. It covered M00/M03 native qualification, M01/M04, M05 with 153
+UI tests, M06 VST3/VST2, M07 headless control, unsigned M08 preparation,
+traceability, and documentation validation (52 Markdown files, 180 local
+links). Fifteen run-owned temporary children were removed. No driver was
+installed or loaded and no persistent audio configuration changed.
+
 ## 2026-09-13 - disposable VB-Cable desktop launcher at `522b1ce2`
 
 The new `tools/run-vb-cable-desktop.ps1` smoke reached the real Tauri shell

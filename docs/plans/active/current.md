@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete elevated `safe-all.ps1` chain at pushed head
+  `fbba7134` on 2026-09-13. M00/M03 toolchain, native compile, read-only
+  31-endpoint inventory, disposable SysVAD, M01/M04, M05 with 153 UI tests
+  and production build, M06 VST3/VST2, M07, unsigned M08 preparation,
+  traceability, and documentation validation all passed. Fifteen run-owned
+  temporary children were removed. No driver installation/loading,
+  signing-mode change, plugin/startup registration, live stream, endpoint
+  default, or persistent audio action occurred.
+
 - Added an accessible first-run Quick route panel on 2026-09-13. It links the
   existing exact-endpoint binding, visual graph, and session lifecycle panels
   in the intended order without creating a second mutation path. The full UI
