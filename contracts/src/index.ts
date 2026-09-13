@@ -233,6 +233,17 @@ export interface NativeEndpointPrepareResult {
   renderEndpointId: string;
 }
 
+export interface NativeEndpointPumpResult {
+  sessionId: EntityId;
+  generation: number;
+  packets: number;
+  capturedFrames: number;
+  processedQuanta: number;
+  renderedFrames: number;
+  droppedRenderFrames: number;
+  renderBackpressureEvents: number;
+}
+
 export interface InactiveDeviceInfo {
   id: string;
   name: string;
@@ -746,6 +757,7 @@ export type ImplementedMethod =
   | "startup.apply"
   | "devices.list"
   | "nativeEndpoints.prepare"
+  | "nativeEndpoints.pump"
   | "plugins.scan"
   | "plugins.list"
   | "plugins.retry"
@@ -835,6 +847,7 @@ export type MethodParams = {
   "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
+  "nativeEndpoints.pump": { sessionId: EntityId; generation: number; maxPackets?: number };
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
   "plugins.retry": { directory: string; idempotencyKey: string };
@@ -936,6 +949,7 @@ export type MethodResult = {
   "startup.apply": StartupApplyResult;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "nativeEndpoints.prepare": NativeEndpointPrepareResult;
+  "nativeEndpoints.pump": NativeEndpointPumpResult;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;
   "plugins.retry": PluginScanResult;

@@ -19,6 +19,16 @@ Updated: 2026-09-13.
   driver, plugin, storage, recording, automation, and release work remains in
   scope; this ordering changes delivery focus, not acceptance criteria.
 
+- Added the first UI-to-native delivery bridge on 2026-09-13. The typed
+  `nativeEndpoints.pump` control method drains a bounded packet budget for the
+  exact running native generation, and the connected UI schedules it only
+  after a native session start. This lets the existing VB-Cable pair continue
+  through the graph while the UI is open, including built-in processor changes
+  committed through the existing graph plan/commit path. It is deliberately a
+  transitional control-plane pump: event-driven worker ownership, background
+  lifetime independent of the WebView, production callback timing, and the
+  managed driver remain open gates.
+
 - New delivery gate: a guarded human run must be able to select the existing
   VB-Cable capture/render pair in the UI, commit a visible graph change, start
   and stop the session, and observe backend status/telemetry while preserving

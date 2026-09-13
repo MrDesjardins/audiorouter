@@ -372,6 +372,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [createdSessions, setCreatedSessions] = useState<import("@audiorouter/contracts").Session[]>([]);
   const [listedSessions, setListedSessions] = useState<import("@audiorouter/contracts").Session[]>(backend.connected ? [] : demoSessions);
   const [sessionInventoryError, setSessionInventoryError] = useState<string | null>(null);
+  const [nativeGeneration, setNativeGeneration] = useState<number | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refreshApplications = () => {
@@ -457,6 +458,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const timer = window.setInterval(() => void poll(), 1000);
     return () => { active = false; window.clearInterval(timer); };
   }, [backend, session.id, snapshotCache]);
+  useEffect(() => {
+    if (!backend.connected || !backend.pumpNativeEndpoint || nativeGeneration === null || !sessionRunning) return;
+    const pumpNativeEndpoint = backend.pumpNativeEndpoint;
+    let active = true;
+    let pumping = false;
+    const pump = async () => {
+      if (!active || pumping) return;
+      pumping = true;
+      try { await pumpNativeEndpoint(session.id, nativeGeneration, 64); }
+      catch { /* Diagnostics remain backend-owned; do not retry or substitute endpoints here. */ }
+      finally { pumping = false; }
+    };
+    void pump();
+    const timer = window.setInterval(() => void pump(), 20);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [backend, nativeGeneration, session.id, sessionRunning]);
   const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) ?? draft.nodes[0];
   const draftNodeNames = new Map(draft.nodes.map((node) => [node.id, node.name]));
   const outputPorts = draft.nodes.flatMap((node) => node.ports.filter((port) => port.direction === "output").map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })));
@@ -533,8 +550,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const createSession = async () => { const name = window.prompt("New session name", "New session")?.trim(); if (!name) return; const id = `session-${Date.now()}`; try { const result = await backend.createSession({ ...demoSession, id, name, revision: 0, nodes: demoSession.nodes.map((node) => ({ ...node, parameters: { ...node.parameters } })), edges: [...demoSession.edges] }, uiIdempotencyKey("session-create")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Created stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to create session.")); } };
   const duplicateSession = async () => { const id = `session-copy-${Date.now()}`; const name = `${session.name} (copy)`; try { const result = await backend.duplicateSession(session.id, id, name, uiIdempotencyKey("session-duplicate")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Duplicated stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to duplicate session.")); } };
   const deleteSession = async () => { if (!window.confirm(`Delete stopped session “${session.name}”?`)) return; try { await backend.deleteSession(session.id, uiIdempotencyKey("session-delete")); setCreatedSessions((current) => current.filter((item) => item.id !== session.id)); const fallback = availableSessions.find((item) => item.id !== session.id); if (fallback) setSelectedSessionId(fallback.id); setActionMessage(`Deleted session ${session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to delete session.")); } };
-  const startSession = async () => { setActionMessage("Starting session..."); try { const result = await backend.startSession(session.id, uiIdempotencyKey("session-start")); await refresh(); setActionMessage(`Session is running (generation ${result.generation}).`); } catch (error) { setActionMessage(formatUiError(error, "Unable to start session.")); } };
-  const stopSession = async () => { setActionMessage("Stopping session..."); try { await backend.stopSession(session.id, uiIdempotencyKey("session-stop")); await refresh(); setActionMessage("Session stopped."); } catch (error) { setActionMessage(formatUiError(error, "Unable to stop session.")); } };
+  const startSession = async () => { setActionMessage("Starting session..."); try { const result = await backend.startSession(session.id, uiIdempotencyKey("session-start")); setNativeGeneration(result.runtime === "native" ? result.generation : null); await refresh(); setActionMessage(`Session is running (generation ${result.generation}).`); } catch (error) { setNativeGeneration(null); setActionMessage(formatUiError(error, "Unable to start session.")); } };
+  const stopSession = async () => { setActionMessage("Stopping session..."); try { await backend.stopSession(session.id, uiIdempotencyKey("session-stop")); setNativeGeneration(null); await refresh(); setActionMessage("Session stopped."); } catch (error) { setActionMessage(formatUiError(error, "Unable to stop session.")); } };
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if (isEditableShortcutTarget(event.target)) return;

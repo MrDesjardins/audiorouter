@@ -1594,6 +1594,9 @@ fn method_description(name: &str) -> &'static str {
         "nativeEndpoints.prepare" => {
             "Prepare exact capture/render clients without starting audio."
         }
+        "nativeEndpoints.pump" => {
+            "Drain a bounded amount of already-available native audio for a running session."
+        }
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
         "plugins.retry" => "Explicitly refresh a plugin inventory after a prior scan failure or quarantine decision.",
@@ -1744,6 +1747,14 @@ fn method_input_schema(name: &str) -> Value {
                 "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
             }),
             &["sessionId", "captureEndpointId", "renderEndpointId"],
+        ),
+        "nativeEndpoints.pump" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "maxPackets": { "type": "integer", "minimum": 1, "maximum": audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE }
+            }),
+            &["sessionId", "generation"],
         ),
         "plugins.scan" => object_schema(
             json!({
@@ -2570,6 +2581,21 @@ fn method_output_schema(name: &str) -> Value {
                 "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
             },
             "required": ["sessionId", "state", "captureEndpointId", "renderEndpointId"],
+            "additionalProperties": false
+        }),
+        "nativeEndpoints.pump" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "packets": { "type": "integer", "minimum": 0 },
+                "capturedFrames": { "type": "integer", "minimum": 0 },
+                "processedQuanta": { "type": "integer", "minimum": 0 },
+                "renderedFrames": { "type": "integer", "minimum": 0 },
+                "droppedRenderFrames": { "type": "integer", "minimum": 0 },
+                "renderBackpressureEvents": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["sessionId", "generation", "packets", "capturedFrames", "processedQuanta", "renderedFrames", "droppedRenderFrames", "renderBackpressureEvents"],
             "additionalProperties": false
         }),
         "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
@@ -6254,6 +6280,7 @@ impl ControlPlane {
                 "startup.apply" => self.dispatch_startup_apply(request.params),
                 "devices.list" => self.dispatch_devices_list(request.params),
                 "nativeEndpoints.prepare" => self.dispatch_native_endpoints_prepare(request.params),
+                "nativeEndpoints.pump" => self.dispatch_native_endpoints_pump(request.params),
                 "plugins.scan" => self.dispatch_plugins_scan(request.params),
                 "plugins.list" => self.dispatch_plugins_list(request.params),
                 "plugins.retry" => self.dispatch_plugins_retry(request.params),
@@ -8322,6 +8349,36 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_native_endpoints_pump(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and generation are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let max_packets = params
+            .get("maxPackets")
+            .and_then(Value::as_u64)
+            .map(|value| {
+                u32::try_from(value)
+                    .map_err(|_| ControlError::InvalidRequest("maxPackets is out of range".into()))
+            })
+            .transpose()?
+            .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        self.pump_native_endpoint_worker_with_bound_taps(&session_id, generation, max_packets)
+    }
+
     fn record_endpoint_changes(&mut self, changed: bool) {
         if changed {
             // EventLog is the bounded notification surface. Endpoint details
@@ -9203,6 +9260,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
         "nativeEndpoints.prepare" => &["sessionId", "captureEndpointId", "renderEndpointId"],
+        "nativeEndpoints.pump" => &["sessionId", "generation", "maxPackets"],
         "plugins.scan" => &["directory"],
         "plugins.list" => &["directory"],
         "plugins.retry" => &["directory", "idempotencyKey"],
