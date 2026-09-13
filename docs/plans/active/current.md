@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Requalified the focused M03 driver bridge acceptance at pushed head on
+  2026-09-13 with VS 18.9.1 and WDK 10.0.28000.0. The x64 driver compiled,
+  catalog generation/signability reported zero errors and warnings, and the
+  WaveRT bridge source-contract checks passed. Disposable build output was
+  removed; installation/loading, signing mode, boot policy, and audio-device
+  configuration were untouched.
+
 - Added and ran the checked-in `m02-control-native-live.ps1` wrapper on
   2026-09-13. It discovers the exact active CABLE pair, preserves/restores
   the caller's live-test environment, and invokes the same-process native

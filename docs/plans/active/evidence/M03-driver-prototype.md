@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - focused bridge source/build requalification
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m03-driver-build.ps1`. With VS 18.9.1 and WDK 10.0.28000.0,
+the project-owned x64 driver compiled, generated its catalog, and passed
+signability with zero errors and warnings. The acceptance also verified the
+WaveRT render-source/capture-sink bridge callback seams, lease ownership,
+rundown, and fail-closed validation markers. Disposable build output was
+removed. No driver was installed or loaded, and no signing mode, boot policy,
+service, endpoint, or persistent audio configuration changed.
+
 ## 2026-09-13 - explicit lease identity comparison
 
 Maintenance request identity is now compared field-by-field rather than by a
