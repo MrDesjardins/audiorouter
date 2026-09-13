@@ -77,6 +77,14 @@ transition, matching the driver overflow contract. Windows-audio tests (65),
 protocol tests (8), strict package Clippy, formatting, and diff checks passed.
 No driver, endpoint, or machine audio configuration was opened or changed.
 
+Requalified the complete elevated `safe-all.ps1` chain after bridge commit
+`632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
+pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
+IDs, and documentation (52 Markdown files/167 local links) all passed. Cleanup
+removed 15 run-owned temporary children. No driver installation/loading,
+signing-mode or boot-policy change, plugin/startup registration, stream
+activation, or persistent audio configuration occurred.
+
 Next action: qualify the render-source/capture-sink bridge publication against
 the AudioRouter driver prototype's source-contract and lease/generation
 boundaries. Keep installation, production signing, PortCls ownership, clean
