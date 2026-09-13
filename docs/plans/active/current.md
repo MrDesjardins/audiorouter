@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Qualified the explicitly installed ReaComp VST2 binary on 2026-09-13 from
+`C:\\Program Files\\VSTPlugins\\ReaPlugs\\reacomp-standalone.dll`. Processing
+passed at 44.1, 48, and 96 kHz, and the dedicated/supervised editor
+containment checks passed. The before/after SHA-256 was
+`4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`; the
+installed file was not modified, environment variables were restored, and no
+plugin registration or audio configuration changed.
+
 Qualified legacy VST2 editor containment on 2026-09-13. The bounded editor
 acceptance passed for all six x64 ReaPlugs fixtures, covering the dedicated
 editor-thread bound and supervised timeout/worker-kill recovery for each
