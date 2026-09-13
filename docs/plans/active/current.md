@@ -8352,7 +8352,7 @@ live-driver evidence.
 - Added a connected UI virtual-route panel on 2026-09-12. It displays the
   authoritative revision/routes and supports explicit JSON-array replacement
   with local revision validation and generated idempotency keys; disconnected
-  mode remains read-only and mutation-disabled. UI typecheck, 125 UI tests,
+  mode remains read-only and mutation-disabled. UI typecheck, 126 UI tests,
   and diff checks passed. The backend remains authoritative for route shape,
   authorization, graph safety, and endpoint activation.
 - Ran the explicitly authorized guarded M02 live adapter bridge on 2026-09-12

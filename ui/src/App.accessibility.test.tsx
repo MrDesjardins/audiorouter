@@ -97,6 +97,26 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByText("This list is read-only. Recovery inspection does not open, repair, play, or delete audio files.")).toBeTruthy();
   });
 
+  it("exposes revisioned virtual-route editing in the connected UI", async () => {
+    const replaceVirtualRoutes = vi.fn(async (baseRevision: number, routes: unknown[]) => ({
+      state: "applied" as const,
+      revision: baseRevision + 1,
+      routes: routes as [],
+    }));
+    const backend = {
+      ...createDisconnectedBackend(),
+      connected: true,
+      listVirtualRoutes: async () => ({ revision: 2, routes: [] }),
+      replaceVirtualRoutes,
+    };
+    render(<App backend={backend} />);
+    expect(await screen.findByRole("heading", { name: "Virtual-bus routes" })).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "Virtual-route base revision" }) as HTMLInputElement).value).toBe("2");
+    fireEvent.click(screen.getByRole("button", { name: "Replace routes" }));
+    await waitFor(() => expect(replaceVirtualRoutes).toHaveBeenCalledWith(2, [], expect.any(String)));
+    expect(await screen.findByText("Virtual routes applied at revision 3.")).toBeTruthy();
+  });
+
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {
     const processor: ProcessorDescriptor = {
       id: "gain",
