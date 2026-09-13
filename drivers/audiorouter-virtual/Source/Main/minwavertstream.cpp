@@ -1715,6 +1715,11 @@ Return Value:
 
     DPF_ENTER(("[CMiniportWaveRT::SetContentId]"));
 
+    if (drmRights == NULL || m_pMiniport == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
     NTSTATUS    ntStatus;
     ULONG       ulOldContentId = contentId;
 

@@ -1,5 +1,13 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - content-rights boundary guard
+
+`SetContentId` now validates its DRM-rights pointer and miniport owner before
+updating the content ID or requesting DRM-rights propagation. The
+non-installing x64 WDK build/source-contract acceptance passed with zero
+signability errors/warnings and catalog generation. No driver was installed or
+loaded.
+
 ## 2026-09-12 - notification timer callback hardening
 
 The notification timer callback now fails closed for zero, negative, or

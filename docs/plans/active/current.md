@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Hardened WaveRT content-rights handling on 2026-09-12: `SetContentId` now
+rejects missing DRM-rights input or miniport ownership before mutating stream
+state. The non-installing x64 WDK build/source-contract acceptance passed with
+zero signability errors/warnings and catalog generation. No driver was
+installed or loaded.
+
 Fresh post-reboot shared-mode WASAPI lifecycle qualification passed on
 2026-09-12: 13 capture endpoints and 18 render endpoints were exercised over
 100 ms, with one occupied render endpoint retained as a distinct ownership
