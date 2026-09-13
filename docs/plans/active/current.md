@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Closed the bridge mapping check-to-open reparse race on 2026-09-13. In
+addition to rejecting unsafe leaves during metadata inspection,
+`NativeBridgeSectionHandle::for_file` now opens with
+`FILE_FLAG_OPEN_REPARSE_POINT`, so a swapped junction/symlink cannot redirect
+the section between validation and handle acquisition. Windows-audio (69)
+tests, formatting, and diff checks passed; no endpoint, driver, or persistent
+audio configuration was accessed.
+
 Closed a WaveRT callback arithmetic gap on 2026-09-13. Both simulated stream
 data paths now fail closed when the DMA buffer is missing or zero-sized before
 computing a modulo offset; the M03 acceptance also asserts the `ReadBytes`
