@@ -2,6 +2,19 @@
 
 Updated: 2026-09-13.
 
+- Requalified the guarded full M00-M08 acceptance chain at pushed head
+  `4a2b48ff` on 2026-09-13. VS 18.9.1 and WDK 10.0.28000.0 toolchain/native
+  compile, AudioRouter driver compile/catalog signability, 34-endpoint
+  read-only inventory, disposable SysVAD qualification, M01, M04 (32 DSP and
+  40 recording tests), M05 (146 UI tests/typecheck and production builds),
+  M06 isolated VST3 and VST2 worker/fixture acceptance, M07, unsigned M08
+  preparation, 159 traceability mappings, and documentation validation (52
+  Markdown files, 180 local links) passed. Fifteen run-owned temporary
+  children were removed. No driver installation/loading, plugin registration,
+  startup registration, signing-mode change, or persistent audio action
+  occurred. This acceptance chain remains distinct from the manual WebView2
+  visual gate and production driver/signing gates.
+
 - Hardened the disconnected canvas affordance on 2026-09-13. The processor
   shelf is now disabled and non-draggable when the backend is offline, while
   the callback-level connected guard remains as defense in depth. Regression
