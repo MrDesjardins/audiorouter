@@ -1,5 +1,14 @@
 # M05 visual editor evidence
 
+## 2026-09-13 - first-run route navigation
+
+The connected UI now presents an accessible three-step Quick route panel:
+select exact endpoints, build the visual graph, then start the session. Each
+step links to the existing authoritative panel; no duplicate action or
+automatic endpoint selection was added. UI typecheck and the complete suite
+passed: 18 files, 153 tests. Manual visual/accessibility observation remains
+open because no targetable desktop surface was available.
+
 ## 2026-09-12 - UI acceptance requalification
 
 The M05 acceptance passed with TypeScript typecheck, all 17 UI test files and

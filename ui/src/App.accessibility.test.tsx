@@ -32,6 +32,14 @@ afterEach(() => {
 });
 
 describe("VB-Cable endpoint selection", () => {
+  it("exposes the human-testable route sequence without duplicating controls", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    const quickRoute = await screen.findByRole("region", { name: "Quick route" });
+    expect(within(quickRoute).getByRole("link", { name: "Select endpoints" }).getAttribute("href")).toBe("#native-endpoint-panel");
+    expect(within(quickRoute).getByRole("link", { name: "Build the graph" }).getAttribute("href")).toBe("#signal-flow-panel");
+    expect(within(quickRoute).getByRole("link", { name: "Start the session" }).getAttribute("href")).toBe("#native-endpoint-panel");
+  });
+
   it("returns exact IDs only for one active, unambiguous pair", () => {
     const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
     expect(findVbCableEndpointPair([

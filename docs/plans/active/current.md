@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Added an accessible first-run Quick route panel on 2026-09-13. It links the
+  existing exact-endpoint binding, visual graph, and session lifecycle panels
+  in the intended order without creating a second mutation path. The full UI
+  suite now passes 153 tests and TypeScript typecheck; no backend, endpoint, or
+  machine configuration behavior changed.
+
 - Re-ran the authorized control-owned VB-Cable lifecycle on 2026-09-13 after
   the desktop launcher delivery. The exact existing pair completed a bounded
   start/stop route with 24,480 captured frames, 191 processed quanta, and
