@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Removed implicit endpoint selection on 2026-09-13. A fresh session now keeps
+  both native endpoint controls blank until the user deliberately selects
+  capture and render IDs; exact saved IDs still restore only when active, and
+  stale bindings remain blank. This prevents silent routing to a first-found
+  monitor in Voicemeeter/Focusrite setups. UI typecheck and all 152 tests pass.
+  No endpoint or machine configuration was changed.
+
 - Corrected VB-Cable routing semantics on 2026-09-13. `CABLE Output` is now
   selectable independently as the normal VB-Cable capture input; the paired
   CABLE Input/Output action is explicitly labeled as a deliberate loopback

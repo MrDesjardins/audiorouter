@@ -436,14 +436,11 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
   }, [sessionId]);
   useEffect(() => {
     if (devices.length === 0) return;
-    const hint = readEndpointBindingHint(sessionId);
     // An empty value with a saved hint is deliberate: it represents a stale
     // binding awaiting replacement. Do not let an inventory effect scheduled
     // before a button click overwrite a newly selected pair.
     if (captureEndpointId && !activeCapture.some((device) => device.id === captureEndpointId)) setCaptureEndpointId("");
-    else if (!captureEndpointId && !hint.captureEndpointId) setCaptureEndpointId(activeCapture[0]?.id ?? "");
     if (renderEndpointId && !activeRender.some((device) => device.id === renderEndpointId)) setRenderEndpointId("");
-    else if (!renderEndpointId && !hint.renderEndpointId) setRenderEndpointId(activeRender[0]?.id ?? "");
   }, [devices, sessionId, captureEndpointId, renderEndpointId]);
   const prepare = async () => {
     if (!backend.prepareNativeEndpoint) { setMessage("Native endpoint preparation is unavailable in this backend."); return; }

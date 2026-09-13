@@ -60,6 +60,19 @@ describe("VB-Cable endpoint selection", () => {
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.endpoint-binding.demo-session") ?? "null")).toEqual({ captureEndpointId: "capture-vb", renderEndpointId: "render-vb" });
     expect(screen.getByText("VB-Cable pair selected. Review the graph, then prepare and start the session.")).toBeTruthy();
   });
+
+  it("selects VB-Cable capture without silently selecting a render monitor", async () => {
+    const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
+    const devices = [
+      { id: "capture-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+      { id: "render-monitor", name: "Headphones", direction: "render" as const, state: "active" as const, defaultRoles: ["console" as const], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+    ];
+    render(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Select VB-Cable capture" }));
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-vb"));
+    expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("");
+    expect(screen.getByText("VB-Cable capture selected. Choose the physical render output, then prepare and start the session.")).toBeTruthy();
+  });
 });
 
 describe("keyboard connection dialog", () => {
@@ -122,8 +135,10 @@ describe("keyboard connection dialog", () => {
     const captureSelect = await screen.findByRole("combobox", { name: "Native capture endpoint" });
     const renderSelect = screen.getByRole("combobox", { name: "Native render endpoint" });
     expect(within(captureSelect).queryByRole("option", { name: /Inactive capture/ })).toBeNull();
-    await waitFor(() => expect((captureSelect as HTMLSelectElement).value).toBe("capture-active"));
-    await waitFor(() => expect((renderSelect as HTMLSelectElement).value).toBe("render-active"));
+    fireEvent.change(captureSelect, { target: { value: "capture-active" } });
+    fireEvent.change(renderSelect, { target: { value: "render-active" } });
+    expect((captureSelect as HTMLSelectElement).value).toBe("capture-active");
+    expect((renderSelect as HTMLSelectElement).value).toBe("render-active");
 
     fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
     await waitFor(() => expect(prepareNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-active", "render-active"));

@@ -1,5 +1,13 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - deliberate endpoint selection safety regression
+
+Removed the fresh-session fallback that selected the first active capture and
+render endpoints. Both controls now remain blank until deliberate selection;
+valid saved exact IDs still restore, and stale IDs remain blank. This avoids
+silent routing to an unintended monitor. UI typecheck and the complete suite
+passed: 18 files, 152 tests.
+
 ## 2026-09-13 - VB-Cable normal-route semantics correction
 
 The endpoint panel now distinguishes the normal route from a cable loopback:
