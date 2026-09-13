@@ -2,6 +2,11 @@
 
 Updated: 2026-09-13.
 
+Revalidated documentation and traceability after the VST2 compatibility
+entries on 2026-09-13. `tests/acceptance/docs.ps1` passed across 52 Markdown
+files and 179 local links. This confirms plan/spec link integrity only; it
+does not close the native driver, signing, or live endpoint gates.
+
 Requalified the installed ReaComp path through the hardened harness on
 2026-09-13 after the failure-path integrity fix. Processing and both editor
 containment checks passed again at 44.1, 48, and 96 kHz; the same SHA-256
