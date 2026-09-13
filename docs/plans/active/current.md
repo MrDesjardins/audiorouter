@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the guarded M02 Rust adapter route on 2026-09-13 using the
+  existing VB-Audio endpoints: 24,000 capture frames, 187 graph blocks,
+  23,936 scheduled frames, and 23,488 routed frames over 500 ms. Processing
+  had zero deadline misses/lateness; endpoint/media identity was unchanged and
+  temporary outputs were removed. This strengthens shared-mode adapter
+  evidence only; managed-driver, production callback, and physical-latency
+  gates remain open.
+
 - Fixed the native session-start lifecycle boundary on 2026-09-13. When a
   session has an explicitly attached endpoint worker, `session_start` now
   publishes the validated graph, activates the worker, reports `runtime:

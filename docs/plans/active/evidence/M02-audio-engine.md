@@ -1,4 +1,23 @@
-# Native adapter route requalification (2026-09-12)
+# Native adapter route requalification (2026-09-13)
+
+## Current-tip guarded Rust adapter route
+
+Command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-rust-adapter-route-live.ps1 -AllowLiveAudio -DurationMilliseconds 500
+```
+
+The run used the existing explicitly selected VB-Audio pair: `CABLE Output`
+capture to `CABLE Input` render. It captured 24,000 frames, processed 187
+graph blocks, scheduled 23,936 frames, and routed 23,488 frames. Processing
+time was 4,046,800 ns total with a 55,400 ns maximum; all 187 deadline samples
+had zero deadline misses and zero lateness. The wrapper verified unchanged
+media-device identity/state and removed its temporary executable/object.
+
+This is shared-mode existing-endpoint adapter evidence only. It does not prove
+managed virtual-driver ownership, production callback timing, physical
+acoustic latency, signing, or installer behavior.
 
 ## Bridge identity encoding contract
 
