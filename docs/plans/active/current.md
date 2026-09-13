@@ -65,6 +65,12 @@ Updated: 2026-09-13.
   bucket; ordinary graph mutations remain rate limited. Control tests and
   strict Clippy pass.
 
+- Added native pump contract regressions on 2026-09-13: read-only clients are
+  denied before pump parameters are parsed, the discovered `maxPackets` schema
+  remains capped at the worker's 64-packet wake bound, and no native rejection
+  counter changes during the authorization failure. Focused control tests and
+  strict Clippy pass.
+
 - New delivery gate: a guarded human run must be able to select the existing
   VB-Cable capture/render pair in the UI, commit a visible graph change, start
   and stop the session, and observe backend status/telemetry while preserving

@@ -15040,6 +15040,37 @@ mod tests {
     }
 
     #[test]
+    fn native_endpoint_pump_requires_session_control_before_parameters() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(92)),
+                method: "nativeEndpoints.pump".into(),
+                params: None,
+            },
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(response.error.unwrap().code, -32001);
+        assert_eq!(plane.native_endpoint_rejections, 0);
+    }
+
+    #[test]
+    fn native_endpoint_pump_input_schema_bounds_packet_budget() {
+        let description = ControlPlane::default().describe();
+        let method = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "nativeEndpoints.pump")
+            .unwrap();
+        assert_eq!(
+            method["inputSchema"]["properties"]["maxPackets"]["maximum"],
+            json!(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE)
+        );
+    }
+
+    #[test]
     fn enrollment_lookup_denies_unknown_and_revoked_clients() {
         let mut plane = ControlPlane::new("enrollment-test");
         assert!(plane.grant_for_client("unknown").unwrap().is_none());
