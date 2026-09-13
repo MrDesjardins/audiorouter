@@ -520,3 +520,14 @@ The administrator-authorized `tests/acceptance/m03-driver-build.ps1` source
 contract and non-installing x64 WDK build passed. Signability reported zero
 errors and warnings and catalog generation completed. No driver was installed
 or loaded and no machine audio configuration changed.
+
+## 2026-09-12 - realtime bridge tap fail-closed access
+
+The native bridge tap now checks each planar channel slice before copying into
+its preallocated interleaved scratch buffer. A malformed block therefore exits
+the callback without a panic or partial bridge publication; normal negotiated
+shapes retain the existing allocation-free path.
+
+The focused Windows-audio suite passed 67 tests and strict package Clippy,
+formatting, and diff checks passed. No endpoint or driver was activated and no
+machine audio configuration changed.

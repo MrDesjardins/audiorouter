@@ -4693,8 +4693,10 @@ impl audiorouter_engine::AudioTap for NativeBridgeRealtimeWriter {
             let count = block.channels() * block.frames();
             for frame in 0..block.frames() {
                 for channel in 0..block.channels() {
-                    scratch[frame * block.channels() + channel] =
-                        block.channel(channel).unwrap()[frame];
+                    let Some(samples) = block.channel(channel) else {
+                        return;
+                    };
+                    scratch[frame * block.channels() + channel] = samples[frame];
                 }
             }
             let Some(sequence) = self

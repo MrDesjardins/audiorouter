@@ -21,6 +21,12 @@ with zero signability errors/warnings and catalog generation. No driver was
 installed or loaded and no machine audio configuration changed. Evidence:
 [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
 
+Hardened the realtime bridge tap on 2026-09-12: checked channel access now
+fails closed instead of panicking if an invalid block reaches the preallocated
+writer callback. The focused Windows-audio suite passed 67 tests, strict
+package Clippy, formatting, and diff checks passed, and no endpoint or driver
+was activated.
+
 Post-reboot guarded requalification after `fc7f4256` passed on 2026-09-12.
 The chain built the project x64 WDK driver with zero signability errors and
 warnings, inventoried 31 endpoints read-only, compiled/qualified disposable
