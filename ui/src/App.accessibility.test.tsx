@@ -117,6 +117,24 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText("Virtual routes applied at revision 3.")).toBeTruthy();
   });
 
+  it("creates an unarmed recorder with the explicit UI configuration", async () => {
+    const createRecorder = vi.fn(async (params: { recorderId: string }) => ({
+      sessionId: demoSession.id,
+      nodeId: null,
+      recorderId: params.recorderId,
+      format: "wavPcm24" as const,
+      path: "C:\\Audio\\take.wav",
+      state: "idle" as const,
+      armed: false as const,
+    }));
+    const backend = { ...connectedPreviewBackend(), createRecorder };
+    render(<App backend={backend} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Recorder ID" }), { target: { value: "voice-take" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create recorder" }));
+    await waitFor(() => expect(createRecorder).toHaveBeenCalledWith(expect.objectContaining({ recorderId: "voice-take", format: "wavPcm24", channels: 2, sampleRate: 48000, sequence: 1, dither: true })));
+    expect(await screen.findByText(/Recorder voice-take created unarmed/)).toBeTruthy();
+  });
+
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {
     const processor: ProcessorDescriptor = {
       id: "gain",

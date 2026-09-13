@@ -8360,6 +8360,12 @@ live-driver evidence.
   disconnected mode rejects creation without touching files. UI typecheck,
   127 UI tests, and diff checks passed. The approved recording root,
   authorization, and realtime graph attachment remain backend-owned gates.
+- Added the connected UI recorder-creation form on 2026-09-12. It exposes
+  recorder ID, WAV/FLAC format, mono/stereo, and 44.1/48 kHz choices while
+  sending bounded defaults, TPDF dither, and a generated idempotency key; the
+  result remains unarmed. UI typecheck, production build, and 128 UI tests
+  passed. Approved-root, authorization, and graph-attachment checks remain
+  backend-owned.
 - Ran the explicitly authorized guarded M02 live adapter bridge on 2026-09-12
   for one 500 ms cycle using the existing VB-Audio endpoints. It captured
   24,480 frames, processed 191 quanta, rendered 24,448 frames, and reported

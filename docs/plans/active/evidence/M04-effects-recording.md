@@ -1127,3 +1127,10 @@ sample-rate, channel, queue, sequence, and idempotency fields without creating
 files from the disconnected backend. UI typecheck, 127 UI tests, and diff
 checks passed; recorder creation still requires the backend's approved-root and
 recording authorization gates.
+
+The connected UI now surfaces the same creation contract in the recorder panel:
+users choose recorder ID, WAV/FLAC format, mono/stereo channels, and 44.1/48
+kHz while the form supplies bounded sequence/queue settings and an explicit
+idempotency key. The result remains unarmed until a separate lifecycle action.
+UI typecheck, production build, and 128 UI tests passed. Creation remains
+subject to backend approved-root and recording authorization checks.
