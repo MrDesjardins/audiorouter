@@ -154,6 +154,13 @@ PLUG-07 processing evidence slice; rights, native editor ownership, release
 qualification, and production VST3/driver gates remain open. Evidence: [M06
 plugin evidence](evidence/M06-vst3-sdk.md), [plugin compatibility snapshot](../../operations/plugin-compatibility.md).
 
+Post-reboot built-in DSP revalidation on 2026-09-12 passed all 32 focused
+`audiorouter-dsp` tests and doctests in 35.29 seconds. The run covered the
+documented EQ, compressor, gate, limiter, delay, pitch, preset, meter,
+finite-output, and state/stability cases. It was portable crate validation;
+no endpoint, driver, plugin, or persistent machine audio configuration was
+accessed.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
