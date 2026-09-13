@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain at
+  pushed head `31c9a4bc` on 2026-09-13. VS/WDK discovery, native compile,
+  AudioRouter driver compile/catalog signability, read-only 31-endpoint
+  inventory, disposable SysVAD, M01/M04, M05 with 155 UI tests and production
+  builds, M06 VST3/VST2 workers, M07, unsigned M08 artifacts, 159 traceability
+  mappings, and documentation validation (52 Markdown files, 180 local links)
+  passed. Fifteen run-owned temporary children were removed. No driver
+  installation/loading, signing-mode change, plugin/startup registration,
+  endpoint default, or persistent audio action occurred.
+
 - Wired supported scan results into the visual editor on 2026-09-13. Selecting
   a verified x64 VST2/VST3 result adds its fingerprinted node to the real draft
   graph through the existing plan/commit path. Placeholders are disabled by
