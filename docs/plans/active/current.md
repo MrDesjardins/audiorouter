@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Closed an M07 startup-plan lifecycle defect: after a fail-closed
+  `startup.apply` attempt is journaled, its short-lived plan is now removed
+  from memory and durable SQLite storage. Added control regressions proving a
+  consumed plan cannot be replayed in the same process or after reopening the
+  database; idempotency remains the retry mechanism for the original result.
+  This does not implement Windows sign-in registration, and no OS startup or
+  audio configuration was changed.
+
 Requalified the non-installing AudioRouter x64 WDK/source-contract build after
 resuming the goal on 2026-09-13. Visual Studio/WDK built the driver and
 package, signability reported zero errors and warnings, and catalog generation

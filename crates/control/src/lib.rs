@@ -8364,6 +8364,17 @@ impl ControlPlane {
             "reason": "sign-in startup registration is not implemented in this build"
         });
         self.journal_idempotent_result(&scoped_key, "startup.apply", &request_hash, &result)?;
+        // A plan is a short-lived authorization preview, not a durable
+        // desired-state record. Consume it after the apply attempt has been
+        // journaled, including the fail-closed unavailable result. This keeps
+        // a stale plan from being replayed after a backend restart while the
+        // idempotency journal still provides the documented retry result.
+        self.startup_plans.remove(&plan_id_value);
+        if let Some(storage) = &self.storage {
+            storage
+                .delete_startup_plan(&plan_id_value)
+                .map_err(storage_error)?;
+        }
         Ok(result)
     }
 
@@ -12065,6 +12076,13 @@ mod tests {
             result["reason"],
             "sign-in startup registration is not implemented in this build"
         );
+        let replay = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(3)),
+            method: "startup.apply".into(),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-2" })),
+        });
+        assert!(replay.error.is_some());
     }
 
     #[test]
@@ -12099,6 +12117,15 @@ mod tests {
             params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-restart" })),
         });
         assert_eq!(applied.result.unwrap()["state"], "unavailable");
+        assert!(restarted
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(3)),
+                method: "startup.apply".into(),
+                params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-replay" })),
+            })
+            .error
+            .is_some());
         let _ = std::fs::remove_file(&path);
     }
 
