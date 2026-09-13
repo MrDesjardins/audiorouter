@@ -1,5 +1,19 @@
 # Native adapter route requalification (2026-09-12)
 
+## Post-reboot system-selected adapter smoke
+
+The authorized bounded adapter smoke check passed for 500 ms on the existing
+system-selected capture/render endpoints at 48 kHz. It captured 24,480 frames,
+processed 191 graph blocks, rendered 25,152 zero-valued frames, and reported
+zero xruns, input/output overruns, and deadline misses. The probe stopped and
+reset both streams and verified unchanged media-device identity/state. Its
+`route=false` result is intentional because the default render endpoint is not
+the explicitly selected CABLE route.
+
+This is shared-mode user-space lifecycle evidence only; it does not qualify
+physical acoustic latency, a loaded managed driver, or routed playback through
+the default endpoint.
+
 ## Session shutdown ownership correction
 
 The control-plane session stop path now treats an attached native endpoint

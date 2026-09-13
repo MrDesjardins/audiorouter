@@ -84,6 +84,14 @@ succeeds. A failed persistence operation therefore retains the complete owner
 for retry. Control tests (125), strict Clippy, formatting, diff, and docs
 checks passed; no endpoint was opened.
 
+The authorized post-reboot 500 ms Rust adapter smoke check passed on
+2026-09-12 using the system-selected existing endpoints at 48 kHz. It captured
+24,480 frames, processed 191 graph blocks, rendered 25,152 silent frames, and
+reported zero xruns, input/output overruns, or deadline misses; media identity
+and state were unchanged after stream stop/reset. This is fresh shared-mode
+user-space evidence only; it does not claim routed playback, physical latency,
+or managed-driver callback ownership.
+
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite
 database and explicitly approved temporary recording root. It verifies an
