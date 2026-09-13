@@ -9986,6 +9986,48 @@ mod tests {
     }
 
     #[test]
+    fn native_worker_preparation_rejects_mismatched_endpoint_shapes_before_opening() {
+        let mut plane = ControlPlane::default();
+        let mut owned = session();
+        owned.id = EntityId::new("native-worker-shape-mismatch");
+        plane.create_session(owned).unwrap();
+        let endpoint = |direction, channels| audiorouter_windows_audio::EndpointInfo {
+            id: format!("{direction:?}-{channels}"),
+            direction,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 30_000,
+            sample_rate_hz: 48_000,
+            channels,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: "00000003-0000-0010-8000-00aa00389b71".into(),
+        };
+        let capture = endpoint(audiorouter_windows_audio::EndpointDirection::Capture, 1);
+        let render = endpoint(audiorouter_windows_audio::EndpointDirection::Render, 2);
+
+        let error = plane
+            .prepare_native_endpoint_worker(
+                EntityId::new("native-worker-shape-mismatch"),
+                &capture,
+                &render,
+                0,
+                1,
+                0,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::Audio {
+                code: "invalidArgument",
+                ..
+            }
+        ));
+        assert!(plane.native_endpoint_worker.is_none());
+        assert!(plane.endpoint_monitor.is_none());
+    }
+
+    #[test]
     fn ephemeral_plan_maps_bound_pending_entries_and_prune_expired_entries() {
         let mut plane = ControlPlane::default();
 
