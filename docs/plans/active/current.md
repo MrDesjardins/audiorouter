@@ -77,6 +77,13 @@ snapshots remain available to control/diagnostic readers. Engine tests (107),
 strict engine Clippy, the full workspace test suite, formatting, and diff checks
 passed. This portable change does not alter endpoint or machine-audio state.
 
+Closed a transient ownership leak on 2026-09-12: deleting a stopped session
+now refuses while its exact native endpoint worker is still running, and drops
+the stopped worker plus prepared taps only after the durable session removal
+succeeds. A failed persistence operation therefore retains the complete owner
+for retry. Control tests (125), strict Clippy, formatting, diff, and docs
+checks passed; no endpoint was opened.
+
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite
 database and explicitly approved temporary recording root. It verifies an

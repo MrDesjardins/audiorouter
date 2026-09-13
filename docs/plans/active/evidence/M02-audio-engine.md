@@ -15,6 +15,19 @@ workspace formatting, and `git diff --check` passed. This is a control-plane
 lifecycle regression fix; it does not qualify a loaded virtual driver or alter
 machine audio settings.
 
+## Session deletion ownership boundary
+
+The control plane now treats an attached native endpoint worker as transient
+session ownership during deletion. A running worker blocks deletion explicitly;
+a stopped worker is cleared only after the durable and in-memory session
+removals succeed. Persistence failure consequently preserves the worker and
+its binding for deliberate retry, while successful deletion cannot leave stale
+native taps attached to a missing session.
+
+Verification: control tests (125), strict control Clippy, formatting,
+`git diff --check`, and documentation validation passed. No endpoint or driver
+was opened or modified.
+
 The administrator-authorized Rust adapter route was rerun against the named
 CABLE endpoints for 500 ms. Negotiation selected 48,000 Hz on both sides with
 the 128-frame graph quantum and a 2,666,667 ns graph deadline. It captured

@@ -5091,6 +5091,16 @@ impl ControlPlane {
                 "stop the session before deleting it".into(),
             ));
         }
+        if self.native_endpoint_session.as_ref() == Some(id)
+            && self
+                .native_endpoint_worker
+                .as_ref()
+                .is_some_and(audiorouter_windows_audio::WasapiEndpointWorker::is_running)
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the native endpoint worker before deleting the session".into(),
+            ));
+        }
         let checkpoint = self.store.clone();
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.delete_session(id) {
@@ -5099,6 +5109,15 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        // A stopped worker is part of the deleted session's transient
+        // ownership, not durable session state. Retain it through the
+        // persistence operation so a failed delete leaves the owner intact;
+        // only a successful store mutation may clear the binding and taps.
+        if self.native_endpoint_session.as_ref() == Some(id) {
+            self.native_endpoint_worker.take();
+            self.native_endpoint_session = None;
+            self.native_endpoint_taps = None;
+        }
         self.runtimes.remove(id);
         for node in session
             .nodes
