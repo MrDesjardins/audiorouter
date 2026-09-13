@@ -50,6 +50,10 @@ audio** action when finished; the launcher removes its database and restores
 the caller's environment. It does not change Windows defaults, endpoint
 volume/mute, driver state, or startup registration.
 
+The same `run-vb-cable-desktop.ps1` file is included beside the executables in
+the prepared unsigned release directory, so an extracted development artifact
+can be started without a repository checkout.
+
 ## 2. Run the safe acceptance checks
 
 From the repository root:

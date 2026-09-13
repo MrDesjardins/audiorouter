@@ -15,7 +15,7 @@ The reproducible preparation flow is:
 
 Preparation requires a clean worktree, locked Cargo inputs, and a new output
 directory. It produces unsigned x64 CLI, native-shell, and disposable-worker
-artifacts, a disposable zipped UI bundle, locked Cargo SBOM metadata, the authoritative UI
+artifacts, the disposable VB-Cable desktop launcher, a disposable zipped UI bundle, locked Cargo SBOM metadata, the authoritative UI
 `package-lock.json` plus a deterministic CycloneDX npm SBOM generated from the
 lockfile, and checksums. Before copying the three executables, preparation reads
 bounded DOS/PE headers and rejects malformed, reparse-point, or non-x64 files.

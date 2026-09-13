@@ -13,6 +13,7 @@ try {
             "audiorouter-cli.exe",
             "audiorouter-plugin-worker.exe",
             "audiorouter-shell.exe",
+            "run-vb-cable-desktop.ps1",
             "audiorouter-ui.zip",
             "sbom.npm.json",
             "sbom.npm.package-lock.json"

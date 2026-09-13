@@ -91,6 +91,7 @@ try {
         Assert-X64PortableExecutable $source
         Copy-Item -LiteralPath $source -Destination (Join-Path $output $binary.Name)
     }
+    Copy-Item -LiteralPath (Join-Path $workspace "tools/run-vb-cable-desktop.ps1") -Destination (Join-Path $output "run-vb-cable-desktop.ps1")
     Compress-Archive -Path (Join-Path $uiBuild "*") -DestinationPath (Join-Path $output "audiorouter-ui.zip") -CompressionLevel Optimal
     Copy-Item -LiteralPath $uiLock -Destination (Join-Path $output "sbom.npm.package-lock.json")
     $npmSbom = Join-Path $output "sbom.npm.json"

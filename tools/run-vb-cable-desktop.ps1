@@ -8,9 +8,20 @@ $ErrorActionPreference = 'Stop'
 # devices, endpoint volume/mute, startup registration, driver state, or the
 # caller's environment. The shell receives exact IDs from the current
 # read-only inventory and uses a temporary database with an operator grant.
-$workspace = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$cli = Join-Path $workspace 'target/debug/audiorouter-cli.exe'
-$shell = Join-Path $workspace 'src-tauri/target/debug/audiorouter-shell.exe'
+$scriptRoot = (Resolve-Path $PSScriptRoot).Path
+$repositoryRoot = Join-Path $scriptRoot '..'
+if (Test-Path -LiteralPath (Join-Path $repositoryRoot 'Cargo.toml') -PathType Leaf) {
+    $workspace = (Resolve-Path $repositoryRoot).Path
+    $cli = Join-Path $workspace 'target/debug/audiorouter-cli.exe'
+    $shell = Join-Path $workspace 'src-tauri/target/debug/audiorouter-shell.exe'
+} else {
+    # Release preparation places this script next to the already-built shell
+    # and CLI. Tauri embeds the built UI in the shell, so no source checkout is
+    # needed for this mode.
+    $workspace = $scriptRoot
+    $cli = Join-Path $workspace 'audiorouter-cli.exe'
+    $shell = Join-Path $workspace 'audiorouter-shell.exe'
+}
 $tempRoot = Join-Path $env:TEMP ('audiorouter-vb-cable-desktop-' + [guid]::NewGuid().ToString('N'))
 $database = Join-Path $tempRoot 'state.sqlite'
 $params = Join-Path $tempRoot 'authorize.json'
@@ -28,6 +39,9 @@ try {
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
 
     if ($Build) {
+        if (-not (Test-Path -LiteralPath (Join-Path $workspace 'Cargo.toml') -PathType Leaf)) {
+            throw '-Build requires running the launcher from the repository checkout'
+        }
         Invoke-Checked 'npm.cmd' @('run', 'build', '--prefix', (Join-Path $workspace 'ui'))
         Invoke-Checked 'cargo.exe' @('build', '--manifest-path', (Join-Path $workspace 'src-tauri/Cargo.toml'))
     }
