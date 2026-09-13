@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-13 at the current head. VS/WDK toolchain discovery, the AudioRouter
+  x64 driver build/signability/catalog, 34-endpoint read-only inventory,
+  disposable SysVAD, M01/M04/M05, VST3/VST2 workers, M07, unsigned M08
+  preparation, 159 requirement mappings, and documentation validation (52
+  Markdown files, 179 local links) passed. Cleanup removed 15 run-owned temp
+  children. No driver was installed or loaded, and no signing mode, startup
+  registration, plugin registration, stream, default, volume, mute, privacy,
+  or persistent machine-audio configuration changed.
+
 - Hardened startup desired-state recovery: malformed persisted
   `startupEnabled` values now return an explicit `CorruptDatabase` error
   instead of silently disabling the user's preference. Added a storage
