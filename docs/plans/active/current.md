@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Corrected current qualification snapshots on 2026-09-13. Release, M07,
+  and M08 evidence now reflects the 146-test UI suite and the 180-link
+  documentation validation; the M08 entry also identifies the exact pushed
+  acceptance head. Documentation validation and diff checks pass. This is
+  evidence maintenance only and changes no runtime, endpoint, driver, or
+  machine configuration.
+
 - Requalified the guarded full M00-M08 acceptance chain at pushed head
   `4a2b48ff` on 2026-09-13. VS 18.9.1 and WDK 10.0.28000.0 toolchain/native
   compile, AudioRouter driver compile/catalog signability, 34-endpoint
