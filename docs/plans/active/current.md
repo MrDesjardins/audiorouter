@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Hardened the public `NativeBridgeSectionHandle::for_file` opener on
+2026-09-13. It now rejects a missing, non-regular, symlink, junction, or
+other reparse-point leaf before calling `CreateFileW`, matching the existing
+safe mapping-region path policy. Added a Windows regression for a directory
+leaf; `audiorouter-windows-audio` now passes 69 tests, with formatting and
+diff checks clean. No endpoint, driver, or persistent machine configuration
+was accessed.
+
 Requalified the complete guarded M00-M08 acceptance chain at pushed head
 `7b096ae5` on 2026-09-13 after the process-loopback activation lifetime
 hardening. VS/MSVC/SDK/WDK discovery, the AudioRouter x64 WDK build and

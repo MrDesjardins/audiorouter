@@ -156,7 +156,24 @@ impl NativeBridgeSectionHandle {
                 "invalid mapping size",
             ));
         }
-        let path = path.as_ref().to_string_lossy();
+        // Do not let this public handle constructor follow a leaf symlink,
+        // junction, or other reparse object. The normal session path creates
+        // its own regular file first, but callers using this lower-level
+        // helper must receive the same containment guarantee.
+        let path_ref = path.as_ref();
+        let metadata = std::fs::symlink_metadata(path_ref).map_err(|error| {
+            windows::core::Error::new(
+                windows::core::HRESULT(0x80070003u32 as i32),
+                format!("mapping path metadata unavailable: {error}"),
+            )
+        })?;
+        if !metadata.is_file() || bridge_path_is_reparse_point(&metadata) {
+            return Err(windows::core::Error::new(
+                windows::core::HRESULT(0x80070057u32 as i32),
+                "mapping path must be a regular non-reparse file",
+            ));
+        }
+        let path = path_ref.to_string_lossy();
         let mut wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
         let file = unsafe {
             CreateFileW(
@@ -6706,6 +6723,23 @@ mod tests {
         drop(section);
         drop(region);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_section_handle_rejects_a_nonregular_leaf_before_opening() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-section-directory-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&path).unwrap();
+        let result = NativeBridgeSectionHandle::for_file(&path, 4096);
+        assert!(result.is_err());
+        std::fs::remove_dir(path).unwrap();
     }
 
     #[cfg(windows)]
