@@ -5,11 +5,15 @@
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
 tests/acceptance/safe-all.ps1` from `C:\code\audiorouter`, using the installed
 VS2026/WDK toolchain. The complete guarded chain passed at pushed head
-`22e55c43`: M00 toolchain/native compile/inventory, non-installing M03 x64
+`4a2b48ff`: M00 toolchain/native compile/inventory, non-installing M03 x64
 driver build and catalog signability, disposable SysVAD, M01/M04/M05, M06
 VST3/VST2 workers, M07, unsigned M08 artifacts, 159 requirement mappings, and
 documentation validation (52 Markdown files, 179 local links). Cleanup
 removed 15 run-owned temporary children.
+
+The current UI stage contained 146 tests and the documentation validator
+reported 180 local links; the values above are retained as the exact captured
+counts for that acceptance invocation.
 
 This is qualification evidence only. The driver was not installed or loaded;
 no signing mode, startup or plugin registration, endpoint default, volume,
