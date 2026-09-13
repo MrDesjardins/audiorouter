@@ -1217,3 +1217,8 @@ per pass. It forwards to the same authorized `recorders.create` backend method;
 the adapter owns no recording state. CLI unit/MCP integration tests (31/3),
 strict Clippy, formatting, and diff checks passed. No audio endpoint or
 recording file was opened by this validation.
+
+The focused MCP recorder-create schema now advertises the authoritative 2,048
+chunk maximum for `queueCapacity`, alongside its required queue and pass-limit
+fields. The CLI catalog regression and MCP stdio integration test verify the
+catalog count and bound; no recorder or audio endpoint was opened.

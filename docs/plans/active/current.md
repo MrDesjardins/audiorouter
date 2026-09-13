@@ -8376,6 +8376,10 @@ live-driver evidence.
   authorized backend method, including required queue/chunk limits. CLI unit
   and MCP integration tests (31/3), strict Clippy, formatting, and diff checks
   passed; no audio endpoint or recording file was opened.
+- Tightened the MCP recorder-create schema on 2026-09-12 to advertise the
+  authoritative `queueCapacity` maximum of 2,048. CLI catalog and MCP stdio
+  tests, strict Clippy, formatting, and diff checks passed; no recorder or
+  endpoint was opened.
 - Corrected `recorders.create` shared-contract drift on 2026-09-12: queue
   capacity and maximum chunks per pass are now required in TypeScript, matching
   the Rust discovery schema and parser. Contract drift/typecheck, UI typecheck,
