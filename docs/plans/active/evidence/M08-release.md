@@ -753,6 +753,19 @@ startup entry was registered, and no machine audio configuration was changed.
 Production driver/signing, installer, hardware/manual UI, and physical latency
 gates remain open.
 
+## 2026-09-12 - guarded chain after configured WAV segmentation
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed at pushed
+head `e277e832` after the configured WAV factory began using the segmented
+worker. WDK/native compatibility and the non-installing AudioRouter driver
+build, read-only 34-endpoint inventory, pinned SysVAD qualification, portable
+M01/M04/M05/M06/M07 checks, unsigned M08 artifact preparation, 159 normative
+traceability mappings, and documentation validation (52 Markdown files, 167
+local links) all passed. Cleanup removed 15 run-owned temporary children.
+No driver was installed or loaded, signing or boot policy changed, plugins or
+startup were registered, streams were activated, or persistent audio settings
+were changed. This remains guarded preparation, not signed-release evidence.
+
 ## Safe-chain requalification after rate-domain bridge (2026-09-08)
 
 The full non-mutating safe chain passed after commit `1264fa4`: native compile,

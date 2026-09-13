@@ -8377,6 +8377,15 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+
+- Requalified `tests/acceptance/safe-all.ps1` at pushed head `e277e832` after
+  wiring configured WAV creation to the segmented worker. The complete guarded
+  chain passed: VS/WDK and AudioRouter driver build, 34-endpoint read-only
+  inventory, pinned SysVAD, M01/M04/M05/M06/M07, unsigned M08 preparation, 159
+  traceability IDs, and documentation validation. Cleanup removed 15 run-owned
+  temporary children. No driver installation/loading, signing-mode change,
+  plugin/startup registration, stream activation, or persistent machine audio
+  configuration occurred.
 - Added CLI convenience parity for virtual routes on 2026-09-12. `virtual-routes
   list` and revisioned `virtual-routes replace` use the shared control
   dispatcher, bounded absolute JSON input, and the existing
