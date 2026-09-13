@@ -1,5 +1,19 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - VB-Cable-first UI selection slice
+
+The UI now offers a connected `Select VB-Cable pair` action. It accepts only
+one active capture endpoint named like `CABLE Output (VB-Audio Virtual Cable)`
+and one active render endpoint named like `CABLE Input (VB-Audio Virtual
+Cable)`, returns their exact backend IDs, and refuses ambiguous or inactive
+matches. The integration regression proves the controls and local hint receive
+those IDs without changing endpoint defaults or device state. TypeScript
+typecheck and the complete UI suite passed: 18 files, 150 tests.
+
+This remains an adapter convenience, not automatic Windows configuration. The
+next evidence requires an attended connected UI and the existing authorized
+native prepare/start operation.
+
 ## 2026-09-13 - current-tip safe acceptance
 
 The guarded `tests/acceptance/safe-all.ps1` chain passed after the shell-owned

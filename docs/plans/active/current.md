@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Added the first VB-Cable-first human setup affordance on 2026-09-13. The
+  endpoint panel now detects exactly one active `CABLE Output (VB-Audio...)`
+  capture endpoint and one active `CABLE Input (VB-Audio...)` render endpoint,
+  lets the user select that exact pair in one action, and persists only those
+  IDs as a local hint. The existing authenticated native prepare/start path
+  remains the backend mutation boundary; defaults, volume, mute, and device
+  state are untouched. UI typecheck and all 150 UI tests pass. Next: run the
+  authorized attended VB-Cable route with a human-observable UI, then wire
+  the selected graph's built-in processor parameters through that same route.
+
 - Completed the tray privacy-mute control on 2026-09-13. The shell tray now
   reads authoritative `status.get` state, toggles `safety.setPrivacyMute`
   with a unique idempotency key, and reports unavailable/refused operations

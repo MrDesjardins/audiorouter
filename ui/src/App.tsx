@@ -391,12 +391,29 @@ function writeEndpointBindingHint(sessionId: string, captureEndpointId: string, 
   }
 }
 
+/**
+ * Return a pair only when the read-only inventory contains one unambiguous
+ * active VB-Cable capture/render endpoint.  Friendly names are used only as
+ * a user-facing convenience; the returned values are still the exact stable
+ * endpoint IDs sent to the backend.
+ */
+export function findVbCableEndpointPair(devices: DeviceListItem[]): { captureEndpointId: string; renderEndpointId: string } | null {
+  const isVbCable = (name: string) => {
+    const normalized = name.toLocaleLowerCase();
+    return normalized.includes("vb-audio") || normalized.includes("vb audio") || normalized.includes("vb-cable") || normalized.includes("vb cable");
+  };
+  const capture = devices.filter((device) => device.state === "active" && device.direction === "capture" && isVbCable(device.name) && device.name.toLocaleLowerCase().includes("cable output"));
+  const render = devices.filter((device) => device.state === "active" && device.direction === "render" && isVbCable(device.name) && device.name.toLocaleLowerCase().includes("cable input"));
+  return capture.length === 1 && render.length === 1 ? { captureEndpointId: capture[0].id, renderEndpointId: render[0].id } : null;
+}
+
 function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onStart, onStop }: { backend: UiBackend; sessionId: string; devices: DeviceListItem[]; sessionRunning: boolean; onStart: () => Promise<void>; onStop: () => Promise<void> }) {
   const activeCapture = devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "capture");
   const activeRender = devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render");
   const savedHint = readEndpointBindingHint(sessionId);
   const missingCaptureHint = devices.length > 0 && Boolean(savedHint.captureEndpointId) && !activeCapture.some((device) => device.id === savedHint.captureEndpointId);
   const missingRenderHint = devices.length > 0 && Boolean(savedHint.renderEndpointId) && !activeRender.some((device) => device.id === savedHint.renderEndpointId);
+  const vbCablePair = findVbCableEndpointPair(devices);
   const [captureEndpointId, setCaptureEndpointId] = useState(() => readEndpointBindingHint(sessionId).captureEndpointId ?? "");
   const [renderEndpointId, setRenderEndpointId] = useState(() => readEndpointBindingHint(sessionId).renderEndpointId ?? "");
   const [message, setMessage] = useState<string | null>(null);
@@ -408,8 +425,13 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
   useEffect(() => {
     if (devices.length === 0) return;
     const hint = readEndpointBindingHint(sessionId);
-    if (!activeCapture.some((device) => device.id === captureEndpointId)) setCaptureEndpointId(hint.captureEndpointId ? "" : activeCapture[0]?.id ?? "");
-    if (!activeRender.some((device) => device.id === renderEndpointId)) setRenderEndpointId(hint.renderEndpointId ? "" : activeRender[0]?.id ?? "");
+    // An empty value with a saved hint is deliberate: it represents a stale
+    // binding awaiting replacement. Do not let an inventory effect scheduled
+    // before a button click overwrite a newly selected pair.
+    if (captureEndpointId && !activeCapture.some((device) => device.id === captureEndpointId)) setCaptureEndpointId("");
+    else if (!captureEndpointId && !hint.captureEndpointId) setCaptureEndpointId(activeCapture[0]?.id ?? "");
+    if (renderEndpointId && !activeRender.some((device) => device.id === renderEndpointId)) setRenderEndpointId("");
+    else if (!renderEndpointId && !hint.renderEndpointId) setRenderEndpointId(activeRender[0]?.id ?? "");
   }, [devices, sessionId, captureEndpointId, renderEndpointId]);
   const prepare = async () => {
     if (!backend.prepareNativeEndpoint) { setMessage("Native endpoint preparation is unavailable in this backend."); return; }
@@ -418,7 +440,14 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
     try { const result = await backend.prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId); setMessage(`Prepared ${result.state}; start the session to activate audio.`); }
     catch (error) { setMessage(formatUiError(error, "Native endpoint preparation failed.")); }
   };
-  return <section className="panel native-endpoint-panel" aria-labelledby="native-endpoint-heading"><div className="section-heading"><div><p className="eyebrow">Native adapter</p><h2 id="native-endpoint-heading">Endpoint binding</h2></div><span className="badge">{sessionRunning ? "running" : "stopped"}</span></div><p className="muted">Select exact active endpoints for this session. Preparation opens stopped clients only; start the session when the graph is ready to move audio.</p>{missingCaptureHint && <p className="muted" role="status">Saved capture endpoint is unavailable. Select a replacement deliberately.</p>}{missingRenderHint && <p className="muted" role="status">Saved render endpoint is unavailable. Select a replacement deliberately.</p>}<label>Capture endpoint<select aria-label="Native capture endpoint" value={captureEndpointId} disabled={!backend.connected || activeCapture.length === 0 || sessionRunning} onChange={(event) => { setCaptureEndpointId(event.target.value); writeEndpointBindingHint(sessionId, event.target.value, renderEndpointId); }}><option value="">Select capture endpoint</option>{activeCapture.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><label>Render endpoint<select aria-label="Native render endpoint" value={renderEndpointId} disabled={!backend.connected || activeRender.length === 0 || sessionRunning} onChange={(event) => { setRenderEndpointId(event.target.value); writeEndpointBindingHint(sessionId, captureEndpointId, event.target.value); }}><option value="">Select render endpoint</option>{activeRender.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><div className="actions"><button type="button" className="secondary" onClick={() => void prepare()} disabled={!backend.connected || !backend.prepareNativeEndpoint || !captureEndpointId || !renderEndpointId || sessionRunning}>Prepare native endpoints</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? onStop() : onStart())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></div>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Requires the authenticated <code>deviceAdministration</code> scope for preparation. Endpoint defaults, volume, and mute are never changed. Selected IDs are retained only as local UI hints; a missing saved ID stays unselected until you deliberately choose a replacement.</p></section>;
+  const selectVbCable = () => {
+    if (!vbCablePair) { setMessage("An unambiguous active VB-Cable input/output pair was not found."); return; }
+    setCaptureEndpointId(vbCablePair.captureEndpointId);
+    setRenderEndpointId(vbCablePair.renderEndpointId);
+    writeEndpointBindingHint(sessionId, vbCablePair.captureEndpointId, vbCablePair.renderEndpointId);
+    setMessage("VB-Cable pair selected. Review the graph, then prepare and start the session.");
+  };
+  return <section className="panel native-endpoint-panel" aria-labelledby="native-endpoint-heading"><div className="section-heading"><div><p className="eyebrow">Native adapter</p><h2 id="native-endpoint-heading">Endpoint binding</h2></div><span className="badge">{sessionRunning ? "running" : "stopped"}</span></div><p className="muted">Select exact active endpoints for this session. Preparation opens stopped clients only; start the session when the graph is ready to move audio.</p>{missingCaptureHint && <p className="muted" role="status">Saved capture endpoint is unavailable. Select a replacement deliberately.</p>}{missingRenderHint && <p className="muted" role="status">Saved render endpoint is unavailable. Select a replacement deliberately.</p>}<div className="actions"><button type="button" className="secondary" onClick={selectVbCable} disabled={!backend.connected || !vbCablePair || sessionRunning} title={vbCablePair ? "Select the exact active VB-Cable endpoints" : "No unambiguous active VB-Cable pair found"}>Select VB-Cable pair</button>{vbCablePair && <small>Active VB-Cable pair detected</small>}</div><label>Capture endpoint<select aria-label="Native capture endpoint" value={captureEndpointId} disabled={!backend.connected || activeCapture.length === 0 || sessionRunning} onChange={(event) => { setCaptureEndpointId(event.target.value); writeEndpointBindingHint(sessionId, event.target.value, renderEndpointId); }}><option value="">Select capture endpoint</option>{activeCapture.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><label>Render endpoint<select aria-label="Native render endpoint" value={renderEndpointId} disabled={!backend.connected || activeRender.length === 0 || sessionRunning} onChange={(event) => { setRenderEndpointId(event.target.value); writeEndpointBindingHint(sessionId, captureEndpointId, event.target.value); }}><option value="">Select render endpoint</option>{activeRender.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><div className="actions"><button type="button" className="secondary" onClick={() => void prepare()} disabled={!backend.connected || !backend.prepareNativeEndpoint || !captureEndpointId || !renderEndpointId || sessionRunning}>Prepare native endpoints</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? onStop() : onStart())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></div>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Requires the authenticated <code>deviceAdministration</code> scope for preparation. Endpoint defaults, volume, and mute are never changed. Selected IDs are retained only as local UI hints; a missing saved ID stays unselected until you deliberately choose a replacement.</p></section>;
 }
 
 function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean; onSelect: () => void }) {

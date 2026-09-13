@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App } from "./App";
+import { App, findVbCableEndpointPair } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -26,7 +26,38 @@ beforeAll(() => {
   });
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
+
+describe("VB-Cable endpoint selection", () => {
+  it("returns exact IDs only for one active, unambiguous pair", () => {
+    const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
+    expect(findVbCableEndpointPair([
+      { id: "capture-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture", state: "active", defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+      { id: "render-vb", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render", state: "active", defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+      { id: "inactive-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture", state: "unplugged", defaultRoles: [] },
+    ])).toEqual({ captureEndpointId: "capture-vb", renderEndpointId: "render-vb" });
+    expect(findVbCableEndpointPair([{ id: "duplicate", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture", state: "active", defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } }])).toBeNull();
+  });
+
+  it("selects the detected pair without changing defaults or device state", async () => {
+    const format = { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
+    const devices = [
+      { id: "capture-vb", name: "CABLE Output (VB-Audio Virtual Cable)", direction: "capture" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+      { id: "render-vb", name: "CABLE Input (VB-Audio Virtual Cable)", direction: "render" as const, state: "active" as const, defaultRoles: [], format, periods: { default100ns: 100000, minimum100ns: 30000 } },
+    ];
+    render(<App backend={{ ...connectedPreviewBackend(), listDevices: async () => devices }} />);
+    const button = await screen.findByRole("button", { name: "Select VB-Cable pair" });
+    expect(button).toHaveProperty("disabled", false);
+    fireEvent.click(button);
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-vb"));
+    expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("render-vb");
+    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.endpoint-binding.demo-session") ?? "null")).toEqual({ captureEndpointId: "capture-vb", renderEndpointId: "render-vb" });
+    expect(screen.getByText("VB-Cable pair selected. Review the graph, then prepare and start the session.")).toBeTruthy();
+  });
+});
 
 describe("keyboard connection dialog", () => {
   it("adds a real processor draft through the canvas drag-and-drop shelf", async () => {
