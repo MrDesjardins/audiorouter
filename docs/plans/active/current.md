@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Corrected status/diagnostics capability reporting on 2026-09-13. Audio
+  status now derives from the native endpoint worker lifecycle: absent or
+  prepared-but-stopped workers remain unavailable, while a running worker is
+  reported as available with an explicit production-driver qualification
+  caveat. The Rust/TypeScript status contract and diagnostics schema now allow
+  both states. Control (129) and UI typecheck pass; no endpoint was opened by
+  these checks.
+
 - Requalified the guarded M02 Rust adapter route on 2026-09-13 using the
   existing VB-Audio endpoints: 24,000 capture frames, 187 graph blocks,
   23,936 scheduled frames, and 23,488 routed frames over 500 ms. Processing

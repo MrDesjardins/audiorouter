@@ -415,7 +415,7 @@ export interface DiscoveryDocument {
 
 export interface StatusSnapshot {
   build: string;
-  audio: "unavailable";
+  audio: "available" | "unavailable";
   deviceDiscovery: "available";
   reason: string;
   storage: "memory" | "sqlite";

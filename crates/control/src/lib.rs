@@ -3037,7 +3037,7 @@ fn diagnostics_output_schema() -> Value {
             "audio": {
                 "type": "object",
                 "properties": {
-                    "state": { "const": "unavailable" },
+                    "state": { "enum": ["available", "unavailable"] },
                     "reason": { "type": "string", "minLength": 1 }
                 },
                 "required": ["state", "reason"],
@@ -5613,11 +5613,12 @@ impl ControlPlane {
             self.store.sessions(500).len()
         };
         let (recent_recovery_crashes, recovery_safe_mode) = self.recovery_status()?;
+        let (audio, reason) = self.audio_status();
         Ok(json!({
             "build": self.build,
-            "audio": "unavailable",
+            "audio": audio,
             "deviceDiscovery": "available",
-            "reason": "native endpoint routing is implemented but not activated; exact bindings and a production driver are required",
+            "reason": reason,
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
             "sessionCount": session_count,
             "activeSessionCount": active_session_ids.len(),
@@ -5644,6 +5645,23 @@ impl ControlPlane {
             Some(worker) if worker.is_running() => "running",
             Some(_) => "configured-stopped",
             None => "implemented-not-activated",
+        }
+    }
+
+    fn audio_status(&self) -> (&'static str, &'static str) {
+        match self.native_adapter_state() {
+            "running" => (
+                "available",
+                "native endpoint worker is running; production driver qualification remains open",
+            ),
+            "configured-stopped" => (
+                "unavailable",
+                "native endpoint worker is prepared but stopped; start a session explicitly",
+            ),
+            _ => (
+                "unavailable",
+                "native endpoint routing is implemented but not activated; exact bindings and a production driver are required",
+            ),
         }
     }
 
@@ -6149,107 +6167,104 @@ impl ControlPlane {
                 "mutating notifications are not supported",
             );
         }
-        let result =
-            validate_method_params(&request.method, request.params.as_ref()).and_then(|_| {
-                match request.method.as_str() {
-                    "system.describe" => Ok(self.describe()),
-                    "system.handshake" => self.dispatch_handshake(request.params),
-                    "status.get" => self.status_snapshot(),
-                    "system.diagnostics" => {
-                        let (recent_recovery_crashes, recovery_safe_mode) =
-                            self.recovery_status()?;
-                        Ok(json!({
-                        "build": self.build,
-                        "backend": "control-plane",
-                        "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
-                        "audio": {
-                            "state": "unavailable",
-                            "reason": "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
-                        },
-                        "nativeAdapter": self.native_adapter_state(),
-                        "nativeSessionId": self.native_endpoint_session.as_ref().map(EntityId::as_str),
-                        "privacyMute": {
-                            "muted": self.privacy_muted,
-                            "persistence": if self.storage.is_some() { "durable" } else { "memory" }
-                        },
-                        "recovery": {
-                            "safeMode": recovery_safe_mode,
-                            "recentCrashes": recent_recovery_crashes,
-                            "persistence": if self.storage.is_some() { "durable" } else { "memory" }
-                        },
-                        "eventLog": {
-                            "latestSequence": self.events.latest_sequence(),
-                            "retained": self.events.len()
-                        },
-                        "redacted": true
-                        }))
-                    }
-                    "clients.list" => self.dispatch_clients_list(),
-                    "clients.authorize" => self.dispatch_client_authorize(request.params),
-                    "clients.revoke" => self.dispatch_client_revoke(request.params),
-                    "operations.get" => self.dispatch_operation_get(request.params),
-                    "operations.cancel" => self.dispatch_operation_cancel(request.params),
-                    "recordings.list" => self.dispatch_recordings_list(request.params),
-                    "recorders.list" => self.dispatch_recorders_list(request.params),
-                    "recorders.create" => self.dispatch_recorder_create(request.params),
-                    "recorders.arm" | "recorders.start" | "recorders.pause"
-                    | "recorders.resume" | "recorders.split" | "recorders.stop" => {
-                        self.dispatch_recorder(request.method.as_str(), request.params)
-                    }
-                    "recordings.get" => self.dispatch_recordings_get(request.params),
-                    "recordings.recovery" => self.dispatch_recording_recovery(request.params),
-                    "recordings.reveal" => self.dispatch_recording_reveal(request.params),
-                    "recordings.preview" => self.dispatch_recordings_preview(request.params),
-                    "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
-                    "recordings.rename" => self.dispatch_recording_rename(request.params),
-                    "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
-                    "recordings.recycle" => self.dispatch_recording_recycle(request.params),
-                    "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
-                    "recovery.clearSafeMode" => self.dispatch_recovery_clear(request.params),
-                    "startup.get" => Ok(json!({
-                        "enabled": self.startup_enabled,
-                        "registration": "unavailable",
-                        "reason": "sign-in startup registration is not implemented in this build"
-                    })),
-                    "startup.plan" => self.dispatch_startup_plan(request.params),
-                    "startup.apply" => self.dispatch_startup_apply(request.params),
-                    "devices.list" => self.dispatch_devices_list(request.params),
-                    "plugins.scan" => self.dispatch_plugins_scan(request.params),
-                    "plugins.list" => self.dispatch_plugins_list(request.params),
-                    "plugins.retry" => self.dispatch_plugins_retry(request.params),
-                    "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
-                    "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
-                    "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
-                    "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
-                    "virtualRoutes.list" => self.dispatch_virtual_routes_list(),
-                    "virtualRoutes.replace" => self.dispatch_virtual_routes_replace(request.params),
-                    "apps.list" | "applications.list" => self.dispatch_apps_list(),
-                    "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
-                    "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
-                    "presets.list" => Ok(self.describe()["presets"].clone()),
-                    "processors.list" => Ok(self.describe()["processors"].clone()),
-                    "processors.response" => self.dispatch_processors_response(request.params),
-                    "sessions.get" => self.dispatch_session_get(request.params),
-                    "sessions.export" => self.dispatch_session_export(request.params),
-                    "sessions.importPlan" => self.dispatch_session_import_plan(request.params),
-                    "sessions.importCommit" => self.dispatch_session_import_commit(request.params),
-                    "sessions.list" => self.dispatch_sessions_list(request.params),
-                    "sessions.create" => self.dispatch_session_create(request.params),
-                    "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
-                    "sessions.delete" => self.dispatch_session_delete(request.params),
-                    "routes.inspect" => self.dispatch_routes_inspect(request.params),
-                    "graph.history" => self.dispatch_graph_history(request.params),
-                    "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
-                    "events.subscribe" => self.dispatch_events_subscribe(request.params),
-                    "session.start" | "sessions.start" => {
-                        self.dispatch_session_start(request.params)
-                    }
-                    "session.stop" | "sessions.stop" => self.dispatch_session_stop(request.params),
-                    "graph.plan" => self.dispatch_plan(request.params),
-                    "graph.commit" => self.dispatch_commit(request.params),
-                    _ => Err(ControlError::InvalidRequest("method not found".into())),
+        let result = validate_method_params(&request.method, request.params.as_ref()).and_then(
+            |_| match request.method.as_str() {
+                "system.describe" => Ok(self.describe()),
+                "system.handshake" => self.dispatch_handshake(request.params),
+                "status.get" => self.status_snapshot(),
+                "system.diagnostics" => {
+                    let (recent_recovery_crashes, recovery_safe_mode) = self.recovery_status()?;
+                    let (audio, audio_reason) = self.audio_status();
+                    Ok(json!({
+                    "build": self.build,
+                    "backend": "control-plane",
+                    "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
+                    "audio": {
+                        "state": audio,
+                        "reason": audio_reason
+                    },
+                    "nativeAdapter": self.native_adapter_state(),
+                    "nativeSessionId": self.native_endpoint_session.as_ref().map(EntityId::as_str),
+                    "privacyMute": {
+                        "muted": self.privacy_muted,
+                        "persistence": if self.storage.is_some() { "durable" } else { "memory" }
+                    },
+                    "recovery": {
+                        "safeMode": recovery_safe_mode,
+                        "recentCrashes": recent_recovery_crashes,
+                        "persistence": if self.storage.is_some() { "durable" } else { "memory" }
+                    },
+                    "eventLog": {
+                        "latestSequence": self.events.latest_sequence(),
+                        "retained": self.events.len()
+                    },
+                    "redacted": true
+                    }))
                 }
-            });
+                "clients.list" => self.dispatch_clients_list(),
+                "clients.authorize" => self.dispatch_client_authorize(request.params),
+                "clients.revoke" => self.dispatch_client_revoke(request.params),
+                "operations.get" => self.dispatch_operation_get(request.params),
+                "operations.cancel" => self.dispatch_operation_cancel(request.params),
+                "recordings.list" => self.dispatch_recordings_list(request.params),
+                "recorders.list" => self.dispatch_recorders_list(request.params),
+                "recorders.create" => self.dispatch_recorder_create(request.params),
+                "recorders.arm" | "recorders.start" | "recorders.pause" | "recorders.resume"
+                | "recorders.split" | "recorders.stop" => {
+                    self.dispatch_recorder(request.method.as_str(), request.params)
+                }
+                "recordings.get" => self.dispatch_recordings_get(request.params),
+                "recordings.recovery" => self.dispatch_recording_recovery(request.params),
+                "recordings.reveal" => self.dispatch_recording_reveal(request.params),
+                "recordings.preview" => self.dispatch_recordings_preview(request.params),
+                "recordings.setMetadata" => self.dispatch_recording_metadata(request.params),
+                "recordings.rename" => self.dispatch_recording_rename(request.params),
+                "recordings.removeEntry" => self.dispatch_recording_remove(request.params),
+                "recordings.recycle" => self.dispatch_recording_recycle(request.params),
+                "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
+                "recovery.clearSafeMode" => self.dispatch_recovery_clear(request.params),
+                "startup.get" => Ok(json!({
+                    "enabled": self.startup_enabled,
+                    "registration": "unavailable",
+                    "reason": "sign-in startup registration is not implemented in this build"
+                })),
+                "startup.plan" => self.dispatch_startup_plan(request.params),
+                "startup.apply" => self.dispatch_startup_apply(request.params),
+                "devices.list" => self.dispatch_devices_list(request.params),
+                "plugins.scan" => self.dispatch_plugins_scan(request.params),
+                "plugins.list" => self.dispatch_plugins_list(request.params),
+                "plugins.retry" => self.dispatch_plugins_retry(request.params),
+                "plugins.inspect" => self.dispatch_plugins_inspect(request.params),
+                "virtualDevices.list" => self.dispatch_virtual_devices_list(request.params),
+                "virtualDevices.plan" => self.dispatch_virtual_devices_plan(request.params),
+                "virtualDevices.apply" => self.dispatch_virtual_devices_apply(request.params),
+                "virtualRoutes.list" => self.dispatch_virtual_routes_list(),
+                "virtualRoutes.replace" => self.dispatch_virtual_routes_replace(request.params),
+                "apps.list" | "applications.list" => self.dispatch_apps_list(),
+                "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
+                "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
+                "presets.list" => Ok(self.describe()["presets"].clone()),
+                "processors.list" => Ok(self.describe()["processors"].clone()),
+                "processors.response" => self.dispatch_processors_response(request.params),
+                "sessions.get" => self.dispatch_session_get(request.params),
+                "sessions.export" => self.dispatch_session_export(request.params),
+                "sessions.importPlan" => self.dispatch_session_import_plan(request.params),
+                "sessions.importCommit" => self.dispatch_session_import_commit(request.params),
+                "sessions.list" => self.dispatch_sessions_list(request.params),
+                "sessions.create" => self.dispatch_session_create(request.params),
+                "sessions.duplicate" => self.dispatch_session_duplicate(request.params),
+                "sessions.delete" => self.dispatch_session_delete(request.params),
+                "routes.inspect" => self.dispatch_routes_inspect(request.params),
+                "graph.history" => self.dispatch_graph_history(request.params),
+                "graph.undoPlan" => self.dispatch_graph_undo_plan(request.params),
+                "events.subscribe" => self.dispatch_events_subscribe(request.params),
+                "session.start" | "sessions.start" => self.dispatch_session_start(request.params),
+                "session.stop" | "sessions.stop" => self.dispatch_session_stop(request.params),
+                "graph.plan" => self.dispatch_plan(request.params),
+                "graph.commit" => self.dispatch_commit(request.params),
+                _ => Err(ControlError::InvalidRequest("method not found".into())),
+            },
+        );
         match result {
             Ok(value) => JsonRpcResponse::success(id, value),
             Err(ControlError::InvalidRequest(message)) if message == "method not found" => {
