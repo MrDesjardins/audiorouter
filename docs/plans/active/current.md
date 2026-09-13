@@ -45,6 +45,12 @@ Updated: 2026-09-13.
   Clippy, formatting, and diff checks pass; no endpoint or machine
   configuration was changed.
 
+- Hardened UI startup against the shell/backend pipe race on 2026-09-13.
+  `SnapshotCache` now performs three bounded asynchronous attempts, retaining
+  the last good snapshot and structured diagnostics on permanent failure. UI
+  typecheck and 129 tests pass, including a simulated startup race; no audio
+  endpoint or machine configuration was changed.
+
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
   invoke API, and Vite emits relative assets for the Tauri app protocol. Shell

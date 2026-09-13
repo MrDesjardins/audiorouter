@@ -66,6 +66,26 @@ describe("UI error formatting", () => {
 });
 
 describe("snapshot cache", () => {
+  it("retries a startup pipe race with bounded asynchronous attempts", async () => {
+    const cache = new SnapshotCache();
+    const disconnected = createDisconnectedBackend();
+    const expected = await disconnected.snapshot();
+    let attempts = 0;
+    const flaky: UiBackend = {
+      ...disconnected,
+      connected: true,
+      snapshot: async () => {
+        attempts += 1;
+        if (attempts < 3) throw new Error("pipe is still starting");
+        return expected;
+      },
+    };
+    const result = await cache.refresh(flaky);
+    expect(attempts).toBe(3);
+    expect(result.stale).toBe(false);
+    expect(result.snapshot?.session.id).toBe(demoSession.id);
+  });
+
   it("retains the last snapshot when refresh fails", async () => {
     const cache = new SnapshotCache();
     const first = await cache.refresh(createDisconnectedBackend());

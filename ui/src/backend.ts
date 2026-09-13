@@ -143,16 +143,27 @@ export class SnapshotCache {
   }
 
   async refresh(backend: UiBackend): Promise<UiSnapshotState> {
-    try {
-      const snapshot = await backend.snapshot();
-      this.state = { snapshot, stale: false, error: null };
-    } catch (error) {
-      this.state = {
-        ...this.state,
-        stale: true,
-        error: formatUiError(error, "Backend refresh failed"),
-      };
+    let lastError: unknown = undefined;
+    // The native shell may still be creating its per-user pipe/backend when
+    // the WebView finishes loading. Retry briefly without blocking the UI or
+    // hiding a previously valid snapshot.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const snapshot = await backend.snapshot();
+        this.state = { snapshot, stale: false, error: null };
+        return this.state;
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
+        }
+      }
     }
+    this.state = {
+      ...this.state,
+      stale: true,
+      error: formatUiError(lastError, "Backend refresh failed"),
+    };
     return this.state;
   }
 }

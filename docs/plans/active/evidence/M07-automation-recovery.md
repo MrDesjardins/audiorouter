@@ -49,6 +49,14 @@ plane stays alive until a terminal pipe/process error. Transport tests (19),
 shell tests (8), strict relevant Clippy, formatting, and doc-tests passed.
 No endpoint or machine configuration was accessed.
 
+## 2026-09-13 - bounded UI startup retry
+
+The UI snapshot cache now retries a newly starting native pipe three times
+asynchronously, then preserves the last valid snapshot and structured error
+diagnostics if the backend remains unavailable. Typecheck and 129 UI tests
+passed, including a simulated pipe-start race. No endpoint or machine
+configuration was accessed.
+
 ## 2026-09-13 - Tauri shell asset and probe hardening
 
 The Tauri shell initialization probe now delegates through the loaded UI
