@@ -325,6 +325,17 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "devices.list", params: { limit: 500, includeInactive: true } });
   });
 
+  it("forwards the bounded native pump with the exact session generation", async () => {
+    let received: unknown;
+    const result = { sessionId: demoSession.id, generation: 7, packets: 2, capturedFrames: 256, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0, renderBackpressureEvents: 0 };
+    const client = {
+      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.pumpNativeEndpoint?.(demoSession.id, 7, 2)).resolves.toEqual(result);
+    expect(received).toEqual({ method: "nativeEndpoints.pump", params: { sessionId: demoSession.id, generation: 7, maxPackets: 2 } });
+  });
+
   it("forwards explicit plugin scan and inspection requests", async () => {
     const requests: unknown[] = [];
     const client = {
