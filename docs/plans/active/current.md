@@ -2,6 +2,24 @@
 
 Updated: 2026-09-13.
 
+- Requalified the first-priority existing VB-Cable delivery on 2026-09-13 with
+  the authorized `m02-control-native-live.ps1 -AllowLiveAudio` route smoke.
+  The exact cable pair carried 24,480 captured frames through 191 processed
+  graph quanta and rendered 24,064 frames. The bounded harness completed
+  same-process start/stop and restored temporary state; no Windows defaults,
+  endpoint volume/mute, driver state, startup registration, or persistent
+  AudioRouter configuration changed. This is backend/native user-mode route
+  evidence; attended UI observation and production virtual-driver ownership
+  remain separate gates.
+
+- Delivery priority is now explicit: (1) existing VB-Cable input/output
+  configuration and a human-testable route, (2) the visual node editor,
+  (3) built-in processors whose committed parameters affect the backend,
+  then (4) the project-owned driver, (5) VST2/VST3 graph integration, and
+  (6) the remaining specification backlog. This reorders execution only; it
+  does not weaken the driver, signing, realtime, privacy, or compatibility
+  acceptance criteria.
+
 - Fixed recursive plugin-directory discovery on 2026-09-13. Explicit scans
   now walk ordinary nested folders with a 256-directory bound, treat each
   `.vst3` bundle as one candidate, and never traverse reparse-point folders.
