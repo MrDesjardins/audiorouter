@@ -216,8 +216,10 @@ AudioRouterValidateBridgeOpenRequest(
     _In_ const AR_BRIDGE_OPEN_REQUEST* Request
 )
 {
-    if (Request == NULL ||
-        Request->ProtocolMajor != AR_BRIDGE_PROTOCOL_MAJOR ||
+    if (Request == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    if (Request->ProtocolMajor != AR_BRIDGE_PROTOCOL_MAJOR ||
         Request->BusIdBytes == 0 ||
         Request->BusIdBytes > AR_BRIDGE_MAX_BUS_ID_BYTES ||
         (Request->BusIdBytes % sizeof(WCHAR)) != 0 ||
@@ -236,6 +238,18 @@ AudioRouterValidateBridgeOpenRequest(
         ((Request->SectionHandle == 0) != (Request->MappingBytes == 0)) ||
         (Request->SectionHandle != 0 && Request->MappingBytes < AR_BRIDGE_HEADER_BYTES)) {
         return STATUS_INVALID_PARAMETER;
+    }
+    USHORT busIdCharacters = Request->BusIdBytes / sizeof(WCHAR);
+    for (USHORT index = 0; index < busIdCharacters; ++index) {
+        if (Request->BusId[index] == L'\0') {
+            return STATUS_INVALID_PARAMETER;
+        }
+    }
+    for (USHORT index = busIdCharacters;
+         index < ARRAYSIZE(Request->BusId); ++index) {
+        if (Request->BusId[index] != L'\0') {
+            return STATUS_INVALID_PARAMETER;
+        }
     }
     return STATUS_SUCCESS;
 }

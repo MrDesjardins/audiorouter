@@ -33,6 +33,13 @@ if (-not $bridgeHeader.Contains('Request->Reserved2 != 0')) {
     throw 'bridge request validation must reject non-zero reserved fields'
 }
 foreach ($required in @(
+        "Request->BusId[index] == L'\0'",
+        "Request->BusId[index] != L'\0'")) {
+    if (-not $bridgeHeader.Contains($required)) {
+        throw "bridge UTF-16 identity validation is missing: $required"
+    }
+}
+foreach ($required in @(
         'if (Irp == NULL)',
         'stack == NULL || stack->FileObject == NULL',
         'IOCTL_AUDIOROUTER_BRIDGE_OPEN &&',

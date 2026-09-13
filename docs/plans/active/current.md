@@ -39,6 +39,11 @@ flag is enabled. Bridge publication remains independent; the M03 source
 acceptance now rejects callback-side diagnostic output and the README records
 the limitation.
 
+Hardened the bridge open-request identity boundary on 2026-09-13. Kernel-side
+validation now rejects embedded NULs and nonzero unused UTF-16 slots in the
+fixed bus-ID buffer, preventing ambiguous identity comparison for malformed
+requests before lease or mapping state is touched.
+
 Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
 at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
 catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,
