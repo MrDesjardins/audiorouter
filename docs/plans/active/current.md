@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Hardened the WaveRT notification timer callback on 2026-09-12. It now rejects
+zero/negative/backward QPC state before conversion, widens notification
+interval arithmetic, and checks miniport, adapter, and timer ownership before
+use. The non-installing x64 WDK build/source-contract acceptance passed with
+zero signability errors/warnings and catalog generation. No driver was
+installed or loaded.
+
 Hardened WaveRT elapsed-time and DMA displacement arithmetic on 2026-09-12.
 Position updates now use checked 64-bit intermediates; unrepresentable
 elapsed intervals or displacements fail closed while resynchronizing the DMA

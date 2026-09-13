@@ -137,6 +137,15 @@ if (-not $stream.Contains('ULONGLONG byteNumerator = static_cast<ULONGLONG>(m_ul
 if (-not $stream.Contains('byteDisplacementWide > MAXULONG')) {
     throw 'WaveRT DMA displacement must fail closed when it exceeds ULONG capacity'
 }
+if (-not $stream.Contains('static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp')) {
+    throw 'WaveRT timer callback must reject a backwards QPC sample before conversion'
+}
+if (-not $stream.Contains('ULONGLONG intervalHns = static_cast<ULONGLONG>(_this->m_ulNotificationIntervalMs) * 10000')) {
+    throw 'WaveRT timer notification arithmetic must widen before interval multiplication'
+}
+if (-not $stream.Contains('if (_this->m_pMiniport == NULL)')) {
+    throw 'WaveRT timer callback must guard its miniport owner'
+}
 if (-not $stream.Contains('PacketNumber == NULL || Flags == NULL')) {
     throw 'WaveRT packet query must validate output pointers'
 }

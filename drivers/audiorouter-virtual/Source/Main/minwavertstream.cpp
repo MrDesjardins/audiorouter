@@ -1804,18 +1804,49 @@ TimerNotifyRT
 
     qpc = KeQueryPerformanceCounter(&qpcFrequency);
 
+    if (_this->m_ullPerformanceCounterFrequency.QuadPart == 0 ||
+        qpc.QuadPart < 0 ||
+        static_cast<ULONGLONG>(qpc.QuadPart) < _this->m_ullLastDPCTimeStamp ||
+        _this->m_ulNotificationIntervalMs == 0)
+    {
+        goto End;
+    }
+
     // Convert ticks to 100ns units.
     LONGLONG  hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(_this->m_ullPerformanceCounterFrequency.QuadPart, qpc);
+
+    if (hnsCurrentTime < 0 ||
+        static_cast<ULONGLONG>(hnsCurrentTime) < _this->m_ullLastDPCTimeStamp)
+    {
+        goto End;
+    }
 
     // Calculate the time elapsed since the last we ran DPC that matched Notification interval. Note that the division by 10000
     // to convert to milliseconds may cause us to lose some of the time, so we will carry the remainder forward.
 
-    ULONG TimeElapsedInMS = (ULONG)(hnsCurrentTime - _this->m_ullLastDPCTimeStamp + _this->m_hnsDPCTimeCarryForward)/10000;
+    ULONGLONG elapsedHns = static_cast<ULONGLONG>(hnsCurrentTime) -
+        _this->m_ullLastDPCTimeStamp;
+    if (elapsedHns > MAXULONGLONG - _this->m_hnsDPCTimeCarryForward)
+    {
+        _this->m_ullLastDPCTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
+        _this->m_hnsDPCTimeCarryForward = 0;
+        goto End;
+    }
+    elapsedHns += _this->m_hnsDPCTimeCarryForward;
+    ULONGLONG elapsedMilliseconds = elapsedHns / 10000;
+    if (elapsedMilliseconds > MAXULONG)
+    {
+        _this->m_ullLastDPCTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
+        _this->m_hnsDPCTimeCarryForward = elapsedHns % 10000;
+        goto End;
+    }
+    ULONG TimeElapsedInMS = static_cast<ULONG>(elapsedMilliseconds);
 
     if (TimeElapsedInMS >= _this->m_ulNotificationIntervalMs)
     {
         // Carry forward the time greater than notification interval to adjust time to signal next buffer completion event accordingly.
-        _this->m_hnsDPCTimeCarryForward = hnsCurrentTime - _this->m_ullLastDPCTimeStamp + _this->m_hnsDPCTimeCarryForward - (_this->m_ulNotificationIntervalMs * 10000);
+        ULONGLONG intervalHns = static_cast<ULONGLONG>(_this->m_ulNotificationIntervalMs) * 10000;
+        _this->m_hnsDPCTimeCarryForward = elapsedHns - intervalHns;
         // Save the last time DPC ran at notification interval
         _this->m_ullLastDPCTimeStamp = hnsCurrentTime;
         bufferCompleted = TRUE;
@@ -1838,7 +1869,15 @@ TimerNotifyRT
         goto End;
     }
 
+    if (_this->m_pMiniport == NULL)
+    {
+        goto End;
+    }
     PADAPTERCOMMON  pAdapterComm = _this->m_pMiniport->GetAdapterCommObj();
+    if (pAdapterComm == NULL)
+    {
+        goto End;
+    }
 
     // Simple buffer underrun detection.
     if (!_this->IsCurrentWaveRTWritePositionUpdated() && !_this->m_bEoSReceived)
@@ -1874,7 +1913,10 @@ TimerNotifyRT
 
     if (_this->m_bLastBufferRendered)
     {
-        ExCancelTimer(_this->m_pNotificationTimer, NULL);
+        if (_this->m_pNotificationTimer != NULL)
+        {
+            ExCancelTimer(_this->m_pNotificationTimer, NULL);
+        }
     }
 
 End:
