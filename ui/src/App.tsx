@@ -81,6 +81,9 @@ function ProcessorCatalog({ processors, error, node, backend }: { processors: Pr
 }
 
 function ProcessorParameterEditor({ node, processors, connected, onChange }: { node: Node; processors: ProcessorDescriptor[] | null; connected: boolean; onChange: (name: string, value: boolean | number | string) => void }) {
+  if (node.kind === "plugin") {
+    return <p className="muted" role="status">Plugin parameters become available after the exact scanned binary is bound to an isolated worker. This placeholder remains stopped and disabled.</p>;
+  }
   const descriptor = processors?.find((processor) => processor.id === node.kind);
   if (!descriptor || descriptor.parameters.length === 0) return null;
   return <>{descriptor.parameters.map((parameter) => {
