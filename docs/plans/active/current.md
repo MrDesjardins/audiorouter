@@ -2,6 +2,19 @@
 
 Updated: 2026-09-13.
 
+Requalified the complete guarded M00-M08 acceptance chain at pushed head
+`7b096ae5` on 2026-09-13 after the process-loopback activation lifetime
+hardening. VS/MSVC/SDK/WDK discovery, the AudioRouter x64 WDK build and
+catalog signability, the 31-endpoint read-only inventory, disposable SysVAD,
+M01/M04/M05 (128 UI tests), M06 VST3/VST2 workers, M07, unsigned M08
+artifacts, 159 traceability IDs, and documentation validation (52 Markdown
+files/179 local links) all passed. Cleanup removed 15 run-owned temporary
+children. Driver installation/loading, signing-mode or boot-policy changes,
+plugin/startup registration, stream activation, and persistent machine-audio
+configuration remained excluded. The managed-driver/PortCls, production
+signing/install, physical-latency, interactive shell, and independent
+third-party plugin gates remain open.
+
 Requalified the locked workspace after the bridge callback safety fixes on
 2026-09-13. `cargo test --workspace --locked -- --test-threads=1` passed with
 exit code 0 across CLI/MCP, control (127), domain (60), DSP (32), engine
