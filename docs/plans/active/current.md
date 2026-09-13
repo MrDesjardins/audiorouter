@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Revalidated the complete locked workspace at the current pushed tree on
+  2026-09-13 with `cargo test --workspace --locked -- --test-threads=1`.
+  CLI (32 plus 3 MCP), control (134 passed and 1 explicitly ignored live
+  test), domain (61), DSP (32), engine (108), plugin-host (69 plus 13 worker
+  integration), storage (86), transport (19), and Windows-audio (70) passed;
+  no endpoint or driver was opened. The interactive desktop surface still
+  exposes no targetable app/window in this agent session, so attended WebView2
+  acceptance remains an explicit user-desktop gate.
+
 - Fixed VST2 test isolation on 2026-09-13. The opcode-dispatch regression now
   uses a thread-local test counter instead of process-global mutable state, so
   parallel plugin-host tests cannot contaminate its expected lifecycle count.
