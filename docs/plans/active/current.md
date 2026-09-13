@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Hardened WaveRT teardown/API validation on 2026-09-12: buffer-free paths now
+guard the PortCls owner, notification registration rejects null events, and
+hardware-latency reporting handles a null output. The non-installing x64 WDK
+build/source-contract acceptance passed with zero signability errors/warnings
+and catalog generation; documentation validation passed with 52 Markdown
+files and 179 local links. No driver was installed or loaded.
+
 Hardened additional WaveRT teardown and API boundaries on 2026-09-12:
 buffer-free paths no longer dereference a cleared PortCls owner, notification
 registration rejects a null event, and hardware-latency reporting handles a

@@ -1,5 +1,13 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - WaveRT teardown/API requalification
+
+The source-contract acceptance was rerun after the teardown guards were
+implemented. The x64 WDK build, package signability check, and catalog
+generation passed with zero errors or warnings; documentation validation also
+passed with 52 Markdown files and 179 local links. No driver was installed or
+loaded.
+
 ## 2026-09-12 - teardown and API boundary guards
 
 WaveRT buffer-free methods now check the PortCls stream owner before unmapping
