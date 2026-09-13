@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Hardened WaveRT write-position teardown on 2026-09-13. The internal write
+position helper now rejects a missing miniport or adapter-common owner before
+emitting diagnostics or updating position state, preventing a late packet
+callback from dereferencing released lifecycle state. M03 non-installing WDK
+build/source-contract acceptance passed with zero signability errors/warnings
+and catalog generation. No driver was installed or loaded.
+
 Added authoritative post-open bridge-size validation on 2026-09-13.
 `NativeBridgeSectionHandle::for_file` now rechecks the actual size returned by
 `GetFileSizeEx` after opening the file and before creating the section, so a

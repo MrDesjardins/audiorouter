@@ -1206,7 +1206,16 @@ NTSTATUS CMiniportWaveRTStream::SetCurrentWritePositionInternal(_In_  ULONG _ulC
         return STATUS_INVALID_DEVICE_REQUEST;
     }
 
+    if (m_pMiniport == NULL)
+    {
+        return STATUS_DEVICE_NOT_READY;
+    }
+
     PADAPTERCOMMON pAdapterComm = m_pMiniport->GetAdapterCommObj();
+    if (pAdapterComm == NULL)
+    {
+        return STATUS_DEVICE_NOT_READY;
+    }
 
     //Event type: eMINIPORT_SET_WAVERT_BUFFER_WRITE_POSITION
     //Parameter 1: Current linear buffer position

@@ -191,6 +191,12 @@ if (-not $stream.Contains('if (Position_ == NULL)')) {
 if (-not $stream.Contains('m_pDmaBuffer == NULL')) {
     throw 'WaveRT DMA allocation must reject a failed mapping'
 }
+if (-not $stream.Contains('m_pMiniport == NULL')) {
+    throw 'WaveRT write-position updates must reject a missing miniport owner'
+}
+if (-not $stream.Contains('pAdapterComm == NULL')) {
+    throw 'WaveRT write-position updates must reject a missing adapter owner'
+}
 if (-not $stream.Contains('m_pPortStream == NULL')) {
     throw 'WaveRT DMA allocation must reject a missing PortCls stream owner'
 }
