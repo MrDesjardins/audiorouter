@@ -63,6 +63,11 @@ and session running. **Quit and stop audio** sends an authenticated
 confirms `stopped`; a refused or failed stop leaves the shell running and
 reports the refusal in the tray status item.
 
+The tray's **Toggle privacy mute** action reads the authoritative backend
+privacy state before changing it. It uses the same scoped API as the editor;
+it does not alter Windows microphone permissions, endpoint mute, or master
+volume.
+
 For a repeatable control-plane check without manual UI observation, build the
 debug CLI and shell, then run `tests/acceptance/m07-shell-rpc.ps1` from an
 elevated PowerShell session. It opts into a temporary frontend initialization

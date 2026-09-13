@@ -364,6 +364,15 @@ fn tray_stop_succeeded(response: &JsonRpcResponse) -> bool {
         == Some("stopped")
 }
 
+fn tray_privacy_muted(response: &JsonRpcResponse) -> Option<bool> {
+    response
+        .result
+        .as_ref()
+        .and_then(|result| result.get("privacyMute"))
+        .and_then(|mute| mute.get("muted"))
+        .and_then(serde_json::Value::as_bool)
+}
+
 fn main() {
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
@@ -387,6 +396,8 @@ fn main() {
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
             let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit and stop audio", true, None::<&str>)?;
+            let privacy =
+                MenuItem::with_id(app, "privacy", "Toggle privacy mute", true, None::<&str>)?;
             let refresh_status =
                 MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
             let status =
@@ -403,7 +414,15 @@ fn main() {
             let recordings_for_handler = recordings.clone();
             let menu = Menu::with_items(
                 app,
-                &[&open, &close, &quit, &refresh_status, &status, &recordings],
+                &[
+                    &open,
+                    &close,
+                    &quit,
+                    &privacy,
+                    &refresh_status,
+                    &status,
+                    &recordings,
+                ],
             )?;
             TrayIconBuilder::with_id("audiorouter")
                 .menu(&menu)
@@ -435,6 +454,55 @@ fn main() {
                                 _ => {
                                     let _ = status_for_handler
                                         .set_text("Quit refused: session stop did not complete");
+                                }
+                            }
+                        }
+                        "privacy" => {
+                            let status_request = JsonRpcRequest {
+                                jsonrpc: "2.0".into(),
+                                id: Some(serde_json::json!("tray-privacy-status")),
+                                method: "status.get".into(),
+                                params: None,
+                            };
+                            let Some(currently_muted) =
+                                forward_rpc_request(&status_request, &pipe_name)
+                                    .ok()
+                                    .and_then(|response| tray_privacy_muted(&response))
+                            else {
+                                let _ = status_for_handler.set_text("Privacy mute unavailable");
+                                return;
+                            };
+                            let request = JsonRpcRequest {
+                                jsonrpc: "2.0".into(),
+                                id: Some(serde_json::json!("tray-privacy-toggle")),
+                                method: "safety.setPrivacyMute".into(),
+                                params: Some(serde_json::json!({
+                                    "muted": !currently_muted,
+                                    "idempotencyKey": format!(
+                                        "tray-privacy-{}",
+                                        std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .map(|duration| duration.as_nanos())
+                                            .unwrap_or_default()
+                                    )
+                                })),
+                            };
+                            match forward_rpc_request(&request, &pipe_name)
+                                .ok()
+                                .and_then(|response| response.result)
+                                .and_then(|result| {
+                                    result.get("muted").and_then(serde_json::Value::as_bool)
+                                }) {
+                                Some(muted) => {
+                                    let _ = status_for_handler.set_text(if muted {
+                                        "Privacy mute enabled"
+                                    } else {
+                                        "Privacy mute disabled"
+                                    });
+                                }
+                                None => {
+                                    let _ =
+                                        status_for_handler.set_text("Privacy mute change refused");
                                 }
                             }
                         }
@@ -576,6 +644,31 @@ mod tests {
             result: None,
             ..stopped
         }));
+    }
+
+    #[test]
+    fn tray_privacy_state_requires_authoritative_status_shape() {
+        let response = JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("tray-privacy-status")),
+            result: Some(json!({ "privacyMute": { "muted": true } })),
+            error: None,
+        };
+        assert_eq!(tray_privacy_muted(&response), Some(true));
+        assert_eq!(
+            tray_privacy_muted(&JsonRpcResponse {
+                result: Some(json!({ "privacyMute": {} })),
+                ..response.clone()
+            }),
+            None
+        );
+        assert_eq!(
+            tray_privacy_muted(&JsonRpcResponse {
+                result: None,
+                ..response
+            }),
+            None
+        );
     }
 
     #[test]

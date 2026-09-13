@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Completed the tray privacy-mute control on 2026-09-13. The shell tray now
+  reads authoritative `status.get` state, toggles `safety.setPrivacyMute`
+  with a unique idempotency key, and reports unavailable/refused operations
+  without guessing. Shell tests (10), formatting, and diff checks pass. The
+  control changes only AudioRouter's process-local privacy latch; Windows
+  permissions, endpoint mute, and master volume are untouched.
+
 - Implemented the explicit UI-10 tray shutdown path on 2026-09-13. The tray
   now distinguishes hiding the window from **Quit and stop audio**: the quit
   action forwards an authenticated `session.stop` for the desktop session and
