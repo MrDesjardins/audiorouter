@@ -150,6 +150,12 @@ presets into ordinary draft nodes. A voice chain is inserted into the first
 compatible connected path when one exists; otherwise its nodes remain
 unconnected for explicit user wiring. Draft changes are not committed until an
 authorized plan/apply flow.
+The Session transfer panel exports the selected stopped configuration as a
+local `.audiorouter.json` file. Import first validates the file through the
+backend, then requires the separate Commit stopped import action; imported
+sessions remain stopped and require endpoint rebinding/review. The transfer
+does not include credentials, grants, recordings, plugin binaries, or machine
+authorization.
 If another client changes the session before commit, the UI reports the typed
 revision conflict and structured remediation, refreshes the authoritative
 session, and clears the stale warning/commit state. Review the refreshed draft
