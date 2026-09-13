@@ -2,6 +2,17 @@
 
 Updated: 2026-09-12.
 
+Fresh post-reboot native adapter qualification after `ce5c3fcc` passed on
+2026-09-12. The bounded system-selected adapter smoke processed 51 capture
+packets/24,480 frames through 191 graph blocks at 48 kHz with 24,448 scheduler
+frames and zero xruns, overruns, or deadline misses. A one-cycle explicit
+CABLE bridge processed 24,480 captured frames, 191 tap calls, and 24,448
+rendered frames with zero non-finite samples, drops, xruns, or deadline
+misses. Both probes stopped/removed temporary resources and verified unchanged
+media state; no default, volume, mute, privacy, driver, signing, startup, or
+persistent machine-audio configuration changed. Evidence: [M02 audio
+evidence](evidence/M02-audio-engine.md).
+
 Post-reboot guarded requalification after `fc7f4256` passed on 2026-09-12.
 The chain built the project x64 WDK driver with zero signability errors and
 warnings, inventoried 31 endpoints read-only, compiled/qualified disposable

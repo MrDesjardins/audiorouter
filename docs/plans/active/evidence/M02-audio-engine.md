@@ -1684,3 +1684,22 @@ successful start/stop/reset, and one deliberate stale-generation rejection.
 The worker detached cleanly and the media identity/state snapshot was unchanged.
 This is existing-endpoint user-mode evidence; production driver installation,
 signing, PortCls ownership, and physical latency remain open.
+# Native adapter requalification after reboot (2026-09-12)
+
+The authorized bounded system-selected adapter smoke passed for 500 ms at
+48 kHz. It captured 24,480 frames in 51 packets, processed 191 graph blocks,
+submitted 24,448 scheduler frames, and reported zero xruns, input/output
+overruns, or deadline misses. The selected capture and render endpoint
+identities were explicit; the probe stopped and reset both streams and found
+unchanged media-device identity/state.
+
+The authorized one-cycle explicit CABLE bridge also passed for 500 ms at
+48 kHz. It captured 24,480 frames, processed 191 quanta/taps, rendered 24,448
+frames, and reported zero non-finite tap samples, drops, xruns, or deadline
+misses. Its temporary stream and recording were stopped/removed and media
+state remained unchanged.
+
+These are shared-mode user-space adapter and digital-bridge checks. They do
+not qualify physical acoustic latency, PortCls callback ownership, a loaded
+managed driver, or production signing. No persistent machine-audio setting
+was changed.
