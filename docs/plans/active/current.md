@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Requalified the guarded full M00-M08 acceptance chain at pushed head
+  `87b4f302` on 2026-09-13 after the graph-list callback integration. VS 18.9.1
+  and WDK 10.0.28000.0 toolchain/native compile, AudioRouter driver
+  compile/catalog signability, 34-endpoint inventory, disposable SysVAD,
+  M01, M04 (32 DSP and 40 recording tests), M05 (143 UI tests/typecheck and
+  production builds), M06 VST3/VST2 workers, M07, unsigned M08 preparation,
+  159 traceability mappings, and documentation validation (52 Markdown files,
+  180 local links) passed. Fifteen run-owned temporary children were removed.
+  No driver installation/loading, plugin registration, startup registration,
+  signing-mode change, or persistent audio action occurred.
+
 - Closed a UI-03/UI-11 integration-boundary gap on 2026-09-13. The structured
   graph list now accepts the same typed processor-insertion callback used by
   the connected App instead of requiring the global event fallback; the
