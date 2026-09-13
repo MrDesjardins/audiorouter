@@ -2781,16 +2781,21 @@ impl Storage {
     }
 
     pub fn load_startup_enabled(&self) -> Result<bool, StorageError> {
-        Ok(self
+        let value = self
             .connection
             .query_row(
                 "SELECT value FROM control_settings WHERE key = 'startupEnabled'",
                 [],
                 |row| row.get::<_, String>(0),
             )
-            .optional()?
-            .as_deref()
-            == Some("true"))
+            .optional()?;
+        match value.as_deref() {
+            None | Some("false") => Ok(false),
+            Some("true") => Ok(true),
+            Some(_) => Err(StorageError::CorruptDatabase(
+                "startupEnabled is not a boolean".into(),
+            )),
+        }
     }
 
     /// Persist one bounded crash marker and return the number of recent
@@ -3263,6 +3268,23 @@ mod tests {
         }));
         storage.delete_startup_plan(&plan_id).unwrap();
         assert!(storage.load_startup_plans().unwrap().is_empty());
+    }
+
+    #[test]
+    fn corrupt_startup_preference_fails_closed() {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .connection
+            .execute(
+                "INSERT INTO control_settings(key, value) VALUES ('startupEnabled', 'maybe')",
+                [],
+            )
+            .unwrap();
+        assert!(matches!(
+            storage.load_startup_enabled(),
+            Err(StorageError::CorruptDatabase(message))
+                if message == "startupEnabled is not a boolean"
+        ));
     }
 
     #[test]

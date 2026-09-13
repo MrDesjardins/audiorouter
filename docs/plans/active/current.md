@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Hardened startup desired-state recovery: malformed persisted
+  `startupEnabled` values now return an explicit `CorruptDatabase` error
+  instead of silently disabling the user's preference. Added a storage
+  regression; control/storage tests (128/84), strict Clippy, formatting, and
+  diff checks pass. No OS startup or audio configuration was accessed.
+
 - Advanced STATE-03/M07 startup persistence: the desired sign-in startup
   preference is now stored in SQLite and restored by `startup.get` after a
   backend restart. Added storage/control regressions and aligned the
