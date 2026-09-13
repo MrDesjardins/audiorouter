@@ -95,6 +95,9 @@ $readBytesSource = $streamSource.Substring($readBytesStart, $readBytesEnd - $rea
 if ($readBytesSource.Contains('m_SaveData.WriteData')) {
     throw 'ReadBytes callback must not perform diagnostic file output'
 }
+if (-not $readBytesSource.Contains('m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0')) {
+    throw 'ReadBytes callback must fail closed before DMA-buffer modulo arithmetic'
+}
 foreach ($required in @(
         'AudioRouterGetLeaseShapeForDirection(',
         'm_BridgeScratchFrames = 0;',

@@ -1565,6 +1565,9 @@ ByteDisplacement - # of bytes to process.
 
 --*/
 {
+    if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0) {
+        return;
+    }
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
     const BOOLEAN bridgeFormat =
@@ -1680,6 +1683,9 @@ ByteDisplacement - # of bytes to process.
 
 --*/
 {
+    if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0) {
+        return;
+    }
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
     const BOOLEAN bridgeFormat =
         m_pWfExt != NULL &&

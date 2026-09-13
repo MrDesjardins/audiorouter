@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Hardened both WaveRT `WriteBytes` and `ReadBytes` callbacks on 2026-09-13:
+they now return before DMA-buffer modulo arithmetic when the buffer is absent
+or its size is zero, preventing a partial stream setup from reaching a
+divide-by-zero callback fault. The M03 source-contract and non-installing
+WDK build acceptance passed with zero signability errors/warnings and catalog
+generation. No driver was installed or loaded and no audio configuration
+changed.
+
 Hardened the public `NativeBridgeSectionHandle::for_file` opener on
 2026-09-13. It now rejects a missing, non-regular, symlink, junction, or
 other reparse-point leaf before calling `CreateFileW`, matching the existing
