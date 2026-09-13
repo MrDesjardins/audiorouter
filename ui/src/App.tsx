@@ -163,12 +163,6 @@ function PresetCatalog({ presets, error }: { presets: import("@audiorouter/contr
   </section>;
 }
 
-function PresetCatalogLegacy({ presets, error }: { presets: import("@audiorouter/contracts").DiscoveryDocument["presets"] | null; error: string | null }) {
-  const entries = presets ? [...presets.voiceChains.map((preset) => ({ ...preset, category: "Voice chain" })), ...presets.eq.map((preset) => ({ ...preset, category: "EQ" }))] : [];
-  const requestEqPreset = (presetId: EqPresetId) => globalThis.dispatchEvent(new CustomEvent("audiorouter:append-eq-preset", { detail: { presetId } }));
-  return <section className="panel preset-catalog" aria-labelledby="preset-catalog-heading"><div className="section-heading"><div><p className="eyebrow">Saved starting points</p><h2 id="preset-catalog-heading">Presets</h2></div><span className="badge">{entries.length}</span></div>{error ? <p className="muted" role="status">Preset catalog unavailable: {error}</p> : presets === null ? <p className="muted">Connect to the backend to load the authoritative preset catalog.</p> : entries.length === 0 ? <p className="muted">No presets are advertised.</p> : <ul aria-label="Available presets">{entries.map((preset) => <li key={`${preset.category}-${preset.id}`}><strong>{preset.name}</strong> <small>{preset.category} · {preset.description}</small>{preset.category === "EQ" && <button type="button" className="secondary" onClick={() => requestEqPreset(preset.id as EqPresetId)}>Add EQ to draft</button>}</li>)}</ul>}<p className="muted">EQ presets expand into ordinary draft nodes; other preset actions remain informational until their topology policy is defined.</p></section>;
-}
-
 function PluginScanPanel({ backend }: { backend: UiBackend }) {
   const [directory, setDirectory] = useState("");
   const [result, setResult] = useState<import("@audiorouter/contracts").PluginScanResult | null>(null);
