@@ -207,6 +207,59 @@ describe("keyboard connection dialog", () => {
     expect((precise as HTMLInputElement).value).toBe("-6");
   });
 
+  it("commits a dropped gate parameter through the graph backend", async () => {
+    const planGraph = vi.fn(async (candidate: typeof demoSession) => ({
+      planId: "gate-plan",
+      baseRevision: candidate.revision,
+      expiresInMs: 30_000,
+      diff: [],
+      affectedDestinations: [],
+      warnings: [],
+      requiredScopes: ["graphWrite"],
+    }));
+    const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
+    const gate = {
+      id: "gate",
+      version: 1,
+      category: "dynamics" as const,
+      availability: { status: "available" as const },
+      latencySamples: 0,
+      parameters: [
+        { name: "thresholdDb", type: "number" as const, unit: "dB", minimum: -80, maximum: 0, default: -45 },
+      ],
+    };
+    const backend = {
+      ...connectedPreviewBackend(),
+      listProcessors: async () => [gate],
+      planGraph,
+      commitGraph,
+    };
+    render(<App backend={backend} />);
+
+    const dropSource = await screen.findByRole("button", { name: /^Gate$/ });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      effectAllowed: "copy",
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    };
+    fireEvent.dragStart(dropSource, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer });
+    fireEvent.click(await screen.findByLabelText("Gate 1, gate"));
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "thresholdDb precise value" }), { target: { value: "-30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+
+    await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("gate-plan", demoSession.revision, expect.any(String)));
+    expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ kind: "gate", parameters: expect.objectContaining({ thresholdDb: -30 }) }),
+      ]),
+    }));
+    expect(await screen.findByText("Committed revision 8. Reconnect to refresh the authoritative view.")).toBeTruthy();
+  });
+
   it("persists tidy layout positions as presentation state", async () => {
     render(<App backend={connectedPreviewBackend()} />);
 

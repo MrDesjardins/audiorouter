@@ -21,6 +21,13 @@ Updated: 2026-09-13.
   all three live-test environment variables. This is evidence for the existing
   endpoint backend path, not yet the unavailable interactive WebView gate.
 
+- Added the UI-to-backend processor regression on 2026-09-13. The test drops a
+  Gate into the visual canvas, edits `thresholdDb` to -30 dB, invokes Plan
+  changes, and verifies the exact candidate reaches `graph.commit` at the
+  current revision. This closes the prior evidence gap between local visual
+  editing and an authoritative graph mutation. UI coverage now passes 133
+  tests and TypeScript typecheck passes.
+
 - Requalified the focused M03 driver bridge acceptance at pushed head on
   2026-09-13 with VS 18.9.1 and WDK 10.0.28000.0. The x64 driver compiled,
   catalog generation/signability reported zero errors and warnings, and the
