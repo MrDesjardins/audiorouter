@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Hardened the disconnected canvas affordance on 2026-09-13. The processor
+  shelf is now disabled and non-draggable when the backend is offline, while
+  the callback-level connected guard remains as defense in depth. Regression
+  coverage verifies the disabled control and rejected drop; UI tests pass
+  (146), TypeScript typecheck and diff checks pass. No graph, audio, or machine
+  state changes occur while disconnected.
+
 - Requalified the Windows process-binding restart regression on 2026-09-13:
   `tests::restarted_process_cannot_inherit_a_stale_binding` passed after
   compiling the current adapter. The test proves stale PID/creation identity

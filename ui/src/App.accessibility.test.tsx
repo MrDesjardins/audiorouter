@@ -49,6 +49,7 @@ describe("keyboard connection dialog", () => {
   it("rejects canvas library drops while disconnected", async () => {
     render(<App backend={createDisconnectedBackend()} />);
     const dropSource = await screen.findByRole("button", { name: /^Gain$/ });
+    expect(dropSource).toHaveProperty("disabled", true);
     const canvas = screen.getByLabelText("Signal-flow graph");
     const dataTransfer = {
       types: ["application/x-audiorouter-library-kind"],
