@@ -82,6 +82,7 @@ where
         "schema" => plane.describe(),
         "diagnostics" => diagnostics_command(&command_args)?,
         "devices" => list_subcommand(&command_args, "devices")?,
+        "native-endpoints" => native_endpoints_command(&command_args)?,
         "virtual-devices" => virtual_devices_command(&command_args)?,
         "virtual-routes" => virtual_routes_command(&command_args)?,
         "plugins" => plugins_command(&command_args)?,
@@ -778,6 +779,36 @@ fn virtual_devices_command(args: &[&str]) -> Result<Value, CliError> {
             "usage: virtual-devices <list|plan|apply> [options]".into(),
         )),
     }
+}
+
+fn native_endpoints_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("prepare") {
+        return Err(CliError::InvalidArguments(
+            "usage: native-endpoints prepare <session-id> <capture-endpoint-id> <render-endpoint-id> --database <path>".into(),
+        ));
+    }
+    let session_id = positional(args, 2, "session id")?;
+    let capture_endpoint_id = positional(args, 3, "capture endpoint id")?;
+    let render_endpoint_id = positional(args, 4, "render endpoint id")?;
+    let response = ControlPlane::with_storage("cli", database(args)?).dispatch_authorized(
+        audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "nativeEndpoints.prepare".into(),
+            params: Some(json!({
+                "sessionId": session_id,
+                "captureEndpointId": capture_endpoint_id,
+                "renderEndpointId": render_endpoint_id,
+            })),
+        },
+        &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
+    );
+    response.result.ok_or_else(|| {
+        CliError::InvalidArguments(response.error.map_or_else(
+            || "native endpoint preparation failed".into(),
+            |error| error.message,
+        ))
+    })
 }
 
 fn virtual_routes_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1719,14 +1750,18 @@ fn help_value() -> Value {
         .insert(5, json!("virtual-devices list [--limit N] [--cursor ID]"));
     value["commands"].as_array_mut().unwrap().insert(
         6,
-        json!("virtual-devices plan --operation <json-file> --database <path>"),
+        json!("native-endpoints prepare <session-id> <capture-endpoint-id> <render-endpoint-id> --database <path>"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         7,
-        json!("virtual-devices apply <plan-id> --idempotency-key KEY --database <path>"),
+        json!("virtual-devices plan --operation <json-file> --database <path>"),
     );
     value["commands"].as_array_mut().unwrap().insert(
         8,
+        json!("virtual-devices apply <plan-id> --idempotency-key KEY --database <path>"),
+    );
+    value["commands"].as_array_mut().unwrap().insert(
+        9,
         json!("virtual-routes list|replace --database <path> [--base-revision N --file <routes.json> --idempotency-key KEY]"),
     );
     value["commands"]
@@ -2454,6 +2489,7 @@ mod tests {
     fn help_and_json_schema_are_available_offline() {
         let help = run(["help", "--json"]).unwrap();
         assert!(help.contains("devices list"));
+        assert!(help.contains("native-endpoints prepare"));
         assert!(help.contains("virtual-devices list"));
         assert!(help.contains("virtual-devices plan"));
         assert!(help.contains("virtual-devices apply"));
