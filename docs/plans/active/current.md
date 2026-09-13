@@ -10,7 +10,9 @@ Updated: 2026-09-13.
   credentials, grants, recordings, plugin binaries, and machine authorization
   are excluded. Full UI coverage passes (141 tests), TypeScript typecheck and
   diff checks pass. No import starts audio, arms a recorder, enables startup,
-  or changes machine configuration.
+  or changes machine configuration. The UI deliberately accepts JSON session
+  documents; the versioned `.audiorouter` ZIP remains the headless
+  `export-bundle`/`import-bundle` path and is not misrepresented as UI support.
 
 - Strengthened UI-06/UI-11 route explanation on 2026-09-13. The connected
   editor now renders `routes.inspect` results as an accessible ordered path

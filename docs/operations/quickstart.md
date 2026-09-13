@@ -155,7 +155,9 @@ local `.audiorouter.json` file. Import first validates the file through the
 backend, then requires the separate Commit stopped import action; imported
 sessions remain stopped and require endpoint rebinding/review. The transfer
 does not include credentials, grants, recordings, plugin binaries, or machine
-authorization.
+authorization. The UI JSON transfer is separate from the versioned
+`.audiorouter` ZIP bundle exposed by the headless `export-bundle` and
+`import-bundle` commands.
 If another client changes the session before commit, the UI reports the typed
 revision conflict and structured remediation, refreshes the authoritative
 session, and clears the stale warning/commit state. Review the refreshed draft
