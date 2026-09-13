@@ -33,6 +33,7 @@ pub enum PathPolicyError {
 
 /// Validates a user-approved local recording root and creates non-overwriting
 /// recording files beneath its canonical directory.
+#[derive(Clone)]
 pub struct RecordingPathPolicy {
     root: PathBuf,
 }

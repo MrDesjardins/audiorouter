@@ -544,34 +544,44 @@ pub fn create_file_recorder_with_config(
     config: &FileRecorderConfig<'_>,
 ) -> Result<(std::path::PathBuf, Box<dyn RecorderWorker>), String> {
     config.validate()?;
-    let (path, file) = policy
-        .create_file(
-            config.session_id,
-            config.recorder_id,
-            config.sequence,
-            config.format.extension(),
-        )
-        .map_err(format_path_policy_error)?;
-    let identity = FileRecordingIdentity {
-        session_id: config.session_id.to_owned(),
-        recorder_id: config.recorder_id.to_owned(),
-        path: path.clone(),
-    };
-    let worker: Box<dyn RecorderWorker> = match config.format {
+    let (path, worker): (std::path::PathBuf, Box<dyn RecorderWorker>) = match config.format {
         FileRecorderFormat::Wav(wav_format) => {
-            let mut worker = WavRecorderWorker::new_with_dither(
-                file,
+            let max_segment_frames = audiorouter_recording::default_wav_segment_frames(
+                wav_format,
+                config.channels,
+                config.sample_rate,
+            )
+            .map_err(|error| format!("invalid default WAV segment boundary: {error:?}"))?;
+            let worker = SegmentedWavRecorderWorker::new_with_dither_and_sequence(
+                policy.clone(),
+                config.session_id,
+                config.recorder_id,
                 wav_format,
                 config.channels,
                 config.sample_rate,
                 config.dither,
+                config.sequence,
                 config.queue_capacity,
                 config.maximum_chunks_per_pass,
+                max_segment_frames,
             )?;
-            worker.set_library_identity(identity);
-            Box::new(worker)
+            let path = worker.initial_path().to_owned();
+            (path, Box::new(worker))
         }
         FileRecorderFormat::Flac { bits_per_sample } => {
+            let (path, file) = policy
+                .create_file(
+                    config.session_id,
+                    config.recorder_id,
+                    config.sequence,
+                    config.format.extension(),
+                )
+                .map_err(format_path_policy_error)?;
+            let identity = FileRecordingIdentity {
+                session_id: config.session_id.to_owned(),
+                recorder_id: config.recorder_id.to_owned(),
+                path: path.clone(),
+            };
             let mut worker = BufferedFlacRecorderWorker::new(
                 file,
                 usize::from(config.channels),
@@ -581,7 +591,7 @@ pub fn create_file_recorder_with_config(
                 config.maximum_chunks_per_pass,
             )?;
             worker.set_library_identity(identity);
-            Box::new(worker)
+            (path, Box::new(worker))
         }
     };
     Ok((path, worker))
@@ -595,6 +605,7 @@ type SegmentedWavFactory = Box<dyn FnMut(u32) -> Result<std::fs::File, Recording
 pub struct SegmentedWavRecorderWorker {
     recorder: Option<SegmentedWavRecorder<std::fs::File, SegmentedWavFactory>>,
     queue: Arc<RecordingQueue>,
+    initial_path: std::path::PathBuf,
     maximum_chunks_per_pass: usize,
     session_id: String,
     recorder_id: String,
@@ -647,21 +658,81 @@ impl SegmentedWavRecorderWorker {
         maximum_chunks_per_pass: usize,
         max_segment_frames: u64,
     ) -> Result<Self, String> {
+        Self::new_with_dither(
+            policy,
+            session,
+            recorder_name,
+            format,
+            channels,
+            sample_rate,
+            false,
+            queue_capacity,
+            maximum_chunks_per_pass,
+            max_segment_frames,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_dither(
+        policy: RecordingPathPolicy,
+        session: &str,
+        recorder_name: &str,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+        max_segment_frames: u64,
+    ) -> Result<Self, String> {
+        Self::new_with_dither_and_sequence(
+            policy,
+            session,
+            recorder_name,
+            format,
+            channels,
+            sample_rate,
+            dither,
+            0,
+            queue_capacity,
+            maximum_chunks_per_pass,
+            max_segment_frames,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_with_dither_and_sequence(
+        policy: RecordingPathPolicy,
+        session: &str,
+        recorder_name: &str,
+        format: WavFormat,
+        channels: u16,
+        sample_rate: u32,
+        dither: bool,
+        sequence: u64,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+        max_segment_frames: u64,
+    ) -> Result<Self, String> {
         if maximum_chunks_per_pass == 0 {
             return Err("maximum recorder drain pass must be positive".into());
         }
         let (initial_path, initial_file) = policy
-            .create_file(session, recorder_name, 0, "wav")
+            .create_file(session, recorder_name, sequence, "wav")
             .map_err(format_path_policy_error)?;
         let session_id = session.to_owned();
         let recorder_id = recorder_name.to_owned();
+        let first_path = initial_path.clone();
         let paths = Arc::new(std::sync::Mutex::new(vec![initial_path]));
         let factory_paths = paths.clone();
         let factory_session = session_id.clone();
         let factory_recorder = recorder_id.clone();
         let factory: SegmentedWavFactory = Box::new(move |index| {
+            let sequence = sequence
+                .checked_add(u64::from(index))
+                .ok_or(RecordingError::TooManyFrames)?;
             let (path, file) = policy
-                .create_file(&factory_session, &factory_recorder, u64::from(index), "wav")
+                .create_file(&factory_session, &factory_recorder, sequence, "wav")
                 .map_err(|error| {
                     RecordingError::Io(std::io::Error::other(format_path_policy_error(error)))
                 })?;
@@ -679,7 +750,7 @@ impl SegmentedWavRecorderWorker {
             format,
             channels,
             sample_rate,
-            false,
+            dither,
             max_segment_frames,
         )
         .map_err(|error| format!("segmented WAV writer initialization failed: {error:?}"))?;
@@ -692,6 +763,7 @@ impl SegmentedWavRecorderWorker {
         Ok(Self {
             recorder: Some(recorder),
             queue: Arc::new(queue),
+            initial_path: first_path,
             maximum_chunks_per_pass,
             session_id,
             recorder_id,
@@ -703,6 +775,10 @@ impl SegmentedWavRecorderWorker {
             run_id: None,
             finalized_recordings: Vec::new(),
         })
+    }
+
+    pub fn initial_path(&self) -> &std::path::Path {
+        &self.initial_path
     }
 
     pub fn arm(&mut self) -> Result<(), String> {
@@ -12740,7 +12816,8 @@ mod tests {
         for (id, method, frame) in [
             (1, "recorders.arm", None),
             (2, "recorders.start", Some(0)),
-            (3, "recorders.stop", Some(0)),
+            (3, "recorders.split", Some(0)),
+            (4, "recorders.stop", Some(0)),
         ] {
             let params = match frame {
                 Some(frame) => json!({
@@ -12769,8 +12846,8 @@ mod tests {
             .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].format, "wav");
-        assert_eq!(rows[0].path, path.to_str().unwrap());
         assert_eq!(rows[0].frames, 0);
+        assert_eq!(rows[0].path, path.to_str().unwrap());
         let _ = std::fs::remove_dir_all(root);
     }
 

@@ -60,6 +60,15 @@ copy, so the check was corrected before the final run. The administrator-
 authorized WDK acceptance then passed with zero signability errors/warnings and
 disposable output removed. No driver was installed or loaded.
 
+Closed a portable REC-06 integration gap on 2026-09-12: the configured WAV
+recorder factory now constructs the tested `SegmentedWavRecorderWorker` rather
+than the single-file worker. It preserves the requested sequence and TPDF
+dither, applies the bounded default size/duration boundary, and keeps FLAC on
+its existing bounded worker path. Control (125), recording (40), CLI (32),
+MCP stdio (3), strict Clippy, formatting, and diff checks passed. The factory
+regression exercises manual split lifecycle through the normal API; no live
+audio endpoint is opened.
+
 Next action: qualify the render-source/capture-sink bridge publication against
 the AudioRouter driver prototype's source-contract and lease/generation
 boundaries. Keep installation, production signing, PortCls ownership, clean
