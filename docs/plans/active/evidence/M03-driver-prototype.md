@@ -533,6 +533,17 @@ The administrator-authorized M03 source-contract and non-installing x64 WDK
 build passed with zero signability errors/warnings and catalog generation. No
 driver was installed or loaded and no machine audio configuration changed.
 
+## 2026-09-12 - WaveRT query pointer validation
+
+WaveRT position, packet, packet-count, and presentation-position queries now
+validate required output pointers before entering their existing lifecycle and
+position logic. Invalid caller buffers return `STATUS_INVALID_PARAMETER`
+instead of reaching a kernel dereference.
+
+The administrator-authorized M03 source-contract and non-installing x64 WDK
+build passed with zero signability errors/warnings and catalog generation. No
+driver was installed or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - realtime bridge tap fail-closed access
 
 The native bridge tap now checks each planar channel slice before copying into

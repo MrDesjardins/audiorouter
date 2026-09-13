@@ -783,6 +783,11 @@ NTSTATUS CMiniportWaveRTStream::GetPosition
     _Out_   KSAUDIO_POSITION    *Position_
 )
 {
+    if (Position_ == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
     NTSTATUS ntStatus;
 
     KIRQL oldIrql;
@@ -833,6 +838,12 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     _Out_ BOOL* MoreData
 )
 {
+    if (PacketNumber == NULL || Flags == NULL ||
+        PerformanceCounterValue == NULL || MoreData == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
     ULONG availablePacketNumber;
     ULONG droppedPackets;
 
@@ -999,7 +1010,10 @@ NTSTATUS CMiniportWaveRTStream::GetOutputStreamPresentationPosition
     _Out_ KSAUDIO_PRESENTATION_POSITION *pPresentationPosition
 )
 {
-    ASSERT (pPresentationPosition);
+    if (pPresentationPosition == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     // The call must be from event driven mode
     if(m_ulNotificationsPerBuffer == 0)
@@ -1018,7 +1032,10 @@ NTSTATUS CMiniportWaveRTStream::GetPacketCount
     _Out_ ULONG *pPacketCount
 )
 {
-    ASSERT(pPacketCount);
+    if (pPacketCount == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     // The call must be from event driven mode
     if(m_ulNotificationsPerBuffer == 0)
@@ -1090,7 +1107,10 @@ NTSTATUS CMiniportWaveRTStream::GetPositions(
 
 NTSTATUS CMiniportWaveRTStream::GetPresentationPosition(_Out_  KSAUDIO_PRESENTATION_POSITION* _pPresentationPosition)
 {
-    ASSERT(_pPresentationPosition);
+    if (_pPresentationPosition == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
     LARGE_INTEGER timeStamp;
 
     DPF_ENTER(("[CMiniportWaveRTStream::GetPresentationPosition]"));

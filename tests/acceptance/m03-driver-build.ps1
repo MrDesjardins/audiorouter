@@ -125,6 +125,12 @@ if (-not $stream.Contains('IID_IMiniportWaveRTOutputStream) && (!this->m_bCaptur
 if (-not $stream.Contains('m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0')) {
     throw 'WaveRT position callback must fail closed before DMA buffer arithmetic'
 }
+if (-not $stream.Contains('PacketNumber == NULL || Flags == NULL')) {
+    throw 'WaveRT packet query must validate output pointers'
+}
+if (-not $stream.Contains('if (Position_ == NULL)')) {
+    throw 'WaveRT position query must validate its output pointer'
+}
 
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')
 $retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)
