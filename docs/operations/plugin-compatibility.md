@@ -138,10 +138,17 @@ was performed.
 `plugins scan` and `plugins inspect` accept explicitly selected absolute paths,
 return bounded identity/compatibility metadata, including best-effort VST3
 vendor, version, and class IDs read from `moduleinfo.json`, and do not load or
-execute plugin code. Directory scan roots and candidate binaries are checked
-against canonical/reparse-point boundaries. Invalid candidates remain visible
-as inspection errors. Missing or malformed optional module metadata leaves
-those fields empty and does not turn a binary into a compatibility claim.
+execute plugin code. A scan recursively walks ordinary nested directories up
+to 256 directories, treats a `.vst3` bundle as one candidate, and never
+traverses a reparse-point directory. Directory roots and candidate binaries are
+checked against canonical/reparse-point boundaries. Invalid candidates remain
+visible as inspection errors. Missing or malformed optional module metadata
+leaves those fields empty and does not turn a binary into a compatibility claim.
+
+The rebuilt CLI scanned the supplied `third_party/vst` tree and returned 18
+candidates, including the verified x64 BUSTERse, COMPER, TDR Nova, and ReaPlugs
+paths plus visible x86/macOS invalid entries. This is discovery evidence only;
+it does not load, register, copy, or qualify every discovered binary.
 
 The worker path has bounded frames, deadlines, heartbeats, shared-memory layout
 checks, failure quarantine, and process cleanup. Full OS-level

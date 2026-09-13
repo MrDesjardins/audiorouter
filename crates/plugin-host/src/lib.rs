@@ -33,6 +33,7 @@ pub const MAX_WORKER_FRAMES: usize = 2048;
 pub const MAX_WORKER_AUDIO_BUSES: usize = 4;
 pub const MAX_WORKER_AUDIO_CHANNELS: usize = 8;
 pub const MAX_SCAN_CANDIDATES: usize = 256;
+pub const MAX_SCAN_DIRECTORIES: usize = 256;
 pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
@@ -383,6 +384,7 @@ pub struct ScanEntry {
 pub enum ScanError {
     InvalidRoot,
     TooManyCandidates,
+    TooManyDirectories,
     Cancelled,
     DeadlineExceeded,
     Io(String),
@@ -394,6 +396,7 @@ impl ScanError {
         match self {
             Self::InvalidRoot => "invalidRoot",
             Self::TooManyCandidates => "tooManyCandidates",
+            Self::TooManyDirectories => "tooManyDirectories",
             Self::Cancelled => "cancelled",
             Self::DeadlineExceeded => "deadlineExceeded",
             Self::Io(_) => "io",
@@ -691,18 +694,31 @@ pub fn scan_directory_with_control(
     }
     control.check()?;
     let mut candidates = Vec::new();
-    for entry in fs::read_dir(root).map_err(|error| ScanError::Io(error.to_string()))? {
+    let mut directories = vec![root.to_path_buf()];
+    let mut directories_seen = 1;
+    while let Some(directory) = directories.pop() {
         control.check()?;
-        let entry = entry.map_err(|error| ScanError::Io(error.to_string()))?;
-        let path = entry.path();
-        let extension = path
-            .extension()
-            .and_then(|value| value.to_str())
-            .map(|value| value.to_ascii_lowercase());
-        if matches!(extension.as_deref(), Some("vst3") | Some("dll")) {
-            candidates.push(path);
-            if candidates.len() > MAX_SCAN_CANDIDATES {
-                return Err(ScanError::TooManyCandidates);
+        for entry in fs::read_dir(&directory).map_err(|error| ScanError::Io(error.to_string()))? {
+            control.check()?;
+            let entry = entry.map_err(|error| ScanError::Io(error.to_string()))?;
+            let path = entry.path();
+            let metadata =
+                fs::symlink_metadata(&path).map_err(|error| ScanError::Io(error.to_string()))?;
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.to_ascii_lowercase());
+            if matches!(extension.as_deref(), Some("vst3") | Some("dll")) {
+                candidates.push(path);
+                if candidates.len() > MAX_SCAN_CANDIDATES {
+                    return Err(ScanError::TooManyCandidates);
+                }
+            } else if metadata.is_dir() && !is_reparse_point(&metadata) {
+                directories_seen += 1;
+                if directories_seen > MAX_SCAN_DIRECTORIES {
+                    return Err(ScanError::TooManyDirectories);
+                }
+                directories.push(path);
             }
         }
     }
@@ -5830,6 +5846,28 @@ mod tests {
         assert!(entries
             .iter()
             .any(|entry| entry.error == Some(InspectionError::NotPe)));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn scans_nested_directories_but_treats_vst3_bundles_as_one_candidate() {
+        let root = temp_root();
+        let nested = root.join("vendor").join("effects");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("effect.dll"), pe_x64()).unwrap();
+        let bundle = root.join("vendor").join("bundle.vst3");
+        let binary_dir = bundle.join("Contents").join("x86_64-win");
+        fs::create_dir_all(&binary_dir).unwrap();
+        fs::write(binary_dir.join("bundle.vst3"), pe_x64()).unwrap();
+
+        let entries = scan_directory(&root).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert!(entries
+            .iter()
+            .any(|entry| entry.path.ends_with("effect.dll")));
+        assert!(entries
+            .iter()
+            .any(|entry| entry.path.ends_with("bundle.vst3")));
         fs::remove_dir_all(root).unwrap();
     }
 

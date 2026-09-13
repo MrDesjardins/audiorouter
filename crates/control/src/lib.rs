@@ -9505,7 +9505,7 @@ fn application_error_data(code: &str) -> Value {
             false,
             "request the required permission scope for the target operation",
         ),
-        "invalidRoot" | "tooManyCandidates" | "cancelled" => (
+        "invalidRoot" | "tooManyCandidates" | "tooManyDirectories" | "cancelled" => (
             false,
             "choose a valid configured directory or explicitly retry the scan",
         ),

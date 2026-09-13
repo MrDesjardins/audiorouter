@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Fixed recursive plugin-directory discovery on 2026-09-13. Explicit scans
+  now walk ordinary nested folders with a 256-directory bound, treat each
+  `.vst3` bundle as one candidate, and never traverse reparse-point folders.
+  After rebuilding the CLI, the user-supplied `third_party/vst` scan found 18
+  candidates, including verified x64 BUSTERse VST2/VST3, COMPER VST3, TDR
+  Nova x64 VST2/VST3, and ReaPlugs, while retaining visible x86/macOS invalid
+  entries. Plugin-host (68 tests) and control (133 tests) passed; discovery
+  remains read-only and no plugin binaries were changed.
+
 - Requalified the user-provided installed ReaPlugs directory on 2026-09-13.
   AudioRouter's read-only scan classified nine x64 DLL candidates: seven
   audio-effect candidates and two non-audio/unsupported candidates. The
