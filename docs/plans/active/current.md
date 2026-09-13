@@ -1,6 +1,13 @@
 # Active plan
 
-Updated: 2026-09-12.
+Updated: 2026-09-13.
+
+Requalified the locked workspace after the bridge callback safety fixes on
+2026-09-13. `cargo test --workspace --locked -- --test-threads=1` passed with
+exit code 0 across CLI/MCP, control (127), domain (60), DSP (32), engine
+(107), recording/storage/transport, Windows-audio (68), plugin-worker, and
+doc-test suites. No driver, endpoint, or persistent machine-audio
+configuration was accessed.
 
 Aligned bridge identity validation across portable and native layers on
 2026-09-12. `AudioBridgeHello::validate` now bounds the UTF-16 representation
