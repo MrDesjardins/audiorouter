@@ -373,6 +373,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [listedSessions, setListedSessions] = useState<import("@audiorouter/contracts").Session[]>(backend.connected ? [] : demoSessions);
   const [sessionInventoryError, setSessionInventoryError] = useState<string | null>(null);
   const [nativeGeneration, setNativeGeneration] = useState<number | null>(null);
+  const [nativePumpStats, setNativePumpStats] = useState<import("@audiorouter/contracts").NativeEndpointPumpResult | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refreshApplications = () => {
@@ -463,10 +464,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const pumpNativeEndpoint = backend.pumpNativeEndpoint;
     let active = true;
     let pumping = false;
+    let lastReportedAt = 0;
     const pump = async () => {
       if (!active || pumping) return;
       pumping = true;
-      try { await pumpNativeEndpoint(session.id, nativeGeneration, 64); }
+      try {
+        const result = await pumpNativeEndpoint(session.id, nativeGeneration, 64);
+        const now = Date.now();
+        if (now - lastReportedAt >= 1000) { lastReportedAt = now; setNativePumpStats(result); }
+      }
       catch { /* Diagnostics remain backend-owned; do not retry or substitute endpoints here. */ }
       finally { pumping = false; }
     };
@@ -490,7 +496,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const visibleLibraryEntries = filterLibraryEntries(libraryEntries, librarySearch);
   const setupSteps = setupChecklist({ connected: backend.connected, audio: snapshot?.status.audio ?? null, storage: snapshot?.status.storage ?? null, deviceCount: devices.length, applicationCount: applications.length });
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
-  const statusSummary = snapshot ? `${snapshot.status.audio} audio - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot";
+  const nativePumpSummary = nativePumpStats && sessionRunning ? `native ${nativePumpStats.capturedFrames} in / ${nativePumpStats.renderedFrames} out` : null;
+  const statusSummary = `${snapshot ? `${snapshot.status.audio} audio - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot"}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}`;
   const recordDraftChange = (next: import("@audiorouter/contracts").Session) => { setDraftHistory((history) => recordDraft(history, draft, next)); setDraft(next); };
   const undoDraft = () => { const transition = undoDraftHistory(draftHistory, draft); if (transition.current === draft) return; setDraftHistory(transition.history); setDraft(transition.current); setActionMessage("Undid the last draft change."); };
   const redoDraft = () => { const transition = redoDraftHistory(draftHistory, draft); if (transition.current === draft) return; setDraftHistory(transition.history); setDraft(transition.current); setActionMessage("Redid the draft change."); };
@@ -550,8 +557,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const createSession = async () => { const name = window.prompt("New session name", "New session")?.trim(); if (!name) return; const id = `session-${Date.now()}`; try { const result = await backend.createSession({ ...demoSession, id, name, revision: 0, nodes: demoSession.nodes.map((node) => ({ ...node, parameters: { ...node.parameters } })), edges: [...demoSession.edges] }, uiIdempotencyKey("session-create")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Created stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to create session.")); } };
   const duplicateSession = async () => { const id = `session-copy-${Date.now()}`; const name = `${session.name} (copy)`; try { const result = await backend.duplicateSession(session.id, id, name, uiIdempotencyKey("session-duplicate")); setCreatedSessions((current) => [...current, result.session]); setSelectedSessionId(result.session.id); setActionMessage(`Duplicated stopped session ${result.session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to duplicate session.")); } };
   const deleteSession = async () => { if (!window.confirm(`Delete stopped session “${session.name}”?`)) return; try { await backend.deleteSession(session.id, uiIdempotencyKey("session-delete")); setCreatedSessions((current) => current.filter((item) => item.id !== session.id)); const fallback = availableSessions.find((item) => item.id !== session.id); if (fallback) setSelectedSessionId(fallback.id); setActionMessage(`Deleted session ${session.name}.`); } catch (error) { setActionMessage(formatUiError(error, "Unable to delete session.")); } };
-  const startSession = async () => { setActionMessage("Starting session..."); try { const result = await backend.startSession(session.id, uiIdempotencyKey("session-start")); setNativeGeneration(result.runtime === "native" ? result.generation : null); await refresh(); setActionMessage(`Session is running (generation ${result.generation}).`); } catch (error) { setNativeGeneration(null); setActionMessage(formatUiError(error, "Unable to start session.")); } };
-  const stopSession = async () => { setActionMessage("Stopping session..."); try { await backend.stopSession(session.id, uiIdempotencyKey("session-stop")); setNativeGeneration(null); await refresh(); setActionMessage("Session stopped."); } catch (error) { setActionMessage(formatUiError(error, "Unable to stop session.")); } };
+  const startSession = async () => { setActionMessage("Starting session..."); setNativePumpStats(null); try { const result = await backend.startSession(session.id, uiIdempotencyKey("session-start")); setNativeGeneration(result.runtime === "native" ? result.generation : null); await refresh(); setActionMessage(`Session is running (generation ${result.generation}).`); } catch (error) { setNativeGeneration(null); setNativePumpStats(null); setActionMessage(formatUiError(error, "Unable to start session.")); } };
+  const stopSession = async () => { setActionMessage("Stopping session..."); try { await backend.stopSession(session.id, uiIdempotencyKey("session-stop")); setNativeGeneration(null); setNativePumpStats(null); await refresh(); setActionMessage("Session stopped."); } catch (error) { setNativeGeneration(null); setNativePumpStats(null); setActionMessage(formatUiError(error, "Unable to stop session.")); } };
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if (isEditableShortcutTarget(event.target)) return;

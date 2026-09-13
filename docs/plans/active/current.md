@@ -71,6 +71,13 @@ Updated: 2026-09-13.
   counter changes during the authorization failure. Focused control tests and
   strict Clippy pass.
 
+- Added low-frequency native throughput visibility on 2026-09-13. After a
+  native session starts, the UI retains the latest bounded pump result and
+  refreshes the top status summary at most once per second with captured and
+  rendered frame counts; it clears the summary on stop or start failure.
+  Audio pumping remains independent of React rendering and still fails closed
+  on backend errors. UI tests (132) and typecheck pass.
+
 - New delivery gate: a guarded human run must be able to select the existing
   VB-Cable capture/render pair in the UI, commit a visible graph change, start
   and stop the session, and observe backend status/telemetry while preserving
