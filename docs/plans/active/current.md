@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Requalified the full locked workspace after resuming the goal on 2026-09-13.
+`cargo test --workspace --locked -- --test-threads=1` passed across CLI (32),
+MCP (3), control (128), domain (60), DSP (32), engine (107), plugin-host
+(67), worker-process (13), protocol (8), recording (40), storage (83),
+transport (19), Windows-audio (70), and all doc-tests. No endpoint, driver,
+plugin registration, or persistent machine-audio configuration was accessed.
+
 Closed a control-plane activation ordering gap on 2026-09-13. Native graph
 activation now rejects a missing endpoint worker before compiling the graph or
 mutating virtual-route bridge state. A focused regression passed, followed by
