@@ -81,6 +81,7 @@ foreach ($required in @(
         'AudioRouterGetLeaseShapeForDirection(',
         'm_BridgeScratchFrames = 0;',
         'm_BridgeScratchFrameOffset = 0;',
+        'm_BridgeScratchFrames > m_BridgePublishFrames',
         'stale frame state')) {
     if (-not $streamSource.Contains($required)) {
         throw "WaveRT bridge scratch-shape guard is missing: $required"

@@ -15,6 +15,11 @@ shape changes. This prevents stale partial data from causing unsigned frame
 underflow after a lease replacement. The M03 source-contract/build acceptance
 must pass; no driver installation or loading is involved.
 
+Added a second fail-closed invariant in the same callback on 2026-09-12:
+unexpected scratch-frame counts are reset before the publish-quantum
+subtraction. This keeps malformed internal state from becoming an unsigned
+underflow even outside the normal lease-shape transition.
+
 Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
 at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
 catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,

@@ -1678,6 +1678,12 @@ ByteDisplacement - # of bytes to process.
         if (m_BridgePublishFrames != 0 && frames != 0) {
             ULONG consumedFrames = 0;
             while (consumedFrames < frames) {
+                if (m_BridgeScratchFrames > m_BridgePublishFrames) {
+                    // Preserve the callback invariant before the subtraction
+                    // below; malformed state fails closed for this quantum.
+                    m_BridgeScratchFrames = 0;
+                    m_BridgeScratchFrameOffset = 0;
+                }
                 ULONG needed = m_BridgePublishFrames - m_BridgeScratchFrames;
                 ULONG copyFrames = min(needed, frames - consumedFrames);
                 RtlCopyMemory(
