@@ -410,6 +410,8 @@ describe("live event cursor", () => {
       sequence: 1,
       channels: 2 as const,
       sampleRate: 48000 as const,
+      queueCapacity: 8,
+      maximumChunksPerPass: 1,
       idempotencyKey: "create-recorder",
     };
     await expect(createLiveBackend(client, demoSession.id).createRecorder(params)).resolves.toMatchObject({ recorderId: "recorder-1", armed: false });

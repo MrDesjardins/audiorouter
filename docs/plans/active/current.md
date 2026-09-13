@@ -8371,6 +8371,10 @@ live-driver evidence.
   dispatch, validates format/channel/sample-rate locally, and keeps approved
   root/file creation in the backend. CLI tests (31), strict Clippy, formatting,
   and diff checks passed.
+- Corrected `recorders.create` shared-contract drift on 2026-09-12: queue
+  capacity and maximum chunks per pass are now required in TypeScript, matching
+  the Rust discovery schema and parser. Contract drift/typecheck, UI typecheck,
+  128 UI tests, and diff checks passed.
 - Ran the explicitly authorized guarded M02 live adapter bridge on 2026-09-12
   for one 500 ms cycle using the existing VB-Audio endpoints. It captured
   24,480 frames, processed 191 quanta, rendered 24,448 frames, and reported

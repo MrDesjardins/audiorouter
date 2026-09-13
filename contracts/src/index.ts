@@ -796,8 +796,8 @@ export type MethodParams = {
     channels: 1 | 2;
     sampleRate: 44100 | 48000;
     dither?: boolean;
-    queueCapacity?: number;
-    maximumChunksPerPass?: number;
+    queueCapacity: number;
+    maximumChunksPerPass: number;
     idempotencyKey: string;
   };
   "recorders.arm": { sessionId: EntityId; idempotencyKey?: string };

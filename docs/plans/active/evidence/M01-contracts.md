@@ -927,3 +927,9 @@ reads a bounded absolute JSON route-array file, requires a base revision and
 idempotency key, and uses the existing `DeviceAdministration` grant; listing requires an
 explicit database and performs no audio activation. CLI tests (31), strict
 Clippy, formatting, and diff checks passed.
+
+The shared `recorders.create` TypeScript request was corrected on 2026-09-12
+to require `queueCapacity` and `maximumChunksPerPass`, matching the discovered
+Rust schema and runtime parser. Contract drift/typecheck, UI typecheck, 128 UI
+tests, and diff checks passed. This prevents typed clients from constructing a
+request that the authoritative API necessarily rejects.
