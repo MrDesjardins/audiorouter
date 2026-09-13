@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Implemented the first real desktop vertical slice on 2026-09-13. The Tauri
+  shell now owns a per-user control backend on its default launch path, opens
+  `%LOCALAPPDATA%\\AudioRouter\\state.sqlite` (or an explicit absolute test
+  path), enrolls only the current user as an observer on first launch, and
+  forwards the existing authenticated named-pipe API. An existing revoked
+  enrollment is never re-enabled. Supplying `AUDIOROUTER_CONTROL_PIPE` keeps
+  the disposable externally managed backend path. Shell check/tests (7) pass;
+  the production WebView interactive acceptance remains open because this
+  agent desktop does not execute the frontend. This slice opens no endpoint,
+  installs no driver, and changes no machine audio configuration.
+
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
   invoke API, and Vite emits relative assets for the Tauri app protocol. Shell

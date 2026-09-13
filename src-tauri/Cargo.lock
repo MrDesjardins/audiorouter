@@ -196,6 +196,7 @@ version = "0.1.0"
 dependencies = [
  "audiorouter-control",
  "audiorouter-protocol",
+ "audiorouter-storage",
  "audiorouter-transport",
  "serde",
  "serde_json",

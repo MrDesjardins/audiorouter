@@ -1,13 +1,17 @@
 # AudioRouter native shell
 
-This is the Tauri 2 desktop shell for the existing AudioRouter UI. It is a
-standalone Cargo workspace so portable workspace builds do not acquire desktop
-runtime dependencies.
+This is the Tauri 2 desktop shell for the existing AudioRouter UI. It starts a
+per-user, read-only control backend on its default launch path, so a fresh
+shell has a real connected status surface without opening an audio endpoint.
+It is a standalone Cargo workspace so portable workspace builds do not acquire
+desktop runtime dependencies.
 
 The `rpc_request` command uses the existing authenticated Windows named-pipe
 transport. Set `AUDIOROUTER_CONTROL_PIPE` only when connecting to a deliberately
 started AudioRouter control service; the default is
-`\\\\.\\pipe\\audiorouter-control`. The shell does not install a driver,
+`\\\\.\\pipe\\audiorouter-control`. The default database is
+`%LOCALAPPDATA%\\AudioRouter\\state.sqlite`; `AUDIOROUTER_DATABASE` can provide
+an absolute test path. The shell does not install a driver,
 register plugins, change Windows audio endpoints, or start an unconfigured
 service.
 

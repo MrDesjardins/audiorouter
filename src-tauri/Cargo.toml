@@ -10,7 +10,9 @@ rust-version = "1.80"
 tauri-build = "2.6.3"
 
 [dependencies]
+audiorouter-control = { path = "../crates/control" }
 audiorouter-protocol = { path = "../crates/protocol" }
+audiorouter-storage = { path = "../crates/storage" }
 audiorouter-transport = { path = "../crates/transport" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.151"

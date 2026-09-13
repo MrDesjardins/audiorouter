@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use audiorouter_control::{ClientRole, ControlPlane};
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
+use audiorouter_storage::Storage;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -8,6 +10,8 @@ use tauri::{
 };
 
 const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\audiorouter-control";
+const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
+const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
 
 #[derive(Clone)]
 struct ShellState {
@@ -100,6 +104,77 @@ fn session_initialization_script(session_id: &str, frontend_probe: bool) -> Stri
     )
 }
 
+fn default_database_path() -> Result<std::path::PathBuf, String> {
+    let root = std::env::var_os("LOCALAPPDATA")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| "LOCALAPPDATA is unavailable; set AUDIOROUTER_DATABASE".to_owned())?;
+    Ok(std::path::PathBuf::from(root)
+        .join(DEFAULT_DATABASE_DIRECTORY)
+        .join(DEFAULT_DATABASE_FILE))
+}
+
+fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle<()>>, String> {
+    if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_some() {
+        return Ok(None);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = pipe_name;
+        return Ok(None);
+    }
+    #[cfg(windows)]
+    {
+        let database = std::env::var_os("AUDIOROUTER_DATABASE")
+            .map(std::path::PathBuf::from)
+            .map(Ok)
+            .unwrap_or_else(default_database_path)?;
+        if !database.is_absolute() {
+            return Err("AUDIOROUTER_DATABASE must be an absolute path".into());
+        }
+        if let Some(parent) = database.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("backend database directory creation failed: {error}"))?;
+        }
+        let pipe_name = pipe_name.to_owned();
+        let handle = std::thread::Builder::new()
+            .name("audiorouter-control".into())
+            .spawn(move || {
+                let result = (|| -> Result<(), String> {
+                    // ControlPlane contains COM-backed endpoint state and is
+                    // deliberately constructed on the serving thread.
+                    let storage = Storage::open(&database)
+                        .map_err(|error| format!("backend database open failed: {error:?}"))?;
+                    let sid = audiorouter_transport::current_user_sid().map_err(|error| {
+                        format!("current user identity lookup failed: {error:?}")
+                    })?;
+                    let enrollment = storage
+                        .load_client_enrollment(&sid)
+                        .map_err(|error| format!("backend enrollment lookup failed: {error:?}"))?;
+                    if enrollment.as_ref().is_some_and(|(_, revoked)| *revoked) {
+                        return Err("the current user enrollment is revoked".into());
+                    }
+                    let mut plane = ControlPlane::with_storage("desktop-shell", storage);
+                    if enrollment.is_none() {
+                        plane
+                            .enroll_client(&sid, ClientRole::Observer)
+                            .map_err(|error| {
+                                format!("initial observer enrollment failed: {error:?}")
+                            })?;
+                    }
+                    audiorouter_transport::serve_control_connections_for_current_user(
+                        &pipe_name, 256, plane,
+                    )
+                    .map_err(|error| format!("control backend stopped: {error:?}"))
+                })();
+                if let Err(error) = result {
+                    eprintln!("AudioRouter control backend stopped: {error:?}");
+                }
+            })
+            .map_err(|error| format!("backend thread creation failed: {error}"))?;
+        Ok(Some(handle))
+    }
+}
+
 fn tray_status_text(response: &JsonRpcResponse) -> String {
     let Some(result) = response.result.as_ref() else {
         return "Status unavailable".to_owned();
@@ -152,6 +227,10 @@ fn main() {
         session_id: format!("tauri-shell-{}", std::process::id()),
         probe_file: std::env::var_os("AUDIOROUTER_SHELL_PROBE_FILE").map(std::path::PathBuf::from),
     };
+    let _backend = start_owned_backend(&state.pipe_name).unwrap_or_else(|error| {
+        eprintln!("AudioRouter backend unavailable: {error}");
+        None
+    });
     let session_script =
         session_initialization_script(&state.session_id, state.probe_file.is_some());
     let tray_pipe_name = state.pipe_name.clone();

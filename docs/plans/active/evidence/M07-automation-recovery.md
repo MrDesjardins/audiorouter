@@ -1,5 +1,18 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - shell-owned backend vertical slice
+
+The Tauri shell now starts the existing Rust control plane on its default
+launch path. It uses a per-user SQLite path (`%LOCALAPPDATA%\\AudioRouter\\state.sqlite`)
+or an explicit absolute `AUDIOROUTER_DATABASE` path, enrolls the current user
+as an observer only when no enrollment exists, and preserves revoked
+enrollments. `AUDIOROUTER_CONTROL_PIPE` continues to select an externally
+managed backend for disposable tests. `cargo check` and the shell unit suite
+(7 tests) passed offline. This is control-plane connectivity evidence only:
+no audio endpoint, driver, plugin registration, or persistent machine-audio
+setting was changed. Interactive WebView execution remains unverified in the
+agent desktop session.
+
 ## 2026-09-13 - Tauri shell asset and probe hardening
 
 The Tauri shell initialization probe now delegates through the loaded UI
