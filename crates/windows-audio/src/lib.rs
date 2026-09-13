@@ -2538,6 +2538,22 @@ struct ProcessLoopbackCompletion {
     result: Option<Result<usize, windows::core::HRESULT>>,
 }
 
+#[cfg(windows)]
+struct CoTaskMemBlob(*mut std::ffi::c_void);
+
+#[cfg(windows)]
+impl Drop for CoTaskMemBlob {
+    fn drop(&mut self) {
+        if !self.0.is_null() {
+            // SAFETY: the pointer is returned by CoTaskMemAlloc and remains
+            // owned by this guard until async activation has completed.
+            unsafe {
+                windows::Win32::System::Com::CoTaskMemFree(Some(self.0.cast()));
+            }
+        }
+    }
+}
+
 #[windows::core::implement(windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler)]
 struct ProcessLoopbackCompletionHandler {
     completion: Arc<(
@@ -2628,6 +2644,7 @@ impl ProcessLoopbackCapture {
                 "process-loopback activation allocation failed",
             )));
         }
+        let blob_owner = CoTaskMemBlob(blob_data);
         unsafe {
             std::ptr::copy_nonoverlapping(
                 std::ptr::addr_of!(activation_params).cast::<u8>(),
@@ -2695,6 +2712,7 @@ impl ProcessLoopbackCapture {
             std::mem::forget(operation);
             std::mem::forget(handler);
             std::mem::forget(property);
+            std::mem::forget(blob_owner);
             return Err(AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x800705B4u32 as i32),
                 "process-loopback activation timed out",

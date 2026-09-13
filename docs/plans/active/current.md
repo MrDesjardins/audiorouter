@@ -58,6 +58,13 @@ rejects null IRPs and missing stack locations before accessing dispatch
 metadata, matching the existing IOCTL malformed-request guard. The M03
 source-contract/build acceptance covers both dispatch families.
 
+Closed a process-loopback activation allocation leak on 2026-09-13. The
+CoTaskMem-backed activation blob is now released by an RAII owner after
+completion or immediate failure; the existing timeout path intentionally
+retains the complete async lifetime because Windows may still read the
+PROPVARIANT. Focused Windows-audio tests and formatting are required before
+commit.
+
 Aligned the portable bridge contract with that identity rule on 2026-09-13:
 `AudioBridgeHello::validate` now rejects embedded NULs before native request
 encoding, with a focused regression. This prevents a portable-valid request

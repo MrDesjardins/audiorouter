@@ -13,6 +13,11 @@ configuration was changed.
 The shared validator also rejects embedded NULs, matching the kernel's fixed
 buffer identity validation and preventing ambiguous native bus identifiers.
 
+The process-loopback activation payload is owned by a Windows COM-task-memory
+RAII guard after asynchronous activation starts. Normal completion and
+immediate activation failure release the blob; only the bounded timeout path
+intentionally retains the async lifetime to prevent a use-after-free.
+
 ## Explicit CABLE adapter route
 
 The bounded post-reboot `m02-rust-adapter-route-live.ps1` acceptance passed
