@@ -2,6 +2,11 @@
 
 Updated: 2026-09-13.
 
+Strict workspace lint also passed at pushed head `508b8b42` on 2026-09-13:
+`cargo clippy --workspace --all-targets --locked -- -D warnings` completed
+without warnings or errors. This is portable-code evidence only; native
+driver installation, signing, and live managed-endpoint gates remain open.
+
 Requalified the full locked workspace at pushed head `37fb589d` on
 2026-09-13. `cargo test --workspace --locked -- --test-threads=1` passed
 across CLI (32), MCP (3), control (127), domain (60), DSP (32), engine (107),
