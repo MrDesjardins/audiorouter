@@ -5460,6 +5460,7 @@ impl ControlPlane {
                 { "name": "semitones", "type": "number", "unit": "semitones", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
                 { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
             ]),
+            audiorouter_domain::NodeKind::Plugin => json!([]),
             _ => json!([]),
         }
     }
