@@ -104,25 +104,6 @@ The operation file contains one lifecycle object, for example
 commands do not install a driver, create a Windows endpoint, or change audio
 configuration.
 
-## Prepare explicitly selected native endpoints
-
-After selecting exact IDs from `devices list`, a device-administration client
-can prepare stopped shared-mode capture and render clients for one session:
-
-```powershell
-audiorouter native-endpoints prepare desktop-session `
-  "<capture-endpoint-id>" "<render-endpoint-id>" `
-  --database C:\path\audiorouter.sqlite `
-  --json
-```
-
-Preparation rechecks that both IDs are active, have the requested directions,
-and share a compatible format. It does not start the session, select defaults,
-change volume/mute/privacy state, or install/load the managed driver. Start and
-stop remain separate explicit session operations. The command requires the
-`deviceAdministration` scope; the default desktop operator enrollment does not
-grant that scope.
-
 ## Watch bounded state events
 
 Replay state events for one session from an opaque cursor. Repeat `--category`

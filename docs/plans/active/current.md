@@ -2,13 +2,12 @@
 
 Updated: 2026-09-13.
 
-- Added the typed `native-endpoints prepare` CLI command on 2026-09-13. It
-  forwards exact capture/render IDs through the authenticated
-  `deviceAdministration` path and leaves clients stopped; help and the
-  headless runbook now expose the safe preparation/start boundary. CLI tests
-  (32), strict Clippy, formatting, and documentation checks pass. The default
-  operator enrollment still cannot use this privileged command, by design;
-  managed-driver installation and production endpoint routing remain open.
+- A one-shot CLI preparation experiment on 2026-09-13 was rejected before any
+  endpoint access: a direct CLI process cannot retain an in-memory prepared
+  worker for a later `session start` process. Native preparation therefore
+  remains on the long-lived authenticated backend/UI path, where the worker
+  lifetime is owned by the control plane; no misleading stateless convenience
+  command is published.
 
 - Requalified the locked workspace after the native endpoint API addition on
   2026-09-13. All Rust workspace tests and doc-tests passed, including CLI
