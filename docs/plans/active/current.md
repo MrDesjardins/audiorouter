@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Fresh post-reboot process-loopback qualification passed on 2026-09-12. The
+include mode captured 21,609 frames with 77,823 nonzero bytes; the exclude
+mode captured 22,050 frames while excluding the disposable child process.
+Both wrappers cleaned up their temporary process/probe resources and changed
+no persistent audio configuration.
+
 Fresh post-reboot digital CABLE signal-loopback qualification passed on
 2026-09-12. A bounded 750 ms disposable tone rendered through the explicitly
 selected CABLE Input and was captured from CABLE Output for 500 ms, producing

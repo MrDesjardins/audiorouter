@@ -1,5 +1,14 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## Process-loopback include/exclude modes
+
+The bounded post-reboot process-loopback acceptances passed. Include mode
+captured 21,609 frames and 77,823 nonzero bytes from the disposable child
+process tree; exclude mode captured 22,050 frames while excluding that child.
+The wrappers removed temporary executables/objects and verified that no
+persistent audio configuration changed. Exclusion evidence validates the API
+mode and lifecycle boundary, not a full cross-process isolation threshold.
+
 ## Digital CABLE signal loopback
 
 The bounded post-reboot `m00-native-loopback.ps1` acceptance passed using the
