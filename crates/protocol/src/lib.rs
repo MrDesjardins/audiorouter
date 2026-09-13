@@ -29,6 +29,7 @@ pub enum AudioBridgeDirection {
 pub enum AudioBridgeContractError {
     UnsupportedMajor(u16),
     EmptyBusId,
+    InvalidBusId,
     BusIdTooLong,
     ZeroGeneration,
     InvalidSampleRate,
@@ -65,6 +66,9 @@ impl AudioBridgeHello {
         }
         if self.bus_id.len() > MAX_AUDIO_BRIDGE_BUS_ID_BYTES {
             return Err(AudioBridgeContractError::BusIdTooLong);
+        }
+        if self.bus_id.encode_utf16().any(|unit| unit == 0) {
+            return Err(AudioBridgeContractError::InvalidBusId);
         }
         // The native bridge ABI carries the identity as a fixed UTF-16
         // buffer. Validate that representation here so a valid portable
@@ -501,11 +505,19 @@ mod tests {
             invalid.validate(),
             Err(AudioBridgeContractError::BusIdTooLong)
         );
-        invalid = hello;
+        invalid = hello.clone();
         invalid.bus_id = "a".repeat(65);
         assert_eq!(
             invalid.validate(),
             Err(AudioBridgeContractError::BusIdTooLong)
+        );
+        invalid = AudioBridgeHello {
+            bus_id: "bus\0id".into(),
+            ..hello
+        };
+        assert_eq!(
+            invalid.validate(),
+            Err(AudioBridgeContractError::InvalidBusId)
         );
     }
 

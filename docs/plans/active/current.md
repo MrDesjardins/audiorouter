@@ -44,6 +44,11 @@ validation now rejects embedded NULs and nonzero unused UTF-16 slots in the
 fixed bus-ID buffer, preventing ambiguous identity comparison for malformed
 requests before lease or mapping state is touched.
 
+Aligned the portable bridge contract with that identity rule on 2026-09-13:
+`AudioBridgeHello::validate` now rejects embedded NULs before native request
+encoding, with a focused regression. This prevents a portable-valid request
+from reaching the kernel only to be rejected for malformed fixed-buffer text.
+
 Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
 at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
 catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,

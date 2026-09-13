@@ -10,6 +10,9 @@ Windows encoder boundary. Protocol and focused Windows-audio tests passed; no
 driver was installed or loaded and no audio endpoint or persistent machine
 configuration was changed.
 
+The shared validator also rejects embedded NULs, matching the kernel's fixed
+buffer identity validation and preventing ambiguous native bus identifiers.
+
 ## Explicit CABLE adapter route
 
 The bounded post-reboot `m02-rust-adapter-route-live.ps1` acceptance passed
