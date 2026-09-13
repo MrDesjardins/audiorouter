@@ -2,6 +2,11 @@
 
 Updated: 2026-09-13.
 
+- Added a control-plane regression proving `nativeEndpoints.prepare` rejects
+  the default Operator grant before parsing parameters or opening endpoint
+  resources. This preserves the separate device-administration gate while the
+  long-lived backend owns native worker lifetime.
+
 - A one-shot CLI preparation experiment on 2026-09-13 was rejected before any
   endpoint access: a direct CLI process cannot retain an in-memory prepared
   worker for a later `session start` process. Native preparation therefore

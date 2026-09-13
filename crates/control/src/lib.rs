@@ -14875,6 +14875,23 @@ mod tests {
     }
 
     #[test]
+    fn native_endpoint_preparation_requires_device_administration_before_parameters() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(91)),
+                method: "nativeEndpoints.prepare".into(),
+                params: None,
+            },
+            &ClientGrant::for_role(ClientRole::Operator),
+        );
+        assert_eq!(response.error.unwrap().code, -32001);
+        assert!(plane.native_endpoint_worker.is_none());
+        assert!(plane.endpoint_monitor.is_none());
+    }
+
+    #[test]
     fn enrollment_lookup_denies_unknown_and_revoked_clients() {
         let mut plane = ControlPlane::new("enrollment-test");
         assert!(plane.grant_for_client("unknown").unwrap().is_none());
