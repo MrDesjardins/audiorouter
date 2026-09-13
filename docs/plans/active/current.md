@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Completed the normal UI development launch path on 2026-09-13. The
+  `npm run dev` script now uses Vite's runner config loader, avoiding the
+  read-only `node_modules` config-temp path; together with the temporary
+  optimizer cache, the ordinary command served `/` and `/src/main.tsx` with
+  HTTP 200 on an alternate free port. The dev server was stopped and both
+  ports were confirmed free. UI tests (146), typecheck, and diff checks pass;
+  no audio or machine configuration was touched.
+
 - Fixed the local UI dev-server cache boundary on 2026-09-13. Vite now uses
   an OS-temporary optimizer cache (overrideable with
   `AUDIOROUTER_VITE_CACHE`) instead of attempting writes under read-only
