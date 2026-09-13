@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Re-ran the authorized control-owned VB-Cable lifecycle on 2026-09-13 after
+  the desktop launcher delivery. The exact existing pair completed a bounded
+  start/stop route with 24,480 captured frames, 191 processed quanta, and
+  24,448 rendered frames. The harness restored its process environment and
+  temporary worker state; no persistent endpoint or machine configuration
+  changed. This strengthens the backend route evidence, while attended UI
+  interaction and own-driver endpoint qualification remain separate gates.
+
 - Requalified the complete elevated `safe-all.ps1` chain at pushed head
   `7527d987` on 2026-09-13. The first attempt stopped at the read-only native
   format inventory after external media-device state churn; an immediate

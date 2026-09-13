@@ -1,5 +1,15 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - repeat VB-Cable lifecycle run
+
+The authorized `m02-control-native-live.ps1 -AllowLiveAudio` run completed
+against the exact active VB-Cable pair: 24,480 captured frames, 191 processed
+quanta, and 24,448 rendered frames. The control-owned graph performed the
+bounded start/stop lifecycle and restored temporary worker/environment state.
+No Windows default, volume, mute, driver, or persistent audio configuration
+was changed. This is native user-mode route evidence; it does not qualify the
+managed AudioRouter driver or physical latency.
+
 ## 2026-09-13 - VB-Cable-first selection and guarded route
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
