@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 66 methods, including the session portability,
+The current catalog contains 67 methods, including the session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
 
@@ -69,6 +69,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `startup.plan` | `sessionControl` | plan-only |
 | `startup.apply` | `sessionControl` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
+| `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
 | `plugins.scan` | `pluginScan` | read-only |
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |

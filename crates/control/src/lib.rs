@@ -1591,6 +1591,9 @@ fn method_description(name: &str) -> &'static str {
             "Move a recording to the operating system Recycle Bin after explicit confirmation."
         }
         "devices.list" => "List authoritative audio endpoint descriptors.",
+        "nativeEndpoints.prepare" => {
+            "Prepare exact capture/render clients without starting audio."
+        }
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
         "plugins.retry" => "Explicitly refresh a plugin inventory after a prior scan failure or quarantine decision.",
@@ -1733,6 +1736,14 @@ fn method_input_schema(name: &str) -> Value {
                 "includeInactive": { "type": "boolean" }
             }),
             &[],
+        ),
+        "nativeEndpoints.prepare" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "captureEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
+            }),
+            &["sessionId", "captureEndpointId", "renderEndpointId"],
         ),
         "plugins.scan" => object_schema(
             json!({
@@ -2550,6 +2561,17 @@ fn method_output_schema(name: &str) -> Value {
                 ]
             })
         }
+        "nativeEndpoints.prepare" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "const": "configured-stopped" },
+                "captureEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
+            },
+            "required": ["sessionId", "state", "captureEndpointId", "renderEndpointId"],
+            "additionalProperties": false
+        }),
         "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
             "type": "object",
             "properties": {
@@ -6231,6 +6253,7 @@ impl ControlPlane {
                 "startup.plan" => self.dispatch_startup_plan(request.params),
                 "startup.apply" => self.dispatch_startup_apply(request.params),
                 "devices.list" => self.dispatch_devices_list(request.params),
+                "nativeEndpoints.prepare" => self.dispatch_native_endpoints_prepare(request.params),
                 "plugins.scan" => self.dispatch_plugins_scan(request.params),
                 "plugins.list" => self.dispatch_plugins_list(request.params),
                 "plugins.retry" => self.dispatch_plugins_retry(request.params),
@@ -8243,6 +8266,62 @@ impl ControlPlane {
         Ok(json!({ "items": devices, "nextCursor": next_cursor }))
     }
 
+    fn dispatch_native_endpoints_prepare(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and endpoint IDs are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let capture_id = params
+            .get("captureEndpointId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("captureEndpointId is required".into()))?;
+        let render_id = params
+            .get("renderEndpointId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("renderEndpointId is required".into()))?;
+        let endpoints =
+            audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
+        let capture = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == capture_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(
+                    "capture endpoint is not an active exact inventory match".into(),
+                )
+            })?;
+        let render = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == render_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(
+                    "render endpoint is not an active exact inventory match".into(),
+                )
+            })?;
+        self.prepare_native_endpoint_worker(session_id.clone(), capture, render, 0, 3, 100)?;
+        Ok(json!({
+            "sessionId": session_id,
+            "state": "configured-stopped",
+            "captureEndpointId": capture_id,
+            "renderEndpointId": render_id
+        }))
+    }
+
     fn record_endpoint_changes(&mut self, changed: bool) {
         if changed {
             // EventLog is the bounded notification surface. Endpoint details
@@ -9123,6 +9202,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.removeEntry" => &["recordingId", "idempotencyKey"],
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
+        "nativeEndpoints.prepare" => &["sessionId", "captureEndpointId", "renderEndpointId"],
         "plugins.scan" => &["directory"],
         "plugins.list" => &["directory"],
         "plugins.retry" => &["directory", "idempotencyKey"],

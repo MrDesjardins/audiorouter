@@ -226,6 +226,13 @@ export interface DeviceInfo {
   };
 }
 
+export interface NativeEndpointPrepareResult {
+  sessionId: EntityId;
+  state: "configured-stopped";
+  captureEndpointId: string;
+  renderEndpointId: string;
+}
+
 export interface InactiveDeviceInfo {
   id: string;
   name: string;
@@ -738,6 +745,7 @@ export type ImplementedMethod =
   | "startup.plan"
   | "startup.apply"
   | "devices.list"
+  | "nativeEndpoints.prepare"
   | "plugins.scan"
   | "plugins.list"
   | "plugins.retry"
@@ -826,6 +834,7 @@ export type MethodParams = {
   "startup.plan": { enabled: boolean };
   "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
+  "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
   "plugins.retry": { directory: string; idempotencyKey: string };
@@ -926,6 +935,7 @@ export type MethodResult = {
   "startup.plan": StartupPlanResult;
   "startup.apply": StartupApplyResult;
   "devices.list": DeviceInfo[] | DeviceListPage;
+  "nativeEndpoints.prepare": NativeEndpointPrepareResult;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;
   "plugins.retry": PluginScanResult;

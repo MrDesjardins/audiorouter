@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Added the authenticated `nativeEndpoints.prepare` API and UI workflow on
+  2026-09-13. A device-administration client can select exact active capture
+  and render IDs from the endpoint inventory; the backend revalidates
+  direction/format identity and prepares stopped WASAPI clients for explicit
+  session start. The UI now exposes both selectors and reports authorization
+  or exact-match failures without changing defaults or volume. Control (129)
+  and UI (129) tests, shell check, typecheck, Clippy, formatting, and diff
+  checks pass. Managed-driver installation and live shell UI acceptance remain
+  open.
+
 - Corrected status/diagnostics capability reporting on 2026-09-13. Audio
   status now derives from the native endpoint worker lifecycle: absent or
   prepared-but-stopped workers remain unavailable, while a running worker is
