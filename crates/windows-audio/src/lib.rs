@@ -468,6 +468,7 @@ pub struct NativeBridgeController {
     client: NativeBridgeControlClient,
     session: NativeBridgeSession,
     section: Option<NativeBridgeSectionHandle>,
+    closed: bool,
 }
 
 #[cfg(windows)]
@@ -625,6 +626,7 @@ impl NativeBridgeController {
             client,
             session,
             section: Some(section),
+            closed: false,
         })
     }
 
@@ -698,6 +700,10 @@ impl NativeBridgeController {
                 .close(self.session.hello())
                 .map_err(NativeBridgeControllerError::Windows)?;
         }
+        // Mark the broker lease closed before any later cleanup can run. If
+        // the request above fails, this assignment is not reached and Drop
+        // retains its best-effort retry path.
+        self.closed = true;
         self.session
             .flush()
             .map_err(NativeBridgeControllerError::Session)
@@ -709,6 +715,9 @@ impl Drop for NativeBridgeController {
     fn drop(&mut self) {
         // Best-effort release for panic/error paths. The kernel lease timeout
         // remains the final recovery boundary when close cannot be delivered.
+        if self.closed {
+            return;
+        }
         if let Some(section) = &self.section {
             let _ = self.client.close_with_mapping(
                 self.session.hello(),

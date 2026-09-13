@@ -1726,3 +1726,15 @@ ownership as the explicit path.
 The focused Windows-audio suite passed 67 tests with formatting and diff
 checks. No driver was installed or loaded and no audio endpoint or persistent
 machine configuration was changed.
+
+## 2026-09-12 - exactly-once controller close
+
+`NativeBridgeController::close` now records successful broker closure before
+flushing the user-mode session. Its destructor skips the broker request after
+that point, while failed broker requests still use the existing best-effort
+drop retry. This prevents duplicate close IOCTLs during normal ownership
+teardown.
+
+The focused Windows-audio suite passed 67 tests with formatting and diff
+checks. No driver was installed or loaded and no audio endpoint or persistent
+machine configuration was changed.

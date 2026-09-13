@@ -19,6 +19,11 @@ section-backed path required by the driver instead of sending an unmapped
 the explicit section constructor and lease ownership rules. Windows-audio
 tests and the guarded acceptance chain remain required for verification.
 
+Made native bridge close exactly-once on 2026-09-12. A successful explicit
+close now marks the controller before session flush, preventing `Drop` from
+issuing a duplicate broker close; if the broker request fails, `Drop` retains
+the best-effort retry path. Windows-audio lifecycle tests and diff checks pass.
+
 Hardened the bridge broker IRP boundary on 2026-09-12: device-control
 dispatch now rejects a null IRP, missing stack, or missing control file object
 before reading the IOCTL or entering lease ownership logic. This prevents a
