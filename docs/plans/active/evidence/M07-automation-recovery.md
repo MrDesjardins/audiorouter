@@ -1,11 +1,22 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - current-tip safe acceptance
+
+The guarded `tests/acceptance/safe-all.ps1` chain passed after the shell-owned
+backend changes. It covered VS2026/WDK driver build and signability, native
+compile/inventory, DSP/recording, UI typecheck/129 tests/production build,
+VST3/VST2 workers, M07 headless, unsigned M08 artifacts, 159 traceability IDs,
+and documentation validation across 52 Markdown files and 179 local links.
+Fifteen run-owned temporary children were removed. The chain did not install or
+load a driver, change signing/startup policy, open a live endpoint, or change
+persistent audio configuration.
+
 ## 2026-09-13 - shell-owned backend vertical slice
 
 The Tauri shell now starts the existing Rust control plane on its default
 launch path. It uses a per-user SQLite path (`%LOCALAPPDATA%\\AudioRouter\\state.sqlite`)
 or an explicit absolute `AUDIOROUTER_DATABASE` path, enrolls the current user
-as an observer only when no enrollment exists, and preserves revoked
+as an operator for graph/session control only when no enrollment exists, and preserves revoked
 enrollments. `AUDIOROUTER_CONTROL_PIPE` continues to select an externally
 managed backend for disposable tests. `cargo check` and the shell unit suite
 (7 tests) passed offline. This is control-plane connectivity evidence only:

@@ -5,7 +5,8 @@ Updated: 2026-09-13.
 - Implemented the first real desktop vertical slice on 2026-09-13. The Tauri
   shell now owns a per-user control backend on its default launch path, opens
   `%LOCALAPPDATA%\\AudioRouter\\state.sqlite` (or an explicit absolute test
-  path), enrolls only the current user as an observer on first launch, and
+  path), enrolls only the current user as an operator for graph/session control
+  on first launch, and
   forwards the existing authenticated named-pipe API. An existing revoked
   enrollment is never re-enabled. Supplying `AUDIOROUTER_CONTROL_PIPE` keeps
   the disposable externally managed backend path. Shell check/tests (7) pass;
@@ -18,7 +19,7 @@ Updated: 2026-09-13.
   stereo physical-input-to-physical-output graph, so the UI's initial
   `sessions.get` request is valid after a fresh launch and across restarts.
   The session is never started automatically, and first-launch enrollment
-  remains observer-only. Shell check/tests (7), formatting, and diff checks
+  remains operator-scoped for graph/session control. Shell check/tests (7), formatting, and diff checks
   pass; interactive WebView execution is still the only unverified part of
   this desktop slice.
 
@@ -50,6 +51,15 @@ Updated: 2026-09-13.
   the last good snapshot and structured diagnostics on permanent failure. UI
   typecheck and 129 tests pass, including a simulated startup race; no audio
   endpoint or machine configuration was changed.
+
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain on
+  2026-09-13 after the shell/backend changes. VS2026/WDK driver build and
+  signability, native compile/inventory, DSP/recording, UI (129 tests/build),
+  VST3/VST2 workers, M07 headless, unsigned M08 artifacts, 159 traceability
+  IDs, and documentation (52 Markdown files/179 links) passed. Cleanup removed
+  15 run-owned temporary children. No driver was installed or loaded, no
+  signing or startup policy changed, and no endpoint or persistent audio
+  configuration was touched.
 
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
