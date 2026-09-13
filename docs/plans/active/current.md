@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Rechecked the M07 interactive-shell prerequisite on 2026-09-13 after reboot.
+The computer-use surface reported no available applications or browsers, so
+the frontend-owned WebView2/Tauri acceptance was not started. This remains an
+environment gate rather than a product result; no shell process, dialog,
+audio endpoint, or persistent machine configuration was created or changed.
+Resume `tests/acceptance/m07-shell-rpc.ps1` only when an interactive desktop is
+available, then retain its temporary-process cleanup and backend RPC evidence.
+
 Requalified the explicitly installed x64 Pitchproof VST2 binary on
 2026-09-13. Processing passed at 44.1, 48, and 96 kHz, and both bounded
 editor-containment checks passed. The SHA-256 remained
