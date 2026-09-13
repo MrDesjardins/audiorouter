@@ -1,5 +1,17 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - post-fix guarded acceptance chain
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed after the mapped
+maintenance-request compatibility fix. M00 toolchain/native inventory, M03
+x64 WDK build and catalog signability, M04 DSP/recording, M05 UI, M06 VST3 and
+VST2 workers, M07 headless control, M08 unsigned preparation, 159 requirement
+mappings, and documentation validation (52 Markdown files and 179 local links)
+all passed. The chain removed 15 run-owned temporary children. No driver was
+installed or loaded, and no signing mode, startup/plugin registration,
+endpoint, stream, default-device, volume, mute, privacy, or persistent
+machine-audio configuration changed.
+
 ## 2026-09-13 - mapped maintenance request compatibility
 
 The bridge control path now accepts both forms already emitted by the Rust

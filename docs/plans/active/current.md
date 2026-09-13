@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain on
+  2026-09-13 after the M03 mapped-maintenance fix. M00/M03/M04/M05/M06/M07/M08
+  acceptance, 159 traceability mappings, and documentation validation (52
+  Markdown files, 179 local links) passed; 15 run-owned temporary children
+  were removed. No driver was installed or loaded, no registration or signing
+  mode changed, and no endpoint or persistent machine-audio configuration was
+  touched. The next actionable work remains the portable backlog; native
+  PortCls ownership, production deployment, and manual/live endpoint gates are
+  still explicitly open.
+
 - Fixed a real M03 bridge lifecycle mismatch on 2026-09-13. The Rust mapped
   controller sends the retained section pair on HEARTBEAT/CLOSE, while the
   driver incorrectly rejected maintenance mappings and compared those requests
