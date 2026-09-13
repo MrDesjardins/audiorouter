@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Removed the obsolete duplicate preset-panel implementation on 2026-09-13
+  after the voice-chain and EQ actions became active. The connected UI now has
+  one authoritative PresetCatalog path; no behavior or backend contract was
+  changed. UI tests (139), TypeScript typecheck, and diff checks passed.
+  Evidence: `ui/src/App.tsx`. Next actionable work is the next human-testable
+  VB-Cable/UI integration slice, with the managed driver still gated behind
+  installation/signing evidence.
+
 - Requalified the full guarded M00-M08 acceptance chain at pushed head
   `85bbe8d5` on 2026-09-13. Elevated Windows execution passed toolchain/native
   compile, project-driver WDK compile/signability, 34-endpoint read-only
