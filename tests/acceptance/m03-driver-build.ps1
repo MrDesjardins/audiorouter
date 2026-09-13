@@ -76,6 +76,16 @@ foreach ($required in @(
 if ($copyHelper.Contains('KeAcquireSpinLock')) {
     throw 'callback lease helper must not acquire the lease spin lock'
 }
+$streamSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
+foreach ($required in @(
+        'AudioRouterGetLeaseShapeForDirection(',
+        'm_BridgeScratchFrames = 0;',
+        'm_BridgeScratchFrameOffset = 0;',
+        'stale frame state')) {
+    if (-not $streamSource.Contains($required)) {
+        throw "WaveRT bridge scratch-shape guard is missing: $required"
+    }
+}
 
 $publishStart = $source.IndexOf('NTSTATUS AudioRouterPublishLeaseBlock(')
 $publishEnd = $source.IndexOf('static void RetireBridgeResources(', $publishStart)

@@ -1554,23 +1554,32 @@ ByteDisplacement - # of bytes to process.
         m_pWfExt->Format.nBlockAlign ==
             m_pWfExt->Format.nChannels * sizeof(FLOAT);
     if (bridgeFormat && m_pWfExt->Format.nChannels <= AR_BRIDGE_MAX_CHANNELS) {
-        if (m_BridgePublishFrames == 0 ||
-            m_BridgePublishChannels != m_pWfExt->Format.nChannels) {
-            USHORT frames = 0;
-            USHORT channels = 0;
-            if (NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
-                    AR_BRIDGE_DIRECTION_CAPTURE_SINK, &frames, &channels)) &&
-                channels == m_pWfExt->Format.nChannels) {
-                m_BridgePublishFrames = frames;
-                m_BridgePublishChannels = channels;
-            } else {
-                m_BridgePublishFrames = 0;
-                m_BridgePublishChannels = 0;
-            }
+        ULONG previousFrames = m_BridgePublishFrames;
+        ULONG previousChannels = m_BridgePublishChannels;
+        USHORT frames = 0;
+        USHORT channels = 0;
+        if (NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
+                AR_BRIDGE_DIRECTION_CAPTURE_SINK, &frames, &channels)) &&
+            channels == m_pWfExt->Format.nChannels) {
+            m_BridgePublishFrames = frames;
+            m_BridgePublishChannels = channels;
+        } else {
+            m_BridgePublishFrames = 0;
+            m_BridgePublishChannels = 0;
+        }
+        if (m_BridgePublishFrames != previousFrames ||
+            m_BridgePublishChannels != previousChannels) {
+            // A lease may be replaced with a different quantum while this
+            // stream still owns a partial scratch block. Never subtract the
+            // new shape from stale frame state in the callback.
+            m_BridgeScratchFrames = 0;
+            m_BridgeScratchFrameOffset = 0;
         }
     } else {
         m_BridgePublishFrames = 0;
         m_BridgePublishChannels = 0;
+        m_BridgeScratchFrames = 0;
+        m_BridgeScratchFrameOffset = 0;
     }
 
     // The capture endpoint is the virtual sink for processed render audio.

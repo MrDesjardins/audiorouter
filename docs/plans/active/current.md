@@ -8,6 +8,13 @@ used by the fixed Windows request buffer, rejecting IDs that would otherwise
 pass the UTF-8 byte limit and fail later during native request encoding. A
 65-character ASCII regression was added.
 
+Hardened the prototype WaveRT bridge scratch state on 2026-09-12. The capture
+callback now refreshes the negotiated sink shape on each callback and clears
+partial scratch data whenever the lease is unavailable or its frame/channel
+shape changes. This prevents stale partial data from causing unsigned frame
+underflow after a lease replacement. The M03 source-contract/build acceptance
+must pass; no driver installation or loading is involved.
+
 Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
 at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
 catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,
