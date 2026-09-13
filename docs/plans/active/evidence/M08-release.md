@@ -1,5 +1,21 @@
 # M08 release evidence
 
+## 2026-09-12 - safe-chain requalification after render-source drain
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed at commit
+`4722af8a`. It covered the installed VS/SDK/WDK toolchain, project x64 WDK
+driver build/signability, disposable SysVAD compile/package/API validation,
+M01/M04/M05/M06/M07, unsigned M08 preparation, 159 normative requirement IDs,
+and documentation validation (52 Markdown files, 176 local links). Cleanup
+removed 15 run-owned temporary children.
+
+No driver was installed or loaded; no signing mode, boot policy, plugin/startup
+registration, audio stream, default device, volume, mute, privacy, or
+persistent machine-audio configuration changed. This remains preparation and
+qualification evidence, not production release evidence. PortCls ownership,
+signed deployment, clean-machine compatibility, physical latency, and manual
+UI/accessibility gates remain open.
+
 ## 2026-09-12 - combined bridge and automation requalification
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed after the

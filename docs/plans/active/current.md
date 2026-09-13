@@ -3426,7 +3426,19 @@ the next OPEN. The non-installing M03 WDK/source-contract acceptance passed.
   keys, and the MCP control_session adapter forwards its required key instead
   of dropping it. Recorder lifecycle/checkpoint regressions, control tests,
   formatting, and diff checks remain the validation target; no audio stream was
-  opened.
+opened.
+
+The complete elevated `tests/acceptance/safe-all.ps1` chain passed at
+`4722af8a` on 2026-09-12 after the render-source change. It covered the
+installed VS/SDK/WDK toolchain, project x64 driver build and signability,
+disposable SysVAD compile/package/API checks, M01/M04/M05/M06/M07, unsigned
+M08 preparation, 159 traceability IDs, and documentation validation (52
+Markdown files, 176 local links). Cleanup removed 15 run-owned temporary
+children. No driver was installed or loaded, and no signing mode, plugin or
+startup registration, stream, default device, volume, mute, privacy, or
+persistent machine-audio configuration changed. Production PortCls ownership,
+signed deployment, clean-machine compatibility, physical latency, and manual
+UI/accessibility remain explicit gates.
 
 - Closed the recording-library key-contract gap on 2026-09-09: metadata update,
   rename, and remove-entry schemas, CLI commands, MCP tools, and dispatchers
