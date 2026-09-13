@@ -173,6 +173,20 @@ machine-audio configuration changed. This is a fresh qualification baseline;
 production PortCls ownership, signed deployment, clean-machine compatibility,
 physical latency, manual UI, and independent plugin-rights gates remain open.
 
+Fresh administrator-authorized native audio evidence was collected on
+2026-09-12 using only explicitly selected existing endpoints. The shared
+WASAPI lifecycle probe passed 13 capture and 21 render endpoints for 100 ms;
+one occupied render endpoint was reported distinctly. The CABLE signal probe
+captured 72,026 nonzero payload bytes, and process inclusion/exclusion probes
+captured 21,609 and 22,050 frames respectively. The Rust adapter route passed
+at 48 kHz with 24,448 routed frames, 191 graph blocks, and zero deadline
+misses. The control-owned route passed with 50 packets, 24,000 captured
+frames, 23,936 rendered frames, one successful start/stop/reset, and one
+rejected stale pump. Every probe captured before/after media state and cleaned
+its temporary process/artifacts; no default, volume, mute, privacy, driver,
+signing, startup, or persistent machine-audio setting changed. Evidence:
+[M00 WASAPI evidence](evidence/M00-wasapi-probe.md), [M02 audio evidence](evidence/M02-audio-engine.md).
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability

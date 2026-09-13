@@ -1,3 +1,22 @@
+# Native endpoint and loopback requalification (2026-09-12)
+
+Administrator-authorized live probes were rerun after reboot against existing
+Windows endpoints only. The shared WASAPI lifecycle probe exercised 13 capture
+and 21 render endpoints for 100 ms; one occupied render endpoint was reported
+as an ownership condition rather than masked as a general failure. The named
+CABLE render-to-capture probe captured 72,026 nonzero payload bytes in 500 ms
+while writing a 750 ms disposable tone. The process-tree inclusion probe
+captured 21,609 frames/77,823 nonzero bytes, and the exclusion-mode probe
+captured 22,050 frames.
+
+Each wrapper captured media-device identity/state before and after the test and
+removed its temporary executable, object, logs, and child processes. Defaults,
+volume, mute, privacy, driver state, signing mode, startup registration, and
+persistent machine audio configuration were not changed. These results prove
+bounded native endpoint/data-path behavior on this machine; they do not prove
+production virtual-driver installation, multi-device synchronization, or the
+physical latency target.
+
 # M00 WASAPI probe
 
 ## 2026-09-09 - Current guarded live requalification

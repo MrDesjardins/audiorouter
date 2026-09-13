@@ -1,3 +1,21 @@
+# Native adapter route requalification (2026-09-12)
+
+The administrator-authorized Rust adapter route was rerun against the named
+CABLE endpoints for 500 ms. Negotiation selected 48,000 Hz on both sides with
+the 128-frame graph quantum and a 2,666,667 ns graph deadline. It captured
+24,480 frames, processed 191 graph blocks, and routed 24,448 frames. Processing
+time totaled 4,083,600 ns with a 57,300 ns maximum and a 65,536 ns p99.9 upper
+bound; deadline misses and deadline lateness were both zero.
+
+The control-owned route was also rerun with the exact endpoint identities: 50
+packets, 24,000 captured frames, 187 processed quanta, 23,936 rendered frames,
+4,140 recording bytes, one successful start/stop/reset, and one rejected stale
+pump. The worker stopped and detached cleanly. Before/after media snapshots
+matched; no default, volume, mute, privacy, driver, signing, startup, or
+persistent machine-audio setting changed. This is real shared-mode adapter and
+control-lifecycle evidence, not production virtual-driver or physical-latency
+qualification.
+
 # M02 audio adapter groundwork
 
 ## 2026-09-08 - Differing-rate route requalification
