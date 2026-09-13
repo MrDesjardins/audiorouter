@@ -33,6 +33,8 @@ if (-not $bridgeHeader.Contains('Request->Reserved2 != 0')) {
     throw 'bridge request validation must reject non-zero reserved fields'
 }
 foreach ($required in @(
+        'if (Irp == NULL)',
+        'stack == NULL || stack->FileObject == NULL',
         'IOCTL_AUDIOROUTER_BRIDGE_OPEN &&',
         'request->SectionHandle == 0',
         'code != IOCTL_AUDIOROUTER_BRIDGE_OPEN',

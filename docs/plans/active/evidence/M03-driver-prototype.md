@@ -703,3 +703,17 @@ state fail-closed for hostile or malformed sizes.
 The administrator-authorized M03 source-contract and non-installing x64 WDK
 build passed with zero signability errors/warnings and catalog generation. No
 driver was installed or loaded and no machine audio configuration changed.
+
+## 2026-09-12 - bridge broker IRP boundary
+
+`BridgeControlDeviceControl` now rejects a null IRP, missing current stack, or
+missing control file object before reading the IOCTL code or applying bridge
+lease ownership. This preserves the invariant that every accepted lease is
+bound to a real control handle and keeps malformed/internal requests
+fail-closed.
+
+`tests/acceptance/m03-driver-build.ps1` passed with Visual Studio 18.9.1 and
+WDK 10.0.28000.0. The x64 driver/package/catalog build reported zero
+signability errors and warnings, and disposable output was removed. No driver
+was installed or loaded and no signing, boot-policy, service, endpoint, or
+machine audio configuration action occurred.

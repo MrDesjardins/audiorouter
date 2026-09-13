@@ -361,7 +361,13 @@ NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
 
 NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
 {
+    if (Irp == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
     PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    if (stack == NULL || stack->FileObject == NULL) {
+        return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
+    }
     ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
     NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-12.
 
+Hardened the bridge broker IRP boundary on 2026-09-12: device-control
+dispatch now rejects a null IRP, missing stack, or missing control file object
+before reading the IOCTL or entering lease ownership logic. This prevents a
+malformed/internal request from creating a lease without a handle identity.
+The administrator-authorized non-installing x64 WDK source-contract and build
+passed with zero signability errors/warnings and catalog generation. No driver
+was installed or loaded. Next: continue the remaining portable M03/M04
+implementation slices while keeping live driver publication separately gated.
+
 Hardened WaveRT timer-dependent state transitions on 2026-09-12. RUN now
 returns `STATUS_INSUFFICIENT_RESOURCES` if a notification timer is required
 but unavailable, PAUSE avoids cancelling a missing timer, and failed state
