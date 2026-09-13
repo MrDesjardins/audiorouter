@@ -1,5 +1,16 @@
 # M08 release evidence
 
+## 2026-09-13 - human-test launcher smoke at `522b1ce2`
+
+The disposable `tools/run-vb-cable-desktop.ps1` launcher resolved the exact
+active VB-Cable pair, started the debug Tauri shell with a temporary database,
+and completed process/environment cleanup after the shell was stopped. This
+is a development-runner qualification, not installer or release evidence:
+the driver was not installed, no signing or startup policy changed, and no
+endpoint defaults, volume, mute, or persistent machine-audio state changed.
+The interactive WebView2 visual gate remains open because no targetable
+desktop surface was available to observe.
+
 ## 2026-09-13 - full safe acceptance at `2b0d2e61`
 
 The elevated `tests/acceptance/safe-all.ps1` chain passed at the pushed

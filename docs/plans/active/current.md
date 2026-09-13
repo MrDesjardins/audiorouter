@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete elevated `safe-all.ps1` chain at pushed head
+  `7527d987` on 2026-09-13. The first attempt stopped at the read-only native
+  format inventory after external media-device state churn; an immediate
+  targeted inventory passed with 34 endpoints, and the full rerun then passed
+  M00/M03, disposable SysVAD, M01/M04, M05 with 152 UI tests and production
+  build, M06 VST3/VST2, M07, unsigned M08 preparation, 159 requirement
+  mappings, and documentation validation (52 Markdown files, 180 local links).
+  Fifteen run-owned temporary children were removed. No driver installation or
+  loading, signing-mode change, plugin/startup registration, endpoint default,
+  or persistent audio action occurred.
+
 - Added the disposable VB-Cable desktop launcher on 2026-09-13. The launcher
   performs an exact read-only active-endpoint match, refuses ambiguity, uses a
   temporary database with an explicit operator/device-administration grant,

@@ -1,5 +1,16 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - disposable VB-Cable desktop launcher at `522b1ce2`
+
+The new `tools/run-vb-cable-desktop.ps1` smoke reached the real Tauri shell
+using exactly one active `CABLE Output` capture and one active `CABLE Input`
+render endpoint. It created an operator grant only in a temporary database,
+started the shell, and after termination left no shell process or temporary
+launcher directory; the four process environment variables were restored.
+The desktop automation surface exposed no targetable window, so visual clicks
+remain an attended gate. No persistent endpoint or machine configuration was
+changed.
+
 ## 2026-09-13 - deliberate endpoint selection safety regression
 
 Removed the fresh-session fallback that selected the first active capture and
