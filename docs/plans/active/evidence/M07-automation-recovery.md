@@ -1,5 +1,12 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - readiness negative-path regression
+
+Added coverage proving that a connected inventory with no unambiguous active
+VB-Cable pair reports `needs-attention` rather than ready. The disconnected
+case remains unavailable. UI typecheck and the complete suite passed: 18 test
+files, 151 tests. No endpoint or machine configuration was accessed.
+
 ## 2026-09-13 - full safe acceptance at `2b0d2e61`
 
 The elevated `tests/acceptance/safe-all.ps1` chain passed at the pushed

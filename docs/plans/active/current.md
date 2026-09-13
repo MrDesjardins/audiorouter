@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Added a regression for the VB-Cable readiness gate on 2026-09-13. A
+  connected inventory without one exact active CABLE Output/Input pair now
+  remains `needs-attention`, while disconnected state remains unavailable;
+  the checklist cannot falsely claim setup readiness. UI typecheck and all
+  151 UI tests pass. No endpoint or machine configuration was accessed.
+
 - Requalified the complete elevated `safe-all.ps1` chain at pushed head
   `2b0d2e61` on 2026-09-13. Toolchain/native compile and read-only inventory,
   non-installing WDK driver build/signability, disposable SysVAD, M01/M04,

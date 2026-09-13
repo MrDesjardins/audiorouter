@@ -12,6 +12,11 @@ describe("guided setup checklist", () => {
     expect(storage).toMatchObject({ state: "ready", detail: "In-memory storage; persistence is not durable" });
   });
 
+  it("marks the VB-Cable gate for deliberate setup when no exact pair is present", () => {
+    const vbCable = setupChecklist({ connected: true, audio: "available", storage: "sqlite", deviceCount: 4, applicationCount: 1, vbCablePairAvailable: false }).find((step) => step.id === "vb-cable");
+    expect(vbCable).toMatchObject({ state: "needs-attention", detail: "Select the exact VB-Cable pair before preparing native audio" });
+  });
+
   it("does not claim readiness while disconnected", () => {
     const steps = setupChecklist({ connected: false, audio: null, storage: null, deviceCount: 0, applicationCount: 0, vbCablePairAvailable: false });
     expect(steps.map((step) => step.state)).toEqual(["unavailable", "unavailable", "unavailable", "unavailable", "unavailable", "unavailable"]);
