@@ -2,6 +2,25 @@
 
 Updated: 2026-09-13.
 
+Guarded the WaveRT timer packet counter on 2026-09-13. `TimerNotifyRT` now
+stops before incrementing the signed internal packet counter at
+`MAXLONGLONG`, preventing a negative wrap from reaching packet/timestamp
+reporting. The non-installing x64 WDK/source acceptance passed with zero
+signability errors/warnings and catalog generation. No driver was installed or
+loaded and no machine audio configuration changed.
+
+Requalified the complete guarded M00-M08 acceptance chain at pushed head
+`0d1d1ab3` on 2026-09-13. Toolchain/native compile, AudioRouter x64 WDK
+build/signability and catalog generation, the 31-endpoint read-only inventory,
+disposable SysVAD, M01/M04/M05 (128 UI tests), M06 VST3/VST2 workers, M07,
+unsigned M08 artifacts, 159 traceability IDs, and documentation validation
+(52 Markdown files/179 local links) all passed. Cleanup removed 15 run-owned
+temporary children. Driver installation/loading, signing-mode or boot-policy
+changes, plugin/startup registration, stream activation, and persistent
+machine-audio configuration remained excluded. Managed PortCls ownership,
+production signing/install, physical-latency, interactive shell, and
+independent third-party plugin gates remain open.
+
 Hardened WaveRT packet timestamp reporting on 2026-09-13. `GetReadPacket`
 now rejects invalid performance-counter state, zero packet sizes, counter
 overflow, carry/position addition overflow, inconsistent backward positions,

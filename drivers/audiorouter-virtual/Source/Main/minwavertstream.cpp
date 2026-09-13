@@ -1981,6 +1981,16 @@ TimerNotifyRT
         goto End;
     }
 
+    // Packet numbers are reported from a signed internal counter.  Stop this
+    // timer tick before the counter can wrap into a negative value; the packet
+    // query will otherwise reject the stream only after undefined arithmetic
+    // has already occurred here.
+    if (!_this->m_bEoSReceived &&
+        _this->m_llPacketCounter == MAXLONGLONG)
+    {
+        goto End;
+    }
+
     _this->UpdatePosition(qpc);
 
     if (!_this->m_bEoSReceived)

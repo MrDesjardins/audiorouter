@@ -199,6 +199,13 @@ foreach ($required in @(
         throw "WaveRT packet timestamp arithmetic guard is missing: $required"
     }
 }
+foreach ($required in @(
+        'm_llPacketCounter == MAXLONGLONG',
+        'before the counter can wrap')) {
+    if (-not $stream.Contains($required)) {
+        throw "WaveRT packet counter overflow guard is missing: $required"
+    }
+}
 if (-not $stream.Contains('ULONGLONG intervalHns = static_cast<ULONGLONG>(_this->m_ulNotificationIntervalMs) * 10000')) {
     throw 'WaveRT timer notification arithmetic must widen before interval multiplication'
 }
