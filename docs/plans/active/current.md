@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the user-provided installed ReaPlugs directory on 2026-09-13.
+  AudioRouter's read-only scan classified nine x64 DLL candidates: seven
+  audio-effect candidates and two non-audio/unsupported candidates. The
+  checked-in VST2 worker matrix then passed the six supported ReaPlugs effect
+  fixtures at 44.1, 48, and 96 kHz, including bounded state and parameter
+  checks; before/after binary integrity and temporary environment restoration
+  passed. No plugin was copied, registered, or added to a live route.
+
 - Requalified the launcher with both exact endpoint overrides on 2026-09-13:
   the active CABLE Output capture ID and CABLE Input render ID reached the
   real Tauri shell, printed the selected pair, and cleaned the temporary

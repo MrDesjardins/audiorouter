@@ -8,6 +8,16 @@ contract. Before/after fingerprints were checked for the candidates, and the
 temporary VST environment values were restored. No plugin registration or
 audio configuration changed.
 
+The current read-only scan of that directory found nine x64 DLL candidates,
+all classified as VST2: `reacomp-standalone.dll`,
+`reacontrolmidi-standalone.dll`, `readelay-standalone.dll`,
+`reaeq-standalone.dll`, `reafir_standalone.dll`, `reagate-standalone.dll`,
+`reajs.dll`, `reastream-standalone.dll`, and `reaxcomp-standalone.dll`.
+The six supported effect fixtures were requalified through the worker matrix
+at 44.1, 48, and 96 kHz; the two non-audio candidates remain rejected and the
+streaming utility remains outside the bounded audio-effect matrix. This scan
+and matrix do not register or modify installed binaries.
+
 The local ReaPlugs VST2 matrix was independently rerun on 2026-09-13. All six
 ignored x64 audio-effect DLLs passed the contained worker load/process checks at
 44.1, 48, and 96 kHz (18 combinations); each binary retained its original
