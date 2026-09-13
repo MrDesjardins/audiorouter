@@ -63,10 +63,12 @@ describe("keyboard connection dialog", () => {
       captureEndpointId,
       renderEndpointId,
     }));
-    const backend = { ...connectedPreviewBackend(), listDevices: async () => [inactive, capture, renderDevice], prepareNativeEndpoint };
+    const startSession = vi.fn(async () => ({ sessionId: "demo-session", state: "running" as const, runtime: "fake" as const, generation: 1 }));
+    const backend = { ...connectedPreviewBackend(), listDevices: async () => [inactive, capture, renderDevice], prepareNativeEndpoint, startSession };
 
     render(<App backend={backend} />);
 
+    const endpointPanel = screen.getByRole("region", { name: "Endpoint binding" });
     const captureSelect = await screen.findByRole("combobox", { name: "Native capture endpoint" });
     const renderSelect = screen.getByRole("combobox", { name: "Native render endpoint" });
     expect(within(captureSelect).queryByRole("option", { name: /Inactive capture/ })).toBeNull();
@@ -76,7 +78,9 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
     await waitFor(() => expect(prepareNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-active", "render-active"));
     expect(await screen.findByText("Prepared configured-stopped; start the session to activate audio.")).toBeTruthy();
-    expect(screen.getByText(/Endpoint defaults and volume are never changed/)).toBeTruthy();
+    expect(screen.getByText(/Endpoint defaults, volume, and mute are never changed/)).toBeTruthy();
+    fireEvent.click(within(endpointPanel).getByRole("button", { name: "Start session" }));
+    await waitFor(() => expect(startSession).toHaveBeenCalledWith("demo-session", expect.any(String)));
   });
 
   it("opens with focus, wraps focus, retains validation errors, and restores focus", async () => {

@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Improved the human-testable VB-Cable setup path on 2026-09-13. The endpoint
+  binding panel now places explicit Start session/Stop session beside the
+  selected capture and render endpoints, shows the session state, and locks
+  endpoint selectors while running. The existing separate lifecycle control
+  remains available; both call the same authorized backend API. UI coverage
+  remains 139 tests, typecheck and diff checks pass. No endpoint defaults,
+  volume, mute, or other machine configuration is changed.
+
 - Removed the obsolete duplicate preset-panel implementation on 2026-09-13
   after the voice-chain and EQ actions became active. The connected UI now has
   one authoritative PresetCatalog path; no behavior or backend contract was
