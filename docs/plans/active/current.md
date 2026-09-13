@@ -34,6 +34,18 @@ and M08 binaries. No driver installation/loading, signing-mode change,
 plugin/startup registration, audio stream, or persistent machine configuration
 occurred.
 
+The full guarded chain was requalified on 2026-09-12 after `a856847d`, which
+added fail-closed validation for every bounded bridge sample before either the
+Rust or kernel-side destination is mutated. The project x64 WDK build again
+reported zero signability errors/warnings; 34 endpoints were inventoried
+read-only; pinned SysVAD, M01/M04/M05, VST3/VST2 workers, M07, unsigned M08,
+159 requirement mappings, and documentation validation (52 Markdown files,
+167 local links) all passed. Cleanup removed 15 run-owned temporary children.
+No driver was installed or loaded and no signing mode, boot policy,
+plugin/startup registration, stream, default device, volume, mute, privacy,
+or persistent machine-audio configuration changed. Evidence: [M08 release
+evidence](evidence/M08-release.md), [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite
 database and explicitly approved temporary recording root. It verifies an

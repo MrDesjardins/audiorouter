@@ -1,5 +1,23 @@
 # M08 release evidence
 
+## 2026-09-12 - Full safe-chain requalification after `a856847d`
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at `a856847d` after
+the Rust and kernel bridge readers were hardened to validate all bounded
+payload samples before copying them. It covered the project x64 WDK build
+with zero signability errors/warnings, 34-endpoint read-only inventory,
+pinned SysVAD qualification, M01/M04/M05, M06 VST3/VST2 workers, M07,
+unsigned M08 preparation, 159 traceability IDs, and documentation validation
+(52 Markdown files and 167 local links). Cleanup removed 15 run-owned
+temporary children. No driver was installed or loaded, and no signing mode,
+boot policy, plugin/startup registration, stream, default device, volume,
+mute, privacy, or persistent machine-audio configuration changed.
+
+This requalification is evidence for the bounded bridge data path only. It
+does not qualify production PortCls ownership, signed deployment, driver
+installation, clean-machine compatibility, physical latency, or manual UI
+acceptance.
+
 ## 2026-09-12 - Full safe-chain requalification after bridge hardening
 
 The elevated `tests/acceptance/safe-all.ps1` chain passed after bridge commit
