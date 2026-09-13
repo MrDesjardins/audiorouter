@@ -1,19 +1,21 @@
 # AudioRouter 0.1.0-dev qualification notes
 
-This document describes the current development snapshot. It is not a signed
+This document describes the current development snapshot (2026-09-13). It is not a signed
 release and must not be presented as an installable Windows audio product.
 
 ## Scope and platform
 
 - Target: Windows 11 x64.
 - Portable control, storage, DSP, recording, CLI, UI, MCP, and plugin-worker
-  foundations are implemented and covered by automated tests.
+  foundations are implemented and covered by automated tests. The UI has 140
+  passing tests and includes a visual graph editor, backend-bound built-in
+  processor/preset editing, explicit endpoint binding, and route provenance.
 - The repository-local Steinberg VST3 SDK is pinned and verified at
   `3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96`.
 - Native builds use Visual Studio Community 2026/MSVC 14.51.36231 and Windows
   SDK 10.0.28000.0; the installed WDK is 10.1.28000.2526.
 
-## Verified in this qualification snapshot (2026-09-09)
+## Verified in this qualification snapshot (2026-09-13)
 
 - The locked Rust workspace passes 466 unit/integration tests, all doc-tests,
   formatting, and strict Clippy.
@@ -41,6 +43,11 @@ release and must not be presented as an installable Windows audio product.
   lifecycle, and endpoint timing baselines. The guarded production Rust adapter
   smoke also passes bounded capture plus zero-valued `submit_bytes` render
   submission while preserving the media-device snapshot.
+- The guarded control-owned native VB-Cable route qualifies exact capture and
+  render endpoint binding, processor-bearing graph activation, bounded pump
+  delivery, and clean start/stop. The latest run observed 24,000 captured
+  frames, 187 processed quanta, and 23,936 rendered frames; it did not change
+  defaults, volume, mute, privacy, drivers, or persistent audio settings.
 
 ## Known limitations
 
@@ -49,8 +56,10 @@ release and must not be presented as an installable Windows audio product.
   remain distinct and fail closed. The guarded live adapter smoke qualifies
   bounded adapter capture/render lifecycle, but is not evidence of complete
   AudioRouter graph routing.
-- Realtime graph scheduling, physical acoustic latency, clock drift, and
-  hardware/endurance qualification are incomplete.
+- Production callback scheduling, physical acoustic latency, clock drift, and
+  hardware/endurance qualification are incomplete. The current VB-Cable pump
+  is a guarded transitional control-plane delivery path, not callback timing
+  evidence.
 - The managed virtual-audio driver is not included, installed, signed, or
   registered. Virtual-device lifecycle remains an honest unavailable
   capability.
