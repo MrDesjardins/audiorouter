@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Rechecked the manual WebView2 shell gate on 2026-09-13 with the Windows UI
+  automation surface. It returned no targetable applications or windows, so
+  no shell launch, click, or audio action was attempted and `rpc_request`
+  delivery remains unverified. This is an environment/manual-observation
+  blocker only; headless transport, shell startup, and authenticated backend
+  tests remain separate evidence. No machine configuration changed.
+
 - Requalified the guarded full M00-M08 acceptance chain at pushed head
   `87b4f302` on 2026-09-13 after the graph-list callback integration. VS 18.9.1
   and WDK 10.0.28000.0 toolchain/native compile, AudioRouter driver
