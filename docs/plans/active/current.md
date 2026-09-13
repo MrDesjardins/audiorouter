@@ -9,6 +9,15 @@ exit code 0 across CLI/MCP, control (127), domain (60), DSP (32), engine
 doc-test suites. No driver, endpoint, or persistent machine-audio
 configuration was accessed.
 
+Requalified the complete guarded M00-M08 acceptance chain at pushed head
+`d5a3e790` on 2026-09-13. Toolchain/native compile, the AudioRouter x64 WDK
+build and catalog signability, 31-endpoint inventory, disposable SysVAD,
+M01/M04/M05, M06 VST3/VST2 workers, M07, unsigned M08 artifacts, 159
+traceability IDs, and documentation all passed with exit code 0. Cleanup
+removed 15 run-owned temporary children. Driver installation/loading,
+signing-mode or boot-policy changes, plugin/startup registration, stream
+activation, and persistent machine-audio configuration remained excluded.
+
 Aligned bridge identity validation across portable and native layers on
 2026-09-12. `AudioBridgeHello::validate` now bounds the UTF-16 representation
 used by the fixed Windows request buffer, rejecting IDs that would otherwise
