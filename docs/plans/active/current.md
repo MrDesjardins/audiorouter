@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Requalified the user-installed ReaPlugs VST2 matrix on 2026-09-13 using
+  disposable native workers. Six x64 audio-effect DLLs passed at 44.1, 48,
+  and 96 kHz with parameter-offset processing, state/integrity checks, and
+  environment restoration. This is real third-party VST2 worker evidence,
+  but not graph-node activation or rights/release qualification; binaries
+  were not copied, registered, or modified.
+
 - Requalified the complete non-live `tests/acceptance/safe-all.ps1` chain on
   2026-09-13 after the VB-Cable delivery reprioritization. WDK driver
   compile/catalog signability, 31-endpoint read-only inventory, disposable
