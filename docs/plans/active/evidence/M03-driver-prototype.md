@@ -1,5 +1,20 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - generation-owned virtual route activation
+
+Native graph activation now prepares the selected virtual-route bridges on the
+control thread before publishing the graph. Only enabled buses with an
+explicit `VirtualCaptureSink` route for the exact producer session are
+activated, and they receive the graph's runtime generation. Bridges for
+unselected routes are deactivated; session stop also deactivates all bridges
+owned by that producer. Reusing an old or equal generation is rejected before
+bridge activation, preventing stale data from crossing a graph replacement.
+
+The control suite passed 127 tests, including activation, teardown, and stale
+generation regressions. Strict package Clippy, formatting, and diff checks
+passed. This is control/portable bridge evidence; no driver was installed or
+loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - bounded render-source wake drain
 
 `NativeBridgeInputWorker::pump_available` now caps render-source work at the

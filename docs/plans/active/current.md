@@ -2,6 +2,15 @@
 
 Updated: 2026-09-12.
 
+Bound virtual-route bridge ownership to native graph activation on 2026-09-12.
+When an enabled route is selected by an explicit `VirtualCaptureSink`, its
+bridge is activated for the exact runtime generation before graph publication;
+unselected route bridges are deactivated, and session stop clears every
+producer-owned route bridge. Stale or reused generations fail closed. The
+control suite passed 127 tests, strict package Clippy, formatting, and diff
+checks passed. Loaded-driver, signed deployment, and physical virtual-device
+gates remain open. Evidence: [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+
 Confirmed the native VST3 parameter-discovery slice on 2026-09-12. The
 repository worker answers `DescribeParameters` from the verified VST3 edit
 controller, enforces the 256-unique-ID/finite-normalized-range/128-byte-title

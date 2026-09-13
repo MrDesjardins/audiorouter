@@ -3777,6 +3777,11 @@ impl ControlPlane {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
         })?;
 
+        self.prepare_virtual_route_bridges(
+            session_id,
+            generation,
+            graph.has_virtual_capture_sink(),
+        )?;
         let virtual_taps =
             self.virtual_route_tap_set(session_id, graph.has_virtual_capture_sink())?;
         recorder_taps.append(&virtual_taps).map_err(|_| {
@@ -3793,6 +3798,78 @@ impl ControlPlane {
             .publish(graph);
         self.native_endpoint_taps = Some(recorder_taps);
         Ok(())
+    }
+
+    /// Make bridge ownership follow the exact native graph generation. This
+    /// is control-plane work performed before publication; realtime taps only
+    /// observe the already-selected, already-activated bridge objects.
+    fn prepare_virtual_route_bridges(
+        &mut self,
+        producer_session_id: &EntityId,
+        generation: u64,
+        has_capture_sink: bool,
+    ) -> Result<(), ControlError> {
+        let route_bus_ids = self
+            .virtual_bus_routes
+            .list()
+            .iter()
+            .filter(|route| route.producer_session_id == *producer_session_id)
+            .map(|route| route.bus_id.clone())
+            .collect::<Vec<_>>();
+        let mut selected = Vec::new();
+        for bus_id in &route_bus_ids {
+            let enabled = self
+                .virtual_buses
+                .list()
+                .iter()
+                .any(|bus| bus.id() == bus_id && bus.enabled());
+            if has_capture_sink && enabled {
+                let bridge = self.virtual_bridges.get(bus_id).ok_or_else(|| {
+                    ControlError::InvalidRequest("route bridge is not prepared".into())
+                })?;
+                if bridge.is_active() && bridge.generation() == generation {
+                    selected.push(bus_id.clone());
+                } else {
+                    if generation <= bridge.generation() {
+                        return Err(ControlError::InvalidRequest(
+                            "native graph generation is stale for virtual route".into(),
+                        ));
+                    }
+                    selected.push(bus_id.clone());
+                }
+            }
+        }
+
+        for bus_id in route_bus_ids {
+            let Some(bridge) = self.virtual_bridges.get(&bus_id) else {
+                continue;
+            };
+            if selected.iter().any(|selected_id| selected_id == &bus_id) {
+                if !bridge.is_active() || bridge.generation() != generation {
+                    bridge.activate(generation).map_err(|_| {
+                        ControlError::InvalidRequest(
+                            "virtual route bridge generation activation failed".into(),
+                        )
+                    })?;
+                }
+            } else if bridge.is_active() {
+                bridge.deactivate();
+            }
+        }
+        Ok(())
+    }
+
+    fn deactivate_virtual_route_bridges(&self, producer_session_id: &EntityId) {
+        for route in self
+            .virtual_bus_routes
+            .list()
+            .iter()
+            .filter(|route| route.producer_session_id == *producer_session_id)
+        {
+            if let Some(bridge) = self.virtual_bridges.get(&route.bus_id) {
+                bridge.deactivate();
+            }
+        }
     }
 
     fn virtual_route_tap_set(
@@ -5905,6 +5982,7 @@ impl ControlPlane {
         } else {
             None
         };
+        self.deactivate_virtual_route_bridges(id);
         let revision = self.get_session(id)?.revision;
         if let Some(runtime) = self.runtimes.get_mut(id) {
             runtime.stop();
@@ -14202,6 +14280,83 @@ mod tests {
                 .unwrap()
                 .len(),
             1
+        );
+    }
+
+    #[test]
+    fn virtual_route_bridge_activation_follows_sink_generation_and_stop_clears_it() {
+        let mut plane = ControlPlane::default();
+        let bus_id = EntityId::new("generation-bus");
+        let producer = EntityId::new("generation-producer");
+        let mut producer_session = session();
+        producer_session.id = producer.clone();
+        let mut consumer_session = session();
+        consumer_session.id = EntityId::new("generation-consumer");
+        plane.insert_session(producer_session).unwrap();
+        plane.insert_session(consumer_session).unwrap();
+        plane
+            .create_virtual_bus(bus_id.clone(), "Generation")
+            .unwrap();
+        plane
+            .replace_virtual_bus_routes(
+                VirtualBusRouteRegistry::new(vec![audiorouter_domain::VirtualBusRoute {
+                    bus_id: bus_id.clone(),
+                    producer_session_id: producer.clone(),
+                    consumer_session_id: EntityId::new("generation-consumer"),
+                }])
+                .unwrap(),
+            )
+            .unwrap();
+
+        let bridge = plane.virtual_bridges.get(&bus_id).unwrap();
+        assert!(!bridge.is_active());
+        plane
+            .prepare_virtual_route_bridges(&producer, 7, true)
+            .unwrap();
+        assert!(bridge.is_active());
+        assert_eq!(bridge.generation(), 7);
+
+        plane
+            .prepare_virtual_route_bridges(&producer, 8, false)
+            .unwrap();
+        assert!(!bridge.is_active());
+        assert_eq!(bridge.generation(), 7);
+
+        plane.deactivate_virtual_route_bridges(&producer);
+        assert!(!bridge.is_active());
+    }
+
+    #[test]
+    fn virtual_route_bridge_rejects_stale_reactivation_generation() {
+        let mut plane = ControlPlane::default();
+        let bus_id = EntityId::new("stale-generation-bus");
+        let producer = EntityId::new("stale-generation-producer");
+        let mut producer_session = session();
+        producer_session.id = producer.clone();
+        let mut consumer_session = session();
+        consumer_session.id = EntityId::new("stale-generation-consumer");
+        plane.insert_session(producer_session).unwrap();
+        plane.insert_session(consumer_session).unwrap();
+        plane.create_virtual_bus(bus_id.clone(), "Stale").unwrap();
+        plane
+            .replace_virtual_bus_routes(
+                VirtualBusRouteRegistry::new(vec![audiorouter_domain::VirtualBusRoute {
+                    bus_id: bus_id.clone(),
+                    producer_session_id: producer.clone(),
+                    consumer_session_id: EntityId::new("stale-generation-consumer"),
+                }])
+                .unwrap(),
+            )
+            .unwrap();
+        plane
+            .prepare_virtual_route_bridges(&producer, 4, true)
+            .unwrap();
+        plane
+            .prepare_virtual_route_bridges(&producer, 4, false)
+            .unwrap();
+        let error = plane.prepare_virtual_route_bridges(&producer, 3, true);
+        assert!(
+            matches!(error, Err(ControlError::InvalidRequest(message)) if message.contains("stale"))
         );
     }
 
