@@ -122,8 +122,11 @@ NTSTATUS AudioRouterPublishLeaseBlock(
     ULONGLONG generation = InterlockedCompareExchange64(
         reinterpret_cast<volatile LONG64*>(&Lease->Request.Generation), 0, 0);
     NTSTATUS status = STATUS_DEVICE_NOT_READY;
-    if (direction != AR_BRIDGE_DIRECTION_CAPTURE_SINK || view == NULL || mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET +
-            sampleCount * sizeof(FLOAT) || generation == 0) {
+    if (direction != AR_BRIDGE_DIRECTION_CAPTURE_SINK || view == NULL ||
+        Lease->Request.FramesPerQuantum != Frames ||
+        Lease->Request.Channels != Channels ||
+        mappedBytes < AR_BRIDGE_PAYLOAD_OFFSET + sampleCount * sizeof(FLOAT) ||
+        generation == 0) {
         ExReleaseRundownProtection(&Lease->Rundown);
         return status;
     }

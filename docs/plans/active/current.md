@@ -108,6 +108,13 @@ check and administrator-authorized non-installing WDK build passed with zero
 signability errors/warnings and catalog generation; the focused Windows-audio
 suite passed 66 tests. Loaded-driver endurance remains an explicit gate.
 
+The same publisher now rejects frame/channel shapes that differ from the
+negotiated lease before touching the mapped slot. This preserves the mapping's
+single-quantum shape contract for the future callback path; source-contract
+and non-installing WDK requalification passed with zero signability
+errors/warnings; documentation validation passed with 52 Markdown files and
+169 local links. Loaded-driver endurance remains an explicit gate.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability

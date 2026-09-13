@@ -1,5 +1,14 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - negotiated bridge shape guard
+
+The capture-sink publisher now rejects frame or channel counts that differ
+from the negotiated lease before accessing the mapped payload. The focused
+source-contract acceptance rebuilt the x64 driver and catalog with zero
+signability errors/warnings; documentation validation also passed with 52
+Markdown files and 169 local links. No driver was installed or loaded and no
+machine audio configuration changed.
+
 ## 2026-09-12 - capture publisher sequence exhaustion guard
 
 The kernel capture-sink publisher now checks the existing `NextSequence`
