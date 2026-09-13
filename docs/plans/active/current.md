@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete guarded M00-M08 acceptance chain at pushed head
+  `8390906c` on 2026-09-13. VS/WDK and project-driver compile/signability,
+  34-endpoint read-only inventory, disposable SysVAD compile/package/API,
+  M01/M04, UI (133 tests/typecheck/production build), VST3 SDK/native worker,
+  VST2 fixtures/workers, M07 headless, unsigned M08 artifacts, 159 normative
+  mappings, and 52-file documentation validation all passed. Fifteen
+  run-owned temporary children were cleaned up. No driver installation/loading,
+  signing-mode, plugin-registration, startup, or persistent audio action was
+  performed.
+
 - Closed the shell authorization gap for the VB-Cable delivery slice on
   2026-09-13. The Tauri shell now keeps its default persisted Operator grant
   least-privilege, while `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` supplies a
