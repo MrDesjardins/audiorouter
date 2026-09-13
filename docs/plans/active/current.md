@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Closed the interactive M07 shell transport gate on 2026-09-12. In the
+current Windows desktop session, the disposable Tauri/WebView2 shell reached
+the frontend initialization script, invoked `rpc_request`, and received an
+authenticated backend `system.describe` response. Temporary backend,
+database, pipe, processes, and probe marker were cleaned up. No audio endpoint
+or persistent machine configuration was accessed.
+
 Hardened WaveRT teardown/API validation on 2026-09-12: buffer-free paths now
 guard the PortCls owner, notification registration rejects null events, and
 hardware-latency reporting handles a null output. The non-installing x64 WDK
