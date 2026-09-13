@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Qualified the supplied legacy VST2 fixtures on 2026-09-13. The ReaPlugs
+acceptance passed for all six x64 DLLs (`reacomp`, `readelay`, `reaeq`,
+`reafir`, `reagate`, and `reaxcomp`) at 44.1, 48, and 96 kHz. The harness
+verified before/after SHA-256 and file lengths, restored both VST environment
+variables, and changed no plugin registration or audio configuration. This
+adds independent VST2 compatibility evidence; vendor rights, editor support,
+and production distribution remain separate gates.
+
 Strict workspace lint also passed at pushed head `508b8b42` on 2026-09-13:
 `cargo clippy --workspace --all-targets --locked -- -D warnings` completed
 without warnings or errors. This is portable-code evidence only; native
