@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Expanded UI-03 connected-path processor actions on 2026-09-13. The draft
+  connection list now exposes all nine existing in-house processor kinds:
+  Gain, Mute, Parametric EQ, Graphic EQ, Compressor, Gate, Limiter, Delay,
+  and Pitch. Each action remains a previewable draft topology edit and uses
+  the same backend-bound plan/commit path; no audio is changed by insertion
+  alone. UI coverage passes with 141 tests, TypeScript typecheck and diff
+  checks pass. Evidence: `ui/src/DraftConnectionList.tsx` and
+  `ui/src/App.accessibility.test.tsx`.
+
 - Extended the guarded native VB-Cable graph on 2026-09-13 to the complete
   in-house voice chain: EQ → Gate → Compressor → Limiter. Exact endpoint
   matching, stopped preparation, native start, 500 ms bounded pumping, and

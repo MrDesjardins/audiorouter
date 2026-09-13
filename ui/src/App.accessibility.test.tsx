@@ -341,9 +341,9 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Insert Gate" }));
     expect(screen.getByText("Gate 1 inserted into the draft. Review and plan the changes before committing.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Insert Parametric EQ" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Insert Compressor" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Insert Limiter" })).toHaveLength(2);
+    for (const label of ["Gain", "Mute", "Parametric EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
+      expect(screen.getAllByRole("button", { name: `Insert ${label}` })).toHaveLength(2);
+    }
   });
 
   it("disables topology mutations when no backend connection context exists", () => {

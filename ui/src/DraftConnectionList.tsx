@@ -5,6 +5,17 @@ import type { InsertableProcessorKind } from "./draft";
 
 const INSERT_MIXER_ACTION = "__audiorouter_insert_mixer__";
 const REMOVE_MIXER_ACTION = "__audiorouter_remove_mixer__";
+const PROCESSOR_ACTIONS: Array<{ kind: InsertableProcessorKind; label: string }> = [
+  { kind: "gain", label: "Gain" },
+  { kind: "mute", label: "Mute" },
+  { kind: "parametricEq", label: "Parametric EQ" },
+  { kind: "graphicEq", label: "Graphic EQ" },
+  { kind: "compressor", label: "Compressor" },
+  { kind: "gate", label: "Gate" },
+  { kind: "limiter", label: "Limiter" },
+  { kind: "delay", label: "Delay" },
+  { kind: "pitch", label: "Pitch" },
+];
 
 export function insertMixerActionId(edgeId: string): string {
   return `${INSERT_MIXER_ACTION}${edgeId}`;
@@ -35,7 +46,7 @@ export function DraftConnectionList({ session, onRemove, onToggle, onInsertProce
       <button type="button" className="secondary" onClick={() => onToggle(edge.id, !edge.enabled)}>{edge.enabled ? "Disable" : "Enable"}</button>
       <button type="button" className="secondary" onClick={() => onRemove(edge.id)}>Remove</button>
       <button type="button" className="secondary" disabled={!connected} aria-label={`Insert mixer on ${names.get(edge.sourceNode) ?? edge.sourceNode} to ${names.get(edge.destinationNode) ?? edge.destinationNode}`} onClick={() => onRemove(insertMixerActionId(edge.id))}>Insert mixer</button>
-      <button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "gate")}>Insert Gate</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "parametricEq")}>Insert Parametric EQ</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "compressor")}>Insert Compressor</button><button type="button" className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, "limiter")}>Insert Limiter</button>
+      {PROCESSOR_ACTIONS.map((processor) => <button type="button" key={processor.kind} className="secondary" disabled={!connected} onClick={() => requestInsertProcessor(edge.id, processor.kind)}>Insert {processor.label}</button>)}
     </li>)}</ul>}
     {mixers.length > 0 && <div className="mixer-topology-actions" aria-label="Mixer topology actions">{mixers.map((mixer) => <div key={mixer.id}>
       <span>{mixer.name}</span>
