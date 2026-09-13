@@ -136,6 +136,13 @@ loaded and no signing, startup, plugin registration, stream, default-device,
 or persistent machine-audio configuration changed. Evidence: [M08 release
 evidence](evidence/M08-release.md).
 
+The administrator-authorized M07 frontend-owned shell RPC acceptance also
+passed on 2026-09-12: WebView2 initialization reached the Tauri command and
+authenticated backend `system.describe` through disposable named-pipe/SQLite
+state. The process tree and temporary state were cleaned up; no audio endpoint
+or persistent machine configuration was accessed. Evidence: [M07 automation
+evidence](evidence/M07-automation-recovery.md).
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability

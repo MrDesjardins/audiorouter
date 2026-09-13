@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-12 - frontend-owned shell RPC acceptance
+
+The administrator-authorized `tests/acceptance/m07-shell-rpc.ps1` run passed
+after the reboot. It launched the repository Tauri shell in the interactive
+desktop, initialized WebView2, sent the authenticated `system.describe`
+request through the disposable named pipe/backend, verified the protocol
+response, and cleaned up the process tree and temporary SQLite state. No audio
+endpoint or persistent machine configuration was accessed.
+
 ## 2026-09-12 - virtual-route MCP parity
 
 The MCP stdio adapter now exposes `list_virtual_routes` and
