@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Advanced STATE-03/M07 startup persistence: the desired sign-in startup
+  preference is now stored in SQLite and restored by `startup.get` after a
+  backend restart. Added storage/control regressions and aligned the
+  TypeScript/discovery contract. Storage/control tests, strict Clippy,
+  formatting, contract drift/typecheck, and UI typecheck passed. Native
+  Windows registration remains unavailable and untouched; no audio or OS
+  startup configuration changed.
+
 - Implemented durable M07 desired startup state. `startup.apply` now persists
   the user's opt-in preference in SQLite, `startup.get` restores it after a
   backend restart, and the TypeScript/discovery contract no longer falsely
