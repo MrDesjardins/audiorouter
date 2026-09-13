@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added and ran the checked-in `m02-control-native-live.ps1` wrapper on
+  2026-09-13. It discovers the exact active CABLE pair, preserves/restores
+  the caller's live-test environment, and invokes the same-process native
+  graph-delivery test. The run passed with 24,000 captured frames, 187 graph
+  quanta, and 23,936 rendered frames; it remains opt-in and excluded from the
+  ordinary safe chain because it opens existing audio clients.
+
 - Ran the guarded same-process native lifecycle harness on 2026-09-13
   against the existing VB-Audio CABLE Output capture and CABLE Input render
   endpoints. Exact inventory matching, stopped-client preparation, native
