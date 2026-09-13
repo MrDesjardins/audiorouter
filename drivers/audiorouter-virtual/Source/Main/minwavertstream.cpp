@@ -1183,7 +1183,14 @@ NTSTATUS CMiniportWaveRTStream::GetPresentationPosition(_Out_  KSAUDIO_PRESENTAT
         return status;
     }
 
-    _pPresentationPosition->u64PositionInBlocks = ullPresentationPosition * m_pWfExt->Format.nSamplesPerSec / m_pWfExt->Format.nAvgBytesPerSec;
+    ULONGLONG sampleRate = m_pWfExt->Format.nSamplesPerSec;
+    if (sampleRate != 0 && ullPresentationPosition > MAXULONGLONG / sampleRate)
+    {
+        return STATUS_INTEGER_OVERFLOW;
+    }
+    ULONGLONG positionNumerator = ullPresentationPosition * sampleRate;
+    _pPresentationPosition->u64PositionInBlocks =
+        positionNumerator / m_pWfExt->Format.nAvgBytesPerSec;
     _pPresentationPosition->u64QPCPosition = (UINT64)timeStamp.QuadPart;
 
     return STATUS_SUCCESS;

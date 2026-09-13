@@ -200,6 +200,9 @@ if (-not $stream.Contains('m_pMiniport == NULL')) {
 if (-not $stream.Contains('pAdapterComm == NULL')) {
     throw 'WaveRT write-position updates must reject a missing adapter owner'
 }
+if (-not $stream.Contains('ullPresentationPosition > MAXULONGLONG / sampleRate')) {
+    throw 'WaveRT presentation position must reject multiplication overflow'
+}
 if (-not $stream.Contains('m_pPortStream == NULL')) {
     throw 'WaveRT DMA allocation must reject a missing PortCls stream owner'
 }

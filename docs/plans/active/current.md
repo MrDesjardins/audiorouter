@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Hardened WaveRT presentation-position arithmetic on 2026-09-13. The byte
+position-to-sample conversion now checks the 64-bit multiplication against the
+negotiated sample rate and returns `STATUS_INTEGER_OVERFLOW` instead of
+publishing a wrapped position. The M03 non-installing WDK/source acceptance
+passed with zero signability errors/warnings and catalog generation. No driver
+was installed or loaded.
+
 Removed an unlocked bridge-retirement state read on 2026-09-13. Cleanup now
 uses the `oldRundownStarted` state captured under the lease lock after waiting
 for callback readers, instead of rereading mutable `lease->Retiring` state
