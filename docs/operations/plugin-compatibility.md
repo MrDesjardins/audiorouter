@@ -282,6 +282,9 @@ The installed ReaComp binary was requalified on 2026-09-13 through the
 fingerprinted installed-plugin wrapper. Processing and both editor-containment
 checks passed at 44.1, 48, and 96 kHz; SHA-256 remained
 `4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`. The
+installed ReaGate binary was independently requalified through the same worker
+path at all three sample rates and passed both containment checks; its SHA-256
+remained `36cde76c3dbd1d79275c5e52a7120c3ccb1e21ae144cfd5f0e70a0f939e29998`.
 installed ReaControlMIDI binary was separately rejected during bounded state
 restoration with `failed to fill whole buffer` and remains outside the audio
 effect contract. The wrapper now verifies the selected binary in its cleanup

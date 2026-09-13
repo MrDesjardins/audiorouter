@@ -22,6 +22,13 @@ Updated: 2026-09-13.
   approved VST2 extension evidence but does not establish redistribution
   rights or release qualification.
 
+- Extended the installed VST2 evidence on 2026-09-13 with the user-provided
+  `reagate-standalone.dll`. Processing at 44.1, 48, and 96 kHz and both bounded
+  editor-containment checks passed; SHA-256
+  `36cde76c3dbd1d79275c5e52a7120c3ccb1e21ae144cfd5f0e70a0f939e29998` was
+  unchanged. The binary was not copied, registered, or modified, and the
+  installed-plugin wrapper restored its environment.
+
 - Closed the shell authorization gap for the VB-Cable delivery slice on
   2026-09-13. The Tauri shell now keeps its default persisted Operator grant
   least-privilege, while `AUDIOROUTER_ALLOW_DEVICE_ADMIN=1` supplies a
