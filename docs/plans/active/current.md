@@ -37,6 +37,14 @@ Updated: 2026-09-13.
   returned `EPERM`, and that output was removed. No endpoint or machine
   configuration was changed.
 
+- Closed the shell backend lifetime gap on 2026-09-13. Added a dedicated
+  lifetime-serving authenticated named-pipe path for the desktop backend while
+  retaining bounded serving helpers for acceptance and disposable tooling.
+  The control plane remains on its COM-owning serving thread until a terminal
+  pipe/process error. Transport tests (19), shell tests (8), strict relevant
+  Clippy, formatting, and diff checks pass; no endpoint or machine
+  configuration was changed.
+
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
   invoke API, and Vite emits relative assets for the Tauri app protocol. Shell

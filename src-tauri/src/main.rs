@@ -222,8 +222,8 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                                 format!("default desktop session creation failed: {error:?}")
                             })?;
                     }
-                    audiorouter_transport::serve_control_connections_for_current_user(
-                        &pipe_name, 256, plane,
+                    audiorouter_transport::serve_control_connections_forever_for_current_user(
+                        &pipe_name, plane,
                     )
                     .map_err(|error| format!("control backend stopped: {error:?}"))
                 })();

@@ -40,6 +40,15 @@ repository-root directory after the UI-local temporary directory was rejected
 by the host with `EPERM`; the output was removed afterward. No endpoint or
 machine configuration was accessed.
 
+## 2026-09-13 - persistent shell backend serving
+
+The desktop shell now uses a dedicated lifetime-serving authenticated
+named-pipe API. The bounded connection/session APIs remain available for
+acceptance harnesses and disposable servers, while the shell-owned control
+plane stays alive until a terminal pipe/process error. Transport tests (19),
+shell tests (8), strict relevant Clippy, formatting, and doc-tests passed.
+No endpoint or machine configuration was accessed.
+
 ## 2026-09-13 - Tauri shell asset and probe hardening
 
 The Tauri shell initialization probe now delegates through the loaded UI

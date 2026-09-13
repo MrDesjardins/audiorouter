@@ -725,6 +725,41 @@ pub fn serve_control_connections_for_current_user(
     serve_control_connections(name, connections, plane, grant)
 }
 
+#[cfg(windows)]
+/// Serve authenticated control connections for the lifetime of the hosting
+/// process. Unlike the bounded acceptance helper, this is the production
+/// backend path; the named-pipe singleton and the control plane remain owned
+/// until the process exits or the pipe reports a terminal error.
+pub fn serve_control_connections_forever_for_current_user(
+    name: &str,
+    mut plane: audiorouter_control::ControlPlane,
+) -> Result<(), TransportError> {
+    let sid = current_user_sid()?;
+    let grant = plane
+        .grant_for_client(&sid)
+        .map_err(|error| TransportError::Protocol(format!("enrollment lookup failed: {error:?}")))?
+        .ok_or_else(|| TransportError::Windows("current user is not enrolled".into()))?;
+    let _singleton = acquire_server_singleton(name)?;
+    loop {
+        serve_once_with_client_optional(name, |client_pid, frame| {
+            let client_id = client_user_sid(client_pid)?;
+            let responses = plane
+                .dispatch_frame_authorized_for_client(frame, &client_id, &grant)
+                .map_err(|error| TransportError::Protocol(error.to_string()))?;
+            if responses.is_empty() {
+                Ok(None)
+            } else {
+                let total = responses.iter().map(Vec::len).sum();
+                let mut combined = Vec::with_capacity(total);
+                for response in responses {
+                    combined.extend_from_slice(&response);
+                }
+                Ok(Some(combined))
+            }
+        })?;
+    }
+}
+
 #[cfg(not(windows))]
 pub fn serve_control_sessions(
     _: &str,
@@ -809,6 +844,14 @@ pub fn current_user_sid() -> Result<String, TransportError> {
 pub fn serve_control_connections_for_current_user(
     _: &str,
     _: usize,
+    _: audiorouter_control::ControlPlane,
+) -> Result<(), TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn serve_control_connections_forever_for_current_user(
+    _: &str,
     _: audiorouter_control::ControlPlane,
 ) -> Result<(), TransportError> {
     Err(TransportError::UnsupportedPlatform)
