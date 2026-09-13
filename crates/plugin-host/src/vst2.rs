@@ -274,7 +274,7 @@ const AUDIO_MASTER_GET_BLOCK_SIZE: i32 = 11;
 #[cfg(all(test, windows))]
 mod opcode_tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::cell::Cell;
 
     #[test]
     fn uses_vst2_dispatcher_opcodes_for_lifecycle_and_state() {
@@ -352,7 +352,9 @@ mod opcode_tests {
         );
     }
 
-    static DISPATCH_COUNT: AtomicUsize = AtomicUsize::new(0);
+    thread_local! {
+        static DISPATCH_COUNT: Cell<usize> = const { Cell::new(0) };
+    }
 
     unsafe extern "C" fn counting_dispatcher(
         _: *mut Vst2Effect,
@@ -362,7 +364,7 @@ mod opcode_tests {
         _: *mut c_void,
         _: f32,
     ) -> isize {
-        DISPATCH_COUNT.fetch_add(1, Ordering::Relaxed);
+        DISPATCH_COUNT.with(|count| count.set(count.get() + 1));
         0
     }
 
@@ -415,7 +417,7 @@ mod opcode_tests {
             editor_open: false,
             host_context: Box::new(Vst2HostContext::default()),
         };
-        DISPATCH_COUNT.store(0, Ordering::Relaxed);
+        DISPATCH_COUNT.with(|count| count.set(0));
 
         assert!(matches!(
             library.set_processing_format(7_999.0, 128),
@@ -433,7 +435,7 @@ mod opcode_tests {
             library.set_processing_format(48_000.0, 2_049),
             Err(Vst2LibraryError::InvalidPath)
         ));
-        assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 0);
+        assert_eq!(DISPATCH_COUNT.with(Cell::get), 0);
         library.set_processing_format(48_000.0, 128).unwrap();
         library.set_processing_format(48_000.0, 128).unwrap();
         library.set_processing_format(48_000.0, 256).unwrap();
@@ -442,7 +444,7 @@ mod opcode_tests {
             library.open_editor(1, std::process::id()),
             Err(Vst2LibraryError::InvalidEditor)
         ));
-        assert_eq!(DISPATCH_COUNT.load(Ordering::Relaxed), 7);
+        assert_eq!(DISPATCH_COUNT.with(Cell::get), 7);
         assert!(matches!(
             library.close_editor(),
             Err(Vst2LibraryError::InvalidEditor)

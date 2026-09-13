@@ -599,6 +599,31 @@ fn read_plugin_metadata(bundle: &Path) -> PluginMetadata {
             }
         }
     }
+    // VST3 compatibility entries are not guaranteed to put the audio module
+    // before its controller. Prefer the declared audio-module CID so a later
+    // worker binding cannot accidentally select a controller class.
+    if let Some(classes) = value.get("Classes").and_then(serde_json::Value::as_array) {
+        let audio_class_ids = classes
+            .iter()
+            .filter(|class| {
+                class.get("Category").and_then(serde_json::Value::as_str)
+                    == Some("Audio Module Class")
+            })
+            .filter_map(|class| class.get("CID").and_then(serde_json::Value::as_str))
+            .filter(|id| id.len() <= 32 && class_ids.iter().any(|existing| existing == id))
+            .take(256)
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        if !audio_class_ids.is_empty() {
+            let mut ordered = audio_class_ids;
+            let remaining = class_ids
+                .into_iter()
+                .filter(|id| !ordered.iter().any(|audio| audio == id))
+                .collect::<Vec<_>>();
+            ordered.extend(remaining);
+            class_ids = ordered;
+        }
+    }
     PluginMetadata {
         vendor,
         version,
@@ -5904,6 +5929,38 @@ mod tests {
         assert_eq!(identity.metadata.vendor.as_deref(), Some("Example Vendor"));
         assert_eq!(identity.metadata.version.as_deref(), Some("1.2.3"));
         assert_eq!(identity.metadata.class_ids.len(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn prefers_declared_audio_module_class_for_vst3_binding_identity() {
+        let root = temp_root();
+        let bundle = root.join("effect.vst3");
+        let binary_dir = bundle.join("Contents").join("x86_64-win");
+        fs::create_dir_all(&binary_dir).unwrap();
+        fs::write(binary_dir.join("effect.vst3"), pe_x64()).unwrap();
+        let resources = bundle.join("Contents").join("Resources");
+        fs::create_dir_all(&resources).unwrap();
+        fs::write(
+            resources.join("moduleinfo.json"),
+            br#"{
+                "Compatibility": [
+                    { "New": "11111111111111111111111111111111" },
+                    { "New": "22222222222222222222222222222222" }
+                ],
+                "Classes": [
+                    { "CID": "11111111111111111111111111111111", "Category": "Component Controller Class" },
+                    { "CID": "22222222222222222222222222222222", "Category": "Audio Module Class" }
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(
+            identity.metadata.class_ids[0],
+            "22222222222222222222222222222222"
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

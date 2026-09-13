@@ -2,6 +2,20 @@
 
 Updated: 2026-09-13.
 
+- Fixed VST2 test isolation on 2026-09-13. The opcode-dispatch regression now
+  uses a thread-local test counter instead of process-global mutable state, so
+  parallel plugin-host tests cannot contaminate its expected lifecycle count.
+  `cargo fmt --all` and `cargo test -p audiorouter-plugin-host --locked`
+  passed with 69 unit tests and 13 worker-process tests. This is test-harness
+  evidence only; it does not claim graph activation or native driver support.
+
+- Improved VST3 binding metadata ordering on 2026-09-13. When bounded
+  `moduleinfo.json` class metadata identifies an Audio Module Class, the
+  worker-facing identity now prefers that CID over a controller CID while
+  retaining the remaining verified classes. A regression covers controller-
+  first metadata; plugin-host tests pass. The binary remains unregistered and
+  unloaded, and no machine audio configuration changed.
+
 - Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain at
   pushed head `9b32f227` on 2026-09-13. VS/WDK discovery, native compile,
   AudioRouter driver compile/catalog signability, read-only 31-endpoint
