@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Qualified legacy VST2 editor containment on 2026-09-13. The bounded editor
+acceptance passed for all six x64 ReaPlugs fixtures, covering the dedicated
+editor-thread bound and supervised timeout/worker-kill recovery for each
+binary. Environment state was restored and no plugin registration or audio
+configuration changed. This proves containment behavior, not vendor editor
+quality or production rights.
+
 Qualified the supplied legacy VST2 fixtures on 2026-09-13. The ReaPlugs
 acceptance passed for all six x64 DLLs (`reacomp`, `readelay`, `reaeq`,
 `reafir`, `reagate`, and `reaxcomp`) at 44.1, 48, and 96 kHz. The harness
