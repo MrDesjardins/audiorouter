@@ -62,6 +62,9 @@ foreach ($required in @(
         'ExAcquireRundownProtection',
         'InterlockedCompareExchangePointer',
         'InterlockedCompareExchange64',
+        'MinimumSequence',
+        'AudioRouterCopyBridgeBlock',
+        'generation != 0',
         'STATUS_RETRY',
         'ExReleaseRundownProtection')) {
     if (-not $copyHelper.Contains($required)) {
@@ -82,6 +85,8 @@ foreach ($required in @(
         'AR_BRIDGE_DIRECTION_CAPTURE_SINK',
         'InterlockedIncrement64',
         'InterlockedCompareExchange64',
+        'generation == 0',
+        'STATUS_DATA_ERROR',
         'STATUS_INTEGER_OVERFLOW',
         'ExReleaseRundownProtection')) {
     if (-not $publishHelper.Contains($required)) {
@@ -98,6 +103,9 @@ foreach ($required in @(
         'AudioRouterPublishLeaseBlockForDirection',
         'AudioRouterGetLeaseShapeForDirection',
         'm_BridgeScratch',
+        'm_BridgeReadSequence',
+        'header.Sequence',
+        'header.Frames',
         'AR_BRIDGE_DIRECTION_RENDER_SOURCE',
         'AR_BRIDGE_DIRECTION_CAPTURE_SINK',
         'RtlZeroMemory')) {

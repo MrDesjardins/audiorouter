@@ -44,6 +44,15 @@ and the temporary database/root are removed by the test. This is
 control-plane and recording-path evidence; it does not activate audio or a
 driver.
 
+M03 bridge qualification was tightened on 2026-09-12: the non-installing
+acceptance now checks the actual callback source for generation validity,
+minimum-sequence replay protection, bounded bridge-copy/publish seams, and
+directional WaveRT header/scratch handoff. An initial assertion named a
+nonexistent publisher helper; the source uses the documented inline bounded
+copy, so the check was corrected before the final run. The administrator-
+authorized WDK acceptance then passed with zero signability errors/warnings and
+disposable output removed. No driver was installed or loaded.
+
 Next action: qualify the render-source/capture-sink bridge publication against
 the AudioRouter driver prototype's source-contract and lease/generation
 boundaries. Keep installation, production signing, PortCls ownership, clean

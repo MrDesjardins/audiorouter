@@ -1,5 +1,23 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - bridge callback source-contract qualification
+
+The M03 acceptance wrapper was tightened to inspect the implemented callback
+seams rather than only their names. It now requires the render-source copy
+helper to enforce a minimum sequence and nonzero generation, the capture-sink
+publisher to reject zero generation and non-finite payloads, and the WaveRT
+stream to retain bridge scratch/header sequence and frame state while invoking
+the direction-specific helpers. A first run exposed an incorrect test-harness
+assumption about a separate publisher helper; the publisher is intentionally
+inline in `AudioRouterPublishLeaseBlock`, so the assertion was corrected.
+
+The corrected administrator-authorized `tests/acceptance/m03-driver-build.ps1`
+run passed on 2026-09-12 using VS 18.9.1 and WDK 10.0.28000.0. Utilities,
+Filters, Main, package/catalog, and Inc built for x64; WDK signability reported
+zero errors and warnings. The wrapper removed disposable output. No driver was
+installed or loaded, and no signing mode, boot policy, service, endpoint, or
+audio configuration changed.
+
 ## 2026-09-12 - Post-reboot guarded acceptance chain
 
 The captured administrator-authorized `tests/acceptance/safe-all.ps1` run
