@@ -46,6 +46,15 @@ plugin/startup registration, stream, default device, volume, mute, privacy,
 or persistent machine-audio configuration changed. Evidence: [M08 release
 evidence](evidence/M08-release.md), [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
 
+Closed a realtime-engine contract gap on 2026-09-12: stateful built-in DSP
+stages no longer use `Mutex`/`try_lock` from the processing path. Each prepared
+stage now owns an atomic, non-blocking realtime state cell; contention fails
+closed for the current block, while control-thread telemetry and reset use the
+same bounded ownership protocol. The engine suite passed 107 tests, the full
+workspace tests passed, strict workspace Clippy passed, and formatting/diff
+checks passed. This is portable engine evidence only; no endpoint, driver,
+plugin, or persistent machine-audio configuration was accessed.
+
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite
 database and explicitly approved temporary recording root. It verifies an

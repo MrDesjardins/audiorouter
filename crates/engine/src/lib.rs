@@ -4,6 +4,7 @@
 //! `AudioBlock` exists, the operations below reuse its storage and perform no
 //! heap allocation, locking, I/O, or logging.
 
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -2401,6 +2402,58 @@ impl DriftController {
     }
 }
 
+/// A single-owner state cell for stateful DSP used by an immutable graph
+/// snapshot. The realtime path acquires ownership with one non-blocking atomic
+/// compare/exchange; contention produces a fail-closed block. Control and
+/// telemetry use the same gate, so no thread can access `state` concurrently.
+/// The graph owns this cell for its entire lifetime, which keeps the
+/// `UnsafeCell` address stable until all graph readers release their snapshot.
+pub struct RealtimeDsp<T> {
+    state: UnsafeCell<T>,
+    busy: AtomicBool,
+}
+
+// SAFETY: `state` is accessed only while `busy` is exclusively held. `T` is
+// required to be Send because the graph snapshot may move between threads.
+unsafe impl<T: Send> Sync for RealtimeDsp<T> {}
+
+impl<T> RealtimeDsp<T> {
+    fn new(state: T) -> Self {
+        Self {
+            state: UnsafeCell::new(state),
+            busy: AtomicBool::new(false),
+        }
+    }
+
+    fn try_with<R>(&self, operation: impl FnOnce(&mut T) -> R) -> Option<R> {
+        if self
+            .busy
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return None;
+        }
+        struct Release<'a>(&'a AtomicBool);
+        impl Drop for Release<'_> {
+            fn drop(&mut self) {
+                self.0.store(false, Ordering::Release);
+            }
+        }
+        let _release = Release(&self.busy);
+        // SAFETY: the successful compare_exchange above is the exclusive
+        // ownership proof, and `_release` keeps the gate held for the borrow.
+        Some(operation(unsafe { &mut *self.state.get() }))
+    }
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for RealtimeDsp<T> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("RealtimeDsp")
+            .finish_non_exhaustive()
+    }
+}
+
 #[derive(Debug)]
 pub enum ProcessingStage {
     Gain {
@@ -2416,31 +2469,31 @@ pub enum ProcessingStage {
         index: usize,
     },
     ParametricEq {
-        left: Box<std::sync::Mutex<audiorouter_dsp::ParametricEq>>,
-        right: Option<Box<std::sync::Mutex<audiorouter_dsp::ParametricEq>>>,
+        left: Box<RealtimeDsp<audiorouter_dsp::ParametricEq>>,
+        right: Option<Box<RealtimeDsp<audiorouter_dsp::ParametricEq>>>,
     },
     Compressor {
-        left: Box<std::sync::Mutex<audiorouter_dsp::Compressor>>,
-        right: Option<Box<std::sync::Mutex<audiorouter_dsp::Compressor>>>,
+        left: Box<RealtimeDsp<audiorouter_dsp::Compressor>>,
+        right: Option<Box<RealtimeDsp<audiorouter_dsp::Compressor>>>,
     },
     Gate {
-        left: Box<std::sync::Mutex<audiorouter_dsp::Gate>>,
-        right: Option<Box<std::sync::Mutex<audiorouter_dsp::Gate>>>,
+        left: Box<RealtimeDsp<audiorouter_dsp::Gate>>,
+        right: Option<Box<RealtimeDsp<audiorouter_dsp::Gate>>>,
     },
     Limiter {
-        limiter: Box<std::sync::Mutex<audiorouter_dsp::PeakLimiter>>,
+        limiter: Box<RealtimeDsp<audiorouter_dsp::PeakLimiter>>,
     },
     Delay {
-        left: Box<std::sync::Mutex<audiorouter_dsp::DelayLine>>,
-        right: Option<Box<std::sync::Mutex<audiorouter_dsp::DelayLine>>>,
+        left: Box<RealtimeDsp<audiorouter_dsp::DelayLine>>,
+        right: Option<Box<RealtimeDsp<audiorouter_dsp::DelayLine>>>,
     },
     GraphicEq {
-        left: Box<std::sync::Mutex<audiorouter_dsp::GraphicEq>>,
-        right: Option<Box<std::sync::Mutex<audiorouter_dsp::GraphicEq>>>,
+        left: Box<RealtimeDsp<audiorouter_dsp::GraphicEq>>,
+        right: Option<Box<RealtimeDsp<audiorouter_dsp::GraphicEq>>>,
     },
     Pitch {
-        left: Box<std::sync::Mutex<audiorouter_dsp::StreamingPitchShifter>>,
-        right: Option<Box<std::sync::Mutex<audiorouter_dsp::StreamingPitchShifter>>>,
+        left: Box<RealtimeDsp<audiorouter_dsp::StreamingPitchShifter>>,
+        right: Option<Box<RealtimeDsp<audiorouter_dsp::StreamingPitchShifter>>>,
     },
 }
 
@@ -3267,8 +3320,8 @@ pub fn compile_session_at_sample_rate(
                     None
                 };
                 stages.push(ProcessingStage::ParametricEq {
-                    left: Box::new(std::sync::Mutex::new(left)),
-                    right: right.map(|filter| Box::new(std::sync::Mutex::new(filter))),
+                    left: Box::new(RealtimeDsp::new(left)),
+                    right: right.map(|filter| Box::new(RealtimeDsp::new(filter))),
                 });
             }
             NodeKind::Compressor => {
@@ -3322,8 +3375,8 @@ pub fn compile_session_at_sample_rate(
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = None;
                 stages.push(ProcessingStage::Compressor {
-                    left: Box::new(std::sync::Mutex::new(left)),
-                    right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
+                    left: Box::new(RealtimeDsp::new(left)),
+                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
                 });
             }
             NodeKind::Gate => {
@@ -3383,8 +3436,8 @@ pub fn compile_session_at_sample_rate(
                     .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 let right = None;
                 stages.push(ProcessingStage::Gate {
-                    left: Box::new(std::sync::Mutex::new(left)),
-                    right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
+                    left: Box::new(RealtimeDsp::new(left)),
+                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
                 });
             }
             NodeKind::Limiter => {
@@ -3418,7 +3471,7 @@ pub fn compile_session_at_sample_rate(
                 )
                 .map_err(|_| GraphCompileError::UnsupportedTopology)?;
                 stages.push(ProcessingStage::Limiter {
-                    limiter: Box::new(std::sync::Mutex::new(limiter)),
+                    limiter: Box::new(RealtimeDsp::new(limiter)),
                 });
             }
             NodeKind::Delay => {
@@ -3452,8 +3505,8 @@ pub fn compile_session_at_sample_rate(
                     None
                 };
                 stages.push(ProcessingStage::Delay {
-                    left: Box::new(std::sync::Mutex::new(left)),
-                    right: right.map(|delay| Box::new(std::sync::Mutex::new(delay))),
+                    left: Box::new(RealtimeDsp::new(left)),
+                    right: right.map(|delay| Box::new(RealtimeDsp::new(delay))),
                 });
             }
             NodeKind::GraphicEq => {
@@ -3480,8 +3533,8 @@ pub fn compile_session_at_sample_rate(
                     None
                 };
                 stages.push(ProcessingStage::GraphicEq {
-                    left: Box::new(std::sync::Mutex::new(left)),
-                    right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
+                    left: Box::new(RealtimeDsp::new(left)),
+                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
                 });
             }
             NodeKind::Pitch => {
@@ -3519,8 +3572,8 @@ pub fn compile_session_at_sample_rate(
                     None
                 };
                 stages.push(ProcessingStage::Pitch {
-                    left: Box::new(std::sync::Mutex::new(left)),
-                    right: right.map(|processor| Box::new(std::sync::Mutex::new(processor))),
+                    left: Box::new(RealtimeDsp::new(left)),
+                    right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
                 });
             }
             NodeKind::PhysicalInput
@@ -4424,23 +4477,29 @@ impl RuntimeGraph {
         };
         match stage {
             ProcessingStage::Compressor { left, right } => {
-                telemetry.gain_reduction_db[0] = left.try_lock().ok()?.gain_reduction_db();
+                telemetry.gain_reduction_db[0] =
+                    left.try_with(|processor| processor.gain_reduction_db())?;
                 if let Some(right) = right {
-                    telemetry.gain_reduction_db[1] = right.try_lock().ok()?.gain_reduction_db();
+                    telemetry.gain_reduction_db[1] =
+                        right.try_with(|processor| processor.gain_reduction_db())?;
                 }
             }
             ProcessingStage::Gate { left, right } => {
-                let left = left.try_lock().ok()?;
-                telemetry.gain_reduction_db[0] = left.gain_reduction_db();
-                telemetry.gate_open[0] = left.is_open();
+                let (gain_reduction_db, gate_open) = left
+                    .try_with(|processor| (processor.gain_reduction_db(), processor.is_open()))?;
+                telemetry.gain_reduction_db[0] = gain_reduction_db;
+                telemetry.gate_open[0] = gate_open;
                 if let Some(right) = right {
-                    let right = right.try_lock().ok()?;
-                    telemetry.gain_reduction_db[1] = right.gain_reduction_db();
-                    telemetry.gate_open[1] = right.is_open();
+                    let (gain_reduction_db, gate_open) = right.try_with(|processor| {
+                        (processor.gain_reduction_db(), processor.is_open())
+                    })?;
+                    telemetry.gain_reduction_db[1] = gain_reduction_db;
+                    telemetry.gate_open[1] = gate_open;
                 }
             }
             ProcessingStage::Limiter { limiter } => {
-                telemetry.gain_reduction_db[0] = limiter.try_lock().ok()?.gain_reduction_db();
+                telemetry.gain_reduction_db[0] =
+                    limiter.try_with(|processor| processor.gain_reduction_db())?;
                 telemetry.gain_reduction_db[1] = telemetry.gain_reduction_db[0];
             }
             _ => return None,
@@ -4457,10 +4516,9 @@ impl RuntimeGraph {
     }
 
     /// Reset stateful DSP history at a stopped-stream recovery boundary.
-    /// Processing uses `try_lock` on the realtime path; this control-side
-    /// operation may wait for those short critical sections, but never runs
-    /// from the callback. A poisoned state lock fails closed so callers can
-    /// keep the route silent instead of reusing unknown processor state.
+    /// This control-side operation also uses non-blocking ownership. If a
+    /// callback currently owns a processor, reset fails closed rather than
+    /// waiting or racing the state.
     pub fn reset_processing_state(&self) -> bool {
         let mut success = true;
         for stage in &self.stages {
@@ -4567,137 +4625,210 @@ impl RuntimeGraph {
                     }
                 }
                 ProcessingStage::ParametricEq { left, right } => {
-                    let Ok(mut left) = left.try_lock() else {
-                        block.clear();
-                        continue;
-                    };
                     if block.channels() == 1 {
-                        if let Some(samples) = block.channel_mut(0) {
-                            left.process_interleaved(samples);
+                        if left
+                            .try_with(|processor| {
+                                if let Some(samples) = block.channel_mut(0) {
+                                    processor.process_interleaved(samples);
+                                }
+                            })
+                            .is_none()
+                        {
+                            block.clear();
                         }
                     } else if block.channels() == 2 {
-                        if let Some(samples) = block.channel_mut(0) {
-                            left.process_interleaved(samples);
+                        let left_ok = left
+                            .try_with(|processor| {
+                                if let Some(samples) = block.channel_mut(0) {
+                                    processor.process_interleaved(samples);
+                                }
+                            })
+                            .is_some();
+                        if !left_ok {
+                            block.clear();
+                            continue;
                         }
                         let Some(filter) = right.as_ref() else {
                             block.clear();
                             continue;
                         };
-                        if let Some(samples) = block.channel_mut(1) {
-                            if let Ok(mut filter) = filter.try_lock() {
-                                filter.process_interleaved(samples);
-                            } else {
-                                block.clear();
-                            }
+                        if filter
+                            .try_with(|processor| {
+                                if let Some(samples) = block.channel_mut(1) {
+                                    processor.process_interleaved(samples);
+                                }
+                            })
+                            .is_none()
+                        {
+                            block.clear();
                         }
                     }
                 }
                 ProcessingStage::Compressor { left, right } => {
-                    let Ok(mut left) = left.try_lock() else {
+                    if block.channels() == 2 && right.is_none() {
+                        let linked = left
+                            .try_with(|processor| {
+                                if processor.channels() == 2 {
+                                    let (left_samples, right_samples) =
+                                        block.channels_mut_pair().unwrap();
+                                    processor.process_planar_linked(left_samples, right_samples);
+                                    true
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap_or(false);
+                        if linked {
+                            continue;
+                        }
                         block.clear();
                         continue;
-                    };
-                    if block.channels() == 2 && right.is_none() && left.channels() == 2 {
-                        let (left_samples, right_samples) = block.channels_mut_pair().unwrap();
-                        left.process_planar_linked(left_samples, right_samples);
-                        continue;
                     }
-                    if let Some(samples) = block.channel_mut(0) {
-                        left.process_interleaved(samples);
+                    let left_ok = left
+                        .try_with(|processor| {
+                            if let Some(samples) = block.channel_mut(0) {
+                                processor.process_interleaved(samples);
+                            }
+                        })
+                        .is_some();
+                    if !left_ok {
+                        block.clear();
+                        continue;
                     }
                     if block.channels() == 2 {
                         let Some(processor) = right.as_ref() else {
                             block.clear();
                             continue;
                         };
-                        if let Some(samples) = block.channel_mut(1) {
-                            if let Ok(mut processor) = processor.try_lock() {
-                                processor.process_interleaved(samples);
-                            } else {
-                                block.clear();
-                            }
+                        if processor
+                            .try_with(|processor| {
+                                if let Some(samples) = block.channel_mut(1) {
+                                    processor.process_interleaved(samples);
+                                }
+                            })
+                            .is_none()
+                        {
+                            block.clear();
                         }
                     }
                 }
                 ProcessingStage::Gate { left, right } => {
-                    let Ok(mut left) = left.try_lock() else {
+                    if block.channels() == 2 && right.is_none() {
+                        let linked = left
+                            .try_with(|processor| {
+                                if processor.channels() == 2 {
+                                    let (left_samples, right_samples) =
+                                        block.channels_mut_pair().unwrap();
+                                    processor.process_planar_linked(left_samples, right_samples);
+                                    true
+                                } else {
+                                    false
+                                }
+                            })
+                            .unwrap_or(false);
+                        if linked {
+                            continue;
+                        }
                         block.clear();
                         continue;
-                    };
-                    if block.channels() == 2 && right.is_none() && left.channels() == 2 {
-                        let (left_samples, right_samples) = block.channels_mut_pair().unwrap();
-                        left.process_planar_linked(left_samples, right_samples);
-                        continue;
                     }
-                    if let Some(samples) = block.channel_mut(0) {
-                        left.process_interleaved(samples);
+                    let left_ok = left
+                        .try_with(|processor| {
+                            if let Some(samples) = block.channel_mut(0) {
+                                processor.process_interleaved(samples);
+                            }
+                        })
+                        .is_some();
+                    if !left_ok {
+                        block.clear();
+                        continue;
                     }
                     if block.channels() == 2 {
                         let Some(processor) = right.as_ref() else {
                             block.clear();
                             continue;
                         };
-                        if let Some(samples) = block.channel_mut(1) {
-                            if let Ok(mut processor) = processor.try_lock() {
-                                processor.process_interleaved(samples);
-                            } else {
-                                block.clear();
-                            }
+                        if processor
+                            .try_with(|processor| {
+                                if let Some(samples) = block.channel_mut(1) {
+                                    processor.process_interleaved(samples);
+                                }
+                            })
+                            .is_none()
+                        {
+                            block.clear();
                         }
                     }
                 }
                 ProcessingStage::Limiter { limiter } => {
-                    let Ok(mut limiter) = limiter.try_lock() else {
+                    if limiter
+                        .try_with(|processor| {
+                            for channel in 0..block.channels() {
+                                if let Some(samples) = block.channel_mut(channel) {
+                                    processor.process_channel(channel, samples);
+                                }
+                            }
+                        })
+                        .is_none()
+                    {
                         block.clear();
-                        continue;
-                    };
-                    for channel in 0..block.channels() {
-                        if let Some(samples) = block.channel_mut(channel) {
-                            limiter.process_channel(channel, samples);
-                        }
                     }
                 }
                 ProcessingStage::Delay { left, right } => {
-                    let Ok(mut left) = left.try_lock() else {
+                    if left
+                        .try_with(|processor| {
+                            if let Some(samples) = block.channel_mut(0) {
+                                processor.process_interleaved(samples);
+                            }
+                        })
+                        .is_none()
+                    {
                         block.clear();
                         continue;
-                    };
-                    if let Some(samples) = block.channel_mut(0) {
-                        left.process_interleaved(samples);
                     }
                     if block.channels() == 2 {
                         let Some(delay) = right.as_ref() else {
                             block.clear();
                             continue;
                         };
-                        if let Some(samples) = block.channel_mut(1) {
-                            if let Ok(mut delay) = delay.try_lock() {
-                                delay.process_interleaved(samples);
-                            } else {
-                                block.clear();
-                            }
+                        if delay
+                            .try_with(|processor| {
+                                if let Some(samples) = block.channel_mut(1) {
+                                    processor.process_interleaved(samples);
+                                }
+                            })
+                            .is_none()
+                        {
+                            block.clear();
                         }
                     }
                 }
                 ProcessingStage::GraphicEq { left, right } => {
-                    let Ok(mut left) = left.try_lock() else {
+                    if left
+                        .try_with(|processor| {
+                            if let Some(samples) = block.channel_mut(0) {
+                                processor.process_interleaved(samples);
+                            }
+                        })
+                        .is_none()
+                    {
                         block.clear();
                         continue;
-                    };
-                    if let Some(samples) = block.channel_mut(0) {
-                        left.process_interleaved(samples);
                     }
                     if block.channels() == 2 {
                         let Some(processor) = right.as_ref() else {
                             block.clear();
                             continue;
                         };
-                        if let Some(samples) = block.channel_mut(1) {
-                            if let Ok(mut processor) = processor.try_lock() {
-                                processor.process_interleaved(samples);
-                            } else {
-                                block.clear();
-                            }
+                        if processor
+                            .try_with(|processor| {
+                                if let Some(samples) = block.channel_mut(1) {
+                                    processor.process_interleaved(samples);
+                                }
+                            })
+                            .is_none()
+                        {
+                            block.clear();
                         }
                     }
                 }
@@ -4707,18 +4838,19 @@ impl RuntimeGraph {
                         continue;
                     }
                     let process_channel =
-                        |processor: &std::sync::Mutex<audiorouter_dsp::StreamingPitchShifter>,
+                        |processor: &RealtimeDsp<audiorouter_dsp::StreamingPitchShifter>,
                          samples: &mut [f32]| {
                             let mut output =
                                 [0.0_f32; audiorouter_dsp::StreamingPitchShifter::BLOCK_FRAMES];
-                            let Ok(mut processor) = processor.try_lock() else {
-                                return false;
-                            };
-                            if processor.process_block(samples, &mut output).is_err() {
-                                return false;
-                            }
-                            samples.copy_from_slice(&output);
-                            true
+                            processor
+                                .try_with(|processor| {
+                                    if processor.process_block(samples, &mut output).is_err() {
+                                        return false;
+                                    }
+                                    samples.copy_from_slice(&output);
+                                    true
+                                })
+                                .unwrap_or(false)
                         };
                     let left_ok = block
                         .channel_mut(0)
@@ -4748,14 +4880,8 @@ impl RuntimeGraph {
     }
 }
 
-fn reset_dsp<T>(processor: &std::sync::Mutex<T>, reset: impl FnOnce(&mut T)) -> bool {
-    match processor.lock() {
-        Ok(mut processor) => {
-            reset(&mut processor);
-            true
-        }
-        Err(_) => false,
-    }
+fn reset_dsp<T>(processor: &RealtimeDsp<T>, reset: impl FnOnce(&mut T)) -> bool {
+    processor.try_with(reset).is_some()
 }
 
 #[cfg(test)]
@@ -5902,7 +6028,7 @@ mod tests {
         let graph = RuntimeGraph::prepare(
             RuntimeGeneration::new(53),
             vec![ProcessingStage::Delay {
-                left: Box::new(std::sync::Mutex::new(delay)),
+                left: Box::new(RealtimeDsp::new(delay)),
                 right: None,
             }],
         );
@@ -6278,7 +6404,7 @@ mod tests {
             sample_rate: 48_000.0,
         };
         let stage = ProcessingStage::ParametricEq {
-            left: Box::new(std::sync::Mutex::new(
+            left: Box::new(RealtimeDsp::new(
                 audiorouter_dsp::ParametricEq::new(
                     [Some(params), None, None, None, None, None, None, None],
                     1,
@@ -6314,7 +6440,7 @@ mod tests {
         let graph = RuntimeGraph::prepare(
             RuntimeGeneration::new(11),
             vec![ProcessingStage::Compressor {
-                left: Box::new(std::sync::Mutex::new(processor)),
+                left: Box::new(RealtimeDsp::new(processor)),
                 right: None,
             }],
         );
@@ -6355,7 +6481,7 @@ mod tests {
         let graph = RuntimeGraph::prepare(
             RuntimeGeneration::new(12),
             vec![ProcessingStage::Gate {
-                left: Box::new(std::sync::Mutex::new(gate)),
+                left: Box::new(RealtimeDsp::new(gate)),
                 right: None,
             }],
         );
@@ -6370,6 +6496,19 @@ mod tests {
         graph.process(&mut block);
         let loud = graph.processor_telemetry(0).unwrap();
         assert!(loud.gate_open[0]);
+    }
+
+    #[test]
+    fn realtime_dsp_ownership_is_nonblocking_under_contention() {
+        let cell = RealtimeDsp::new(0_u32);
+        let nested_attempt = cell
+            .try_with(|state| {
+                *state = 1;
+                cell.try_with(|_| ()).is_none()
+            })
+            .expect("outer realtime ownership should succeed");
+        assert!(nested_attempt);
+        assert_eq!(cell.try_with(|state| *state), Some(1));
     }
 
     #[test]
@@ -6390,7 +6529,7 @@ mod tests {
         let graph = RuntimeGraph::prepare(
             RuntimeGeneration::new(14),
             vec![ProcessingStage::Compressor {
-                left: Box::new(std::sync::Mutex::new(processor)),
+                left: Box::new(RealtimeDsp::new(processor)),
                 right: None,
             }],
         );
@@ -6405,7 +6544,7 @@ mod tests {
     #[test]
     fn prepared_graphic_eq_processes_planar_audio_and_stays_finite() {
         let stage = ProcessingStage::GraphicEq {
-            left: Box::new(std::sync::Mutex::new(
+            left: Box::new(RealtimeDsp::new(
                 audiorouter_dsp::GraphicEq::new(
                     [6.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                     48_000.0,
@@ -6737,7 +6876,7 @@ mod tests {
     #[test]
     fn prepared_pitch_stage_requires_the_declared_graph_quantum() {
         let stage = ProcessingStage::Pitch {
-            left: Box::new(std::sync::Mutex::new(
+            left: Box::new(RealtimeDsp::new(
                 audiorouter_dsp::StreamingPitchShifter::new(audiorouter_dsp::PitchShiftParams {
                     semitones: 7.0,
                     cents: 0.0,

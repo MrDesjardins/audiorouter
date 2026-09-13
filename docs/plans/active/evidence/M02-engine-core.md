@@ -1,5 +1,21 @@
 # M02 realtime engine core groundwork
 
+## 2026-09-12 - Non-blocking ownership for stateful DSP
+
+`RuntimeGraph` now protects each prepared stateful built-in processor with an
+atomic non-blocking ownership cell instead of a `Mutex`. The audio processing
+path performs one ownership attempt and clears the affected block when the
+processor is already owned; it never waits on a control-plane lock. Telemetry
+and reset use the same bounded protocol, so a concurrent control operation
+cannot stall the callback. A regression proves nested ownership is rejected
+without waiting and that ownership is released correctly afterward.
+
+Verification: `cargo test -p audiorouter-engine --locked -- --test-threads=1`
+passed 107 tests; `cargo test --workspace --locked -- --test-threads=1`, strict
+workspace Clippy with `-D warnings`, `cargo fmt --all -- --check`, and
+`git diff --check` passed. This evidence is portable and does not qualify a
+Windows endpoint, driver, plugin, or machine audio configuration.
+
 ## 2026-09-08 - Linear compiler fail-closed topology guard
 
 `compile_session` now rejects an enabled node outside the participating
