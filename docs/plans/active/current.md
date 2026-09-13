@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Closed the remaining virtual-route retirement leak on 2026-09-12: runtime
+crash recovery and successful session deletion now deactivate all bridges
+owned by the retired producer session. The control suite passed 127 tests,
+strict package Clippy, formatting, and diff checks passed. No endpoint,
+driver, or machine audio configuration was accessed.
+
 Bound virtual-route bridge ownership to native graph activation on 2026-09-12.
 When an enabled route is selected by an explicit `VirtualCaptureSink`, its
 bridge is activated for the exact runtime generation before graph publication;

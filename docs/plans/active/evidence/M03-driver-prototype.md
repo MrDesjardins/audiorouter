@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - route retirement cleanup
+
+Bridge teardown is now also enforced after successful session deletion and for
+every session identified as running during runtime-crash recovery. Durable
+deletion failures still leave the existing ownership state intact; cleanup
+occurs only after the in-memory session removal succeeds. The control suite
+passed 127 tests, including the deletion cleanup regression, with strict
+Clippy, formatting, and diff checks passing. No driver or endpoint was
+activated.
+
 ## 2026-09-12 - generation-owned virtual route activation
 
 Native graph activation now prepares the selected virtual-route bridges on the

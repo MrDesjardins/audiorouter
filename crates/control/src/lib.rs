@@ -5186,6 +5186,7 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        self.deactivate_virtual_route_bridges(id);
         // A stopped worker is part of the deleted session's transient
         // ownership, not durable session state. Retain it through the
         // persistence operation so a failed delete leaves the owner intact;
@@ -5508,6 +5509,9 @@ impl ControlPlane {
             if runtime.state() == RuntimeState::Running {
                 runtime.stop();
             }
+        }
+        for session_id in &crashed_session_ids {
+            self.deactivate_virtual_route_bridges(session_id);
         }
         if decision.mode == RecoveryMode::RestoreEligible {
             for session_id in &decision.session_ids {
@@ -14322,7 +14326,11 @@ mod tests {
         assert!(!bridge.is_active());
         assert_eq!(bridge.generation(), 7);
 
-        plane.deactivate_virtual_route_bridges(&producer);
+        plane
+            .prepare_virtual_route_bridges(&producer, 8, true)
+            .unwrap();
+        assert!(bridge.is_active());
+        plane.delete_session(&producer).unwrap();
         assert!(!bridge.is_active());
     }
 
