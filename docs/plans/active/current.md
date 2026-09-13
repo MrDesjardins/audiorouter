@@ -2,6 +2,18 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `08c1ab74` on 2026-09-13. VS/WDK discovery, native compile,
+  AudioRouter driver compile/catalog signability, read-only 31-endpoint
+  inventory, disposable SysVAD package/API validation, M04 (32 DSP and 40
+  recording tests), M05 (153 UI tests/typecheck/production build), M06 VST3
+  and VST2 workers, M07 (133 control tests plus MCP), unsigned M08 artifacts,
+  159 traceability mappings, and documentation validation (52 Markdown files,
+  180 local links) passed. Fifteen run-owned temporary children were removed.
+  No driver installation/loading, signing-mode change, plugin/startup
+  registration, live stream, endpoint default, or persistent audio action
+  occurred.
+
 - Qualify the existing VB-Cable route against an ordinary physical output on
   2026-09-13. Read-only inventory found an active `Speakers (Focusrite USB
   Audio)` render endpoint at 48 kHz/stereo, but the bounded native lifecycle
