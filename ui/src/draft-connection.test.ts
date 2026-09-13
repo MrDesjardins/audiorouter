@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendEqPresetNode, appendLibraryNode, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
+import { appendDraftConnection, appendEqPresetNode, appendLibraryNode, appendVoiceChainPreset, insertDraftMixer, insertDraftProcessor, removeDraftConnection, removeSinglePathDraftMixer, setDraftConnectionEnabled } from "./draft";
+import { templateSession } from "./templates";
 import { demoSession } from "./fixtures";
 
 describe("appendDraftConnection", () => {
@@ -103,6 +104,18 @@ describe("appendDraftConnection", () => {
     });
     expect(hum.edges).toEqual(demoSession.edges);
     expect(hum.revision).toBe(demoSession.revision);
+  });
+
+  it("inserts the voice chain into one path but leaves a disconnected draft unwired", () => {
+    const connected = appendVoiceChainPreset(templateSession("gaming-discord"), "voiceGateAndCompression");
+    expect(connected.nodes.map((node) => node.kind)).toEqual(["physicalInput", "gain", "physicalOutput", "gate", "compressor", "limiter"]);
+    expect(connected.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual(expect.arrayContaining([
+      ["mic", "gate-1"], ["gate-1", "compressor-1"], ["compressor-1", "limiter-1"], ["limiter-1", "voice"], ["voice", "headphones"],
+    ]));
+    expect(connected.edges).toHaveLength(5);
+    const unwired = appendVoiceChainPreset(demoSession, "voiceNeutral");
+    expect(unwired.nodes.at(-1)).toMatchObject({ kind: "limiter", name: "Limiter 1" });
+    expect(unwired.edges).toEqual([]);
   });
 
   it("refuses to remove a mixer with ambiguous topology", () => {

@@ -13,6 +13,7 @@ export const GAIN_MAX_DB = 24;
 export type LibraryNodeKind = Extract<NodeKind, "mixer" | "gain" | "mute" | "meter" | "parametricEq" | "compressor" | "gate" | "limiter" | "delay" | "graphicEq" | "pitch">;
 export type InsertableProcessorKind = Exclude<LibraryNodeKind, "mixer" | "meter">;
 export type EqPresetId = "voiceNeutral" | "hum50Hz" | "hum60Hz";
+export type VoiceChainPresetId = "voiceNeutral" | "voiceGateAndCompression";
 
 const parametricEqDefaults: Record<string, boolean | number | string> = {
   frequencyHz: 1000,
@@ -171,6 +172,32 @@ export function appendEqPresetNode(session: Session, presetId: EqPresetId): Sess
       }
       : candidate),
   };
+}
+
+/** Expands a voice preset without inventing a route when the draft is disconnected. */
+export function appendVoiceChainPreset(session: Session, presetId: VoiceChainPresetId): Session {
+  const kinds: InsertableProcessorKind[] = presetId === "voiceGateAndCompression"
+    ? ["gate", "compressor", "limiter"]
+    : ["limiter"];
+  let next = session;
+  let edgeId = next.edges.find((edge) => {
+    const destination = next.nodes.find((node) => node.id === edge.destinationNode);
+    return destination?.kind !== "mixer";
+  })?.id;
+  const destination = edgeId ? next.edges.find((edge) => edge.id === edgeId)?.destinationNode : undefined;
+  const destinationPort = edgeId ? next.edges.find((edge) => edge.id === edgeId)?.destinationPort : undefined;
+  for (const kind of kinds) {
+    if (!edgeId || !destination || !destinationPort) {
+      next = appendLibraryNode(next, kind);
+      continue;
+    }
+    next = insertDraftProcessor(next, edgeId, kind);
+    const processor = next.nodes.at(-1);
+    edgeId = processor
+      ? next.edges.find((edge) => edge.sourceNode === processor.id && edge.destinationNode === destination && edge.destinationPort === destinationPort)?.id
+      : undefined;
+  }
+  return next;
 }
 
 /** Adds a topology edge to a local draft; backend validation still gates commit. */

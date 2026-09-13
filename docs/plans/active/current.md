@@ -19,6 +19,15 @@ Updated: 2026-09-13.
   137 tests with TypeScript typecheck passing. No preset action commits,
   starts audio, or changes machine configuration.
 
+- Added model-side voice-chain preset expansion on 2026-09-13. The
+  voiceNeutral preset expands to a Limiter and voiceGateAndCompression expands
+  to Gate → Compressor → Limiter; a compatible existing path is split while
+  preserving its channel matrix, and a disconnected draft receives unconnected
+  ordinary nodes instead of an invented route. UI tests remain at the
+  informational voice-chain boundary for now; the next slice is the explicit
+  UI action wiring. Model regressions, control/DSP tests, UI (138), and
+  typecheck pass. No preset operation commits or starts audio.
+
 - Requalified the full guarded M00-M08 acceptance chain at pushed head
   `061b49fc` on 2026-09-13 after the direct processor-insertion delivery.
   Elevated Windows execution passed toolchain/native compile, project-driver
