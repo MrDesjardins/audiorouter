@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete non-live `tests/acceptance/safe-all.ps1` chain on
+  2026-09-13 after the VB-Cable delivery reprioritization. WDK driver
+  compile/catalog signability, 31-endpoint read-only inventory, disposable
+  SysVAD, M01/M04, M05 with 154 UI tests and production builds, M06 VST3 and
+  VST2 workers, M07, unsigned M08 artifacts, 159 traceability mappings, and
+  documentation validation (52 Markdown files, 180 local links) passed.
+  Fifteen run-owned temporary children were removed. No driver installation
+  or loading, signing-mode change, plugin/startup registration, endpoint
+  default, or persistent audio action occurred.
+
 - Requalified the first-priority existing VB-Cable delivery on 2026-09-13 with
   the authorized `m02-control-native-live.ps1 -AllowLiveAudio` route smoke.
   The exact cable pair carried 24,480 captured frames through 191 processed
