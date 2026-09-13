@@ -17,6 +17,21 @@ legacy VST2 processing evidence for PLUG-07; it does not establish vendor
 redistribution rights, native editor ownership, arbitrary-plugin compatibility,
 or production release qualification.
 
+## Native VST3 parameter discovery confirmation (2026-09-12)
+
+The native VST3 worker's `DescribeParameters` path queries the verified
+component's edit controller and returns a bounded normalized descriptor
+catalog. It rejects more than 256 descriptors, duplicate parameter IDs,
+non-finite or out-of-range defaults, and titles beyond the worker contract.
+The native AGain worker acceptance verified a non-empty catalog with unique
+IDs and finite defaults in `[0, 1]`; the Rust protocol validation remains the
+shared second boundary.
+
+This closes the native parameter-discovery slice of PLUG-04. Native editor
+ownership still requires an authenticated interactive shell, and arbitrary
+third-party compatibility, rights, and production release qualification remain
+open. No audio endpoint or machine configuration was accessed.
+
 ## Runtime multi-bus quantum-shape hardening (2026-09-09)
 
 `RuntimeBusGeneration::process` now validates that every present input bus and

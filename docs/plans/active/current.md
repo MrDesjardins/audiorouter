@@ -2,6 +2,14 @@
 
 Updated: 2026-09-12.
 
+Confirmed the native VST3 parameter-discovery slice on 2026-09-12. The
+repository worker answers `DescribeParameters` from the verified VST3 edit
+controller, enforces the 256-unique-ID/finite-normalized-range/128-byte-title
+limits, and the native worker acceptance verifies non-empty descriptors from
+the AGain fixture. Generic parameter control is therefore available without
+a native editor; editor HWND ownership and arbitrary third-party qualification
+remain explicit gates. No audio endpoint or machine configuration is used.
+
 Fresh post-reboot native adapter qualification after `ce5c3fcc` passed on
 2026-09-12. The bounded system-selected adapter smoke processed 51 capture
 packets/24,480 frames through 191 graph blocks at 48 kHz with 24,448 scheduler
