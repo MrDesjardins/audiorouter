@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Extended the guarded native VB-Cable graph on 2026-09-13 to the complete
+  in-house voice chain: EQ → Gate → Compressor → Limiter. Exact endpoint
+  matching, stopped preparation, native start, 500 ms bounded pumping, and
+  stop passed with 23,520 captured frames, 183 processed quanta, and 23,424
+  rendered frames. The wrapper restored its environment and temporary state;
+  no persistent audio configuration changed. This is native control-owned
+  graph-delivery evidence, not acoustic, production callback-timing,
+  managed-driver, signing, or physical-latency qualification.
+  Evidence: `docs/plans/active/evidence/M02-audio-engine.md`.
+
 - Extended the guarded native VB-Cable graph evidence on 2026-09-13 with a
   real one-channel built-in `Live EQ` (1 kHz peaking band, Q 1, -6 dB) before
   `Live Gate`. Exact endpoint matching, stopped preparation, native start,

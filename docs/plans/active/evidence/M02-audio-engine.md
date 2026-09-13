@@ -1,5 +1,22 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - guarded lifecycle with the built-in voice chain
+
+The ignored Windows control test was extended to the full one-channel
+processor chain `Live EQ` → `Live Gate` → `Live Compressor` → `Live Limiter`.
+The exact active CABLE Output capture and CABLE Input render endpoints were
+prepared stopped, started through the control plane, pumped for 500 ms, and
+stopped cleanly. The wrapper reported 23,520 captured frames, 183 processed
+quanta, and 23,424 rendered frames. Its environment and temporary worker state
+were restored/removed; no persistent audio configuration changed.
+
+The chain uses bounded parameters from the authoritative processor catalog:
+EQ 1 kHz peaking/Q1/-6 dB, Gate -45 dB/60 dB/4:1, Compressor -18 dB/3:1,
+and Limiter -1 dBFS/5 ms lookahead. This proves native control-owned graph
+delivery for the in-house voice processors, not acoustic response measurement,
+production callback timing, managed-driver ownership, signing, or physical
+latency qualification.
+
 ## 2026-09-13 - guarded lifecycle with built-in EQ and Gate
 
 The ignored Windows control test was extended to use a disposable one-channel

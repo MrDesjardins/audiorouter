@@ -10285,6 +10285,69 @@ mod tests {
                 ],
             },
         );
+        owned.nodes.insert(
+            3,
+            Node {
+                id: EntityId::new("compressor"),
+                kind: NodeKind::Compressor,
+                type_version: 1,
+                name: "Live Compressor".into(),
+                enabled: true,
+                bypass: false,
+                parameters: [
+                    ("thresholdDb".into(), json!(-18.0)),
+                    ("ratio".into(), json!(3.0)),
+                    ("attackMs".into(), json!(10.0)),
+                    ("releaseMs".into(), json!(150.0)),
+                    ("kneeDb".into(), json!(6.0)),
+                    ("makeupDb".into(), json!(0.0)),
+                ]
+                .into_iter()
+                .collect(),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 1,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    },
+                ],
+            },
+        );
+        owned.nodes.insert(
+            4,
+            Node {
+                id: EntityId::new("limiter"),
+                kind: NodeKind::Limiter,
+                type_version: 1,
+                name: "Live Limiter".into(),
+                enabled: true,
+                bypass: false,
+                parameters: [
+                    ("ceilingDb".into(), json!(-1.0)),
+                    ("lookaheadMs".into(), json!(5.0)),
+                    ("releaseMs".into(), json!(100.0)),
+                ]
+                .into_iter()
+                .collect(),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 1,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    },
+                ],
+            },
+        );
         owned.edges = vec![
             Edge {
                 id: EntityId::new("edge-in-eq"),
@@ -10305,8 +10368,26 @@ mod tests {
                 enabled: true,
             },
             Edge {
-                id: EntityId::new("edge-gate-out"),
+                id: EntityId::new("edge-gate-compressor"),
                 source_node: EntityId::new("gate"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("compressor"),
+                destination_port: "in".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("edge-compressor-limiter"),
+                source_node: EntityId::new("compressor"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("limiter"),
+                destination_port: "in".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("edge-limiter-out"),
+                source_node: EntityId::new("limiter"),
                 source_port: "out".into(),
                 destination_node: EntityId::new("out"),
                 destination_port: "main".into(),
