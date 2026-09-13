@@ -12,6 +12,16 @@ Updated: 2026-09-13.
   tests pass. This does not implement Windows sign-in registration, and no OS
   startup or audio configuration was changed.
 
+- Requalified the full locked workspace after the startup-plan retry-ordering
+  correction on 2026-09-13. `cargo test --workspace --locked
+  -- --test-threads=1` passed across CLI (32), MCP (3), control (128),
+  domain (60), DSP (32), engine (107), plugin-host (67), worker-process (13),
+  protocol (8), recording (40), storage (83), transport (19),
+  Windows-audio (70), and all doc-tests. Strict control Clippy, formatting,
+  and diff checks also passed; no endpoint, driver, plugin registration,
+  startup registration, or persistent machine-audio configuration was
+  changed.
+
 Requalified the non-installing AudioRouter x64 WDK/source-contract build after
 resuming the goal on 2026-09-13. Visual Studio/WDK built the driver and
 package, signability reported zero errors and warnings, and catalog generation
