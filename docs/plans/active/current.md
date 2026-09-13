@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Made the native bridge section-size contract explicit on 2026-09-13.
+`NativeBridgeSectionHandle::for_file` now rejects a regular file smaller than
+the requested mapping before `CreateFileMappingW`; a focused undersized-file
+regression was added. Windows-audio tests (70), formatting, and diff checks
+passed. No endpoint, driver, or persistent machine-audio configuration was
+accessed.
+
 Closed the bridge mapping check-to-open reparse race on 2026-09-13. In
 addition to rejecting unsafe leaves during metadata inspection,
 `NativeBridgeSectionHandle::for_file` now opens with

@@ -173,6 +173,12 @@ impl NativeBridgeSectionHandle {
                 "mapping path must be a regular non-reparse file",
             ));
         }
+        if metadata.len() < u64::from(mapping_bytes) {
+            return Err(windows::core::Error::new(
+                windows::core::HRESULT(0x8007007au32 as i32),
+                "mapping file is smaller than the requested section",
+            ));
+        }
         let path = path_ref.to_string_lossy();
         let mut wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
         let file = unsafe {
@@ -6740,6 +6746,23 @@ mod tests {
         let result = NativeBridgeSectionHandle::for_file(&path, 4096);
         assert!(result.is_err());
         std::fs::remove_dir(path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_bridge_section_handle_rejects_an_undersized_file_before_mapping() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-section-small-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&path, [0_u8; 1]).unwrap();
+        let result = NativeBridgeSectionHandle::for_file(&path, 4096);
+        assert!(result.is_err());
+        std::fs::remove_file(path).unwrap();
     }
 
     #[cfg(windows)]
