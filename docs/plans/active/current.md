@@ -2,11 +2,11 @@
 
 Updated: 2026-09-13.
 
-- Wired supported scan results into the visual editor on 2026-09-13. The UI
-  now offers `Add stopped placeholder` for verified x64 VST2/VST3 entries and
-  adds the fingerprinted node to the real draft graph through the existing
-  plan/commit path. Placeholders are disabled by default and clearly remain
-  unavailable until an isolated worker is bound. UI typecheck and 155 tests
+- Wired supported scan results into the visual editor on 2026-09-13. Selecting
+  a verified x64 VST2/VST3 result adds its fingerprinted node to the real draft
+  graph through the existing plan/commit path. Placeholders are disabled by
+  default and clearly remain unavailable until an isolated worker is bound;
+  unsupported/error entries remain inspection-only. UI typecheck and 155 tests
   passed; no plugin was loaded and no audio or machine configuration changed.
 
 - Added the first graph-facing plugin contract slice on 2026-09-13. Domain
