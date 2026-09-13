@@ -1,5 +1,14 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## Event-driven shared-mode requalification
+
+The bounded post-reboot `m00-native-event-live.ps1` acceptance passed against
+the explicitly selected existing CABLE Input/Output endpoints. The event-
+driven shared-mode probe captured 24,480 frames and rendered 28,800 silent
+frames during the 500 ms run. It verified unchanged media identity/state after
+cleanup; defaults, volume, mute, privacy, drivers, signing, and startup
+configuration were unchanged.
+
 Administrator-authorized live probes were rerun after reboot against existing
 Windows endpoints only. The shared WASAPI lifecycle probe exercised 13 capture
 and 21 render endpoints for 100 ms; one occupied render endpoint was reported

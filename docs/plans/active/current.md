@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Fresh post-reboot event-driven native WASAPI qualification passed on
+2026-09-12 using the existing CABLE endpoints: 24,480 capture frames and
+28,800 silent render frames over 500 ms. Before/after media identity and state
+matched; defaults, volume, mute, privacy, drivers, signing, and startup
+configuration were unchanged.
+
 Requalified the full guarded M00-M08 acceptance chain on 2026-09-12 after the
 latest UI, shell, driver-boundary, and route-lifecycle work. Toolchain/native
 compile, AudioRouter WDK build and signability/catalog, 31-endpoint inventory,
