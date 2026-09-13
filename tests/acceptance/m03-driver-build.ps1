@@ -59,8 +59,12 @@ foreach ($required in @(
         'IRP_MJ_CLEANUP',
         'IRP_MJ_CLOSE',
         'DriverObject->MajorFunction[IRP_MJ_CLEANUP] = BridgeControlCreateClose',
-        'OwnerFileObject == FileObject',
-        'RetireBridgeResources(lease, mappedView, sectionObject')) {
+    'OwnerFileObject == FileObject',
+    'lease->Active || lease->Retiring',
+    'lease->OwnerFileObject = stack->FileObject',
+    'lease->RundownStarted == oldRundownStarted',
+    'Do not resurrect a lease for a closed handle',
+    'RetireBridgeResources(lease, mappedView, sectionObject')) {
     if (-not $source.Contains($required)) {
         throw "driver close cleanup is missing required ownership invariant: $required"
     }

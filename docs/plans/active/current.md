@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Closed an M03 bridge replacement/cleanup race on 2026-09-13. An in-flight
+  replacement now reserves its incoming file owner while the prior callback
+  view drains; cleanup can cancel that reservation, and the replacement
+  rechecks ownership/rundown state before publishing. The non-installing x64
+  WDK build and source-contract acceptance passed with zero signability
+  errors/warnings and catalog generation. No driver was installed or loaded.
+
 - Closed an M03 unload teardown race on 2026-09-13. Driver unload now clears
   negotiated lease identity only after mapped-view detachment and rundown
   reader drain, matching the close/expiry ordering. The administrator-

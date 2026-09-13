@@ -211,7 +211,8 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
         KIRQL oldIrql;
 
         KeAcquireSpinLock(&lease->Lock, &oldIrql);
-        if (lease->Active && lease->OwnerFileObject == FileObject) {
+        if ((lease->Active || lease->Retiring) &&
+            lease->OwnerFileObject == FileObject) {
             sectionObject = lease->SectionObject;
             mappedView = InterlockedExchangePointer(&lease->MappedView, NULL);
             rundownStarted = mappedView != NULL;
@@ -492,6 +493,10 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                     lease->OwnerFileObject = NULL;
                     if (oldRundownStarted) {
                         lease->Retiring = TRUE;
+                        // Reserve the replacement for this file object while
+                        // callbacks drain. Cleanup must be able to cancel
+                        // this in-flight OPEN before it publishes a mapping.
+                        lease->OwnerFileObject = stack->FileObject;
                         publishAfterRetire = TRUE;
                     } else {
                         if (priorRundownStarted) {
@@ -564,22 +569,30 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
                 oldMappedView = NULL;
                 oldSectionObject = NULL;
                 KeAcquireSpinLock(&lease->Lock, &oldIrql);
-                ExReInitializeRundownProtection(&lease->Rundown);
-                lease->RundownStarted = FALSE;
-                lease->Request = *request;
-                lease->OwnerFileObject = stack->FileObject;
-                lease->LastHeartbeat100ns = now;
-                lease->SectionObject = sectionObject;
-                lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
-                InterlockedExchange64(&lease->NextSequence, 0);
-                KeMemoryBarrier();
-                lease->MappedView = mappedView;
-                lease->Active = TRUE;
-                lease->Retiring = FALSE;
+                if (lease->Retiring &&
+                    lease->OwnerFileObject == stack->FileObject &&
+                    lease->RundownStarted == oldRundownStarted) {
+                    ExReInitializeRundownProtection(&lease->Rundown);
+                    lease->RundownStarted = FALSE;
+                    lease->Request = *request;
+                    lease->OwnerFileObject = stack->FileObject;
+                    lease->LastHeartbeat100ns = now;
+                    lease->SectionObject = sectionObject;
+                    lease->MappedBytes = static_cast<ULONG>(request->MappingBytes);
+                    InterlockedExchange64(&lease->NextSequence, 0);
+                    KeMemoryBarrier();
+                    lease->MappedView = mappedView;
+                    lease->Active = TRUE;
+                    lease->Retiring = FALSE;
+                    sectionObject = NULL;
+                    mappedView = NULL;
+                    status = STATUS_SUCCESS;
+                } else {
+                    // Cleanup or a competing owner won while the old view
+                    // drained. Do not resurrect a lease for a closed handle.
+                    status = STATUS_INVALID_DEVICE_STATE;
+                }
                 KeReleaseSpinLock(&lease->Lock, oldIrql);
-                sectionObject = NULL;
-                mappedView = NULL;
-                status = STATUS_SUCCESS;
             } else if (oldMappedView != NULL || oldSectionObject != NULL) {
                 RetireBridgeResources(lease, oldMappedView, oldSectionObject,
                                       oldRundownStarted);

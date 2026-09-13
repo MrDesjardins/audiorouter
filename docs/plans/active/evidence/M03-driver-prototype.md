@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - replacement cleanup race
+
+Bridge replacement now reserves the incoming owner while the prior mapped
+view drains. File cleanup recognizes both active and retiring leases and can
+cancel that reservation; the replacement path rechecks owner and rundown state
+before publishing, otherwise it releases the newly prepared mapping without
+resurrecting a closed handle. The administrator-authorized non-installing x64
+WDK build and source-contract acceptance passed with zero signability
+errors/warnings and catalog generation. No driver was installed or loaded.
+
 ## 2026-09-13 - unload rundown ordering
 
 Driver unload now clears each lease's negotiated request only after detaching
