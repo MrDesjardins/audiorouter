@@ -124,7 +124,8 @@ was accessed. Evidence: [M07 automation evidence](evidence/M07-automation-recove
 
 The MCP regression also executes both tools through the dispatcher, proving a
 read-only grant can list the revisioned route document and cannot replace it;
-the denial remains structured as `permissionDenied`.
+the denial remains structured as `permissionDenied`. Its replacement schema
+also mirrors the backend route shape and bounded 128-byte identifiers.
 
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,

@@ -13,6 +13,8 @@ configuration was accessed.
 The same regression invokes both tools through the MCP dispatcher: a
 read-only grant receives the empty revisioned route document, while the same
 grant receives a structured `permissionDenied` response for replacement.
+The replacement tool schema mirrors the backend route shape and its bounded
+128-byte identifiers, so clients receive the same contract before dispatch.
 
 ## 2026-09-08 - Graph-plan restart timestamp hardening
 
