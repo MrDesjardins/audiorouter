@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Extended the guarded native VB-Cable graph evidence on 2026-09-13 with a
+  real one-channel built-in `Live EQ` (1 kHz peaking band, Q 1, -6 dB) before
+  `Live Gate`. Exact endpoint matching, stopped preparation, native start,
+  500 ms bounded pumping, and stop passed with 24,000 captured frames, 187
+  processed quanta, and 23,936 rendered frames. The live wrapper restored its
+  environment and temporary state; no persistent audio configuration changed.
+  This proves EQ and Gate graph delivery, not acoustic frequency-response,
+  production callback timing, managed-driver, signing, or physical-latency
+  qualification. Evidence: `docs/plans/active/evidence/M02-audio-engine.md`.
+
 - Added the UI-09 session-transfer slice on 2026-09-13. The editor now
   exports the selected session configuration as a local `.audiorouter.json`
   download and validates imported JSON through `sessions.importPlan`; a

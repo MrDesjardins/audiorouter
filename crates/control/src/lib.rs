@@ -10222,6 +10222,38 @@ mod tests {
         owned.nodes.insert(
             1,
             Node {
+                id: EntityId::new("eq"),
+                kind: NodeKind::ParametricEq,
+                type_version: 1,
+                name: "Live EQ".into(),
+                enabled: true,
+                bypass: false,
+                parameters: [
+                    ("band0Enabled".into(), json!(true)),
+                    ("band0Type".into(), json!("peaking")),
+                    ("band0FrequencyHz".into(), json!(1000.0)),
+                    ("band0Q".into(), json!(1.0)),
+                    ("band0GainDb".into(), json!(-6.0)),
+                ]
+                .into_iter()
+                .collect(),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 1,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    },
+                ],
+            },
+        );
+        owned.nodes.insert(
+            2,
+            Node {
                 id: EntityId::new("gate"),
                 kind: NodeKind::Gate,
                 type_version: 1,
@@ -10255,9 +10287,18 @@ mod tests {
         );
         owned.edges = vec![
             Edge {
-                id: EntityId::new("edge-in-gate"),
+                id: EntityId::new("edge-in-eq"),
                 source_node: EntityId::new("in"),
                 source_port: "main".into(),
+                destination_node: EntityId::new("eq"),
+                destination_port: "in".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("edge-eq-gate"),
+                source_node: EntityId::new("eq"),
+                source_port: "out".into(),
                 destination_node: EntityId::new("gate"),
                 destination_port: "in".into(),
                 matrix: vec![1.0],

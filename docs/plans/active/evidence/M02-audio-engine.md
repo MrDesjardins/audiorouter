@@ -1,5 +1,21 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - guarded lifecycle with built-in EQ and Gate
+
+The ignored Windows control test was extended to use a disposable one-channel
+`Live EQ` (`band0Enabled=true`, peaking at 1,000 Hz, Q 1, gain -6 dB) before
+the existing `Live Gate`. The exact active CABLE Output capture and CABLE
+Input render endpoints were prepared stopped, the graph was started and
+pumped for 500 ms, and then stopped through the same `ControlPlane`. The
+wrapper reported 24,000 captured frames, 187 processed quanta, and 23,936
+rendered frames. Environment variables and the temporary worker state were
+restored/removed; no persistent audio configuration changed.
+
+This proves that both the built-in EQ and Gate stages can be compiled into the
+native control-owned graph delivery path. It does not prove calibrated acoustic
+frequency-response measurement, managed-driver ownership, PortCls integration,
+signing, or physical latency.
+
 ## 2026-09-13 - guarded control-owned native lifecycle
 
 The ignored Windows control test
