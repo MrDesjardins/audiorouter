@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added the disposable VB-Cable desktop launcher on 2026-09-13. The launcher
+  performs an exact read-only active-endpoint match, refuses ambiguity, uses a
+  temporary database with an explicit operator/device-administration grant,
+  starts the real Tauri shell, and removes its database while restoring the
+  caller's process environment after exit. It does not change Windows defaults,
+  endpoint volume/mute, driver state, startup registration, or persistent
+  AudioRouter state. This closes the repeatable human-test setup gap; attended
+  visual interaction and audible route observation remain manual gates.
+
 - Removed implicit endpoint selection on 2026-09-13. A fresh session now keeps
   both native endpoint controls blank until the user deliberately selects
   capture and render IDs; exact saved IDs still restore only when active, and

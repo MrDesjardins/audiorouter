@@ -34,6 +34,22 @@ This is compile-only evidence; it does not install a driver, register startup,
 open an audio stream, or alter machine audio configuration. The release flow
 rebuilds the UI automatically before its optimized shell build.
 
+For a human-testable VB-Cable desktop run, use the disposable launcher after
+building the CLI and shell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop.ps1
+```
+
+Add `-Build` to build the UI and shell first. The launcher performs a read-only
+inventory, refuses ambiguous or missing VB-Cable endpoints, creates a database
+under `%TEMP%`, and grants device administration only to that temporary
+process. In the UI, select the exact capture/render endpoints, prepare them,
+plan/commit the graph, and start the session. Use the tray **Quit and stop
+audio** action when finished; the launcher removes its database and restores
+the caller's environment. It does not change Windows defaults, endpoint
+volume/mute, driver state, or startup registration.
+
 ## 2. Run the safe acceptance checks
 
 From the repository root:
