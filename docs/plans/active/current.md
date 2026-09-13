@@ -10,6 +10,14 @@ leaf; `audiorouter-windows-audio` now passes 69 tests, with formatting and
 diff checks clean. No endpoint, driver, or persistent machine configuration
 was accessed.
 
+Revalidated the mapping-opener change on 2026-09-13: the full locked workspace
+suite passed, including CLI (32), MCP (3), control (127), domain (60), DSP
+(32), engine (107), storage/recording/transport, Windows-audio (69), and
+plugin-worker suites. The non-installing M03 WDK/source-contract acceptance
+also passed with zero signability errors or warnings and catalog generation.
+No driver was installed or loaded and no persistent machine-audio
+configuration changed.
+
 Requalified the complete guarded M00-M08 acceptance chain at pushed head
 `7b096ae5` on 2026-09-13 after the process-loopback activation lifetime
 hardening. VS/MSVC/SDK/WDK discovery, the AudioRouter x64 WDK build and
