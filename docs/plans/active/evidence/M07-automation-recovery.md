@@ -23,6 +23,14 @@ not started automatically, and the current user remains observer-only on
 first launch. Shell check/tests (7), formatting, and diff checks passed; no
 audio endpoint or machine configuration was accessed.
 
+## 2026-09-13 - shell editing authorization boundary
+
+The first-launch shell enrollment now uses the built-in operator role, which
+allows graph and session control for the authenticated current Windows user.
+It does not grant `deviceAdministration`, so virtual-device provisioning and
+driver/endpoint changes remain explicit operations. The shell still does not
+start audio automatically. No endpoint or machine configuration was accessed.
+
 ## 2026-09-13 - Tauri shell asset and probe hardening
 
 The Tauri shell initialization probe now delegates through the loaded UI

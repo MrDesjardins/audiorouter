@@ -205,10 +205,13 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                     }
                     let mut plane = ControlPlane::with_storage("desktop-shell", storage);
                     if enrollment.is_none() {
+                        // The shell is the user's authenticated local editor:
+                        // grant graph/session control on first launch. Device
+                        // administration remains outside this built-in role.
                         plane
-                            .enroll_client(&sid, ClientRole::Observer)
+                            .enroll_client(&sid, ClientRole::Operator)
                             .map_err(|error| {
-                                format!("initial observer enrollment failed: {error:?}")
+                                format!("initial operator enrollment failed: {error:?}")
                             })?;
                     }
                     let session_id = EntityId::new(DESKTOP_SESSION_ID);

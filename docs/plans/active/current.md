@@ -22,6 +22,14 @@ Updated: 2026-09-13.
   pass; interactive WebView execution is still the only unverified part of
   this desktop slice.
 
+- Enabled the shell's first-launch editing path on 2026-09-13. The current
+  Windows user is now enrolled as the built-in operator for graph and session
+  control, allowing the visible editor to commit ordinary changes. Device
+  administration, virtual-driver provisioning, and endpoint activation remain
+  separately scoped and are not granted by this enrollment. Shell check/tests,
+  formatting, and release build pass; no endpoint or machine configuration was
+  changed.
+
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
   invoke API, and Vite emits relative assets for the Tauri app protocol. Shell
