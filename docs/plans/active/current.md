@@ -63,6 +63,13 @@ a running client from being orphaned behind a stopped session. Control tests
 (125), strict Clippy, formatting, and diff checks passed. No endpoint was
 opened by these checks; loaded-driver and physical-device gates remain open.
 
+Added the bounded render-source wake path on 2026-09-12: `NativeBridgeInputWorker`
+now drains a caller-selected number of quanta capped by the shared 64-step
+per-wake limit, matching the capture-sink worker's bounded packet path. It
+never waits for bridge data; empty, stale, busy, or torn slots retain the
+existing fresh-silence behavior. Windows-audio tests, strict Clippy,
+formatting, and diff checks pass; no driver or endpoint was activated.
+
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite
 database and explicitly approved temporary recording root. It verifies an

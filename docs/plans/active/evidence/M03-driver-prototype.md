@@ -1,5 +1,19 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - bounded render-source wake drain
+
+`NativeBridgeInputWorker::pump_available` now caps render-source work at the
+shared 64-quantum wake budget. Each iteration performs one nonblocking bridge
+read and scheduler step; no event wait, retry, allocation, or implicit
+endpoint recovery is introduced. The existing input-worker behavior remains
+fail-closed: empty, busy, torn, stale-generation, and repeated slots produce
+fresh silence rather than replaying a previous owner's payload.
+
+The Windows-audio suite, strict package Clippy, formatting, and diff checks
+passed. This remains a portable/adapter lifecycle seam: loaded PortCls-owned
+callback, production driver, and physical virtual-endpoint qualification are
+not claimed.
+
 ## 2026-09-12 - negotiated bridge shape guard
 
 The capture-sink publisher now rejects frame or channel counts that differ

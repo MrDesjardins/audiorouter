@@ -369,6 +369,27 @@ impl NativeBridgeInputWorker {
                 }
             })
     }
+
+    /// Consume a bounded number of render-source quanta for one endpoint
+    /// wake. The source is a single negotiated bridge slot, so each iteration
+    /// performs exactly one nonblocking read/process/submit step; this helper
+    /// only bounds scheduler work and never waits for a new bridge block.
+    pub fn pump_available(
+        &mut self,
+        max_quanta: u32,
+    ) -> Result<WasapiSchedulerPump, NativeBridgeInputWorkerError> {
+        if !self.running {
+            return Err(NativeBridgeInputWorkerError::Audio(
+                AudioError::ProcessingStateUnavailable,
+            ));
+        }
+        let mut total = WasapiSchedulerPump::default();
+        let budget = max_quanta.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        for _ in 0..budget {
+            total.accumulate(self.pump()?);
+        }
+        Ok(total)
+    }
 }
 
 #[cfg(windows)]
