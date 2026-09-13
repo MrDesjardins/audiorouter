@@ -1,5 +1,16 @@
 # Native adapter route requalification (2026-09-12)
 
+## Explicit CABLE adapter route
+
+The bounded post-reboot `m02-rust-adapter-route-live.ps1` acceptance passed
+against the explicitly selected existing CABLE Input/Output endpoints. The
+48 kHz route captured 24,000 frames, processed 187 graph blocks, scheduled
+and routed 23,936 frames, and reported zero deadline misses. Processing-time
+and deadline-lateness histograms were complete and internally consistent.
+The runner removed its temporary native probe outputs and verified unchanged
+media identity/state; it did not change defaults, volume, mute, privacy,
+drivers, signing, startup, or other persistent machine-audio configuration.
+
 ## Post-reboot system-selected adapter smoke
 
 The authorized bounded adapter smoke check passed for 500 ms on the existing

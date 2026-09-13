@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Fresh post-reboot explicit CABLE Rust adapter-route qualification passed on
+2026-09-12. At 48 kHz with 128-frame quanta it captured 24,000 frames,
+processed 187 graph blocks, and routed 23,936 frames with complete processing
+and deadline histograms, zero deadline misses, and no media-state change.
+Temporary probe outputs were removed; defaults, volume, mute, privacy, driver,
+signing, and startup configuration were unchanged.
+
 Requalified the full locked workspace after virtual-route lifecycle changes on
 2026-09-12. CLI/MCP, control (127), domain, DSP (32), engine (107), recording,
 storage, transport, Windows-audio (67), plugin-worker, and all doc-tests
