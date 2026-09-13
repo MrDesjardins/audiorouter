@@ -2,6 +2,18 @@
 
 Updated: 2026-09-13.
 
+- Qualify the existing VB-Cable route against an ordinary physical output on
+  2026-09-13. Read-only inventory found an active `Speakers (Focusrite USB
+  Audio)` render endpoint at 48 kHz/stereo, but the bounded native lifecycle
+  correctly rejected its render activation with
+  `AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`). This is the expected ownership
+  diagnostic and is distinct from `E_INVALIDARG`; Voicemeeter/other host
+  ownership remains an environmental blocker for audible physical-output
+  proof. The exact VB-Cable capture/render loopback was then requalified with
+  24,000 captured frames, 187 processed quanta, and 23,936 rendered frames,
+  with temporary state cleaned and process environment restored. No default,
+  volume, mute, driver, or persistent machine-audio setting changed.
+
 - Requalified the complete elevated `safe-all.ps1` chain at pushed head
   `fbba7134` on 2026-09-13. M00/M03 toolchain, native compile, read-only
   31-endpoint inventory, disposable SysVAD, M01/M04, M05 with 153 UI tests

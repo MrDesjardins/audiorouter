@@ -1,5 +1,24 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - physical render ownership diagnostic and VB-Cable fallback
+
+Read-only endpoint inventory identified the exact active pair used for this
+qualification: `CABLE Output (VB-Audio Virtual Cable)` capture and
+`Speakers (Focusrite USB Audio)` render, both 48 kHz/stereo. The authorized
+bounded command
+`tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio` failed during
+render activation with `AUDCLNT_E_DEVICE_IN_USE` (`0x8889000A`). The backend
+reported `deviceInUse` with retry guidance, preserving the ownership conflict
+as a distinct diagnostic rather than translating it to `E_INVALIDARG`.
+
+The exact existing VB-Cable capture/render loopback was immediately
+requalified afterward and passed: 24,000 captured frames, 187 processed
+quanta, and 23,936 rendered frames. The harness restored its process
+environment and temporary worker state. No Windows default, volume, mute,
+driver, or persistent audio configuration changed. The physical-output
+qualification remains open until the competing render stream is released or
+another exact active physical endpoint is deliberately selected.
+
 ## 2026-09-13 - repeat VB-Cable lifecycle run
 
 The authorized `m02-control-native-live.ps1 -AllowLiveAudio` run completed
