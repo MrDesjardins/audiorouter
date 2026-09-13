@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Closed a UI-03/UI-11 integration-boundary gap on 2026-09-13. The structured
+  graph list now accepts the same typed processor-insertion callback used by
+  the connected App instead of requiring the global event fallback; the
+  fallback remains for standalone compatibility. A regression verifies that
+  the list's Parametric EQ action reaches the callback with the selected edge
+  and processor kind. UI tests pass (143), TypeScript typecheck passes, and
+  diff checks pass. This remains a draft-only mutation until plan/commit.
+
 - Closed the UI-03/UI-11 structured-list parity gap on 2026-09-13. Graph-list
   connections now expose the same nine in-house processor insertion actions as
   the canvas, using the shared processor catalog and existing draft event

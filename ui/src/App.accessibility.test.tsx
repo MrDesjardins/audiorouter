@@ -359,13 +359,16 @@ describe("keyboard connection dialog", () => {
     const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
     const onRemove = vi.fn();
     const onToggle = vi.fn();
-    render(<BackendConnectionContext.Provider value={true}><GraphList session={connected} selectedNodeId="mic" onSelect={vi.fn()} onRemoveConnection={onRemove} onToggleConnection={onToggle} /></BackendConnectionContext.Provider>);
+    const onInsertProcessor = vi.fn();
+    render(<BackendConnectionContext.Provider value={true}><GraphList session={connected} selectedNodeId="mic" onSelect={vi.fn()} onRemoveConnection={onRemove} onToggleConnection={onToggle} onInsertProcessor={onInsertProcessor} /></BackendConnectionContext.Provider>);
 
     fireEvent.click(screen.getByRole("button", { name: "Insert mixer on Microphone to Voice gain" }));
     expect(onRemove).toHaveBeenCalledWith(insertMixerActionId("edge-1"));
     for (const label of ["Gain", "Mute", "Parametric EQ", "Graphic EQ", "Compressor", "Gate", "Limiter", "Delay", "Pitch"]) {
       expect(screen.getByRole("button", { name: `Insert ${label}` })).toBeTruthy();
     }
+    fireEvent.click(screen.getByRole("button", { name: "Insert Parametric EQ" }));
+    expect(onInsertProcessor).toHaveBeenCalledWith("edge-1", "parametricEq");
   });
 
   it("renders backend route provenance as an accessible path list", async () => {

@@ -4,11 +4,14 @@ import { BackendConnectionContext } from "./backendConnectionContext";
 import { insertMixerActionId, PROCESSOR_ACTIONS, removeMixerActionId } from "./DraftConnectionList";
 import { nodePortLabels, nodeStateLabel } from "./graphView";
 
-export function GraphList({ session, selectedNodeId, onSelect, onRemoveConnection, onToggleConnection }: { session: Session; selectedNodeId: string; onSelect: (id: string) => void; onRemoveConnection: (id: string) => void; onToggleConnection: (id: string, enabled: boolean) => void }) {
+export function GraphList({ session, selectedNodeId, onSelect, onRemoveConnection, onToggleConnection, onInsertProcessor }: { session: Session; selectedNodeId: string; onSelect: (id: string) => void; onRemoveConnection: (id: string) => void; onToggleConnection: (id: string, enabled: boolean) => void; onInsertProcessor?: (edgeId: string, kind: (typeof PROCESSOR_ACTIONS)[number]["kind"]) => void }) {
   const connected = useContext(BackendConnectionContext);
   const names = new Map(session.nodes.map((node) => [node.id, node.name]));
   const mixers = session.nodes.filter((node) => node.kind === "mixer");
-  const insertProcessor = (edgeId: string, kind: (typeof PROCESSOR_ACTIONS)[number]["kind"]) => globalThis.dispatchEvent(new CustomEvent("audiorouter:insert-processor", { detail: { edgeId, kind } }));
+  const insertProcessor = (edgeId: string, kind: (typeof PROCESSOR_ACTIONS)[number]["kind"]) => {
+    if (onInsertProcessor) onInsertProcessor(edgeId, kind);
+    else globalThis.dispatchEvent(new CustomEvent("audiorouter:insert-processor", { detail: { edgeId, kind } }));
+  };
   return <div className="graph-list" aria-label="Graph nodes and connections">
     <ol aria-label="Nodes">{session.nodes.map((node) => <li key={node.id}><button type="button" className={node.id === selectedNodeId ? "selected" : ""} aria-current={node.id === selectedNodeId ? "true" : undefined} onClick={() => onSelect(node.id)}>{node.name} <small>{node.kind}, {nodeStateLabel(node)}</small><span className="list-port-summary">{nodePortLabels(node).join(" · ")}</span></button></li>)}</ol>
     <h3>Connections</h3>
