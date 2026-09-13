@@ -52,6 +52,19 @@ Updated: 2026-09-13.
   WebView acceptance remains an explicit user-desktop gate; this is not
   evidence of audio activation.
 
+- Corrected a native delivery defect found during review on 2026-09-13:
+  frequent `nativeEndpoints.pump` scheduler ticks were incorrectly entering
+  the 20/sec user-mutation bucket and would eventually throttle a running
+  stream after the burst. Pump remains authenticated and generation-bound but
+  is now excluded from mutation throttling; the API reference documents this
+  distinction. No user mutation is performed by a pump tick.
+
+- Added a regression for the scheduler-rate-limit distinction on 2026-09-13:
+  `nativeEndpoints.pump` remains classified as an external operation for
+  authorization/discovery, but is proven excluded from the user mutation
+  bucket; ordinary graph mutations remain rate limited. Control tests and
+  strict Clippy pass.
+
 - New delivery gate: a guarded human run must be able to select the existing
   VB-Cable capture/render pair in the UI, commit a visible graph change, start
   and stop the session, and observe backend status/telemetry while preserving

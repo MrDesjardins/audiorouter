@@ -6371,7 +6371,11 @@ impl ControlPlane {
             }
             return response;
         }
-        if is_mutating_method(&request.method) {
+        // Native endpoint pumping is a scheduler tick, not a user mutation;
+        // applying the ordinary 20/sec mutation bucket would stop a running
+        // stream after its initial burst. It remains permission-gated and
+        // generation-bound, but is intentionally outside mutation throttling.
+        if rate_limit_method(&request.method) {
             if let Some(client_id) = client_id {
                 if let Err(retry_after_ms) = self.mutation_limiter.allow(client_id) {
                     let mut response = JsonRpcResponse::failure(id, -32000, "rate limited");
@@ -9350,6 +9354,10 @@ fn is_mutating_method(method: &str) -> bool {
         .iter()
         .find(|spec| spec.name == method)
         .is_some_and(|spec| spec.side_effect != audiorouter_domain::SideEffectClass::ReadOnly)
+}
+
+fn rate_limit_method(method: &str) -> bool {
+    is_mutating_method(method) && method != "nativeEndpoints.pump"
 }
 
 fn storage_error(error: StorageError) -> ControlError {
@@ -13195,6 +13203,13 @@ mod tests {
                 method.name
             );
         }
+    }
+
+    #[test]
+    fn native_pump_is_not_counted_as_a_user_mutation() {
+        assert!(!rate_limit_method("nativeEndpoints.pump"));
+        assert!(rate_limit_method("graph.commit"));
+        assert!(is_mutating_method("nativeEndpoints.pump"));
     }
 
     #[test]
