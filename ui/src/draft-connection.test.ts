@@ -90,6 +90,23 @@ describe("appendDraftConnection", () => {
     expect(inserted.revision).toBe(demoSession.revision);
   });
 
+  it("inserts every advertised in-house processor on a connected path", () => {
+    const kinds = ["gain", "mute", "parametricEq", "graphicEq", "compressor", "gate", "limiter", "delay", "pitch"] as const;
+    for (const kind of kinds) {
+      const connected = appendDraftConnection(demoSession, "mic", "out", "voice", "in");
+      const inserted = insertDraftProcessor(connected, "edge-1", kind);
+      const processor = inserted.nodes.find((node) => node.id === `${kind}-1`);
+      expect(processor?.ports).toEqual([
+        { name: "in", direction: "input", channels: 1 },
+        { name: "out", direction: "output", channels: 1 },
+      ]);
+      expect(inserted.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([
+        ["mic", processor?.id],
+        [processor?.id, "voice"],
+      ]);
+    }
+  });
+
   it("expands each EQ preset into an inspectable ordinary node", () => {
     const hum = appendEqPresetNode(demoSession, "hum50Hz");
     const humNode = hum.nodes.at(-1);

@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added data-driven UI-03 regression coverage on 2026-09-13 for all nine
+  advertised in-house processor insertions. Each processor is inserted on a
+  real connected draft path and the test verifies its one-channel ports plus
+  source→processor→destination rewiring. The fixture's pre-existing Gain node
+  is explicitly excluded by deterministic inserted IDs. UI tests pass (142),
+  TypeScript typecheck and diff checks pass; no audio or machine state changes.
+
 - Expanded UI-03 connected-path processor actions on 2026-09-13. The draft
   connection list now exposes all nine existing in-house processor kinds:
   Gain, Mute, Parametric EQ, Graphic EQ, Compressor, Gate, Limiter, Delay,
