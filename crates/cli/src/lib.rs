@@ -2170,6 +2170,7 @@ fn mcp_tools() -> Value {
         { "name": "cancel_operation", "description": "Request cancellation with an idempotency key; completed operations are never undone.", "inputSchema": { "type": "object", "properties": { "operationId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["operationId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_recordings", "description": "List persisted recording metadata without reading audio content; requires recording scope. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": ["string", "null"] }, "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
         { "name": "list_live_recorders", "description": "List live in-memory recorder states and frame boundaries; requires recording scope and does not inspect persisted files.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "create_recorder", "description": "Create an unarmed file recorder under the approved recording root; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "nodeId": { "type": ["string", "null"], "minLength": 1 }, "recorderId": { "type": "string", "minLength": 1 }, "format": { "enum": ["wavPcm16", "wavPcm24", "wavFloat32", "flac16", "flac24"] }, "sequence": { "type": "integer", "minimum": 0 }, "channels": { "type": "integer", "enum": [1, 2] }, "sampleRate": { "type": "integer", "enum": [44100, 48000] }, "dither": { "type": "boolean" }, "queueCapacity": { "type": "integer", "minimum": 1 }, "maximumChunksPerPass": { "type": "integer", "minimum": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "recorderId", "format", "sequence", "channels", "sampleRate", "queueCapacity", "maximumChunksPerPass", "idempotencyKey"], "additionalProperties": false } },
         { "name": "arm_recorder", "description": "Arm a session recorder at the control boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "start_recorder", "description": "Start a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
         { "name": "pause_recorder", "description": "Pause a recorder at an explicit frame boundary; requires recording scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "frame": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "frame", "idempotencyKey"], "additionalProperties": false } },
@@ -2246,6 +2247,7 @@ fn mcp_tool_call(
         "cancel_operation" => ("operations.cancel", Some(arguments)),
         "list_recordings" => ("recordings.list", Some(arguments)),
         "list_live_recorders" => ("recorders.list", Some(arguments)),
+        "create_recorder" => ("recorders.create", Some(arguments)),
         "arm_recorder" => ("recorders.arm", Some(arguments)),
         "start_recorder" => ("recorders.start", Some(arguments)),
         "pause_recorder" => ("recorders.pause", Some(arguments)),
@@ -3874,8 +3876,19 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 44);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 45);
         let tools = mcp_tools();
+        let create_recorder = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "create_recorder")
+            .unwrap();
+        assert!(create_recorder["inputSchema"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "queueCapacity"));
         let list_recordings = tools
             .as_array()
             .unwrap()

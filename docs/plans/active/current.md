@@ -8371,6 +8371,11 @@ live-driver evidence.
   dispatch, validates format/channel/sample-rate locally, and keeps approved
   root/file creation in the backend. CLI tests (31), strict Clippy, formatting,
   and diff checks passed.
+- Added focused MCP `create_recorder` parity on 2026-09-12. Its catalog exposes
+  the complete bounded recorder-create schema and forwards to the same
+  authorized backend method, including required queue/chunk limits. CLI unit
+  and MCP integration tests (31/3), strict Clippy, formatting, and diff checks
+  passed; no audio endpoint or recording file was opened.
 - Corrected `recorders.create` shared-contract drift on 2026-09-12: queue
   capacity and maximum chunks per pass are now required in TypeScript, matching
   the Rust discovery schema and parser. Contract drift/typecheck, UI typecheck,

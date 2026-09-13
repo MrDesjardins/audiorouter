@@ -1209,3 +1209,11 @@ open an audio endpoint, install/load a driver, register startup, or change
 persistent machine configuration. This closes the previously blocked shell
 transport acceptance; manual Narrator/scaling/usability acceptance and the
 native audio/driver gates remain separate.
+## 2026-09-12 — Focused recorder-create MCP tool
+
+The MCP catalog now exposes `create_recorder` with the complete bounded
+recorder-create schema, including required queue capacity and maximum chunks
+per pass. It forwards to the same authorized `recorders.create` backend method;
+the adapter owns no recording state. CLI unit/MCP integration tests (31/3),
+strict Clippy, formatting, and diff checks passed. No audio endpoint or
+recording file was opened by this validation.
