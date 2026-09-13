@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+Requalified the installed ReaComp path through the hardened harness on
+2026-09-13 after the failure-path integrity fix. Processing and both editor
+containment checks passed again at 44.1, 48, and 96 kHz; the same SHA-256
+remained unchanged. This covers both successful and early-failure fingerprint
+cleanup paths without modifying the installed plugin or audio configuration.
+
 Rejected and classified the installed ReaControlMIDI VST2 binary on
 2026-09-13. The worker failed closed during state restoration with
 `failed to fill whole buffer`, so it remains unsupported for the bounded audio
