@@ -12,6 +12,12 @@ installed or loaded, and no signing mode, boot policy, plugin/startup
 registration, stream, default device, volume, mute, privacy, or persistent
 machine-audio configuration changed.
 
+The follow-up `cargo test --workspace --locked -- --test-threads=1` run also
+passed every workspace unit, integration, and doc test, including the updated
+65-test Windows-audio suite. This confirms downstream consumers compile and
+exercise the bridge changes under the locked dependency graph; it remains
+portable/test evidence and does not qualify a loaded driver or release.
+
 ## 2026-09-11 - Segmented library-row requalification at `d350b013`
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed at pushed

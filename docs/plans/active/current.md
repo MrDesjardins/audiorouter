@@ -77,6 +77,12 @@ transition, matching the driver overflow contract. Windows-audio tests (65),
 protocol tests (8), strict package Clippy, formatting, and diff checks passed.
 No driver, endpoint, or machine audio configuration was opened or changed.
 
+The subsequent locked sequential workspace run also passed all workspace unit,
+integration, and doc tests, including domain (60), engine (106), control (125),
+recording (40), storage (83), plugin-host (67 plus 13 worker-process tests),
+transport (19), protocol (8), DSP (32), CLI/MCP (32/3), and Windows-audio (65)
+coverage. No endpoint, driver, or persistent machine configuration was touched.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
