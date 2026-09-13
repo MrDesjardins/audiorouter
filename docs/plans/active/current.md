@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Completed deliberate replacement coverage for pinned endpoint hints on
+  2026-09-13. The connected UI regression selects current capture/render IDs
+  after stale saved IDs are shown as blank, verifies the exact pair is stored
+  locally, and confirms native preparation receives that deliberate choice.
+  UI tests pass (148), typecheck and diff checks pass; no audio or machine
+  configuration changed.
+
 - Fixed an endpoint-hint inventory race on 2026-09-13. The UI now waits for
   the first device snapshot before evaluating saved IDs, so valid saved
   capture/render bindings are not cleared during asynchronous inventory

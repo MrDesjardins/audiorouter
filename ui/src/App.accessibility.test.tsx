@@ -114,10 +114,18 @@ describe("keyboard connection dialog", () => {
     window.localStorage.setItem("audiorouter.ui.endpoint-binding.demo-session", JSON.stringify({ captureEndpointId: "capture-gone", renderEndpointId: "render-gone" }));
     const capture = { id: "capture-current", name: "Current capture", direction: "capture" as const, state: "active" as const, defaultRoles: [], format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 }, periods: { default100ns: 100000, minimum100ns: 30000 } };
     const renderDevice = { ...capture, id: "render-current", name: "Current render", direction: "render" as const };
-    const backend = { ...connectedPreviewBackend(), listDevices: async () => [capture, renderDevice] };
+    const prepareNativeEndpoint = vi.fn(async (sessionId: string, captureEndpointId: string, renderEndpointId: string) => ({ sessionId, state: "configured-stopped" as const, captureEndpointId, renderEndpointId }));
+    const backend = { ...connectedPreviewBackend(), listDevices: async () => [capture, renderDevice], prepareNativeEndpoint };
     render(<App backend={backend} />);
-    await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe(""));
-    expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("");
+    const captureSelect = await screen.findByRole("combobox", { name: "Native capture endpoint" });
+    const renderSelect = screen.getByRole("combobox", { name: "Native render endpoint" });
+    await waitFor(() => expect((captureSelect as HTMLSelectElement).value).toBe(""));
+    expect((renderSelect as HTMLSelectElement).value).toBe("");
+    fireEvent.change(captureSelect, { target: { value: "capture-current" } });
+    fireEvent.change(renderSelect, { target: { value: "render-current" } });
+    expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.endpoint-binding.demo-session") ?? "null")).toEqual({ captureEndpointId: "capture-current", renderEndpointId: "render-current" });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
+    await waitFor(() => expect(prepareNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-current", "render-current"));
     window.localStorage.removeItem("audiorouter.ui.endpoint-binding.demo-session");
   });
 
