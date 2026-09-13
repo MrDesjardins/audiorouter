@@ -13,6 +13,13 @@ Updated: 2026-09-13.
   and actual plugin processing remain the next implementation slice; no
   plugin was loaded or machine audio configuration changed.
 
+- Added control-plane scan provenance for plugin placeholders on 2026-09-13.
+  Graph planning and session import now require each placeholder's path, format,
+  and fingerprint to match a current explicit scan inventory; missing or stale
+  evidence is rejected before durable plan/session mutation. The worker still
+  must revalidate identity at launch. Control tests (134), strict Clippy,
+  formatting, diff checks, and documentation validation passed.
+
 - Requalified the user-installed ReaPlugs VST2 matrix on 2026-09-13 using
   disposable native workers. Six x64 audio-effect DLLs passed at 44.1, 48,
   and 96 kHz with parameter-offset processing, state/integrity checks, and

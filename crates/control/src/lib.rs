@@ -5830,6 +5830,7 @@ impl ControlPlane {
         base_revision: u64,
         candidate: Session,
     ) -> Result<EntityId, ControlError> {
+        self.validate_plugin_placeholders(&candidate)?;
         let checkpoint = self.store.clone();
         let plan_id = self
             .store
@@ -5849,6 +5850,65 @@ impl ControlPlane {
             }
         }
         Ok(plan_id)
+    }
+
+    /// Require plugin placeholders to originate from a current explicit scan.
+    /// The cached identity is discovery evidence, not permission to execute;
+    /// worker launch will revalidate the binary again at its own boundary.
+    fn validate_plugin_placeholders(&self, session: &Session) -> Result<(), ControlError> {
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Plugin)
+        {
+            let path = node
+                .parameters
+                .get("path")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("plugin placeholder path is missing".into())
+                })?;
+            let format = node
+                .parameters
+                .get("format")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("plugin placeholder format is missing".into())
+                })?;
+            let fingerprint = node
+                .parameters
+                .get("fingerprint")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("plugin placeholder fingerprint is missing".into())
+                })?;
+            let verified = self.plugin_inventories.values().any(|inventory| {
+                inventory
+                    .get("entries")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .any(|entry| {
+                        entry.get("path").and_then(Value::as_str) == Some(path)
+                            && entry
+                                .get("identity")
+                                .and_then(|identity| identity.get("format"))
+                                .and_then(Value::as_str)
+                                == Some(format)
+                            && entry
+                                .get("identity")
+                                .and_then(|identity| identity.get("sha256"))
+                                .and_then(Value::as_str)
+                                == Some(fingerprint)
+                    })
+            });
+            if !verified {
+                return Err(ControlError::InvalidRequest(
+                    "plugin placeholder requires a current explicit scan result".into(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     pub fn commit_graph(
@@ -6701,6 +6761,7 @@ impl ControlPlane {
                 format_validation_errors(&errors)
             ))
         })?;
+        self.validate_plugin_placeholders(&session)?;
         if self.store.session(&session.id).is_some() {
             return Err(ControlError::InvalidRequest(
                 "session already exists".into(),
@@ -11136,6 +11197,53 @@ mod tests {
         assert!(inspected_result["identity"].is_null());
         assert_eq!(inspected_result["errorCode"], "notPe");
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_placeholder_plan_requires_current_scan_evidence() {
+        let mut plane = ControlPlane::default();
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let mut candidate = original.clone();
+        candidate.nodes.push(Node {
+            id: EntityId::new("plugin"),
+            kind: NodeKind::Plugin,
+            type_version: 1,
+            name: "Unbound plugin".into(),
+            enabled: false,
+            bypass: false,
+            parameters: [
+                ("path".into(), json!("C:\\Plugins\\effect.dll")),
+                ("format".into(), json!("vst2")),
+                (
+                    "fingerprint".into(),
+                    json!("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                ),
+                ("classId".into(), json!("effect-class")),
+            ]
+            .into_iter()
+            .collect(),
+            ports: vec![
+                Port {
+                    name: "in".into(),
+                    direction: PortDirection::Input,
+                    channels: 1,
+                },
+                Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 1,
+                },
+            ],
+        });
+        let error = plane
+            .plan_graph(&original.id, original.revision, candidate)
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message.contains("current explicit scan")
+        ));
     }
 
     #[test]
