@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - callback clock validation
+
+`UpdatePosition` now returns before time conversion and DMA displacement when
+the performance-counter frequency is zero, the incoming QPC is negative, or
+the incoming QPC precedes the last DMA timestamp. This prevents an invalid
+clock sample from becoming a divide-by-zero or huge unsigned displacement.
+The non-installing x64 WDK build/source-contract acceptance passed with zero
+signability errors/warnings and catalog generation. No driver was installed or
+loaded.
+
 ## 2026-09-12 - WaveRT teardown/API requalification
 
 The source-contract acceptance was rerun after the teardown guards were

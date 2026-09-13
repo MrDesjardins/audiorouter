@@ -1390,7 +1390,10 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // Do not perform position arithmetic or call either bridge direction until
     // the DMA buffer and byte rate are valid; in particular, this prevents a
     // zero-sized modulo on an early or late callback.
-    if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0)
+    if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0 ||
+        m_ullPerformanceCounterFrequency.QuadPart == 0 ||
+        ilQPC.QuadPart < 0 ||
+        static_cast<ULONGLONG>(ilQPC.QuadPart) < m_ullDmaTimeStamp)
     {
         return;
     }

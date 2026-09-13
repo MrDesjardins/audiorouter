@@ -125,6 +125,12 @@ if (-not $stream.Contains('IID_IMiniportWaveRTOutputStream) && (!this->m_bCaptur
 if (-not $stream.Contains('m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0')) {
     throw 'WaveRT position callback must fail closed before DMA buffer arithmetic'
 }
+if (-not $stream.Contains('m_ullPerformanceCounterFrequency.QuadPart == 0')) {
+    throw 'WaveRT position callback must reject an uninitialized performance-counter frequency'
+}
+if (-not $stream.Contains('static_cast<ULONGLONG>(ilQPC.QuadPart) < m_ullDmaTimeStamp')) {
+    throw 'WaveRT position callback must reject a backwards performance-counter sample'
+}
 if (-not $stream.Contains('PacketNumber == NULL || Flags == NULL')) {
     throw 'WaveRT packet query must validate output pointers'
 }

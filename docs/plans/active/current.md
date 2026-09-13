@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Hardened WaveRT callback clock validation on 2026-09-12. Position updates now
+fail closed before elapsed-time/DMA arithmetic when the performance-counter
+frequency is zero, the sampled QPC is negative, or the clock moves backwards.
+The non-installing x64 WDK build/source-contract acceptance passed with zero
+signability errors/warnings and catalog generation. No driver was installed or
+loaded.
+
 Fresh post-reboot process-loopback qualification passed on 2026-09-12. The
 include mode captured 21,609 frames with 77,823 nonzero bytes; the exclude
 mode captured 22,050 frames while excluding the disposable child process.
