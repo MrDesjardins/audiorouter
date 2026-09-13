@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Requalified the launcher with both exact endpoint overrides on 2026-09-13:
+  the active CABLE Output capture ID and CABLE Input render ID reached the
+  real Tauri shell, printed the selected pair, and cleaned the temporary
+  database after the test-launched shell child was stopped. This validates the
+  new two-sided selection branch without changing defaults, volume, mute,
+  driver state, or persistent machine audio configuration.
+
 - Extended the disposable VB-Cable launcher on 2026-09-13 with exact
   `-CaptureEndpointId` and `-RenderEndpointId` overrides. Safe defaults still
   select the active CABLE Output/Input pair, while deliberate users can
