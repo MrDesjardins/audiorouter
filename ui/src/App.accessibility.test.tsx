@@ -275,6 +275,20 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByRole("heading", { name: "Parametric EQ 1" })).toBeTruthy();
   });
 
+  it("expands a voice-chain preset into ordinary draft processors", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      listPresets: async () => ({
+        voiceChains: [{ id: "voiceGateAndCompression", version: 1, name: "Voice gate and compression", description: "Voice neutral with a conservative gate and compression." }],
+        eq: [],
+      }),
+    };
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add voice chain to draft" }));
+    expect(screen.getByText("Gate 1, Compressor 1, Limiter 1 added to the draft. Review and plan the changes before committing.")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
+  });
+
   it("persists tidy layout positions as presentation state", async () => {
     render(<App backend={connectedPreviewBackend()} />);
 

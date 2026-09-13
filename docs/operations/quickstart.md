@@ -145,8 +145,11 @@ routes, and display device/application/recording metadata when connected to a
 backend. Use the Gate, Parametric EQ, Compressor, or Limiter action on any
 connected draft path to insert that processor between the existing nodes; the
 insertion and its parameters are real draft changes, not canvas-only
-decoration. Draft changes are not committed until an authorized plan/apply
-flow.
+decoration. The Presets panel can also expand EQ presets and the voice-chain
+presets into ordinary draft nodes. A voice chain is inserted into the first
+compatible connected path when one exists; otherwise its nodes remain
+unconnected for explicit user wiring. Draft changes are not committed until an
+authorized plan/apply flow.
 If another client changes the session before commit, the UI reports the typed
 revision conflict and structured remediation, refreshes the authoritative
 session, and clears the stale warning/commit state. Review the refreshed draft
