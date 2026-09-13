@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Rechecked the attended UI gate on 2026-09-13 after the current safe-chain
+  push. The Windows automation surface still reports no applications or
+  browsers, so connected WebView2 rendering, endpoint selection, drag/drop,
+  and accessibility behavior cannot be observed here. No launch, click,
+  endpoint operation, or machine configuration change was attempted. The
+  repository-side UI tests and shell-RPC evidence remain valid but do not
+  substitute for this manual gate.
+
 - Corrected current qualification snapshots on 2026-09-13. Release, M07,
   and M08 evidence now reflects the 146-test UI suite and the 180-link
   documentation validation; the M08 entry also identifies the exact pushed
