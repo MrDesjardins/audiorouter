@@ -2,12 +2,20 @@
 
 Updated: 2026-09-13.
 
+- Fixed an endpoint-hint inventory race on 2026-09-13. The UI now waits for
+  the first device snapshot before evaluating saved IDs, so valid saved
+  capture/render bindings are not cleared during asynchronous inventory
+  loading; stale IDs remain unselected for deliberate replacement. The
+  focused connected regressions and full UI suite pass (148), with typecheck
+  and diff checks clean. No audio or machine configuration changed.
+
 - Added repeatable VB-Cable endpoint selection on 2026-09-13. The UI retains
   exact capture/render IDs as per-session local hints and restores them only
   when the current read-only inventory still reports those IDs active;
-  unavailable or stale hints fall back to an active endpoint and never select
-  a substitute silently. A connected accessibility regression covers the
-  restore path. UI tests pass (147), TypeScript typecheck and diff checks pass.
+  unavailable or stale hints remain unselected until deliberate replacement;
+  the UI never selects a substitute silently. Connected accessibility
+  regressions cover both restore and stale-ID paths. UI tests pass (148),
+  TypeScript typecheck and diff checks pass.
   This is presentation-only persistence and changes no Windows defaults,
   volume, mute, endpoint, driver, or backend desired state.
 

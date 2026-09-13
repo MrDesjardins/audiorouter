@@ -11,7 +11,7 @@ VST3/VST2 workers, M07, unsigned M08 artifacts, 159 requirement mappings, and
 documentation validation (52 Markdown files, 180 local links). Cleanup
 removed 15 run-owned temporary children.
 
-The current UI stage contained 147 tests; the documentation validator reported
+The current UI stage contained 148 tests; the documentation validator reported
 180 local links.
 
 This is qualification evidence only. The driver was not installed or loaded;
