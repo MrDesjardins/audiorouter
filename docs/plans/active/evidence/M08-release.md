@@ -1,5 +1,19 @@
 # M08 release evidence
 
+## 2026-09-13 - guarded M00-M08 requalification at `f0ada080`
+
+The complete guarded acceptance chain passed at the pushed head. It covered
+project x64 driver source/build/signability, portable milestone suites, UI
+build and tests, VST3/VST2 workers, M07, unsigned M08 artifact preparation,
+159 normative requirement mappings, and documentation validation (52 Markdown
+files, 179 local links). Cleanup removed 15 run-owned temporary children.
+
+No driver was installed or loaded; no signing mode, boot policy,
+plugin/startup registration, stream, default device, volume, mute, privacy,
+or persistent machine-audio configuration changed. This is unsigned release
+preparation evidence only; production signing, installer, clean-machine,
+physical-latency, and interactive/manual gates remain open.
+
 ## 2026-09-12 - guarded M00-M08 requalification
 
 The full guarded acceptance chain passed after the latest repository changes.
