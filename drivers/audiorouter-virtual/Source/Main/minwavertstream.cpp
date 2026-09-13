@@ -202,6 +202,7 @@ Return Value:
     m_ulNotificationsPerBuffer = 0;
     m_KsState = KSSTATE_STOP;
     m_pTimer = NULL;
+    m_pNotificationTimer = NULL;
     m_pDpc = NULL;
     m_llPacketCounter = 0;
     m_ullPlayPosition = 0;

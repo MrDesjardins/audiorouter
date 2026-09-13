@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Closed a WaveRT constructor-failure safety gap on 2026-09-12 by initializing
+the notification-timer pointer before attempting allocation. Destructor
+cleanup can now safely distinguish an unallocated timer after partial
+construction. The non-installing x64 WDK build/source-contract acceptance
+passed with zero signability errors/warnings and catalog generation; no driver
+was installed or loaded.
+
 Hardened WaveRT content-rights handling on 2026-09-12: `SetContentId` now
 rejects missing DRM-rights input or miniport ownership before mutating stream
 state. The non-installing x64 WDK build/source-contract acceptance passed with

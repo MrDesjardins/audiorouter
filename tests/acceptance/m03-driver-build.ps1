@@ -176,6 +176,9 @@ if (-not $stream.Contains('if (Latency_ == NULL)')) {
 if (-not $stream.Contains('if (drmRights == NULL || m_pMiniport == NULL)')) {
     throw 'WaveRT content-id handling must validate DRM rights and miniport ownership'
 }
+if (-not $stream.Contains('m_pNotificationTimer = NULL;')) {
+    throw 'WaveRT constructor must initialize the notification timer owner before allocation'
+}
 if (-not $stream.Contains('m_pPortStream->FreePagesFromMdl(pBufferMdl)')) {
     throw 'WaveRT DMA mapping failure must release allocated pages'
 }

@@ -1,5 +1,14 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - constructor-failure cleanup guard
+
+The stream constructor now initializes `m_pNotificationTimer` to null before
+calling `ExAllocateTimer`, allowing the destructor to safely clean up a
+partially constructed object when timer allocation or a later initialization
+step fails. The non-installing x64 WDK build/source-contract acceptance passed
+with zero signability errors/warnings and catalog generation. No driver was
+installed or loaded.
+
 ## 2026-09-12 - content-rights boundary guard
 
 `SetContentId` now validates its DRM-rights pointer and miniport owner before
