@@ -10,15 +10,17 @@ run with explicit opt-in and the existing pair:
 - render: `CABLE Input (VB-Audio Virtual Cable)`
 
 The test enumerated and exact-matched both active IDs, prepared stopped WASAPI
-clients, started the session through the same `ControlPlane`, observed one
-successful native start, stopped the session, and observed one successful
-native stop. It used no durable database and the temporary opt-in environment
-variables were removed after the run. No defaults, volume, mute, privacy, or
-other persistent audio configuration was changed.
+clients, started the session through the same `ControlPlane`, pumped the graph
+for 500 ms, and then stopped the session. It reported 23,520 captured frames,
+183 processed graph quanta, 23,424 rendered frames, one successful native
+start, and one successful native stop. It used no durable database and the
+temporary opt-in environment variables were removed after the run. No
+defaults, volume, mute, privacy, or other persistent audio configuration was
+changed.
 
-This is the first control-owned native worker lifecycle evidence. It does not
-prove processed audio delivery, managed virtual-driver ownership, PortCls
-integration, signing, or physical acoustic latency.
+This is control-owned native worker and processed graph-delivery evidence. It
+does not prove managed virtual-driver ownership, PortCls integration, signing,
+or physical acoustic latency.
 
 ## Guarded same-process control lifecycle harness
 

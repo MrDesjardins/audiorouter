@@ -10163,6 +10163,32 @@ mod tests {
             plane.native_endpoint_lifecycle_telemetry()["successfulStarts"],
             1
         );
+        let generation = started["generation"].as_u64().unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        let mut captured_frames = 0_u64;
+        let mut processed_quanta = 0_u64;
+        let mut rendered_frames = 0_u64;
+        while std::time::Instant::now() < deadline {
+            let pump = plane
+                .pump_native_endpoint_worker_with_bound_taps(&owned.id, generation, 64)
+                .unwrap();
+            captured_frames =
+                captured_frames.saturating_add(pump["capturedFrames"].as_u64().unwrap());
+            processed_quanta =
+                processed_quanta.saturating_add(pump["processedQuanta"].as_u64().unwrap());
+            rendered_frames =
+                rendered_frames.saturating_add(pump["renderedFrames"].as_u64().unwrap());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(captured_frames > 0, "native worker did not capture frames");
+        assert!(
+            processed_quanta > 0,
+            "native worker did not process graph quanta"
+        );
+        assert!(rendered_frames > 0, "native worker did not render frames");
+        eprintln!(
+            "guarded_native_lifecycle capture_frames={captured_frames} processed_quanta={processed_quanta} rendered_frames={rendered_frames}"
+        );
         let stopped = plane.session_stop(&owned.id).unwrap();
         assert_eq!(stopped["runtime"], "native");
         assert_eq!(
