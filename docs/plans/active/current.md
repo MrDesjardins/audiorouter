@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Requalified the explicitly installed x64 Pitchproof VST2 binary on
+2026-09-13. Processing passed at 44.1, 48, and 96 kHz, and both bounded
+editor-containment checks passed. The SHA-256 remained
+`1974a3033b53ae72da5f419a9f37056d44c1610591bfd11a615ace0c448cf050`;
+environment variables were restored and the installed file was not modified.
+The sibling x86 binary remains excluded and was not loaded.
+
 Requalified the installed ReaStream VST2 binary on 2026-09-13 after reboot.
 Processing passed at 44.1, 48, and 96 kHz, and both bounded editor-containment
 checks passed. The SHA-256 remained
