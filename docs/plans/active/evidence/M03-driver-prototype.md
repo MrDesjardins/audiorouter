@@ -585,3 +585,15 @@ shapes retain the existing allocation-free path.
 The focused Windows-audio suite passed 67 tests and strict package Clippy,
 formatting, and diff checks passed. No endpoint or driver was activated and no
 machine audio configuration changed.
+
+## 2026-09-12 - notification-buffer arithmetic bounds
+
+Notification-buffer setup now rejects sizes that could overflow its optional
+diagnostic write-size multiplication. Buffer-duration arithmetic widens before
+multiplication and rejects values that cannot fit the driver timing field,
+releasing the mapped MDL before returning. This keeps allocation and timing
+state fail-closed for hostile or malformed sizes.
+
+The administrator-authorized M03 source-contract and non-installing x64 WDK
+build passed with zero signability errors/warnings and catalog generation. No
+driver was installed or loaded and no machine audio configuration changed.

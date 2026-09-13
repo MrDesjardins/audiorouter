@@ -137,6 +137,12 @@ if (-not $stream.Contains('m_pDmaBuffer == NULL')) {
 if (-not $stream.Contains('m_pPortStream == NULL')) {
     throw 'WaveRT DMA allocation must reject a missing PortCls stream owner'
 }
+if (-not $stream.Contains('RequestedSize_ > (MAXULONG / 4)')) {
+    throw 'WaveRT notification allocation must bound diagnostic-size multiplication'
+}
+if (-not $stream.Contains('static_cast<ULONGLONG>(RequestedSize_) * 1000')) {
+    throw 'WaveRT notification timing arithmetic must widen before multiplication'
+}
 if (-not $stream.Contains('m_pPortStream->FreePagesFromMdl(pBufferMdl)')) {
     throw 'WaveRT DMA mapping failure must release allocated pages'
 }

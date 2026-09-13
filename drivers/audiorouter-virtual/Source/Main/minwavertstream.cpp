@@ -491,6 +491,11 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
         return STATUS_INVALID_PARAMETER;
     }
 
+    if (RequestedSize_ > (MAXULONG / 4))
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
     RequestedSize_ -= RequestedSize_ % (m_pWfExt->Format.nBlockAlign);
 
     if (!m_bCapture && (!g_DoNotCreateDataFiles))
@@ -540,7 +545,16 @@ NTSTATUS CMiniportWaveRTStream::AllocateBufferWithNotification
     }
     m_ulNotificationsPerBuffer = NotificationCount_;
     m_ulDmaBufferSize = RequestedSize_;
-    ulBufferDurationMs = (RequestedSize_ * 1000) / m_ulDmaMovementRate;
+    ULONGLONG bufferDurationMs =
+        (static_cast<ULONGLONG>(RequestedSize_) * 1000) / m_ulDmaMovementRate;
+    if (bufferDurationMs > MAXULONG)
+    {
+        m_pPortStream->UnmapAllocatedPages(m_pDmaBuffer, pBufferMdl);
+        m_pDmaBuffer = NULL;
+        m_pPortStream->FreePagesFromMdl(pBufferMdl);
+        return STATUS_INVALID_PARAMETER;
+    }
+    ulBufferDurationMs = static_cast<ULONG>(bufferDurationMs);
     m_ulNotificationIntervalMs = ulBufferDurationMs / NotificationCount_;
 
     *AudioBufferMdl_ = pBufferMdl;
