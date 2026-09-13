@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete elevated `safe-all.ps1` chain at pushed head
+  `2b0d2e61` on 2026-09-13. Toolchain/native compile and read-only inventory,
+  non-installing WDK driver build/signability, disposable SysVAD, M01/M04,
+  M05 with 150 UI tests and production build, M06 VST3/VST2 workers, M07,
+  unsigned M08 artifacts, 159 requirement mappings, and documentation (52
+  Markdown files, 180 local links) all passed. Fifteen run-owned temporary
+  children were removed. No driver installation/loading, signing-mode change,
+  plugin/startup registration, endpoint default, or persistent audio action
+  occurred. The attended WebView2 and production driver gates remain open.
+
 - Added a VB-Cable readiness gate on 2026-09-13. The guided setup checklist
   now reports whether the authoritative inventory contains an unambiguous
   active CABLE Output/Input pair, distinguishes that from generic endpoint

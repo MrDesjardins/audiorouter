@@ -1,5 +1,21 @@
 # M08 release evidence
 
+## 2026-09-13 - full safe acceptance at `2b0d2e61`
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the pushed
+VB-Cable readiness head. It covered the installed VS2026/WDK toolchain,
+read-only 34-endpoint inventory, non-installing AudioRouter driver build and
+catalog signability, disposable SysVAD, M01/M04, M05 (150 UI tests and
+production build), M06 VST3/VST2 workers, M07, unsigned M08 artifacts, 159
+requirement mappings, and documentation validation (52 Markdown files, 180
+local links). Fifteen run-owned temporary children were removed.
+
+This remains qualification evidence only: the driver was not installed or
+loaded, no plugin or startup registration occurred, and no endpoint default,
+volume, mute, or persistent machine-audio configuration changed. Attended
+WebView2, production driver, signing, clean-machine, and physical-latency
+gates remain open.
+
 ## 2026-09-13 - current pushed head safe acceptance
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File

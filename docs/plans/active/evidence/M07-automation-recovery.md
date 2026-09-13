@@ -1,5 +1,17 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - full safe acceptance at `2b0d2e61`
+
+The elevated `tests/acceptance/safe-all.ps1` chain passed at the pushed
+VB-Cable UI head. M05 reported 150 UI tests and a production build; M07
+reported 32 CLI tests, 3 MCP interoperability tests, 133 control tests (one
+explicit live test ignored), 67 plugin-host tests, and 13 worker-process
+tests. M00/M03, M04, M06, unsigned M08 preparation, 159 traceability mappings,
+and documentation validation (52 Markdown files, 180 local links) also passed.
+Run-owned temporary children were cleaned up. No driver installation/loading,
+plugin registration, startup registration, or persistent machine-audio change
+occurred.
+
 ## 2026-09-13 - VB-Cable readiness checklist
 
 The guided setup checklist now exposes a dedicated VB-Cable gate derived from
