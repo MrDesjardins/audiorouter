@@ -12812,12 +12812,18 @@ mod tests {
             .create_and_attach_configured_file_recorder(original.id.clone(), &config)
             .unwrap();
         assert!(path.is_file());
+        let taps = plane.recorder_tap_set(&original.id).unwrap();
+        let mut first_block = AudioBlock::new(1, 2).unwrap();
+        first_block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.1, 0.2]);
+        taps.on_processed_block(0, &first_block);
 
         for (id, method, frame) in [
             (1, "recorders.arm", None),
             (2, "recorders.start", Some(0)),
-            (3, "recorders.split", Some(0)),
-            (4, "recorders.stop", Some(0)),
+            (3, "recorders.split", Some(2)),
         ] {
             let params = match frame {
                 Some(frame) => json!({
@@ -12838,15 +12844,33 @@ mod tests {
             });
             assert!(response.result.is_some(), "{method}: {response:?}");
         }
+        let mut second_block = AudioBlock::new(1, 2).unwrap();
+        second_block
+            .channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.3, 0.4]);
+        taps.on_processed_block(2, &second_block);
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "recorders.stop".into(),
+            params: Some(json!({
+                "sessionId": original.id,
+                "frame": 4,
+                "idempotencyKey": "factory-4"
+            })),
+        });
+        assert!(response.result.is_some(), "recorders.stop: {response:?}");
         let rows = plane
             .storage
             .as_ref()
             .unwrap()
             .list_recordings(Some(original.id.as_str()))
             .unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].format, "wav");
-        assert_eq!(rows[0].frames, 0);
+        assert_eq!(rows.len(), 2);
+        assert!(rows
+            .iter()
+            .all(|row| row.format == "wav" && row.frames == 2));
         assert_eq!(rows[0].path, path.to_str().unwrap());
         let _ = std::fs::remove_dir_all(root);
     }

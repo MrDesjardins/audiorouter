@@ -6,12 +6,12 @@ The normal `create_file_recorder_with_config` control factory now routes WAV
 configurations through `SegmentedWavRecorderWorker`, retaining the requested
 sequence number, dither setting, and the recording module's bounded default
 segment boundary. The initial path is returned from the worker, while rotated
-paths remain allocated only on the lifecycle/worker side. FLAC configurations
-retain their existing bounded worker implementation. The factory regression
-confirms the normal configured API accepts the split lifecycle and publishes
-the initial recording row. Control (125), recording (40), CLI (32), and MCP
-stdio (3) tests passed with strict Clippy, formatting, and diff checks. No
-live endpoint or machine audio configuration was used.
+paths remain allocated only on the lifecycle/worker side. A normal configured
+factory regression feeds two blocks, requests a split at frame 2, and verifies
+two finalized two-frame WAV library rows. FLAC configurations retain their
+existing bounded worker implementation. Control (125), recording (40), CLI
+(32), and MCP stdio (3) tests passed with strict Clippy, formatting, and diff
+checks. No live endpoint or machine audio configuration was used.
 
 ## 2026-09-11 - Explicit FLAC library handoff
 
