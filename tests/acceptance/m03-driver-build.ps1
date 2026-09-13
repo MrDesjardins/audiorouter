@@ -44,10 +44,12 @@ foreach ($required in @(
         'NTSTATUS BridgeControlCreateClose',
         'if (stack == NULL)',
         'stack == NULL || stack->FileObject == NULL',
-        'IOCTL_AUDIOROUTER_BRIDGE_OPEN &&',
-        'request->SectionHandle == 0',
-        'code != IOCTL_AUDIOROUTER_BRIDGE_OPEN',
-        'request->SectionHandle != 0')) {
+    'IOCTL_AUDIOROUTER_BRIDGE_OPEN &&',
+    'request->SectionHandle == 0',
+    'request->SectionHandle != 0',
+    'BridgeRequestsHaveSameLeaseIdentity',
+    'left.SectionHandle = 0',
+    'right.MappingBytes = 0')) {
     if (-not $source.Contains($required)) {
         throw "driver IOCTL handle-role validation is missing: $required"
     }

@@ -2,6 +2,18 @@
 
 Updated: 2026-09-13.
 
+- Fixed a real M03 bridge lifecycle mismatch on 2026-09-13. The Rust mapped
+  controller sends the retained section pair on HEARTBEAT/CLOSE, while the
+  driver incorrectly rejected maintenance mappings and compared those requests
+  byte-for-byte with OPEN. Maintenance now accepts either mapping form and
+  compares the stable lease identity while excluding process-relative section
+  handle/size. The administrator-authorized non-installing x64 WDK build and
+  source-contract acceptance passed with zero signability errors/warnings and
+  catalog generation. No driver was installed or loaded and no machine audio
+  configuration changed. Next: continue the portable M07 transaction/recovery
+  backlog while keeping loaded PortCls ownership and production deployment as
+  explicit qualification gates.
+
 - Requalified the elevated guarded `tests/acceptance/safe-all.ps1` chain on
   2026-09-13 at the current head. VS/WDK toolchain discovery, the AudioRouter
   x64 driver build/signability/catalog, 34-endpoint read-only inventory,

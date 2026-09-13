@@ -1,5 +1,19 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - mapped maintenance request compatibility
+
+The bridge control path now accepts both forms already emitted by the Rust
+controller for HEARTBEAT and CLOSE: a request with the retained section
+mapping pair and a request with zero mapping fields. OPEN remains the only
+operation that acquires and maps a user section. Lease identity comparison
+ignores the process-relative section handle and mapping size while retaining
+the negotiated protocol, bus, format, direction, lease, and generation
+fields. This fixes a real controller/driver mismatch that would otherwise
+reject valid mapped maintenance requests as invalid state. The administrator-
+authorized non-installing x64 WDK build and source-contract acceptance passed
+with zero signability errors/warnings and catalog generation. No driver was
+installed or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - timer-dependent state transition guard
 
 `SetState(KSSTATE_RUN)` now fails with insufficient resources when event-driven
