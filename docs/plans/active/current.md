@@ -3,7 +3,7 @@
 Updated: 2026-09-13.
 
 - Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain at
-  pushed head `31c9a4bc` on 2026-09-13. VS/WDK discovery, native compile,
+  pushed head `9b32f227` on 2026-09-13. VS/WDK discovery, native compile,
   AudioRouter driver compile/catalog signability, read-only 31-endpoint
   inventory, disposable SysVAD, M01/M04, M05 with 155 UI tests and production
   builds, M06 VST3/VST2 workers, M07, unsigned M08 artifacts, 159 traceability
