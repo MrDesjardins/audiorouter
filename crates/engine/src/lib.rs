@@ -3846,6 +3846,14 @@ impl RuntimePublication {
     pub fn load(&self) -> Option<std::sync::Arc<RuntimeGraph>> {
         self.current.load_full()
     }
+
+    /// Borrow the current graph through ArcSwap's hazard-style guard. The
+    /// realtime processor uses this form so releasing its observation cannot
+    /// drop the last retired graph on the callback thread. Callers that need
+    /// an owned snapshot for control/diagnostics should use [`Self::load`].
+    fn load_guard(&self) -> arc_swap::Guard<Option<std::sync::Arc<RuntimeGraph>>> {
+        self.current.load()
+    }
 }
 
 /// Integrated block-processing boundary used by a future Windows scheduler.
@@ -3937,8 +3945,8 @@ impl RuntimeProcessor {
     }
 
     /// Reset stateful stages in the active graph at a stopped-stream
-    /// recovery boundary. An absent graph is already safe; a poisoned stage
-    /// lock is reported so the caller can keep the route silent.
+    /// recovery boundary. An absent graph is already safe; a busy stage is
+    /// reported so the caller can keep the route silent.
     pub fn reset_processing_state(&self) -> bool {
         match self.publication.load() {
             Some(graph) => graph.reset_processing_state(),
@@ -3950,7 +3958,8 @@ impl RuntimeProcessor {
     /// published, the block is cleared and `None` is returned.
     pub fn process(&self, block: &mut AudioBlock) -> Option<RuntimeGeneration> {
         let started = std::time::Instant::now();
-        let Some(graph) = self.publication.load() else {
+        let graph_guard = self.publication.load_guard();
+        let Some(graph) = graph_guard.as_deref() else {
             block.clear();
             self.metrics.record_processing_time(started.elapsed());
             return None;

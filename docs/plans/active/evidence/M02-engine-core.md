@@ -16,6 +16,19 @@ workspace Clippy with `-D warnings`, `cargo fmt --all -- --check`, and
 `git diff --check` passed. This evidence is portable and does not qualify a
 Windows endpoint, driver, plugin, or machine audio configuration.
 
+## 2026-09-12 - Guarded callback graph observation
+
+The realtime `RuntimeProcessor::process` path now observes the published graph
+through ArcSwap's guarded load. It no longer takes an owned `Arc` snapshot with
+`load_full`; therefore, when a control-thread publication retires the prior
+generation, releasing the callback observation cannot synchronously destroy
+that graph on the audio thread. Control and diagnostics retain the owned
+snapshot API, and publication/reclamation boundaries remain unchanged.
+
+Verification: engine tests (107), strict engine Clippy with `-D warnings`,
+formatting, and `git diff --check` passed. No endpoint, driver, plugin, or
+machine-audio configuration was accessed.
+
 ## 2026-09-08 - Linear compiler fail-closed topology guard
 
 `compile_session` now rejects an enabled node outside the participating
