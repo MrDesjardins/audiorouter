@@ -630,7 +630,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       .some((value) => value.toLocaleLowerCase().includes(query));
   });
   const visibleLibraryEntries = filterLibraryEntries(libraryEntries, librarySearch);
-  const setupSteps = setupChecklist({ connected: backend.connected, audio: snapshot?.status.audio ?? null, storage: snapshot?.status.storage ?? null, deviceCount: devices.length, applicationCount: applications.length });
+  const setupSteps = setupChecklist({ connected: backend.connected, audio: snapshot?.status.audio ?? null, storage: snapshot?.status.storage ?? null, deviceCount: devices.length, applicationCount: applications.length, vbCablePairAvailable: findVbCableEndpointPair(devices) !== null });
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
   const nativePumpSummary = nativePumpStats && sessionRunning ? `native ${nativePumpStats.capturedFrames} in / ${nativePumpStats.renderedFrames} out` : null;
   const statusSummary = `${snapshot ? `${snapshot.status.audio} audio - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot"}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}`;

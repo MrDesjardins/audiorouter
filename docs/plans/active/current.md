@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added a VB-Cable readiness gate on 2026-09-13. The guided setup checklist
+  now reports whether the authoritative inventory contains an unambiguous
+  active CABLE Output/Input pair, distinguishes that from generic endpoint
+  inventory, and stays unavailable while disconnected. This is read-only
+  presentation derived from exact endpoint metadata; it does not select
+  defaults or mutate Windows audio state. UI typecheck and all 150 UI tests
+  pass. Next: complete the attended UI observation when an interactive
+  desktop surface is available.
+
 - Requalified the VB-Cable-first delivery on 2026-09-13 with the authorized
   guarded command `tests/acceptance/m02-control-native-live.ps1
   -AllowLiveAudio`. The exact active CABLE Output/CABLE Input pair carried

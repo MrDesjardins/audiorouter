@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - VB-Cable readiness checklist
+
+The guided setup checklist now exposes a dedicated VB-Cable gate derived from
+the read-only endpoint inventory. It reports ready only for one active exact
+CABLE Output capture and one active exact CABLE Input render endpoint, and
+reports attention/unavailable otherwise. The disconnected regression remains
+fail-closed. TypeScript typecheck and the complete UI suite passed: 18 files,
+150 tests.
+
 ## 2026-09-13 - VB-Cable-first UI selection slice
 
 The UI now offers a connected `Select VB-Cable pair` action. It accepts only
