@@ -70,6 +70,13 @@ MCP stdio (3), strict Clippy, formatting, and diff checks passed. The factory
   frame boundary, and verifies two finalized parts with no frame loss; no live
   audio endpoint is opened.
 
+Hardened the M03 mapped bridge on 2026-09-12: a recreated realtime writer now
+resumes after the existing stable sequence instead of restarting at one, and
+the Rust seqlock writer rejects the largest even counter before its odd/even
+transition, matching the driver overflow contract. Windows-audio tests (65),
+protocol tests (8), strict package Clippy, formatting, and diff checks passed.
+No driver, endpoint, or machine audio configuration was opened or changed.
+
 Next action: qualify the render-source/capture-sink bridge publication against
 the AudioRouter driver prototype's source-contract and lease/generation
 boundaries. Keep installation, production signing, PortCls ownership, clean

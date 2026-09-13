@@ -4265,6 +4265,7 @@ pub enum NativeBridgeRegionError {
     TornRead,
     StaleGeneration,
     SequenceRegression,
+    SequenceExhausted,
     InvalidFrame,
     Io(String),
     Contract(audiorouter_protocol::AudioBridgeContractError),
@@ -4388,6 +4389,13 @@ impl NativeBridgeRegion {
         let current = unsafe { (*state).load(std::sync::atomic::Ordering::Acquire) };
         if current & 1 != 0 {
             return Err(NativeBridgeRegionError::Busy);
+        }
+        // Keep the sequence word representable after both the odd (writer)
+        // and even (published) transitions.  Without this check the final
+        // release store could saturate at an odd value and permanently make
+        // the slot look busy.
+        if current > u64::MAX - 2 {
+            return Err(NativeBridgeRegionError::SequenceExhausted);
         }
         if current != 0 {
             let previous = u64::from_le_bytes(
@@ -4565,6 +4573,35 @@ impl NativeBridgeRegion {
             ),
         }
     }
+
+    /// Return the last published sequence while the slot is stable. This is
+    /// a control-plane construction helper used when a realtime writer is
+    /// recreated over an existing mapping; the callback itself never calls
+    /// it.
+    fn last_sequence(&self, expected_generation: u64) -> Result<u64, NativeBridgeRegionError> {
+        let state = self.state();
+        let before = state.load(std::sync::atomic::Ordering::Acquire);
+        if before == 0 {
+            return Ok(0);
+        }
+        if before & 1 != 0 {
+            return Err(NativeBridgeRegionError::Busy);
+        }
+        let header = self.header();
+        header
+            .validate()
+            .map_err(NativeBridgeRegionError::Contract)?;
+        if header.generation != expected_generation {
+            return Err(NativeBridgeRegionError::StaleGeneration);
+        }
+        if header.sequence == 0 {
+            return Err(NativeBridgeRegionError::InvalidFrame);
+        }
+        if state.load(std::sync::atomic::Ordering::Acquire) != before {
+            return Err(NativeBridgeRegionError::TornRead);
+        }
+        Ok(header.sequence)
+    }
 }
 
 /// Allocation-free `AudioTap` adapter for the broker's single mapped slot.
@@ -4596,10 +4633,11 @@ impl NativeBridgeRealtimeWriter {
             return Err(NativeBridgeRegionError::InvalidFrame);
         }
         let sample_count = usize::from(region.channels) * usize::from(region.max_frames);
+        let initial_sequence = region.last_sequence(generation)?;
         Ok(Self {
             region: std::cell::UnsafeCell::new(region),
             generation,
-            next_sequence: AtomicU64::new(0),
+            next_sequence: AtomicU64::new(initial_sequence),
             published_blocks: AtomicU64::new(0),
             in_use: AtomicBool::new(false),
             scratch: std::cell::UnsafeCell::new(vec![0.0; sample_count]),
@@ -6145,6 +6183,54 @@ mod tests {
         reader.read_into(9, &mut output).unwrap();
         assert_eq!(output, [1.0, 10.0, 2.0, 20.0, 3.0, 30.0, 4.0, 40.0]);
         drop(reader);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_realtime_writer_resumes_after_existing_sequence() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-tap-resume-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let region = NativeBridgeRegion::create(&path, 1, 128).unwrap();
+        region.write(9, 7, &[0.25]).unwrap();
+        let reader = NativeBridgeRegion::open(&path, 1, 128).unwrap();
+        let writer = NativeBridgeRealtimeWriter::new(region, 9).unwrap();
+        let mut block = audiorouter_engine::AudioBlock::new(1, 1).unwrap();
+        block.copy_from_interleaved(&[0.75]).unwrap();
+        <NativeBridgeRealtimeWriter as audiorouter_engine::AudioTap>::on_processed_block(
+            &writer, 0, &block,
+        );
+        let mut output = [0.0];
+        let header = reader.read_into_after(9, 7, &mut output).unwrap();
+        assert_eq!(header.sequence, 8);
+        assert_eq!(output, [0.75]);
+        drop(reader);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_region_rejects_seqlock_counter_overflow() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-overflow-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let region = NativeBridgeRegion::create(&path, 1, 1).unwrap();
+        region
+            .state()
+            .store(u64::MAX - 1, std::sync::atomic::Ordering::Release);
+        assert!(matches!(
+            region.write(9, 1, &[0.0]),
+            Err(NativeBridgeRegionError::SequenceExhausted)
+        ));
         std::fs::remove_file(path).unwrap();
     }
 

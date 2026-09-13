@@ -1,5 +1,18 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - bridge writer sequence and seqlock-overflow hardening
+
+The Windows adapter now resumes a realtime writer's sequence from the stable
+published header when a writer view is recreated over an existing mapping.
+This prevents the first post-reconnect block from being rejected as an older
+sequence. The Rust mapped-slot writer also rejects the largest even seqlock
+state before the odd/even transition, matching the driver's overflow guard;
+the previous saturating transition could otherwise leave a slot permanently
+busy. The focused Windows-audio suite passed 65 tests, protocol tests passed 8
+tests, strict package Clippy passed, and formatting/diff checks passed. This is
+portable bridge-contract evidence only; no driver, endpoint, or machine audio
+configuration was opened or changed.
+
 ## 2026-09-12 - bridge callback source-contract qualification
 
 The M03 acceptance wrapper was tightened to inspect the implemented callback
