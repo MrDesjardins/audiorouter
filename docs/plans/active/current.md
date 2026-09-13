@@ -30,6 +30,13 @@ Updated: 2026-09-13.
   formatting, and release build pass; no endpoint or machine configuration was
   changed.
 
+- Added a regression for the shell's seeded session on 2026-09-13. Strict
+  shell Clippy, formatting, and 8 shell tests passed. UI typecheck and all
+  128 UI tests passed; the Vite production build also passed into a disposable
+  repository-root output directory after the protected UI-local temp path
+  returned `EPERM`, and that output was removed. No endpoint or machine
+  configuration was changed.
+
 - Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
   frontend probe now runs from the loaded UI module through the official Tauri
   invoke API, and Vite emits relative assets for the Tauri app protocol. Shell

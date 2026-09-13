@@ -31,6 +31,15 @@ It does not grant `deviceAdministration`, so virtual-device provisioning and
 driver/endpoint changes remain explicit operations. The shell still does not
 start audio automatically. No endpoint or machine configuration was accessed.
 
+## 2026-09-13 - shell session regression and UI build
+
+The shell regression suite now verifies the seeded session is a valid stopped
+stereo graph; strict shell Clippy and all 8 shell tests passed. UI typecheck
+and 128 tests passed. Vite production output passed in a disposable
+repository-root directory after the UI-local temporary directory was rejected
+by the host with `EPERM`; the output was removed afterward. No endpoint or
+machine configuration was accessed.
+
 ## 2026-09-13 - Tauri shell asset and probe hardening
 
 The Tauri shell initialization probe now delegates through the loaded UI

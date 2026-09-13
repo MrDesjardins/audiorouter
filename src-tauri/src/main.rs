@@ -385,6 +385,7 @@ fn main() {
 mod tests {
     use super::*;
     use audiorouter_control::ControlPlane;
+    use audiorouter_domain::validate_session;
     use serde_json::json;
 
     #[test]
@@ -394,6 +395,16 @@ mod tests {
             r#"window.__AUDIO_ROUTER_SESSION_ID__ = "shell\";window.pwned=true;\\escape";"#
         ));
         assert!(script.contains("window.__AUDIO_ROUTER_HOST__"));
+    }
+
+    #[test]
+    fn default_desktop_session_is_a_valid_stopped_stereo_graph() {
+        let session = default_desktop_session();
+        assert_eq!(session.id.as_str(), DESKTOP_SESSION_ID);
+        assert_eq!(session.revision, 0);
+        assert_eq!(session.nodes.len(), 2);
+        assert_eq!(session.edges.len(), 1);
+        assert!(validate_session(&session).is_ok());
     }
 
     #[test]
