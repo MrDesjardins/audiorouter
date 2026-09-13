@@ -8334,7 +8334,22 @@ impl ControlPlane {
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("idempotencyKey is required".into()))?;
         let plan_id_value = EntityId::new(plan_id);
-        let Some((enabled, expires_at)) = self.startup_plans.get(&plan_id_value).copied() else {
+        let scoped_key = self.scoped_idempotency_key("startup.apply", idempotency_key);
+        // The plan is consumed after a journaled attempt, so check the
+        // durable idempotency record before looking up the plan. This keeps a
+        // retry safe across backend restart without allowing a new key to
+        // replay the consumed authorization preview.
+        let request_hash = Self::request_hash(&json!({ "planId": plan_id }));
+        if let Some(previous) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
+            self.remember_operation_outcome(
+                &scoped_key,
+                previous.clone(),
+                "startup.apply",
+                Some(&request_hash),
+            );
+            return Ok(previous);
+        }
+        let Some((_enabled, expires_at)) = self.startup_plans.get(&plan_id_value).copied() else {
             return Err(ControlError::InvalidRequest(
                 "startup plan was not found".into(),
             ));
@@ -8344,18 +8359,6 @@ impl ControlPlane {
             return Err(ControlError::InvalidRequest(
                 "startup plan has expired".into(),
             ));
-        }
-        let scoped_key = self.scoped_idempotency_key("startup.apply", idempotency_key);
-        let request_hash = Self::request_hash(&json!({ "planId": plan_id, "enabled": enabled }));
-        if let Some(previous) = self.operation_outcomes.get(&scoped_key) {
-            if self
-                .idempotency_hashes
-                .get(&scoped_key)
-                .is_some_and(|hash| hash == &request_hash)
-            {
-                return Ok(previous.clone());
-            }
-            return Err(ControlError::IdempotencyConflict);
         }
         let result = json!({
             "planId": plan_id,
@@ -12083,6 +12086,13 @@ mod tests {
             params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-2" })),
         });
         assert!(replay.error.is_some());
+        let retry = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "startup.apply".into(),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-1" })),
+        });
+        assert_eq!(retry.result.unwrap()["state"], "unavailable");
     }
 
     #[test]
@@ -12126,6 +12136,13 @@ mod tests {
             })
             .error
             .is_some());
+        let retry = restarted.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(4)),
+            method: "startup.apply".into(),
+            params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-restart" })),
+        });
+        assert_eq!(retry.result.unwrap()["state"], "unavailable");
         let _ = std::fs::remove_file(&path);
     }
 

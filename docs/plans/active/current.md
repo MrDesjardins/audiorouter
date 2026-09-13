@@ -6,9 +6,11 @@ Updated: 2026-09-13.
   `startup.apply` attempt is journaled, its short-lived plan is now removed
   from memory and durable SQLite storage. Added control regressions proving a
   consumed plan cannot be replayed in the same process or after reopening the
-  database; idempotency remains the retry mechanism for the original result.
-  This does not implement Windows sign-in registration, and no OS startup or
-  audio configuration was changed.
+  database. The idempotency lookup runs before plan lookup, so the original
+  key still retries the journaled result in memory and after restart, while a
+  new key is rejected. `cargo fmt`, strict control Clippy, and all 128 control
+  tests pass. This does not implement Windows sign-in registration, and no OS
+  startup or audio configuration was changed.
 
 Requalified the non-installing AudioRouter x64 WDK/source-contract build after
 resuming the goal on 2026-09-13. Visual Studio/WDK built the driver and
