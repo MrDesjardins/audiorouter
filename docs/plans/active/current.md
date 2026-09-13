@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Fixed the local UI dev-server cache boundary on 2026-09-13. Vite now uses
+  an OS-temporary optimizer cache (overrideable with
+  `AUDIOROUTER_VITE_CACHE`) instead of attempting writes under read-only
+  `node_modules`; an isolated server returned HTTP 200 for `/` and
+  `/src/main.tsx`, then was stopped with port 5173 free. UI tests pass (146),
+  TypeScript typecheck and diff checks pass. The cache is disposable and does
+  not touch audio, driver, or machine configuration.
+
 - Rechecked the attended UI gate on 2026-09-13 after the current safe-chain
   push. The Windows automation surface still reports no applications or
   browsers, so connected WebView2 rendering, endpoint selection, drag/drop,
