@@ -16,6 +16,16 @@ persistent machine-audio setting changed. This is real shared-mode adapter and
 control-lifecycle evidence, not production virtual-driver or physical-latency
 qualification.
 
+Two additional 500 ms Rust adapter bridge cycles passed against the exact CABLE
+pair. Each cycle captured 24,480 frames, processed 191 quanta/tap calls, and
+rendered 24,448 frames. Both reported zero non-finite tap samples, dropped
+frames, scheduler xruns, or deadline misses. The Rust process-loopback include
+and exclude modes also passed at 44.1 kHz source to 48 kHz engine conversion:
+10,584 and 11,025 source frames became 11,392 and 11,904 engine frames, with
+zero rejected packets and xruns. All streams were stopped/reset and media
+state remained unchanged. These checks strengthen M02 user-space evidence but
+do not substitute for managed-driver callback or physical-latency validation.
+
 # M02 audio adapter groundwork
 
 ## 2026-09-08 - Differing-rate route requalification

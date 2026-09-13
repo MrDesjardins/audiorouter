@@ -187,6 +187,14 @@ its temporary process/artifacts; no default, volume, mute, privacy, driver,
 signing, startup, or persistent machine-audio setting changed. Evidence:
 [M00 WASAPI evidence](evidence/M00-wasapi-probe.md), [M02 audio evidence](evidence/M02-audio-engine.md).
 
+Two further native-independent route checks passed on 2026-09-12. The Rust
+adapter bridge completed two 500 ms CABLE cycles, each with 24,480 captured
+frames, 24,448 rendered frames, 191 tap calls, zero non-finite tap samples,
+zero dropped frames, xruns, and deadline misses. Rust process-loopback include
+and exclude modes also passed: 10,584/11,025 source frames converted to
+11,392/11,904 engine frames with zero rejected packets and xruns. Streams were
+stopped/reset by the probes and no persistent audio configuration changed.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
