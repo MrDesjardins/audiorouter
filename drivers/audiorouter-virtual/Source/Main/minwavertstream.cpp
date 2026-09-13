@@ -848,7 +848,8 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     ULONG droppedPackets;
 
     // The call must be from event driven mode
-    if (m_ulNotificationsPerBuffer == 0)
+    if (m_ulNotificationsPerBuffer == 0 ||
+        m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0)
     {
         return STATUS_NOT_SUPPORTED;
     }
@@ -930,6 +931,11 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
 {
     UNREFERENCED_PARAMETER(EosPacketLength);
     NTSTATUS ntStatus;
+
+    if (m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0)
+    {
+        return STATUS_DEVICE_NOT_READY;
+    }
 
     // The call must be from event driven mode
     if (m_ulNotificationsPerBuffer == 0)
@@ -1110,6 +1116,10 @@ NTSTATUS CMiniportWaveRTStream::GetPresentationPosition(_Out_  KSAUDIO_PRESENTAT
     if (_pPresentationPosition == NULL)
     {
         return STATUS_INVALID_PARAMETER;
+    }
+    if (m_pWfExt == NULL || m_pWfExt->Format.nAvgBytesPerSec == 0)
+    {
+        return STATUS_DEVICE_NOT_READY;
     }
     LARGE_INTEGER timeStamp;
 

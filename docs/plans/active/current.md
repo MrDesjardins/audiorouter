@@ -22,6 +22,13 @@ and presentation-position methods now reject null output pointers with
 and non-installing WDK build passed with zero signability errors/warnings and
 catalog generation. No driver was installed or loaded.
 
+Added lifecycle guards to WaveRT packet and presentation arithmetic on
+2026-09-12: packet queries reject an unallocated/zero-rate DMA state before
+division, write-packet setup rejects the same state before indexing, and
+presentation queries reject a missing or zero-byte-rate format. The M03
+source-contract and non-installing WDK build passed with zero signability
+errors/warnings and catalog generation. No driver was installed or loaded.
+
 Fresh post-reboot native adapter qualification after `ce5c3fcc` passed on
 2026-09-12. The bounded system-selected adapter smoke processed 51 capture
 packets/24,480 frames through 191 graph blocks at 48 kHz with 24,448 scheduler

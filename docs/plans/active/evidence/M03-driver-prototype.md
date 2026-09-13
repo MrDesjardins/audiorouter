@@ -533,6 +533,17 @@ The administrator-authorized M03 source-contract and non-installing x64 WDK
 build passed with zero signability errors/warnings and catalog generation. No
 driver was installed or loaded and no machine audio configuration changed.
 
+## 2026-09-12 - WaveRT query lifecycle guards
+
+Packet queries, write-packet setup, and presentation-position calculation now
+fail closed when DMA storage, byte rate, or the negotiated format is not
+available. This prevents division by zero and buffer indexing during early
+startup or teardown while retaining the existing unsupported-state responses.
+
+The administrator-authorized M03 source-contract and non-installing x64 WDK
+build passed with zero signability errors/warnings and catalog generation. No
+driver was installed or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - WaveRT query pointer validation
 
 WaveRT position, packet, packet-count, and presentation-position queries now
