@@ -1188,3 +1188,18 @@ plugins/startup actions, activate a stream, or change persistent machine audio
 configuration. Production driver activation, signing, installer,
 clean-machine, physical-latency, manual UI, and independent-plugin rights
 gates remain open.
+# 2026-09-12 - post-reboot guarded requalification
+
+The administrator-authorized `tests/acceptance/safe-all.ps1` chain passed at
+`fc7f4256` after the machine reboot. It built the project x64 WDK driver with
+zero signability errors and warnings, inventoried 31 endpoints read-only,
+qualified disposable SysVAD, passed M01/M04/M05, VST3/VST2 workers, M07,
+unsigned M08 artifact preparation, 159 normative traceability IDs, and
+documentation validation (52 Markdown files, 176 local links). The runner
+removed 15 run-owned temporary children.
+
+This is guarded compile/portable/reference-driver evidence. It does not claim
+driver installation, production signing, clean-machine behavior, or physical
+latency. No driver was installed or loaded, and no signing mode, boot policy,
+plugin/startup registration, stream, default device, volume, mute, privacy,
+or persistent machine-audio configuration changed.

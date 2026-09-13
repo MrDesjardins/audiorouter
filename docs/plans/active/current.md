@@ -2,6 +2,16 @@
 
 Updated: 2026-09-12.
 
+Post-reboot guarded requalification after `fc7f4256` passed on 2026-09-12.
+The chain built the project x64 WDK driver with zero signability errors and
+warnings, inventoried 31 endpoints read-only, compiled/qualified disposable
+SysVAD, passed M01/M04/M05, VST3/VST2, M07, unsigned M08 preparation, 159
+traceability IDs, and documentation validation (52 Markdown files, 176 local
+links). Cleanup removed 15 run-owned temporary children. No driver was
+installed or loaded, and no signing mode, boot policy, plugin/startup
+registration, stream, default device, volume, mute, privacy, or persistent
+machine-audio configuration changed.
+
 ## Current execution checkpoint: driver bridge data-path slice
 
 The core implementation is moving ahead of the extended VST3 qualification.
