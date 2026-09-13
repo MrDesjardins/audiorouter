@@ -383,12 +383,7 @@ impl NativeBridgeInputWorker {
                 AudioError::ProcessingStateUnavailable,
             ));
         }
-        let mut total = WasapiSchedulerPump::default();
-        let budget = max_quanta.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
-        for _ in 0..budget {
-            total.accumulate(self.pump()?);
-        }
-        Ok(total)
+        bounded_pump(max_quanta, false, || self.pump())
     }
 }
 
@@ -1301,6 +1296,27 @@ pub struct WasapiSchedulerPump {
     pub render_backpressure_events: u32,
 }
 
+fn bounded_pump<E, F>(
+    max_packets: u32,
+    stop_when_empty: bool,
+    mut pump: F,
+) -> Result<WasapiSchedulerPump, E>
+where
+    F: FnMut() -> Result<WasapiSchedulerPump, E>,
+{
+    let mut total = WasapiSchedulerPump::default();
+    let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+    for _ in 0..budget {
+        let result = pump()?;
+        let packetless = result.packets == 0;
+        total.accumulate(result);
+        if stop_when_empty && packetless {
+            break;
+        }
+    }
+    Ok(total)
+}
+
 impl WasapiSchedulerPump {
     fn accumulate(&mut self, other: Self) {
         self.packets = self.packets.saturating_add(other.packets);
@@ -1997,16 +2013,7 @@ impl WasapiEndpointWorker {
         if !self.running {
             return Err(AudioError::ProcessingStateUnavailable);
         }
-        let mut total = WasapiSchedulerPump::default();
-        let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
-        for _ in 0..budget {
-            let result = self.pump()?;
-            total.accumulate(result);
-            if result.packets == 0 {
-                break;
-            }
-        }
-        Ok(total)
+        bounded_pump(max_packets, true, || self.pump())
     }
 
     /// Tap variant of [`Self::pump_available`] without imposing a deadline
@@ -2020,9 +2027,7 @@ impl WasapiEndpointWorker {
         if !self.running {
             return Err(AudioError::ProcessingStateUnavailable);
         }
-        let mut total = WasapiSchedulerPump::default();
-        let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
-        for _ in 0..budget {
+        bounded_pump(max_packets, true, || {
             let capture = self
                 .capture
                 .as_ref()
@@ -2031,13 +2036,8 @@ impl WasapiEndpointWorker {
                 .render
                 .as_ref()
                 .ok_or(AudioError::ProcessingStateUnavailable)?;
-            let result = self.bridge.pump_with_tap(capture, render, tap)?;
-            total.accumulate(result);
-            if result.packets == 0 {
-                break;
-            }
-        }
-        Ok(total)
+            self.bridge.pump_with_tap(capture, render, tap)
+        })
     }
 
     /// Pump one bounded packet with the allocation-free graph tap and the
@@ -2080,17 +2080,9 @@ impl WasapiEndpointWorker {
         if !self.running {
             return Err(AudioError::ProcessingStateUnavailable);
         }
-        let mut total = WasapiSchedulerPump::default();
-        let budget = max_packets.min(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
-        for _ in 0..budget {
-            let result =
-                self.pump_with_tap_and_quantum_deadline(tap, first_deadline, quantum_duration)?;
-            total.accumulate(result);
-            if result.packets == 0 {
-                break;
-            }
-        }
-        Ok(total)
+        bounded_pump(max_packets, true, || {
+            self.pump_with_tap_and_quantum_deadline(tap, first_deadline, quantum_duration)
+        })
     }
 }
 
@@ -5178,6 +5170,35 @@ mod tests {
         assert_eq!(total.rendered_frames, u32::MAX);
         assert_eq!(total.dropped_render_frames, u32::MAX);
         assert_eq!(total.render_backpressure_events, u32::MAX);
+    }
+
+    #[test]
+    fn bounded_pump_caps_work_and_stops_after_packetless_result() {
+        let mut calls = 0;
+        let result = bounded_pump(usize::MAX as u32, true, || {
+            calls += 1;
+            Ok::<_, ()>(WasapiSchedulerPump {
+                packets: if calls == 3 { 0 } else { 1 },
+                processed_quanta: 1,
+                ..WasapiSchedulerPump::default()
+            })
+        })
+        .unwrap();
+        assert_eq!(calls, 3);
+        assert_eq!(result.packets, 2);
+        assert_eq!(result.processed_quanta, 3);
+
+        let mut capped_calls = 0;
+        let result = bounded_pump(MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE + 1, false, || {
+            capped_calls += 1;
+            Ok::<_, ()>(WasapiSchedulerPump {
+                packets: 1,
+                ..WasapiSchedulerPump::default()
+            })
+        })
+        .unwrap();
+        assert_eq!(capped_calls, MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        assert_eq!(result.packets, MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
     }
 
     #[test]

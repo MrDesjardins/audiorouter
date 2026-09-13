@@ -14,6 +14,20 @@ passed. This remains a portable/adapter lifecycle seam: loaded PortCls-owned
 callback, production driver, and physical virtual-endpoint qualification are
 not claimed.
 
+## 2026-09-12 - shared bounded pump policy
+
+The input-worker, endpoint, tap, and deadline drain paths now use one shared
+`bounded_pump` helper. It clamps every caller-provided budget to the 64-step
+per-wake limit, saturatingly accumulates telemetry, and optionally stops after
+a packetless result. The input worker passes the non-stopping policy because
+its bridge read is intentionally a nonblocking fresh-silence quantum; endpoint
+drains retain packetless early termination.
+
+The focused Windows-audio suite passed 67 tests, including direct coverage of
+both policies. Strict package Clippy, formatting, and diff checks passed. This
+is portable scheduler/adapter evidence only; no driver or endpoint was
+activated and no machine audio configuration changed.
+
 ## 2026-09-12 - negotiated bridge shape guard
 
 The capture-sink publisher now rejects frame or channel counts that differ

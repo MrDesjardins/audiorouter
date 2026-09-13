@@ -70,6 +70,13 @@ never waits for bridge data; empty, stale, busy, or torn slots retain the
 existing fresh-silence behavior. Windows-audio tests, strict Clippy,
 formatting, and diff checks pass; no driver or endpoint was activated.
 
+Completed the bounded-drain consolidation on 2026-09-12: input-worker,
+endpoint, tap, and deadline pump paths now share one capped accumulation helper.
+Its regression test proves both the 64-step ceiling and packetless early stop,
+while preserving the input worker's deliberate fixed-budget silence pumping.
+The Windows-audio suite passed 67 tests and strict package Clippy, formatting,
+and diff checks passed. No driver or endpoint was activated.
+
 Closed another ARCH-04 realtime reclamation gap on 2026-09-12: callback graph
 reads now use an `ArcSwap` guard rather than `load_full`, preventing the last
 retired runtime graph from being destroyed on the audio thread. Owned graph
