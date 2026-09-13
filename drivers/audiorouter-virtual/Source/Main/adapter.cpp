@@ -127,6 +127,15 @@ NTSTATUS AudioRouterPublishLeaseBlock(
         ExReleaseRundownProtection(&Lease->Rundown);
         return status;
     }
+    // Never let the published sequence wrap through zero.  A wrapped value
+    // would look like a fresh block to a reader that has retained an older
+    // minimum sequence and could make the producer appear to move backwards.
+    ULONGLONG nextSequence = static_cast<ULONGLONG>(
+        InterlockedCompareExchange64(&Lease->NextSequence, 0, 0));
+    if (nextSequence == MAXULONGLONG) {
+        ExReleaseRundownProtection(&Lease->Rundown);
+        return STATUS_INTEGER_OVERFLOW;
+    }
     for (SIZE_T index = 0; index < sampleCount; ++index) {
         if (Samples[index] != Samples[index] ||
             Samples[index] > 3.402823466e+38F ||

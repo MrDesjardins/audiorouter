@@ -86,6 +86,7 @@ foreach ($required in @(
         'InterlockedIncrement64',
         'InterlockedCompareExchange64',
         'generation == 0',
+        'nextSequence == MAXULONGLONG',
         'STATUS_DATA_ERROR',
         'STATUS_INTEGER_OVERFLOW',
         'ExReleaseRundownProtection')) {

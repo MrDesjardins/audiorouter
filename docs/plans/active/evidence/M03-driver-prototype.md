@@ -1,5 +1,16 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - capture publisher sequence exhaustion guard
+
+The kernel capture-sink publisher now checks the existing `NextSequence`
+counter before claiming the mapped seqlock. A counter already at
+`MAXULONGLONG` returns `STATUS_INTEGER_OVERFLOW` without publishing, so the
+producer cannot wrap through zero and make a reader observe a sequence
+regression. The source-contract acceptance checks this guard, and the
+administrator-authorized non-installing WDK build passed with zero
+signability errors/warnings and catalog generation. No driver was installed
+or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - fail-closed bridge payload validation
 
 The Rust mapped reader and kernel bridge copy helper now validate every sample

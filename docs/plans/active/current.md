@@ -101,6 +101,13 @@ input cannot partially refresh a destination quantum. Windows-audio tests (66),
 strict Clippy, formatting, and the non-installing WDK build passed; no driver,
 endpoint, or machine audio configuration was changed.
 
+The kernel capture publisher was further hardened on 2026-09-12: it now
+rejects an already-exhausted sequence counter before claiming the seqlock,
+preventing a zero wrap and subsequent sequence regression. The source-contract
+check and administrator-authorized non-installing WDK build passed with zero
+signability errors/warnings and catalog generation; the focused Windows-audio
+suite passed 66 tests. Loaded-driver endurance remains an explicit gate.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
