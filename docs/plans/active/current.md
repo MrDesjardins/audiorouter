@@ -74,8 +74,8 @@ Closed another ARCH-04 realtime reclamation gap on 2026-09-12: callback graph
 reads now use an `ArcSwap` guard rather than `load_full`, preventing the last
 retired runtime graph from being destroyed on the audio thread. Owned graph
 snapshots remain available to control/diagnostic readers. Engine tests (107),
-strict engine Clippy, formatting, and diff checks passed. This portable change
-does not alter endpoint or machine-audio state.
+strict engine Clippy, the full workspace test suite, formatting, and diff checks
+passed. This portable change does not alter endpoint or machine-audio state.
 
 Portable follow-up on 2026-09-12: the CLI recorder-create regression now
 executes the authorized `recorders.create` path against a disposable SQLite

@@ -25,9 +25,9 @@ generation, releasing the callback observation cannot synchronously destroy
 that graph on the audio thread. Control and diagnostics retain the owned
 snapshot API, and publication/reclamation boundaries remain unchanged.
 
-Verification: engine tests (107), strict engine Clippy with `-D warnings`,
-formatting, and `git diff --check` passed. No endpoint, driver, plugin, or
-machine-audio configuration was accessed.
+Verification: engine tests (107), the full workspace test suite, strict engine
+Clippy with `-D warnings`, formatting, and `git diff --check` passed. No
+endpoint, driver, plugin, or machine-audio configuration was accessed.
 
 ## 2026-09-08 - Linear compiler fail-closed topology guard
 
