@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - teardown and API boundary guards
+
+WaveRT buffer-free methods now check the PortCls stream owner before unmapping
+or freeing an MDL, notification registration rejects a null event, and
+`GetHWLatency` returns safely when its output pointer is absent. These guards
+prevent teardown-time null dereferences and assertion-only API validation.
+The administrator-authorized non-installing x64 WDK build and source-contract
+acceptance passed with zero signability errors/warnings and catalog generation.
+No driver was installed or loaded.
+
 ## 2026-09-12 - workspace requalification
 
 After the route-generation and retirement changes, the full locked workspace

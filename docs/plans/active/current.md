@@ -2,6 +2,14 @@
 
 Updated: 2026-09-12.
 
+Hardened additional WaveRT teardown and API boundaries on 2026-09-12:
+buffer-free paths no longer dereference a cleared PortCls owner, notification
+registration rejects a null event, and hardware-latency reporting handles a
+null output pointer without relying on an assertion. The administrator-
+authorized non-installing x64 WDK build and source-contract acceptance passed
+with zero signability errors/warnings and catalog generation. No driver was
+installed or loaded.
+
 Fresh post-reboot explicit CABLE Rust adapter-route qualification passed on
 2026-09-12. At 48 kHz with 128-frame quanta it captured 24,000 frames,
 processed 187 graph blocks, and routed 23,936 frames with complete processing

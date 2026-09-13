@@ -579,13 +579,16 @@ VOID CMiniportWaveRTStream::FreeBufferWithNotification
 
     if (Mdl_ != NULL)
     {
-        if (m_pDmaBuffer != NULL)
+        if (m_pDmaBuffer != NULL && m_pPortStream != NULL)
         {
             m_pPortStream->UnmapAllocatedPages(m_pDmaBuffer, Mdl_);
             m_pDmaBuffer = NULL;
         }
 
-        m_pPortStream->FreePagesFromMdl(Mdl_);
+        if (m_pPortStream != NULL)
+        {
+            m_pPortStream->FreePagesFromMdl(Mdl_);
+        }
     }
 
     m_ulDmaBufferSize = 0;
@@ -604,6 +607,11 @@ NTSTATUS CMiniportWaveRTStream::RegisterNotificationEvent
     UNREFERENCED_PARAMETER(NotificationEvent_);
 
     PAGED_CODE();
+
+    if (NotificationEvent_ == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
 
     NotificationListEntry *nleNew = (NotificationListEntry*)ExAllocatePool2(
         POOL_FLAG_NON_PAGED,
@@ -707,7 +715,10 @@ VOID CMiniportWaveRTStream::GetHWLatency
 {
     PAGED_CODE();
 
-    ASSERT(Latency_);
+    if (Latency_ == NULL)
+    {
+        return;
+    }
 
     Latency_->ChipsetDelay = 0;
     Latency_->CodecDelay = 0;
@@ -728,13 +739,16 @@ _In_        ULONG       Size_
 
     if (Mdl_ != NULL)
     {
-        if (m_pDmaBuffer != NULL)
+        if (m_pDmaBuffer != NULL && m_pPortStream != NULL)
         {
             m_pPortStream->UnmapAllocatedPages(m_pDmaBuffer, Mdl_);
             m_pDmaBuffer = NULL;
         }
 
-        m_pPortStream->FreePagesFromMdl(Mdl_);
+        if (m_pPortStream != NULL)
+        {
+            m_pPortStream->FreePagesFromMdl(Mdl_);
+        }
     }
 
     m_ulDmaBufferSize = 0;

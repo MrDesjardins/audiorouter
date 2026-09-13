@@ -143,6 +143,15 @@ if (-not $stream.Contains('RequestedSize_ > (MAXULONG / 4)')) {
 if (-not $stream.Contains('static_cast<ULONGLONG>(RequestedSize_) * 1000')) {
     throw 'WaveRT notification timing arithmetic must widen before multiplication'
 }
+if (-not $stream.Contains('m_pDmaBuffer != NULL && m_pPortStream != NULL')) {
+    throw 'WaveRT buffer teardown must not dereference a missing PortCls stream owner'
+}
+if (-not $stream.Contains('if (NotificationEvent_ == NULL)')) {
+    throw 'WaveRT notification registration must reject a null event'
+}
+if (-not $stream.Contains('if (Latency_ == NULL)')) {
+    throw 'WaveRT hardware-latency query must handle a null output pointer'
+}
 if (-not $stream.Contains('m_pPortStream->FreePagesFromMdl(pBufferMdl)')) {
     throw 'WaveRT DMA mapping failure must release allocated pages'
 }
