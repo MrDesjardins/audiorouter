@@ -8,6 +8,11 @@ Updated: 2026-09-13.
   suite now passes 153 tests and TypeScript typecheck; no backend, endpoint, or
   machine configuration behavior changed.
 
+- Requalified M05 at pushed head `bde3b7d7` on 2026-09-13. TypeScript
+  typecheck, all 153 UI tests, and the disposable three-file production build
+  passed; temporary output was removed. Native shell injection and attended
+  visual/accessibility observation remain separate gates.
+
 - Re-ran the authorized control-owned VB-Cable lifecycle on 2026-09-13 after
   the desktop launcher delivery. The exact existing pair completed a bounded
   start/stop route with 24,480 captured frames, 191 processed quanta, and

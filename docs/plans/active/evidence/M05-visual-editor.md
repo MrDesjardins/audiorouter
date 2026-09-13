@@ -9,6 +9,10 @@ automatic endpoint selection was added. UI typecheck and the complete suite
 passed: 18 files, 153 tests. Manual visual/accessibility observation remains
 open because no targetable desktop surface was available.
 
+The pushed-head M05 acceptance also passed the TypeScript typecheck and a
+disposable three-file Vite production build. No audio, driver, or machine
+configuration was changed.
+
 ## 2026-09-12 - UI acceptance requalification
 
 The M05 acceptance passed with TypeScript typecheck, all 17 UI test files and
