@@ -1134,3 +1134,10 @@ kHz while the form supplies bounded sequence/queue settings and an explicit
 idempotency key. The result remains unarmed until a separate lifecycle action.
 UI typecheck, production build, and 128 UI tests passed. Creation remains
 subject to backend approved-root and recording authorization checks.
+
+The CLI now exposes `recorder create <session-id> <recorder-id>` with typed
+format, channel, sample-rate, sequence, queue, dither, optional node, and
+idempotency options. It dispatches through the authorized `Record` scope and
+rejects unsupported format/channel/rate values before opening storage. CLI
+tests (31), strict Clippy, formatting, and diff checks passed; the backend
+still owns approved-root validation and file creation.

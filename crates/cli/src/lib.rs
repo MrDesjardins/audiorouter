@@ -1404,15 +1404,97 @@ fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
 fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
     let action = args.get(1).copied().ok_or_else(|| {
         CliError::InvalidArguments(
-            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> --idempotency-key KEY".into(),
+            "usage: recorder <create|arm|start|pause|resume|split|stop> ...".into(),
         )
     })?;
+    if action == "create" {
+        let session_id = args
+            .get(2)
+            .copied()
+            .filter(|value| !value.starts_with('-'))
+            .ok_or_else(|| CliError::InvalidArguments("recorder session id is required".into()))?;
+        let recorder_id = args
+            .get(3)
+            .copied()
+            .filter(|value| !value.starts_with('-'))
+            .ok_or_else(|| CliError::InvalidArguments("recorder ID is required".into()))?;
+        let format = option_value(args, "--format")?;
+        if !matches!(
+            format,
+            "wavPcm16" | "wavPcm24" | "wavFloat32" | "flac16" | "flac24"
+        ) {
+            return Err(CliError::InvalidArguments(
+                "--format must be wavPcm16, wavPcm24, wavFloat32, flac16, or flac24".into(),
+            ));
+        }
+        let channels = option_value(args, "--channels")?
+            .parse::<u16>()
+            .map_err(|_| CliError::InvalidArguments("--channels must be 1 or 2".into()))?;
+        if !matches!(channels, 1 | 2) {
+            return Err(CliError::InvalidArguments(
+                "--channels must be 1 or 2".into(),
+            ));
+        }
+        let sample_rate = option_value(args, "--sample-rate")?
+            .parse::<u32>()
+            .map_err(|_| {
+                CliError::InvalidArguments("--sample-rate must be 44100 or 48000".into())
+            })?;
+        if !matches!(sample_rate, 44100 | 48000) {
+            return Err(CliError::InvalidArguments(
+                "--sample-rate must be 44100 or 48000".into(),
+            ));
+        }
+        let idempotency_key = option_value(args, "--idempotency-key")?;
+        if idempotency_key.len() > 256 {
+            return Err(CliError::InvalidArguments(
+                "--idempotency-key must contain at most 256 characters".into(),
+            ));
+        }
+        let node_id = optional_option_value(args, "--node-id")?;
+        let sequence = optional_option_value(args, "--sequence")?
+            .unwrap_or("1")
+            .parse::<u64>()
+            .map_err(|_| CliError::InvalidArguments("--sequence must be an integer".into()))?;
+        let queue_capacity = optional_option_value(args, "--queue-capacity")?
+            .unwrap_or("8")
+            .parse::<u64>()
+            .map_err(|_| {
+                CliError::InvalidArguments("--queue-capacity must be an integer".into())
+            })?;
+        let maximum_chunks_per_pass = optional_option_value(args, "--maximum-chunks-per-pass")?
+            .unwrap_or("1")
+            .parse::<u64>()
+            .map_err(|_| {
+                CliError::InvalidArguments("--maximum-chunks-per-pass must be an integer".into())
+            })?;
+        let mut params = json!({ "sessionId": session_id, "recorderId": recorder_id, "format": format, "sequence": sequence, "channels": channels, "sampleRate": sample_rate, "dither": args.contains(&"--dither"), "queueCapacity": queue_capacity, "maximumChunksPerPass": maximum_chunks_per_pass, "idempotencyKey": idempotency_key });
+        if let Some(node_id) = node_id {
+            params["nodeId"] = json!(node_id);
+        }
+        let response = ControlPlane::with_storage("cli", database(args)?).dispatch_authorized(
+            audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "recorders.create".into(),
+                params: Some(params),
+            },
+            &ClientGrant::with_scopes([PermissionScope::Record]),
+        );
+        return response.result.ok_or_else(|| {
+            CliError::InvalidArguments(
+                response
+                    .error
+                    .map_or_else(|| "recorder creation failed".into(), |error| error.message),
+            )
+        });
+    }
     if !matches!(
         action,
         "arm" | "start" | "pause" | "resume" | "split" | "stop"
     ) {
         return Err(CliError::InvalidArguments(
-            "usage: recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> --idempotency-key KEY".into(),
+            "usage: recorder <create|arm|start|pause|resume|split|stop> ...".into(),
         ));
     }
     let session_id = args
@@ -1701,7 +1783,7 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         15,
-        json!("recorder <arm|start|pause|resume|split|stop> <session-id> [<frame>] --database <path> --idempotency-key KEY"),
+        json!("recorder create <session-id> <recorder-id> --format FORMAT --channels 1|2 --sample-rate 44100|48000 --database <path> --idempotency-key KEY | recorder <arm|start|pause|resume|split|stop> ..."),
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
@@ -2856,6 +2938,10 @@ mod tests {
         ));
         assert!(matches!(
             run(["plugins", "scan", "--directory", "relative"]),
+            Err(CliError::InvalidArguments(_))
+        ));
+        assert!(matches!(
+            run(["recorder", "create", "session", "take", "--format", "mp3"]),
             Err(CliError::InvalidArguments(_))
         ));
     }

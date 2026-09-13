@@ -8366,6 +8366,11 @@ live-driver evidence.
   result remains unarmed. UI typecheck, production build, and 128 UI tests
   passed. Approved-root, authorization, and graph-attachment checks remain
   backend-owned.
+- Added the typed CLI `recorder create` convenience command on 2026-09-12.
+  It forwards the shared recorder configuration through authorized `Record`
+  dispatch, validates format/channel/sample-rate locally, and keeps approved
+  root/file creation in the backend. CLI tests (31), strict Clippy, formatting,
+  and diff checks passed.
 - Ran the explicitly authorized guarded M02 live adapter bridge on 2026-09-12
   for one 500 ms cycle using the existing VB-Audio endpoints. It captured
   24,480 frames, processed 191 quanta, rendered 24,448 frames, and reported
