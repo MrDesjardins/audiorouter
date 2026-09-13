@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Corrected canvas layout ownership on 2026-09-13. The App now returns the
+  inserted draft node identity without writing presentation storage; the
+  canvas alone merges the dropped position with existing layout entries. This
+  prevents a new drop from replacing positions for other nodes while keeping
+  graph edits and layout persistence separate. UI tests pass (144), typecheck
+  and diff checks pass.
+
 - Fixed a UI-08/UI-13 disconnected-mutation regression on 2026-09-13. The
   direct canvas library-drop callback now fails closed when the backend is
   unavailable, matching the existing connected guards for library buttons,
