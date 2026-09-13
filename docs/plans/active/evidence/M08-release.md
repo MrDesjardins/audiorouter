@@ -1,5 +1,17 @@
 # M08 release evidence
 
+## 2026-09-12 - guarded M00-M08 requalification
+
+The full guarded acceptance chain passed after the latest repository changes.
+It covered toolchain/native compile, the AudioRouter x64 WDK build with zero
+signability errors/warnings and catalog generation, read-only inventory of 31
+endpoints, disposable SysVAD qualification, M01/M04/M05, VST3/VST2 workers,
+M07, unsigned M08 artifact preparation, 159 normative requirement mappings,
+and documentation validation (52 Markdown files, 179 local links). Cleanup
+removed 15 run-owned temporary children. No driver was installed or loaded,
+and no signing mode, plugin/startup registration, stream, or persistent
+machine-audio configuration changed.
+
 ## 2026-09-12 - safe-chain requalification after render-source drain
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed at commit

@@ -2,6 +2,15 @@
 
 Updated: 2026-09-12.
 
+Requalified the full guarded M00-M08 acceptance chain on 2026-09-12 after the
+latest UI, shell, driver-boundary, and route-lifecycle work. Toolchain/native
+compile, AudioRouter WDK build and signability/catalog, 31-endpoint inventory,
+SysVAD, M01/M04/M05, VST3/VST2, M07, unsigned M08, 159 requirement mappings,
+and documentation validation all passed. Cleanup removed 15 run-owned
+temporary children. No driver installation/loading, signing-mode, plugin or
+startup registration, stream, default, volume, mute, privacy, or persistent
+machine-audio configuration action occurred.
+
 Fresh M05 UI acceptance passed on 2026-09-12: TypeScript typecheck, 17 test
 files/128 tests, and a disposable production Vite build of 213 modules all
 completed successfully. The three temporary build files were removed; no
