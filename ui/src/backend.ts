@@ -29,6 +29,7 @@ import type {
   RecordingRemoveResult,
   RecordingRow,
   RecorderLifecycleResult,
+  RecorderCreateResult,
   RouteInspection,
   Session,
   SessionCreateResult,
@@ -107,6 +108,7 @@ export interface UiBackend {
   clearRecoverySafeMode(idempotencyKey?: string): Promise<RecoveryClearResult>;
   removeRecordingEntry(recordingId: string, idempotencyKey?: string): Promise<RecordingRemoveResult>;
   recycleRecording(recordingId: string, confirm: boolean, idempotencyKey?: string): Promise<RecordingRecycleResult>;
+  createRecorder(params: MethodParams["recorders.create"]): Promise<RecorderCreateResult>;
   armRecorder(sessionId: string, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
   startRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
   pauseRecorder(sessionId: string, frame: number, idempotencyKey?: string): Promise<RecorderLifecycleResult>;
@@ -276,6 +278,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async recycleRecording() {
       throw new Error("The backend is disconnected; recording recycle is unavailable.");
+    },
+    async createRecorder() {
+      throw new Error("The backend is disconnected; recorder creation is unavailable.");
     },
     async armRecorder() {
       throw new Error("The backend is disconnected; recorder control is unavailable.");
@@ -494,6 +499,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async recycleRecording(recordingId, confirm, idempotencyKey) {
       return client.request("recordings.recycle", { recordingId, confirm, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });
+    },
+    async createRecorder(params) {
+      return client.request("recorders.create", params);
     },
     async armRecorder(recorderSessionId, idempotencyKey) {
       return client.request("recorders.arm", { sessionId: recorderSessionId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) });

@@ -8355,6 +8355,11 @@ live-driver evidence.
   mode remains read-only and mutation-disabled. UI typecheck, 126 UI tests,
   and diff checks passed. The backend remains authoritative for route shape,
   authorization, graph safety, and endpoint activation.
+- Added typed UI backend forwarding for `recorders.create` on 2026-09-12. The
+  adapter passes the shared recorder configuration and idempotency contract;
+  disconnected mode rejects creation without touching files. UI typecheck,
+  127 UI tests, and diff checks passed. The approved recording root,
+  authorization, and realtime graph attachment remain backend-owned gates.
 - Ran the explicitly authorized guarded M02 live adapter bridge on 2026-09-12
   for one 500 ms cycle using the existing VB-Audio endpoints. It captured
   24,480 frames, processed 191 quanta, rendered 24,448 frames, and reported

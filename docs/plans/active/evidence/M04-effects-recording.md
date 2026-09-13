@@ -1120,3 +1120,10 @@ attachment, and native endpoint ownership remain open.
 Segment identities include a per-start run identifier so a later recording
 cannot replace an earlier segment row through SQLite upsert. The focused
 regression verifies the bounded identity shape and remains green.
+
+The UI backend adapter now exposes typed `recorders.create` forwarding beside
+the existing lifecycle methods. It preserves the shared contract's format,
+sample-rate, channel, queue, sequence, and idempotency fields without creating
+files from the disconnected backend. UI typecheck, 127 UI tests, and diff
+checks passed; recorder creation still requires the backend's approved-root and
+recording authorization gates.

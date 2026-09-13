@@ -98,6 +98,7 @@ describe("snapshot cache", () => {
       clearRecoverySafeMode: async () => { throw new Error("not connected"); },
       removeRecordingEntry: async () => { throw new Error("not connected"); },
       recycleRecording: async () => { throw new Error("not connected"); },
+      createRecorder: async () => { throw new Error("not connected"); },
       armRecorder: async () => { throw new Error("not connected"); },
       startRecorder: async () => { throw new Error("not connected"); },
       pauseRecorder: async () => { throw new Error("not connected"); },
@@ -392,6 +393,27 @@ describe("live event cursor", () => {
     const backend = createLiveBackend(client, demoSession.id);
     await expect(backend.previewRecording("take-1")).resolves.toEqual({ recordingId: "take-1", preview: { status: "missing" } });
     expect(received).toEqual({ method: "recordings.preview", params: { recordingId: "take-1" } });
+  });
+
+  it("forwards typed recorder creation through the shared API", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return { sessionId: "session-1", nodeId: null, recorderId: "recorder-1", format: "wavPcm24", path: "C:\\Audio\\take.wav", state: "idle", armed: false };
+      },
+    } as never;
+    const params = {
+      sessionId: "session-1",
+      recorderId: "recorder-1",
+      format: "wavPcm24" as const,
+      sequence: 1,
+      channels: 2 as const,
+      sampleRate: 48000 as const,
+      idempotencyKey: "create-recorder",
+    };
+    await expect(createLiveBackend(client, demoSession.id).createRecorder(params)).resolves.toMatchObject({ recorderId: "recorder-1", armed: false });
+    expect(received).toEqual({ method: "recorders.create", params });
   });
 
   it("forwards the privacy safety latch through the live API", async () => {
