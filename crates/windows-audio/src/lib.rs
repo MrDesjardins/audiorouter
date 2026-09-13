@@ -4485,12 +4485,19 @@ impl NativeBridgeRegion {
         if samples.len() < sample_count {
             return Err(NativeBridgeRegionError::BufferTooSmall);
         }
+        // Validate every sample before mutating the caller-owned destination.
+        // A malformed block must fail closed as a whole, rather than leaving
+        // a partially refreshed quantum for a caller that handles the error
+        // without first clearing its buffer.
+        for index in 0..sample_count {
+            let offset = BRIDGE_PAYLOAD_OFFSET + index * 4;
+            if !f32::from_le_bytes(self.map[offset..offset + 4].try_into().unwrap()).is_finite() {
+                return Err(NativeBridgeRegionError::InvalidFrame);
+            }
+        }
         for (index, destination) in samples[..sample_count].iter_mut().enumerate() {
             let offset = BRIDGE_PAYLOAD_OFFSET + index * 4;
             *destination = f32::from_le_bytes(self.map[offset..offset + 4].try_into().unwrap());
-            if !destination.is_finite() {
-                return Err(NativeBridgeRegionError::InvalidFrame);
-            }
         }
         if state.load(std::sync::atomic::Ordering::Acquire) != before {
             return Err(NativeBridgeRegionError::TornRead);
@@ -6231,6 +6238,30 @@ mod tests {
             region.write(9, 1, &[0.0]),
             Err(NativeBridgeRegionError::SequenceExhausted)
         ));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn native_bridge_region_does_not_partially_copy_nonfinite_payloads() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-nonfinite-{}-{}.slot",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut region = NativeBridgeRegion::create(&path, 1, 2).unwrap();
+        region.write(9, 1, &[0.25, 0.5]).unwrap();
+        region.map[BRIDGE_PAYLOAD_OFFSET + std::mem::size_of::<f32>()
+            ..BRIDGE_PAYLOAD_OFFSET + 2 * std::mem::size_of::<f32>()]
+            .copy_from_slice(&f32::NAN.to_le_bytes());
+        let mut output = [9.0, 9.0];
+        assert!(matches!(
+            region.read_into(9, &mut output),
+            Err(NativeBridgeRegionError::InvalidFrame)
+        ));
+        assert_eq!(output, [9.0, 9.0]);
         std::fs::remove_file(path).unwrap();
     }
 

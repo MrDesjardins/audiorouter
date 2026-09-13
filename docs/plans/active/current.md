@@ -83,6 +83,12 @@ recording (40), storage (83), plugin-host (67 plus 13 worker-process tests),
 transport (19), protocol (8), DSP (32), CLI/MCP (32/3), and Windows-audio (65)
 coverage. No endpoint, driver, or persistent machine configuration was touched.
 
+Closed a bridge fail-closed gap on 2026-09-12: both Rust and kernel bounded
+payload readers validate all samples before copying, so malformed non-finite
+input cannot partially refresh a destination quantum. Windows-audio tests (66),
+strict Clippy, formatting, and the non-installing WDK build passed; no driver,
+endpoint, or machine audio configuration was changed.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability

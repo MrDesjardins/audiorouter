@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - fail-closed bridge payload validation
+
+The Rust mapped reader and kernel bridge copy helper now validate every sample
+in a bounded payload before mutating the destination. A non-finite sample
+therefore rejects the entire quantum instead of leaving a partially refreshed
+buffer. The Rust Windows-audio suite passed 66 tests, strict package Clippy
+and formatting passed, and the administrator-authorized non-installing WDK
+build passed with zero signability errors and warnings. No driver was
+installed or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - bridge writer sequence and seqlock-overflow hardening
 
 The Windows adapter now resumes a realtime writer's sequence from the stable

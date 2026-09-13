@@ -181,6 +181,8 @@ AudioRouterCopyBridgeBlock(
     if (DestinationCapacitySamples < sampleCount) {
         return STATUS_BUFFER_TOO_SMALL;
     }
+    // Validate the entire bounded payload before touching the destination so
+    // malformed input cannot leave a partially refreshed audio quantum.
     for (SIZE_T index = 0; index < sampleCount; ++index) {
         FLOAT sample = 0.0F;
         RtlCopyMemory(
@@ -193,6 +195,13 @@ AudioRouterCopyBridgeBlock(
             sample < -3.402823466e+38F) {
             return STATUS_DATA_ERROR;
         }
+    }
+    for (SIZE_T index = 0; index < sampleCount; ++index) {
+        FLOAT sample = 0.0F;
+        RtlCopyMemory(
+            &sample,
+            View + AR_BRIDGE_PAYLOAD_OFFSET + index * sizeof(FLOAT),
+            sizeof(FLOAT));
         Destination[index] = sample;
     }
     *Header = *sourceHeader;
