@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Requalified the locked workspace after the native endpoint API addition on
+  2026-09-13. All Rust workspace tests and doc-tests passed, including CLI
+  (32), control (129), domain (60), engine (107), storage (86), transport
+  (19), and Windows-audio (70); UI typecheck/tests (129), strict Clippy, and
+  documentation validation also passed. No endpoint or machine configuration
+  was changed by this requalification.
+
 - Added the authenticated `nativeEndpoints.prepare` API and UI workflow on
   2026-09-13. A device-administration client can select exact active capture
   and render IDs from the endpoint inventory; the backend revalidates
