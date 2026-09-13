@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added accessible stale-binding diagnostics on 2026-09-13. When a saved
+  capture or render ID is absent from the active inventory, the endpoint panel
+  now identifies that direction and instructs deliberate replacement while
+  keeping preparation disabled. UI regression coverage, 148 UI tests,
+  TypeScript typecheck, and diff checks pass. No audio or machine
+  configuration changed.
+
 - Completed deliberate replacement coverage for pinned endpoint hints on
   2026-09-13. The connected UI regression selects current capture/render IDs
   after stale saved IDs are shown as blank, verifies the exact pair is stored

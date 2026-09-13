@@ -121,6 +121,8 @@ describe("keyboard connection dialog", () => {
     const renderSelect = screen.getByRole("combobox", { name: "Native render endpoint" });
     await waitFor(() => expect((captureSelect as HTMLSelectElement).value).toBe(""));
     expect((renderSelect as HTMLSelectElement).value).toBe("");
+    expect(screen.getByText("Saved capture endpoint is unavailable. Select a replacement deliberately.")).toBeTruthy();
+    expect(screen.getByText("Saved render endpoint is unavailable. Select a replacement deliberately.")).toBeTruthy();
     fireEvent.change(captureSelect, { target: { value: "capture-current" } });
     fireEvent.change(renderSelect, { target: { value: "render-current" } });
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.endpoint-binding.demo-session") ?? "null")).toEqual({ captureEndpointId: "capture-current", renderEndpointId: "render-current" });
