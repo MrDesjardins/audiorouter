@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Verified the process-loopback activation allocation fix on 2026-09-13. The
+CoTaskMem-backed activation blob is owned by an RAII guard through completion
+or immediate failure, while the timeout path retains its documented complete
+async lifetime. `cargo test -p audiorouter-windows-audio --locked --
+--test-threads=1` passed all 70 tests, with formatting and diff checks also
+passing. No endpoint was opened and no machine audio configuration changed.
+
 Requalified the installed `C:\\Program Files\\VSTPlugins\\ReaPlugs` directory
 through the batch VST2 classifier on 2026-09-13. Seven x64 audio-effect
 candidates (`reacomp`, `readelay`, `reaeq`, `reafir`, `reagate`, `reastream`,
