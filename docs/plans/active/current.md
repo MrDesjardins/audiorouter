@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Attempted the attended shell launch gate on 2026-09-13 using a disposable
+  enrolled SQLite database and named pipe. The built shell and backend started
+  successfully, but the Windows automation surface returned zero applications
+  and windows on two observations, so visual connected-state and accessibility
+  behavior remain unverified. Exact temporary frontend/backend processes and
+  the temporary database directory were stopped/removed afterward. No audio
+  endpoint or persistent machine configuration changed.
+
 - Re-ran the frontend-owned shell RPC acceptance on 2026-09-13. The
   disposable Tauri/WebView initialization reached the native `rpc_request`
   command and authenticated backend `system.describe` successfully. This
