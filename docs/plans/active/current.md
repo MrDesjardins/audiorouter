@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+Rejected and classified the installed ReaControlMIDI VST2 binary on
+2026-09-13. The worker failed closed during state restoration with
+`failed to fill whole buffer`, so it remains unsupported for the bounded audio
+effect contract. Its SHA-256 remained
+`0fb6cf94df57eca771efdcef76c2ca8ca24332fce64b71d2340f0b7faea1ed6e`, and
+both VST environment variables were restored. The installed-plugin harness
+was also hardened to verify binary integrity in its `finally` path when a
+candidate fails early; no plugin registration or audio configuration changed.
+
 Qualified the explicitly installed ReaComp VST2 binary on 2026-09-13 from
 `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reacomp-standalone.dll`. Processing
 passed at 44.1, 48, and 96 kHz, and the dedicated/supervised editor

@@ -43,6 +43,14 @@ $hash = (Get-FileHash -LiteralPath $PluginPath -Algorithm SHA256).Hash.ToLowerIn
 Write-Output "Running installed VST2 worker acceptance: $PluginPath"
 Write-Output "SHA-256: $hash"
 
+function Assert-PluginUnchanged {
+    $finalFile = Get-Item -LiteralPath $PluginPath
+    $finalHash = (Get-FileHash -LiteralPath $PluginPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($finalFile.Length -ne $initialSize -or $finalHash -ne $hash) {
+        throw "Selected VST2 binary changed during acceptance: $PluginPath"
+    }
+}
+
 $previousFixture = $env:AUDIOROUTER_VST2_FIXTURE
 $previousSampleRate = $env:AUDIOROUTER_VST2_SAMPLE_RATE
 try {
@@ -69,11 +77,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Installed VST2 supervised editor containment failed with exit code $LASTEXITCODE"
     }
-    $finalFile = Get-Item -LiteralPath $PluginPath
-    $finalHash = (Get-FileHash -LiteralPath $PluginPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($finalFile.Length -ne $initialSize -or $finalHash -ne $hash) {
-        throw "Selected VST2 binary changed during acceptance: $PluginPath"
-    }
+    Assert-PluginUnchanged
     Write-Output 'Installed VST2 worker acceptance passed; binary fingerprint unchanged.'
 } finally {
     if ($null -eq $previousFixture) {
@@ -86,6 +90,10 @@ try {
     } else {
         $env:AUDIOROUTER_VST2_SAMPLE_RATE = $previousSampleRate
     }
+    # Preserve the integrity guarantee even when a candidate fails before the
+    # normal success-path check.  An incompatible plugin must not be able to
+    # make the harness skip the before/after fingerprint validation.
+    Assert-PluginUnchanged
 }
 
 Write-Output 'Scope: one explicitly selected user-installed VST2 DLL; binary fingerprint is checked before/after, with no copy, registration, or audio configuration changes.'
