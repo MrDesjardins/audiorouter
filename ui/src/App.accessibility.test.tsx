@@ -205,6 +205,7 @@ describe("keyboard connection dialog", () => {
     expect((precise as HTMLInputElement).value).toBe("0");
     fireEvent.change(slider, { target: { value: "-6" } });
     expect((precise as HTMLInputElement).value).toBe("-6");
+    expect(screen.getByText("Draft effect: gainDb: 0 → -6. Plan changes to validate and commit.")).toBeTruthy();
   });
 
   it("commits a dropped gate parameter through the graph backend", async () => {

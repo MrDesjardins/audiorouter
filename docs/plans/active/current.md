@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Closed the UI-05 inspector effect-summary gap on 2026-09-13. The selected
+  node inspector now compares the draft node with the authoritative session
+  node and reports bounded parameter, name, enabled, and bypass changes before
+  plan/commit; newly added nodes are explicitly identified as additions. The
+  existing connected Gain inspector regression verifies the visible
+  gainDb: 0 → -6 summary. UI coverage remains 135 tests and TypeScript
+  typecheck passes. Rollback is limited to inspector presentation and tests.
+
 - Requalified the full guarded M00-M08 acceptance chain at pushed head
   `061b49fc` on 2026-09-13 after the direct processor-insertion delivery.
   Elevated Windows execution passed toolchain/native compile, project-driver
