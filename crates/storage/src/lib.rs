@@ -2769,6 +2769,30 @@ impl Storage {
             == Some("true"))
     }
 
+    /// Persist the desired sign-in startup policy. This is configuration
+    /// state only; it never writes an operating-system startup registration.
+    pub fn save_startup_enabled(&self, enabled: bool) -> Result<(), StorageError> {
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('startupEnabled', ?1)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![if enabled { "true" } else { "false" }],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_startup_enabled(&self) -> Result<bool, StorageError> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = 'startupEnabled'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .as_deref()
+            == Some("true"))
+    }
+
     /// Persist one bounded crash marker and return the number of recent
     /// markers. The supervisor supplies epoch seconds; no restart or audio
     /// action is performed by this storage primitive.
@@ -3222,6 +3246,11 @@ mod tests {
     #[test]
     fn startup_plans_round_trip_and_delete_without_os_side_effects() {
         let storage = Storage::open_memory().unwrap();
+        assert!(!storage.load_startup_enabled().unwrap());
+        storage.save_startup_enabled(true).unwrap();
+        assert!(storage.load_startup_enabled().unwrap());
+        storage.save_startup_enabled(false).unwrap();
+        assert!(!storage.load_startup_enabled().unwrap());
         let plan_id = EntityId::new("startup-plan-live");
         storage.save_startup_plan(&plan_id, true, i64::MAX).unwrap();
         storage

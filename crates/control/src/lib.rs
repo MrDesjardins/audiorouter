@@ -2213,7 +2213,7 @@ fn method_output_schema(name: &str) -> Value {
         "startup.get" => json!({
             "type": "object",
             "properties": {
-                "enabled": { "const": false },
+                "enabled": { "type": "boolean" },
                 "registration": { "const": "unavailable" },
                 "reason": { "type": "string", "minLength": 1 }
             },
@@ -3548,6 +3548,7 @@ pub struct ControlPlane {
     plugin_inventories: HashMap<String, Value>,
     plugin_inventory_order: VecDeque<String>,
     privacy_muted: bool,
+    startup_enabled: bool,
     recovery_tracker: CrashRecoveryTracker,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
@@ -3597,6 +3598,7 @@ impl ControlPlane {
             plugin_inventories: HashMap::new(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted: false,
+            startup_enabled: false,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
@@ -3975,6 +3977,7 @@ impl ControlPlane {
         // Fail closed if the durable latch cannot be read: a persistence
         // failure must never silently unmute a capture path.
         let privacy_muted = storage.load_privacy_mute()?;
+        let startup_enabled = storage.load_startup_enabled()?;
         let recording_policy = storage
             .load_recording_root()?
             .map(RecordingPathPolicy::new)
@@ -4081,6 +4084,7 @@ impl ControlPlane {
             plugin_inventories: HashMap::new(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted,
+            startup_enabled,
             recovery_tracker: CrashRecoveryTracker::default(),
             virtual_buses,
             virtual_bus_routes,
@@ -6095,7 +6099,7 @@ impl ControlPlane {
                     "safety.setPrivacyMute" => self.dispatch_privacy_mute(request.params),
                     "recovery.clearSafeMode" => self.dispatch_recovery_clear(request.params),
                     "startup.get" => Ok(json!({
-                        "enabled": false,
+                        "enabled": self.startup_enabled,
                         "registration": "unavailable",
                         "reason": "sign-in startup registration is not implemented in this build"
                     })),
@@ -8349,7 +8353,7 @@ impl ControlPlane {
             );
             return Ok(previous);
         }
-        let Some((_enabled, expires_at)) = self.startup_plans.get(&plan_id_value).copied() else {
+        let Some((enabled, expires_at)) = self.startup_plans.get(&plan_id_value).copied() else {
             return Err(ControlError::InvalidRequest(
                 "startup plan was not found".into(),
             ));
@@ -8366,6 +8370,12 @@ impl ControlPlane {
             "registration": "unavailable",
             "reason": "sign-in startup registration is not implemented in this build"
         });
+        if let Some(storage) = &self.storage {
+            storage
+                .save_startup_enabled(enabled)
+                .map_err(storage_error)?;
+        }
+        self.startup_enabled = enabled;
         self.journal_idempotent_result(&scoped_key, "startup.apply", &request_hash, &result)?;
         // A plan is a short-lived authorization preview, not a durable
         // desired-state record. Consume it after the apply attempt has been
@@ -12079,6 +12089,19 @@ mod tests {
             result["reason"],
             "sign-in startup registration is not implemented in this build"
         );
+        assert!(
+            plane
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(5)),
+                    method: "startup.get".into(),
+                    params: None,
+                })
+                .result
+                .unwrap()["enabled"]
+                .as_bool()
+                == Some(true)
+        );
         let replay = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(3)),
@@ -12127,6 +12150,19 @@ mod tests {
             params: Some(json!({ "planId": plan_id, "idempotencyKey": "startup-restart" })),
         });
         assert_eq!(applied.result.unwrap()["state"], "unavailable");
+        assert!(
+            restarted
+                .dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(5)),
+                    method: "startup.get".into(),
+                    params: None,
+                })
+                .result
+                .unwrap()["enabled"]
+                .as_bool()
+                == Some(true)
+        );
         assert!(restarted
             .dispatch(JsonRpcRequest {
                 jsonrpc: "2.0".into(),

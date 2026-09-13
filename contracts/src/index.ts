@@ -448,7 +448,7 @@ export interface DiagnosticsSnapshot {
 }
 
 export interface StartupStatus {
-  enabled: false;
+  enabled: boolean;
   registration: "unavailable";
   reason: string;
 }

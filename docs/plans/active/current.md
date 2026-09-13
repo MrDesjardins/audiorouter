@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Implemented durable M07 desired startup state. `startup.apply` now persists
+  the user's opt-in preference in SQLite, `startup.get` restores it after a
+  backend restart, and the TypeScript/discovery contract no longer falsely
+  constrains `enabled` to `false`. Storage/control regressions, strict
+  package Clippy, formatting, contracts typecheck/drift, UI typecheck, and the
+  affected suites pass. OS sign-in registration remains explicitly
+  unavailable, so no startup or audio machine configuration was changed.
+
 - Closed an M07 startup-plan lifecycle defect: after a fail-closed
   `startup.apply` attempt is journaled, its short-lived plan is now removed
   from memory and durable SQLite storage. Added control regressions proving a
