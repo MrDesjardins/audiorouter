@@ -1,5 +1,17 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - Tauri shell asset and probe hardening
+
+The Tauri shell initialization probe now delegates through the loaded UI
+module's official Tauri invoke API, while the native initialization script
+only supplies a private diagnostic flag. Vite now emits relative asset URLs,
+which is required by the Tauri app protocol. Tauri shell tests (7), UI
+typecheck, UI tests (128), and production build passed. The disposable
+shell-RPC acceptance still could not observe frontend execution in the agent's
+non-interactive desktop session: the shell process remained alive, but no
+frontend probe marker was produced. This remains a manual interactive-desktop
+gate; no audio endpoint or persistent machine configuration was touched.
+
 ## 2026-09-13 - workspace requalification after atomic apply
 
 After the atomic startup-apply persistence change, strict Clippy for

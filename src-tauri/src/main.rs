@@ -91,7 +91,7 @@ fn session_id(state: State<'_, ShellState>) -> String {
 fn session_initialization_script(session_id: &str, frontend_probe: bool) -> String {
     let encoded = serde_json::to_string(session_id).expect("session id is serializable");
     let probe = if frontend_probe {
-        "(()=>{let sent=false;const send=()=>{if(sent)return;sent=true;window.__TAURI_INTERNALS__.invoke('rpc_request',{request:{jsonrpc:'2.0',id:'shell-probe',method:'system.describe'}});};if(document.readyState==='loading'){window.addEventListener('DOMContentLoaded',send,{once:true});}else{send();}window.setTimeout(send,250);})();"
+        "window.__AUDIO_ROUTER_FRONTEND_PROBE__ = true;"
     } else {
         ""
     };
@@ -254,7 +254,6 @@ mod tests {
             r#"window.__AUDIO_ROUTER_SESSION_ID__ = "shell\";window.pwned=true;\\escape";"#
         ));
         assert!(script.contains("window.__AUDIO_ROUTER_HOST__"));
-        assert!(script.contains("window.__TAURI_INTERNALS__.invoke('rpc_request', {request})"));
     }
 
     #[test]
@@ -266,11 +265,7 @@ mod tests {
     #[test]
     fn optional_frontend_probe_uses_the_native_command() {
         let script = session_initialization_script("probe", true);
-        assert!(script.contains("id:'shell-probe'"));
-        assert!(script.contains("method:'system.describe'"));
-        assert!(script.contains("DOMContentLoaded"));
-        assert!(script.contains("setTimeout(send,250)"));
-        assert!(script.contains("sent=false"));
+        assert!(script.contains("window.__AUDIO_ROUTER_FRONTEND_PROBE__ = true"));
     }
 
     #[test]

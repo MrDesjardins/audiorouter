@@ -184,6 +184,7 @@ declare global {
   interface Window {
     __AUDIO_ROUTER_HOST__?: unknown;
     __AUDIO_ROUTER_SESSION_ID__?: unknown;
+    __AUDIO_ROUTER_FRONTEND_PROBE__?: boolean;
     __TAURI__?: unknown;
     chrome?: { webview?: unknown };
   }

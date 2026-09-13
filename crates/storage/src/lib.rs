@@ -3357,6 +3357,42 @@ mod tests {
     }
 
     #[test]
+    fn startup_apply_commit_rolls_back_all_surfaces_on_storage_failure() {
+        let mut storage = Storage::open_memory().unwrap();
+        let plan_id = EntityId::new("startup-rollback");
+        storage.save_startup_enabled(false).unwrap();
+        storage.save_startup_plan(&plan_id, true, i64::MAX).unwrap();
+        storage
+            .connection
+            .execute_batch(
+                "CREATE TRIGGER fail_startup_apply
+                 BEFORE UPDATE OF value ON control_settings
+                 WHEN OLD.key = 'startupEnabled'
+                 BEGIN SELECT RAISE(ABORT, 'forced startup failure'); END;",
+            )
+            .unwrap();
+
+        assert!(storage
+            .commit_startup_apply(
+                &plan_id,
+                true,
+                "startup.apply:rollback",
+                "startup.apply",
+                r#"{"state":"unavailable"}"#,
+                "request-hash",
+            )
+            .is_err());
+        assert!(!storage.load_startup_enabled().unwrap());
+        assert_eq!(
+            storage
+                .journal_result_checked("startup.apply:rollback", "request-hash")
+                .unwrap(),
+            None
+        );
+        assert_eq!(storage.load_startup_plans().unwrap().len(), 1);
+    }
+
+    #[test]
     fn corrupt_startup_preference_fails_closed() {
         let storage = Storage::open_memory().unwrap();
         storage

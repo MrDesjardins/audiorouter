@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Hardened the launchable M05/M07 Tauri shell boundary on 2026-09-13. The
+  frontend probe now runs from the loaded UI module through the official Tauri
+  invoke API, and Vite emits relative assets for the Tauri app protocol. Shell
+  tests (7), UI typecheck/tests (128), and production build passed. The
+  disposable shell-RPC acceptance remains unverified in this non-interactive
+  desktop session because the shell process stayed alive without executing the
+  frontend; manual interactive-desktop acceptance remains open. No audio or
+  machine configuration changed.
+
 - Revalidated the atomic startup-apply change at workspace scope on 2026-09-13.
   Strict Clippy for storage/control and `cargo test --workspace --locked
   -- --test-threads=1` passed across all workspace suites and doc-tests,
