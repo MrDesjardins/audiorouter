@@ -1,5 +1,13 @@
 # Plugin compatibility snapshot
 
+The installed ReaPlugs directory was batch-qualified on 2026-09-13. Seven
+x64 audio-effect candidates passed the contained worker matrix at 44.1, 48,
+and 96 kHz. `reacontrolmidi-standalone.dll` and `reajs.dll` were classified
+and rejected because they do not satisfy the bounded audio-effect/state
+contract. Before/after fingerprints were checked for the candidates, and the
+temporary VST environment values were restored. No plugin registration or
+audio configuration changed.
+
 The local ReaPlugs VST2 matrix was independently rerun on 2026-09-13. All six
 ignored x64 audio-effect DLLs passed the contained worker load/process checks at
 44.1, 48, and 96 kHz (18 combinations); each binary retained its original

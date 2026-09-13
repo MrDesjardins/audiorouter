@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+Requalified the installed `C:\\Program Files\\VSTPlugins\\ReaPlugs` directory
+through the batch VST2 classifier on 2026-09-13. Seven x64 audio-effect
+candidates (`reacomp`, `readelay`, `reaeq`, `reafir`, `reagate`, `reastream`,
+and `reaxcomp`) passed the contained worker matrix at 44.1, 48, and 96 kHz;
+`reacontrolmidi` and `reajs` were rejected as incompatible with the bounded
+audio-effect/state contract. Fingerprints were checked, both temporary VST
+environment values were restored, and no plugin registration or audio
+configuration changed. This expands installed-directory evidence; it does
+not close the native driver, signing, or live endpoint gates.
+
 Rechecked the M07 interactive-shell prerequisite on 2026-09-13 after reboot.
 The computer-use surface reported no available applications or browsers, so
 the frontend-owned WebView2/Tauri acceptance was not started. This remains an
