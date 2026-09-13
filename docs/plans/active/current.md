@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Revalidated the atomic startup-apply change at workspace scope on 2026-09-13.
+  Strict Clippy for storage/control and `cargo test --workspace --locked
+  -- --test-threads=1` passed across all workspace suites and doc-tests,
+  including control (128), storage (85), engine (107), DSP (32), recording
+  (40), plugin-host (67), worker-process (13), and Windows-audio (70). No
+  endpoint, driver, plugin registration, startup registration, or machine
+  audio configuration was accessed.
+
 - Closed an M07 persistence consistency gap on 2026-09-13. `startup.apply`
   now atomically commits the desired startup flag, idempotency result, and
   one-shot plan deletion in SQLite. Control (128) and storage (85) tests pass,

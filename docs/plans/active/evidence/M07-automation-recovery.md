@@ -1,5 +1,14 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - workspace requalification after atomic apply
+
+After the atomic startup-apply persistence change, strict Clippy for
+storage/control and the full locked workspace test suite passed. The run
+included control (128), storage (85), engine (107), DSP (32), recording (40),
+plugin-host (67), worker-process (13), and Windows-audio (70), plus all
+doc-tests. No endpoint, driver, startup registration, plugin registration, or
+machine-audio configuration was accessed.
+
 ## 2026-09-13 - atomic startup apply persistence
 
 `startup.apply` now commits the desired startup flag, idempotency result, and
