@@ -17,6 +17,12 @@ bounded native endpoint/data-path behavior on this machine; they do not prove
 production virtual-driver installation, multi-device synchronization, or the
 physical latency target.
 
+The same CABLE pair passed the bounded impulse correlation probe with 997 of
+1,000 impulse groups detected, p95 spacing error of 0 frames, and estimated
+user-space onset of 73.71 ms. Temporary raw audio/log artifacts were removed.
+The result is useful for repeatability and signal-path correlation, but is not
+calibrated physical p95 latency or loaded-driver timing evidence.
+
 # M00 WASAPI probe
 
 ## 2026-09-09 - Current guarded live requalification

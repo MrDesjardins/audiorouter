@@ -195,6 +195,13 @@ and exclude modes also passed: 10,584/11,025 source frames converted to
 11,392/11,904 engine frames with zero rejected packets and xruns. Streams were
 stopped/reset by the probes and no persistent audio configuration changed.
 
+The bounded CABLE impulse correlation probe also passed on 2026-09-12:
+997/1000 impulse groups were detected with a p95 spacing error of 0 frames and
+an estimated user-space onset of 73.71 ms. The raw capture and logs were
+temporary and removed by the wrapper. This is repeatable signal-correlation
+evidence only; calibrated physical p95 latency and driver timing remain open.
+stopped/reset by the probes and no persistent audio configuration changed.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
