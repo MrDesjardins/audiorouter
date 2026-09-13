@@ -2113,6 +2113,7 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "list_devices"
             | "list_plugins"
             | "list_virtual_devices"
+            | "list_virtual_routes"
             | "list_applications"
             | "list_processors"
             | "get_session"
@@ -2155,6 +2156,8 @@ fn mcp_tools() -> Value {
         { "name": "list_plugins", "description": "List the last bounded plugin scan inventory without scanning or loading plugin code; requires plugin-scan scope.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 } }, "required": ["directory"], "additionalProperties": false } },
         { "name": "retry_plugins", "description": "Explicitly refresh a bounded plugin inventory after a prior scan failure; requires plugin-scan scope and an idempotency key.", "inputSchema": { "type": "object", "properties": { "directory": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["directory", "idempotencyKey"], "additionalProperties": false } },
         { "name": "list_virtual_devices", "description": "List managed virtual bus desired state without activating endpoints. Optional cursor/limit fields return bounded pages.", "inputSchema": { "type": "object", "properties": { "cursor": { "type": ["string", "null"], "minLength": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 500 } }, "additionalProperties": false } },
+        { "name": "list_virtual_routes", "description": "List explicit revisioned cross-session virtual-bus routes without activating endpoints.", "inputSchema": { "type": "object", "additionalProperties": false } },
+        { "name": "replace_virtual_routes", "description": "Replace explicit cross-session virtual-bus routes as one revisioned, idempotent operation; requires device-administration scope and does not activate endpoints.", "inputSchema": { "type": "object", "properties": { "baseRevision": { "type": "integer", "minimum": 0 }, "routes": { "type": "array", "maxItems": 64, "items": { "type": "object" } }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["baseRevision", "routes", "idempotencyKey"], "additionalProperties": false } },
         { "name": "plan_virtual_device", "description": "Validate a managed virtual bus lifecycle operation without applying it.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
         { "name": "apply_virtual_device", "description": "Apply a validated managed virtual bus lifecycle plan.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "plan_virtual_device_change", "description": "Validate a managed virtual bus lifecycle operation without applying it; compatibility name for the focused virtual-device planner.", "inputSchema": { "type": "object", "properties": { "operation": { "type": "object" } }, "required": ["operation"], "additionalProperties": false } },
@@ -2232,6 +2235,8 @@ fn mcp_tool_call(
         "list_plugins" => ("plugins.list", Some(arguments)),
         "retry_plugins" => ("plugins.retry", Some(arguments)),
         "list_virtual_devices" => ("virtualDevices.list", Some(arguments)),
+        "list_virtual_routes" => ("virtualRoutes.list", None),
+        "replace_virtual_routes" => ("virtualRoutes.replace", Some(arguments)),
         "plan_virtual_device" => ("virtualDevices.plan", Some(arguments)),
         "apply_virtual_device" => ("virtualDevices.apply", Some(arguments)),
         "plan_virtual_device_change" => ("virtualDevices.plan", Some(arguments)),
@@ -3876,7 +3881,7 @@ mod tests {
             }),
         );
         assert_eq!(denied_clear["result"]["isError"], true);
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 45);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 47);
         let tools = mcp_tools();
         let create_recorder = tools
             .as_array()
@@ -3923,6 +3928,8 @@ mod tests {
         );
         for (name, read_only, destructive, idempotent) in [
             ("get_session", true, false, true),
+            ("list_virtual_routes", true, false, true),
+            ("replace_virtual_routes", false, false, true),
             ("plan_graph_change", true, false, true),
             ("apply_graph_change", false, false, true),
             ("remove_recording_entry", false, true, true),
@@ -3949,6 +3956,10 @@ mod tests {
             ("apply_startup", json!(["planId", "idempotencyKey"])),
             ("retry_plugins", json!(["directory", "idempotencyKey"])),
             ("apply_virtual_device", json!(["planId", "idempotencyKey"])),
+            (
+                "replace_virtual_routes",
+                json!(["baseRevision", "routes", "idempotencyKey"]),
+            ),
             ("commit_session_import", json!(["planId", "idempotencyKey"])),
             ("arm_recorder", json!(["sessionId", "idempotencyKey"])),
             (

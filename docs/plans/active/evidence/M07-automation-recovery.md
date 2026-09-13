@@ -1,5 +1,15 @@
 # M07 automation and recovery evidence
 
+## 2026-09-12 - virtual-route MCP parity
+
+The MCP stdio adapter now exposes `list_virtual_routes` and
+`replace_virtual_routes`. Both forward to the shared authorized control
+dispatcher; replacement retains the revision, bounded-route, and idempotency
+contracts and does not activate endpoints. The CLI/MCP suite passed 32 unit
+tests and 3 stdio integration tests, strict Clippy and formatting passed, and
+the tool catalog now contains 47 tools. No audio endpoint or machine
+configuration was accessed.
+
 ## 2026-09-08 - Graph-plan restart timestamp hardening
 
 `graph.commit` now uses checked, positive, five-minute-capped expiry

@@ -115,6 +115,13 @@ and non-installing WDK requalification passed with zero signability
 errors/warnings; documentation validation passed with 52 Markdown files and
 169 local links. Loaded-driver endurance remains an explicit gate.
 
+Closed the remaining virtual-route automation parity gap on 2026-09-12:
+MCP stdio now exposes `list_virtual_routes` and `replace_virtual_routes` over
+the shared authorized revision/idempotent API. CLI/MCP validation passed (32
+unit tests and 3 stdio integration tests), strict Clippy and formatting passed,
+and the catalog contains 47 tools. No endpoint or machine audio configuration
+was accessed. Evidence: [M07 automation evidence](evidence/M07-automation-recovery.md).
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
