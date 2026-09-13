@@ -4286,6 +4286,19 @@ pub enum NativeBridgeRegionError {
     Contract(audiorouter_protocol::AudioBridgeContractError),
 }
 
+#[cfg(windows)]
+fn bridge_path_is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        || metadata.file_type().is_symlink()
+}
+
+#[cfg(not(windows))]
+fn bridge_path_is_reparse_point(metadata: &std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
 /// One bounded, file-backed shared-memory slot for the future driver broker.
 /// The file path is supplied by the authorized broker and is never chosen from
 /// a display label. The mapping is control/broker-side; realtime callers should
@@ -4345,7 +4358,7 @@ impl NativeBridgeRegion {
         // could follow it into an unintended location.
         let metadata = std::fs::symlink_metadata(path)
             .map_err(|error| NativeBridgeRegionError::Io(error.to_string()))?;
-        if !metadata.file_type().is_file() {
+        if !metadata.is_file() || bridge_path_is_reparse_point(&metadata) {
             return Err(NativeBridgeRegionError::InvalidPath);
         }
         let file = std::fs::OpenOptions::new()
@@ -4546,7 +4559,7 @@ impl NativeBridgeRegion {
         while let Some(parent) = current {
             if parent.exists()
                 && std::fs::symlink_metadata(parent)
-                    .map(|metadata| metadata.file_type().is_symlink())
+                    .map(|metadata| bridge_path_is_reparse_point(&metadata))
                     .unwrap_or(true)
             {
                 return Err(NativeBridgeRegionError::InvalidPath);

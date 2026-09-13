@@ -1749,3 +1749,14 @@ directory leaf is rejected without creating a mapping.
 The focused Windows-audio suite passed 68 tests with formatting and diff
 checks. No driver was installed or loaded and no audio endpoint or persistent
 machine configuration was changed.
+
+## 2026-09-12 - Windows reparse-point coverage
+
+Bridge path validation now checks the Windows `FILE_ATTRIBUTE_REPARSE_POINT`
+metadata bit for both existing parents and the mapping leaf, in addition to
+Rust symlink metadata. This rejects junction-style redirection before a
+shared-memory file is opened or mapped.
+
+The focused Windows-audio suite passed 68 tests with formatting and diff
+checks. No driver was installed or loaded and no audio endpoint or persistent
+machine configuration was changed.

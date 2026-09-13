@@ -30,6 +30,11 @@ where parent reparse checks did not prevent a leaf symlink or directory from
 being followed. A focused non-regular-leaf regression and Windows-audio tests
 passed; no audio endpoint or persistent machine configuration was accessed.
 
+Extended that bridge path check to Windows reparse attributes on 2026-09-12.
+Parent and leaf validation now reject `FILE_ATTRIBUTE_REPARSE_POINT` objects
+as well as Rust-reported symlinks, covering junction-style redirection before
+the mapping is opened. The focused Windows-audio suite remains green.
+
 Hardened the bridge broker IRP boundary on 2026-09-12: device-control
 dispatch now rejects a null IRP, missing stack, or missing control file object
 before reading the IOCTL or entering lease ownership logic. This prevents a
