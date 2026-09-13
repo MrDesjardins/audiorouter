@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Requalified the full locked workspace at pushed head `37fb589d` on
+2026-09-13. `cargo test --workspace --locked -- --test-threads=1` passed
+across CLI (32), MCP (3), control (127), domain (60), DSP (32), engine (107),
+plugin-host (67) plus worker-process (13), protocol (8), recording (40),
+storage (83), transport (19), Windows-audio (70), and all doc-tests. No
+driver, endpoint, plugin registration, or persistent machine-audio
+configuration was changed.
+
 Guarded the WaveRT timer packet counter on 2026-09-13. `TimerNotifyRT` now
 stops before incrementing the signed internal packet counter at
 `MAXLONGLONG`, preventing a negative wrap from reaching packet/timestamp
