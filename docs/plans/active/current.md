@@ -161,6 +161,18 @@ finite-output, and state/stability cases. It was portable crate validation;
 no endpoint, driver, plugin, or persistent machine audio configuration was
 accessed.
 
+The complete guarded `tests/acceptance/safe-all.ps1` chain was requalified
+after the reboot on 2026-09-12. Project x64 WDK build/signability, 34-endpoint
+read-only inventory, disposable SysVAD compile/package/API checks, M01/M04/M05,
+M06 SDK/VST3/VST2 workers, M07 CLI/MCP, unsigned M08 preparation, 159
+traceability IDs, and documentation validation (52 Markdown files, 174 local
+links) passed. Cleanup removed 15 run-owned temporary children. No driver was
+installed or loaded, no plugin or startup registration occurred, and no stream,
+default device, volume, mute, privacy, boot policy, signing mode, or persistent
+machine-audio configuration changed. This is a fresh qualification baseline;
+production PortCls ownership, signed deployment, clean-machine compatibility,
+physical latency, manual UI, and independent plugin-rights gates remain open.
+
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit
 `632125bc`: project WDK build/signability, read-only 34-endpoint inventory,
 pinned SysVAD, M01/M04/M05, M06 VST3/VST2, M07, unsigned M08, 159 traceability
