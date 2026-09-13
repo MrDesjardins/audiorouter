@@ -1309,6 +1309,15 @@ VOID CMiniportWaveRTStream::UpdatePosition
     _In_ LARGE_INTEGER ilQPC
 )
 {
+    // The notification timer can outlive a client buffer during teardown.
+    // Do not perform position arithmetic or call either bridge direction until
+    // the DMA buffer and byte rate are valid; in particular, this prevents a
+    // zero-sized modulo on an early or late callback.
+    if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0)
+    {
+        return;
+    }
+
     // Convert ticks to 100ns units.
     LONGLONG  hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ilQPC);
 

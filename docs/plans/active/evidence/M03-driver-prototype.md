@@ -521,6 +521,18 @@ contract and non-installing x64 WDK build passed. Signability reported zero
 errors and warnings and catalog generation completed. No driver was installed
 or loaded and no machine audio configuration changed.
 
+## 2026-09-12 - teardown-safe position callback
+
+`UpdatePosition` now fails closed when the notification timer observes a
+stream during DMA-buffer teardown or before allocation. It checks the DMA
+pointer, buffer size, and byte rate before doing modulo/position arithmetic or
+calling the bridge data path, preventing a zero-sized modulo and invalid
+callback access.
+
+The administrator-authorized M03 source-contract and non-installing x64 WDK
+build passed with zero signability errors/warnings and catalog generation. No
+driver was installed or loaded and no machine audio configuration changed.
+
 ## 2026-09-12 - realtime bridge tap fail-closed access
 
 The native bridge tap now checks each planar channel slice before copying into

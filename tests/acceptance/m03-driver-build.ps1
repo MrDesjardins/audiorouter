@@ -122,6 +122,9 @@ if (-not $stream.Contains('ReadBytes(ByteDisplacement);')) {
 if (-not $stream.Contains('IID_IMiniportWaveRTOutputStream) && (!this->m_bCapture)')) {
     throw 'WaveRT capture streams must not advertise the render-stream interface'
 }
+if (-not $stream.Contains('m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0')) {
+    throw 'WaveRT position callback must fail closed before DMA buffer arithmetic'
+}
 
 $retireStart = $source.IndexOf('static void RetireBridgeResources(')
 $retireEnd = $source.IndexOf('static AR_BRIDGE_LEASE_STATE* BridgeLeaseForDirection(', $retireStart)
