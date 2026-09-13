@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Requalified the non-installing AudioRouter x64 WDK/source-contract build after
+resuming the goal on 2026-09-13. Visual Studio/WDK built the driver and
+package, signability reported zero errors and warnings, and catalog generation
+completed. Disposable build output was removed. No driver installation or
+loading, signing-mode or boot-policy change, service action, endpoint access,
+or machine-audio configuration change occurred.
+
 Requalified the full locked workspace after resuming the goal on 2026-09-13.
 `cargo test --workspace --locked -- --test-threads=1` passed across CLI (32),
 MCP (3), control (128), domain (60), DSP (32), engine (107), plugin-host
