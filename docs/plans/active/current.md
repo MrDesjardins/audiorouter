@@ -8362,6 +8362,13 @@ live-driver evidence.
   state matched before/after and temporary outputs were removed. This advances
   native user-mode adapter evidence only; the managed driver remains neither
   installed nor loaded, and machine audio configuration was unchanged.
+- Re-ran the guarded control-owned M02 route harness on 2026-09-12 for one
+  500 ms cycle. Generation 1 processed 50 packets, 24,000 captured frames,
+  187 graph quanta, and 23,936 rendered frames; start/stop/reset all succeeded
+  and the deliberate stale-generation probe was rejected once. Worker detach
+  and before/after media-state checks passed. This remains existing-endpoint
+  user-mode evidence; driver installation, signing, PortCls ownership, and
+  physical latency remain open.
 - Refreshed the non-installing M03 WDK qualification on 2026-09-12 with VS
   18.9.1 and WDK 10.0.28000.0. All x64 driver/package targets and catalog
   signability passed with zero errors and warnings; disposable output was

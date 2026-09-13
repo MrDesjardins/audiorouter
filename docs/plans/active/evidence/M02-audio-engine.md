@@ -1572,3 +1572,11 @@ The control regression `virtual_route_taps_require_an_explicit_sink_and_select_o
 passed on 2026-09-12. It proves that no virtual tap is built without an
 explicit capture-sink marker and that a sink-owned producer receives only its
 matching enabled route bridge; unrelated producer routes are excluded.
+
+The control-owned live route harness was re-run with explicit authorization on
+2026-09-12 for one 500 ms cycle. It reached generation 1 with 50 packets,
+24,000 captured frames, 187 processed quanta, 23,936 rendered frames, one
+successful start/stop/reset, and one deliberate stale-generation rejection.
+The worker detached cleanly and the media identity/state snapshot was unchanged.
+This is existing-endpoint user-mode evidence; production driver installation,
+signing, PortCls ownership, and physical latency remain open.
