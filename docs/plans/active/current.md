@@ -6,10 +6,11 @@ Updated: 2026-09-13.
   against the existing VB-Audio CABLE Output capture and CABLE Input render
   endpoints. Exact inventory matching, stopped-client preparation, native
   session start, successful stop, and lifecycle counters passed in one
-  `ControlPlane`; the 500 ms pump produced 23,520 captured frames, 183 graph
-  quanta, and 23,424 rendered frames. Temporary environment variables were
-  cleared afterward. This proves control-owned shared WASAPI graph delivery
-  only, not managed-driver routing or physical latency.
+  `ControlPlane`; the checked-in wrapper's 500 ms pump produced 24,000
+  captured frames, 187 graph quanta, and 23,936 rendered frames. Temporary
+  environment variables were restored afterward. This proves control-owned
+  shared WASAPI graph delivery only, not managed-driver routing or physical
+  latency.
 
 - Added a guarded same-process Windows control-plane lifecycle harness for
   exact native endpoints. It requires `AUDIOROUTER_ALLOW_LIVE_AUDIO=1` plus

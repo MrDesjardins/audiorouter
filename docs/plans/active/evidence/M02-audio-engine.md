@@ -11,12 +11,12 @@ run with explicit opt-in and the existing pair:
 
 The test enumerated and exact-matched both active IDs, prepared stopped WASAPI
 clients, started the session through the same `ControlPlane`, pumped the graph
-for 500 ms, and then stopped the session. It reported 23,520 captured frames,
-183 processed graph quanta, 23,424 rendered frames, one successful native
-start, and one successful native stop. It used no durable database and the
-temporary opt-in environment variables were removed after the run. No
-defaults, volume, mute, privacy, or other persistent audio configuration was
-changed.
+for 500 ms, and then stopped the session. The checked-in wrapper reported
+24,000 captured frames, 187 processed graph quanta, 23,936 rendered frames,
+one successful native start, and one successful native stop. It used no durable
+database and restored the temporary opt-in environment variables after the
+run. No defaults, volume, mute, privacy, or other persistent audio
+configuration was changed.
 
 This is control-owned native worker and processed graph-delivery evidence. It
 does not prove managed virtual-driver ownership, PortCls integration, signing,
@@ -35,11 +35,7 @@ test is never run by ordinary workspace acceptance; it is a deliberate live
 qualification command:
 
 ```powershell
-$env:AUDIOROUTER_ALLOW_LIVE_AUDIO = '1'
-$env:AUDIOROUTER_CAPTURE_ENDPOINT_ID = '<exact-capture-id>'
-$env:AUDIOROUTER_RENDER_ENDPOINT_ID = '<exact-render-id>'
-cargo test -p audiorouter-control --offline guarded_live_native_endpoint_session_lifecycle -- --ignored --nocapture
-Remove-Item Env:AUDIOROUTER_ALLOW_LIVE_AUDIO,Env:AUDIOROUTER_CAPTURE_ENDPOINT_ID,Env:AUDIOROUTER_RENDER_ENDPOINT_ID -ErrorAction SilentlyContinue
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-control-native-live.ps1 -AllowLiveAudio
 ```
 
 The harness owns no durable database and does not select defaults or alter
