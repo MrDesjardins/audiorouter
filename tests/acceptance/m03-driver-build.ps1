@@ -77,6 +77,15 @@ if ($copyHelper.Contains('KeAcquireSpinLock')) {
     throw 'callback lease helper must not acquire the lease spin lock'
 }
 $streamSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/minwavertstream.cpp') -Raw
+$readBytesStart = $streamSource.IndexOf('VOID CMiniportWaveRTStream::ReadBytes')
+$readBytesEnd = $streamSource.IndexOf('#pragma code_seg("PAGE")', $readBytesStart)
+if ($readBytesStart -lt 0 -or $readBytesEnd -le $readBytesStart) {
+    throw 'ReadBytes callback boundary is missing'
+}
+$readBytesSource = $streamSource.Substring($readBytesStart, $readBytesEnd - $readBytesStart)
+if ($readBytesSource.Contains('m_SaveData.WriteData')) {
+    throw 'ReadBytes callback must not perform diagnostic file output'
+}
 foreach ($required in @(
         'AudioRouterGetLeaseShapeForDirection(',
         'm_BridgeScratchFrames = 0;',

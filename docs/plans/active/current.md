@@ -32,6 +32,13 @@ the final DMA position update now use bounded modular advancement rather than
 adding the displacement before modulo, preventing pre-modulo integer wrap in
 the callback while preserving the existing buffer-position semantics.
 
+Removed the inherited diagnostic file write from the WaveRT `ReadBytes`
+callback on 2026-09-13. `CSaveData::WriteData` takes a spin lock and queues
+work items, so it cannot be called on the realtime path even when its registry
+flag is enabled. Bridge publication remains independent; the M03 source
+acceptance now rejects callback-side diagnostic output and the README records
+the limitation.
+
 Requalified the guarded M00-M08 acceptance chain after reboot on 2026-09-12
 at `2819714e`. Toolchain/native compile, the AudioRouter x64 WDK build and
 catalog signability, 31-endpoint inventory, disposable SysVAD, M01/M04/M05,

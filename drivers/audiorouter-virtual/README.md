@@ -45,7 +45,10 @@ procedure; do not use them on a development workstation.
   remains the owner of EQ, gate, compressor, limiter, delay, pitch,
   voice-chain, and meter processing. This is sample callback-wiring evidence;
   production PortCls ownership, managed bus lifecycle, loaded-driver
-  transport, and measured callback behavior remain open.
+  transport, and measured callback behavior remain open. The inherited
+  diagnostic file writer is not invoked from the realtime callback because it
+  takes locks and queues work items; bridge publication remains independent of
+  that opt-in sample diagnostic feature.
 - No driver installation or live endpoint test is authorized by this build
   script. Those gates require a reversible isolated-target procedure and must
   preserve the user's existing audio configuration.

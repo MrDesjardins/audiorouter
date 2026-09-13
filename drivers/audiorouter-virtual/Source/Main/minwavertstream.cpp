@@ -1525,8 +1525,9 @@ VOID CMiniportWaveRTStream::UpdatePosition
             m_bLastBufferRendered = TRUE;
         }
 
-        // Read from the render DMA for the capture-sink bridge and, when
-        // enabled, write the same consumed bytes to the diagnostic file.
+        // Read from the render DMA for the capture-sink bridge. Diagnostic
+        // file output is intentionally not called from this callback: the
+        // inherited SaveData path takes locks and queues work items.
         ReadBytes(ByteDisplacement);
     }
 
@@ -1720,9 +1721,6 @@ ByteDisplacement - # of bytes to process.
                     m_BridgeScratchFrames = 0;
                 }
             }
-        }
-        if (!g_DoNotCreateDataFiles) {
-            m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);
         }
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
