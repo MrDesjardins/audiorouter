@@ -99,6 +99,17 @@ describe("keyboard connection dialog", () => {
     await waitFor(() => expect(startSession).toHaveBeenCalledWith("demo-session", expect.any(String)));
   });
 
+  it("restores endpoint choices only when the exact IDs are still active", async () => {
+    window.localStorage.setItem("audiorouter.ui.endpoint-binding.demo-session", JSON.stringify({ captureEndpointId: "capture-saved", renderEndpointId: "render-saved" }));
+    const capture = { id: "capture-saved", name: "Saved capture", direction: "capture" as const, state: "active" as const, defaultRoles: [], format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 }, periods: { default100ns: 100000, minimum100ns: 30000 } };
+    const renderDevice = { ...capture, id: "render-saved", name: "Saved render", direction: "render" as const };
+    const backend = { ...connectedPreviewBackend(), listDevices: async () => [capture, renderDevice] };
+    render(<App backend={backend} />);
+    await waitFor(() => expect((screen.getByRole("combobox", { name: "Native capture endpoint" }) as HTMLSelectElement).value).toBe("capture-saved"));
+    expect((screen.getByRole("combobox", { name: "Native render endpoint" }) as HTMLSelectElement).value).toBe("render-saved");
+    window.localStorage.removeItem("audiorouter.ui.endpoint-binding.demo-session");
+  });
+
   it("opens with focus, wraps focus, retains validation errors, and restores focus", async () => {
     const backend = connectedPreviewBackend();
     render(<App backend={backend} />);

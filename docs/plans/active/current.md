@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added repeatable VB-Cable endpoint selection on 2026-09-13. The UI retains
+  exact capture/render IDs as per-session local hints and restores them only
+  when the current read-only inventory still reports those IDs active;
+  unavailable or stale hints fall back to an active endpoint and never select
+  a substitute silently. A connected accessibility regression covers the
+  restore path. UI tests pass (147), TypeScript typecheck and diff checks pass.
+  This is presentation-only persistence and changes no Windows defaults,
+  volume, mute, endpoint, driver, or backend desired state.
+
 - Completed the normal UI development launch path on 2026-09-13. The
   `npm run dev` script now uses Vite's runner config loader, avoiding the
   read-only `node_modules` config-temp path; together with the temporary

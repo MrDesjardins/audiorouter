@@ -4,7 +4,7 @@
 
 The guarded `tests/acceptance/safe-all.ps1` chain passed after the shell-owned
 backend changes. It covered VS2026/WDK driver build and signability, native
-compile/inventory, DSP/recording, UI typecheck/146 tests/production build,
+compile/inventory, DSP/recording, UI typecheck/147 tests/production build,
 VST3/VST2 workers, M07 headless, unsigned M08 artifacts, 159 traceability IDs,
 and documentation validation across 52 Markdown files and 180 local links.
 Fifteen run-owned temporary children were removed. The chain did not install or

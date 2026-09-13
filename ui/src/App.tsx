@@ -365,12 +365,43 @@ function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
   return <section className="panel virtual-route-panel" aria-labelledby="virtual-route-heading"><div className="section-heading"><div><p className="eyebrow">Explicit cross-session routing</p><h2 id="virtual-route-heading">Virtual-bus routes</h2></div><div className="actions"><span className="badge">rev {state?.revision ?? "-"}</span><button type="button" className="secondary" onClick={refresh} disabled={!backend.connected}>Refresh</button></div></div><p className="muted">Routes are replaced as one revisioned document. The backend validates bus identities, sessions, cycles, authorization, and idempotency before changing desired state.</p>{state?.routes.length ? <ul aria-label="Explicit virtual-bus routes">{state.routes.map((route) => <li key={`${route.busId}-${route.producerSessionId}-${route.consumerSessionId}`}><code>{route.busId}</code> · {route.producerSessionId} → {route.consumerSessionId}</li>)}</ul> : <p className="muted">No explicit cross-session routes are currently listed.</p>}<fieldset disabled={!backend.connected}><legend>Revisioned replacement</legend><label>Base revision<input aria-label="Virtual-route base revision" inputMode="numeric" value={revisionText} onChange={(event) => setRevisionText(event.target.value)} /></label><label>Routes JSON<textarea aria-label="Virtual-route JSON" value={routeText} onChange={(event) => setRouteText(event.target.value)} rows={6} spellCheck={false} /></label><button type="button" className="secondary" onClick={() => void replace()}>Replace routes</button></fieldset>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Disconnected preview mode never mutates route state. Replacement requires the backend’s <code>deviceAdministration</code> permission and does not activate endpoints by itself.</p></section>;
 }
 
+function endpointBindingStorageKey(sessionId: string) {
+  return `audiorouter.ui.endpoint-binding.${sessionId}`;
+}
+
+function readEndpointBindingHint(sessionId: string): { captureEndpointId?: string; renderEndpointId?: string } {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(endpointBindingStorageKey(sessionId)) ?? "null");
+    if (!value || typeof value !== "object") return {};
+    const record = value as Record<string, unknown>;
+    return {
+      captureEndpointId: typeof record.captureEndpointId === "string" ? record.captureEndpointId.slice(0, 32768) : undefined,
+      renderEndpointId: typeof record.renderEndpointId === "string" ? record.renderEndpointId.slice(0, 32768) : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function writeEndpointBindingHint(sessionId: string, captureEndpointId: string, renderEndpointId: string) {
+  try {
+    window.localStorage.setItem(endpointBindingStorageKey(sessionId), JSON.stringify({ captureEndpointId, renderEndpointId }));
+  } catch {
+    // Local presentation persistence is best effort and never blocks routing.
+  }
+}
+
 function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onStart, onStop }: { backend: UiBackend; sessionId: string; devices: DeviceListItem[]; sessionRunning: boolean; onStart: () => Promise<void>; onStop: () => Promise<void> }) {
   const activeCapture = devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "capture");
   const activeRender = devices.filter((device): device is Extract<DeviceListItem, { state: "active" }> => device.state === "active" && device.direction === "render");
-  const [captureEndpointId, setCaptureEndpointId] = useState("");
-  const [renderEndpointId, setRenderEndpointId] = useState("");
+  const [captureEndpointId, setCaptureEndpointId] = useState(() => readEndpointBindingHint(sessionId).captureEndpointId ?? "");
+  const [renderEndpointId, setRenderEndpointId] = useState(() => readEndpointBindingHint(sessionId).renderEndpointId ?? "");
   const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    const hint = readEndpointBindingHint(sessionId);
+    setCaptureEndpointId(hint.captureEndpointId ?? "");
+    setRenderEndpointId(hint.renderEndpointId ?? "");
+  }, [sessionId]);
   useEffect(() => {
     if (!activeCapture.some((device) => device.id === captureEndpointId)) setCaptureEndpointId(activeCapture[0]?.id ?? "");
     if (!activeRender.some((device) => device.id === renderEndpointId)) setRenderEndpointId(activeRender[0]?.id ?? "");
@@ -382,7 +413,7 @@ function NativeEndpointPanel({ backend, sessionId, devices, sessionRunning, onSt
     try { const result = await backend.prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId); setMessage(`Prepared ${result.state}; start the session to activate audio.`); }
     catch (error) { setMessage(formatUiError(error, "Native endpoint preparation failed.")); }
   };
-  return <section className="panel native-endpoint-panel" aria-labelledby="native-endpoint-heading"><div className="section-heading"><div><p className="eyebrow">Native adapter</p><h2 id="native-endpoint-heading">Endpoint binding</h2></div><span className="badge">{sessionRunning ? "running" : "stopped"}</span></div><p className="muted">Select exact active endpoints for this session. Preparation opens stopped clients only; start the session when the graph is ready to move audio.</p><label>Capture endpoint<select aria-label="Native capture endpoint" value={captureEndpointId} disabled={!backend.connected || activeCapture.length === 0 || sessionRunning} onChange={(event) => setCaptureEndpointId(event.target.value)}><option value="">Select capture endpoint</option>{activeCapture.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><label>Render endpoint<select aria-label="Native render endpoint" value={renderEndpointId} disabled={!backend.connected || activeRender.length === 0 || sessionRunning} onChange={(event) => setRenderEndpointId(event.target.value)}><option value="">Select render endpoint</option>{activeRender.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><div className="actions"><button type="button" className="secondary" onClick={() => void prepare()} disabled={!backend.connected || !backend.prepareNativeEndpoint || !captureEndpointId || !renderEndpointId || sessionRunning}>Prepare native endpoints</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? onStop() : onStart())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></div>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Requires the authenticated <code>deviceAdministration</code> scope for preparation. Endpoint defaults, volume, and mute are never changed.</p></section>;
+  return <section className="panel native-endpoint-panel" aria-labelledby="native-endpoint-heading"><div className="section-heading"><div><p className="eyebrow">Native adapter</p><h2 id="native-endpoint-heading">Endpoint binding</h2></div><span className="badge">{sessionRunning ? "running" : "stopped"}</span></div><p className="muted">Select exact active endpoints for this session. Preparation opens stopped clients only; start the session when the graph is ready to move audio.</p><label>Capture endpoint<select aria-label="Native capture endpoint" value={captureEndpointId} disabled={!backend.connected || activeCapture.length === 0 || sessionRunning} onChange={(event) => { setCaptureEndpointId(event.target.value); writeEndpointBindingHint(sessionId, event.target.value, renderEndpointId); }}><option value="">Select capture endpoint</option>{activeCapture.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><label>Render endpoint<select aria-label="Native render endpoint" value={renderEndpointId} disabled={!backend.connected || activeRender.length === 0 || sessionRunning} onChange={(event) => { setRenderEndpointId(event.target.value); writeEndpointBindingHint(sessionId, captureEndpointId, event.target.value); }}><option value="">Select render endpoint</option>{activeRender.map((device) => <option key={device.id} value={device.id}>{device.name} · {device.format.sampleRateHz} Hz · {device.format.channels} ch</option>)}</select></label><div className="actions"><button type="button" className="secondary" onClick={() => void prepare()} disabled={!backend.connected || !backend.prepareNativeEndpoint || !captureEndpointId || !renderEndpointId || sessionRunning}>Prepare native endpoints</button><button type="button" className={sessionRunning ? "secondary" : "primary"} onClick={() => void (sessionRunning ? onStop() : onStart())} disabled={!backend.connected}>{sessionRunning ? "Stop session" : "Start session"}</button></div>{message && <p className="muted" role="status" aria-live="polite">{message}</p>}<p className="muted">Requires the authenticated <code>deviceAdministration</code> scope for preparation. Endpoint defaults, volume, and mute are never changed. Selected IDs are retained only as local UI hints and are rechecked against active endpoints.</p></section>;
 }
 
 function NodeCard({ node, selected, onSelect }: { node: Node; selected: boolean; onSelect: () => void }) {
