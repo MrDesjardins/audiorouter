@@ -48,8 +48,9 @@ foreach ($required in @(
     'request->SectionHandle == 0',
     'request->SectionHandle != 0',
     'BridgeRequestsHaveSameLeaseIdentity',
-    'left.SectionHandle = 0',
-    'right.MappingBytes = 0')) {
+    'SectionHandle and MappingBytes',
+    'Left->Generation == Right->Generation',
+    'RtlCompareMemory(Left->BusId, Right->BusId')) {
     if (-not $source.Contains($required)) {
         throw "driver IOCTL handle-role validation is missing: $required"
     }

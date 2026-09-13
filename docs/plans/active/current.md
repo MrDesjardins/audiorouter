@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Hardened M03 lease identity comparison on 2026-09-13. Maintenance requests
+  now compare explicit negotiated fields and the complete UTF-16 bus ID,
+  excluding ABI padding and process-relative mapping fields. The
+  non-installing x64 WDK build and source-contract acceptance passed with zero
+  signability errors/warnings and catalog generation. No driver was installed
+  or loaded.
+
 - Closed an M03 bridge replacement/cleanup race on 2026-09-13. An in-flight
   replacement now reserves its incoming file owner while the prior callback
   view drains; cleanup can cancel that reservation, and the replacement

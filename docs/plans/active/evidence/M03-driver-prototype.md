@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - explicit lease identity comparison
+
+Maintenance request identity is now compared field-by-field rather than by a
+whole-struct memory comparison. Negotiated protocol, bus, format, direction,
+lease, generation, reserved-field, and complete UTF-16 bus identity remain
+bound, while ABI padding and the process-relative section handle/mapping size
+are excluded. The administrator-authorized non-installing x64 WDK build and
+source-contract acceptance passed with zero signability errors/warnings and
+catalog generation. No driver was installed or loaded.
+
 ## 2026-09-13 - replacement cleanup race
 
 Bridge replacement now reserves the incoming owner while the prior mapped

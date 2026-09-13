@@ -256,13 +256,21 @@ static BOOLEAN BridgeRequestsHaveSameLeaseIdentity(
     _In_ const AR_BRIDGE_OPEN_REQUEST* Left,
     _In_ const AR_BRIDGE_OPEN_REQUEST* Right)
 {
-    AR_BRIDGE_OPEN_REQUEST left = *Left;
-    AR_BRIDGE_OPEN_REQUEST right = *Right;
-    left.SectionHandle = 0;
-    left.MappingBytes = 0;
-    right.SectionHandle = 0;
-    right.MappingBytes = 0;
-    return RtlCompareMemory(&left, &right, sizeof(left)) == sizeof(left);
+    // Compare fields explicitly so compiler/ABI padding cannot become part of
+    // the protocol identity. SectionHandle and MappingBytes are intentionally
+    // omitted because maintenance requests may repeat or omit that pair.
+    return Left->ProtocolMajor == Right->ProtocolMajor &&
+        Left->ProtocolMinor == Right->ProtocolMinor &&
+        Left->BusIdBytes == Right->BusIdBytes &&
+        Left->Channels == Right->Channels &&
+        Left->FramesPerQuantum == Right->FramesPerQuantum &&
+        Left->Direction == Right->Direction &&
+        Left->SampleRateHz == Right->SampleRateHz &&
+        Left->LeaseMs == Right->LeaseMs &&
+        Left->Generation == Right->Generation &&
+        Left->Reserved2 == Right->Reserved2 &&
+        RtlCompareMemory(Left->BusId, Right->BusId,
+                         sizeof(Left->BusId)) == sizeof(Left->BusId);
 }
 
 NTSTATUS AudioRouterCopyLeaseBlockForDirection(
