@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Fresh post-reboot digital CABLE signal-loopback qualification passed on
+2026-09-12. A bounded 750 ms disposable tone rendered through the explicitly
+selected CABLE Input and was captured from CABLE Output for 500 ms, producing
+69,556 nonzero payload bytes. Before/after media state matched; defaults,
+volume, mute, privacy, drivers, signing, and startup configuration were
+unchanged.
+
 Fresh post-reboot event-driven native WASAPI qualification passed on
 2026-09-12 using the existing CABLE endpoints: 24,480 capture frames and
 28,800 silent render frames over 500 ms. Before/after media identity and state

@@ -1,5 +1,14 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## Digital CABLE signal loopback
+
+The bounded post-reboot `m00-native-loopback.ps1` acceptance passed using the
+explicit CABLE Input render and CABLE Output capture endpoints. A disposable
+750 ms tone produced 69,556 nonzero captured payload bytes during the 500 ms
+capture. The wrapper verified unchanged media identity/state and restored all
+temporary resources; no defaults, volume, mute, privacy, driver, signing, or
+startup configuration changed.
+
 ## Event-driven shared-mode requalification
 
 The bounded post-reboot `m00-native-event-live.ps1` acceptance passed against
