@@ -53,6 +53,11 @@ validation now rejects embedded NULs and nonzero unused UTF-16 slots in the
 fixed bus-ID buffer, preventing ambiguous identity comparison for malformed
 requests before lease or mapping state is touched.
 
+Hardened bridge create/cleanup/close dispatch on 2026-09-13. The driver now
+rejects null IRPs and missing stack locations before accessing dispatch
+metadata, matching the existing IOCTL malformed-request guard. The M03
+source-contract/build acceptance covers both dispatch families.
+
 Aligned the portable bridge contract with that identity rule on 2026-09-13:
 `AudioBridgeHello::validate` now rejects embedded NULs before native request
 encoding, with a focused regression. This prevents a portable-valid request

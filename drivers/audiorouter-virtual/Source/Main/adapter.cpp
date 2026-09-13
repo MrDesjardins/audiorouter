@@ -348,7 +348,13 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject);
 
 NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT, _In_ PIRP Irp)
 {
+    if (Irp == NULL) {
+        return STATUS_INVALID_PARAMETER;
+    }
     PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    if (stack == NULL) {
+        return CompleteBridgeIrp(Irp, STATUS_INVALID_PARAMETER);
+    }
     if (stack != NULL && (stack->MajorFunction == IRP_MJ_CLEANUP ||
                           stack->MajorFunction == IRP_MJ_CLOSE)) {
         // A client can terminate without sending the close IOCTL. Release

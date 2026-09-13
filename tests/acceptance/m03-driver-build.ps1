@@ -41,6 +41,8 @@ foreach ($required in @(
 }
 foreach ($required in @(
         'if (Irp == NULL)',
+        'NTSTATUS BridgeControlCreateClose',
+        'if (stack == NULL)',
         'stack == NULL || stack->FileObject == NULL',
         'IOCTL_AUDIOROUTER_BRIDGE_OPEN &&',
         'request->SectionHandle == 0',
