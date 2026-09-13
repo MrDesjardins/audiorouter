@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+Hardened WaveRT packet timestamp reporting on 2026-09-13. `GetReadPacket`
+now rejects invalid performance-counter state, zero packet sizes, counter
+overflow, carry/position addition overflow, inconsistent backward positions,
+timestamp subtraction underflow, and QPC multiplication overflow before
+publishing a packet timestamp. The non-installing x64 WDK/source acceptance
+passed with zero signability errors/warnings and catalog generation. No driver
+was installed or loaded and no machine audio configuration changed.
+
 Closed another WaveRT counter-overflow path on 2026-09-13. `UpdatePosition`
 now rejects a displacement that would wrap either the monotonic presentation
 position or linear position, resets the time/carry anchor, and returns before

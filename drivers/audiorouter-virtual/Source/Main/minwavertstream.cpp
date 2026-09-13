@@ -897,7 +897,8 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
 
     // The call must be from event driven mode
     if (m_ulNotificationsPerBuffer == 0 ||
-        m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0)
+        m_ulDmaBufferSize == 0 || m_ulDmaMovementRate == 0 ||
+        m_ullPerformanceCounterFrequency.QuadPart <= 0)
     {
         return STATUS_NOT_SUPPORTED;
     }
@@ -921,7 +922,11 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
 
     // The 0-based number of the last completed packet
     // FUTURE-2014/10/27 Update to allow different numbers of packets per WaveRT buffer
-    availablePacketNumber = LODWORD(packetCounter - 1);  // Note this might be ULONG_MAX if called during the first packet
+    // Keep the first-packet ULONG_MAX behavior without performing a signed
+    // subtraction on the 64-bit counter.  The counter is expected to be
+    // non-negative, but the low-word operation also remains well-defined at
+    // the packet-number wrap boundary.
+    availablePacketNumber = LODWORD(packetCounter) - 1;
 
     // If no new packets are available...
     if (availablePacketNumber == m_ulLastOsReadPacket)
@@ -945,12 +950,48 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     // driver, it is extrapolated from the sample driver's internal simulated position correlation
     // [m_ullLinearPosition @ m_ullDmaTimeStamp] and the sample's internal 64-bit packet counter, subtracting
     // 1 from the packet counter to compute the time at the start of that last completed packet.
-    ULONGLONG linearPositionOfAvailablePacket = packetCounter * (m_ulDmaBufferSize / m_ulNotificationsPerBuffer);
+    ULONG packetSize = m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
+    if (packetSize == 0 || packetCounter < 0 ||
+        static_cast<ULONGLONG>(packetCounter) >
+            MAXULONGLONG / packetSize)
+    {
+        return STATUS_INTEGER_OVERFLOW;
+    }
+    ULONGLONG linearPositionOfAvailablePacket =
+        static_cast<ULONGLONG>(packetCounter) * packetSize;
     // Need to divide by (1000 * 10000 because m_ulDmaMovementRate is average bytes per sec
+    if (hnsElapsedTimeCarryForward >
+        MAXULONGLONG / m_ulDmaMovementRate)
+    {
+        return STATUS_INTEGER_OVERFLOW;
+    }
     ULONGLONG carryForwardBytes = (hnsElapsedTimeCarryForward * m_ulDmaMovementRate) / 10000000;
-    ULONGLONG deltaLinearPosition = ullLinearPosition + carryForwardBytes - linearPositionOfAvailablePacket;
+    if (carryForwardBytes > MAXULONGLONG - ullLinearPosition)
+    {
+        return STATUS_INTEGER_OVERFLOW;
+    }
+    ULONGLONG advancedLinearPosition = ullLinearPosition + carryForwardBytes;
+    if (advancedLinearPosition < linearPositionOfAvailablePacket)
+    {
+        return STATUS_INVALID_DEVICE_STATE;
+    }
+    ULONGLONG deltaLinearPosition =
+        advancedLinearPosition - linearPositionOfAvailablePacket;
+    if (deltaLinearPosition > MAXULONGLONG / 10000000)
+    {
+        return STATUS_INTEGER_OVERFLOW;
+    }
     ULONGLONG deltaTimeInHns = deltaLinearPosition * 10000000 / m_ulDmaMovementRate;
+    if (deltaTimeInHns > ullDmaTimeStamp)
+    {
+        return STATUS_INVALID_DEVICE_STATE;
+    }
     ULONGLONG timeOfAvailablePacketInHns = ullDmaTimeStamp - deltaTimeInHns;
+    if (timeOfAvailablePacketInHns >
+        MAXULONGLONG / m_ullPerformanceCounterFrequency.QuadPart)
+    {
+        return STATUS_INTEGER_OVERFLOW;
+    }
     ULONGLONG timeOfAvailablePacketInQpc = timeOfAvailablePacketInHns * m_ullPerformanceCounterFrequency.QuadPart / 10000000;
 
     *PerformanceCounterValue = timeOfAvailablePacketInQpc;
@@ -1025,7 +1066,7 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
         return STATUS_DATA_OVERRUN;
     }
 
-    ULONG packetSize = (m_ulDmaBufferSize / m_ulNotificationsPerBuffer);
+    ULONG packetSize = m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
     ULONG packetIndex = PacketNumber % m_ulNotificationsPerBuffer;
     ULONG ulCurrentWritePosition = packetIndex * packetSize;
 

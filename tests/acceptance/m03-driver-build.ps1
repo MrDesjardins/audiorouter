@@ -185,6 +185,20 @@ if (-not $stream.Contains('ByteDisplacement > MAXULONGLONG - m_ullPresentationPo
 if (-not $stream.Contains('ByteDisplacement > MAXULONGLONG - m_ullLinearPosition')) {
     throw 'WaveRT position callback must reject linear-position overflow'
 }
+foreach ($required in @(
+        'm_ullPerformanceCounterFrequency.QuadPart <= 0',
+        'static_cast<ULONGLONG>(packetCounter) >',
+        'MAXULONGLONG / packetSize',
+        'hnsElapsedTimeCarryForward >',
+        'MAXULONGLONG - ullLinearPosition',
+        'advancedLinearPosition < linearPositionOfAvailablePacket',
+        'deltaLinearPosition > MAXULONGLONG / 10000000',
+        'deltaTimeInHns > ullDmaTimeStamp',
+        'timeOfAvailablePacketInHns >')) {
+    if (-not $stream.Contains($required)) {
+        throw "WaveRT packet timestamp arithmetic guard is missing: $required"
+    }
+}
 if (-not $stream.Contains('ULONGLONG intervalHns = static_cast<ULONGLONG>(_this->m_ulNotificationIntervalMs) * 10000')) {
     throw 'WaveRT timer notification arithmetic must widen before interval multiplication'
 }
