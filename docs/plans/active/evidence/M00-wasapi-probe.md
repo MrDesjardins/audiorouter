@@ -1,5 +1,14 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## Digital impulse correlation
+
+The bounded post-reboot `m00-native-impulse.ps1` acceptance passed through the
+explicit CABLE endpoints with 100 expected impulses. Analysis detected 101
+groups, measured zero p95 spacing error in frames, and estimated a 41.88 ms
+digital onset. This does not satisfy the calibrated physical acoustic latency
+requirement; the runner used disposable artifacts and changed no persistent
+audio configuration.
+
 ## Process-loopback include/exclude modes
 
 The bounded post-reboot process-loopback acceptances passed. Include mode

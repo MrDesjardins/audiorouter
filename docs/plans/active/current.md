@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Fresh post-reboot digital impulse qualification passed on 2026-09-12 through
+the existing CABLE endpoints: 100 expected impulses produced 101 detected
+groups, zero p95 spacing error, and a 41.88 ms estimated digital onset. This
+is signal-correlation evidence only, not the calibrated physical acoustic
+latency gate; no persistent audio configuration changed.
+
 Hardened the WaveRT notification timer callback on 2026-09-12. It now rejects
 zero/negative/backward QPC state before conversion, widens notification
 interval arithmetic, and checks miniport, adapter, and timer ownership before
