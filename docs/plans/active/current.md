@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+Requalified the installed ReaStream VST2 binary on 2026-09-13 after reboot.
+Processing passed at 44.1, 48, and 96 kHz, and both bounded editor-containment
+checks passed. The SHA-256 remained
+`57c43a7a3f7fb7df14ccd7a4af77f9e475f98fe681486dcd290b23983099c5f6`; the
+installed file was not modified, temporary environment values were restored,
+and no plugin registration or audio configuration changed.
+
 Revalidated documentation and traceability after the VST2 compatibility
 entries on 2026-09-13. `tests/acceptance/docs.ps1` passed across 52 Markdown
 files and 179 local links. This confirms plan/spec link integrity only; it
