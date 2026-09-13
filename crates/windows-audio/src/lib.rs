@@ -4340,6 +4340,14 @@ impl NativeBridgeRegion {
     ) -> Result<Self, NativeBridgeRegionError> {
         let path = path.as_ref();
         Self::validate_layout(path, channels, max_frames)?;
+        // Parent reparse checks do not protect the leaf itself. Refuse a
+        // symlink, directory, or other non-regular object before OpenOptions
+        // could follow it into an unintended location.
+        let metadata = std::fs::symlink_metadata(path)
+            .map_err(|error| NativeBridgeRegionError::Io(error.to_string()))?;
+        if !metadata.file_type().is_file() {
+            return Err(NativeBridgeRegionError::InvalidPath);
+        }
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -6323,6 +6331,24 @@ mod tests {
             NativeBridgeRegion::create(&path, 2, 0),
             Err(NativeBridgeRegionError::InvalidFrame)
         ));
+    }
+
+    #[test]
+    fn native_bridge_region_open_rejects_a_non_regular_leaf() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-nonregular-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&path).unwrap();
+        assert!(matches!(
+            NativeBridgeRegion::open(&path, 1, 2),
+            Err(NativeBridgeRegionError::InvalidPath)
+        ));
+        std::fs::remove_dir(path).unwrap();
     }
 
     #[test]

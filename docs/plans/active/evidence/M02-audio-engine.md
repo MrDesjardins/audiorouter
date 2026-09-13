@@ -1738,3 +1738,14 @@ teardown.
 The focused Windows-audio suite passed 67 tests with formatting and diff
 checks. No driver was installed or loaded and no audio endpoint or persistent
 machine configuration was changed.
+
+## 2026-09-12 - bridge leaf-path validation
+
+`NativeBridgeRegion::open` now inspects the leaf with `symlink_metadata` and
+rejects anything that is not a regular file before opening or mapping it.
+Parent reparse checks remain in place, and a focused regression proves a
+directory leaf is rejected without creating a mapping.
+
+The focused Windows-audio suite passed 68 tests with formatting and diff
+checks. No driver was installed or loaded and no audio endpoint or persistent
+machine configuration was changed.

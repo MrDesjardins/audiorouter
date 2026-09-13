@@ -24,6 +24,12 @@ close now marks the controller before session flush, preventing `Drop` from
 issuing a duplicate broker close; if the broker request fails, `Drop` retains
 the best-effort retry path. Windows-audio lifecycle tests and diff checks pass.
 
+Hardened the file-backed bridge opener on 2026-09-12: the leaf mapping path
+must now be an existing regular file before it is opened, closing the gap
+where parent reparse checks did not prevent a leaf symlink or directory from
+being followed. A focused non-regular-leaf regression and Windows-audio tests
+passed; no audio endpoint or persistent machine configuration was accessed.
+
 Hardened the bridge broker IRP boundary on 2026-09-12: device-control
 dispatch now rejects a null IRP, missing stack, or missing control file object
 before reading the IOCTL or entering lease ownership logic. This prevents a
