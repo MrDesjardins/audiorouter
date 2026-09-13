@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Validated the launcher’s explicit render-ID branch on 2026-09-13 with the
+  active Focusrite render ID. It reached the real Tauri shell and printed the
+  exact CABLE Output capture/Focusrite render selection. The smoke harness
+  terminated the wrapper process tree, so the wrapper `finally` cleanup could
+  not run; after confirming no launcher or shell process remained, the exact
+  run-owned temporary directory was removed manually. No persistent endpoint,
+  default, volume, mute, driver, or machine-audio configuration changed.
+
 - Extended the disposable VB-Cable desktop launcher on 2026-09-13 with an
   explicit `-RenderEndpointId` override. The default remains the exact active
   CABLE Input loopback render, while the override lets a human launch the
