@@ -1,12 +1,13 @@
 # Plugin compatibility snapshot
 
-The local ReaPlugs VST2 matrix was independently rerun on 2026-09-12. All six
+The local ReaPlugs VST2 matrix was independently rerun on 2026-09-13. All six
 ignored x64 audio-effect DLLs passed the contained worker load/process checks at
 44.1, 48, and 96 kHz (18 combinations); each binary retained its original
 length and SHA-256, and the wrapper restored its temporary environment values.
-This is bounded processing evidence only. It does not grant redistribution
-rights, qualify native editor windows, or change the release-qualified VST3
-boundary.
+The same six fixtures also passed the bounded editor-containment checks. This
+is local compatibility and failure-containment evidence only. It does not
+grant redistribution rights, prove successful native editor-window support,
+or change the release-qualified VST3 boundary.
 
 AudioRouter's release-qualified plugin boundary remains VST3 x64. A gated
 Windows-only VST2 x64 worker adapter is available for explicitly selected
@@ -269,6 +270,16 @@ These binaries contain no readable embedded file-version metadata, so the
 SHA-256 fingerprints and file sizes are the reproducible exact-version
 identifiers for this local installation.
 
+The installed ReaComp binary was requalified on 2026-09-13 through the
+fingerprinted installed-plugin wrapper. Processing and both editor-containment
+checks passed at 44.1, 48, and 96 kHz; SHA-256 remained
+`4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`. The
+installed ReaControlMIDI binary was separately rejected during bounded state
+restoration with `failed to fill whole buffer` and remains outside the audio
+effect contract. The wrapper now verifies the selected binary in its cleanup
+path even when a candidate fails early, and restores both temporary VST
+environment variables. Neither installed DLL was modified.
+
 Run the reproducible local qualification with:
 
 ```powershell
@@ -294,7 +305,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m06-vst2-
 ```
 
 The wrapper prints the binary SHA-256, verifies the selected DLL's size and
-SHA-256 are unchanged after worker execution, restores any pre-existing
+SHA-256 are unchanged after worker execution (including early failures), restores any pre-existing
 `AUDIOROUTER_VST2_FIXTURE` value, and never changes audio configuration. Its
 processing and editor-containment checks both pass for the current fixture:
 the editor enters `effEditOpen` but does not return within five seconds, so
