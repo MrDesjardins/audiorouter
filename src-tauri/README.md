@@ -17,6 +17,15 @@ The shell does not install a driver,
 register plugins, change Windows audio endpoints, or start an unconfigured
 service.
 
+For an explicitly authorized native adapter test, set both
+`AUDIOROUTER_CAPTURE_ENDPOINT_ID` and `AUDIOROUTER_RENDER_ENDPOINT_ID` to the
+exact IDs returned by `devices.list`. The shell then prepares matching stopped
+WASAPI clients; pressing **Start session** is still required to start them.
+If either ID is missing, stale, direction-mismatched, or format-incompatible,
+the worker is rejected and the control backend remains available without
+opening a substitute endpoint. Clear both variables to return to the normal
+control-only launch path.
+
 Compile without launching or packaging:
 
 ```text

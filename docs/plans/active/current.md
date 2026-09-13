@@ -21,6 +21,15 @@ Updated: 2026-09-13.
   Control tests (128), formatting, and strict Clippy pass. Native endpoint
   activation and managed-driver qualification remain open.
 
+- Added an opt-in shell construction path on 2026-09-13. Supplying both exact
+  `AUDIOROUTER_CAPTURE_ENDPOINT_ID` and `AUDIOROUTER_RENDER_ENDPOINT_ID`
+  causes the shell backend to inventory, validate, and prepare stopped WASAPI
+  clients for the stable desktop session; missing or invalid configuration is
+  reported without selecting a substitute, and session start remains explicit.
+  Shell build/check and control tests pass. The variables are unset by
+  default, so ordinary launch behavior and machine audio configuration are
+  unchanged; live endpoint and production-driver evidence remain open.
+
 - Implemented the first real desktop vertical slice on 2026-09-13. The Tauri
   shell now owns a per-user control backend on its default launch path, opens
   `%LOCALAPPDATA%\\AudioRouter\\state.sqlite` (or an explicit absolute test

@@ -163,6 +163,47 @@ fn default_desktop_session() -> Session {
     }
 }
 
+#[cfg(windows)]
+fn prepare_configured_native_worker(
+    plane: &mut ControlPlane,
+    session_id: EntityId,
+) -> Result<bool, String> {
+    let Some(capture_id) = std::env::var_os("AUDIOROUTER_CAPTURE_ENDPOINT_ID") else {
+        return Ok(false);
+    };
+    let Some(render_id) = std::env::var_os("AUDIOROUTER_RENDER_ENDPOINT_ID") else {
+        return Err(
+            "AUDIOROUTER_CAPTURE_ENDPOINT_ID requires AUDIOROUTER_RENDER_ENDPOINT_ID".into(),
+        );
+    };
+    let capture_id = capture_id
+        .to_str()
+        .ok_or_else(|| "capture endpoint ID is not valid UTF-8".to_owned())?;
+    let render_id = render_id
+        .to_str()
+        .ok_or_else(|| "render endpoint ID is not valid UTF-8".to_owned())?;
+    let endpoints = audiorouter_windows_audio::enumerate_active_endpoints()
+        .map_err(|error| format!("endpoint inventory for native worker failed: {error:?}"))?;
+    let capture = endpoints
+        .iter()
+        .find(|endpoint| {
+            endpoint.id == capture_id
+                && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Capture
+        })
+        .ok_or_else(|| "configured capture endpoint is not an active exact match".to_owned())?;
+    let render = endpoints
+        .iter()
+        .find(|endpoint| {
+            endpoint.id == render_id
+                && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+        })
+        .ok_or_else(|| "configured render endpoint is not an active exact match".to_owned())?;
+    plane
+        .prepare_native_endpoint_worker(session_id, capture, render, 0, 3, 100)
+        .map_err(|error| format!("native endpoint worker preparation failed: {error:?}"))?;
+    Ok(true)
+}
+
 fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle<()>>, String> {
     if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_some() {
         return Ok(None);
@@ -221,6 +262,13 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             .map_err(|error| {
                                 format!("default desktop session creation failed: {error:?}")
                             })?;
+                    }
+                    if std::env::var_os("AUDIOROUTER_CAPTURE_ENDPOINT_ID").is_some() {
+                        match prepare_configured_native_worker(&mut plane, session_id.clone()) {
+                            Ok(true) => eprintln!("AudioRouter native endpoint worker prepared; session start remains explicit"),
+                            Ok(false) => unreachable!("configured native worker returned false"),
+                            Err(error) => eprintln!("AudioRouter native endpoint worker unavailable: {error}"),
+                        }
                     }
                     audiorouter_transport::serve_control_connections_forever_for_current_user(
                         &pipe_name, plane,
