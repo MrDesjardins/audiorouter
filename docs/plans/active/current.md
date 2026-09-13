@@ -15,6 +15,8 @@ Updated: 2026-09-13.
   shell, and the launcher detects repository versus extracted-artifact mode;
   artifact verification and M08 acceptance require it. The artifact launcher
   still uses a temporary database and exact read-only endpoint matching.
+  Clean-tree M08 preparation/verification passed after this change, including
+  launcher checksum coverage; the temporary artifact directory was removed.
 
 - Requalified the complete elevated `safe-all.ps1` chain at pushed head
   `7527d987` on 2026-09-13. The first attempt stopped at the read-only native

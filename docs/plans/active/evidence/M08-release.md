@@ -1,5 +1,14 @@
 # M08 release evidence
 
+## 2026-09-13 - launcher packaged at `82c96e1c`
+
+The clean-tree `tests/acceptance/m08-release.ps1` run passed after adding
+`run-vb-cable-desktop.ps1` beside the unsigned CLI and shell. Preparation
+produced and verified the x64 release binaries, UI archive, SBOM/provenance
+files, and launcher checksum; the acceptance removed its temporary output.
+The manifest remains `signed: false` and `publicationReady: false`, with
+driver installation, production signing, and clean-machine gates unchanged.
+
 ## 2026-09-13 - human-test launcher smoke at `522b1ce2`
 
 The disposable `tools/run-vb-cable-desktop.ps1` launcher resolved the exact
