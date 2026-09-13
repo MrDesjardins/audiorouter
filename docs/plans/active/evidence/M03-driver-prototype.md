@@ -1,5 +1,14 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-12 - timer-dependent state transition guard
+
+`SetState(KSSTATE_RUN)` now fails with insufficient resources when event-driven
+operation requires a missing notification timer; the PAUSE path checks the
+timer before cancellation, and a failed transition returns before assigning
+the new stream state. The non-installing x64 WDK build/source-contract
+acceptance passed with zero signability errors/warnings and catalog generation.
+No driver was installed or loaded.
+
 ## 2026-09-12 - constructor-failure cleanup guard
 
 The stream constructor now initializes `m_pNotificationTimer` to null before

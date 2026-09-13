@@ -179,6 +179,12 @@ if (-not $stream.Contains('if (drmRights == NULL || m_pMiniport == NULL)')) {
 if (-not $stream.Contains('m_pNotificationTimer = NULL;')) {
     throw 'WaveRT constructor must initialize the notification timer owner before allocation'
 }
+if (-not $stream.Contains('m_ulNotificationIntervalMs > 0 && m_pNotificationTimer == NULL')) {
+    throw 'WaveRT RUN transition must fail closed without its notification timer owner'
+}
+if (-not $stream.Contains('if (!NT_SUCCESS(ntStatus))')) {
+    throw 'WaveRT state transitions must not publish a failed state change'
+}
 if (-not $stream.Contains('m_pPortStream->FreePagesFromMdl(pBufferMdl)')) {
     throw 'WaveRT DMA mapping failure must release allocated pages'
 }

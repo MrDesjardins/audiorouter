@@ -1304,7 +1304,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
                 //
 
                 // Pause DMA
-                if (m_ulNotificationIntervalMs > 0)
+                if (m_ulNotificationIntervalMs > 0 && m_pNotificationTimer != NULL)
                 {
                     ExCancelTimer(m_pNotificationTimer, NULL);
                     KeFlushQueuedDpcs();
@@ -1330,6 +1330,11 @@ NTSTATUS CMiniportWaveRTStream::SetState
             break;
 
         case KSSTATE_RUN:
+            if (m_ulNotificationIntervalMs > 0 && m_pNotificationTimer == NULL)
+            {
+                ntStatus = STATUS_INSUFFICIENT_RESOURCES;
+                break;
+            }
             // Start DMA
             LARGE_INTEGER ullPerfCounterTemp;
             ullPerfCounterTemp = KeQueryPerformanceCounter(&m_ullPerformanceCounterFrequency);
@@ -1352,6 +1357,11 @@ NTSTATUS CMiniportWaveRTStream::SetState
             }
 
             break;
+    }
+
+    if (!NT_SUCCESS(ntStatus))
+    {
+        return ntStatus;
     }
 
     m_KsState = State_;

@@ -2,6 +2,13 @@
 
 Updated: 2026-09-12.
 
+Hardened WaveRT timer-dependent state transitions on 2026-09-12. RUN now
+returns `STATUS_INSUFFICIENT_RESOURCES` if a notification timer is required
+but unavailable, PAUSE avoids cancelling a missing timer, and failed state
+transitions no longer publish the requested state. The non-installing x64 WDK
+build/source-contract acceptance passed with zero signability errors/warnings
+and catalog generation. No driver was installed or loaded.
+
 Closed a WaveRT constructor-failure safety gap on 2026-09-12 by initializing
 the notification-timer pointer before attempting allocation. Destructor
 cleanup can now safely distinguish an unallocated timer after partial
