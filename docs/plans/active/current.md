@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Implemented the explicit UI-10 tray shutdown path on 2026-09-13. The tray
+  now distinguishes hiding the window from **Quit and stop audio**: the quit
+  action forwards an authenticated `session.stop` for the desktop session and
+  exits only on an authoritative `stopped` response; failures leave the shell
+  open and update the tray status. Shell tests (9), formatting, and diff checks
+  pass. No driver, endpoint, or machine configuration was changed.
+
 - Added accessible stale-binding diagnostics on 2026-09-13. When a saved
   capture or render ID is absent from the active inventory, the endpoint panel
   now identifies that direction and instructs deliberate replacement while

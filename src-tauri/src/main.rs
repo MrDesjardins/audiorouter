@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use audiorouter_control::{ClientGrant, ClientRole, ControlPlane};
-use audiorouter_domain::{Edge, EntityId, Node, NodeKind, PermissionScope, Port, PortDirection, Session};
+use audiorouter_domain::{
+    Edge, EntityId, Node, NodeKind, PermissionScope, Port, PortDirection, Session,
+};
 use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcResponse};
 use audiorouter_storage::Storage;
 use tauri::{
@@ -353,6 +355,15 @@ fn tray_recording_text(response: &JsonRpcResponse) -> String {
     )
 }
 
+fn tray_stop_succeeded(response: &JsonRpcResponse) -> bool {
+    response
+        .result
+        .as_ref()
+        .and_then(|result| result.get("state"))
+        .and_then(serde_json::Value::as_str)
+        == Some("stopped")
+}
+
 fn main() {
     let pipe_name =
         std::env::var("AUDIOROUTER_CONTROL_PIPE").unwrap_or_else(|_| DEFAULT_PIPE_NAME.to_owned());
@@ -375,6 +386,7 @@ fn main() {
             let session_script = session_script.clone();
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
             let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit and stop audio", true, None::<&str>)?;
             let refresh_status =
                 MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
             let status =
@@ -389,8 +401,10 @@ fn main() {
             let pipe_name = tray_pipe_name.clone();
             let status_for_handler = status.clone();
             let recordings_for_handler = recordings.clone();
-            let menu =
-                Menu::with_items(app, &[&open, &close, &refresh_status, &status, &recordings])?;
+            let menu = Menu::with_items(
+                app,
+                &[&open, &close, &quit, &refresh_status, &status, &recordings],
+            )?;
             TrayIconBuilder::with_id("audiorouter")
                 .menu(&menu)
                 .tooltip("AudioRouter")
@@ -406,6 +420,23 @@ fn main() {
                         }
                         "close" => {
                             let _ = window.hide();
+                        }
+                        "quit" => {
+                            let request = JsonRpcRequest {
+                                jsonrpc: "2.0".into(),
+                                id: Some(serde_json::json!("tray-quit-stop")),
+                                method: "session.stop".into(),
+                                params: Some(serde_json::json!({
+                                    "sessionId": DESKTOP_SESSION_ID
+                                })),
+                            };
+                            match forward_rpc_request(&request, &pipe_name) {
+                                Ok(response) if tray_stop_succeeded(&response) => app.exit(0),
+                                _ => {
+                                    let _ = status_for_handler
+                                        .set_text("Quit refused: session stop did not complete");
+                                }
+                            }
                         }
                         "refresh-status" => {
                             let request = JsonRpcRequest {
@@ -526,6 +557,25 @@ mod tests {
             tray_recording_text(&response),
             "Live recorders: 2 active · 1 paused · 1 armed · 1 failed"
         );
+    }
+
+    #[test]
+    fn tray_quit_requires_an_authoritative_stopped_response() {
+        let stopped = JsonRpcResponse {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("tray-quit-stop")),
+            result: Some(json!({ "state": "stopped" })),
+            error: None,
+        };
+        assert!(tray_stop_succeeded(&stopped));
+        assert!(!tray_stop_succeeded(&JsonRpcResponse {
+            result: Some(json!({ "state": "failed" })),
+            ..stopped.clone()
+        }));
+        assert!(!tray_stop_succeeded(&JsonRpcResponse {
+            result: None,
+            ..stopped
+        }));
     }
 
     #[test]

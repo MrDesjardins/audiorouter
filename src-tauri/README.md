@@ -57,6 +57,12 @@ The expected observation is that the shell opens and its normal UI reports a
 connected backend after a read-only refresh. This does not prove driver or
 audio routing behavior. Do not use the user's normal database for diagnosis.
 
+The tray's **Close window** action hides the editor while leaving the backend
+and session running. **Quit and stop audio** sends an authenticated
+`session.stop` for the stable desktop session and exits only after the backend
+confirms `stopped`; a refused or failed stop leaves the shell running and
+reports the refusal in the tray status item.
+
 For a repeatable control-plane check without manual UI observation, build the
 debug CLI and shell, then run `tests/acceptance/m07-shell-rpc.ps1` from an
 elevated PowerShell session. It opts into a temporary frontend initialization
