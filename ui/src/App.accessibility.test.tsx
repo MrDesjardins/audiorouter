@@ -29,6 +29,40 @@ beforeAll(() => {
 afterEach(() => cleanup());
 
 describe("keyboard connection dialog", () => {
+  it("binds only explicitly selected active endpoints and preserves the no-defaults boundary", async () => {
+    const capture = {
+      id: "capture-active",
+      name: "Active capture",
+      direction: "capture" as const,
+      state: "active" as const,
+      defaultRoles: [],
+      format: { sampleRateHz: 48000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 },
+      periods: { default100ns: 100000, minimum100ns: 30000 },
+    };
+    const renderDevice = { ...capture, id: "render-active", name: "Active render", direction: "render" as const };
+    const inactive = { id: "capture-inactive", name: "Inactive capture", direction: "capture" as const, state: "unplugged" as const, defaultRoles: [] };
+    const prepareNativeEndpoint = vi.fn(async (sessionId: string, captureEndpointId: string, renderEndpointId: string) => ({
+      sessionId,
+      state: "configured-stopped" as const,
+      captureEndpointId,
+      renderEndpointId,
+    }));
+    const backend = { ...connectedPreviewBackend(), listDevices: async () => [inactive, capture, renderDevice], prepareNativeEndpoint };
+
+    render(<App backend={backend} />);
+
+    const captureSelect = await screen.findByRole("combobox", { name: "Native capture endpoint" });
+    const renderSelect = screen.getByRole("combobox", { name: "Native render endpoint" });
+    expect(within(captureSelect).queryByRole("option", { name: /Inactive capture/ })).toBeNull();
+    await waitFor(() => expect((captureSelect as HTMLSelectElement).value).toBe("capture-active"));
+    await waitFor(() => expect((renderSelect as HTMLSelectElement).value).toBe("render-active"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Prepare native endpoints" }));
+    await waitFor(() => expect(prepareNativeEndpoint).toHaveBeenCalledWith("demo-session", "capture-active", "render-active"));
+    expect(await screen.findByText("Prepared configured-stopped; start the session to activate audio.")).toBeTruthy();
+    expect(screen.getByText(/Endpoint defaults and volume are never changed/)).toBeTruthy();
+  });
+
   it("opens with focus, wraps focus, retains validation errors, and restores focus", async () => {
     const backend = connectedPreviewBackend();
     render(<App backend={backend} />);

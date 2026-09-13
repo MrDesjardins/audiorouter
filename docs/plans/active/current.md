@@ -9,6 +9,23 @@ Updated: 2026-09-13.
   removed; installation/loading, signing mode, boot policy, and audio-device
   configuration were untouched.
 
+- Priority decision recorded on 2026-09-13: deliver a human-testable VB-Cable
+  loop first, without changing system defaults. The execution order is now
+  (1) explicit capture/render endpoint configuration and session start/stop,
+  (2) the visual node editor as the primary way to edit that graph, (3)
+  built-in EQ/gate and other processors wired into the committed backend graph,
+  (4) managed AudioRouter driver provisioning and virtual buses, (5) VST2/VST3
+  compatibility hardening, and (6) the remaining specification work. Existing
+  driver, plugin, storage, recording, automation, and release work remains in
+  scope; this ordering changes delivery focus, not acceptance criteria.
+
+- New delivery gate: a guarded human run must be able to select the existing
+  VB-Cable capture/render pair in the UI, commit a visible graph change, start
+  and stop the session, and observe backend status/telemetry while preserving
+  endpoint defaults, volume, mute, and the pre-test environment. Interactive
+  WebView acceptance is still unavailable to this agent and must be performed
+  on the user's desktop; portable/UI regressions are being added now.
+
 - Added and ran the checked-in `m02-control-native-live.ps1` wrapper on
   2026-09-13. It discovers the exact active CABLE pair, preserves/restores
   the caller's live-test environment, and invokes the same-process native
