@@ -221,6 +221,13 @@ The control-owned route passed again at its two-second bound on 2026-09-12:
 one successful start/stop/reset with one stale-pump rejection. Exact endpoint
 binding, cleanup, and unchanged media state were verified; no persistent audio
 configuration changed.
+
+The system-selected Rust adapter smoke path passed on 2026-09-12 without
+changing endpoint defaults: 51 packets, 24,480 captured frames, 191 graph
+blocks, 24,448 scheduler frames, zero xruns/overruns/deadline misses, and a
+65,536 ns p99.9 processing-time upper bound. It correctly reported
+`route=false` because the existing default render endpoint is not the explicit
+CABLE route; this validates default-endpoint lifecycle and processing only.
 stopped/reset by the probes and no persistent audio configuration changed.
 
 Requalified the complete elevated `safe-all.ps1` chain after bridge commit

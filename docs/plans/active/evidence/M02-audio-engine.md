@@ -16,6 +16,15 @@ persistent machine-audio setting changed. This is real shared-mode adapter and
 control-lifecycle evidence, not production virtual-driver or physical-latency
 qualification.
 
+The system-selected Rust adapter smoke path was also rerun for 500 ms. It
+passed at 48 kHz with 51 capture packets, 24,480 captured frames, 191 graph
+blocks, 24,448 scheduler frames, zero xruns, input/output overruns, or deadline
+misses, and a 65,536 ns p99.9 processing-time upper bound. Its telemetry
+correctly reported `route=false`: the existing default render endpoint differs
+from the explicitly selected CABLE route. This is default-endpoint lifecycle
+and processing evidence, not a routed-playback claim; streams stopped/reset
+and media state was unchanged.
+
 The maximum five-cycle Rust adapter bridge soak then passed at 48 kHz with
 one-second cycles. Every cycle captured 48,480 frames, processed 378 quanta
 and tap calls, and rendered 48,384 frames. All five reported zero non-finite
