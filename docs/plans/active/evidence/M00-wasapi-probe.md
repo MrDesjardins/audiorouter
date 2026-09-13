@@ -1,5 +1,14 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## Shared-mode endpoint lifecycle
+
+The bounded post-reboot `m00-native-live.ps1` acceptance passed across 13
+capture and 18 render endpoints over 100 ms. One occupied render endpoint was
+reported as a distinct ownership diagnostic rather than being masked as a
+general failure. Before/after endpoint/media state matched, and no defaults,
+volume, mute, privacy, driver, signing, startup, or persistent audio setting
+changed.
+
 ## Digital impulse correlation
 
 The bounded post-reboot `m00-native-impulse.ps1` acceptance passed through the

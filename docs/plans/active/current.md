@@ -2,6 +2,12 @@
 
 Updated: 2026-09-12.
 
+Fresh post-reboot shared-mode WASAPI lifecycle qualification passed on
+2026-09-12: 13 capture endpoints and 18 render endpoints were exercised over
+100 ms, with one occupied render endpoint retained as a distinct ownership
+diagnostic. Endpoint/media state matched before and after; defaults, volume,
+mute, privacy, drivers, signing, and startup configuration were unchanged.
+
 Fresh post-reboot digital impulse qualification passed on 2026-09-12 through
 the existing CABLE endpoints: 100 expected impulses produced 101 detected
 groups, zero p95 spacing error, and a 41.88 ms estimated digital onset. This
