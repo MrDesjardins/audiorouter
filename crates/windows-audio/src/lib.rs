@@ -2554,6 +2554,14 @@ impl Drop for CoTaskMemBlob {
     }
 }
 
+#[cfg(windows)]
+struct ProcessLoopbackActivationLifetime {
+    _operation: windows::Win32::Media::Audio::IActivateAudioInterfaceAsyncOperation,
+    _handler: windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler,
+    _property: windows::Win32::System::Com::StructuredStorage::PROPVARIANT,
+    _blob: CoTaskMemBlob,
+}
+
 #[windows::core::implement(windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler)]
 struct ProcessLoopbackCompletionHandler {
     completion: Arc<(
@@ -2689,30 +2697,42 @@ impl ProcessLoopbackCapture {
             operation: "ActivateAudioInterfaceAsync(process-loopback)",
             error,
         })?;
+        let activation_lifetime = ProcessLoopbackActivationLifetime {
+            _operation: operation,
+            _handler: handler,
+            _property: property,
+            _blob: blob_owner,
+        };
         let (lock, wake) = &*completion;
-        let state = lock.lock().map_err(|_| {
-            AudioError::Windows(windows::core::Error::new(
-                windows::core::HRESULT(0x80004005u32 as i32),
-                "process-loopback activation state was poisoned",
-            ))
-        })?;
-        let timeout = std::time::Duration::from_secs(5);
-        let (mut state, timed_out) = wake
-            .wait_timeout_while(state, timeout, |state| state.result.is_none())
-            .map_err(|_| {
-                AudioError::Windows(windows::core::Error::new(
+        let state = match lock.lock() {
+            Ok(state) => state,
+            Err(_) => {
+                // The callback may still be in flight if its state lock was
+                // poisoned. Keep every async-owned value alive indefinitely.
+                std::mem::forget(activation_lifetime);
+                return Err(AudioError::Windows(windows::core::Error::new(
                     windows::core::HRESULT(0x80004005u32 as i32),
-                    "process-loopback activation wait was poisoned",
-                ))
-            })?;
+                    "process-loopback activation state was poisoned",
+                )));
+            }
+        };
+        let timeout = std::time::Duration::from_secs(5);
+        let (mut state, timed_out) =
+            match wake.wait_timeout_while(state, timeout, |state| state.result.is_none()) {
+                Ok(result) => result,
+                Err(_) => {
+                    std::mem::forget(activation_lifetime);
+                    return Err(AudioError::Windows(windows::core::Error::new(
+                        windows::core::HRESULT(0x80004005u32 as i32),
+                        "process-loopback activation wait was poisoned",
+                    )));
+                }
+            };
         if timed_out.timed_out() && state.result.is_none() {
             // Windows may still invoke the callback and read the PROPVARIANT.
             // Leak the operation, handler, completion, and blob together on
             // this exceptional timeout rather than creating a use-after-free.
-            std::mem::forget(operation);
-            std::mem::forget(handler);
-            std::mem::forget(property);
-            std::mem::forget(blob_owner);
+            std::mem::forget(activation_lifetime);
             return Err(AudioError::Windows(windows::core::Error::new(
                 windows::core::HRESULT(0x800705B4u32 as i32),
                 "process-loopback activation timed out",
@@ -2777,7 +2797,6 @@ impl ProcessLoopbackCapture {
         unsafe { client.SetEventHandle(event.0)? };
         let capture: windows::Win32::Media::Audio::IAudioCaptureClient =
             unsafe { client.GetService()? };
-        drop(operation);
         Ok(Self {
             client,
             capture,
