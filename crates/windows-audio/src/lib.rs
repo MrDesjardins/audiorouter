@@ -395,9 +395,18 @@ impl NativeBridgeInputWorker {
     }
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeInputWorkerError> {
-        self.source
-            .heartbeat()
-            .map_err(NativeBridgeInputWorkerError::Bridge)
+        if let Err(error) = self.source.heartbeat() {
+            // A lost render-source lease must not leave the physical render
+            // client running with an invalid bridge. Stop/reset on this
+            // control/worker thread and preserve the bridge error for the
+            // supervisor; the realtime pump never performs this recovery.
+            self.running = false;
+            let _ = stop_endpoint_and_reset(&mut self.render, || {
+                self.bridge.reset_stream().map(|_| ())
+            });
+            return Err(NativeBridgeInputWorkerError::Bridge(error));
+        }
+        Ok(())
     }
 
     /// Pump one bridge block without waiting. Empty, busy, torn, stale, or
@@ -502,9 +511,15 @@ impl NativeBridgeOutputWorker {
     /// Refresh the kernel lease from the control/worker thread. This is not
     /// called from the realtime callback.
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeOutputWorkerError> {
-        self.controller
-            .heartbeat()
-            .map_err(NativeBridgeOutputWorkerError::Bridge)
+        if let Err(error) = self.controller.heartbeat() {
+            // Do not keep a physical render client alive after its capture
+            // sink lease expires. Endpoint stop/reset is bounded cleanup on
+            // the worker thread and leaves the original bridge failure
+            // visible to the caller.
+            let _ = self.endpoint.stop();
+            return Err(NativeBridgeOutputWorkerError::Bridge(error));
+        }
+        Ok(())
     }
 
     pub fn pump_available(
@@ -595,9 +610,16 @@ impl NativeBridgeDuplexWorker {
         let input_result = self.input.heartbeat();
         let output_result = self.output.heartbeat();
         if let Err(error) = input_result {
+            let _ = self.input.stop();
+            let _ = self.output.stop();
             return Err(NativeBridgeDuplexWorkerError::Input(error));
         }
-        output_result.map_err(NativeBridgeDuplexWorkerError::Output)
+        if let Err(error) = output_result {
+            let _ = self.input.stop();
+            let _ = self.output.stop();
+            return Err(NativeBridgeDuplexWorkerError::Output(error));
+        }
+        Ok(())
     }
 
     pub fn pump_available(

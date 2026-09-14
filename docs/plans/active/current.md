@@ -12,6 +12,16 @@ Updated: 2026-09-14.
   loaded-driver, production-signing, and physical-latency gates remain open.
   Next action: continue the next safe M03/M07 recovery integration item.
 
+- Implemented the worker-level VDEV-12 fail-closed slice on 2026-09-14. A
+  failed native bridge heartbeat now stops and resets the affected endpoint
+  worker before returning the original bridge error; duplex recovery stops
+  both directions while preserving error identity. This is explicit
+  control/worker-thread cleanup and does not change defaults or other machine
+  audio configuration. Windows-audio (73 tests), strict Clippy, formatting,
+  and diff checks passed. Real lease-failure execution remains a loaded-driver
+  gate and was not claimed. Next action: continue the next safe M03/M07
+  recovery integration item.
+
 - Planned the next VDEV-12 failure-path slice: native binding heartbeat errors
 - now detach and close only the affected binding, deactivate its portable
   route, and preserve other bindings. The failure path remains control-thread
