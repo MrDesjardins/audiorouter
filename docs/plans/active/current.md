@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Wired committed plugin parameter values into the worker bridge on
+  2026-09-13. Native graph activation now converts bounded normalized
+  `pluginParameter:<id>` values into sorted `ParameterEvent`s; the bridge
+  validates and publishes the template outside the callback, and the worker
+  thread supplies it on each exchange. Focused control/plugin-host tests
+  passed (134 control, 70 plugin-host, 13 worker-process plus 1 explicit live
+  test ignored). No endpoint or machine configuration changed.
+
 - Added bounded plugin-parameter discovery on 2026-09-13. The new
   `plugins.parameters` API revalidates an existing scan fingerprint, launches
   only the matching isolated VST2/native-VST3 worker, returns bounded typed

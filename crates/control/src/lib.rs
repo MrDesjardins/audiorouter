@@ -6048,6 +6048,27 @@ impl ControlPlane {
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("plugin runtime bridge failed: {error:?}"))
             })?;
+            let mut parameters = node
+                .parameters
+                .iter()
+                .filter_map(|(name, value)| {
+                    let parameter_id = name
+                        .strip_prefix("pluginParameter:")
+                        .and_then(|id| id.parse::<u32>().ok())?;
+                    let normalized_value = value.as_f64()? as f32;
+                    Some(audiorouter_plugin_host::ParameterEvent {
+                        parameter_id,
+                        normalized_value,
+                        sample_offset: 0,
+                    })
+                })
+                .collect::<Vec<_>>();
+            parameters.sort_by_key(|event| event.parameter_id);
+            bridge.set_parameters(parameters).map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "plugin parameter template rejected: {error:?}"
+                ))
+            })?;
             stages.insert(node.id.clone(), bridge as Arc<dyn RealtimePluginProcessor>);
         }
         Ok(stages)

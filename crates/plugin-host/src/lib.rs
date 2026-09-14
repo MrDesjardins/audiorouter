@@ -3686,6 +3686,7 @@ pub struct PluginRuntimeBridge {
     output: Arc<ArrayQueue<PluginQuantum>>,
     running: Arc<AtomicBool>,
     failed: Arc<AtomicBool>,
+    parameters: Arc<Mutex<Vec<ParameterEvent>>>,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -3695,6 +3696,7 @@ pub enum PluginRuntimeBridgeError {
     InvalidFrames,
     InvalidDepth,
     ThreadStart,
+    InvalidParameters,
 }
 
 impl std::fmt::Debug for PluginRuntimeBridge {
@@ -3736,11 +3738,13 @@ impl PluginRuntimeBridge {
         }
         let running = Arc::new(AtomicBool::new(true));
         let failed = Arc::new(AtomicBool::new(false));
+        let parameters = Arc::new(Mutex::new(Vec::new()));
         let thread_running = Arc::clone(&running);
         let thread_failed = Arc::clone(&failed);
         let thread_free = Arc::clone(&free);
         let thread_input = Arc::clone(&input);
         let thread_output = Arc::clone(&output);
+        let thread_parameters = Arc::clone(&parameters);
         let worker_thread = std::thread::Builder::new()
             .name("audiorouter-plugin-runtime".into())
             .spawn(move || {
@@ -3779,7 +3783,11 @@ impl PluginRuntimeBridge {
                             }
                         };
                     sequence = sequence.saturating_add(1);
-                    match worker.process(frame, Vec::new(), Instant::now()) {
+                    let parameters = thread_parameters
+                        .lock()
+                        .map(|value| value.clone())
+                        .unwrap_or_default();
+                    match worker.process(frame, parameters, Instant::now()) {
                         Ok(result)
                             if result.channels == channels as u16
                                 && result.frame_count() == frames
@@ -3816,6 +3824,7 @@ impl PluginRuntimeBridge {
             output,
             running,
             failed,
+            parameters,
             worker: Some(worker_thread),
         }))
     }
@@ -3830,6 +3839,29 @@ impl PluginRuntimeBridge {
 
     pub fn queued_output(&self) -> usize {
         self.output.len()
+    }
+
+    /// Replace the bounded control-plane parameter template. This is never
+    /// called from the realtime callback; the worker thread clones it before
+    /// each supervised exchange.
+    pub fn set_parameters(
+        &self,
+        parameters: Vec<ParameterEvent>,
+    ) -> Result<(), PluginRuntimeBridgeError> {
+        if parameters.len() > MAX_PARAMETER_EVENTS
+            || parameters.iter().any(|event| {
+                !event.normalized_value.is_finite()
+                    || !(0.0..=1.0).contains(&event.normalized_value)
+                    || event.sample_offset >= MAX_WORKER_FRAMES
+            })
+        {
+            return Err(PluginRuntimeBridgeError::InvalidParameters);
+        }
+        *self
+            .parameters
+            .lock()
+            .map_err(|_| PluginRuntimeBridgeError::InvalidParameters)? = parameters;
+        Ok(())
     }
 }
 
