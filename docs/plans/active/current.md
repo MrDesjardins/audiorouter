@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed the M03 lifecycle state-publication recovery gap on 2026-09-14.
+  Installation now stages the rollback JSON in the target directory and
+  compensates with package removal if state publication fails, avoiding an
+  installed-but-unmanaged package. PowerShell parsing, static acceptance, and
+  the WDK build/signability gate passed. No PnP, driver, signing, endpoint,
+  or audio configuration action occurred. Next action: continue the next
+  independently testable M03/M07 recovery item.
+
 - Corrected stale startup permission documentation on 2026-09-14. The
   operations guide now distinguishes backend desired-state authorization from
   the desktop shell's explicit native registration command and no longer

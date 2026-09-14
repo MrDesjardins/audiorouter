@@ -92,8 +92,22 @@ if ($Install) {
         publishedName = $published
     }
     $parent = Split-Path -Parent $statePath
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    $record | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $statePath -Encoding UTF8 -NoNewline
+    try {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        Assert-NoReparseAncestors -Path $parent
+        $temporaryStatePath = Join-Path $parent ('.audiorouter-driver-state.' + [guid]::NewGuid().ToString('N') + '.tmp')
+        $record | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $temporaryStatePath -Encoding UTF8 -NoNewline
+        Move-Item -LiteralPath $temporaryStatePath -Destination $statePath
+    } catch {
+        if ($temporaryStatePath -and (Test-Path -LiteralPath $temporaryStatePath)) {
+            Remove-Item -LiteralPath $temporaryStatePath -Force -ErrorAction SilentlyContinue
+        }
+        $rollback = & $pnputil '/delete-driver' $published '/uninstall' 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "Lifecycle state publication failed and automatic driver rollback also failed (exit $LASTEXITCODE): $($rollback -join ' ')"
+        }
+        throw "Lifecycle state publication failed; the newly installed package $published was rolled back: $($_.Exception.Message)"
+    }
     Write-Output "Installed $published and recorded rollback state at $statePath"
     exit 0
 }

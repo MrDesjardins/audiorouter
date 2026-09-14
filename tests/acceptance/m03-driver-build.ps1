@@ -24,6 +24,8 @@ foreach ($required in @(
         'Assert-NoReparsePath',
         'Assert-NoReparseAncestors',
         'FileAttributes]::ReparsePoint',
+        'temporaryStatePath',
+        'automatic driver rollback',
         '/add-driver',
         '/delete-driver',
         'publishedName -notmatch ''^oem\d+\.inf$''',
