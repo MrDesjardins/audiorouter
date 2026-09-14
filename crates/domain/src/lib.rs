@@ -588,7 +588,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 69] = [
+pub const API_METHODS: [ApiMethodSpec; 70] = [
     ApiMethodSpec {
         name: "system.describe",
         permission: PermissionScope::Read,
@@ -751,6 +751,11 @@ pub const API_METHODS: [ApiMethodSpec; 69] = [
     },
     ApiMethodSpec {
         name: "nativeEndpoints.prepare",
+        permission: PermissionScope::DeviceAdministration,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "nativeApplications.prepare",
         permission: PermissionScope::DeviceAdministration,
         side_effect: SideEffectClass::ExternalOperation,
     },

@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Exposed the verified application-capture preparation path through the
+  versioned JSON-RPC contract and UI on 2026-09-13. The new
+  `nativeApplications.prepare` operation is device-administration gated,
+  requires decimal process creation identity plus an exact active stereo render
+  endpoint, and reuses the control plane's graph/source and process validation
+  before opening stopped clients. The UI action is available for observed
+  applications and uses the exact render binding selected in the endpoint
+  panel; it does not start sessions or change defaults, volume, mute, or
+  persistent machine configuration. Rust control/domain tests and UI tests
+  pass; a live application-capture invocation remains a guarded Windows gate.
+
 - Added a guarded control-owned application-capture acceptance on 2026-09-13.
   With explicit `AUDIOROUTER_APPLICATION_PROCESS_ID`, executable,
   creation-time, and render-endpoint inputs, the test constructs the real

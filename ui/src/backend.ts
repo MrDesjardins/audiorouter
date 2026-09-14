@@ -88,6 +88,7 @@ export interface UiBackend {
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
+  prepareNativeApplication?(params: Omit<import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"], "creationTime100ns"> & { creationTime100ns: string | null }): Promise<import("@audiorouter/contracts").NativeApplicationPrepareResult>;
   pumpNativeEndpoint?(sessionId: string, generation: number, maxPackets?: number): Promise<import("@audiorouter/contracts").NativeEndpointPumpResult>;
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
@@ -451,6 +452,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
         captureEndpointId,
         renderEndpointId,
       });
+    },
+    async prepareNativeApplication(params) {
+      return client.request("nativeApplications.prepare", params as import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"]);
     },
     async pumpNativeEndpoint(currentSessionId, generation, maxPackets = 64) {
       return client.request("nativeEndpoints.pump", { sessionId: currentSessionId, generation, maxPackets });

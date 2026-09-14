@@ -1594,6 +1594,9 @@ fn method_description(name: &str) -> &'static str {
         "nativeEndpoints.prepare" => {
             "Prepare exact capture/render clients without starting audio."
         }
+        "nativeApplications.prepare" => {
+            "Prepare a verified application process-loopback capture and exact render client without starting audio."
+        }
         "nativeEndpoints.pump" => {
             "Drain a bounded amount of already-available native audio for a running session."
         }
@@ -1748,6 +1751,25 @@ fn method_input_schema(name: &str) -> Value {
                 "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
             }),
             &["sessionId", "captureEndpointId", "renderEndpointId"],
+        ),
+        "nativeApplications.prepare" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "processId": { "type": "integer", "minimum": 1, "maximum": u32::MAX },
+                "executable": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "executablePath": { "type": ["string", "null"], "maxLength": MAX_CONTROL_STRING_BYTES },
+                "creationTime100ns": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 20 },
+                "mode": { "enum": ["include", "exclude"] },
+                "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
+            }),
+            &[
+                "sessionId",
+                "processId",
+                "executable",
+                "creationTime100ns",
+                "mode",
+                "renderEndpointId",
+            ],
         ),
         "nativeEndpoints.pump" => object_schema(
             json!({
@@ -2588,6 +2610,21 @@ fn method_output_schema(name: &str) -> Value {
                 "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
             },
             "required": ["sessionId", "state", "captureEndpointId", "renderEndpointId"],
+            "additionalProperties": false
+        }),
+        "nativeApplications.prepare" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "const": "configured-stopped" },
+                "processId": { "type": "integer", "minimum": 1, "maximum": u32::MAX },
+                "executable": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES },
+                "executablePath": { "type": ["string", "null"], "maxLength": MAX_CONTROL_STRING_BYTES },
+                "creationTime100ns": { "type": "string", "pattern": "^[0-9]+$", "maxLength": 20 },
+                "mode": { "enum": ["include", "exclude"] },
+                "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
+            },
+            "required": ["sessionId", "state", "processId", "executable", "executablePath", "creationTime100ns", "mode", "renderEndpointId"],
             "additionalProperties": false
         }),
         "nativeEndpoints.pump" => json!({
@@ -6976,6 +7013,9 @@ impl ControlPlane {
                 "startup.apply" => self.dispatch_startup_apply(request.params),
                 "devices.list" => self.dispatch_devices_list(request.params),
                 "nativeEndpoints.prepare" => self.dispatch_native_endpoints_prepare(request.params),
+                "nativeApplications.prepare" => {
+                    self.dispatch_native_applications_prepare(request.params)
+                }
                 "nativeEndpoints.pump" => self.dispatch_native_endpoints_pump(request.params),
                 "plugins.scan" => self.dispatch_plugins_scan(request.params),
                 "plugins.list" => self.dispatch_plugins_list(request.params),
@@ -9051,6 +9091,98 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_native_applications_prepare(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "application identity and render endpoint are required".into(),
+            )
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let process_id = params
+            .get("processId")
+            .and_then(Value::as_u64)
+            .and_then(|value| u32::try_from(value).ok())
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("processId is required".into()))?;
+        let executable = params
+            .get("executable")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("executable is required".into()))?;
+        let executable_path = params
+            .get("executablePath")
+            .and_then(|value| {
+                if value.is_null() {
+                    Some(None)
+                } else {
+                    value.as_str().map(Some)
+                }
+            })
+            .flatten();
+        let creation_time = params
+            .get("creationTime100ns")
+            .and_then(Value::as_str)
+            .and_then(|value| value.parse::<u64>().ok())
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("creationTime100ns must be a decimal string".into())
+            })?;
+        let mode = match params.get("mode").and_then(Value::as_str) {
+            Some("include") => audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+            Some("exclude") => audiorouter_windows_audio::ProcessLoopbackMode::ExcludeTargetTree,
+            _ => {
+                return Err(ControlError::InvalidRequest(
+                    "mode must be include or exclude".into(),
+                ))
+            }
+        };
+        let render_id = params
+            .get("renderEndpointId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| ControlError::InvalidRequest("renderEndpointId is required".into()))?;
+        let endpoints =
+            audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
+        let render = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint.id == render_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(
+                    "render endpoint is not an active exact inventory match".into(),
+                )
+            })?;
+        self.prepare_native_application_worker(
+            session_id.clone(),
+            NativeApplicationWorkerConfig {
+                process_id,
+                expected_executable: executable,
+                expected_executable_path: executable_path,
+                expected_creation_time_100ns: creation_time,
+                mode,
+                render,
+                buffer_duration_100ns: 0,
+                max_attempts: 3,
+                retry_delay_ms: 100,
+            },
+        )?;
+        Ok(
+            json!({ "sessionId": session_id, "state": "configured-stopped", "processId": process_id,
+            "executable": executable, "executablePath": executable_path, "creationTime100ns": creation_time.to_string(),
+            "mode": if matches!(mode, audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree) { "include" } else { "exclude" },
+            "renderEndpointId": render_id }),
+        )
+    }
+
     fn dispatch_native_endpoints_pump(
         &mut self,
         params: Option<Value>,
@@ -10091,6 +10223,15 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
         "nativeEndpoints.prepare" => &["sessionId", "captureEndpointId", "renderEndpointId"],
+        "nativeApplications.prepare" => &[
+            "sessionId",
+            "processId",
+            "executable",
+            "executablePath",
+            "creationTime100ns",
+            "mode",
+            "renderEndpointId",
+        ],
         "nativeEndpoints.pump" => &["sessionId", "generation", "maxPackets"],
         "plugins.scan" => &["directory"],
         "plugins.list" => &["directory"],

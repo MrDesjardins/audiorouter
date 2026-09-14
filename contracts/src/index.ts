@@ -249,6 +249,17 @@ export interface NativeEndpointPrepareResult {
   renderEndpointId: string;
 }
 
+export interface NativeApplicationPrepareResult {
+  sessionId: EntityId;
+  state: "configured-stopped";
+  processId: number;
+  executable: string;
+  executablePath: string | null;
+  creationTime100ns: string;
+  mode: "include" | "exclude";
+  renderEndpointId: string;
+}
+
 export interface NativeEndpointPumpResult {
   sessionId: EntityId;
   generation: number;
@@ -773,6 +784,7 @@ export type ImplementedMethod =
   | "startup.apply"
   | "devices.list"
   | "nativeEndpoints.prepare"
+  | "nativeApplications.prepare"
   | "nativeEndpoints.pump"
   | "plugins.scan"
   | "plugins.list"
@@ -864,6 +876,7 @@ export type MethodParams = {
   "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
+  "nativeApplications.prepare": { sessionId: EntityId; processId: number; executable: string; executablePath?: string | null; creationTime100ns: string; mode: "include" | "exclude"; renderEndpointId: string };
   "nativeEndpoints.pump": { sessionId: EntityId; generation: number; maxPackets?: number };
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
@@ -967,6 +980,7 @@ export type MethodResult = {
   "startup.apply": StartupApplyResult;
   "devices.list": DeviceInfo[] | DeviceListPage;
   "nativeEndpoints.prepare": NativeEndpointPrepareResult;
+  "nativeApplications.prepare": NativeApplicationPrepareResult;
   "nativeEndpoints.pump": NativeEndpointPumpResult;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;
