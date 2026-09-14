@@ -1763,6 +1763,9 @@ fn method_description(name: &str) -> &'static str {
         "nativeEndpoints.pump" => {
             "Drain a bounded amount of already-available native audio for a running session."
         }
+        "nativeDuplex.pump" => {
+            "Drain bounded already-available audio from both directions of a running duplex session."
+        }
         "plugins.scan" => "Inspect an explicitly selected plugin directory without loading plugin code.",
         "plugins.list" => "List the last bounded plugin scan inventory without scanning or loading plugin code.",
         "plugins.retry" => "Explicitly refresh a plugin inventory after a prior scan failure or quarantine decision.",
@@ -1939,6 +1942,15 @@ fn method_input_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
                 "maxPackets": { "type": "integer", "minimum": 1, "maximum": audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE }
+            }),
+            &["sessionId", "generation"],
+        ),
+        "nativeDuplex.pump" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "maxInputQuanta": { "type": "integer", "minimum": 1, "maximum": audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE },
+                "maxOutputPackets": { "type": "integer", "minimum": 1, "maximum": audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE }
             }),
             &["sessionId", "generation"],
         ),
@@ -2804,6 +2816,41 @@ fn method_output_schema(name: &str) -> Value {
                 "recorderChunksDrained": { "type": "integer", "minimum": 0 }
             },
             "required": ["sessionId", "generation", "packets", "capturedFrames", "processedQuanta", "renderedFrames", "droppedRenderFrames", "renderBackpressureEvents", "recorderChunksDrained"],
+            "additionalProperties": false
+        }),
+        "nativeDuplex.pump" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "generation": { "type": "integer", "minimum": 1 },
+                "input": {
+                    "type": "object",
+                    "properties": {
+                        "packets": { "type": "integer", "minimum": 0 },
+                        "capturedFrames": { "type": "integer", "minimum": 0 },
+                        "processedQuanta": { "type": "integer", "minimum": 0 },
+                        "renderedFrames": { "type": "integer", "minimum": 0 },
+                        "droppedRenderFrames": { "type": "integer", "minimum": 0 },
+                        "renderBackpressureEvents": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["packets", "capturedFrames", "processedQuanta", "renderedFrames", "droppedRenderFrames", "renderBackpressureEvents"],
+                    "additionalProperties": false
+                },
+                "output": {
+                    "type": "object",
+                    "properties": {
+                        "packets": { "type": "integer", "minimum": 0 },
+                        "capturedFrames": { "type": "integer", "minimum": 0 },
+                        "processedQuanta": { "type": "integer", "minimum": 0 },
+                        "renderedFrames": { "type": "integer", "minimum": 0 },
+                        "droppedRenderFrames": { "type": "integer", "minimum": 0 },
+                        "renderBackpressureEvents": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["packets", "capturedFrames", "processedQuanta", "renderedFrames", "droppedRenderFrames", "renderBackpressureEvents"],
+                    "additionalProperties": false
+                }
+            },
+            "required": ["sessionId", "generation", "input", "output"],
             "additionalProperties": false
         }),
         "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
@@ -7662,6 +7709,7 @@ impl ControlPlane {
                         self.dispatch_native_applications_prepare(request.params)
                     }
                     "nativeEndpoints.pump" => self.dispatch_native_endpoints_pump(request.params),
+                    "nativeDuplex.pump" => self.dispatch_native_duplex_pump(request.params),
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
                     "plugins.list" => self.dispatch_plugins_list(request.params),
                     "plugins.retry" => self.dispatch_plugins_retry(request.params),
@@ -9862,6 +9910,63 @@ impl ControlPlane {
         self.pump_native_endpoint_worker_with_bound_taps(&session_id, generation, max_packets)
     }
 
+    #[cfg(windows)]
+    fn dispatch_native_duplex_pump(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params = params.ok_or_else(|| {
+            ControlError::InvalidRequest("sessionId and generation are required".into())
+        })?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let generation = params
+            .get("generation")
+            .and_then(Value::as_u64)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| ControlError::InvalidRequest("generation is required".into()))?;
+        let max_input_quanta = params
+            .get("maxInputQuanta")
+            .and_then(Value::as_u64)
+            .map(|value| {
+                u32::try_from(value).map_err(|_| {
+                    ControlError::InvalidRequest("maxInputQuanta is out of range".into())
+                })
+            })
+            .transpose()?
+            .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        let max_output_packets = params
+            .get("maxOutputPackets")
+            .and_then(Value::as_u64)
+            .map(|value| {
+                u32::try_from(value).map_err(|_| {
+                    ControlError::InvalidRequest("maxOutputPackets is out of range".into())
+                })
+            })
+            .transpose()?
+            .unwrap_or(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE);
+        self.pump_native_duplex_worker(
+            &session_id,
+            generation,
+            max_input_quanta,
+            max_output_packets,
+        )
+    }
+
+    #[cfg(not(windows))]
+    fn dispatch_native_duplex_pump(
+        &mut self,
+        _params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        Err(ControlError::InvalidRequest(
+            "native duplex pumping requires Windows".into(),
+        ))
+    }
+
     fn record_endpoint_changes(&mut self, changed: bool) {
         if changed {
             // EventLog is the bounded notification surface. Endpoint details
@@ -10882,6 +10987,12 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
             "renderEndpointId",
         ],
         "nativeEndpoints.pump" => &["sessionId", "generation", "maxPackets"],
+        "nativeDuplex.pump" => &[
+            "sessionId",
+            "generation",
+            "maxInputQuanta",
+            "maxOutputPackets",
+        ],
         "plugins.scan" => &["directory"],
         "plugins.list" => &["directory"],
         "plugins.retry" => &["directory", "idempotencyKey"],
@@ -10975,7 +11086,7 @@ fn is_mutating_method(method: &str) -> bool {
 }
 
 fn rate_limit_method(method: &str) -> bool {
-    is_mutating_method(method) && method != "nativeEndpoints.pump"
+    is_mutating_method(method) && !matches!(method, "nativeEndpoints.pump" | "nativeDuplex.pump")
 }
 
 fn storage_error(error: StorageError) -> ControlError {
@@ -15474,8 +15585,10 @@ mod tests {
     #[test]
     fn native_pump_is_not_counted_as_a_user_mutation() {
         assert!(!rate_limit_method("nativeEndpoints.pump"));
+        assert!(!rate_limit_method("nativeDuplex.pump"));
         assert!(rate_limit_method("graph.commit"));
         assert!(is_mutating_method("nativeEndpoints.pump"));
+        assert!(is_mutating_method("nativeDuplex.pump"));
     }
 
     #[test]
@@ -17430,6 +17543,23 @@ mod tests {
             method["inputSchema"]["properties"]["maxPackets"]["maximum"],
             json!(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE)
         );
+    }
+
+    #[test]
+    fn native_duplex_pump_input_schema_bounds_both_budgets() {
+        let description = ControlPlane::default().describe();
+        let method = description["methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|method| method["name"] == "nativeDuplex.pump")
+            .unwrap();
+        for property in ["maxInputQuanta", "maxOutputPackets"] {
+            assert_eq!(
+                method["inputSchema"]["properties"][property]["maximum"],
+                json!(audiorouter_windows_audio::MAX_ENDPOINT_WORKER_PACKETS_PER_WAKE)
+            );
+        }
     }
 
     #[test]

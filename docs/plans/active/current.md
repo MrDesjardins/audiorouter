@@ -2,6 +2,20 @@
 
 Updated: 2026-09-14.
 
+- Exposed the paired native bridge pump through the versioned API on
+  2026-09-14. `nativeDuplex.pump` is now present in the authoritative domain
+  method registry, TypeScript contracts, control-plane discovery schemas,
+  authenticated dispatch, and generation/session validation. It accepts
+  independent bounded input-quanta and output-packet budgets and returns
+  separate direction counters. Like the existing endpoint pump, it is not
+  subject to user-mutation rate limiting because it is a bounded realtime
+  wake operation. Verification: 146 control/domain tests passed, strict
+  Clippy passed, formatting and diff checks passed, and the UI TypeScript
+  typecheck passed. No endpoint, driver, or machine audio configuration was
+  accessed. Loaded PortCls, production signing, and physical-latency evidence
+  remain open. Next action: continue with the next independently testable
+  bridge/control integration item.
+
 - Revalidated the duplex diagnostics and session-start boundary on 2026-09-14.
   Control now distinguishes endpoint-worker attachment from duplex-worker
   attachment before activation, reports duplex ownership in read-only

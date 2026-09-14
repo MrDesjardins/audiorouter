@@ -274,6 +274,13 @@ export interface NativeEndpointPumpResult {
   recorderChunksDrained: number;
 }
 
+export interface NativeDuplexPumpResult {
+  sessionId: EntityId;
+  generation: number;
+  input: Omit<NativeEndpointPumpResult, "sessionId" | "generation" | "recorderChunksDrained">;
+  output: Omit<NativeEndpointPumpResult, "sessionId" | "generation" | "recorderChunksDrained">;
+}
+
 export interface InactiveDeviceInfo {
   id: string;
   name: string;
@@ -822,6 +829,7 @@ export type ImplementedMethod =
   | "nativeEndpoints.prepare"
   | "nativeApplications.prepare"
   | "nativeEndpoints.pump"
+  | "nativeDuplex.pump"
   | "plugins.scan"
   | "plugins.list"
   | "plugins.retry"
@@ -914,6 +922,7 @@ export type MethodParams = {
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
   "nativeApplications.prepare": { sessionId: EntityId; processId: number; executable: string; executablePath?: string | null; creationTime100ns: string; mode: "include" | "exclude"; renderEndpointId: string };
   "nativeEndpoints.pump": { sessionId: EntityId; generation: number; maxPackets?: number };
+  "nativeDuplex.pump": { sessionId: EntityId; generation: number; maxInputQuanta?: number; maxOutputPackets?: number };
   "plugins.scan": { directory: string };
   "plugins.list": { directory: string };
   "plugins.retry": { directory: string; idempotencyKey: string };
@@ -1018,6 +1027,7 @@ export type MethodResult = {
   "nativeEndpoints.prepare": NativeEndpointPrepareResult;
   "nativeApplications.prepare": NativeApplicationPrepareResult;
   "nativeEndpoints.pump": NativeEndpointPumpResult;
+  "nativeDuplex.pump": NativeDuplexPumpResult;
   "plugins.scan": PluginScanResult;
   "plugins.list": PluginScanResult;
   "plugins.retry": PluginScanResult;
