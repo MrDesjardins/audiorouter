@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete guarded `safe-all.ps1` chain at `a4b21d6b` on
+  2026-09-14 after the recording-encoding UI slice. M00/M03 toolchain,
+  project-owned driver build/signability, read-only 31-endpoint inventory,
+  disposable SysVAD, M01/M04, M05 UI (typecheck, 178 tests, production build),
+  M06 VST3/VST2, M07, unsigned M08 preparation, 159 traceability IDs, and
+  documentation validation (52 Markdown files, 190 local links) passed.
+  Cleanup removed 15 run-owned temporary children. No driver installation or
+  loading, signing-mode/boot-policy change, plugin registration, audio stream,
+  or persistent machine configuration occurred. Next action: continue the
+  next open native bridge/driver evidence slice.
+
 - Completed the M04/M05 recording-visibility slice on 2026-09-14. The visual
   editor now exposes persisted recording format, sample rate, channel count,
   dither, and conversion metadata in an accessible Recording encoding panel,
