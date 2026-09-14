@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Fixed and requalified the M02 Rust VB-Cable route on 2026-09-14. Shared
+  capture and render initialization now retains `AUTOCONVERTPCM` alongside
+  `NOPERSIST` and event delivery, matching the passing native probe for the
+  current virtual endpoint format. The exact active CABLE pair completed a
+  500 ms control-owned run with 24,000 captured frames, 187 processed quanta,
+  and 23,936 rendered frames. This identifies the prior `E_INVALIDARG` as a
+  stream-initialization flag/format compatibility issue, not endpoint
+  ownership; contention HRESULTs remain distinct. Streams were stopped/reset,
+  and no defaults, volume, mute, driver, or persistent audio configuration
+  changed. Next action: continue the next independently testable delivery item.
+
 - Extended M07 node-recorder regression coverage on 2026-09-14. Each
   independently attached recorder node now proves an invalid repeated arm is
   rejected without proceeding to the worker, covering the node-owned path in

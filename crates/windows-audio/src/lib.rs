@@ -3840,8 +3840,8 @@ impl SharedCapture {
     ) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eCapture, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator, MMDeviceEnumerator,
-            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -3882,17 +3882,19 @@ impl SharedCapture {
         // event-creation failure cannot leak the format buffer.
         let format = unsafe { client.GetMixFormat()? };
         let stream_flags = if event_driven {
-            AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST
+            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+                | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                | AUDCLNT_STREAMFLAGS_NOPERSIST
         } else {
-            AUDCLNT_STREAMFLAGS_NOPERSIST
+            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_NOPERSIST
         };
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
-                // GetMixFormat is the endpoint's exact shared-mode format;
-                // conversion is neither needed nor desirable here. Keeping
-                // the request exact avoids format/flag combinations that
-                // some drivers reject with E_INVALIDARG.
+                // GetMixFormat remains the requested shared-mode format. The
+                // conversion flag is retained because some virtual endpoints
+                // reject otherwise identical initialization without explicit
+                // PCM conversion permission.
                 stream_flags,
                 buffer_duration_100ns,
                 0,
@@ -4183,8 +4185,8 @@ impl SharedRender {
     pub fn open(endpoint_id: &str, _buffer_duration_100ns: i64) -> Result<Self, AudioError> {
         use windows::Win32::Media::Audio::{
             eRender, IAudioClient, IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator,
-            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-            AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
+            AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+            AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_NOPERSIST, DEVICE_STATE_ACTIVE,
         };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
 
@@ -4223,7 +4225,9 @@ impl SharedRender {
         let initialized = unsafe {
             client.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
-                AUDCLNT_STREAMFLAGS_EVENTCALLBACK | AUDCLNT_STREAMFLAGS_NOPERSIST,
+                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
+                    | AUDCLNT_STREAMFLAGS_EVENTCALLBACK
+                    | AUDCLNT_STREAMFLAGS_NOPERSIST,
                 0,
                 0,
                 format,
