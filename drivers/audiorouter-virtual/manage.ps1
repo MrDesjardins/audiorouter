@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$maxStateBytes = 64KB
 $infPath = (Resolve-Path -LiteralPath $Inf).Path
 $statePath = [IO.Path]::GetFullPath($State)
 $driverRoot = (Resolve-Path (Join-Path $PSScriptRoot '.')).Path.TrimEnd('\')
@@ -54,6 +55,21 @@ function Assert-NoReparseAncestors {
         }
         $current = $current.Parent
     }
+}
+
+function Read-BoundedState {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path
+    )
+    $item = Get-Item -LiteralPath $Path -Force
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "The lifecycle state file cannot be a reparse point: $($item.FullName)"
+    }
+    if ($item.Length -gt $maxStateBytes) {
+        throw "The lifecycle state file exceeds the $maxStateBytes byte limit: $($item.FullName)"
+    }
+    return [IO.File]::ReadAllText($item.FullName)
 }
 
 if (-not $AllowDriverInstall) {
@@ -115,7 +131,8 @@ if ($Install) {
 if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
     throw "No lifecycle state exists at $statePath; refusing package-wide deletion."
 }
-$record = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+Assert-NoReparsePath -Path $statePath -StopAt (Split-Path -Parent $statePath)
+$record = Read-BoundedState -Path $statePath | ConvertFrom-Json
 if ($record.schemaVersion -ne 1 -or [string]::IsNullOrWhiteSpace($record.publishedName) -or
     $record.publishedName -notmatch '^oem\d+\.inf$') {
     throw "Lifecycle state is invalid or ambiguous: $statePath"

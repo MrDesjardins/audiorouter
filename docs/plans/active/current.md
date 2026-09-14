@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Hardened the M03 driver lifecycle state boundary on 2026-09-14. Uninstall
+  now rejects a reparse-point rollback file and bounds its UTF-8 state read to
+  64 KiB before JSON parsing; the static acceptance asserts both guards. The
+  x64 WDK build, catalog/signability check, formatting, and diff checks passed.
+  No driver installation/loading, signing-mode, endpoint, or machine audio
+  configuration action occurred. Next action: continue the next independently
+  testable M03/M07 recovery or delivery item.
+
 - Fixed an M07 recording-factory rollback defect on 2026-09-14. The
   caller-supplied `create_and_attach_file_recorder` path now removes its
   exclusively-created file when worker attachment is rejected, matching the
