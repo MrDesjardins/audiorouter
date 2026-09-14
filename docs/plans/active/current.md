@@ -2,6 +2,11 @@
 
 Updated: 2026-09-13.
 
+- Built the Windows Tauri shell debug artifact on 2026-09-13 with `cargo
+  build --manifest-path src-tauri/Cargo.toml`; compilation completed in 10.69 s
+  and produced the runnable shell target. The executable was not launched and
+  no endpoint, driver, signing, or machine audio configuration was accessed.
+
 - Revalidated the actual Windows Tauri desktop shell on 2026-09-13 at the
   current UI/backend head with `cargo check --manifest-path
   src-tauri/Cargo.toml`. The shell, authenticated transport, control plane,
