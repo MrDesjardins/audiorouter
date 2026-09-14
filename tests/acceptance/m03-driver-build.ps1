@@ -196,9 +196,38 @@ $timerSource = $stream.Substring($timerStart)
 if (-not $timerSource.Contains('_this->UpdatePosition(qpc);')) {
     throw 'WaveRT timer callback does not reach the position-update bridge path'
 }
-$readBytesSource = $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes'))
+$readBytesStart = $stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes')
+$readBytesEnd = $stream.IndexOf('VOID CMiniportWaveRTStream::RefreshBridgePublishShape', $readBytesStart)
+if ($readBytesStart -lt 0 -or $readBytesEnd -le $readBytesStart) {
+    throw 'WaveRT capture callback boundary is missing'
+}
+$readBytesSource = $stream.Substring($readBytesStart, $readBytesEnd - $readBytesStart)
 if (-not $readBytesSource.Contains('RefreshBridgePublishShape();')) {
     throw 'WaveRT render callback must refresh the capture-sink bridge shape before publication'
+}
+$callbackBoundaries = @(
+    $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes'), $stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes') - $stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes')),
+    $readBytesSource
+)
+foreach ($callback in $callbackBoundaries) {
+    foreach ($forbidden in @('KeWaitFor', 'KeDelayExecutionThread', 'ExAllocatePool', 'IoQueueWorkItem')) {
+        if ($callback.Contains($forbidden)) {
+            throw "WaveRT bridge callback contains a forbidden realtime operation: $forbidden"
+        }
+    }
+    $loggingLine = $callback -split "`r?`n" | Where-Object {
+        $trimmed = $_.TrimStart()
+        $trimmed.StartsWith('DPF_') -or $trimmed.StartsWith('DbgPrint')
+    } | Select-Object -First 1
+    if ($null -ne $loggingLine) {
+        throw 'WaveRT bridge callback contains a forbidden realtime logging call'
+    }
+}
+if (-not $readBytesSource.Contains('AudioRouterPublishLeaseBlockForDirection')) {
+    throw 'WaveRT capture callback must publish only through the bounded bridge helper'
+}
+if (-not $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::WriteBytes')).Contains('RtlZeroMemory')) {
+    throw 'WaveRT render callback must retain a fail-closed silence path'
 }
 if (-not $stream.Contains('IID_IMiniportWaveRTOutputStream) && (!this->m_bCapture)')) {
     throw 'WaveRT capture streams must not advertise the render-stream interface'

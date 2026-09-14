@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Strengthened the M03 driver callback acceptance gate on 2026-09-14. The
+  non-installing WDK acceptance now bounds the exact `WriteBytes`/`ReadBytes`
+  callback regions and rejects waits, delays, pool allocation, work-item
+  queuing, and realtime logging while requiring the bounded bridge publication
+  and fail-closed silence paths. The x64 build, catalog signability, and new
+  source invariants passed; no driver was installed or loaded and no audio
+  configuration changed. The loaded PortCls callback and production signing
+  gates remain open.
+
 - Requalified the complete guarded `safe-all.ps1` chain at `a4b21d6b` on
   2026-09-14 after the recording-encoding UI slice. M00/M03 toolchain,
   project-owned driver build/signability, read-only 31-endpoint inventory,
