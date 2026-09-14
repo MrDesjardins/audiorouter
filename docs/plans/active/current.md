@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Corrected stale startup permission documentation on 2026-09-14. The
+  operations guide now distinguishes backend desired-state authorization from
+  the desktop shell's explicit native registration command and no longer
+  claims the feature is unimplemented. Documentation validation passed for
+  53 Markdown files and 192 local links. No registry, driver, endpoint, or
+  persistent audio configuration was changed. Next action: continue the
+  next independently testable M03/M07 recovery item.
+
 - Corrected native startup ownership matching on 2026-09-14. Registry values
   are now compared using Windows case-insensitive path semantics and an
   optional whole-value quote pair; values with extra arguments remain foreign.

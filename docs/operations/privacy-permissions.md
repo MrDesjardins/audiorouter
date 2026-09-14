@@ -32,14 +32,17 @@ The important scopes are deliberately separate:
   and library entries.
 - `pluginScan` — inspect explicitly selected plugin files.
 - `deviceAdministration` — plan/apply managed virtual-device desired state.
-- `startup.write` — startup registration, which remains unavailable here.
+- `startup.write` — authorize startup desired-state changes; native OS
+  registration is performed only by the explicit desktop shell command.
 
 A generic read grant cannot elevate itself to another scope. Revoked or
 unknown clients are denied before method dispatch. Imported bundles do not
 install drivers, execute plugins, arm recorders, or register startup.
 
 API discovery serializes the conceptual `startup.write` scope as
-`startupWrite`; startup registration remains unavailable in this build.
+`startupWrite`. The portable control plane stores the desired preference and
+reports native registration as shell-owned; it does not write the OS registry
+itself.
 
 ## Audio privacy boundary
 
