@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Reconciled the REC-03 recording-encoding contract on 2026-09-14. The
+  previously pending implementation is already complete: recording dither and
+  conversion are validated at the recording boundary, persisted through the
+  version-2 SQLite migration with conservative legacy defaults, returned by
+  `recordings.list`, and hydrated in the UI's encoding panel. Round-trip and
+  legacy migration coverage passed in storage (90 tests), runtime propagation
+  and API coverage passed in control (155 passed, 2 guarded live ignored), the
+  recording suite passed (40), and the UI suite passed (189 tests across 19
+  files). No audio endpoint, driver, or machine configuration was accessed.
+  This closes the portable REC-03 metadata contract; file metadata editing
+  remains intentionally library-only and is clearly disclosed by the UI.
+  Next action: continue the next safe M03/M07 recovery integration item.
+
 - Closed the remaining M03 native-worker exclusivity entry point on
   2026-09-14. Endpoint preparation now uses the same shared guard as direct
   attachment and application capture, rejecting an already attached duplex
