@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `c7f49716` on 2026-09-14 after duplex bridge lease maintenance.
+  M00 toolchain/native compile and 31-endpoint read-only inventory, M03
+  AudioRouter and disposable SysVAD x64 builds, M01/M04/M05/M06/M07, unsigned
+  M08 artifacts, 159 traceability IDs, and documentation validation (53
+  Markdown files, 192 local links) passed. Cleanup removed 15 run-owned
+  temporary children. No driver installation/loading, signing-mode change,
+  plugin/startup registration, stream activation, or persistent machine audio
+  configuration occurred. Loaded PortCls, production signing/installation,
+  physical-latency, and manual UI gates remain open. Next action: continue
+  the next safe M03/M07 recovery integration item.
+
 - Connected VDEV-12 duplex lease maintenance to the bounded native pump on
   2026-09-14. A transferred duplex worker now refreshes both negotiated
   directional leases at a control/worker-thread half-lease cadence before
