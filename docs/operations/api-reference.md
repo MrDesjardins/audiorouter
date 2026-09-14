@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 67 methods, including the session portability,
+The current catalog contains 71 methods, including the session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
 
@@ -63,6 +63,9 @@ file worker and lifecycle state are attached to that validated recorder node.
 `recorders.list` reports `nodeId` for node-targeted entries and keeps it absent
 for compatibility session entries; results are bounded and deterministically
 ordered.
+`recovery.clearSafeMode` clears durable crash markers and the safe-mode latch
+atomically with its idempotent journal result; if that journal write cannot be
+committed, recovery state remains unchanged.
 Finalized node-targeted recording rows from `recordings.list` and
 `recordings.get` include the persisted `nodeId`; legacy rows return `null`.
 | `startup.get` | `read` | read-only |

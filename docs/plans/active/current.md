@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Corrected API reference drift on 2026-09-14: the documented method catalog
+  now matches the current 71-method contract, and `recovery.clearSafeMode`
+  documents its durable journal/latch atomicity and fail-closed behavior.
+  Documentation validation passed for 53 Markdown files and 192 local links.
+  No audio, driver, registry, or machine configuration was accessed. Next
+  action: continue the next independently testable M03/M07 recovery item.
+
 - Added the M07 control-level recovery atomicity regression on 2026-09-14.
   An authorized `recovery.clearSafeMode` dispatch now has explicit coverage
   for journal-capacity failure: the RPC returns an error and the durable
