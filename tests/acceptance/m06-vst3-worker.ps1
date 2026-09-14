@@ -9,6 +9,15 @@ $workerBuild = Join-Path $repositoryRoot 'tools\m06-vst3-worker\build.ps1'
 $worker = Join-Path $repositoryRoot 'tools\m06-vst3-worker\m06-vst3-worker.exe'
 $workerObject = Join-Path $repositoryRoot 'tools\m06-vst3-worker\m06-vst3-worker.obj'
 $iidObject = Join-Path $repositoryRoot 'tools\m06-vst3-worker\vstinitiids.obj'
+$workerSource = Get-Content -LiteralPath (Join-Path $repositoryRoot 'tools\m06-vst3-worker\main.cpp') -Raw
+foreach ($required in @(
+        'case ''\b'':',
+        'case ''\n'':',
+        'static_cast<unsigned char>(character) < 0x20')) {
+    if (-not $workerSource.Contains($required)) {
+        throw "native VST3 JSON string escaping is missing: $required"
+    }
+}
 $defaultFixture = Join-Path $repositoryRoot 'third_party\vst3sdk-build\VST3\Release\again.vst3'
 if ([string]::IsNullOrWhiteSpace($FixturePath)) {
     $fixture = $defaultFixture

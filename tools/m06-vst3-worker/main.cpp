@@ -978,8 +978,26 @@ private:
 static std::string quote_json(const std::string& value) {
     std::string result = "\"";
     for (const auto character : value) {
-        if (character == '\\' || character == '"') result.push_back('\\');
-        result.push_back(character);
+        switch (character) {
+            case '\\': result += "\\\\"; break;
+            case '"': result += "\\\""; break;
+            case '\b': result += "\\b"; break;
+            case '\f': result += "\\f"; break;
+            case '\n': result += "\\n"; break;
+            case '\r': result += "\\r"; break;
+            case '\t': result += "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(character) < 0x20) {
+                    constexpr char hex[] = "0123456789abcdef";
+                    const auto byte = static_cast<unsigned char>(character);
+                    result += "\\u00";
+                    result.push_back(hex[byte >> 4]);
+                    result.push_back(hex[byte & 0x0f]);
+                } else {
+                    result.push_back(character);
+                }
+                break;
+        }
     }
     result.push_back('"');
     return result;
