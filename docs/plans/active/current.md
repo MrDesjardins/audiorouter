@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the authorized M02 control-owned native lifecycle on 2026-09-14
+  against the exact active VB-Cable endpoints. The single Rust control plane
+  prepared, started, processed, and stopped the route successfully, reporting
+  24,480 captured frames, 191 processed quanta, and 24,448 rendered frames.
+  The acceptance restores its process environment and does not persist device
+  changes. No defaults, volume, mute, privacy, registry, driver, signing, or
+  startup configuration changed. Next action: continue the next safe M03/M07
+  recovery or delivery item.
+
 - Revalidated the authorized M02 Rust VB-Cable route on 2026-09-14 using
   the exact active `CABLE Output (VB-Audio Virtual Cable)` capture and
   `CABLE Input (VB-Audio Virtual Cable)` render endpoints for 500 ms. The
