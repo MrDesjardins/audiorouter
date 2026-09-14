@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Clarified the M07 shell handoff documentation on 2026-09-14. The runbook
+  now separates the passed WebView-to-authenticated-RPC transport gate from
+  the still-open attended visual accessibility/scaling review, and release
+  notes link the same boundary. Documentation validation passed for 53
+  Markdown files and 192 local links. No audio, driver, registry, or machine
+  configuration was accessed. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Corrected API reference drift on 2026-09-14: the documented method catalog
   now matches the current 71-method contract, and `recovery.clearSafeMode`
   documents its durable journal/latch atomicity and fail-closed behavior.

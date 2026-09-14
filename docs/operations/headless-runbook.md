@@ -32,12 +32,12 @@ permissions, open an audio endpoint, install a driver, or modify Windows audio
 settings. The Tauri shell forwards its requests to this pipe and does not open
 the database itself.
 
-## Interactive Tauri shell acceptance
+## Interactive Tauri shell transport acceptance
 
-For the remaining desktop-shell gate, use a disposable database and pipe. Run
-from an elevated PowerShell session after building the CLI and shell. Enroll
-only the current Windows user's SID as an observer, start the bounded backend,
-and launch the shell:
+For the WebView-to-backend transport gate, use a disposable database and pipe.
+Run from an elevated PowerShell session after building the CLI and shell.
+Enroll only the current Windows user's SID as an observer, start the bounded
+backend, and launch the shell:
 
 ```powershell
 $database = Join-Path $env:TEMP "audiorouter-shell-check.sqlite"
@@ -53,10 +53,16 @@ Remove-Item Env:AUDIOROUTER_CONTROL_PIPE -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $params, $database -Force -ErrorAction SilentlyContinue
 ```
 
-The manual gate passes only when the shell opens and the UI reports a connected
-backend after a read-only refresh. It does not open an audio stream, install a
-driver, or change persistent audio settings. Do not use the normal user
-database for diagnosis.
+The checked-in `tests/acceptance/m07-shell-rpc.ps1` wrapper verifies that the
+real WebView reaches the native `rpc_request` command and authenticated
+`system.describe`, then removes its temporary state. This transport gate does
+not open an audio stream, install a driver, or change persistent audio
+settings. Do not use the normal user database for diagnosis.
+
+The separate manual visual gate still requires an attended desktop review of
+layout, scaling, keyboard navigation, and screen-reader behavior after the
+connected UI is visible. Transport success must not be reported as completion
+of that visual/accessibility review.
 
 ### Existing VB-Cable endpoint test
 
