@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete non-installing `safe-all.ps1` chain at pushed head
+  `1af9407f` on 2026-09-14 after the STATE-07 schema guard. M00/M03 native
+  toolchain and WDK build/signability, M01 CLI, M04 DSP/recording, M05 UI
+  (187 tests and production build), M06 VST2/VST3 workers, M07 headless
+  control, unsigned M08 artifacts, 159-ID traceability, and documentation
+  validation (53 Markdown files, 192 local links) passed. The run removed 15
+  run-owned temporary children. No driver installation/loading, signing-mode
+  change, startup/plugin registration, endpoint default, or persistent audio
+  configuration occurred. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Added the STATE-07 unsupported-schema guard on 2026-09-14. Storage now
   reads the existing migration table before applying DDL and fails closed on
   a negative or newer-than-supported version, leaving the database schema
