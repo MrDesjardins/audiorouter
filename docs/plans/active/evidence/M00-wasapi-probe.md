@@ -1,5 +1,18 @@
 # Native endpoint and loopback requalification (2026-09-12)
 
+## 2026-09-13 - current-tip event-driven lifecycle
+
+The authorized `m00-native-event-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 2000` run used the exact active VB-Cable capture and
+render endpoint IDs. Event-driven initialization and event registration
+completed, followed by bounded start/pump/stop/reset. The run captured 96,480
+frames and rendered 100,800 silent frames.
+
+The harness restored temporary process state and did not change endpoint
+defaults, volume, mute, privacy, drivers, signing, startup registration, or
+persistent audio configuration. This is shared-mode event lifecycle evidence,
+not calibrated physical latency, drift, or managed-driver callback evidence.
+
 ## 2026-09-13 - guarded include/exclude process attribution
 
 The authorized guarded probes completed successfully:

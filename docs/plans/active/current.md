@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Requalified the event-driven native endpoint lifecycle for two seconds on
+  2026-09-13 through the exact VB-Cable pair. The run captured 96,480 frames
+  and rendered 100,800 silent frames after successful event setup, start,
+  bounded pumping, stop, and reset. Defaults, volume, mute, privacy, driver,
+  signing, startup, and persistent audio configuration were unchanged.
+  Physical latency, drift, and managed-driver callback gates remain open.
+
 - Requalified the complete safe M00-M08 acceptance chain at pushed head
   `ef84e3c4` on 2026-09-13 after the elevated driver-readiness audit. The
   project x64 WDK build/signability, read-only native checks, disposable
