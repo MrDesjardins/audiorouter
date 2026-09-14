@@ -7,7 +7,7 @@ Updated: 2026-09-13.
   negotiated `NativeBridgeCaptureSinkBinding`; graph activation prefers its
   lock-free realtime writer only for the matching `busId`, while the Windows
   handle remains control-thread-owned. Workspace compilation and focused
-  control/windows-audio tests pass (135 and 70); no driver device was opened
+  control/windows-audio tests pass (136 and 70); no driver device was opened
   by those tests, and driver installation/loading/signing remain separate
   gates.
 
@@ -16,7 +16,7 @@ Updated: 2026-09-13.
   `parameters.busId`; native graph activation extracts enabled capture-sink
   identities and selects only matching route bridges. A control regression
   proves a producer route for bus A is not tapped when the graph selects bus
-  B, while domain, engine, and control suites pass (62, 108, and 135 tests;
+  B, while domain, engine, and control suites pass (62, 108, and 136 tests;
   one live test remains intentionally ignored). This is the portable binding
   prerequisite for the project-owned driver and does not claim driver loading.
 

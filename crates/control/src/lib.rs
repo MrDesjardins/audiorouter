@@ -10618,6 +10618,38 @@ mod tests {
         assert!(plane.native_endpoint_taps.is_none());
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn native_capture_sink_binding_rejects_mismatched_hello_before_driver_open() {
+        let mut plane = ControlPlane::default();
+        let bus_id = EntityId::new("capture-bus");
+        plane.create_virtual_bus(bus_id.clone(), "Capture").unwrap();
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "different-bus".into(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 1,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 128,
+            lease_ms: 1_000,
+        };
+        let error = plane
+            .prepare_native_capture_sink_binding(
+                bus_id,
+                "\\\\.\\AudioRouterVirtualBridge",
+                "C:\\missing-capture.slot",
+                hello,
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message == "native capture sink hello does not match the requested bus"
+        ));
+    }
+
     #[test]
     fn native_worker_preparation_rejects_mismatched_endpoint_shapes_before_opening() {
         let mut plane = ControlPlane::default();
