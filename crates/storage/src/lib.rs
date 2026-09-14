@@ -68,6 +68,9 @@ pub const MAX_PLUGIN_STATE_LIST_ITEMS: usize = 500;
 pub const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
 pub const MAX_REQUEST_HASH_BYTES: usize = 128;
 pub const MAX_SESSION_LIST_ITEMS: usize = 500;
+/// Highest schema migration this binary knows how to apply. Newer databases
+/// must be opened by a newer binary rather than silently written by this one.
+pub const MAX_SCHEMA_VERSION: i64 = 2;
 /// One extra row is permitted so callers can detect a full page.
 pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
 /// Maximum number of directory entries inspected by recovery retention.
@@ -760,6 +763,26 @@ impl Storage {
     }
 
     fn migrate(&self) -> Result<(), StorageError> {
+        let schema_table_exists: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if schema_table_exists.is_some() {
+            let version: i64 = self.connection.query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+                [],
+                |row| row.get(0),
+            )?;
+            if !(0..=MAX_SCHEMA_VERSION).contains(&version) {
+                return Err(StorageError::CorruptDatabase(format!(
+                    "unsupported schema migration version {version}"
+                )));
+            }
+        }
         self.connection.execute_batch(
             "PRAGMA foreign_keys = ON;
              CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -4019,6 +4042,40 @@ mod tests {
         drop(first);
         let second = Storage::open(&path).unwrap();
         assert_eq!(second.claim_backend_epoch().unwrap(), 3);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn newer_schema_is_rejected_before_migration_writes() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-newer-schema-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+                     INSERT INTO schema_migrations(version) VALUES (99);",
+                )
+                .unwrap();
+        }
+        let result = Storage::open(&path);
+        assert!(matches!(
+            result,
+            Err(StorageError::CorruptDatabase(message))
+                if message == "unsupported schema migration version 99"
+        ));
+        let connection = Connection::open(&path).unwrap();
+        let table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(table_count, 0);
         let _ = std::fs::remove_file(path);
     }
 

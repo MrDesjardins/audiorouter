@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Added the STATE-07 unsupported-schema guard on 2026-09-14. Storage now
+  reads the existing migration table before applying DDL and fails closed on
+  a negative or newer-than-supported version, leaving the database schema
+  untouched; legacy version 1/2 databases continue through the known
+  migration path. The new regression proves a version-99 database is rejected
+  before `sessions` is created. Storage tests (88), strict Clippy, formatting,
+  and diff checks passed. No audio, driver, registry, plugin, or machine
+  configuration changed. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Requalified the guarded process-loopback lifecycle on 2026-09-14 against
   the observed `voicemeeterpro.exe` process (PID 34568, creation identity
   `134336595287373468`) and the exact existing CABLE Input render endpoint.
