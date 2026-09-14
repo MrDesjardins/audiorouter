@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Hardened the VST3 worker acceptance entrypoint on 2026-09-14 to accept an
+  explicitly selected absolute regular `.vst3` module as well as a directory
+  bundle; the default AGain path remains unchanged. The full AGain acceptance
+  passed, including state restoration, multi-bus scheduling, failure
+  quarantine, and bounded shutdown. An attempted full TDR Nova VST3 run
+  reached processing but failed closed during opaque state restoration with
+  VST3 result `0x1`; it is therefore unsupported for the current stateful
+  worker contract rather than being misclassified as compatible. No plugin
+  registration, file modification, audio stream, or machine configuration
+  occurred. Next action: retain this explicit state gate and continue the next
+  independently testable M03/M07 recovery item.
+
 - Qualified the supplied x64 BUSTERse VST2 binary on 2026-09-14 through the
   contained worker path. Processing passed at 44.1, 48, and 96 kHz, and both
   bounded editor-thread containment regressions passed; the DLL SHA-256

@@ -1,5 +1,6 @@
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [string]$FixturePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -8,10 +9,24 @@ $workerBuild = Join-Path $repositoryRoot 'tools\m06-vst3-worker\build.ps1'
 $worker = Join-Path $repositoryRoot 'tools\m06-vst3-worker\m06-vst3-worker.exe'
 $workerObject = Join-Path $repositoryRoot 'tools\m06-vst3-worker\m06-vst3-worker.obj'
 $iidObject = Join-Path $repositoryRoot 'tools\m06-vst3-worker\vstinitiids.obj'
-$fixture = Join-Path $repositoryRoot 'third_party\vst3sdk-build\VST3\Release\again.vst3'
-if (-not (Test-Path -LiteralPath $fixture -PathType Container)) {
-    throw "AGain fixture is missing; run m06-vst3-sdk.ps1 first: $fixture"
+$defaultFixture = Join-Path $repositoryRoot 'third_party\vst3sdk-build\VST3\Release\again.vst3'
+if ([string]::IsNullOrWhiteSpace($FixturePath)) {
+    $fixture = $defaultFixture
+} else {
+    if (-not [System.IO.Path]::IsPathRooted($FixturePath)) {
+        throw "FixturePath must be an absolute VST3 bundle path: $FixturePath"
+    }
+    $fixture = $FixturePath
 }
+if (-not (Test-Path -LiteralPath $fixture -PathType Container) -and
+    -not (Test-Path -LiteralPath $fixture -PathType Leaf)) {
+    throw "VST3 fixture bundle or module is missing: $fixture"
+}
+$fixtureItem = Get-Item -LiteralPath $fixture
+if (-not $fixtureItem.PSIsContainer -and $fixtureItem.Extension -ne '.vst3') {
+    throw "FixturePath must name a .vst3 bundle or module: $fixture"
+}
+$fixture = $fixtureItem.FullName
 if (-not $SkipBuild) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $workerBuild
     if ($LASTEXITCODE -ne 0) { throw "native VST3 worker build failed with exit code $LASTEXITCODE" }
