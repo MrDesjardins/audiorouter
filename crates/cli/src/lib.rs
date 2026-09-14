@@ -3807,12 +3807,14 @@ mod tests {
         let startup_content = startup["result"]["content"][0]["text"].as_str().unwrap();
         let startup_payload: Value = serde_json::from_str(startup_content).unwrap();
         assert_eq!(startup_payload["result"]["registration"], "unavailable");
-        let operator =
-            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let startup_grant = audiorouter_control::ClientGrant::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::StartupWrite,
+        ]);
         let startup_plan = mcp_tool_call(
             &mut plane,
             "mcp-test",
-            &operator,
+            &startup_grant,
             None,
             &json!({
                 "id": 13,
@@ -3828,7 +3830,7 @@ mod tests {
         let startup_apply = mcp_tool_call(
             &mut plane,
             "mcp-test",
-            &operator,
+            &startup_grant,
             None,
             &json!({
                 "id": 14,

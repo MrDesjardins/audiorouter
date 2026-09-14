@@ -17847,8 +17847,10 @@ mod tests {
             method: "startup.plan".into(),
             params: Some(json!({ "enabled": true })),
         };
-        let denied = ControlPlane::default()
-            .dispatch_authorized(request.clone(), &ClientGrant::for_role(ClientRole::Operator));
+        let denied = ControlPlane::default().dispatch_authorized(
+            request.clone(),
+            &ClientGrant::for_role(ClientRole::Operator),
+        );
         assert_eq!(denied.error.unwrap().code, -32001);
 
         let allowed = ControlPlane::default().dispatch_authorized(

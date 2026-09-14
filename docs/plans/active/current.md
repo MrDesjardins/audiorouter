@@ -9,9 +9,11 @@ Updated: 2026-09-14.
   cannot plan startup while an explicit startup grant can. Contract drift,
   TypeScript typechecks, UI backend tests (53), domain (64), control (153),
   strict Clippy, formatting, and diff checks passed. This changes no OS
-  registration or audio configuration. Native sign-in registration and tray
-  lifecycle remain separate open work. Next action: continue the next safe
-  M03/M07 recovery integration item.
+  registration or audio configuration. The complete Rust workspace then passed
+  after updating the CLI MCP fixture to use an explicit startup grant (all
+  package tests and doc-tests; two guarded live tests remain ignored). Native
+  sign-in registration and tray lifecycle remain separate open work. Next
+  action: continue the next safe M03/M07 recovery integration item.
 
 - Planned the next M07 authorization slice on 2026-09-14: align startup
   planning/apply with the specification's dedicated `startup.write` scope.
