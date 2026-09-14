@@ -2,6 +2,12 @@
 
 Updated: 2026-09-14.
 
+- Added explicit API-08 UI subscription regressions on 2026-09-14 for
+  `devices.changed` and `recovery.safeModeCleared`, the two production event
+  categories found during the emission audit. UI coverage remains 184 tests,
+  typecheck and diff checks pass, and no audio or machine configuration was
+  accessed. Next action: continue the next safe M03/M07 recovery item.
+
 - Corrected the API-08 recovery-event catalog on 2026-09-14. The emitted
   `recovery.safeModeCleared` event is now discoverable in Rust, typed in
   TypeScript, and subscribed by the UI, so recovery-latch changes refresh the
