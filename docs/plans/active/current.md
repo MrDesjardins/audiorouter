@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the guarded control-owned native lifecycle on 2026-09-14 with
+  the existing VB-Cable pair and `-AllowLiveAudio`. The exact active capture
+  and render endpoints delivered 24,000 captured frames, 187 processed graph
+  quanta, and 23,936 rendered frames; the control-owned worker stopped and
+  detached successfully and the media identity/state snapshot was unchanged.
+  This is measured existing-endpoint evidence only: no default endpoint,
+  volume, mute, privacy, driver, signing, startup, or persistent audio
+  configuration changed. Production virtual-driver activation and physical
+  latency gates remain open. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Added the versioned REC-03 recording metadata migration on 2026-09-14.
   Storage now records schema migration version 2 only after the bounded
   `dither` and `conversion` columns exist, including conservative defaults
