@@ -1938,7 +1938,6 @@ impl WasapiSchedulerBridge {
     /// Pump a process-loopback packet after its PCM16 payload has been
     /// expanded to the bridge's float32 boundary. The process source is
     /// otherwise scheduled identically to an endpoint capture source.
-    #[cfg(windows)]
     pub fn pump_process_loopback(
         &mut self,
         capture: &ProcessLoopbackCapture,
@@ -2105,7 +2104,6 @@ impl EndpointLifecycle for SharedRender {
     }
 }
 
-#[cfg(windows)]
 impl EndpointLifecycle for ProcessLoopbackCapture {
     fn start(&mut self) -> Result<(), AudioError> {
         ProcessLoopbackCapture::start(self)
@@ -2402,7 +2400,6 @@ impl Drop for WasapiEndpointWorker {
 /// plane may transition it to running. Process-loopback PCM16 is expanded at
 /// the capture boundary, so the scheduler and graph use the same float32
 /// contract as endpoint capture.
-#[cfg(windows)]
 pub struct ProcessLoopbackWorker {
     capture: ProcessLoopbackCapture,
     render: SharedRender,
@@ -2410,7 +2407,6 @@ pub struct ProcessLoopbackWorker {
     running: bool,
 }
 
-#[cfg(windows)]
 impl ProcessLoopbackWorker {
     pub fn new(
         capture: ProcessLoopbackCapture,
@@ -2487,10 +2483,74 @@ impl ProcessLoopbackWorker {
     }
 }
 
-#[cfg(windows)]
 impl Drop for ProcessLoopbackWorker {
     fn drop(&mut self) {
         let _ = self.stop();
+    }
+}
+
+/// Native graph worker variants sharing the same control-plane lifecycle
+/// surface. This keeps session ownership explicit while allowing a graph's
+/// source to be an endpoint capture or a verified process tree.
+pub enum NativeAudioWorker {
+    Endpoint(WasapiEndpointWorker),
+    ProcessLoopback(ProcessLoopbackWorker),
+}
+
+impl NativeAudioWorker {
+    pub fn is_running(&self) -> bool {
+        match self {
+            Self::Endpoint(worker) => worker.is_running(),
+            Self::ProcessLoopback(worker) => worker.is_running(),
+        }
+    }
+
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        match self {
+            Self::Endpoint(worker) => worker.start(),
+            Self::ProcessLoopback(worker) => worker.start(),
+        }
+    }
+
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        match self {
+            Self::Endpoint(worker) => worker.stop(),
+            Self::ProcessLoopback(worker) => worker.stop(),
+        }
+    }
+
+    pub fn bridge(&self) -> &WasapiSchedulerBridge {
+        match self {
+            Self::Endpoint(worker) => worker.bridge(),
+            Self::ProcessLoopback(worker) => worker.bridge(),
+        }
+    }
+
+    pub fn bridge_mut(&mut self) -> &mut WasapiSchedulerBridge {
+        match self {
+            Self::Endpoint(worker) => worker.bridge_mut(),
+            Self::ProcessLoopback(worker) => worker.bridge_mut(),
+        }
+    }
+
+    pub fn pump_available_with_tap(
+        &mut self,
+        max_packets: u32,
+        tap: &dyn audiorouter_engine::AudioTap,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        match self {
+            Self::Endpoint(worker) => worker.pump_available_with_tap(max_packets, tap),
+            Self::ProcessLoopback(worker) => {
+                bounded_pump(max_packets, true, || worker.pump_with_tap(tap))
+            }
+        }
+    }
+
+    pub fn telemetry(&self) -> WasapiEndpointWorkerTelemetry {
+        match self {
+            Self::Endpoint(worker) => worker.telemetry(),
+            Self::ProcessLoopback(_) => WasapiEndpointWorkerTelemetry::default(),
+        }
     }
 }
 
@@ -3407,7 +3467,6 @@ impl Drop for ProcessLoopbackCapture {
     }
 }
 
-#[cfg(windows)]
 impl AudioCaptureSource for ProcessLoopbackCapture {
     fn next_packet_into(
         &self,

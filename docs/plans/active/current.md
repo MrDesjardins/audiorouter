@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Connected application capture to the control-plane native worker boundary
+  on 2026-09-13. Native worker ownership now supports either an exact
+  endpoint pair or a verified process-loopback capture while preserving one
+  session/generation/lifecycle surface. Added explicit preparation that
+  validates the selected application identity and requires a matching enabled
+  `applicationCapture` node before opening process loopback or the requested
+  stereo render endpoint. Control tests (137 passed, one guarded live test
+  ignored) and strict dependency-chain Clippy pass. A real process-loopback
+  start/pump/restart run remains a guarded Windows runtime gate.
+
 - Cleared the strict-Clippy quality gate on 2026-09-13. The application
   selector validator had two identical error branches; the equivalent
   presence-mismatch predicate is now expressed once. Strict Clippy for the

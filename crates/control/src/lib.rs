@@ -3617,7 +3617,7 @@ pub struct ControlPlane {
     next_session_import_plan: u64,
     active_idempotency_scope: Option<String>,
     endpoint_monitor: Option<audiorouter_windows_audio::EndpointMonitor>,
-    native_endpoint_worker: Option<audiorouter_windows_audio::WasapiEndpointWorker>,
+    native_endpoint_worker: Option<audiorouter_windows_audio::NativeAudioWorker>,
     native_endpoint_session: Option<EntityId>,
     native_endpoint_taps: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
@@ -3726,9 +3726,119 @@ impl ControlPlane {
                 "native endpoint worker must be stopped before attachment".into(),
             ));
         }
-        self.native_endpoint_worker = Some(worker);
+        self.native_endpoint_worker = Some(audiorouter_windows_audio::NativeAudioWorker::Endpoint(
+            worker,
+        ));
         self.native_endpoint_session = Some(session_id);
         Ok(())
+    }
+
+    /// Attach an already-opened process-loopback worker to a session. The
+    /// worker must have been created from a currently verified application
+    /// identity and remains stopped until the session is started.
+    pub fn attach_native_application_worker(
+        &mut self,
+        session_id: EntityId,
+        worker: audiorouter_windows_audio::ProcessLoopbackWorker,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if self.native_endpoint_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native worker is already attached".into(),
+            ));
+        }
+        if worker.is_running() {
+            return Err(ControlError::InvalidRequest(
+                "native application worker must be stopped before attachment".into(),
+            ));
+        }
+        self.native_endpoint_worker =
+            Some(audiorouter_windows_audio::NativeAudioWorker::ProcessLoopback(worker));
+        self.native_endpoint_session = Some(session_id);
+        Ok(())
+    }
+
+    /// Prepare a process-loopback worker after revalidating the exact
+    /// executable, path, PID, and creation-time identity. Only the supplied
+    /// render endpoint is opened; no default endpoint is selected.
+    pub fn prepare_native_application_worker(
+        &mut self,
+        session_id: EntityId,
+        process_id: u32,
+        expected_executable: &str,
+        expected_executable_path: Option<&str>,
+        expected_creation_time_100ns: u64,
+        mode: audiorouter_windows_audio::ProcessLoopbackMode,
+        render: &audiorouter_windows_audio::EndpointInfo,
+        buffer_duration_100ns: i64,
+        max_attempts: u32,
+        retry_delay_ms: u64,
+    ) -> Result<(), ControlError> {
+        audiorouter_windows_audio::bind_application_with_path(
+            process_id,
+            expected_executable,
+            expected_executable_path,
+            Some(expected_creation_time_100ns),
+        )
+        .map_err(audio_control_error)?;
+        let session = self.get_session(&session_id)?.clone();
+        let process_id_value = serde_json::Value::from(u64::from(process_id));
+        let has_matching_capture = session.nodes.iter().any(|node| {
+            node.enabled
+                && node.kind == NodeKind::ApplicationCapture
+                && node
+                    .parameters
+                    .get("processId")
+                    .is_some_and(|value| value == &process_id_value)
+        });
+        if !has_matching_capture {
+            return Err(ControlError::InvalidRequest(
+                "application worker requires a matching enabled applicationCapture node".into(),
+            ));
+        }
+        if self.native_endpoint_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native worker is already attached".into(),
+            ));
+        }
+        if render.direction != audiorouter_windows_audio::EndpointDirection::Render
+            || !render.is_ieee_float32()
+            || render.channels != 2
+        {
+            return Err(ControlError::InvalidRequest(
+                "process-loopback render binding must be stereo IEEE float32".into(),
+            ));
+        }
+        let capture = audiorouter_windows_audio::ProcessLoopbackCapture::open(process_id, mode)
+            .map_err(audio_control_error)?;
+        let monitor = if let Some(monitor) = self.endpoint_monitor.as_mut() {
+            monitor
+        } else {
+            self.endpoint_monitor = Some(
+                audiorouter_windows_audio::EndpointMonitor::start().map_err(audio_control_error)?,
+            );
+            self.endpoint_monitor.as_mut().expect("monitor initialized")
+        };
+        let render_client =
+            audiorouter_windows_audio::SharedRender::open_refreshed_bound_with_retry(
+                monitor,
+                render,
+                buffer_duration_100ns,
+                max_attempts,
+                retry_delay_ms,
+            )
+            .map_err(audio_control_error)?;
+        let bridge = audiorouter_windows_audio::WasapiSchedulerBridge::new(
+            8,
+            2,
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            audiorouter_windows_audio::MAX_PROCESS_LOOPBACK_PACKET_FRAMES as usize,
+        )
+        .map_err(audio_control_error)?;
+        self.attach_native_application_worker(
+            session_id,
+            audiorouter_windows_audio::ProcessLoopbackWorker::new(capture, render_client, bridge),
+        )
     }
 
     /// Prepare a stopped native worker from two endpoint descriptors returned
@@ -4401,7 +4511,7 @@ impl ControlPlane {
         let worker = self
             .native_endpoint_worker
             .as_ref()
-            .map(audiorouter_windows_audio::WasapiEndpointWorker::telemetry)
+            .map(audiorouter_windows_audio::NativeAudioWorker::telemetry)
             .unwrap_or_default();
         json!({
             "startAttempts": worker.start_attempts,
@@ -4419,7 +4529,7 @@ impl ControlPlane {
         if self
             .native_endpoint_worker
             .as_ref()
-            .is_some_and(audiorouter_windows_audio::WasapiEndpointWorker::is_running)
+            .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
         {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker must be stopped before detachment".into(),
@@ -5652,7 +5762,7 @@ impl ControlPlane {
             && self
                 .native_endpoint_worker
                 .as_ref()
-                .is_some_and(audiorouter_windows_audio::WasapiEndpointWorker::is_running)
+                .is_some_and(audiorouter_windows_audio::NativeAudioWorker::is_running)
         {
             return Err(ControlError::InvalidRequest(
                 "stop the native endpoint worker before deleting the session".into(),
@@ -6741,7 +6851,7 @@ impl ControlPlane {
         let native_stop_error = if self.native_endpoint_session.as_ref() == Some(id) {
             self.native_endpoint_worker
                 .as_mut()
-                .map(audiorouter_windows_audio::WasapiEndpointWorker::stop)
+                .map(audiorouter_windows_audio::NativeAudioWorker::stop)
                 .transpose()
                 .err()
         } else {
