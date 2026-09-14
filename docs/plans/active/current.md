@@ -22,15 +22,15 @@ Updated: 2026-09-14.
   quanta, and 23,936 rendered frames. The ignored test passed, and its process
   environment was restored; no persistent audio configuration changed.
 
-- Qualified the guarded native application-capture path on 2026-09-14 using
-  the exact verified `voicemeeterpro.exe` process identity (PID, creation time,
-  executable path) and the existing CABLE Input render endpoint. The bounded
-  500 ms run passed the authenticated process-loopback preparation,
-  start/pump/stop lifecycle, and worker detachment. Temporary process
-  environment values were cleared by the test command; no endpoint default,
+- Qualified the guarded native application-capture path and restart behavior
+  on 2026-09-14 using the exact verified `voicemeeterpro.exe` process identity
+  (PID, creation time, executable path) and the existing CABLE Input render
+  endpoint. The bounded test completed two start/pump/stop cycles on the same
+  worker, with successful session-owned shutdown and final detachment.
+  Temporary process environment values were restored; no endpoint default,
   volume, mute, driver, signing, startup, or persistent audio configuration
-  changed. This establishes one current-process identity qualification, not
-  restart/rebind endurance or production-driver evidence.
+  changed. This establishes same-process restart qualification; process
+  replacement/rebind endurance and production-driver evidence remain open.
 
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   the current worktree on 2026-09-14 after the lifecycle-order repair. The

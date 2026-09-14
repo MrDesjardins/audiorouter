@@ -11654,6 +11654,29 @@ mod tests {
         plane
             .session_stop(&EntityId::new("guarded-live-application"))
             .unwrap();
+        let restarted = plane
+            .session_start(&EntityId::new("guarded-live-application"))
+            .unwrap();
+        let restarted_generation = restarted["generation"].as_u64().unwrap();
+        let restarted_at = Instant::now();
+        while restarted_at.elapsed() < Duration::from_millis(500) {
+            let result = plane
+                .pump_native_endpoint_worker_with_bound_taps(
+                    &EntityId::new("guarded-live-application"),
+                    restarted_generation,
+                    64,
+                )
+                .unwrap();
+            packets = packets.saturating_add(result["packets"].as_u64().unwrap_or(0));
+            processed_quanta =
+                processed_quanta.saturating_add(result["processedQuanta"].as_u64().unwrap_or(0));
+            rendered_frames =
+                rendered_frames.saturating_add(result["renderedFrames"].as_u64().unwrap_or(0));
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        plane
+            .session_stop(&EntityId::new("guarded-live-application"))
+            .unwrap();
         plane.detach_native_endpoint_worker().unwrap();
         assert!(packets > 0);
         assert!(processed_quanta > 0);
