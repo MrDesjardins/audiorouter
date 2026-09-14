@@ -13,6 +13,14 @@ Updated: 2026-09-14.
   explicitly. UI typecheck and all 185 UI tests pass. Sign-in rehydration and
   attended rollback verification remain open.
 
+- Added sign-in rehydration on 2026-09-14. On shell launch, a persisted
+  enabled startup policy restores the shell's own validated HKCU registration;
+  a disabled policy is deliberately a no-op so an unrelated value is never
+  removed implicitly. Shell tests (13), strict Clippy, formatting, and diff
+  checks pass. The rehydration path was not exercised with an enabled live
+  registry policy during qualification; attended enable/disable rollback and
+  status reconciliation remain open.
+
 - Fixed the desktop-shell authorization handoff on 2026-09-14. After
   `startupWrite` was separated from the ordinary Operator role, the shell's
   enrolled operator path still received the old three-scope grant and could

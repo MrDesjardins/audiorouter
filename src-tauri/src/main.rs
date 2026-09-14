@@ -301,7 +301,30 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             .enroll_client(&sid, ClientRole::Operator)
                             .map_err(|error| {
                                 format!("initial operator enrollment failed: {error:?}")
-                            })?;
+                        })?;
+                    }
+                    // Rehydrate only the previously persisted, user-approved
+                    // startup policy. A disabled policy is intentionally a
+                    // no-op so the shell never deletes a value it did not
+                    // create; explicit disable goes through the consent flow.
+                    let startup = plane
+                        .dispatch(JsonRpcRequest {
+                            jsonrpc: "2.0".into(),
+                            id: Some(serde_json::json!("startup-rehydrate")),
+                            method: "startup.get".into(),
+                            params: None,
+                        })
+                        .result
+                        .and_then(|result| result.get("enabled").and_then(serde_json::Value::as_bool))
+                        .unwrap_or(false);
+                    if startup {
+                        match std::env::current_exe()
+                            .map_err(|error| format!("startup executable lookup failed: {error}"))
+                            .and_then(|executable| startup::apply(true, &executable))
+                        {
+                            Ok(()) => eprintln!("AudioRouter sign-in startup registration rehydrated"),
+                            Err(error) => eprintln!("AudioRouter startup registration unavailable: {error}"),
+                        }
                     }
                     let session_id = EntityId::new(DESKTOP_SESSION_ID);
                     if plane.get_session(&session_id).is_err() {
