@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Strengthened the application-capture UI integration regression on
+  2026-09-13. The test now invokes preparation with the default `include`
+  policy and then with explicit `exclude`, proving both values reach the
+  backend adapter while retaining the exact render binding. UI coverage
+  remains 159 passing tests and TypeScript typecheck is green; no endpoint or
+  machine configuration is changed by this UI-only test.
+
 - Requalified the authorized current-tip Rust adapter route on 2026-09-13
   through the exact existing VB-Cable pair. The 500 ms run negotiated 48 kHz
   capture/render and a 128-frame graph quantum, captured 24,000 frames,

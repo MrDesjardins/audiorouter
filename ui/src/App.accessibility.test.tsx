@@ -70,6 +70,9 @@ describe("VB-Cable endpoint selection", () => {
     window.localStorage.setItem(`audiorouter.ui.endpoint-binding.${demoSession.id}`, JSON.stringify({ renderEndpointId: "render-test" }));
     render(<App backend={backend} />);
     await screen.findByRole("button", { name: "Prepare application worker" });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare application worker" }));
+    await waitFor(() => expect(prepareNativeApplication).toHaveBeenCalledWith(expect.objectContaining({ mode: "include" })));
+    prepareNativeApplication.mockClear();
     fireEvent.change(screen.getByRole("combobox", { name: "Application capture policy" }), { target: { value: "exclude" } });
     fireEvent.click(screen.getByRole("button", { name: "Prepare application worker" }));
     await waitFor(() => expect(prepareNativeApplication).toHaveBeenCalledWith(expect.objectContaining({ mode: "exclude" })));
