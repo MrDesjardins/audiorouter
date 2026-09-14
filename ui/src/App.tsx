@@ -24,6 +24,22 @@ import { GraphList as NodeList } from "./GraphList";
 const defaultBackend = createDisconnectedBackend();
 const PluginParameterContext = createContext<{ parameters: PluginParametersResult | null; error: string | null }>({ parameters: null, error: null });
 
+/** State categories that can invalidate the workspace snapshot. Meter events
+ * are intentionally excluded; diagnostics use the bounded snapshot path. */
+export const WORKSPACE_EVENT_CATEGORIES = [
+  "graph.committed",
+  "runtime.crashed",
+  "runtime.started",
+  "runtime.activated",
+  "runtime.stopped",
+  "virtualDevice.changed",
+  "recorder.changed",
+  "recording.metadataChanged",
+  "recording.renamed",
+  "recording.entryRemoved",
+  "recording.recycled",
+] as const;
+
 export function formatNativePumpSummary(stats: NativeEndpointPumpResult | null, running: boolean): string | null {
   if (!stats || !running) return null;
   const warnings = [
@@ -640,19 +656,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!active || polling) return;
       polling = true;
       try {
-        const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch, [
-          "graph.committed",
-          "runtime.crashed",
-          "runtime.started",
-          "runtime.activated",
-          "runtime.stopped",
-          "virtualDevice.changed",
-          "recorder.changed",
-          "recording.metadataChanged",
-          "recording.renamed",
-          "recording.entryRemoved",
-          "recording.recycled",
-        ]);
+        const result = await backend.subscribe(eventCursor.current.sequence, session.id, eventCursor.current.backendEpoch, [...WORKSPACE_EVENT_CATEGORIES]);
         if (!active) return;
         if (result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend);

@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary } from "./App";
+import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, WORKSPACE_EVENT_CATEGORIES } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -33,6 +33,12 @@ afterEach(() => {
 });
 
 describe("VB-Cable endpoint selection", () => {
+  it("keeps workspace events bounded to state categories and excludes meters", () => {
+    expect(WORKSPACE_EVENT_CATEGORIES).toContain("graph.committed");
+    expect(WORKSPACE_EVENT_CATEGORIES).toContain("recording.recycled");
+    expect(WORKSPACE_EVENT_CATEGORIES.some((category) => category.startsWith("meter"))).toBe(false);
+  });
+
   it("formats recorder drain telemetry only for a running native route", () => {
     const stats = { sessionId: demoSession.id, generation: 1, packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 3 };
     expect(formatNativePumpSummary(stats, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks");

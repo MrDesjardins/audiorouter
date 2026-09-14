@@ -2,6 +2,12 @@
 
 Updated: 2026-09-14.
 
+- Promoted the UI workspace event filter to the exported
+  `WORKSPACE_EVENT_CATEGORIES` contract on 2026-09-14 and added a regression
+  proving state categories are present while meter categories remain absent.
+  TypeScript typecheck and the full UI suite passed (18 files, 168 tests).
+  No endpoint or machine configuration changed.
+
 - Requalified the standalone Rust adapter route on 2026-09-14 against the
   freshly inventoried VB-Cable pair. The 500 ms run captured 24,480 frames,
   processed 191 graph blocks, routed 24,000 frames, recorded zero deadline
