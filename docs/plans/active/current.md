@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Connected VDEV-12 duplex lease maintenance to the bounded native pump on
+  2026-09-14. A transferred duplex worker now refreshes both negotiated
+  directional leases at a control/worker-thread half-lease cadence before
+  pumping audio, while heartbeat failure still stops both directions and
+  returns the structured error. The same pass also services all prepared
+  bindings after an individual failure. Control (150 passed, 2 guarded live
+  tests ignored), Windows-audio (73 passed), strict Clippy, formatting, and
+  diff checks passed; the Windows-target check completed where configured.
+  Loaded-driver execution and physical timing remain native gates. Next
+  action: continue the next safe M03/M07 recovery integration item.
+
 - Hardened VDEV-12 native bridge heartbeat sweeps on 2026-09-14. Capture-sink,
   render-source, and duplex binding sweeps now detach and report each failed
   binding while continuing to service all remaining bindings in the same

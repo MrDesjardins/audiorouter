@@ -551,12 +551,21 @@ pub enum NativeBridgeDuplexWorkerError {
 pub struct NativeBridgeDuplexWorker {
     input: NativeBridgeInputWorker,
     output: NativeBridgeOutputWorker,
+    last_heartbeat: std::time::Instant,
+    heartbeat_interval: std::time::Duration,
 }
 
 #[cfg(windows)]
 impl NativeBridgeDuplexWorker {
     pub fn new(input: NativeBridgeInputWorker, output: NativeBridgeOutputWorker) -> Self {
-        Self { input, output }
+        let lease_ms = input.source.lease_ms();
+        let heartbeat_interval = std::time::Duration::from_millis(u64::from(lease_ms / 2).max(1));
+        Self {
+            input,
+            output,
+            last_heartbeat: std::time::Instant::now(),
+            heartbeat_interval,
+        }
     }
 
     /// Build both worker directions from one negotiated duplex binding. The
@@ -619,6 +628,18 @@ impl NativeBridgeDuplexWorker {
             let _ = self.output.stop();
             return Err(NativeBridgeDuplexWorkerError::Output(error));
         }
+        Ok(())
+    }
+
+    /// Refresh both directional leases only when the control/worker pump is
+    /// due. The realtime audio callback never enters this method.
+    pub fn heartbeat_if_due(&mut self) -> Result<(), NativeBridgeDuplexWorkerError> {
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_heartbeat) < self.heartbeat_interval {
+            return Ok(());
+        }
+        self.heartbeat()?;
+        self.last_heartbeat = now;
         Ok(())
     }
 
@@ -940,6 +961,10 @@ impl NativeBridgeController {
         self.session
             .heartbeat()
             .map_err(NativeBridgeControllerError::Session)
+    }
+
+    fn lease_ms(&self) -> u32 {
+        self.session.hello().lease_ms
     }
 
     pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeControllerError> {

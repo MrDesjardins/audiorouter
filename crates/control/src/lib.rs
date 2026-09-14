@@ -4761,12 +4761,13 @@ impl ControlPlane {
                 "native duplex worker session generation is not running".into(),
             ));
         }
-        let (input, output) = self
-            .native_duplex_worker
-            .as_mut()
-            .ok_or_else(|| {
-                ControlError::InvalidRequest("native duplex worker is not attached".into())
-            })?
+        let worker = self.native_duplex_worker.as_mut().ok_or_else(|| {
+            ControlError::InvalidRequest("native duplex worker is not attached".into())
+        })?;
+        worker.heartbeat_if_due().map_err(|error| {
+            ControlError::InvalidRequest(format!("native duplex heartbeat failed: {error:?}"))
+        })?;
+        let (input, output) = worker
             .pump_available(max_input_quanta, max_output_packets)
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("native duplex pump failed: {error:?}"))
