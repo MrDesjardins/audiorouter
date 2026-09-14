@@ -1,5 +1,18 @@
 # Native adapter route requalification (2026-09-14)
 
+## 2026-09-14 - verified application-capture lifecycle
+
+The guarded ignored test
+`guarded_live_native_application_worker_lifecycle` qualified the native
+process-loopback path against the exact observed `voicemeeterpro.exe` identity
+(PID, creation-time value, and verified executable path) and the active CABLE
+Input render endpoint. The bounded 500 ms run completed preparation, native
+session start, packet pumping, session-owned stop, and worker detachment.
+Temporary process environment values were cleared after the run. No endpoint
+default, volume, mute, driver, signing, startup, or persistent audio
+configuration changed. This is one current-process identity result; restart
+and rebind endurance plus production-driver transport remain open.
+
 ## 2026-09-14 - lifecycle-order regression and rerun
 
 The control-owned probe initially exposed an unsafe teardown-order mismatch:
