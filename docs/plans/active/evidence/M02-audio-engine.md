@@ -1,5 +1,23 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - current-tip guarded application-loopback lifecycle
+
+The explicitly authorized ignored control test
+`guarded_live_native_application_worker_lifecycle_uses_one_control_plane`
+completed against the existing `voicemeeterpro.exe` process (PID 34568), using
+its exact executable path and creation-time identity plus the active
+`CABLE Input (VB-Audio Virtual Cable)` render endpoint. The test validated the
+selected process identity before opening the stopped worker, started the
+control-owned process-loopback route, pumped for the bounded 500 ms interval,
+then stopped and detached it successfully.
+
+The process was not terminated or reconfigured. All temporary environment
+variables were restored after the run, and no endpoint default, volume, mute,
+privacy, driver, startup, or persistent machine-audio setting changed. This
+is native application-capture evidence; process restart recovery, physical
+latency/drift, production driver ownership, signing, and attended UI gates
+remain open.
+
 ## 2026-09-13 - current-tip guarded VB-Cable lifecycle
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File

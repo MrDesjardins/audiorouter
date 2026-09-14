@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the authorized current-tip application-loopback route on
+  2026-09-13 using the existing `voicemeeterpro.exe` process (PID 34568), its
+  exact executable/creation identity, and the active Voicemeeter render
+  endpoint. The control-owned worker passed identity validation, bounded
+  start/pump/stop, and detach. The process was not terminated or changed;
+  temporary environment was restored and no endpoint default, volume, mute,
+  privacy, driver, startup, or persistent machine-audio setting changed.
+  Process-restart recovery, physical latency/drift, production driver,
+  signing, and attended UI gates remain open.
+
 - Requalified the authorized current-tip VB-Cable route on 2026-09-13 using
   `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio`. The exact
   active CABLE capture/render pair completed the 500 ms control-owned native
