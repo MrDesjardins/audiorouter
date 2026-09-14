@@ -43,6 +43,25 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText("Native registration: registered")).toBeTruthy();
   });
 
+  it("keeps the native startup result visible while reconciling observed state", async () => {
+    let desired = false;
+    const backend = {
+      ...connectedPreviewBackend(),
+      getStartup: vi.fn(async () => ({ enabled: desired, registration: "unavailable" as const, reason: "shell-owned" })),
+      planStartup: vi.fn(async () => ({ planId: "startup-plan", enabled: true, registration: "unavailable" as const, reason: "shell-owned", requiredScopes: ["startupWrite" as const], warnings: [] })),
+      applyStartup: vi.fn(async () => ({ planId: "startup-plan", state: "unavailable" as const, registration: "unavailable" as const, reason: "shell-owned" })),
+      registerStartup: vi.fn(async (enabled: boolean) => { desired = enabled; return '"C:\\Program Files\\AudioRouter\\audiorouter-shell.exe"'; }),
+      startupRegistrationStatus: vi.fn(async () => (desired ? "registered" as const : "unregistered" as const)),
+    };
+    render(<App backend={backend} />);
+    await waitFor(() => expect(backend.getStartup).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
+    await screen.findByRole("button", { name: "Apply planned policy" });
+    fireEvent.click(screen.getByRole("button", { name: "Apply planned policy" }));
+    expect(await screen.findByText(/Startup registration enabled:/)).toBeTruthy();
+  });
+
   it("keeps workspace events bounded to state categories and excludes meters", () => {
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("graph.committed");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("recording.recycled");

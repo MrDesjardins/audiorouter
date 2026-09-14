@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Fixed the startup-panel post-apply message race on 2026-09-14. Native
+  success or failure text now survives the asynchronous observed-state
+  refresh, while an explicit user refresh still clears stale feedback. Added
+  an accessibility regression covering successful native registration;
+  UI typecheck, 19 test files/187 tests, and diff checks passed. No registry,
+  driver, endpoint, or persistent audio configuration was changed. Next
+  action: continue the next independently testable M03/M07 recovery item.
+
 - Closed the M03 lifecycle state-publication recovery gap on 2026-09-14.
   Installation now stages the rollback JSON in the target directory and
   compensates with package removal if state publication fails, avoiding an
