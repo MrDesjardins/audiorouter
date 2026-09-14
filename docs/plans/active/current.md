@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Fixed the desktop-shell authorization handoff on 2026-09-14. After
+  `startupWrite` was separated from the ordinary Operator role, the shell's
+  enrolled operator path still received the old three-scope grant and could
+  not use the startup controls. Added a shell-only explicit grant containing
+  `read`, `graphWrite`, `sessionControl`, and `startupWrite`; it does not grant
+  capture or device administration. Control tests (151 passed, 2 guarded live
+  ignored), shell tests (11), strict Clippy, formatting, and diff checks pass.
+  This changes no OS registration or audio configuration; native registration
+  remains the next lifecycle boundary.
+
 - Requalified the elevated `tests/acceptance/safe-all.ps1` chain at the
   pushed head on 2026-09-14. Toolchain/native compile, 31-endpoint read-only
   inventory, disposable SysVAD x64 package/API validation, M01, M04 (32 DSP

@@ -3898,6 +3898,18 @@ impl ClientGrant {
         }
     }
 
+    /// Grant the desktop shell's explicitly local user surface the startup
+    /// capability in addition to ordinary operator controls. This is not an
+    /// enrolled role and must not be used for remote, MCP, or CLI clients.
+    pub fn for_desktop_shell() -> Self {
+        Self::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::GraphWrite,
+            PermissionScope::SessionControl,
+            PermissionScope::StartupWrite,
+        ])
+    }
+
     fn allows(&self, scope: PermissionScope) -> bool {
         self.scopes.contains(&scope)
     }
@@ -17815,6 +17827,8 @@ mod tests {
         assert!(ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::SessionControl));
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::Capture));
         assert!(!ClientGrant::for_role(ClientRole::Operator).allows(PermissionScope::StartupWrite));
+        assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::StartupWrite));
+        assert!(!ClientGrant::for_desktop_shell().allows(PermissionScope::Capture));
         assert!(!ClientGrant::for_role(ClientRole::Operator)
             .allows(PermissionScope::DeviceAdministration));
         assert!(!ClientGrant::read_only().allows(PermissionScope::PluginScan));

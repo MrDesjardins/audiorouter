@@ -145,10 +145,7 @@ fn default_desktop_session() -> Session {
                 name: "Neutral gain".into(),
                 enabled: true,
                 bypass: false,
-                parameters: serde_json::Map::from_iter([(
-                    "gainDb".into(),
-                    serde_json::json!(0.0),
-                )]),
+                parameters: serde_json::Map::from_iter([("gainDb".into(), serde_json::json!(0.0))]),
                 ports: vec![
                     Port {
                         name: "in".into(),
@@ -324,8 +321,22 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             PermissionScope::Read,
                             PermissionScope::GraphWrite,
                             PermissionScope::SessionControl,
+                            // Startup registration is a separate explicit
+                            // capability. The desktop shell exposes it only
+                            // to the current user's local control surface;
+                            // device administration and capture remain opt-in.
+                            PermissionScope::StartupWrite,
                             PermissionScope::DeviceAdministration,
                         ])
+                    } else if enrollment
+                        .as_ref()
+                        .is_some_and(|(role, revoked)| role == "operator" && !revoked)
+                    {
+                        // The shell is the enrolled operator's local UI. It
+                        // may request startup registration explicitly, but
+                        // still receives no capture or device-administration
+                        // authority through this path.
+                        ClientGrant::for_desktop_shell()
                     } else {
                         plane
                             .grant_for_client(&sid)
@@ -612,7 +623,10 @@ mod tests {
         assert_eq!(session.nodes.len(), 3);
         assert_eq!(session.edges.len(), 2);
         assert_eq!(session.nodes[1].kind, NodeKind::Gain);
-        assert_eq!(session.nodes[1].parameters["gainDb"], serde_json::json!(0.0));
+        assert_eq!(
+            session.nodes[1].parameters["gainDb"],
+            serde_json::json!(0.0)
+        );
         assert!(validate_session(&session).is_ok());
     }
 
