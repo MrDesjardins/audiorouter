@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed the remaining M03 native-worker exclusivity entry point on
+  2026-09-14. Endpoint preparation now uses the same shared guard as direct
+  attachment and application capture, rejecting an already attached duplex
+  worker before opening physical endpoint clients. Control tests (155
+  passed, 2 guarded live ignored), formatting, diff checks, and Windows-target
+  compilation passed; no endpoint or machine audio configuration changed.
+  Next action: continue the next safe M03/M07 recovery integration item.
+
 - Closed an M03/ARCH-05 native-worker exclusivity gap on 2026-09-14. All
   endpoint, application-capture, and duplex worker attachment paths now use
   one shared guard, preventing two native worker kinds from being attached

@@ -4268,7 +4268,7 @@ impl ControlPlane {
         retry_delay_ms: u64,
     ) -> Result<(), ControlError> {
         self.get_session(&session_id)?;
-        if self.native_endpoint_worker.is_some() {
+        if self.any_native_worker_attached() {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is already attached".into(),
             ));
