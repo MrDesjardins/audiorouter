@@ -317,6 +317,14 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/\[deviceInUse, HRESULT 0x8889000A\]/)).toBeTruthy();
     expect(screen.getByText(/select another endpoint, or close it and retry/i)).toBeTruthy();
   });
+
+  it("detaches a stopped native worker before deliberate endpoint replacement", async () => {
+    const detachNativeEndpoint = vi.fn(async () => ({ sessionId: "demo-session", state: "detached" as const }));
+    render(<App backend={{ ...connectedPreviewBackend(), detachNativeEndpoint }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Detach stopped worker" }));
+    await waitFor(() => expect(detachNativeEndpoint).toHaveBeenCalledWith("demo-session"));
+    expect(await screen.findByText(/Native worker detached; select new endpoints/i)).toBeTruthy();
+  });
 });
 
 describe("keyboard connection dialog", () => {

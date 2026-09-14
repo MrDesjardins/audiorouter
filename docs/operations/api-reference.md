@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 71 methods, including the session portability,
+The current catalog contains 72 methods, including the session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
 
@@ -73,6 +73,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `startup.apply` | `startupWrite` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
+| `nativeEndpoints.detach` | `deviceAdministration` | external operation; detaches an exact stopped native worker |
 | `nativeApplications.prepare` | `deviceAdministration` | external operation; prepares a verified stopped process-loopback capture and exact render client |
 | `nativeEndpoints.pump` | `sessionControl` | external operation; drains a bounded packet budget for the exact running native generation |
 | `nativeDuplex.pump` | `sessionControl` | external operation; drains independently bounded input and output work for the exact running duplex generation |
@@ -130,6 +131,9 @@ volume, or mute state. `nativeEndpoints.pump` requires the prepared session's
 current positive runtime generation and drains only already-available packets,
 up to the documented per-wake bound. It does not wait, rebind, select a
 replacement endpoint, or activate a stopped session.
+`nativeEndpoints.detach` requires the session to be stopped and removes only
+that session's stopped worker, allowing a deliberate exact-endpoint selection
+and preparation to follow.
 
 Pump ticks are intentionally not counted against the user mutation-rate bucket:
 they are bounded scheduler traffic rather than user mutations. They remain

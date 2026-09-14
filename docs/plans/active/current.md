@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Added the M03/CAP-12 exact endpoint replacement path on 2026-09-14.
+  `nativeEndpoints.detach` is now a device-administration RPC that accepts
+  only the exact session, requires the worker to be stopped, and removes only
+  that worker; the UI exposes the stopped-worker action so a changed or
+  invalidated binding can be deliberately replaced instead of leaving the
+  user unable to prepare a second pair. Contracts, API reference, control
+  dispatch, and UI adapters/tests were updated together. Control (157 passed,
+  2 guarded live ignored), UI (191), contract drift (72 methods), Windows
+  target compilation, UI production build, formatting, diff, and docs checks
+  passed. No endpoint, driver, registry, or persistent machine audio
+  configuration was changed. Next action: continue the next safe M03/M07
+  recovery integration item.
+
 - Requalified the full locked workspace after the crash-recovery fix at
   `35846337` on 2026-09-14. CLI (33), MCP interoperability (3), control (156
   passed, 2 guarded live ignored), domain (64), DSP (32), engine (111), plugin

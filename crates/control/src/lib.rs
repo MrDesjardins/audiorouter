@@ -1773,6 +1773,9 @@ fn method_description(name: &str) -> &'static str {
         "nativeEndpoints.prepare" => {
             "Prepare exact capture/render clients without starting audio."
         }
+        "nativeEndpoints.detach" => {
+            "Detach a stopped native endpoint worker so exact bindings can be replaced."
+        }
         "nativeApplications.prepare" => {
             "Prepare a verified application process-loopback capture and exact render client without starting audio."
         }
@@ -1933,6 +1936,12 @@ fn method_input_schema(name: &str) -> Value {
                 "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
             }),
             &["sessionId", "captureEndpointId", "renderEndpointId"],
+        ),
+        "nativeEndpoints.detach" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["sessionId"],
         ),
         "nativeApplications.prepare" => object_schema(
             json!({
@@ -2801,6 +2810,15 @@ fn method_output_schema(name: &str) -> Value {
                 "renderEndpointId": { "type": "string", "minLength": 1, "maxLength": MAX_CONTROL_STRING_BYTES }
             },
             "required": ["sessionId", "state", "captureEndpointId", "renderEndpointId"],
+            "additionalProperties": false
+        }),
+        "nativeEndpoints.detach" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "const": "detached" }
+            },
+            "required": ["sessionId", "state"],
             "additionalProperties": false
         }),
         "nativeApplications.prepare" => json!({
@@ -8004,6 +8022,9 @@ impl ControlPlane {
                     "nativeEndpoints.prepare" => {
                         self.dispatch_native_endpoints_prepare(request.params)
                     }
+                    "nativeEndpoints.detach" => {
+                        self.dispatch_native_endpoints_detach(request.params)
+                    }
                     "nativeApplications.prepare" => {
                         self.dispatch_native_applications_prepare(request.params)
                     }
@@ -10120,6 +10141,28 @@ impl ControlPlane {
         }))
     }
 
+    fn dispatch_native_endpoints_detach(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        self.get_session(&session_id)?;
+        if self.native_endpoint_session.as_ref() != Some(&session_id) {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker is not attached to this session".into(),
+            ));
+        }
+        self.detach_native_endpoint_worker()?;
+        Ok(json!({ "sessionId": session_id, "state": "detached" }))
+    }
+
     fn dispatch_native_applications_prepare(
         &mut self,
         params: Option<Value>,
@@ -11309,6 +11352,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
         "devices.list" => &["cursor", "limit"],
         "nativeEndpoints.prepare" => &["sessionId", "captureEndpointId", "renderEndpointId"],
+        "nativeEndpoints.detach" => &["sessionId"],
         "nativeApplications.prepare" => &[
             "sessionId",
             "processId",
@@ -18185,6 +18229,33 @@ mod tests {
         assert_eq!(response.error.unwrap().code, -32001);
         assert!(plane.native_endpoint_worker.is_none());
         assert!(plane.endpoint_monitor.is_none());
+    }
+
+    #[test]
+    fn native_endpoint_detachment_requires_device_administration_and_exact_binding() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(92)),
+                method: "nativeEndpoints.detach".into(),
+                params: Some(json!({ "sessionId": "missing" })),
+            },
+            &ClientGrant::for_role(ClientRole::Operator),
+        );
+        assert_eq!(response.error.unwrap().code, -32001);
+
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(93)),
+                method: "nativeEndpoints.detach".into(),
+                params: Some(json!({ "sessionId": "missing" })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
+        );
+        assert_eq!(response.error.unwrap().code, -32602);
+        assert!(plane.native_endpoint_worker.is_none());
     }
 
     #[test]
