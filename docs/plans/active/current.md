@@ -21,6 +21,16 @@ Updated: 2026-09-14.
   full chain is still required after this contract change. Next action: finish
   legacy worker metadata propagation and then requalify the full chain.
 
+- Follow-up acceptance on 2026-09-14: the post-change full chain reached M07
+  and exposed one direct `RecordingRecord` fixture in the CLI test; adding
+  the new fields made the targeted M07 headless suite pass (32 CLI tests,
+  3 MCP stdio tests, 145 control tests, 70 plugin-host tests, and doc-tests).
+  M08 release preparation was intentionally retried only after committing,
+  because its verifier requires a clean tree; traceability (159 IDs) and
+  documentation (52 Markdown files, 190 links) passed independently. Next
+  action: run clean-tree M08 release preparation, then finish compatibility
+  worker metadata propagation.
+
 - Delivered the REC-03 recorder dither control on 2026-09-14. The UI now
   exposes TPDF dithering as an explicit create-time option, enabled by
   default, and forwards the selected value through the shared

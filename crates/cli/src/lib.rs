@@ -2782,6 +2782,8 @@ mod tests {
                 title: Some("CLI test".into()),
                 artist: None,
                 comment: None,
+                dither: false,
+                conversion: "unknown".into(),
             })
             .unwrap();
         drop(storage);
