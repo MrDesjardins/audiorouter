@@ -66,8 +66,8 @@ ordered.
 Finalized node-targeted recording rows from `recordings.list` and
 `recordings.get` include the persisted `nodeId`; legacy rows return `null`.
 | `startup.get` | `read` | read-only |
-| `startup.plan` | `sessionControl` | plan-only |
-| `startup.apply` | `sessionControl` | mutating; requires an idempotency key |
+| `startup.plan` | `startupWrite` | plan-only |
+| `startup.apply` | `startupWrite` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
 | `nativeApplications.prepare` | `deviceAdministration` | external operation; prepares a verified stopped process-loopback capture and exact render client |
