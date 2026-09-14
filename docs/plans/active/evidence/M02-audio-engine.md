@@ -1,5 +1,22 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - current-tip guarded VB-Cable lifecycle
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio`.
+
+The explicitly authorized run selected the active `CABLE Output (VB-Audio
+Virtual Cable)` capture and `CABLE Input (VB-Audio Virtual Cable)` render
+endpoints, then completed the same-process 500 ms control-owned lifecycle.
+It reported 24,000 captured frames, 187 processed quanta, and 23,936 rendered
+frames. The test restored all process environment variables and temporary
+worker state. No default endpoint, volume, mute, privacy, driver, startup, or
+persistent machine-audio setting was changed.
+
+This is current Windows user-mode VB-Cable route evidence and does not close
+the managed AudioRouter driver, PortCls ownership, signing, installer,
+physical-latency, or attended UI gates.
+
 ## 2026-09-13 - physical render ownership diagnostic and VB-Cable fallback
 
 Read-only endpoint inventory identified the exact active pair used for this

@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the authorized current-tip VB-Cable route on 2026-09-13 using
+  `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio`. The exact
+  active CABLE capture/render pair completed the 500 ms control-owned native
+  lifecycle with 24,000 captured frames, 187 processed quanta, and 23,936
+  rendered frames. The harness restored process environment and temporary
+  worker state; no endpoint default, volume, mute, privacy, driver, startup,
+  or persistent machine-audio setting changed. This is user-mode existing-
+  endpoint evidence and does not close managed-driver, signing, physical-
+  latency, or attended-UI gates.
+
 - Requalified the complete non-installing `tests/acceptance/safe-all.ps1`
   chain at pushed head `ac2a869d` on 2026-09-13. Toolchain/native compile,
   AudioRouter x64 WDK driver build/signability/catalog, read-only 31-endpoint
