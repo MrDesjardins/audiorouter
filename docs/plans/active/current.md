@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Confirmed no interactive desktop surface is available for the attended
+  WebView2/Narrator gate on 2026-09-13 (`cua.getState` returned no apps or
+  browsers). The full Rust workspace regression nevertheless passed at the
+  current head, including all unit/integration tests and doc-tests; this is
+  portable evidence only and does not waive manual UI acceptance.
+
 - Requalified the full Rust workspace on 2026-09-13 with `cargo test
   --workspace`. All workspace unit/integration tests and doc-tests passed,
   including the current control/CLI/MCP, DSP, engine, plugin-host, storage,
