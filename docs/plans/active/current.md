@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Completed the guarded M03 package-lifecycle slice at pushed commit
+  `c2ffcb8e` on 2026-09-14. Added `drivers/audiorouter-virtual/manage.ps1`,
+  which requires explicit install/uninstall plus authorization switches,
+  constrains the INF to the project package, records the exact `oem*.inf`
+  returned by `pnputil`, and refuses ambiguous or unmanaged removal. Script
+  parsing, negative authorization/state tests, the M03 build/signability gate,
+  and the elevated aggregate M00–M07 chain passed. The clean-head M08 release
+  preparation then built and verified unsigned optimized Rust/UI artifacts.
+  No driver was installed or loaded and no audio/default/signing/boot policy
+  changed. Driver installation, loaded PortCls behavior, production signing,
+  and physical latency remain native gates. Next action: continue the next
+  safe M03/M07 recovery integration item.
+
 - Planned the next M03 delivery slice on 2026-09-14: add an explicit,
   reversible driver package lifecycle script. Build-only qualification already
   exists, but the repository still has no guarded install/uninstall entrypoint;
