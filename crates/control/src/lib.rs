@@ -3581,6 +3581,21 @@ impl From<audiorouter_domain::StoreError> for ControlError {
     }
 }
 
+/// Explicit inputs for preparing a verified process-loopback worker. The
+/// caller supplies the observed process identity and exact render binding;
+/// preparation never chooses a default endpoint.
+pub struct NativeApplicationWorkerConfig<'a> {
+    pub process_id: u32,
+    pub expected_executable: &'a str,
+    pub expected_executable_path: Option<&'a str>,
+    pub expected_creation_time_100ns: u64,
+    pub mode: audiorouter_windows_audio::ProcessLoopbackMode,
+    pub render: &'a audiorouter_windows_audio::EndpointInfo,
+    pub buffer_duration_100ns: i64,
+    pub max_attempts: u32,
+    pub retry_delay_ms: u64,
+}
+
 pub struct ControlPlane {
     store: GraphStore,
     build: String,
@@ -3764,25 +3779,17 @@ impl ControlPlane {
     pub fn prepare_native_application_worker(
         &mut self,
         session_id: EntityId,
-        process_id: u32,
-        expected_executable: &str,
-        expected_executable_path: Option<&str>,
-        expected_creation_time_100ns: u64,
-        mode: audiorouter_windows_audio::ProcessLoopbackMode,
-        render: &audiorouter_windows_audio::EndpointInfo,
-        buffer_duration_100ns: i64,
-        max_attempts: u32,
-        retry_delay_ms: u64,
+        config: NativeApplicationWorkerConfig<'_>,
     ) -> Result<(), ControlError> {
         audiorouter_windows_audio::bind_application_with_path(
-            process_id,
-            expected_executable,
-            expected_executable_path,
-            Some(expected_creation_time_100ns),
+            config.process_id,
+            config.expected_executable,
+            config.expected_executable_path,
+            Some(config.expected_creation_time_100ns),
         )
         .map_err(audio_control_error)?;
         let session = self.get_session(&session_id)?.clone();
-        let process_id_value = serde_json::Value::from(u64::from(process_id));
+        let process_id_value = serde_json::Value::from(u64::from(config.process_id));
         let has_matching_capture = session.nodes.iter().any(|node| {
             node.enabled
                 && node.kind == NodeKind::ApplicationCapture
@@ -3801,16 +3808,17 @@ impl ControlPlane {
                 "native worker is already attached".into(),
             ));
         }
-        if render.direction != audiorouter_windows_audio::EndpointDirection::Render
-            || !render.is_ieee_float32()
-            || render.channels != 2
+        if config.render.direction != audiorouter_windows_audio::EndpointDirection::Render
+            || !config.render.is_ieee_float32()
+            || config.render.channels != 2
         {
             return Err(ControlError::InvalidRequest(
                 "process-loopback render binding must be stereo IEEE float32".into(),
             ));
         }
-        let capture = audiorouter_windows_audio::ProcessLoopbackCapture::open(process_id, mode)
-            .map_err(audio_control_error)?;
+        let capture =
+            audiorouter_windows_audio::ProcessLoopbackCapture::open(config.process_id, config.mode)
+                .map_err(audio_control_error)?;
         let monitor = if let Some(monitor) = self.endpoint_monitor.as_mut() {
             monitor
         } else {
@@ -3822,10 +3830,10 @@ impl ControlPlane {
         let render_client =
             audiorouter_windows_audio::SharedRender::open_refreshed_bound_with_retry(
                 monitor,
-                render,
-                buffer_duration_100ns,
-                max_attempts,
-                retry_delay_ms,
+                config.render,
+                config.buffer_duration_100ns,
+                config.max_attempts,
+                config.retry_delay_ms,
             )
             .map_err(audio_control_error)?;
         let bridge = audiorouter_windows_audio::WasapiSchedulerBridge::new(
