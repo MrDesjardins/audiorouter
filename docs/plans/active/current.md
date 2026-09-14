@@ -9,6 +9,12 @@ Updated: 2026-09-14.
   65,536 ns). Defaults, volume, mute, privacy, drivers, signing, and startup
   configuration were unchanged.
 
+- Requalified the Rust endpoint-to-virtual-bus bridge on 2026-09-14 for one
+  guarded cycle on the exact VB-Cable pair. It captured 24,480 frames,
+  processed 191 quanta/tap calls, produced no non-finite samples, dropped
+  frames, xruns, or deadline misses, and removed its temporary recording.
+  Media-device state and persistent configuration remained unchanged.
+
 - Narrowed the live UI event subscription on 2026-09-14 to the bounded state
   categories the workspace can refresh: graph/runtime, virtual-device,
   recorder, and recording-library changes. Meter events remain excluded as
