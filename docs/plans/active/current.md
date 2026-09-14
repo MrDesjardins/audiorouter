@@ -27,6 +27,12 @@ Updated: 2026-09-14.
   through the bounded headless workflow. No audio device, driver, plugin
   registration, startup registration, or machine configuration changed.
 
+- Requalified M08 preparation gates on 2026-09-14. Traceability covered all
+  159 normative requirement IDs, and unsigned release artifacts were built
+  and verified for the Rust binaries, Tauri shell, and UI bundle in disposable
+  paths. No installer, production signing, driver deployment, or audio
+  configuration action occurred.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
