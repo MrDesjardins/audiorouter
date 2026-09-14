@@ -16,6 +16,16 @@ passed. This is contained repository-fixture evidence; it does not establish
 compatibility with arbitrary vendor VST3 binaries or resolve the previously
 observed vendor-specific activation/crash behavior.
 
+The supplied x64 `BUSTERse.vst3` binary was rechecked through the isolated
+native worker on 2026-09-13. Read-only inspection classified it as a supported
+x64 VST3 candidate with SHA-256
+`463cce6bc6e2d9066abc81310f171d4cd375f39fe5cf97d41222d336b2a7e581`.
+Worker activation returned a truncated protocol response (`failed to fill
+whole buffer`); the dedicated expected-failure test contained the result and
+reaped the worker successfully. This is a vendor activation incompatibility,
+not evidence of endpoint contention or `E_INVALIDARG`; the supplied binary
+was not modified or registered.
+
 The current read-only scan of that directory found nine x64 DLL candidates,
 all classified as VST2: `reacomp-standalone.dll`,
 `reacontrolmidi-standalone.dll`, `readelay-standalone.dll`,

@@ -11,6 +11,14 @@ Updated: 2026-09-13.
   TypeScript typecheck passes. This changes no endpoint defaults, volume, mute,
   driver state, or persistent machine audio configuration.
 
+- Requalified the supplied BUSTERse x64 VST3 candidate on 2026-09-13. Read-only
+  inspection confirmed VST3/x64 identity and the isolated native worker
+  returned a truncated protocol response during activation; the dedicated
+  expected-failure path contained and reaped the worker successfully. This is
+  recorded as vendor-specific activation incompatibility, not endpoint
+  contention or an `E_INVALIDARG` audio-device failure. The binary remained
+  unchanged and unregistered; no audio or machine configuration was touched.
+
 - Exposed the verified application-capture preparation path through the
   versioned JSON-RPC contract and UI on 2026-09-13. The new
   `nativeApplications.prepare` operation is device-administration gated,
