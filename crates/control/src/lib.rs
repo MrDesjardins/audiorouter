@@ -110,6 +110,14 @@ pub struct RecorderFinalizationOutcome {
 /// checkpoint; the realtime tap never constructs or touches library rows.
 pub type FinalizedRecording = RecordingRecord;
 
+/// Reports the quantization policy that was actually applied to a WAV file.
+/// Float32 output is written without quantization dithering even when a
+/// caller supplies the generic dither option, so its persisted metadata must
+/// not claim that TPDF noise was applied.
+fn effective_wav_dither(format: WavFormat, requested: bool) -> bool {
+    requested && !matches!(format, WavFormat::Float32)
+}
+
 /// Explicit identity required before a file worker may publish a library row.
 /// The worker never guesses session, recorder, or path ownership from a file
 /// handle; callers must provide all three on the lifecycle thread.
@@ -483,7 +491,7 @@ impl RecorderWorker for WavRecorderWorker {
                 identity,
                 run_id,
                 start_time,
-                self.dither,
+                effective_wav_dither(self.format, self.dither),
                 format!(
                     "targetSampleRate={};channels={};format={:?}",
                     self.sample_rate, self.channels, self.format
@@ -1020,7 +1028,7 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
                 title: None,
                 artist: None,
                 comment: None,
-                dither: self.dither,
+                dither: effective_wav_dither(self.format, self.dither),
                 conversion: format!(
                     "targetSampleRate={};channels={};format=wav",
                     self.sample_rate, self.channels
@@ -16564,6 +16572,46 @@ mod tests {
         assert_eq!(
             plane.recorders[&original.id].state(),
             RecorderState::Completed
+        );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn float_wav_metadata_does_not_claim_requested_dither() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-control-float-dither-{}.wav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        let mut worker =
+            WavRecorderWorker::new_with_dither(file, WavFormat::Float32, 1, 48_000, true, 8, 1)
+                .unwrap();
+        worker.set_library_identity(FileRecordingIdentity {
+            session_id: "float-session".into(),
+            recorder_id: "float-recorder".into(),
+            path: path.clone(),
+        });
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        worker
+            .try_push(RecordingChunk {
+                start_frame: 0,
+                samples: vec![0.25],
+            })
+            .unwrap();
+        worker.finalize(1).unwrap();
+
+        let recordings = worker.finalized_recordings();
+        assert_eq!(recordings.len(), 1);
+        assert!(!recordings[0].dither);
+        assert_eq!(
+            recordings[0].conversion,
+            "targetSampleRate=48000;channels=1;format=Float32"
         );
         let _ = std::fs::remove_file(path);
     }

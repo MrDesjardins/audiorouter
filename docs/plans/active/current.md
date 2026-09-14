@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Fixed a REC-03 metadata correctness defect on 2026-09-14. Float32 WAV
+  encoding does not quantize and therefore never applies TPDF dither, but
+  finalized direct and segmented WAV rows previously copied a requested
+  `dither=true` value. Both workers now persist the effective applied policy,
+  and a finalization regression verifies Float32 metadata reports no dither
+  while preserving its format/conversion identity. The full control suite
+  passed (146 tests, 2 guarded live tests ignored) and strict Clippy passed.
+  No audio endpoint or machine configuration was changed. Next action:
+  continue the next safe, independently testable delivery item.
+
 - Requalified REC-03 after the metadata round-trip regression on 2026-09-14:
   all 145 control tests passed (2 guarded live tests remained intentionally
   ignored) and strict control Clippy passed. The persisted encoding fields are
