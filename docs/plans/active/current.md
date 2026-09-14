@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Closed a durable M07 recovery atomicity gap on 2026-09-14. Clearing the
+  recovery crash rows and safe-mode latch now journals the idempotent clear
+  result in the same SQLite transaction; journal validation or capacity
+  failure leaves the recovery state unchanged. Storage regressions prove both
+  successful co-commit and full-journal rollback (2 focused tests), while the
+  control suite remains green at 152 passed with 2 guarded live tests ignored.
+  Strict Clippy and formatting passed. No audio, driver, registry, or machine
+  configuration was accessed. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Hardened the M07 tray recorder-status boundary on 2026-09-14. Every entry
   returned by `recorders.list` is now shape-checked, including unrelated
   sessions; missing required fields, invalid frame types, unknown states, and

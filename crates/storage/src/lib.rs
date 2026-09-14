@@ -3017,6 +3017,55 @@ impl Storage {
         Ok(())
     }
 
+    /// Clear the durable recovery latch and record its idempotent outcome as
+    /// one SQLite transaction. A journal-capacity or validation failure must
+    /// therefore leave the recovery state unchanged.
+    pub fn clear_recovery_crashes_and_journal(
+        &self,
+        key: &str,
+        operation: &str,
+        result: &str,
+        request_hash: &str,
+    ) -> Result<(), StorageError> {
+        validate_idempotency_key(key)?;
+        validate_request_hash(request_hash)?;
+        validate_journal_fields(operation, result, 0)?;
+        let transaction = self.connection.unchecked_transaction()?;
+        transaction.execute(
+            "DELETE FROM operation_journal
+             WHERE created_at < datetime('now', ?1)",
+            params![format!("-{} seconds", IDEMPOTENCY_RETENTION_SECONDS)],
+        )?;
+        let exists: bool = transaction.query_row(
+            "SELECT EXISTS(SELECT 1 FROM operation_journal WHERE idempotency_key = ?1)",
+            params![key],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            let count: usize =
+                transaction.query_row("SELECT COUNT(*) FROM operation_journal", [], |row| {
+                    row.get(0)
+                })?;
+            if count >= MAX_OPERATION_JOURNAL_ENTRIES {
+                return Err(StorageError::JournalLimitReached);
+            }
+        }
+        transaction.execute("DELETE FROM recovery_crashes", [])?;
+        transaction.execute(
+            "INSERT INTO control_settings(key, value) VALUES ('recoverySafeMode', 'false')
+             ON CONFLICT(key) DO UPDATE SET value='false'",
+            [],
+        )?;
+        transaction.execute(
+            "INSERT OR IGNORE INTO operation_journal
+             (idempotency_key, operation, result, committed_revision, request_hash)
+             VALUES (?1, ?2, ?3, 0, ?4)",
+            params![key, operation, result, request_hash],
+        )?;
+        transaction.commit()?;
+        Ok(())
+    }
+
     pub fn recovery_safe_mode(&self) -> Result<bool, StorageError> {
         Ok(self
             .connection
@@ -4219,6 +4268,60 @@ mod tests {
             assert!(!storage.recovery_safe_mode().unwrap());
         }
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recovery_clear_and_journal_commit_together() {
+        let storage = Storage::open_memory().unwrap();
+        storage.record_recovery_crash(100).unwrap();
+        storage.record_recovery_crash(101).unwrap();
+        storage
+            .clear_recovery_crashes_and_journal(
+                "recovery-clear",
+                "recovery.clearSafeMode",
+                r#"{"safeMode":false,"recentCrashes":0}"#,
+                "request-hash",
+            )
+            .unwrap();
+
+        assert_eq!(storage.recovery_crash_count(101).unwrap(), 0);
+        assert!(!storage.recovery_safe_mode().unwrap());
+        assert_eq!(
+            storage
+                .journal_result_checked("recovery-clear", "request-hash")
+                .unwrap()
+                .as_deref(),
+            Some(r#"{"safeMode":false,"recentCrashes":0}"#)
+        );
+    }
+
+    #[test]
+    fn recovery_clear_does_not_commit_when_journal_is_full() {
+        let storage = Storage::open_memory().unwrap();
+        storage.record_recovery_crash(100).unwrap();
+        storage.record_recovery_crash(101).unwrap();
+        storage.record_recovery_crash(102).unwrap();
+        for index in 0..MAX_OPERATION_JOURNAL_ENTRIES {
+            storage
+                .journal_commit(&format!("existing-{index}"), "test", "{}", 0)
+                .unwrap();
+        }
+
+        assert!(matches!(
+            storage.clear_recovery_crashes_and_journal(
+                "new-recovery-clear",
+                "recovery.clearSafeMode",
+                r#"{"safeMode":false,"recentCrashes":0}"#,
+                "request-hash",
+            ),
+            Err(StorageError::JournalLimitReached)
+        ));
+        assert_eq!(storage.recovery_crash_count(102).unwrap(), 3);
+        assert!(storage.recovery_safe_mode().unwrap());
+        assert!(storage
+            .journal_result("new-recovery-clear")
+            .unwrap()
+            .is_none());
     }
 
     #[test]

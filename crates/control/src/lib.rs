@@ -9622,23 +9622,39 @@ impl ControlPlane {
         if let Some(previous) = self.lookup_idempotent_result(&operation.0, &operation.1)? {
             return Ok(previous);
         }
-        if let Some(storage) = &self.storage {
-            storage.clear_recovery_crashes().map_err(storage_error)?;
-        }
-        self.recovery_tracker.clear_after_stable_run();
-        self.events
-            .append(0, None, "recovery.safeModeCleared", None);
         let result = json!({
             "safeMode": false,
             "recentCrashes": 0,
             "persistence": if self.storage.is_some() { "durable" } else { "memory" }
         });
-        self.journal_idempotent_result(
-            &operation.0,
-            "recovery.clearSafeMode",
-            &operation.1,
-            &result,
-        )?;
+        if let Some(storage) = &self.storage {
+            let encoded = serde_json::to_string(&result)
+                .map_err(|error| ControlError::Json(error.to_string()))?;
+            storage
+                .clear_recovery_crashes_and_journal(
+                    &operation.0,
+                    "recovery.clearSafeMode",
+                    &encoded,
+                    &operation.1,
+                )
+                .map_err(storage_error)?;
+            self.remember_operation_outcome(
+                &operation.0,
+                result.clone(),
+                "recovery.clearSafeMode",
+                Some(&operation.1),
+            );
+        } else {
+            self.recovery_tracker.clear_after_stable_run();
+            self.remember_operation_outcome(
+                &operation.0,
+                result.clone(),
+                "recovery.clearSafeMode",
+                Some(&operation.1),
+            );
+        }
+        self.events
+            .append(0, None, "recovery.safeModeCleared", None);
         Ok(result)
     }
 
