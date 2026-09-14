@@ -506,10 +506,10 @@ describe("live event cursor", () => {
     const client = {
       request: async (method: string, params: unknown) => {
         received = { method, params };
-        return [{ sessionId: "session-1", state: "recording", lastFrame: 480 }];
+        return [{ sessionId: "session-1", nodeId: "recorder-node", state: "recording", lastFrame: 480 }];
       },
     } as never;
-    await expect(createLiveBackend(client, demoSession.id).listRecorders()).resolves.toEqual([{ sessionId: "session-1", state: "recording", lastFrame: 480 }]);
+    await expect(createLiveBackend(client, demoSession.id).listRecorders()).resolves.toEqual([{ sessionId: "session-1", nodeId: "recorder-node", state: "recording", lastFrame: 480 }]);
     expect(received).toEqual({ method: "recorders.list", params: undefined });
   });
 

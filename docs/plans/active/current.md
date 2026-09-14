@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Corrected a shared recorder contract omission on 2026-09-14: the
+  `recorders.list` result now preserves optional `nodeId` identity for
+  node-attached recorder workers instead of silently discarding ownership
+  information at the TypeScript adapter boundary. Added an adapter regression
+  with a node-attached result; UI typecheck and the full UI suite passed (18
+  files, 172 tests). No audio endpoint or machine configuration changed.
+
 - Closed a portable M04/M05 recorder-state hydration gap on 2026-09-14.
   The connected UI now reads `recorders.list` on startup/backend replacement
   and refreshes it with lifecycle events, so the Recorder panel does not

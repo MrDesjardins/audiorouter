@@ -991,7 +991,7 @@ export type MethodResult = {
   "operations.get": OperationCompleted | OperationUnknown;
   "operations.cancel": OperationCancelled;
   "recordings.list": RecordingRow[] | RecordingListPage;
-  "recorders.list": Array<{ sessionId: EntityId; state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"; lastFrame: number | null }>;
+  "recorders.list": Array<{ sessionId: EntityId; nodeId?: EntityId | null; state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"; lastFrame: number | null }>;
   "recorders.create": RecorderCreateResult;
   "recorders.arm": RecorderLifecycleResult;
   "recorders.start": RecorderLifecycleResult;
