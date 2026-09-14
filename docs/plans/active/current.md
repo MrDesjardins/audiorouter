@@ -53,6 +53,13 @@ Updated: 2026-09-14.
   remain local qualification fixtures; no registration, redistribution, or
   audio configuration change occurred.
 
+- Requalified the repository-local native VST3 worker on 2026-09-14.
+  Single-stream and auxiliary-bus AGain processing, asynchronous graph
+  staging, bounded restart/quarantine recovery, validated state restoration,
+  repeated-quantum timing, finite output, and bounded shutdown all passed.
+  No plugin registration, audio stream, or machine audio configuration
+  changed; independent vendor/editor and production sandbox gates remain.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
