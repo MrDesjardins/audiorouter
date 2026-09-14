@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Added M05 regression coverage on 2026-09-14 for status-reason visibility.
+  The rendered UI test now verifies the disconnected backend's authoritative
+  audio reason appears in the top/compact status summary, protecting the
+  distinction between unavailable causes without invoking lifecycle actions.
+  The check is presentation-only and does not access endpoints or machine
+  configuration. Next action: continue the next safe, independently testable
+  plan item.
+
 - Improved M05 status observability on 2026-09-14. The top status summary and
   compact route-status view now include the backend-authored audio reason, so
   users can distinguish a disconnected backend, a prepared-but-stopped

@@ -92,6 +92,11 @@ describe("VB-Cable endpoint selection", () => {
     expect(within(quickRoute).getByRole("link", { name: "Start the session" }).getAttribute("href")).toBe("#native-endpoint-panel");
   });
 
+  it("keeps the backend-authored audio reason visible in the status summary", async () => {
+    render(<App backend={createDisconnectedBackend()} />);
+    expect(await screen.findByText(/unavailable audio \(The control backend is disconnected\.\)/)).toBeTruthy();
+  });
+
   it("offers a persisted compact route status view with live controls", async () => {
     render(<App backend={connectedPreviewBackend()} />);
     const toggle = await screen.findByRole("button", { name: "Compact status" });
