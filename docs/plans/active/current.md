@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Requalified the current pushed head after the M05 telemetry changes on
+  2026-09-14 with `cargo test --workspace --locked -- --test-threads=1`.
+  CLI (32), MCP (3), control (145), domain (64), DSP (32), engine (110),
+  plugin-host/worker (83), protocol (8), recording (40), storage (86),
+  transport (19), and Windows-audio (73) passed, along with all workspace
+  doc-tests. This is portable/user-mode evidence only; no driver, endpoint,
+  signing policy, or persistent machine audio configuration changed.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
