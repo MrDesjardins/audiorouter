@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Revalidated the actual Windows Tauri desktop shell on 2026-09-13 at the
+  current UI/backend head with `cargo check --manifest-path
+  src-tauri/Cargo.toml`. The shell, authenticated transport, control plane,
+  storage, and Windows-audio dependencies compiled successfully in 15.21 s.
+  The shell was not launched; no endpoint, driver, signing, or machine audio
+  configuration was accessed. Manual attended visual acceptance remains open.
+
 - Added UI graph-connection transaction coverage on 2026-09-13. The
   regression creates a `mic:out` → `voice:in` connection through the keyboard
   connection dialog, plans the draft, and verifies the exact edge reaches the
