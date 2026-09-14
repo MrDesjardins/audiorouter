@@ -98,12 +98,12 @@ export function SessionFlowCanvas({ session, selectedNodeId, selectedNodeIds = [
         nodes={nodes}
         edges={edges}
         fitView
-        nodesConnectable
+        nodesConnectable={canEdit}
         nodesDraggable
         selectionOnDrag
         onSelectionChange={({ nodes: selectedNodes }) => onSelectMany?.(selectedNodes.map((node) => node.id))}
         onNodeClick={(_, node) => onSelect(node.id)}
-        onConnect={onConnect}
+        onConnect={canEdit ? onConnect : undefined}
         onNodeDragStop={(_, node) => { const next = { ...positions, [node.id]: node.position }; setPositions(next); writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next); }}
         proOptions={{ hideAttribution: true }}
       >

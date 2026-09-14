@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed an M05 disconnected-edit boundary on 2026-09-14. The visual graph
+  now disables React Flow port connections and removes the connection callback
+  whenever the authenticated backend is unavailable, matching the already
+  disabled library-drop controls. UI typecheck and all 188 tests across 19
+  files passed; no endpoint, driver, registry, or machine configuration was
+  accessed. Manual visual/accessibility acceptance remains open. Next action:
+  continue the next independently testable M03/M07 recovery or delivery item.
+
 - Hardened the M03 driver lifecycle state boundary on 2026-09-14. Uninstall
   now rejects a reparse-point rollback file and bounds its UTF-8 state read to
   64 KiB before JSON parsing; the static acceptance asserts both guards. The
