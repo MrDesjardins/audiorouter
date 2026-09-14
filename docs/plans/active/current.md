@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Passed the isolated installed-plugin M06 acceptance on 2026-09-14 for the
+  explicitly selected `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reaeq-standalone.dll`.
+  Processing passed at 44.1, 48, and 96 kHz; the dedicated editor-thread and
+  supervised editor-timeout containment tests passed; and the binary's
+  SHA-256 (`c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`)
+  was unchanged. Environment values were restored. No copy, registration, or
+  audio configuration changed. This qualifies one installed VST2 binary, not
+  the full vendor/editor compatibility matrix. Next action: continue the next
+  safe M03/M07 recovery or delivery item.
+
 - Fixed an M06/M07 plugin-panel mutation boundary on 2026-09-14. Selecting a
   scanned plugin for inspection is now read-only; adding a verified x64 VST2
   or VST3 result to the stopped graph requires a separate explicit action.
