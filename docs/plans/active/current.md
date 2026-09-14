@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the in-house built-in processing chain on 2026-09-13 through
+  the authorized VB-Cable pair after adding the `Pitch` node to the guarded
+  native control-plane route. The bounded 500 ms run captured 24,000 frames,
+  processed 187 graph quanta, and rendered 23,936 frames successfully. The
+  chain now exercises EQ, Gate, Compressor, Pitch (+2 semitones), and Limiter
+  in one backend-owned graph; endpoint identity/state and temporary process
+  state were restored. This is user-mode processing evidence, not production
+  driver, physical-latency, or long-duration artifact qualification.
+
 - Requalified the authorized Rust adapter route for 2 seconds on 2026-09-13
   through explicit VB-Cable endpoint IDs. It captured 96,480 frames,
   processed 753 blocks, routed 96,384 frames, and observed zero deadline

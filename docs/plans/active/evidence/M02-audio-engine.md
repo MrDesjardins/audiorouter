@@ -1,5 +1,22 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - built-in processing chain with pitch
+
+The authorized ignored control test
+`guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane` was
+run against the exact existing VB-Cable capture/render pair after extending
+its backend-owned graph with the built-in `Pitch` node at +2 semitones. The
+live chain is now EQ, Gate, Compressor, Pitch, and Limiter between the native
+capture and render nodes. The bounded 500 ms run captured 24,000 frames,
+processed 187 graph quanta, and rendered 23,936 frames; start, pumping, and
+stop all passed.
+
+The harness restored process environment and temporary worker state, and the
+before/after media identity/state remained unchanged. This proves native
+attachment of the in-house pitch processor in the user-mode route. It does
+not establish production-driver ownership, calibrated physical latency, or
+long-duration pitch artifact quality; those gates remain open under DSP-06.
+
 ## 2026-09-13 - current-tip two-second adapter route
 
 The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio

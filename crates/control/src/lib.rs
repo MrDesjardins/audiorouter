@@ -11730,6 +11730,35 @@ mod tests {
         owned.nodes.insert(
             4,
             Node {
+                id: EntityId::new("pitch"),
+                kind: NodeKind::Pitch,
+                type_version: 1,
+                name: "Live Pitch".into(),
+                enabled: true,
+                bypass: false,
+                parameters: [
+                    ("semitones".into(), json!(2.0)),
+                    ("cents".into(), json!(0.0)),
+                ]
+                .into_iter()
+                .collect(),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: 1,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 1,
+                    },
+                ],
+            },
+        );
+        owned.nodes.insert(
+            5,
+            Node {
                 id: EntityId::new("limiter"),
                 kind: NodeKind::Limiter,
                 type_version: 1,
@@ -11786,8 +11815,17 @@ mod tests {
                 enabled: true,
             },
             Edge {
-                id: EntityId::new("edge-compressor-limiter"),
+                id: EntityId::new("edge-compressor-pitch"),
                 source_node: EntityId::new("compressor"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("pitch"),
+                destination_port: "in".into(),
+                matrix: vec![1.0],
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("edge-pitch-limiter"),
+                source_node: EntityId::new("pitch"),
                 source_port: "out".into(),
                 destination_node: EntityId::new("limiter"),
                 destination_port: "in".into(),
