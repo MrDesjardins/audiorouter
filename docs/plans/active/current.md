@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the guarded acceptance chain after refreshing `src-tauri/Cargo.lock`
+  on 2026-09-13. The first run correctly stopped at M08 because the locked
+  native-shell build detected the stale lockfile; `cargo check --manifest-path
+  src-tauri/Cargo.toml --offline` regenerated the one dependency entry and the
+  fix was pushed as `2380649d`. The corrected M08 release preparation passed,
+  including optimized shell/UI builds and unsigned artifact verification.
+  M08 traceability passed for 159 normative IDs and documentation validation
+  passed for 52 Markdown files/183 local links. No installer, driver,
+  signing-mode, endpoint, or persistent audio action occurred.
+
 - Qualified the existing VB-Cable bridge path on 2026-09-13 with one guarded
   500 ms live cycle using the repository's M02 bridge runner. The exact
   discovered render/capture pair produced 24,000 captured frames, 187
