@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the locked workspace and adapters at pushed head `65e4f953` on
+  2026-09-14. Rust workspace tests passed across domain, DSP, engine,
+  recording, storage, Windows-audio (73), control (150 with 2 guarded live
+  tests ignored), transport, CLI/MCP, and plugin-host; strict workspace
+  Clippy, formatting, and diff checks passed. Contract drift/typecheck passed
+  with 71 methods, 19 node kinds, 7 processors, and 19 event categories; UI
+  tests (184) and typecheck passed. No endpoint, driver, plugin registration,
+  or persistent machine audio configuration was changed. Next action:
+  continue the next safe M03/M07 recovery integration item.
+
 - Closed the VDEV-12 transferred-duplex failure observability gap on
   2026-09-14. Duplex worker heartbeat failure now carries its negotiated bus
   identity back to control, deactivates only that portable bridge, publishes
