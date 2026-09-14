@@ -33,6 +33,14 @@ Updated: 2026-09-14.
   workspace state. UI typecheck and the full UI suite passed (18 files, 167
   tests); no endpoint or machine configuration was accessed.
 
+- Added node-identity telemetry publication on 2026-09-14. Compiled graphs
+  now retain stage-to-node identity, and `system.diagnostics.nodeTelemetry`
+  reports bounded meter and dynamics observations for the attached session;
+  absent, unknown, non-meter/non-dynamics, and busy stages remain omitted.
+  Control/engine tests passed (143 control, 110 engine), contracts drift and
+  UI typechecks passed, and no endpoint or machine configuration was changed.
+  Loaded PortCls transport and physical-driver evidence remain open.
+
 - Added prepared-stage node identity on 2026-09-14. Compiled engine graphs
   retain an immutable node-ID map beside their stages, and expose best-effort
   meter and dynamics telemetry by authored node ID without waiting on the

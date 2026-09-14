@@ -248,6 +248,14 @@ repaired samples, xruns, processing-time totals/maxima, and deadline-miss and
 lateness counters. It is a read-only control-thread snapshot of atomics; the
 audio callback does not wait for diagnostics or serialize JSON.
 
+`nodeTelemetry` is a bounded array of observations for the attached session's
+prepared meter, gate, compressor, and limiter nodes. Each item includes the
+authored node ID and kind, with finite meter dB/clip values or processor gain
+reduction/gate state. It is empty without an attached worker or when no
+matching prepared stage is available; a busy realtime processor is omitted
+rather than waited on. The response is observational and does not alter the
+saved graph.
+
 The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
 the enrolled client identity and cannot bypass the backend permission checks.
 See the [headless runbook](headless-runbook.md) for launch and recovery

@@ -201,6 +201,7 @@ const disconnectedDiagnostics: DiagnosticsSnapshot = {
   nativeAdapter: "implemented-not-activated",
   nativeSessionId: null,
   schedulerTelemetry: null,
+  nodeTelemetry: [],
   privacyMute: { muted: true, persistence: "memory" },
   recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
   eventLog: { latestSequence: 0, retained: 0 },

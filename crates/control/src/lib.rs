@@ -3241,6 +3241,21 @@ fn diagnostics_output_schema() -> Value {
                     }
                 ]
             },
+            "nodeTelemetry": {
+                "type": "array",
+                "maxItems": audiorouter_domain::MAX_NODES_PER_SESSION,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                        "kind": { "type": "string", "minLength": 1 },
+                        "meter": { "type": ["object", "null"] },
+                        "processor": { "type": ["object", "null"] }
+                    },
+                    "required": ["nodeId", "kind", "meter", "processor"],
+                    "additionalProperties": false
+                }
+            },
             "privacyMute": {
                 "type": "object",
                 "properties": {
@@ -3271,7 +3286,7 @@ fn diagnostics_output_schema() -> Value {
             },
             "redacted": { "const": true }
         },
-        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeSessionId", "schedulerTelemetry", "privacyMute", "recovery", "eventLog", "redacted"],
+        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeSessionId", "schedulerTelemetry", "nodeTelemetry", "privacyMute", "recovery", "eventLog", "redacted"],
         "additionalProperties": false
     })
 }
@@ -4760,6 +4775,57 @@ impl ControlPlane {
             "deadlineLatenessNsTotal": telemetry.deadline_lateness_ns_total,
             "deadlineLatenessNsMax": telemetry.deadline_lateness_ns_max,
         })
+    }
+
+    /// Return bounded node-keyed observations from the attached prepared
+    /// graph. This walks the immutable committed session only on the
+    /// diagnostics thread; processor reads remain best-effort and lock-free.
+    fn native_node_telemetry(&self) -> Value {
+        let (Some(worker), Some(session_id)) = (
+            self.native_endpoint_worker.as_ref(),
+            self.native_endpoint_session.as_ref(),
+        ) else {
+            return json!([]);
+        };
+        let Some(session) = self.store.session(session_id) else {
+            return json!([]);
+        };
+        let processor = worker.bridge().scheduler().processor();
+        session
+            .nodes
+            .iter()
+            .filter_map(|node| {
+                let meter = processor.meter_snapshot_for_node(&node.id).map(|snapshot| {
+                    json!({
+                        "peakDb": snapshot.peak_db,
+                        "rmsDb": snapshot.rms_db,
+                        "clippedSamples": snapshot.clipped_samples,
+                        "channelPeakDb": snapshot.channel_peak_db,
+                        "channelRmsDb": snapshot.channel_rms_db,
+                        "channelClippedSamples": snapshot.channel_clipped_samples,
+                    })
+                });
+                let processor_telemetry =
+                    processor
+                        .processor_telemetry_for_node(&node.id)
+                        .map(|telemetry| {
+                            json!({
+                                "gainReductionDb": telemetry.gain_reduction_db,
+                                "gateOpen": telemetry.gate_open,
+                            })
+                        });
+                if meter.is_none() && processor_telemetry.is_none() {
+                    return None;
+                }
+                Some(json!({
+                    "nodeId": node.id,
+                    "kind": node.kind.type_name(),
+                    "meter": meter,
+                    "processor": processor_telemetry,
+                }))
+            })
+            .collect::<Vec<_>>()
+            .into()
     }
 
     /// Detach only a stopped native worker; this never affects unrelated
@@ -7172,6 +7238,7 @@ impl ControlPlane {
                     "nativeAdapter": self.native_adapter_state(),
                     "nativeSessionId": self.native_endpoint_session.as_ref().map(EntityId::as_str),
                     "schedulerTelemetry": self.native_scheduler_telemetry(),
+                    "nodeTelemetry": self.native_node_telemetry(),
                     "privacyMute": {
                         "muted": self.privacy_muted,
                         "persistence": if self.storage.is_some() { "durable" } else { "memory" }
@@ -13599,6 +13666,7 @@ mod tests {
         assert_eq!(result["nativeAdapter"], "implemented-not-activated");
         assert_eq!(result["nativeSessionId"], Value::Null);
         assert_eq!(result["schedulerTelemetry"], Value::Null);
+        assert_eq!(result["nodeTelemetry"], json!([]));
         assert_eq!(result["redacted"], true);
         assert!(result.get("path").is_none());
     }

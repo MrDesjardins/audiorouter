@@ -504,6 +504,22 @@ export interface DiagnosticsSnapshot {
     deadlineLatenessNsTotal: number;
     deadlineLatenessNsMax: number;
   } | null;
+  nodeTelemetry: Array<{
+    nodeId: EntityId;
+    kind: string;
+    meter: {
+      peakDb: number;
+      rmsDb: number;
+      clippedSamples: number;
+      channelPeakDb: number[];
+      channelRmsDb: number[];
+      channelClippedSamples: number[];
+    } | null;
+    processor: {
+      gainReductionDb: number[];
+      gateOpen: boolean[];
+    } | null;
+  }>;
   privacyMute: { muted: boolean; persistence: "durable" | "memory" };
   recovery: { safeMode: boolean; recentCrashes: number; persistence: "durable" | "memory" };
   eventLog: { latestSequence: number; retained: number };

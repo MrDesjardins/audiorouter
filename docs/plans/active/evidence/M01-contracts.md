@@ -377,6 +377,14 @@ The live adapter regression also verifies the diagnostics request and a
 non-null processed-quanta value crossing into the workspace snapshot; the
 suite now passes 167 tests.
 
+On 2026-09-14, `system.diagnostics` gained the bounded `nodeTelemetry` array.
+The control adapter walks only the selected committed session and emits
+authored node IDs with meter or dynamics observations from the immutable
+prepared graph; no worker yields an empty array. The response schema and
+TypeScript contract require this field while keeping the existing redacted
+boundary. Control and engine regressions cover identity lookup and missing
+identity behavior; this is portable/control evidence, not loaded-driver proof.
+
 The fixed `startup.get` capability response and `recovery.clearSafeMode` result
 now have explicit output schemas and shared TypeScript types. Their
 unavailable/cleared-state invariants are discovery-tested without registering

@@ -177,6 +177,12 @@ non-dynamics stages, absent meters, and callback contention fail closed with
 `None`. Two regressions cover gate telemetry and meter snapshots by identity.
 The engine suite passes 110 tests with formatting clean. Control-plane API
 publication remains separate and is not claimed by this engine-only evidence.
+
+The control adapter now consumes those identity-keyed accessors for its
+diagnostics response. It emits only prepared meter, gate, compressor, and
+limiter observations, preserving finite dB projections and omitting busy
+processor reads instead of waiting. This joins engine identity evidence to the
+control contract without changing callback ownership or endpoint state.
 The engine now provides preparation-time `calculate_latency_compensation`.
 It computes destination-major delay samples from cumulative path latency,
 validates an 8--192 kHz graph rate, and rejects branch spreads beyond the
