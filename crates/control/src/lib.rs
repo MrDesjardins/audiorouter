@@ -6197,6 +6197,17 @@ impl ControlPlane {
     pub fn session_start(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
         let session = self.get_session(id)?.clone();
+        let has_enabled_plugin = session
+            .nodes
+            .iter()
+            .any(|node| node.enabled && node.kind == NodeKind::Plugin);
+        let native_attached = self.native_endpoint_session.as_ref() == Some(id)
+            && self.native_endpoint_worker.is_some();
+        if has_enabled_plugin && !native_attached {
+            return Err(ControlError::InvalidRequest(
+                "enabled plugin nodes require an attached native endpoint session".into(),
+            ));
+        }
         if let Some(runtime) = self.runtimes.get(id) {
             if runtime.state() == RuntimeState::Running {
                 return Ok(
@@ -6236,8 +6247,6 @@ impl ControlPlane {
         // samples could reach the endpoint.  Prepare and publish the graph
         // before starting the worker; any failure rolls back the runtime and
         // selected bridge generation so the session cannot be half-started.
-        let native_attached = self.native_endpoint_session.as_ref() == Some(id)
-            && self.native_endpoint_worker.is_some();
         if native_attached {
             if let Err(error) = self.activate_native_graph(id, generation, 48_000) {
                 if let Some(runtime) = self.runtimes.get_mut(id) {

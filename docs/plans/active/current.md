@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Tightened plugin lifecycle safety on 2026-09-13. `session.start` now rejects
+  an enabled plugin graph unless the exact native endpoint session is attached;
+  it cannot report a fake runtime as healthy while silently omitting plugin
+  processing. Existing native activation performs the scan revalidation and
+  worker launch before graph publication. Control tests (134 passed and 1
+  explicit live test ignored), strict Clippy, formatting, and diff checks
+  passed. No endpoint or plugin was opened by these checks.
+
 - Wired control-plane plugin binding on 2026-09-13. Native graph activation
   now resolves enabled plugin nodes only from current scan inventory, repeats
   exact binary/fingerprint inspection, launches the matching verified VST2 or
