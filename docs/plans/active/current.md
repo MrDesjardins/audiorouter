@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified five guarded Rust adapter bridge cycles on 2026-09-14 at the
+  current head using the exact VB-Cable pair. Each one-second cycle processed
+  101 packets, captured 48,480 frames, ran 378 graph/tap quanta, and rendered
+  48,384 frames with zero non-finite samples, dropped frames, xruns, or
+  deadline misses; each finalized a temporary recording. All stream and file
+  resources were stopped/removed and the media-device snapshot remained
+  unchanged. This is repeated user-mode bridge evidence only; loaded PortCls,
+  production driver/signing, physical latency, and manual UI gates remain
+  open. Next action: continue the next safe, independently testable item.
+
 - Requalified the guarded control-owned VB-Cable route for one second on
   2026-09-14 using the exact active capture/render endpoint IDs. The run
   captured and rendered 48,000 frames across 100 packets and 375 processed
