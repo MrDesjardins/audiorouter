@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Revalidated the human-test UI delivery on 2026-09-13. The React Flow
+  canvas, drag/drop processor shelf, connection editor, parameter inspector,
+  and plan/commit draft path pass the complete UI suite (18 files, 156 tests)
+  and the production TypeScript/Vite build. The first attempted test command
+  used unsupported Jest syntax (`--runInBand`) and was rerun with the actual
+  Vitest command; no source change was needed. Native shell visual acceptance
+  and loaded-driver endpoint evidence remain separate gates.
+
 - Added the symmetric control-owned project-driver render-source binding on
   2026-09-13. It validates an enabled virtual bus and exact negotiated
   direction/identity before opening the supplied driver path, retains the
