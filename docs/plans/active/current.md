@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Passed the authorized M00/CAP-08 process-exclusion acceptance on 2026-09-14
+  for a 500 ms disposable child. The exclusion-mode lifecycle completed
+  activation, capture start/stop/reset, and child exit, producing 22,050
+  captured frames; before/after media identity/state remained unchanged.
+  Temporary probe outputs were removed and no persistent audio configuration
+  changed. This is API/lifecycle evidence, not a full cross-process isolation
+  threshold. Next action: continue the next safe M03/M07 recovery or delivery
+  item.
+
 - Revalidated the authorized M00 process-attribution acceptance on 2026-09-14
   for a 500 ms disposable child. The exact process capture path produced
   21,609 captured frames and 77,823 nonzero payload bytes; activation,
