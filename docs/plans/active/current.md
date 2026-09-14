@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added the first human-facing application-capture graph slice on 2026-09-13.
+  The UI can add an observed application as a stopped draft source, retaining
+  executable/path identity and either a selected-instance PID plus creation
+  time or an all-verified-instances policy; unsupported/unobserved entries
+  remain disabled. The domain validator enforces the same bounded contract,
+  and UI production build plus 157 UI tests pass. This is graph/UI contract
+  delivery only; native process-loopback worker attachment and restart
+  recovery remain open M02 runtime gates.
+
 - Hardened CAP-05/CAP-06/CAP-08 graph contracts on 2026-09-13. The domain
   validator now accepts only bounded application-capture selectors with an
   executable and explicit `selectedInstance` or `allVerifiedInstances`

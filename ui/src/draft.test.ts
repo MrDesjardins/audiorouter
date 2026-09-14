@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendDraftConnection, appendLibraryNode, appendPluginPlaceholderNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
+import { appendApplicationCaptureNode, appendDraftConnection, appendLibraryNode, appendPluginPlaceholderNode, duplicateDraftNode, GAIN_MAX_DB, GAIN_MIN_DB, removeDraftNode, resetNodeDraftParameters, setNodeDraftName, setNodeDraftParameter, setSessionDraftName } from "./draft";
 import { demoSession } from "./fixtures";
 
 describe("appendLibraryNode", () => {
@@ -115,5 +115,36 @@ describe("appendLibraryNode", () => {
     expect(setSessionDraftName(demoSession, "  Streaming setup  ").name).toBe("Streaming setup");
     expect(() => setSessionDraftName(demoSession, " ")).toThrow("cannot be empty");
     expect(() => setSessionDraftName(demoSession, "x".repeat(121))).toThrow("120");
+  });
+});
+
+describe("appendApplicationCaptureNode", () => {
+  it("creates a stopped capture source bound to the observed process identity", () => {
+    const next = appendApplicationCaptureNode(demoSession, {
+      processId: 42,
+      executable: "game.exe",
+      executablePath: "C:\\Games\\game.exe",
+      creationTime100ns: "123456789",
+      audioActivity: "active",
+      captureCapability: "observed",
+      audioSessionCount: 1,
+      activeAudioSessionCount: 1,
+      captureSessionCount: 0,
+      renderSessionCount: 1,
+      audioDisplayNames: ["Game"],
+    });
+    expect(next.nodes.at(-1)).toMatchObject({
+      id: "application-capture-1",
+      kind: "applicationCapture",
+      enabled: false,
+      parameters: {
+        executable: "game.exe",
+        executablePath: "C:\\Games\\game.exe",
+        processPolicy: "selectedInstance",
+        processId: 42,
+        creationTime100ns: "123456789",
+      },
+      ports: [{ name: "out", direction: "output", channels: 2 }],
+    });
   });
 });

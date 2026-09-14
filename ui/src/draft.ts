@@ -1,4 +1,4 @@
-import type { EntityId, NodeKind, PluginScanEntry, Session } from "@audiorouter/contracts";
+import type { ApplicationInfo, EntityId, NodeKind, PluginScanEntry, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 
 export type DraftChange = {
@@ -147,6 +147,42 @@ export function appendLibraryNode(
         ports: definition.ports.map((port) => ({ ...port })),
       },
     ],
+  };
+}
+
+/** Adds a verified application identity as a stopped process-capture source. */
+export function appendApplicationCaptureNode(session: Session, application: ApplicationInfo): Session {
+  if (!application.executable || application.processId < 1) {
+    throw new Error("Only a verified running application can be added to the graph");
+  }
+  const selectedInstance = application.creationTime100ns !== null;
+  let suffix = 1;
+  let id = `application-capture-${suffix}`;
+  while (session.nodes.some((node) => node.id === id)) {
+    suffix += 1;
+    id = `application-capture-${suffix}`;
+  }
+  const parameters: Record<string, boolean | number | string> = {
+    executable: application.executable,
+    processPolicy: selectedInstance ? "selectedInstance" : "allVerifiedInstances",
+  };
+  if (selectedInstance) {
+    parameters.processId = application.processId;
+    parameters.creationTime100ns = application.creationTime100ns!;
+  }
+  if (application.executablePath !== null) parameters.executablePath = application.executablePath;
+  return {
+    ...session,
+    nodes: [...session.nodes, {
+      id,
+      kind: "applicationCapture",
+      typeVersion: 1,
+      name: `${application.executable} capture ${suffix}`,
+      enabled: false,
+      bypass: false,
+      parameters,
+      ports: [{ name: "out", direction: "output", channels: 2 }],
+    }],
   };
 }
 
