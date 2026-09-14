@@ -188,6 +188,7 @@ describe("live event cursor", () => {
       storage: "memory",
       audio: { state: "available", reason: "test" },
       nativeAdapter: "running",
+      nativeAdapterKind: "endpoint",
       nativeSessionId: demoSession.id,
       schedulerTelemetry: {
         activeGeneration: 3,

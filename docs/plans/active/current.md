@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Added native worker-kind routing to diagnostics and the UI on 2026-09-14.
+  `system.diagnostics` now reports whether the attached worker is the legacy
+  endpoint adapter or the paired duplex adapter, while reporting `null` when
+  none is attached. The UI selects the matching bounded pump and aggregates
+  duplex telemetry without double-counting single-endpoint quanta. A regression
+  caught and corrected that counter-formatting issue. Verification: 146
+  control tests, 179 UI tests, UI typecheck, formatting, and diff checks
+  passed. No endpoint, driver, or machine audio configuration was accessed.
+  Loaded PortCls, production signing, and physical-latency evidence remain
+  open. Next action: continue the next independently testable native/UI
+  delivery item.
+
 - Requalified the complete safe acceptance chain at pushed head on 2026-09-14
   after the duplex API/UI/documentation additions. M00 toolchain/native checks,
   M03 AudioRouter and SysVAD build-only checks, M01 CLI, M04 DSP/recording,

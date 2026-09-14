@@ -247,6 +247,9 @@ bound session ID. Attachment requires a caller-supplied exact-binding worker,
 so discovery and ordinary session open cannot activate audio implicitly. These
 statuses do not claim a production driver, graph activation, or physical
 latency qualification.
+`nativeAdapterKind` is `endpoint` for the single endpoint worker,
+`duplex` for a paired bridge worker, and `null` when no worker is attached.
+Adapters use it to select the matching pump method.
 
 `schedulerTelemetry` contains the active graph generation and negotiated sample
 rate, bounded input/output overrun and underrun counters, processed quanta,

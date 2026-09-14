@@ -496,6 +496,7 @@ export interface DiagnosticsSnapshot {
   storage: "memory" | "sqlite";
   audio: { state: "available" | "unavailable"; reason: string };
   nativeAdapter: "implemented-not-activated" | "configured-stopped" | "running";
+  nativeAdapterKind: "endpoint" | "duplex" | null;
   nativeSessionId: EntityId | null;
   schedulerTelemetry: {
     activeGeneration: number | null;

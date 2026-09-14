@@ -203,6 +203,7 @@ const disconnectedDiagnostics: DiagnosticsSnapshot = {
   storage: "memory",
   audio: { state: "unavailable", reason: "The control backend is disconnected." },
   nativeAdapter: "implemented-not-activated",
+  nativeAdapterKind: null,
   nativeSessionId: null,
   schedulerTelemetry: null,
   nodeTelemetry: [],

@@ -3347,6 +3347,7 @@ fn diagnostics_output_schema() -> Value {
                 "additionalProperties": false
             },
             "nativeAdapter": { "enum": ["implemented-not-activated", "configured-stopped", "running"] },
+            "nativeAdapterKind": { "enum": ["endpoint", "duplex", null] },
             "nativeSessionId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
             "schedulerTelemetry": {
                 "oneOf": [
@@ -3439,7 +3440,7 @@ fn diagnostics_output_schema() -> Value {
             },
             "redacted": { "const": true }
         },
-        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeSessionId", "schedulerTelemetry", "nodeTelemetry", "privacyMute", "recovery", "eventLog", "redacted"],
+        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeAdapterKind", "nativeSessionId", "schedulerTelemetry", "nodeTelemetry", "privacyMute", "recovery", "eventLog", "redacted"],
         "additionalProperties": false
     })
 }
@@ -6856,6 +6857,17 @@ impl ControlPlane {
         None
     }
 
+    fn native_adapter_kind(&self) -> Option<&'static str> {
+        if self.native_endpoint_worker.is_some() {
+            return Some("endpoint");
+        }
+        #[cfg(windows)]
+        if self.native_duplex_worker.is_some() {
+            return Some("duplex");
+        }
+        None
+    }
+
     fn audio_status(&self) -> (&'static str, &'static str) {
         match self.native_adapter_state() {
             "running" => (
@@ -7653,6 +7665,7 @@ impl ControlPlane {
                             "reason": audio_reason
                         },
                         "nativeAdapter": self.native_adapter_state(),
+                        "nativeAdapterKind": self.native_adapter_kind(),
                         "nativeSessionId": self.native_session_id().map(EntityId::as_str),
                         "schedulerTelemetry": self.native_scheduler_telemetry(),
                         "nodeTelemetry": self.native_node_telemetry(),
@@ -14151,6 +14164,7 @@ mod tests {
         assert_eq!(result["backend"], "control-plane");
         assert_eq!(result["storage"], "memory");
         assert_eq!(result["nativeAdapter"], "implemented-not-activated");
+        assert_eq!(result["nativeAdapterKind"], Value::Null);
         assert_eq!(result["nativeSessionId"], Value::Null);
         assert_eq!(result["schedulerTelemetry"], Value::Null);
         assert_eq!(result["nodeTelemetry"], json!([]));

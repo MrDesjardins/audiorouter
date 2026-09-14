@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ChangeEvent } from "react";
-import type { NativeEndpointPumpResult, Node, PluginParametersResult, RecordingRecoveryItem, RouteInspection } from "@audiorouter/contracts";
+import type { NativeDuplexPumpResult, NativeEndpointPumpResult, Node, PluginParametersResult, RecordingRecoveryItem, RouteInspection } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type RecorderStatus, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
@@ -43,13 +43,21 @@ export const WORKSPACE_EVENT_CATEGORIES = [
 /** Default diagnostics/meter refresh: 20 Hz, below the API's 30 Hz ceiling. */
 export const DIAGNOSTICS_REFRESH_INTERVAL_MS = 50;
 
-export function formatNativePumpSummary(stats: NativeEndpointPumpResult | null, running: boolean): string | null {
+type NativePumpStats = NativeEndpointPumpResult | NativeDuplexPumpResult;
+
+export function formatNativePumpSummary(stats: NativePumpStats | null, running: boolean): string | null {
   if (!stats || !running) return null;
+  const input = "input" in stats ? stats.input : stats;
+  const output = "output" in stats ? stats.output : stats;
   const warnings = [
-    stats.droppedRenderFrames > 0 ? `${stats.droppedRenderFrames} dropped` : null,
-    stats.renderBackpressureEvents > 0 ? `${stats.renderBackpressureEvents} backpressure` : null,
+    output.droppedRenderFrames > 0 ? `${output.droppedRenderFrames} dropped` : null,
+    output.renderBackpressureEvents > 0 ? `${output.renderBackpressureEvents} backpressure` : null,
   ].filter((value): value is string => value !== null);
-  return `native ${stats.capturedFrames} in / ${stats.renderedFrames} out / ${stats.processedQuanta} quanta${stats.recorderChunksDrained > 0 ? ` / ${stats.recorderChunksDrained} recorder chunks` : ""}${warnings.length > 0 ? ` / ${warnings.join(" / ")}` : ""}`;
+  const recorderChunks = "recorderChunksDrained" in stats ? stats.recorderChunksDrained : 0;
+  const processedQuanta = "input" in stats
+    ? input.processedQuanta + output.processedQuanta
+    : stats.processedQuanta;
+  return `native ${input.capturedFrames} in / ${output.renderedFrames} out / ${processedQuanta} quanta${recorderChunks > 0 ? ` / ${recorderChunks} recorder chunks` : ""}${warnings.length > 0 ? ` / ${warnings.join(" / ")}` : ""}`;
 }
 
 export function formatRecordingDuration(frames: number, sampleRate: number): string {
@@ -606,7 +614,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [listedSessions, setListedSessions] = useState<import("@audiorouter/contracts").Session[]>(backend.connected ? [] : demoSessions);
   const [sessionInventoryError, setSessionInventoryError] = useState<string | null>(null);
   const [nativeGeneration, setNativeGeneration] = useState<number | null>(null);
-  const [nativePumpStats, setNativePumpStats] = useState<import("@audiorouter/contracts").NativeEndpointPumpResult | null>(null);
+  const [nativePumpStats, setNativePumpStats] = useState<NativePumpStats | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   useEffect(() => { let mounted = true; void snapshotCache.refresh(backend).then((nextState) => { if (mounted) { setSnapshotState(nextState); if (nextState.snapshot) eventCursor.current = { backendEpoch: nextState.snapshot.status.eventCursor.backendEpoch, sequence: nextState.snapshot.status.eventCursor.latestSequence }; } }); return () => { mounted = false; }; }, [backend, snapshotCache]);
   const refreshApplications = () => {
@@ -738,8 +746,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     return () => { active = false; window.clearInterval(timer); };
   }, [backend, sessionRunning]);
   useEffect(() => {
-    if (!backend.connected || !backend.pumpNativeEndpoint || nativeGeneration === null || !sessionRunning) return;
+    const nativeAdapterKind = snapshot?.diagnostics.nativeAdapterKind;
     const pumpNativeEndpoint = backend.pumpNativeEndpoint;
+    const pumpNativeDuplex = backend.pumpNativeDuplex;
+    if (!backend.connected || nativeGeneration === null || !sessionRunning ||
+        (nativeAdapterKind === "duplex" ? !pumpNativeDuplex : !pumpNativeEndpoint)) return;
     let active = true;
     let pumping = false;
     let lastReportedAt = 0;
@@ -747,7 +758,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!active || pumping) return;
       pumping = true;
       try {
-        const result = await pumpNativeEndpoint(session.id, nativeGeneration, 64);
+        const result = nativeAdapterKind === "duplex"
+          ? await pumpNativeDuplex!(session.id, nativeGeneration, 64, 64)
+          : await pumpNativeEndpoint!(session.id, nativeGeneration, 64);
         const now = Date.now();
         if (now - lastReportedAt >= 1000) { lastReportedAt = now; setNativePumpStats(result); }
       }
@@ -757,7 +770,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     void pump();
     const timer = window.setInterval(() => void pump(), 20);
     return () => { active = false; window.clearInterval(timer); };
-  }, [backend, nativeGeneration, session.id, sessionRunning]);
+  }, [backend, nativeGeneration, session.id, sessionRunning, snapshot?.diagnostics.nativeAdapterKind]);
   const draftNodeNames = new Map(draft.nodes.map((node) => [node.id, node.name]));
   const outputPorts = draft.nodes.flatMap((node) => node.ports.filter((port) => port.direction === "output").map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })));
   const inputPorts = draft.nodes.flatMap((node) => node.ports.filter((port) => port.direction === "input").map((port) => ({ nodeId: node.id, nodeName: node.name, portName: port.name, channels: port.channels })));

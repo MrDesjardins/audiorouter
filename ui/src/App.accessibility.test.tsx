@@ -70,6 +70,7 @@ describe("VB-Cable endpoint selection", () => {
     expect(formatNativePumpSummary(stats, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks");
     expect(formatNativePumpSummary({ ...stats, recorderChunksDrained: 0 }, true)).toBe("native 128 in / 128 out / 1 quanta");
     expect(formatNativePumpSummary({ ...stats, droppedRenderFrames: 2, renderBackpressureEvents: 1 }, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks / 2 dropped / 1 backpressure");
+    expect(formatNativePumpSummary({ sessionId: "demo-session", generation: 1, input: { packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0 }, output: { packets: 1, capturedFrames: 0, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0 } }, true)).toBe("native 128 in / 128 out / 2 quanta");
     expect(formatNativePumpSummary(stats, false)).toBeNull();
   });
 
