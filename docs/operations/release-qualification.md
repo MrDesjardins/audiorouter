@@ -39,19 +39,20 @@ surface is green:
   and strict workspace Clippy.
 - M04 passes 32 DSP and 40 recording tests, including the 60-second pitch
   boundary cases.
-- M05 passes TypeScript typecheck, 153 UI tests, and a disposable production
+- M05 passes TypeScript typecheck, 158 UI tests, and a disposable production
   build.
 - M06 passes with the pinned local VST3 SDK: 51 SDK self-tests, 1,598 official
   validator tests with zero failures, and the offline native loader.
-- M07 passes 32 CLI tests, MCP stdio/named-pipe interoperability, 128 control
-  tests, 67 plugin-host tests, 13 worker-process tests, and strict Clippy.
+- M07 passes 32 CLI tests, MCP stdio/named-pipe interoperability, 143 control
+  tests, 70 plugin-host tests, 13 worker-process tests, and strict Clippy.
 - M08 unsigned artifact preparation, provenance/SBOM, checksums, exact-content
   verification, and cleanup pass in a disposable output directory.
-- M00 native validation is compile-only on this machine. Visual Studio
-  Community 2026, MSVC 14.51.36231, Windows SDK 10.0.28000.0, and WDK
-  10.0.28000.0 are available; the SysVAD sample also passes x64 package/API
-  validation through the 64-bit MSBuild host. No probe executable or driver is
-  run by this gate.
+- M00 native validation includes read-only endpoint-format inventory and
+  compile-only probe checks on this machine. Visual Studio Community 2026,
+  MSVC 14.51.36231, Windows SDK 10.0.28000.0, and WDK 10.0.28000.0 are
+  available; the SysVAD sample also passes x64 package/API validation through
+  the 64-bit MSBuild host. No stream, probe runtime, or driver is run by this
+  gate.
 
 The VST3 SDK is source-distributed and installed only at the ignored local
 path `third_party/vst3sdk`; it is not a system SDK or plugin registration.
