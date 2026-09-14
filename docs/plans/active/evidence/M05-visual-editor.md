@@ -652,6 +652,15 @@ session create, duplicate, and delete. Entity IDs remain separate from retry
 keys. UI typecheck, all 63 Vitest tests, and the disposable three-file Vite
 production build pass; no audio, driver, recording file, or machine
 configuration was accessed.
+
+## 2026-09-14 - Telemetry inspector acceptance
+
+The M05 acceptance wrapper requalified the current UI after the node telemetry
+inspector and 1 Hz diagnostics refresh were added. Contracts/UI typecheck, all
+18 Vitest files (167 tests), and a disposable Vite production build (3
+artifacts) passed. The output was temporary and removed by the wrapper. Manual
+WebView2/Narrator acceptance remains open; no audio endpoint or machine
+configuration was accessed.
 ## Idempotency forwarding regression (2026-09-06)
 
 The UI adapter test suite now explicitly asserts that retry keys reach the

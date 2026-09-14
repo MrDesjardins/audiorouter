@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Requalified M05 at the current worktree on 2026-09-14. The acceptance
+  wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
+  a disposable Vite production build producing 3 artifacts. The telemetry
+  inspector and bounded diagnostics refresh are included; temporary output was
+  run-owned and removed. No audio, driver, signing, or machine configuration
+  changed.
+
 - Hardened the nested `nodeTelemetry` diagnostics schema on 2026-09-14.
   Meter and processor objects now have explicit required fields, finite-number
   types, nonnegative counters/reduction, stereo-sized channel arrays, and
