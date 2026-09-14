@@ -1,5 +1,20 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - current-head control-owned VB-Cable lifecycle
+
+The authorized ignored control test
+`guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane` was
+run through `tests/acceptance/m02-control-native-live.ps1 -AllowLiveAudio`
+against the exact active VB-Cable capture/render pair. The 500 ms route
+captured 24,000 frames, processed 187 graph quanta, and rendered 23,936
+frames; the same control plane completed start, bounded pumping, and stop.
+
+The wrapper restored its process environment and temporary worker state. No
+endpoint default, volume, mute, privacy, driver, signing, startup, or
+persistent machine-audio setting changed. This is current-head user-mode
+route evidence, not managed-driver, calibrated physical-latency, or drift-soak
+evidence.
+
 ## 2026-09-13 - five-cycle adapter bridge endurance
 
 The authorized `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio

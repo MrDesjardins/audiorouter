@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Requalified the current pushed head `33f17f6a` through the authorized
+  control-owned VB-Cable lifecycle on 2026-09-13. The exact active pair
+  captured 24,000 frames, processed 187 graph quanta, and rendered 23,936
+  frames; start/pump/stop passed and the process environment/temporary worker
+  state was restored. No persistent audio configuration changed. Evidence:
+  [M02 audio-engine evidence](evidence/M02-audio-engine.md).
+
 - Revalidated the telemetry UI production bundle on 2026-09-13. The normal
   `ui/dist` build could not replace an existing JavaScript asset because an
   Edge/WebView2 process held it (`EPERM`); no unrelated process was terminated.
