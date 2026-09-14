@@ -60,6 +60,12 @@ Updated: 2026-09-14.
   No plugin registration, audio stream, or machine audio configuration
   changed; independent vendor/editor and production sandbox gates remain.
 
+- Requalified M04 DSP/recording acceptance on 2026-09-14. All 32 DSP tests
+  and 40 recording tests passed, including built-in EQ/dynamics/limiter/
+  delay/pitch, windowed metering, bounded WAV/FLAC output and recovery, and
+  checkpoint behavior, with doc-tests green. No audio device or machine
+  configuration changed.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
