@@ -6869,18 +6869,37 @@ impl ControlPlane {
     }
 
     fn audio_status(&self) -> (&'static str, &'static str) {
-        match self.native_adapter_state() {
+        Self::audio_status_for(self.native_adapter_state(), self.native_adapter_kind())
+    }
+
+    fn audio_status_for(
+        state: &'static str,
+        kind: Option<&'static str>,
+    ) -> (&'static str, &'static str) {
+        match state {
             "running" => (
                 "available",
-                "native endpoint worker is running; production driver qualification remains open",
+                if kind == Some("duplex") {
+                    "native duplex worker is running; production driver qualification remains open"
+                } else {
+                    "native endpoint worker is running; production driver qualification remains open"
+                },
             ),
             "configured-stopped" => (
                 "unavailable",
-                "native endpoint worker is prepared but stopped; start a session explicitly",
+                if kind == Some("duplex") {
+                    "native duplex worker is prepared but stopped; start a session explicitly"
+                } else {
+                    "native endpoint worker is prepared but stopped; start a session explicitly"
+                },
             ),
             _ => (
                 "unavailable",
-                "native endpoint routing is implemented but not activated; exact bindings and a production driver are required",
+                if kind == Some("duplex") {
+                    "native duplex routing is implemented but not activated; exact bindings and a production driver are required"
+                } else {
+                    "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
+                },
             ),
         }
     }
@@ -14170,6 +14189,31 @@ mod tests {
         assert_eq!(result["nodeTelemetry"], json!([]));
         assert_eq!(result["redacted"], true);
         assert!(result.get("path").is_none());
+    }
+
+    #[test]
+    fn audio_status_names_the_attached_worker_kind() {
+        assert_eq!(
+            ControlPlane::audio_status_for("running", Some("endpoint")),
+            (
+                "available",
+                "native endpoint worker is running; production driver qualification remains open"
+            )
+        );
+        assert_eq!(
+            ControlPlane::audio_status_for("configured-stopped", Some("duplex")),
+            (
+                "unavailable",
+                "native duplex worker is prepared but stopped; start a session explicitly"
+            )
+        );
+        assert_eq!(
+            ControlPlane::audio_status_for("unknown", None),
+            (
+                "unavailable",
+                "native endpoint routing is implemented but not activated; exact bindings and a production driver are required"
+            )
+        );
     }
 
     #[test]

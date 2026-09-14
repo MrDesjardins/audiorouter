@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Corrected native diagnostics wording on 2026-09-14. When a paired duplex
+  worker was attached, the control plane still described it as an endpoint
+  worker in `status.get` audio details. The shared status formatter now names
+  endpoint and duplex workers distinctly while preserving the unavailable,
+  stopped, and production-driver qualification semantics. Added regressions
+  for running endpoint, stopped duplex, and inactive states. No endpoint,
+  driver, or machine audio configuration was accessed. Next action: continue
+  the next independently testable delivery item.
+
 - Attempted a read-only rendered UI smoke on 2026-09-14 by starting the Vite
   development server on disposable localhost port 5175; ports 5173 and 5174
   were already occupied. The server initialized successfully and was then
