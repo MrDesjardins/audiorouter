@@ -325,6 +325,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
       if (result.lastFrame !== undefined) setLastFrame(result.lastFrame ?? null);
       setMessage(`Recorder ${result.state} at frame ${frame}.`);
     } catch (error) {
+      setState("failed");
       setMessage(formatUiError(error, `Unable to ${action.toLowerCase()} recorder.`));
     }
   };

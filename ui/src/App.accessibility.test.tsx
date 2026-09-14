@@ -486,6 +486,15 @@ describe("keyboard connection dialog", () => {
     expect(screen.queryByText("Backend last frame: 480")).toBeNull();
   });
 
+  it("shows a failed recorder state when a lifecycle operation is rejected", async () => {
+    const backend = { ...connectedPreviewBackend(), armRecorder: async () => { throw new Error("disk full"); } };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Recorder" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Arm" }));
+    await waitFor(() => expect(within(panel).getByText("failed")).toBeTruthy());
+    expect(within(panel).getByText("disk full")).toBeTruthy();
+  });
+
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {
     const processor: ProcessorDescriptor = {
       id: "gain",

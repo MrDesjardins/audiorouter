@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Hardened UI-14 recorder failure visibility on 2026-09-14. A rejected
+  lifecycle operation now marks the local panel `failed` while retaining the
+  backend's actionable error text; successful authoritative `recorders.list`
+  hydration can subsequently replace that state. Added a rendered disk-error
+  regression; TypeScript typecheck and the full UI suite passed (18 files,
+  174 tests). No audio endpoint or machine configuration changed.
+
 - Corrected a shared recorder contract omission on 2026-09-14: the
   `recorders.list` result now preserves optional `nodeId` identity for
   node-attached recorder workers instead of silently discarding ownership
