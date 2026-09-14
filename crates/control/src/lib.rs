@@ -11376,9 +11376,9 @@ mod tests {
                 EntityId::new("application-worker-identity-required"),
                 NativeApplicationWorkerConfig {
                     process_id: 42,
-                    expected_executable: "different.exe",
+                    expected_executable: "ACTUAL.EXE",
                     expected_executable_path: None,
-                    expected_creation_time_100ns: 100,
+                    expected_creation_time_100ns: 101,
                     mode: audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
                     render: &render,
                     buffer_duration_100ns: 0,
