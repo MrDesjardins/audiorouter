@@ -133,6 +133,41 @@ if (missingProcessors.length > 0 || extraProcessors.length > 0) {
   );
 }
 
+const eventCategoryUnion = contracts.match(
+  /export type StateEventCategory\s*=([\s\S]*?);/,
+);
+if (!eventCategoryUnion) {
+  throw new Error("StateEventCategory union is missing from contracts/src/index.ts");
+}
+const declaredEventCategories = [
+  ...eventCategoryUnion[1].matchAll(/"([^\"]+)"/g),
+].map((match) => match[1]);
+const duplicateEventCategories = declaredEventCategories.filter(
+  (category, index) => declaredEventCategories.indexOf(category) !== index,
+);
+if (duplicateEventCategories.length > 0) {
+  throw new Error(
+    `duplicate StateEventCategory values: ${[...new Set(duplicateEventCategories)].join(", ")}`,
+  );
+}
+const discoveredEventCategories = schema.events?.stateCategories ?? [];
+const declaredEventCategorySet = new Set(declaredEventCategories);
+const discoveredEventCategorySet = new Set(discoveredEventCategories);
+const missingEventCategories = discoveredEventCategories.filter(
+  (category) => !declaredEventCategorySet.has(category),
+);
+const extraEventCategories = declaredEventCategories.filter(
+  (category) => !discoveredEventCategorySet.has(category),
+);
+if (missingEventCategories.length > 0 || extraEventCategories.length > 0) {
+  throw new Error(
+    `event category drift detected: ${[
+      missingEventCategories.length > 0 ? `missing from TypeScript: ${missingEventCategories.join(", ")}` : "",
+      extraEventCategories.length > 0 ? `not discovered by Rust: ${extraEventCategories.join(", ")}` : "",
+    ].filter(Boolean).join("; ")}`,
+  );
+}
+
 console.log(
-  `Contract drift check passed: ${declared.length} methods, ${declaredNodeKinds.length} node kinds, and ${discoveredProcessors.length} processors match the UI/CLI catalogs.`,
+  `Contract drift check passed: ${declared.length} methods, ${declaredNodeKinds.length} node kinds, ${discoveredProcessors.length} processors, and ${declaredEventCategories.length} event categories match the UI/CLI/Rust catalogs.`,
 );

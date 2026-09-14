@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Implemented the API-08 contract-hardening slice on 2026-09-14. The contract
+  drift checker now fails closed on missing, extra, or duplicate event
+  categories and compares the TypeScript `StateEventCategory` union with Rust's
+  discovered `events.stateCategories` catalog. It reports 71 methods, 19 node
+  kinds, 7 processors, and 17 event categories aligned; contracts typecheck
+  and diff checks pass. This is read-only tooling and accessed no audio or
+  machine configuration. Next action: continue the next safe M03/M07 item.
+
 - Closed the API-08 adapter contract gap on 2026-09-14. TypeScript now
   exposes the same bounded 17-value state-event-category union as Rust
   discovery, including `virtualBridge.failed` and `virtualBridge.expired`;

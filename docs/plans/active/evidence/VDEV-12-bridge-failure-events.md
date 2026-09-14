@@ -26,8 +26,9 @@ Verification on Windows workspace `C:\code\audiorouter`:
 - `cargo clippy -q -p audiorouter-control --locked --all-targets -- -D warnings` — passed.
 - `npm.cmd --prefix ui run test -- --run` — 184 passed.
 - `npm.cmd --prefix ui run typecheck` — passed.
-- `npm.cmd --prefix contracts run check:drift` — 71 methods, 19 node kinds, and
-  7 processors aligned.
+- `npm.cmd --prefix contracts run check:drift` — 71 methods, 19 node kinds, 7
+  processors, and 17 event categories aligned.
+- `npm.cmd --prefix contracts run typecheck` — passed.
 - `tests\acceptance\docs.ps1` — 53 Markdown files and 192 local links passed.
 
 No endpoint, default-device, driver, or other machine audio configuration was
