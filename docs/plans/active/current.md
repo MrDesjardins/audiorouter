@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Revalidated the telemetry UI production bundle on 2026-09-13. The normal
+  `ui/dist` build could not replace an existing JavaScript asset because an
+  Edge/WebView2 process held it (`EPERM`); no unrelated process was terminated.
+  The same build then succeeded into a unique disposable Temp output (213
+  modules, 3 artifacts), which was removed. TypeScript and 164 UI tests remain
+  green; no endpoint or machine audio configuration was accessed.
+
 - Exposed native pump health counters in the connected UI status summary on
   2026-09-13. Running VB-Cable routes now show processed quanta and explicitly
   surface nonzero dropped-render frames and backpressure events, alongside
