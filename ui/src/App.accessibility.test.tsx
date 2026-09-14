@@ -34,6 +34,15 @@ afterEach(() => {
 });
 
 describe("VB-Cable endpoint selection", () => {
+  it("shows native startup registration status independently of backend capability", async () => {
+    render(<App backend={{
+      ...connectedPreviewBackend(),
+      getStartup: async () => ({ enabled: true, registration: "unavailable", reason: "portable backend state" }),
+      startupRegistrationStatus: async () => "registered",
+    }} />);
+    expect(await screen.findByText("Native registration: registered")).toBeTruthy();
+  });
+
   it("keeps workspace events bounded to state categories and excludes meters", () => {
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("graph.committed");
     expect(WORKSPACE_EVENT_CATEGORIES).toContain("recording.recycled");

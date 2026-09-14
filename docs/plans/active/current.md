@@ -30,6 +30,11 @@ Updated: 2026-09-14.
   bounded value inspection. Shell tests (13), strict Clippy, formatting, and
   diff checks pass. No registry or audio configuration was changed.
 
+- Added the native startup-status UI regression on 2026-09-14. A native host's
+  read-only `registered` result is now verified as visible independently of
+  the portable backend capability response. UI typecheck and all 186 UI tests
+  pass; no registry, driver, or audio configuration was accessed.
+
 - Fixed the desktop-shell authorization handoff on 2026-09-14. After
   `startupWrite` was separated from the ordinary Operator role, the shell's
   enrolled operator path still received the old three-scope grant and could
