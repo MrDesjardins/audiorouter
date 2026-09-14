@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete non-installing `safe-all.ps1` chain at pushed head
+  `1bbb411a` on 2026-09-14 after the recovery clear-flow UI regression. M00/M03
+  toolchain, AudioRouter and disposable SysVAD WDK build/signability, M01
+  CLI, M04 DSP/recording (32/40 tests), M05 UI (19 files/188 tests and
+  production build), M06 VST3/VST2 workers, M07 headless control, unsigned M08
+  artifacts, 159-ID traceability, and documentation validation (53 Markdown
+  files, 192 local links) passed. Cleanup removed 15 run-owned temporary
+  children. No driver installation/loading, signing-mode change, startup or
+  plugin registration, endpoint default, or persistent audio configuration
+  occurred. Next action: continue the next independently testable M03/M07
+  recovery item.
+
 - Added an M05 UI regression on 2026-09-14 for backend-authored recovery
   presentation. A connected fixture with three recent in-memory crashes now
   proves the UI shows active safe mode, the bounded crash count, memory
