@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete safe M00-M08 acceptance chain at pushed head
+  `0e22ac83` on 2026-09-13. The x64 VS/WDK toolchain and project-driver
+  signability/catalog build, read-only endpoint/native checks, disposable
+  SysVAD, M01/M04, M05 (159 UI tests and production builds), M06 VST3/VST2
+  workers, M07, unsigned M08 artifacts, 159 normative mappings, and 52-file/
+  189-link documentation validation all passed. Fifteen temporary run-owned
+  children were cleaned up; no driver install/load, signing-mode, plugin or
+  startup registration, endpoint default, or persistent audio configuration
+  action occurred.
+
 - Completed a read-only driver-install readiness audit on 2026-09-13 as
   administrator. Secure Boot is enabled, the current boot entry does not
   expose test-signing mode, and no AudioRouter package is present in the
