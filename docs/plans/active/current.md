@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Fixed and requalified the guarded control-route harness on 2026-09-14. The
+  M02 probe had retained the pre-dither `StreamingFlacRecorderWorker::new`
+  call shape, so route acceptance failed at compile time with `E0061` before
+  opening audio. The probe now supplies the explicit false-dither compatibility
+  value. The rerun passed with 50 packets, 24,000 captured frames, 187
+  processed quanta, 23,936 rendered frames, 95,788 recording bytes, one
+  successful start/stop/reset lifecycle, and one expected stale-pump
+  rejection. The wrapper verified unchanged media state and restored its
+  temporary state. No defaults, volume, mute, driver, or persistent audio
+  configuration changed. Next action: continue the next independently
+  testable native/UI delivery item.
+
 - Revalidated guarded process-loopback capture on 2026-09-14 using the active
   `voicemeeterpro.exe` identity (PID 34568, verified creation timestamp and
   executable path) with the exact active VB-Cable render endpoint. The

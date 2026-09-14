@@ -1004,6 +1004,7 @@ fn adapter_bridge_smoke(
         capture_info.channels,
         capture_info.sample_rate_hz,
         24,
+        false,
         32,
         64,
     )
