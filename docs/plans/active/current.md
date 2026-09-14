@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Closed the duplex construction gap on 2026-09-14. A negotiated
+  `NativeBridgeDuplexBinding` can now be consumed directly into the paired
+  render-source/capture-sink workers, preserving one owner for each lease and
+  the shared capture writer. Control-plane attachment, exact-generation
+  session start/stop, bounded pumping, detachment, and deletion protection are
+  wired to that worker lifecycle. Verification: 145 control tests and 73
+  Windows-audio tests passed, with strict Clippy, formatting, and diff checks.
+  No endpoint was opened; driver installation/loading, signing, and physical
+  latency remain explicit gates. Next action: continue the next independently
+  testable native bridge or portable plan item.
+
 - Connected the composed duplex bridge worker to the control-plane session
   lifecycle on 2026-09-14. Control now supports stopped-worker attachment with
   an exact session generation, explicit start/pump/stop/detach operations,

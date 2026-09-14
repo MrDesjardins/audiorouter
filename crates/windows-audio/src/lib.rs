@@ -448,7 +448,7 @@ impl NativeBridgeInputWorker {
 pub struct NativeBridgeOutputWorker {
     endpoint: WasapiEndpointWorker,
     controller: NativeBridgeController,
-    writer: NativeBridgeRealtimeWriter,
+    writer: std::sync::Arc<NativeBridgeRealtimeWriter>,
 }
 
 #[cfg(windows)]
@@ -463,8 +463,20 @@ impl NativeBridgeOutputWorker {
         Ok(Self {
             endpoint,
             controller,
-            writer,
+            writer: std::sync::Arc::new(writer),
         })
+    }
+
+    fn from_parts(
+        endpoint: WasapiEndpointWorker,
+        controller: NativeBridgeController,
+        writer: std::sync::Arc<NativeBridgeRealtimeWriter>,
+    ) -> Self {
+        Self {
+            endpoint,
+            controller,
+            writer,
+        }
     }
 
     pub fn is_running(&self) -> bool {
@@ -500,7 +512,7 @@ impl NativeBridgeOutputWorker {
         max_packets: u32,
     ) -> Result<WasapiSchedulerPump, NativeBridgeOutputWorkerError> {
         self.endpoint
-            .pump_available_with_tap(max_packets, &self.writer)
+            .pump_available_with_tap(max_packets, &*self.writer)
             .map_err(NativeBridgeOutputWorkerError::Audio)
     }
 
@@ -530,6 +542,26 @@ pub struct NativeBridgeDuplexWorker {
 impl NativeBridgeDuplexWorker {
     pub fn new(input: NativeBridgeInputWorker, output: NativeBridgeOutputWorker) -> Self {
         Self { input, output }
+    }
+
+    /// Build both worker directions from one negotiated duplex binding. The
+    /// binding is consumed exactly once, so each directional lease and its
+    /// mapped writer have one clear owner after construction.
+    pub fn from_binding(
+        binding: NativeBridgeDuplexBinding,
+        input_render: SharedRender,
+        input_bridge: WasapiSchedulerBridge,
+        output_endpoint: WasapiEndpointWorker,
+    ) -> Self {
+        let (render_controller, capture_controller, capture_writer) = binding.into_worker_parts();
+        Self::new(
+            NativeBridgeInputWorker::new(render_controller, input_render, input_bridge),
+            NativeBridgeOutputWorker::from_parts(
+                output_endpoint,
+                capture_controller,
+                capture_writer,
+            ),
+        )
     }
 
     pub fn is_running(&self) -> bool {
