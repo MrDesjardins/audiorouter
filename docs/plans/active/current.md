@@ -27,6 +27,12 @@ Updated: 2026-09-14.
   passed (18 files, 166 tests). No audio endpoint or machine configuration
   changed.
 
+- Added a live-adapter snapshot regression on 2026-09-14. The UI test now
+  verifies that `system.diagnostics` is requested alongside status, discovery,
+  and the selected session, and that processed-quanta telemetry reaches the
+  workspace state. UI typecheck and the full UI suite passed (18 files, 167
+  tests); no endpoint or machine configuration was accessed.
+
 - Fixed a real M02 acceptance integration defect on 2026-09-14. After the
   native lifecycle boundary was tightened, the control-owned VB-Cable probe
   still stopped the endpoint worker before stopping its running session; the

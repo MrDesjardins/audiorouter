@@ -178,6 +178,51 @@ describe("snapshot cache", () => {
 });
 
 describe("live event cursor", () => {
+  it("loads diagnostics with the live workspace snapshot", async () => {
+    const requests: string[] = [];
+    const diagnostics = {
+      build: "test",
+      backend: "control-plane",
+      storage: "memory",
+      audio: { state: "available", reason: "test" },
+      nativeAdapter: "running",
+      nativeSessionId: demoSession.id,
+      schedulerTelemetry: {
+        activeGeneration: 3,
+        activeSampleRateHz: 48_000,
+        inputOverruns: 0,
+        inputUnderruns: 0,
+        outputOverruns: 0,
+        outputUnderruns: 0,
+        processedQuanta: 4,
+        repairedSamples: 0,
+        xruns: 0,
+        processingTimeNsTotal: 12,
+        processingTimeNsMax: 4,
+        deadlineMisses: 0,
+        deadlineLatenessNsTotal: 0,
+        deadlineLatenessNsMax: 0,
+      },
+      privacyMute: { muted: false, persistence: "memory" },
+      recovery: { safeMode: false, recentCrashes: 0, persistence: "memory" },
+      eventLog: { latestSequence: 2, retained: 2 },
+      redacted: true,
+    } as const;
+    const disconnectedSnapshot = await createDisconnectedBackend().snapshot();
+    const client = {
+      request: async (method: string) => {
+        requests.push(method);
+        if (method === "status.get") return { ...disconnectedSnapshot.status, audio: "available" };
+        if (method === "system.diagnostics") return diagnostics;
+        if (method === "system.describe") return {};
+        return demoSession;
+      },
+    } as never;
+    const snapshot = await createLiveBackend(client, demoSession.id).snapshot();
+    expect(snapshot.diagnostics.schedulerTelemetry?.processedQuanta).toBe(4);
+    expect(requests).toEqual(["status.get", "system.diagnostics", "system.describe", "sessions.get"]);
+  });
+
   it("forwards the backend epoch and bounded cursor to the shared client", async () => {
     let received: unknown;
     const client = {

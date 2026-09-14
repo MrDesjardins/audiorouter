@@ -373,6 +373,9 @@ keeps the disconnected fixture at an explicit `schedulerTelemetry: null`.
 The status strip presents processed-quanta and xrun counters only when the
 backend supplies a worker snapshot; UI tests passed with 18 files and 166
 tests.
+The live adapter regression also verifies the diagnostics request and a
+non-null processed-quanta value crossing into the workspace snapshot; the
+suite now passes 167 tests.
 
 The fixed `startup.get` capability response and `recovery.clearSafeMode` result
 now have explicit output schemas and shared TypeScript types. Their
