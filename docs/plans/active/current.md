@@ -23,6 +23,13 @@ Updated: 2026-09-14.
   display for registered/unregistered/unavailable native state; UI typecheck
   and all 185 UI tests pass.
 
+- Hardened startup registration ownership on 2026-09-14. Enable now refuses
+  to overwrite a different existing command, and disable deletes only a
+  value whose executable matches the current AudioRouter shell; missing or
+  unrelated values remain untouched. The read-only status path uses the same
+  bounded value inspection. Shell tests (13), strict Clippy, formatting, and
+  diff checks pass. No registry or audio configuration was changed.
+
 - Fixed the desktop-shell authorization handoff on 2026-09-14. After
   `startupWrite` was separated from the ordinary Operator role, the shell's
   enrolled operator path still received the old three-scope grant and could

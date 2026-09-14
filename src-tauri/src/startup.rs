@@ -36,6 +36,52 @@ mod windows_registry {
         Ok(wide(text))
     }
 
+    fn value_text(key: HKEY, name: PCWSTR) -> Result<Option<String>, String> {
+        let mut value_type = REG_VALUE_TYPE(0);
+        let mut byte_len = 0u32;
+        let status = unsafe {
+            RegQueryValueExW(
+                key,
+                name,
+                None,
+                Some(&mut value_type),
+                None,
+                Some(&mut byte_len),
+            )
+        };
+        if status == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        if status != ERROR_SUCCESS {
+            return Err(format!("startup registry value lookup failed: {status:?}"));
+        }
+        if byte_len == 0 || byte_len % 2 != 0 {
+            return Err("startup registry value is not valid UTF-16".into());
+        }
+        let mut bytes = vec![0u8; byte_len as usize];
+        let status = unsafe {
+            RegQueryValueExW(
+                key,
+                name,
+                None,
+                Some(&mut value_type),
+                Some(bytes.as_mut_ptr()),
+                Some(&mut byte_len),
+            )
+        };
+        if status != ERROR_SUCCESS {
+            return Err(format!("startup registry value read failed: {status:?}"));
+        }
+        let words = bytes[..byte_len as usize]
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .take_while(|word| *word != 0)
+            .collect::<Vec<_>>();
+        String::from_utf16(&words)
+            .map(Some)
+            .map_err(|_| "startup registry value is not valid UTF-16".into())
+    }
+
     struct Key(HKEY);
 
     impl Drop for Key {
@@ -71,6 +117,15 @@ mod windows_registry {
         }
         let _key = Key(raw);
         let status = if enabled {
+            let existing = value_text(raw, PCWSTR(name.as_ptr()))?;
+            let executable_text = String::from_utf16(&executable[..executable.len() - 1])
+                .map_err(|_| "startup executable path is not valid UTF-16".to_owned())?;
+            if existing
+                .as_deref()
+                .is_some_and(|value| value != executable_text)
+            {
+                return Err("existing startup registration is owned by another command".into());
+            }
             // `executable` is a live Vec<u16>; its nul terminator is excluded
             // and the byte view preserves the UTF-16LE representation expected
             // by REG_SZ. The view is consumed before the Vec can move.
@@ -82,6 +137,14 @@ mod windows_registry {
             };
             unsafe { RegSetValueExW(raw, PCWSTR(name.as_ptr()), Some(0), REG_SZ, Some(bytes)) }
         } else {
+            let Some(existing) = value_text(raw, PCWSTR(name.as_ptr()))? else {
+                return Ok(());
+            };
+            let executable_text = String::from_utf16(&executable[..executable.len() - 1])
+                .map_err(|_| "startup executable path is not valid UTF-16".to_owned())?;
+            if existing != executable_text {
+                return Err("startup registration is owned by another command".into());
+            }
             unsafe { RegDeleteValueW(raw, PCWSTR(name.as_ptr())) }
         };
         if !enabled && status == ERROR_FILE_NOT_FOUND {
@@ -113,25 +176,7 @@ mod windows_registry {
             return Err(format!("startup registry key lookup failed: {status:?}"));
         }
         let _key = Key(raw);
-        let mut value_type = REG_VALUE_TYPE(0);
-        let mut byte_len = 0u32;
-        let status = unsafe {
-            RegQueryValueExW(
-                raw,
-                PCWSTR(name.as_ptr()),
-                None,
-                Some(&mut value_type),
-                None,
-                Some(&mut byte_len),
-            )
-        };
-        if status == ERROR_FILE_NOT_FOUND {
-            return Ok(false);
-        }
-        if status != ERROR_SUCCESS {
-            return Err(format!("startup registry value lookup failed: {status:?}"));
-        }
-        Ok(byte_len > 0)
+        Ok(value_text(raw, PCWSTR(name.as_ptr()))?.is_some())
     }
 }
 
