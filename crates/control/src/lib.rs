@@ -88,7 +88,11 @@ const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
 fn session_runtime_label(native_attached: bool) -> &'static str {
-    if native_attached { "native" } else { "fake" }
+    if native_attached {
+        "native"
+    } else {
+        "fake"
+    }
 }
 
 /// Result returned by a backend-owned encoder worker during graceful stop.
@@ -4321,6 +4325,18 @@ impl ControlPlane {
 
     /// Start the explicitly attached endpoint pair on the control thread.
     pub fn start_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        let session_id = self.native_endpoint_session.clone().ok_or_else(|| {
+            ControlError::InvalidRequest("native endpoint worker is not attached".into())
+        })?;
+        if !self
+            .runtimes
+            .get(&session_id)
+            .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native endpoint worker requires a running session".into(),
+            ));
+        }
         self.native_endpoint_worker
             .as_mut()
             .ok_or_else(|| {
@@ -4333,6 +4349,17 @@ impl ControlPlane {
     /// Stop the explicitly attached endpoint pair and clear staged bridge
     /// audio. The worker remains attached and may be deliberately restarted.
     pub fn stop_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        if let Some(session_id) = self.native_endpoint_session.as_ref() {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "stop the session before stopping its native endpoint worker".into(),
+                ));
+            }
+        }
         self.native_endpoint_worker
             .as_mut()
             .ok_or_else(|| {
@@ -4684,6 +4711,17 @@ impl ControlPlane {
     /// Detach only a stopped native worker; this never affects unrelated
     /// endpoints or machine audio configuration.
     pub fn detach_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
+        if let Some(session_id) = self.native_endpoint_session.as_ref() {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "stop the session before detaching its native endpoint worker".into(),
+                ));
+            }
+        }
         if self
             .native_endpoint_worker
             .as_ref()
@@ -11205,6 +11243,27 @@ mod tests {
         ));
         plane.session_stop(&running.id).unwrap();
         assert_eq!(plane.delete_session(&running.id).unwrap()["deleted"], true);
+    }
+
+    #[test]
+    fn native_worker_lifecycle_cannot_bypass_running_session_boundary() {
+        let mut plane = ControlPlane::default();
+        let mut owned = session();
+        owned.id = EntityId::new("native-boundary");
+        plane.insert_session(owned.clone()).unwrap();
+        plane.session_start(&owned.id).unwrap();
+        plane.native_endpoint_session = Some(owned.id.clone());
+
+        assert!(matches!(
+            plane.stop_native_endpoint_worker(),
+            Err(ControlError::InvalidRequest(message))
+                if message == "stop the session before stopping its native endpoint worker"
+        ));
+        assert!(matches!(
+            plane.detach_native_endpoint_worker(),
+            Err(ControlError::InvalidRequest(message))
+                if message == "stop the session before detaching its native endpoint worker"
+        ));
     }
 
     #[test]

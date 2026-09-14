@@ -28,6 +28,14 @@ Updated: 2026-09-13.
   The focused regression and complete control crate suite pass (144 tests,
   2 ignored). No endpoint was opened by these tests.
 
+- Closed a native lifecycle bypass on 2026-09-13. Control-thread start,
+  stop, and detach helpers now enforce the session runtime boundary: worker
+  start requires a running session, while stop/detach require the session to
+  be stopped. This prevents an attached worker from being independently
+  stopped or detached while the control plane still reports the session as
+  running. The focused regression and full control suite pass (143 tests,
+  2 intentionally ignored); no endpoint was opened.
+
 - Added a persisted local compact route-status view on 2026-09-13. The UI
   exposes an accessible `Compact status` toggle that presents the selected
   session, backend/native telemetry summary, session start/stop, and privacy
