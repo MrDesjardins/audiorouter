@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the clean pushed head on 2026-09-14 after the native startup
+  status/attendance work. The complete locked Rust workspace passed all
+  package tests and doc-tests; the two guarded live tests remain ignored.
+  The UI typecheck and all 186 Vitest tests also passed. The first UI command
+  invocation was blocked by the machine's PowerShell execution policy; the
+  equivalent `npm.cmd` invocation passed without changing that policy. No
+  registry, driver, endpoint, or persistent audio configuration was changed.
+  Attended startup enable/disable rollback and production native gates remain
+  open. Next action: continue the next independently testable M03/M07
+  recovery integration item.
+
 - Attempted the attended startup-registration round-trip on 2026-09-14 with
   the built shell and an isolated temporary database/pipe. The shell process
   launched, but the Windows computer-use surface returned no targetable apps
