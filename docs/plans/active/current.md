@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Hardened M07 session shutdown recorder boundaries on 2026-09-14. Shutdown
+  now uses a pending `stopFrame` when a recorder is already in `Stopping`, so
+  queued audio is finalized through the requested boundary rather than the
+  previous committed frame. It also validates the boundary before worker
+  finalization, preserving retryability on invalid state. Focused session-stop
+  tests, the full control suite (154 passed, 2 guarded live ignored), strict
+  formatting, and diff checks passed. No audio or machine configuration
+  changed. Next action: continue the next independently testable recovery or
+  delivery item.
+
 - Closed an M07 recorder state/worker ordering gap on 2026-09-14. Session- and
   node-owned recorder commands now validate and advance a cloned authoritative
   controller before invoking the worker; failed controller transitions no

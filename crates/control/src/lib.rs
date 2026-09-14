@@ -7683,15 +7683,41 @@ impl ControlPlane {
             ));
         }
         let mut recorder_outcomes = Vec::new();
-        let active_frame = self.recorders.get(id).and_then(|recorder| {
-            matches!(
-                recorder.state(),
-                RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
-            )
-            .then(|| recorder.checkpoint().last_frame)
-            .flatten()
-        });
+        let active_frame = self
+            .recorders
+            .get(id)
+            .filter(|recorder| {
+                matches!(
+                    recorder.state(),
+                    RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
+                )
+            })
+            .map(|recorder| {
+                let checkpoint = recorder.checkpoint();
+                checkpoint
+                    .stop_frame
+                    .or(checkpoint.last_frame)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "active recorder has no committed frame boundary".into(),
+                        )
+                    })
+            })
+            .transpose()?;
         if let Some(frame) = active_frame {
+            let mut recorder_candidate = self.recorders.get(id).cloned().ok_or_else(|| {
+                ControlError::InvalidRequest("active recorder disappeared".into())
+            })?;
+            let boundary_result = if recorder_candidate.state() == RecorderState::Stopping {
+                recorder_candidate.complete()
+            } else {
+                recorder_candidate.stop(frame)
+            };
+            boundary_result.map_err(|error| {
+                ControlError::InvalidRequest(format!(
+                    "recorder boundary finalization failed: {error:?}"
+                ))
+            })?;
             let worker = self.recorder_workers.get_mut(id).ok_or_else(|| {
                 ControlError::InvalidRequest(
                     "finalize the active recorder before stopping the session".into(),
@@ -7706,20 +7732,12 @@ impl ControlPlane {
                 ));
             }
             let finalized_recordings = worker.finalized_recordings();
-            let recorder = self.recorders.get_mut(id).ok_or_else(|| {
-                ControlError::InvalidRequest("active recorder state disappeared".into())
-            })?;
-            let boundary_result = if recorder.state() == RecorderState::Stopping {
-                recorder.complete()
-            } else {
-                recorder.stop(frame)
-            };
-            boundary_result.map_err(|error| {
-                ControlError::InvalidRequest(format!(
-                    "recorder boundary finalization failed: {error:?}"
-                ))
-            })?;
-            let checkpoint = recorder.checkpoint();
+            self.recorders.insert(id.clone(), recorder_candidate);
+            let checkpoint = self
+                .recorders
+                .get(id)
+                .expect("recorder candidate inserted above")
+                .checkpoint();
             if let Some(storage) = &self.storage {
                 storage
                     .save_recording_checkpoint(id.as_str(), &checkpoint)
