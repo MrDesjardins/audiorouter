@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Closed the M07 frontend-owned shell RPC gate on 2026-09-14. The attended
+  Tauri/WebView acceptance reached the native `rpc_request` command and the
+  authenticated backend `system.describe` through a disposable pipe and
+  database, then cleaned up its test processes and temporary state. No audio
+  endpoint, driver, registry, or persistent machine configuration was
+  touched. This closes WebView-to-backend transport evidence; manual visual
+  accessibility/scaling and production driver gates remain open. Next action:
+  continue the next independently testable M03/M07 recovery item.
+
 - Hardened the M07 tray finalization boundary on 2026-09-14. Active desktop
   recorders must now report a non-null, non-negative `lastFrame`; a missing or
   invalid boundary fails closed instead of being converted to frame zero.
