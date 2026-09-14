@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Completed the remaining non-installing M08 acceptance slices on 2026-09-14.
+  `m08-release.ps1` built and verified the release shell and UI in disposable
+  locations, and `m08-traceability.ps1` covered all 159 normative requirement
+  IDs. The release check remains unsigned and non-installing by design; no
+  driver, installer, signing policy, endpoint, or persistent machine audio
+  configuration was changed. Production signing/install/update/rollback,
+  physical latency, loaded PortCls transport, and attended UI/accessibility
+  evidence remain separate gates. Next action: continue the next safe
+  M03/M07 recovery integration item.
+
 - Requalified the aggregate acceptance chain after the duplex-detach slice on
   2026-09-14. M00 toolchain/native checks, the non-installing x64 WDK driver
   build and catalog signability, M04 DSP/recording, M05 UI (192 tests and
