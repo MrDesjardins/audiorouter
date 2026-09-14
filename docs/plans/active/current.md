@@ -12,6 +12,15 @@ Updated: 2026-09-14.
   No endpoint or machine audio configuration changed. Next action: continue
   the next safe delivery item.
 
+- Closed the REC-03 schema/implementation mismatch on 2026-09-14. The shared
+  `recorders.create` input schema now treats `dither` as optional, retains it
+  in the allowed-parameter set, and documents its format-aware default; the
+  CLI/MCP schema carries the same description. Added a schema regression.
+  Control (148 passed, 2 guarded live tests ignored), CLI (33 passed), MCP
+  interoperability, formatting, strict Clippy, and diff checks passed. No
+  endpoint, file recording, or machine audio configuration changed. Next
+  action: continue the next safe implementation delivery.
+
 - Requalified the complete non-installing safe acceptance chain after the
   recorder default-policy change on 2026-09-14. M00 toolchain/native compile,
   AudioRouter x64 WDK build/catalog signability, read-only endpoint inventory,

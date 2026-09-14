@@ -1735,7 +1735,7 @@ fn method_description(name: &str) -> &'static str {
         "operations.cancel" => "Cancel a pending operation when it has not completed.",
         "recordings.list" => "List persisted recording metadata without touching audio files.",
         "recorders.list" => "List live in-memory recorder states and frame boundaries.",
-        "recorders.create" => "Create and attach an unarmed file recorder under the approved root.",
+        "recorders.create" => "Create and attach an unarmed file recorder under the approved root. Omitted dither defaults to TPDF for integer output and is disabled for Float32.",
         "recorders.arm" => "Arm a session recorder without opening an audio device.",
         "recorders.start" => "Start a recorder at an explicit engine frame boundary.",
         "recorders.pause" => "Pause a recorder at an explicit engine frame boundary.",
@@ -1893,7 +1893,7 @@ fn method_input_schema(name: &str) -> Value {
                 "sequence": { "type": "integer", "minimum": 0 },
                 "channels": { "type": "integer", "enum": [1, 2] },
                 "sampleRate": { "type": "integer", "enum": [44100, 48000] },
-                "dither": { "type": "boolean" },
+                "dither": { "type": "boolean", "description": "Optional; defaults to TPDF for integer WAV/FLAC and false for WAV Float32." },
                 "queueCapacity": { "type": "integer", "minimum": 1, "maximum": audiorouter_recording::MAX_RECORDING_QUEUE_CHUNKS },
                 "maximumChunksPerPass": { "type": "integer", "minimum": 1 },
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
@@ -16344,6 +16344,17 @@ mod tests {
         assert!(failed.error.is_some());
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recorder_create_schema_allows_format_aware_dither_default() {
+        let schema = method_input_schema("recorders.create");
+        let required = schema["required"].as_array().unwrap();
+        assert!(!required.iter().any(|value| value == "dither"));
+        assert_eq!(
+            schema["properties"]["dither"]["description"],
+            "Optional; defaults to TPDF for integer WAV/FLAC and false for WAV Float32."
+        );
     }
 
     #[test]
