@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Aligned the M05 recorder form with REC-03 on 2026-09-14. Selecting WAV
+  Float32 now clears and disables the TPDF dither control and explains that
+  floating output is not dithered; the create request therefore cannot claim
+  an inapplicable setting. Added an accessibility regression covering the
+  disabled control and request payload. The full UI suite passed (183 tests),
+  typecheck passed, and a disposable production build passed. The default
+  `ui/dist` build target remains intermittently locked by Windows (`EPERM`
+  while replacing an existing asset), so the build evidence uses a temporary
+  output directory; no source output was modified and no machine audio state
+  changed. Next action: continue the next safe delivery item.
+
 - Fixed a REC-03 metadata correctness defect on 2026-09-14. Float32 WAV
   encoding does not quantize and therefore never applies TPDF dither, but
   finalized direct and segmented WAV rows previously copied a requested

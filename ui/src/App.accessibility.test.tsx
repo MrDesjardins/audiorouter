@@ -484,6 +484,27 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText(/Recorder voice-take created unarmed/)).toBeTruthy();
   });
 
+  it("disables dither for Float32 recorder output", async () => {
+    const createRecorder = vi.fn(async (params: { recorderId: string }) => ({
+      sessionId: demoSession.id,
+      nodeId: null,
+      recorderId: params.recorderId,
+      format: "wavFloat32" as const,
+      path: "C:\\Audio\\float.wav",
+      state: "idle" as const,
+      armed: false as const,
+    }));
+    const backend = { ...connectedPreviewBackend(), createRecorder };
+    render(<App backend={backend} />);
+    fireEvent.change(await screen.findByRole("combobox", { name: "Recorder format" }), { target: { value: "wavFloat32" } });
+    const dither = screen.getByRole("checkbox", { name: "TPDF dither" }) as HTMLInputElement;
+    expect(dither.checked).toBe(false);
+    expect(dither.disabled).toBe(true);
+    expect(await screen.findByText("Float32 output is not dithered.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create recorder" }));
+    await waitFor(() => expect(createRecorder).toHaveBeenCalledWith(expect.objectContaining({ format: "wavFloat32", dither: false })));
+  });
+
   it("hydrates the recorder panel from the authoritative live state", async () => {
     const backend = {
       ...connectedPreviewBackend(),
