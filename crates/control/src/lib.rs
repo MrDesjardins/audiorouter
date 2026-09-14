@@ -4023,6 +4023,36 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Transfer a paired bus lease to the two stopped endpoint workers after
+    /// checking the exact graph generation.
+    pub fn take_native_duplex_worker_parts(
+        &mut self,
+        bus_id: &EntityId,
+        generation: u64,
+    ) -> Result<
+        (
+            audiorouter_windows_audio::NativeBridgeController,
+            audiorouter_windows_audio::NativeBridgeController,
+            std::sync::Arc<audiorouter_windows_audio::NativeBridgeRealtimeWriter>,
+        ),
+        ControlError,
+    > {
+        let binding = self.native_duplex_bindings.get(bus_id).ok_or_else(|| {
+            ControlError::InvalidRequest("native duplex binding is not prepared".into())
+        })?;
+        if binding.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native duplex binding generation is stale".into(),
+            ));
+        }
+        Ok(self
+            .native_duplex_bindings
+            .remove(bus_id)
+            .expect("binding was checked above")
+            .into_worker_parts())
+    }
+
+    #[cfg(windows)]
     /// Transfer a validated render-source lease to an endpoint worker. The
     /// generation is checked before removal so a stale graph cannot consume
     /// a binding prepared for an earlier graph.

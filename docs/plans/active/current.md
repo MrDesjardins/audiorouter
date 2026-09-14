@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Added the paired lease worker split on 2026-09-13. A validated duplex bus
+  can transfer its render controller, capture controller, and prebuilt capture
+  writer to the two stopped endpoint workers; the control plane checks graph
+  generation before removing the binding. This preserves one negotiated lease
+  per direction without sharing COM-backed endpoint handles. Focused tests,
+  formatting, and strict Clippy are the verification gate; construction alone
+  opens no endpoint.
+
 - Requalified the pushed duplex checkpoint on 2026-09-13. The locked
   workspace passed all unit/integration tests and doc-tests (including 138
   control, 62 domain, 32 DSP, 108 engine, 70 Windows-audio, and 32 CLI tests;

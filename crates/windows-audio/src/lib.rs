@@ -707,6 +707,24 @@ impl NativeBridgeDuplexBinding {
             .render_read_into_after(minimum_sequence, samples)
     }
 
+    /// Split the paired lease for attachment to the two stopped endpoint
+    /// workers. Each returned controller owns one directional lease.
+    pub fn into_worker_parts(
+        self,
+    ) -> (
+        NativeBridgeController,
+        NativeBridgeController,
+        std::sync::Arc<NativeBridgeRealtimeWriter>,
+    ) {
+        let Self {
+            controller,
+            capture_writer,
+            ..
+        } = self;
+        let NativeBridgeDuplexController { render, capture } = controller;
+        (render, capture, capture_writer)
+    }
+
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
         self.controller.heartbeat()
     }
