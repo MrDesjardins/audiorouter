@@ -6811,13 +6811,17 @@ impl ControlPlane {
         ])
     }
 
-    fn recovery_status(&self) -> Result<(usize, bool), ControlError> {
-        self.storage.as_ref().map_or(Ok((0, false)), |storage| {
-            let status = storage
-                .recovery_status(unix_epoch_seconds() as u64)
-                .map_err(storage_error)?;
-            Ok((status.recent_crashes, status.safe_mode))
-        })
+    fn recovery_status(&mut self) -> Result<(usize, bool), ControlError> {
+        let now = unix_epoch_seconds() as u64;
+        if let Some(storage) = &self.storage {
+            let status = storage.recovery_status(now).map_err(storage_error)?;
+            return Ok((status.recent_crashes, status.safe_mode));
+        }
+        let recent_crashes = self.recovery_tracker.crash_count(now);
+        Ok((
+            recent_crashes,
+            self.recovery_tracker.mode() == RecoveryMode::SafeMode,
+        ))
     }
 
     /// Record one backend/runtime crash and return the bounded recovery
@@ -6913,7 +6917,7 @@ impl ControlPlane {
         Ok(decision)
     }
 
-    fn status_snapshot(&self) -> Result<Value, ControlError> {
+    fn status_snapshot(&mut self) -> Result<Value, ControlError> {
         let mut active_session_ids = self
             .runtimes
             .iter()
@@ -14595,6 +14599,20 @@ mod tests {
         assert_eq!(replay.result.unwrap(), cleared.result.unwrap());
         let decision = plane.record_runtime_crash(103).unwrap();
         assert_eq!(decision.mode, RecoveryMode::RestoreEligible);
+    }
+
+    #[test]
+    fn memory_recovery_status_exposes_recent_crashes_and_safe_mode() {
+        let mut plane = ControlPlane::default();
+        let now = unix_epoch_seconds() as u64;
+        plane.record_runtime_crash(now).unwrap();
+        plane.record_runtime_crash(now + 1).unwrap();
+        plane.record_runtime_crash(now + 2).unwrap();
+
+        let status = plane.status_snapshot().unwrap();
+        assert_eq!(status["recovery"]["recentCrashes"], 3);
+        assert_eq!(status["recovery"]["safeMode"], true);
+        assert_eq!(status["recovery"]["persistence"], "memory");
     }
 
     #[test]

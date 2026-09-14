@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Fixed M07 memory recovery status reporting on 2026-09-14. The control
+  snapshot now prunes and exposes the in-memory crash tracker instead of
+  always reporting zero crashes and normal mode; durable SQLite reporting is
+  unchanged. A regression proves three recent memory crashes surface as
+  `safeMode: true` with `persistence: memory`. Control tests (154: 152
+  passed, 2 guarded live ignored), strict Clippy, formatting, and diff checks
+  passed. No audio, driver, registry, plugin, or machine configuration
+  changed. Next action: continue the next independently testable M03/M07
+  recovery item.
+
 - Requalified the complete non-installing `safe-all.ps1` chain at pushed head
   `1af9407f` on 2026-09-14 after the STATE-07 schema guard. M00/M03 native
   toolchain and WDK build/signability, M01 CLI, M04 DSP/recording, M05 UI
