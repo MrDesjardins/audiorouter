@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the complete non-installing `safe-all.ps1` chain at pushed head
+  `e3d924ea` on 2026-09-14 after the memory recovery status fix. M00/M03
+  native toolchain and WDK build/signability, M01 CLI, M04 DSP/recording, M05
+  UI (187 tests and production build), M06 VST2/VST3 workers, M07 headless
+  control, unsigned M08 artifacts, 159-ID traceability, and documentation
+  validation (53 Markdown files, 192 local links) passed. Cleanup removed 15
+  run-owned temporary children. No driver installation/loading, signing-mode
+  change, startup/plugin registration, endpoint default, or persistent audio
+  configuration occurred. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Fixed M07 memory recovery status reporting on 2026-09-14. The control
   snapshot now prunes and exposes the in-memory crash tracker instead of
   always reporting zero crashes and normal mode; durable SQLite reporting is
