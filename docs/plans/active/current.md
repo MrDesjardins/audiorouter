@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Hardened the M07 tray finalization boundary on 2026-09-14. Active desktop
+  recorders must now report a non-null, non-negative `lastFrame`; a missing or
+  invalid boundary fails closed instead of being converted to frame zero.
+  Inactive entries may still report `null`. The shell suite remains green at
+  17 tests with strict Clippy and formatting checks passed. No tray action,
+  endpoint, driver, registry, or machine audio configuration was invoked.
+  Next action: continue the next independently testable M03/M07 recovery
+  item.
+
 - Closed a durable M07 recovery atomicity gap on 2026-09-14. Clearing the
   recovery crash rows and safe-mode latch now journals the idempotent clear
   result in the same SQLite transaction; journal validation or capacity

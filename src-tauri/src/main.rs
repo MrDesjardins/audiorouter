@@ -475,8 +475,8 @@ fn tray_recorders_to_finalize(
         let recorder_session = object.get("sessionId")?.as_str()?;
         let state = object.get("state")?.as_str()?;
         let last_frame = match object.get("lastFrame")? {
-            value if value.is_null() => 0,
-            value => value.as_u64()?,
+            value if value.is_null() => None,
+            value => Some(value.as_u64()?),
         };
         let node_id = match object.get("nodeId") {
             None => None,
@@ -492,7 +492,7 @@ fn tray_recorders_to_finalize(
         if recorder_session == session_id
             && matches!(state, "armed" | "recording" | "paused" | "stopping")
         {
-            to_finalize.push((node_id, last_frame));
+            to_finalize.push((node_id, last_frame?));
         }
     }
     Some(to_finalize)
@@ -912,6 +912,15 @@ mod tests {
             ..malformed
         };
         assert_eq!(tray_recorders_to_finalize(&malformed_item, DESKTOP_SESSION_ID), None);
+
+        let active_without_frame = JsonRpcResponse {
+            result: Some(json!([{ "sessionId": DESKTOP_SESSION_ID, "state": "recording", "lastFrame": null }])),
+            ..malformed_item
+        };
+        assert_eq!(
+            tray_recorders_to_finalize(&active_without_frame, DESKTOP_SESSION_ID),
+            None
+        );
     }
 
     #[test]
