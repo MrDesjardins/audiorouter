@@ -47,6 +47,12 @@ Updated: 2026-09-14.
   `c200e540c26ac793b43611aaceb4aa42cdd2829cdfbf0d60494716d9bdde8a7d`.
   No copy, registration, plugin mutation, or audio configuration occurred.
 
+- Requalified the supplied ReaPlugs VST2 matrix on 2026-09-14: six x64
+  effects passed isolated processing at 44.1/48/96 kHz, including bounded
+  parameter-offset handling and before/after binary-integrity checks. These
+  remain local qualification fixtures; no registration, redistribution, or
+  audio configuration change occurred.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
