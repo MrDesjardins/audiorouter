@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the project-driver bridge publication contract on 2026-09-13
+  with the installed VS Community MSBuild 18.9.1 and WDK 10.0.28000.0.
+  Utilities, Filters, Main, package/catalog, and Inc compiled; catalog
+  signability reported zero errors and zero warnings. The acceptance checked
+  direction-aware WaveRT publication, lease ownership/rundown, bounded
+  mapped-block validation, and fail-closed arithmetic. Disposable output was
+  removed. No driver installation/loading, signing-mode, boot-policy,
+  service, endpoint, or persistent audio configuration action occurred.
+  Evidence: [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+
 - Re-ran the native VST3 worker acceptance on 2026-09-13 with the pinned
   repository AGain fixture. Single-bus and auxiliary-bus processing,
   asynchronous graph staging, bounded worker-failure quarantine, repeated

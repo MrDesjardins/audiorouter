@@ -1,5 +1,17 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - bridge publication requalification at current head
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m03-driver-build.ps1`. With VS Community MSBuild 18.9.1 and
+WDK 10.0.28000.0, Utilities, Filters, Main, package/catalog, and Inc compiled
+for x64. Catalog signability reported zero errors and zero warnings. The
+acceptance checked direction-aware WaveRT render-source/capture-sink
+publication, lease ownership and rundown, bounded mapped-block validation,
+and fail-closed arithmetic. Disposable output was removed. No driver was
+installed or loaded, and signing mode, boot policy, service state, endpoints,
+and persistent audio configuration were unchanged.
+
 ## 2026-09-13 - WDK build requalification at current head
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
