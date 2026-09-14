@@ -256,6 +256,10 @@ matching prepared stage is available; a busy realtime processor is omitted
 rather than waited on. The response is observational and does not alter the
 saved graph.
 
+The UI requests this diagnostic snapshot at most once per second while a
+session is running. Diagnostics are not replayed or retained as meter events;
+the UI keeps the last successful snapshot if a refresh fails.
+
 The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
 the enrolled client identity and cannot bypass the backend permission checks.
 See the [headless runbook](headless-runbook.md) for launch and recovery

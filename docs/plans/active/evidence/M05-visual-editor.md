@@ -820,3 +820,10 @@ values. UI typecheck and the full suite passed with 18 files/167 tests. The
 panel is currently snapshot-based; bounded meter event refresh and attended
 WebView2/accessibility acceptance remain open. No endpoint or machine audio
 configuration was accessed.
+
+The snapshot-based limitation was narrowed on 2026-09-14: while a session is
+running, the UI now refreshes only `system.diagnostics` at a bounded 1 Hz,
+coalesces an in-flight request, and retains the last known values on transient
+failure. It stops the timer when the session stops or backend disconnects. The
+live adapter regression and 18-file/167-test UI suite pass; no durable meter
+events, endpoint access, or machine audio configuration are involved.

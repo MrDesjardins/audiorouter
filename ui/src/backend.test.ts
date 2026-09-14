@@ -93,6 +93,7 @@ describe("snapshot cache", () => {
     const failing: UiBackend = {
       connected: true,
       snapshot: async () => { throw new Error("pipe closed"); },
+      refreshDiagnostics: async () => { throw new Error("pipe closed"); },
       subscribe: async () => ({ backendEpoch: 0, events: [], nextSequence: 0 }),
       inspectRoute: async () => null,
       planGraph: async () => { throw new Error("not connected"); },
@@ -221,6 +222,9 @@ describe("live event cursor", () => {
     const snapshot = await createLiveBackend(client, demoSession.id).snapshot();
     expect(snapshot.diagnostics.schedulerTelemetry?.processedQuanta).toBe(4);
     expect(requests).toEqual(["status.get", "system.diagnostics", "system.describe", "sessions.get"]);
+    const refreshed = await createLiveBackend(client, demoSession.id).refreshDiagnostics();
+    expect(refreshed).toEqual(diagnostics);
+    expect(requests.at(-1)).toBe("system.diagnostics");
   });
 
   it("forwards the backend epoch and bounded cursor to the shared client", async () => {

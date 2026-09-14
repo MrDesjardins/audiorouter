@@ -81,6 +81,7 @@ export type UiBackendSnapshot = {
 export interface UiBackend {
   readonly connected: boolean;
   snapshot(): Promise<UiBackendSnapshot>;
+  refreshDiagnostics(): Promise<DiagnosticsSnapshot>;
   subscribe(afterSequence?: number, sessionId?: string, backendEpoch?: number, categories?: string[]): Promise<EventsSubscribeResult>;
   inspectRoute(destinationNode: string): Promise<RouteInspection | null>;
   planGraph(candidate: Session): Promise<GraphPlanResult>;
@@ -214,6 +215,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     connected: false,
     async snapshot() {
       return { status: disconnectedStatus, diagnostics: disconnectedDiagnostics, session, discovery: null };
+    },
+    async refreshDiagnostics() {
+      return disconnectedDiagnostics;
     },
     async subscribe() {
       return { backendEpoch: 0, events: [], nextSequence: 0 };
@@ -416,6 +420,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
         client.request("sessions.get", { sessionId }),
       ]);
       return { status, diagnostics, discovery, session };
+    },
+    async refreshDiagnostics() {
+      return client.request("system.diagnostics", undefined);
     },
     async subscribe(afterSequence = 0, sessionId, backendEpoch, categories) {
       return client.request("events.subscribe", {

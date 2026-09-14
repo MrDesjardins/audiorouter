@@ -665,6 +665,27 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     return () => { active = false; window.clearInterval(timer); };
   }, [backend, session.id, snapshotCache]);
   useEffect(() => {
+    if (!backend.connected || !sessionRunning) return;
+    let active = true;
+    let refreshing = false;
+    const refreshDiagnostics = async () => {
+      if (!active || refreshing) return;
+      refreshing = true;
+      try {
+        const diagnostics = await backend.refreshDiagnostics();
+        if (active) setSnapshotState((current) => current.snapshot ? { ...current, snapshot: { ...current.snapshot, diagnostics } } : current);
+      } catch {
+        // Keep the last known diagnostics; the event/snapshot path reports
+        // connection failures and never replaces observations with guesses.
+      } finally {
+        refreshing = false;
+      }
+    };
+    void refreshDiagnostics();
+    const timer = window.setInterval(() => void refreshDiagnostics(), 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [backend, sessionRunning]);
+  useEffect(() => {
     if (!backend.connected || !backend.pumpNativeEndpoint || nativeGeneration === null || !sessionRunning) return;
     const pumpNativeEndpoint = backend.pumpNativeEndpoint;
     let active = true;

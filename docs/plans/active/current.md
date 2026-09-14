@@ -48,6 +48,14 @@ Updated: 2026-09-14.
   stages. UI typecheck and the full suite passed (18 files, 167 tests); this
   remains snapshot-based until bounded meter event refresh is connected.
 
+- Added bounded runtime diagnostics refresh on 2026-09-14. A running UI
+  session requests only `system.diagnostics` once per second, prevents
+  overlapping refreshes, and preserves the last known observation on transient
+  failure; stopped/disconnected sessions do not poll. The live adapter
+  forwarding regression, contracts/UI typechecks, and full UI suite passed
+  (18 files, 167 tests). This stays below the 30 Hz telemetry ceiling and does
+  not add meter events to durable history.
+
 - Added prepared-stage node identity on 2026-09-14. Compiled engine graphs
   retain an immutable node-ID map beside their stages, and expose best-effort
   meter and dynamics telemetry by authored node ID without waiting on the
