@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the authorized current-tip Rust adapter bridge on 2026-09-13
+  with three explicit 300 ms cycles through the existing VB-Cable pair. Each
+  cycle reported 48 kHz stereo, 14,880 captured frames, 116 processed quanta,
+  14,848 rendered frames, and zero non-finite samples, drops, XRuns, or
+  deadline misses. The harness removed temporary streams/recordings and media
+  identity/state remained unchanged; no persistent audio configuration,
+  driver, signing, or startup state changed. Physical latency/drift soak and
+  managed-driver gates remain open.
+
 - Strengthened the application-capture UI integration regression on
   2026-09-13. The test now invokes preparation with the default `include`
   policy and then with explicit `exclude`, proving both values reach the

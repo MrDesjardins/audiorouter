@@ -1,5 +1,22 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - current-tip three-cycle bridge lifecycle
+
+The authorized `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 300 -Cycles 3` run used explicit exact IDs for the
+existing VB-Cable capture/render pair. All three cycles independently reported
+48 kHz stereo, 14,880 captured frames, 116 processed quanta, 116 tap calls,
+14,848 rendered frames, and 25,072 recording-file bytes. Every cycle reported
+zero non-finite tap samples, dropped render frames, scheduler XRuns, and
+deadline misses.
+
+The harness compared media-device identity/state after each cycle and removed
+all temporary streams and recordings. No default endpoint, volume, mute,
+privacy, driver, signing, startup, or persistent machine-audio setting
+changed. This strengthens user-mode bridge lifecycle evidence; physical
+latency/drift soak, managed-driver ownership, and production release gates
+remain open.
+
 ## 2026-09-13 - current-tip Rust adapter route
 
 The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
