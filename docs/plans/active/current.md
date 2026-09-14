@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Added the engine-side plugin stage boundary on 2026-09-13. A prepared graph
+  may now accept an exact node-ID map of `RealtimePluginProcessor` stages;
+  processing is allocation-free/nonblocking at the callback contract, and an
+  enabled plugin without a bound stage still fails closed. A regression uses a
+  bound processor to verify that plugin-stage audio changes reach the runtime
+  block, while the existing unbound-placeholder rejection remains covered.
+  Engine tests (108) and strict Clippy passed. The actual worker-owned bounded
+  queue and control-plane binding remain next; no plugin process was launched
+  and no machine audio configuration changed.
+
 - Revalidated the complete locked workspace at the current pushed tree on
   2026-09-13 with `cargo test --workspace --locked -- --test-threads=1`.
   CLI (32 plus 3 MCP), control (134 passed and 1 explicitly ignored live

@@ -978,6 +978,22 @@ pub trait AudioTap: Send + Sync {
     fn on_processed_block(&self, start_frame: u64, block: &AudioBlock);
 }
 
+/// A plugin stage prepared before graph publication.
+///
+/// Implementations must be allocation-free, nonblocking, non-panicking, and
+/// free of I/O/logging in `process`. Worker-host implementations should use a
+/// bounded preallocated handoff and fail closed when a worker result is late;
+/// the realtime callback must never perform plugin IPC itself.
+pub trait RealtimePluginProcessor: Send + Sync + std::fmt::Debug {
+    fn process(&self, block: &mut AudioBlock);
+
+    /// Reset state at a stopped-stream or graph activation boundary. Returning
+    /// false reports that the stage could not obtain its nonblocking ownership.
+    fn reset(&self) -> bool {
+        true
+    }
+}
+
 /// Maximum number of independent realtime observers supported by one
 /// processing boundary. Recorder nodes use one observer each; the bound
 /// keeps fan-out work explicit and matches the global recorder limit.
@@ -2495,6 +2511,9 @@ pub enum ProcessingStage {
         left: Box<RealtimeDsp<audiorouter_dsp::StreamingPitchShifter>>,
         right: Option<Box<RealtimeDsp<audiorouter_dsp::StreamingPitchShifter>>>,
     },
+    Plugin {
+        processor: std::sync::Arc<dyn RealtimePluginProcessor>,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -3045,6 +3064,27 @@ pub fn compile_session_at_sample_rate(
     generation: RuntimeGeneration,
     sample_rate_hz: u32,
 ) -> Result<RuntimeGraph, GraphCompileError> {
+    compile_session_at_sample_rate_with_plugins(
+        session,
+        generation,
+        sample_rate_hz,
+        &std::collections::HashMap::new(),
+    )
+}
+
+/// Prepare a graph with already-bound plugin stages. Binding is deliberately
+/// supplied by the control/host layer so graph compilation never spawns a
+/// process or performs plugin I/O. Every enabled plugin node must have an
+/// exact node-id match in `plugins`; otherwise compilation fails closed.
+pub fn compile_session_at_sample_rate_with_plugins(
+    session: &audiorouter_domain::Session,
+    generation: RuntimeGeneration,
+    sample_rate_hz: u32,
+    plugins: &std::collections::HashMap<
+        audiorouter_domain::EntityId,
+        std::sync::Arc<dyn RealtimePluginProcessor>,
+    >,
+) -> Result<RuntimeGraph, GraphCompileError> {
     use audiorouter_domain::{validate_session, NodeKind};
     use std::collections::{HashMap, VecDeque};
 
@@ -3224,7 +3264,7 @@ pub fn compile_session_at_sample_rate(
         }
         // A placeholder must never be treated as a transparent processor:
         // until its isolated worker is bound, activation fails closed.
-        if node.kind == NodeKind::Plugin {
+        if node.kind == NodeKind::Plugin && !plugins.contains_key(&node.id) {
             return Err(GraphCompileError::UnsupportedTopology);
         }
         if node.bypass {
@@ -3581,7 +3621,12 @@ pub fn compile_session_at_sample_rate(
                     right: right.map(|processor| Box::new(RealtimeDsp::new(processor))),
                 });
             }
-            NodeKind::Plugin => return Err(GraphCompileError::UnsupportedTopology),
+            NodeKind::Plugin => stages.push(ProcessingStage::Plugin {
+                processor: plugins
+                    .get(&node.id)
+                    .cloned()
+                    .ok_or(GraphCompileError::UnsupportedTopology)?,
+            }),
             NodeKind::PhysicalInput
             | NodeKind::ApplicationCapture
             | NodeKind::EndpointLoopback
@@ -4603,6 +4648,11 @@ impl RuntimeGraph {
                         }
                     }
                 }
+                ProcessingStage::Plugin { processor } => {
+                    if !processor.reset() {
+                        success = false;
+                    }
+                }
                 ProcessingStage::Gain { .. }
                 | ProcessingStage::Mute { .. }
                 | ProcessingStage::ChannelMatrix { .. }
@@ -4885,6 +4935,7 @@ impl RuntimeGraph {
                         }
                     }
                 }
+                ProcessingStage::Plugin { processor } => processor.process(block),
             }
         }
         let repaired = block.sanitize_non_finite();
@@ -6891,6 +6942,13 @@ mod tests {
     #[test]
     fn compiler_rejects_an_enabled_unbound_plugin_placeholder() {
         use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        #[derive(Debug)]
+        struct Doubler;
+        impl RealtimePluginProcessor for Doubler {
+            fn process(&self, block: &mut AudioBlock) {
+                block.apply_gain(2.0);
+            }
+        }
         let port = |name: &str, direction| Port {
             name: name.into(),
             direction,
@@ -6969,6 +7027,22 @@ mod tests {
             compile_session(&session, RuntimeGeneration::new(50)),
             Err(GraphCompileError::UnsupportedTopology)
         ));
+
+        let plugins = std::collections::HashMap::from([(
+            EntityId::new("plugin"),
+            std::sync::Arc::new(Doubler) as std::sync::Arc<dyn RealtimePluginProcessor>,
+        )]);
+        let graph = compile_session_at_sample_rate_with_plugins(
+            &session,
+            RuntimeGeneration::new(51),
+            INTERNAL_SAMPLE_RATE_HZ,
+            &plugins,
+        )
+        .unwrap();
+        let mut block = AudioBlock::new(1, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        graph.process(&mut block);
+        assert_eq!(block.channel(0).unwrap(), &[0.5; 128]);
     }
 
     #[test]
