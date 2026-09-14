@@ -10203,7 +10203,7 @@ impl ControlPlane {
                 ));
             }
             self.detach_native_duplex_worker()?;
-            return Ok(json!({ "sessionId": session_id, "state": "detached" }));
+            Ok(json!({ "sessionId": session_id, "state": "detached" }))
         }
         #[cfg(not(windows))]
         {

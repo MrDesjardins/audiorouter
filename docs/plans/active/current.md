@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Requalified the aggregate acceptance chain after the duplex-detach slice on
+  2026-09-14. M00 toolchain/native checks, the non-installing x64 WDK driver
+  build and catalog signability, M04 DSP/recording, M05 UI (192 tests and
+  production build), M06 VST3/VST2 worker checks, and the M01/M07 headless
+  suites passed. The first M07 run exposed one real strict-Clippy defect in
+  the new Windows-only dispatch branch (an unnecessary `return`); it was
+  removed, then strict Clippy, Windows-target compilation, control (158
+  passed, 2 guarded live ignored), and the complete M07 headless acceptance
+  passed. Disposable outputs were cleaned up. No driver was installed or
+  loaded and no signing policy, endpoint, or persistent machine audio
+  configuration changed. Next action: continue the next safe M03/M07
+  recovery integration item.
+
 - Added the M03/VDEV-12 project-driver duplex replacement path on
   2026-09-14. `nativeDuplex.detach` is now an authorized
   `deviceAdministration` RPC that targets the exact session and delegates to
