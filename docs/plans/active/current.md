@@ -2,6 +2,20 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete safe acceptance chain at pushed head on 2026-09-14.
+  M00 toolchain/native inventory, M03 non-installing x64 WDK driver build and
+  catalog signability, M01/M04/M05, M06 SDK/VST3/VST2 workers, M07 headless,
+  M08 unsigned release artifacts and 159 requirement mappings, and
+  documentation validation (53 Markdown files, 193 local links) all passed.
+  The first aggregate attempt was correctly rejected because an in-repository
+  temporary log made the clean-tree release input dirty; the rerun placed the
+  log outside the repository and passed. Cleanup removed run-owned temporary
+  children. No driver was installed or loaded and no signing policy, endpoint,
+  plugin/startup registration, or persistent machine audio configuration was
+  changed. Loaded PortCls, production signing/install/update, physical
+  latency, and attended UI/accessibility gates remain open. Next action:
+  continue the next safe M03/M07 recovery integration item.
+
 - Completed the remaining non-installing M08 acceptance slices on 2026-09-14.
   `m08-release.ps1` built and verified the release shell and UI in disposable
   locations, and `m08-traceability.ps1` covered all 159 normative requirement
