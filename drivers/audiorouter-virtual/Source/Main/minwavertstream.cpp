@@ -1639,6 +1639,7 @@ ByteDisplacement - # of bytes to process.
     if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0) {
         return;
     }
+    RefreshBridgePublishShape();
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
     const BOOLEAN bridgeFormat =
@@ -1646,35 +1647,6 @@ ByteDisplacement - # of bytes to process.
         m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
         m_pWfExt->Format.nBlockAlign ==
             m_pWfExt->Format.nChannels * sizeof(FLOAT);
-    if (bridgeFormat && m_pWfExt->Format.nChannels <= AR_BRIDGE_MAX_CHANNELS) {
-        ULONG previousFrames = m_BridgePublishFrames;
-        ULONG previousChannels = m_BridgePublishChannels;
-        USHORT frames = 0;
-        USHORT channels = 0;
-        if (NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
-                AR_BRIDGE_DIRECTION_CAPTURE_SINK, &frames, &channels)) &&
-            channels == m_pWfExt->Format.nChannels) {
-            m_BridgePublishFrames = frames;
-            m_BridgePublishChannels = channels;
-        } else {
-            m_BridgePublishFrames = 0;
-            m_BridgePublishChannels = 0;
-        }
-        if (m_BridgePublishFrames != previousFrames ||
-            m_BridgePublishChannels != previousChannels) {
-            // A lease may be replaced with a different quantum while this
-            // stream still owns a partial scratch block. Never subtract the
-            // new shape from stale frame state in the callback.
-            m_BridgeScratchFrames = 0;
-            m_BridgeScratchFrameOffset = 0;
-        }
-    } else {
-        m_BridgePublishFrames = 0;
-        m_BridgePublishChannels = 0;
-        m_BridgeScratchFrames = 0;
-        m_BridgeScratchFrameOffset = 0;
-    }
-
     // The capture endpoint is the virtual sink for processed render audio.
     // Only the negotiated float32 interleaved shape can use the bridge; an
     // unavailable or incoherent block is rendered as silence.
@@ -1757,6 +1729,7 @@ ByteDisplacement - # of bytes to process.
     if (m_pDmaBuffer == NULL || m_ulDmaBufferSize == 0) {
         return;
     }
+    RefreshBridgePublishShape();
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
     const BOOLEAN bridgeFormat =
         m_pWfExt != NULL &&
@@ -1801,6 +1774,40 @@ ByteDisplacement - # of bytes to process.
         }
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
+    }
+}
+
+//=============================================================================
+#pragma code_seg()
+VOID CMiniportWaveRTStream::RefreshBridgePublishShape()
+{
+    ULONG previousFrames = m_BridgePublishFrames;
+    ULONG previousChannels = m_BridgePublishChannels;
+    USHORT frames = 0;
+    USHORT channels = 0;
+    const BOOLEAN bridgeFormat =
+        !m_bCapture &&
+        m_pWfExt != NULL &&
+        m_pWfExt->Format.wBitsPerSample == sizeof(FLOAT) * 8 &&
+        m_pWfExt->Format.nBlockAlign ==
+            m_pWfExt->Format.nChannels * sizeof(FLOAT) &&
+        m_pWfExt->Format.nChannels <= AR_BRIDGE_MAX_CHANNELS;
+    if (bridgeFormat && NT_SUCCESS(AudioRouterGetLeaseShapeForDirection(
+            AR_BRIDGE_DIRECTION_CAPTURE_SINK, &frames, &channels)) &&
+        channels == m_pWfExt->Format.nChannels) {
+        m_BridgePublishFrames = frames;
+        m_BridgePublishChannels = channels;
+    } else {
+        m_BridgePublishFrames = 0;
+        m_BridgePublishChannels = 0;
+    }
+    if (m_BridgePublishFrames != previousFrames ||
+        m_BridgePublishChannels != previousChannels) {
+        // A lease may be replaced with a different quantum while this
+        // stream still owns a partial scratch block. Never subtract the new
+        // shape from stale frame state in the callback.
+        m_BridgeScratchFrames = 0;
+        m_BridgeScratchFrameOffset = 0;
     }
 }
 

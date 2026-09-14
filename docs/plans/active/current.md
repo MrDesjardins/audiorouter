@@ -17,6 +17,15 @@ Updated: 2026-09-13.
   workspace, while enabled state round-trips. The focused preference suite
   passes (3 tests) and TypeScript passes.
 
+- Fixed a driver-prototype bridge gap on 2026-09-13: the render-stream
+  `ReadBytes` callback now refreshes the capture-sink lease shape before
+  accumulating and publishing render DMA. Shape changes discard only the
+  partial callback scratch quantum; missing, mismatched, or non-float formats
+  remain disabled. The shared helper is bounded/nonblocking and the M03
+  source-contract acceptance now requires its presence in the render path.
+  This remains build/source evidence only; the driver is not installed or
+  loaded.
+
 - Confirmed no interactive desktop surface is available for the attended
   WebView2/Narrator gate on 2026-09-13 (`cua.getState` returned no apps or
   browsers). The full Rust workspace regression nevertheless passed at the

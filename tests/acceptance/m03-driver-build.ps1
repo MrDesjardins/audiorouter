@@ -162,6 +162,7 @@ foreach ($required in @(
         'AudioRouterCopyLeaseBlockForDirection',
         'AudioRouterPublishLeaseBlockForDirection',
         'AudioRouterGetLeaseShapeForDirection',
+        'RefreshBridgePublishShape();',
         'm_BridgeScratch',
         'm_BridgeReadSequence',
         'header.Sequence',
@@ -175,6 +176,10 @@ foreach ($required in @(
 }
 if (-not $stream.Contains('ReadBytes(ByteDisplacement);')) {
     throw 'WaveRT render consumption must run the bridge publisher even when file diagnostics are disabled'
+}
+$readBytesSource = $stream.Substring($stream.IndexOf('VOID CMiniportWaveRTStream::ReadBytes'))
+if (-not $readBytesSource.Contains('RefreshBridgePublishShape();')) {
+    throw 'WaveRT render callback must refresh the capture-sink bridge shape before publication'
 }
 if (-not $stream.Contains('IID_IMiniportWaveRTOutputStream) && (!this->m_bCapture)')) {
     throw 'WaveRT capture streams must not advertise the render-stream interface'

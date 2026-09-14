@@ -178,6 +178,11 @@ private:
         _In_ ULONG ByteDisplacement
     );
 
+    // Refresh the capture-sink bridge shape on the control-independent
+    // callback path. This is deliberately bounded and nonblocking; a changed
+    // lease shape discards only the stream's partial scratch quantum.
+    VOID RefreshBridgePublishShape();
+
     VOID UpdatePosition
     (
         _In_ LARGE_INTEGER ilQPC
