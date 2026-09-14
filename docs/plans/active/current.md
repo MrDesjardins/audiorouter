@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Wired control-plane plugin binding on 2026-09-13. Native graph activation
+  now resolves enabled plugin nodes only from current scan inventory, repeats
+  exact binary/fingerprint inspection, launches the matching verified VST2 or
+  native VST3 worker, creates the bounded realtime bridge, and supplies stages
+  by exact node ID to engine compilation. Graphs without plugins do not seek a
+  worker executable; missing/stale identities fail before publication. Control
+  tests (134 passed and 1 explicit live test ignored), strict Clippy, format,
+  and diff checks passed. Real third-party graph activation still requires an
+  explicitly prepared native endpoint session and worker executable; no plugin
+  was registered and no machine audio configuration changed.
+
 - Revalidated the all-features workspace after the worker bridge change on
   2026-09-13 with `cargo test --workspace --all-features --offline
   -- --test-threads=1`. CLI/MCP, control (134 passed and 1 live test

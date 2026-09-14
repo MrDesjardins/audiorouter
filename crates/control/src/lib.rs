@@ -11,8 +11,8 @@ use audiorouter_domain::{
     VirtualBusRegistry, VirtualBusRouteRegistry, API_METHODS,
 };
 use audiorouter_engine::{
-    AudioBlock, AudioTap, AudioTapSet, RecorderTapBindings, RuntimeGeneration, VirtualBusBridgeSet,
-    VirtualBusBridgeSetError,
+    AudioBlock, AudioTap, AudioTapSet, RealtimePluginProcessor, RecorderTapBindings,
+    RuntimeGeneration, VirtualBusBridgeSet, VirtualBusBridgeSetError,
 };
 use audiorouter_protocol::{
     decode_rpc_frame, encode_frame, FrameError, JsonRpcRequest, JsonRpcResponse, RpcMessage,
@@ -3892,10 +3892,12 @@ impl ControlPlane {
                     ControlError::InvalidRequest("recorder graph tap binding is invalid".into())
                 })?
         };
-        let graph = audiorouter_engine::compile_session_at_sample_rate(
+        let plugin_stages = self.prepare_plugin_stages(&session, sample_rate_hz)?;
+        let graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins(
             &session,
             RuntimeGeneration::new(generation),
             sample_rate_hz,
+            &plugin_stages,
         )
         .map_err(|error| {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
@@ -5909,6 +5911,139 @@ impl ControlPlane {
             }
         }
         Ok(())
+    }
+
+    /// Resolve and launch only plugin identities present in the current scan
+    /// inventory. Worker creation is control-thread work; the returned stages
+    /// perform only the bounded callback handoff once the graph is published.
+    fn prepare_plugin_stages(
+        &self,
+        session: &Session,
+        sample_rate_hz: u32,
+    ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
+        let mut stages = HashMap::new();
+        if !session
+            .nodes
+            .iter()
+            .any(|node| node.enabled && node.kind == NodeKind::Plugin)
+        {
+            return Ok(stages);
+        }
+        let worker_executable = std::env::var_os("AUDIOROUTER_PLUGIN_WORKER_PATH")
+            .map(std::path::PathBuf::from)
+            .or_else(|| {
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|path| path.parent().map(std::path::Path::to_path_buf))
+                    .map(|directory| {
+                        directory.join(if cfg!(windows) {
+                            "audiorouter-plugin-worker.exe"
+                        } else {
+                            "audiorouter-plugin-worker"
+                        })
+                    })
+            })
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("plugin worker executable is unavailable".into())
+            })?;
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.enabled && node.kind == NodeKind::Plugin)
+        {
+            let path = node
+                .parameters
+                .get("path")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ControlError::InvalidRequest("plugin path is missing".into()))?;
+            let fingerprint = node
+                .parameters
+                .get("fingerprint")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("plugin fingerprint is missing".into())
+                })?;
+            let (_entry, root) = self
+                .plugin_inventories
+                .iter()
+                .filter_map(|(root, inventory)| {
+                    let entry = inventory
+                        .get("entries")
+                        .and_then(Value::as_array)?
+                        .iter()
+                        .find(|entry| entry.get("path").and_then(Value::as_str) == Some(path))?;
+                    let entry_fingerprint = entry
+                        .get("identity")
+                        .and_then(|identity| identity.get("sha256"))
+                        .and_then(Value::as_str)?;
+                    (entry_fingerprint == fingerprint).then_some((entry, root))
+                })
+                .next()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "plugin worker requires a current matching scan identity".into(),
+                    )
+                })?;
+            let configured_root = std::path::PathBuf::from(root);
+            let verified = audiorouter_plugin_host::inspect_binary(
+                std::path::Path::new(path),
+                std::slice::from_ref(&configured_root),
+            )
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("plugin revalidation failed: {error:?}"))
+            })?;
+            if verified.sha256 != fingerprint {
+                return Err(ControlError::InvalidRequest(
+                    "plugin fingerprint changed since scan".into(),
+                ));
+            }
+            let channels = node
+                .ports
+                .iter()
+                .find(|port| port.direction == audiorouter_domain::PortDirection::Input)
+                .map(|port| usize::from(port.channels))
+                .unwrap_or(1);
+            let worker = if verified.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+                #[cfg(windows)]
+                {
+                    audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+                        &worker_executable,
+                        &verified,
+                        std::slice::from_ref(&configured_root),
+                        channels as u16,
+                        sample_rate_hz,
+                        Instant::now(),
+                    )
+                }
+                #[cfg(not(windows))]
+                {
+                    return Err(ControlError::InvalidRequest(
+                        "VST3 worker activation requires Windows".into(),
+                    ));
+                }
+            } else {
+                audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                    &worker_executable,
+                    &verified,
+                    std::slice::from_ref(&configured_root),
+                    channels as u16,
+                    sample_rate_hz,
+                    Instant::now(),
+                )
+            }
+            .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
+            let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start(
+                worker,
+                channels,
+                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+                2,
+            )
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("plugin runtime bridge failed: {error:?}"))
+            })?;
+            stages.insert(node.id.clone(), bridge as Arc<dyn RealtimePluginProcessor>);
+        }
+        Ok(stages)
     }
 
     pub fn commit_graph(
