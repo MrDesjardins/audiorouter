@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete safe acceptance chain at pushed head on 2026-09-14
+  after the duplex API/UI/documentation additions. M00 toolchain/native checks,
+  M03 AudioRouter and SysVAD build-only checks, M01 CLI, M04 DSP/recording,
+  M05 UI (typecheck, 179 tests, production build), M06 VST3/VST2, M07
+  headless, unsigned M08 preparation, 159 normative mappings, and the
+  documentation validator all passed. The run removed 15 run-owned temporary
+  children. No driver was installed or loaded, no plugin was registered, and
+  no endpoint or machine audio configuration was changed. Loaded PortCls,
+  production signing, and physical-latency evidence remain open. Next action:
+  continue the next independently testable native/UI delivery item.
+
 - Documented the new duplex pump contract on 2026-09-14. The operations API
   reference and API specification now list `nativeDuplex.pump`, its separate
   bounded budgets, generation binding, fail-closed behavior, and distinct
