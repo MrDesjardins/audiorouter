@@ -624,6 +624,7 @@ dependencies = [
  "audiorouter-engine",
  "audiorouter-recording",
  "audiorouter-windows-audio",
+ "serde_json",
  "windows",
  "windows-core",
 ]

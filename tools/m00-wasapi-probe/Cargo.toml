@@ -10,6 +10,7 @@ audiorouter-domain = { path = "../../crates/domain" }
 audiorouter-recording = { path = "../../crates/recording" }
 audiorouter-windows-audio = { path = "../../crates/windows-audio" }
 audiorouter-engine = { path = "../../crates/engine" }
+serde_json = "1"
 windows = { version = "0.62.2", features = [
   "Win32_Foundation",
   "Win32_Media_Audio",

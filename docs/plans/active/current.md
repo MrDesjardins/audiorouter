@@ -2,6 +2,20 @@
 
 Updated: 2026-09-14.
 
+- Extended the guarded M02 control-owned route on 2026-09-14 with an actual
+  in-house `Gain` node (`gainDb=-6`) between the selected capture endpoint and
+  recorder/output. The route therefore now exercises graph compilation and a
+  built-in realtime modifier in addition to WASAPI transport/lifecycle. The
+  one-second exact VB-Cable run passed with 100 packets, 48,000 captured and
+  rendered frames, 375 processed quanta, 192,044 recording bytes, one clean
+  start/stop/reset, and one stale-pump rejection. Before/after media checks
+  confirmed no endpoint, default, volume, mute, privacy, driver, or startup
+  configuration changes. This is user-mode Gain-path evidence; amplitude
+  qualification against private user audio is intentionally not asserted, and
+  loaded PortCls, production driver/signing, physical latency, and manual UI
+  gates remain open. Next action: continue the next safe processing/routing
+  delivery item and preserve this guarded rollback boundary.
+
 - Requalified five guarded Rust adapter bridge cycles on 2026-09-14 at the
   current head using the exact VB-Cable pair. Each one-second cycle processed
   101 packets, captured 48,480 frames, ran 378 graph/tap quanta, and rendered

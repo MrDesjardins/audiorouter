@@ -215,6 +215,7 @@ fn adapter_control_route(
     let worker = audiorouter_windows_audio::WasapiEndpointWorker::new(capture, render, bridge);
     let session_id = EntityId::new("native-control-probe");
     let input_id = EntityId::new("input");
+    let gain_id = EntityId::new("gain");
     let recorder_id = EntityId::new("recorder");
     let output_id = EntityId::new("output");
     let ports = |direction| {
@@ -239,6 +240,30 @@ fn adapter_control_route(
                 bypass: false,
                 parameters: Default::default(),
                 ports: ports(PortDirection::Output),
+            },
+            Node {
+                id: gain_id.clone(),
+                kind: NodeKind::Gain,
+                type_version: 1,
+                name: "probe gain".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::Map::from_iter([(
+                    "gainDb".into(),
+                    serde_json::json!(-6.0),
+                )]),
+                ports: vec![
+                    Port {
+                        name: "in".into(),
+                        direction: PortDirection::Input,
+                        channels: channel_count,
+                    },
+                    Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: channel_count,
+                    },
+                ],
             },
             Node {
                 id: recorder_id.clone(),
@@ -277,6 +302,21 @@ fn adapter_control_route(
                 id: EntityId::new("probe-input-recorder"),
                 source_node: input_id,
                 source_port: "main".into(),
+                destination_node: gain_id.clone(),
+                destination_port: "in".into(),
+                matrix: (0..channels)
+                    .flat_map(|row| {
+                        (0..channels).map(move |column| {
+                            if row == column { 1.0 } else { 0.0 }
+                        })
+                    })
+                    .collect(),
+                enabled: true,
+            },
+            Edge {
+                id: EntityId::new("probe-gain-recorder"),
+                source_node: gain_id,
+                source_port: "out".into(),
                 destination_node: recorder_id.clone(),
                 destination_port: "in".into(),
                 matrix: (0..channels)
