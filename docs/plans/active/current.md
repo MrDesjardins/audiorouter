@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the system-selected Rust adapter smoke path on 2026-09-14.
+  The bounded run captured 51 packets/24,480 frames, processed 191 graph
+  blocks, and produced 24,448 scheduler frames at 48 kHz with the 128-frame
+  graph quantum. It reported zero xruns, input/output overruns, deadline
+  misses, or deadline lateness, with a 66,500 ns processing maximum. The
+  result correctly reported `route=false` because the system-selected render
+  endpoint was not the explicit VB-Cable route; this is default-endpoint
+  lifecycle/processing evidence, not a duplicate-route claim. Streams were
+  stopped/reset and media identity remained unchanged. No defaults, volume,
+  mute, driver, or persistent audio configuration changed. Next action:
+  continue the next independently testable native/UI delivery item.
+
 - Revalidated the guarded Rust adapter route on 2026-09-14 with the exact
   VB-Cable pair. At 48 kHz and the 128-frame graph quantum, the route captured
   24,000 frames, processed 187 graph blocks, and routed/rendered 23,936
