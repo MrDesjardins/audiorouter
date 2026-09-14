@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the elevated aggregate `safe-all.ps1` chain after the tray
+  lifecycle fix on 2026-09-14. VS2026/MSVC/SDK/WDK discovery, AudioRouter x64
+  driver build/signability, read-only 34-endpoint inventory, disposable
+  SysVAD qualification, M01/M04/M05, M06 VST3/VST2, M07 headless, unsigned
+  M08 artifacts, 159 requirement mappings, and documentation checks passed.
+  The non-elevated attempt stopped at the expected PnP access-denied gate;
+  the authorized elevated rerun passed. No driver was installed or loaded,
+  no signing or boot policy changed, and no endpoint/default/volume/mute or
+  persistent machine audio configuration was changed. Production driver,
+  signing/install, physical-latency, and attended UI gates remain open. Next
+  action: continue the next safe M03/M07 recovery integration item.
+
 - Closed a M07/UI-10 tray-quit lifecycle gap on 2026-09-14. The shell now
   reads the coherent, bounded authoritative `activeSessionIds` set before
   quitting, finalizes active recorders belonging to every active session, and
