@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Passed the authorized M00 impulse-response acceptance on 2026-09-14 against
+  the exact existing VB-Cable render/capture pair. The bounded 1,000-impulse
+  run detected 998 groups, with p95 spacing error of 0 frames and an estimated
+  47.81 ms onset. The harness verified capture/render start-stop-reset,
+  unchanged media identity/state, and removed its temporary executable,
+  object, raw capture, and logs. This is signal-correlation evidence only; it
+  is not the calibrated physical p95 latency gate. No defaults, volume, mute,
+  privacy, registry, driver, signing, or startup configuration changed. Next
+  action: continue the next safe M03/M07 recovery or delivery item.
+
 - Passed the authorized M00 event and signal-path acceptances on 2026-09-14
   against the existing VB-Cable pair. Event-driven capture/render completed
   with 24,480 capture frames and 28,320 submitted render frames. The bounded
