@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Closed an M07 recorder state/worker ordering gap on 2026-09-14. Session- and
+  node-owned recorder commands now validate and advance a cloned authoritative
+  controller before invoking the worker; failed controller transitions no
+  longer arm, split, or finalize a worker that cannot be retried. Added a
+  repeated-arm regression proving the worker receives no invalid second
+  transition. Control tests passed 154 with 2 guarded live tests ignored,
+  formatting passed, and no audio or machine configuration changed. Next
+  action: continue the next independently testable recovery or delivery item.
+
 - Hardened the M06 native VST3 worker JSON boundary on 2026-09-14. Parameter
   and identity strings now escape JSON control characters, including C0 bytes,
   so vendor-supplied titles cannot corrupt framed worker responses. The static

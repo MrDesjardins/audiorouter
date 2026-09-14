@@ -6240,6 +6240,28 @@ impl ControlPlane {
                 Ok(frame.unwrap_or_default())
             }
         };
+        let mut recorder_candidate =
+            self.recorder_node_states
+                .get(node_id)
+                .cloned()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("recorder node state is not attached".into())
+                })?;
+        match method {
+            "recorders.arm" => recorder_candidate.arm(),
+            "recorders.start" => recorder_candidate.start(frame(true)?),
+            "recorders.pause" => recorder_candidate.pause(frame(true)?),
+            "recorders.resume" => recorder_candidate.resume(frame(true)?),
+            "recorders.split" => recorder_candidate.split(frame(true)?),
+            "recorders.stop" => recorder_candidate.stop(frame(true)?),
+            _ => Err(audiorouter_recording::RecorderError::InvalidTransition {
+                state: recorder_candidate.state(),
+                action: "unknown",
+            }),
+        }
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
+        })?;
         let mut finalized_recordings = Vec::new();
         {
             let worker = self.recorder_node_workers.get_mut(node_id).ok_or_else(|| {
@@ -6275,21 +6297,12 @@ impl ControlPlane {
             }
         }
         let (checkpoint, state, parts, pauses) = {
-            let recorder = self.recorder_node_states.get_mut(node_id).ok_or_else(|| {
-                ControlError::InvalidRequest("recorder node state is not attached".into())
-            })?;
-            let result = match method {
-                "recorders.arm" => recorder.arm(),
-                "recorders.start" => recorder.start(frame(true)?),
-                "recorders.pause" => recorder.pause(frame(true)?),
-                "recorders.resume" => recorder.resume(frame(true)?),
-                "recorders.split" => recorder.split(frame(true)?),
-                "recorders.stop" => recorder.stop(frame(true)?),
-                _ => return Err(ControlError::InvalidRequest("method not found".into())),
-            };
-            result.map_err(|error| {
-                ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
-            })?;
+            self.recorder_node_states
+                .insert(node_id.clone(), recorder_candidate);
+            let recorder = self
+                .recorder_node_states
+                .get(node_id)
+                .expect("recorder node state inserted above");
             let checkpoint = recorder.checkpoint();
             let state = recorder_state_name(recorder.state());
             let parts = checkpoint
@@ -8840,6 +8853,32 @@ impl ControlPlane {
                 "active recorder limit reached".into(),
             ));
         }
+        let mut recorder_candidate = self.recorders.get(&session_id).cloned().unwrap_or_default();
+        match method {
+            "recorders.arm" => recorder_candidate.arm(),
+            "recorders.start" => recorder_candidate.start(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.pause" => recorder_candidate.pause(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.resume" => recorder_candidate.resume(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.split" => recorder_candidate.split(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            "recorders.stop" => recorder_candidate.stop(
+                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
+            ),
+            _ => Err(audiorouter_recording::RecorderError::InvalidTransition {
+                state: recorder_candidate.state(),
+                action: "unknown",
+            }),
+        }
+        .map_err(|error| {
+            ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
+        })?;
         let mut worker_finalized = false;
         let mut finalized_recordings = Vec::new();
         if let Some(worker) = self.recorder_workers.get_mut(&session_id) {
@@ -8887,29 +8926,12 @@ impl ControlPlane {
                 ControlError::InvalidRequest(format!("recorder worker transition failed: {error}"))
             })?;
         }
-        let recorder = self.recorders.entry(session_id.clone()).or_default();
-        let result = match method {
-            "recorders.arm" => recorder.arm(),
-            "recorders.start" => recorder.start(
-                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
-            ),
-            "recorders.pause" => recorder.pause(
-                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
-            ),
-            "recorders.resume" => recorder.resume(
-                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
-            ),
-            "recorders.split" => recorder.split(
-                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
-            ),
-            "recorders.stop" => recorder.stop(
-                frame.ok_or_else(|| ControlError::InvalidRequest("frame is required".into()))?,
-            ),
-            _ => return Err(ControlError::InvalidRequest("method not found".into())),
-        };
-        result.map_err(|error| {
-            ControlError::InvalidRequest(format!("recorder transition failed: {error:?}"))
-        })?;
+        self.recorders
+            .insert(session_id.clone(), recorder_candidate);
+        let recorder = self
+            .recorders
+            .get(&session_id)
+            .expect("recorder candidate inserted above");
         let checkpoint = recorder.checkpoint();
         let result = json!({
             "sessionId": session_id,
@@ -15976,10 +15998,34 @@ mod tests {
             )
             .unwrap();
 
+        assert!(plane
+            .dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: "recorders.arm".into(),
+                params: Some(json!({
+                    "sessionId": original.id,
+                    "idempotencyKey": "hook-arm"
+                })),
+            })
+            .result
+            .is_some());
+        let repeated_arm = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "recorders.arm".into(),
+            params: Some(json!({
+                "sessionId": original.id,
+                "idempotencyKey": "hook-repeated-arm"
+            })),
+        });
+        assert!(repeated_arm.result.is_none());
+        assert!(repeated_arm.error.is_some());
+        assert_eq!(*hooks.lock().unwrap(), vec!["arm"]);
+
         for (id, method, frame) in [
-            (1, "recorders.arm", None),
-            (2, "recorders.start", Some(0)),
-            (3, "recorders.split", Some(128)),
+            (3, "recorders.start", Some(0)),
+            (4, "recorders.split", Some(128)),
         ] {
             let params = match frame {
                 Some(frame) => json!({

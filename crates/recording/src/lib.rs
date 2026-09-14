@@ -222,6 +222,7 @@ pub struct RecorderCheckpoint {
 
 /// Control-plane recorder state machine. File encoding and queue draining are
 /// separate worker responsibilities; this type only records exact boundaries.
+#[derive(Clone)]
 pub struct RecorderController {
     state: RecorderState,
     parts: Vec<RecordingPart>,
