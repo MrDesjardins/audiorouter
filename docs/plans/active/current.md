@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Requalified the standalone Rust adapter route on 2026-09-14 against the
+  freshly inventoried VB-Cable pair. The 500 ms run captured 24,480 frames,
+  processed 191 graph blocks, routed 24,000 frames, recorded zero deadline
+  misses, and stayed within the bounded processing histogram (p99 upper bound
+  65,536 ns). Defaults, volume, mute, privacy, drivers, signing, and startup
+  configuration were unchanged.
+
 - Narrowed the live UI event subscription on 2026-09-14 to the bounded state
   categories the workspace can refresh: graph/runtime, virtual-device,
   recorder, and recording-library changes. Meter events remain excluded as
