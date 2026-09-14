@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, formatRecordingDuration, WORKSPACE_EVENT_CATEGORIES } from "./App";
+import { App, DIAGNOSTICS_REFRESH_INTERVAL_MS, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary, formatRecordingDuration, WORKSPACE_EVENT_CATEGORIES } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -77,6 +77,10 @@ describe("VB-Cable endpoint selection", () => {
     expect(formatRecordingDuration(480, 48000)).toBe("00:00:00.010");
     expect(formatRecordingDuration(180000, 48000)).toBe("00:00:03.750");
     expect(formatRecordingDuration(-1, 48000)).toBe("unknown");
+  });
+
+  it("keeps diagnostics refresh at the 20 Hz default below the 30 Hz ceiling", () => {
+    expect(DIAGNOSTICS_REFRESH_INTERVAL_MS).toBe(50);
   });
 
   it("exposes the human-testable route sequence without duplicating controls", async () => {

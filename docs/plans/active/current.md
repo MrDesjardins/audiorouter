@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed the UI/NFR-08 meter freshness mismatch on 2026-09-14. Running
+  sessions now refresh backend-owned diagnostics at the declared 20 Hz
+  default (50 ms), below the API's 30 Hz ceiling; stopped/disconnected paths
+  remain idle, overlapping requests remain suppressed, and transient failures
+  retain the last observation. Added a rate-boundary regression; TypeScript
+  typecheck and the full UI suite passed (18 files, 176 tests). No audio or
+  machine configuration changed.
+
 - Requalified the guarded full `tests/acceptance/safe-all.ps1` chain at the
   current pushed head on 2026-09-14. M00/M03 toolchain, native compile,
   non-installing AudioRouter/SysVAD qualification, M01, M04, M05 (175 UI

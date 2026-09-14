@@ -40,6 +40,9 @@ export const WORKSPACE_EVENT_CATEGORIES = [
   "recording.recycled",
 ] as const;
 
+/** Default diagnostics/meter refresh: 20 Hz, below the API's 30 Hz ceiling. */
+export const DIAGNOSTICS_REFRESH_INTERVAL_MS = 50;
+
 export function formatNativePumpSummary(stats: NativeEndpointPumpResult | null, running: boolean): string | null {
   if (!stats || !running) return null;
   const warnings = [
@@ -728,7 +731,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
     };
     void refreshDiagnostics();
-    const timer = window.setInterval(() => void refreshDiagnostics(), 1000);
+    const timer = window.setInterval(() => void refreshDiagnostics(), DIAGNOSTICS_REFRESH_INTERVAL_MS);
     return () => { active = false; window.clearInterval(timer); };
   }, [backend, sessionRunning]);
   useEffect(() => {
