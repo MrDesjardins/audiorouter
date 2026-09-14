@@ -15,7 +15,29 @@ param(
 $ErrorActionPreference = 'Stop'
 $infPath = (Resolve-Path -LiteralPath $Inf).Path
 $statePath = [IO.Path]::GetFullPath($State)
-$driverRoot = (Resolve-Path (Join-Path $PSScriptRoot '.')).Path
+$driverRoot = (Resolve-Path (Join-Path $PSScriptRoot '.')).Path.TrimEnd('\')
+$driverRootPrefix = $driverRoot + '\'
+
+function Assert-NoReparsePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+        [Parameter(Mandatory = $true)]
+        [string] $StopAt
+    )
+    $current = Get-Item -LiteralPath $Path -Force
+    while ($null -ne $current) {
+        if (($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "The driver package path cannot contain a reparse point: $($current.FullName)"
+        }
+        if ([string]::Equals($current.FullName.TrimEnd('\'), $StopAt.TrimEnd('\'),
+                [StringComparison]::OrdinalIgnoreCase)) {
+            return
+        }
+        $current = $current.Parent
+    }
+    throw "The driver package path does not resolve beneath $StopAt."
+}
 
 if (-not $AllowDriverInstall) {
     throw 'Driver lifecycle changes require -AllowDriverInstall in addition to -Install or -Uninstall.'
@@ -23,9 +45,10 @@ if (-not $AllowDriverInstall) {
 if (-not [IO.Path]::IsPathRooted($statePath)) {
     throw 'State must be an absolute path.'
 }
-if (-not $infPath.StartsWith($driverRoot, [StringComparison]::OrdinalIgnoreCase)) {
+if (-not $infPath.StartsWith($driverRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'The INF must be inside the AudioRouter driver package directory.'
 }
+Assert-NoReparsePath -Path $infPath -StopAt $driverRoot
 
 $pnputil = Join-Path $env:WINDIR 'System32\pnputil.exe'
 if (-not (Test-Path -LiteralPath $pnputil -PathType Leaf)) {

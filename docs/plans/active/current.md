@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Hardened and regression-covered the M03 package boundary on 2026-09-14.
+  The lifecycle acceptance now asserts exact package containment and
+  reparse-point rejection in `manage.ps1`, preventing junction/symlink paths
+  from escaping the AudioRouter driver package. M03 build/static acceptance
+  passed with the installed VS/WDK toolchain and zero signability errors. No
+  driver installation/loading, signing-mode change, endpoint, or audio
+  configuration action occurred. Next action: continue the next
+  independently testable M03/M07 recovery integration item.
+
 - Hardened the native startup registry boundary on 2026-09-14. Registry
   values must now be bounded, even-sized UTF-16 `REG_SZ` data, and the
   second query's returned length is checked before decoding. Malformed or
