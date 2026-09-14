@@ -120,6 +120,7 @@ name = "audiorouter-plugin-host"
 version = "0.1.0"
 dependencies = [
  "audiorouter-engine",
+ "crossbeam-queue",
  "memmap2",
  "serde",
  "serde_json",

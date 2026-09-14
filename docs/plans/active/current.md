@@ -2,6 +2,27 @@
 
 Updated: 2026-09-13.
 
+- Revalidated the all-features workspace after the worker bridge change on
+  2026-09-13 with `cargo test --workspace --all-features --offline
+  -- --test-threads=1`. CLI/MCP, control (134 passed and 1 live test
+  ignored), domain (61), DSP (32), engine (108), plugin-host (70 unit plus
+  35 worker-process passes and 11 native/environment ignores), storage (86),
+  transport (19), and Windows-audio (70) passed, including doc tests. No
+  endpoint or driver was opened and no machine audio configuration changed.
+
+- Added the first worker-owned realtime plugin bridge on 2026-09-13. A
+  bounded preallocated slot pool now implements the engine's
+  `RealtimePluginProcessor` contract: the callback only performs bounded
+  copies and lock-free queue operations, while a dedicated thread performs
+  the blocking supervised worker exchange. Missing/late/full/failing work
+  clears the current block and never waits. Windows all-features plugin-host
+  verification passed (70 unit tests plus 35 passing worker-process tests and
+  11 explicitly ignored environment/native-fixture tests), strict Clippy,
+  formatting, and diff checks. A fixture regression proves asynchronous echo
+  delivery. This is the runtime handoff seam; control-plane graph binding,
+  latency accounting, and real third-party activation remain next. No plugin
+  was registered and no machine audio configuration changed.
+
 - Added the engine-side plugin stage boundary on 2026-09-13. A prepared graph
   may now accept an exact node-ID map of `RealtimePluginProcessor` stages;
   processing is allocation-free/nonblocking at the callback contract, and an

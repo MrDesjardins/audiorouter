@@ -3,6 +3,7 @@
 //! This crate intentionally does not load or execute plugin code. Discovery
 //! produces identity evidence for a later disposable worker boundary.
 
+use crossbeam_queue::ArrayQueue;
 use memmap2::{MmapMut, MmapOptions};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -3666,6 +3667,215 @@ impl SupervisedWorkerProcess {
     }
 }
 
+const MAX_PLUGIN_PIPELINE_SLOTS: usize = 8;
+
+struct PluginQuantum {
+    block: audiorouter_engine::AudioBlock,
+}
+
+/// Nonblocking realtime handoff for one isolated plugin worker.
+///
+/// The engine callback only copies into or out of preallocated slots and
+/// touches bounded lock-free queues. A dedicated thread owns the blocking
+/// `SupervisedWorkerProcess` exchange. The one-quantum pipeline is
+/// fail-closed: a late result, full queue, or worker failure produces silence
+/// for that callback and never waits for recovery.
+pub struct PluginRuntimeBridge {
+    free: Arc<ArrayQueue<PluginQuantum>>,
+    input: Arc<ArrayQueue<PluginQuantum>>,
+    output: Arc<ArrayQueue<PluginQuantum>>,
+    running: Arc<AtomicBool>,
+    failed: Arc<AtomicBool>,
+    worker: Option<JoinHandle<()>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PluginRuntimeBridgeError {
+    InvalidChannels,
+    InvalidFrames,
+    InvalidDepth,
+    ThreadStart,
+}
+
+impl std::fmt::Debug for PluginRuntimeBridge {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PluginRuntimeBridge")
+            .field("failed", &self.failed.load(Ordering::Relaxed))
+            .finish_non_exhaustive()
+    }
+}
+
+impl PluginRuntimeBridge {
+    /// Start a worker-owned bridge with a bounded number of preallocated
+    /// quanta. The worker is already verified and prepared by the caller.
+    pub fn start(
+        mut worker: SupervisedWorkerProcess,
+        channels: usize,
+        frames: usize,
+        depth: usize,
+    ) -> Result<Arc<Self>, PluginRuntimeBridgeError> {
+        if !matches!(channels, 1 | 2) {
+            return Err(PluginRuntimeBridgeError::InvalidChannels);
+        }
+        if !(1..=MAX_WORKER_FRAMES).contains(&frames) {
+            return Err(PluginRuntimeBridgeError::InvalidFrames);
+        }
+        if !(1..=MAX_PLUGIN_PIPELINE_SLOTS).contains(&depth) {
+            return Err(PluginRuntimeBridgeError::InvalidDepth);
+        }
+        let free = Arc::new(ArrayQueue::<PluginQuantum>::new(depth));
+        let input = Arc::new(ArrayQueue::<PluginQuantum>::new(depth));
+        let output = Arc::new(ArrayQueue::<PluginQuantum>::new(depth));
+        for _ in 0..depth {
+            free.push(PluginQuantum {
+                block: audiorouter_engine::AudioBlock::new(channels, frames)
+                    .map_err(|_| PluginRuntimeBridgeError::InvalidFrames)?,
+            })
+            .map_err(|_| PluginRuntimeBridgeError::InvalidDepth)?;
+        }
+        let running = Arc::new(AtomicBool::new(true));
+        let failed = Arc::new(AtomicBool::new(false));
+        let thread_running = Arc::clone(&running);
+        let thread_failed = Arc::clone(&failed);
+        let thread_free = Arc::clone(&free);
+        let thread_input = Arc::clone(&input);
+        let thread_output = Arc::clone(&output);
+        let worker_thread = std::thread::Builder::new()
+            .name("audiorouter-plugin-runtime".into())
+            .spawn(move || {
+                let mut sequence = 1_u64;
+                let mut samples = vec![0.0_f32; channels * frames];
+                while thread_running.load(Ordering::Acquire) {
+                    let Some(mut quantum) = thread_input.pop() else {
+                        std::thread::yield_now();
+                        continue;
+                    };
+                    if quantum.block.copy_to_interleaved(&mut samples).is_err() {
+                        quantum.block.clear();
+                        thread_failed.store(true, Ordering::Release);
+                        if let Err(quantum) = thread_output.push(quantum) {
+                            let _ = thread_free.push(quantum);
+                        }
+                        continue;
+                    }
+                    for sample in &mut samples {
+                        if !sample.is_finite() {
+                            *sample = 0.0;
+                        }
+                    }
+                    let deadline_tick = worker_clock_tick().saturating_add(1_000_000);
+                    let frame =
+                        match WorkerFrame::new(sequence, deadline_tick, channels as u16, samples) {
+                            Ok(frame) => frame,
+                            Err(_) => {
+                                quantum.block.clear();
+                                thread_failed.store(true, Ordering::Release);
+                                if let Err(quantum) = thread_output.push(quantum) {
+                                    let _ = thread_free.push(quantum);
+                                }
+                                samples = vec![0.0; channels * frames];
+                                continue;
+                            }
+                        };
+                    sequence = sequence.saturating_add(1);
+                    match worker.process(frame, Vec::new(), Instant::now()) {
+                        Ok(result)
+                            if result.channels == channels as u16
+                                && result.frame_count() == frames
+                                && quantum.block.copy_from_interleaved(&result.samples).is_ok() =>
+                        {
+                            if let Err(quantum) = thread_output.push(quantum) {
+                                let _ = thread_free.push(quantum);
+                            }
+                            samples = result.samples;
+                        }
+                        Ok(result) => {
+                            quantum.block.clear();
+                            thread_failed.store(true, Ordering::Release);
+                            if let Err(quantum) = thread_output.push(quantum) {
+                                let _ = thread_free.push(quantum);
+                            }
+                            samples = result.samples;
+                        }
+                        Err(_) => {
+                            quantum.block.clear();
+                            thread_failed.store(true, Ordering::Release);
+                            if let Err(quantum) = thread_output.push(quantum) {
+                                let _ = thread_free.push(quantum);
+                            }
+                            break;
+                        }
+                    }
+                }
+            })
+            .map_err(|_| PluginRuntimeBridgeError::ThreadStart)?;
+        Ok(Arc::new(Self {
+            free,
+            input,
+            output,
+            running,
+            failed,
+            worker: Some(worker_thread),
+        }))
+    }
+
+    pub fn failed(&self) -> bool {
+        self.failed.load(Ordering::Acquire)
+    }
+
+    pub fn queued_input(&self) -> usize {
+        self.input.len()
+    }
+
+    pub fn queued_output(&self) -> usize {
+        self.output.len()
+    }
+}
+
+impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
+    fn process(&self, block: &mut audiorouter_engine::AudioBlock) {
+        if self.failed.load(Ordering::Acquire) {
+            block.clear();
+            return;
+        }
+        if let Some(mut quantum) = self.free.pop() {
+            if quantum.block.copy_from(block).is_ok() {
+                if let Err(quantum) = self.input.push(quantum) {
+                    let _ = self.free.push(quantum);
+                    block.clear();
+                }
+            } else {
+                let _ = self.free.push(quantum);
+                block.clear();
+            }
+        } else {
+            block.clear();
+        }
+        if let Some(quantum) = self.output.pop() {
+            if block.copy_from(&quantum.block).is_err() {
+                block.clear();
+            }
+            let _ = self.free.push(quantum);
+        } else {
+            block.clear();
+        }
+    }
+
+    fn reset(&self) -> bool {
+        !self.failed()
+    }
+}
+
+impl Drop for PluginRuntimeBridge {
+    fn drop(&mut self) {
+        self.running.store(false, Ordering::Release);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
 impl WorkerProcess {
     pub fn spawn(
         executable: impl AsRef<Path>,
@@ -6300,6 +6510,53 @@ mod tests {
         assert_eq!(supervisor.record_failure(start), WorkerState::Quarantined);
         supervisor.deliberate_retry();
         assert_eq!(supervisor.state(), WorkerState::Stopped);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn realtime_plugin_bridge_hands_off_without_callback_ipc() {
+        use audiorouter_engine::RealtimePluginProcessor;
+        let identity = PluginIdentity {
+            path: PathBuf::from("fixture.vst3"),
+            binary_path: PathBuf::from("fixture.vst3"),
+            format: PluginFormat::Vst3,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "0".repeat(64),
+            metadata: Default::default(),
+        };
+        let worker_executable = std::env::var_os("CARGO_BIN_EXE_audiorouter_plugin_worker")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                std::env::current_exe()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("audiorouter-plugin-worker.exe")
+            });
+        let worker =
+            SupervisedWorkerProcess::spawn(worker_executable, &identity, 1, Instant::now())
+                .unwrap();
+        let bridge = PluginRuntimeBridge::start(worker, 1, 128, 2).unwrap();
+        let mut first = audiorouter_engine::AudioBlock::new(1, 128).unwrap();
+        first.channel_mut(0).unwrap().fill(0.25);
+        bridge.process(&mut first);
+        assert_eq!(first.channel(0).unwrap(), &[0.0; 128]);
+        let mut received = false;
+        for _ in 0..50 {
+            std::thread::sleep(Duration::from_millis(2));
+            let mut next = audiorouter_engine::AudioBlock::new(1, 128).unwrap();
+            next.channel_mut(0).unwrap().fill(0.5);
+            bridge.process(&mut next);
+            if next.channel(0).unwrap() == [0.25; 128] {
+                received = true;
+                break;
+            }
+        }
+        assert!(received, "worker result did not reach the realtime bridge");
+        assert!(!bridge.failed());
     }
 
     #[test]
