@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Reconciled the current qualification snapshot on 2026-09-14 after the
+  mix-minus template compatibility fix. User-facing release notes now report
+  the verified current counts (189 UI tests and 156 control tests, with 2
+  guarded live control tests ignored) instead of stale prior counts. The full
+  UI typecheck and 19-file/189-test suite passed at head `64825ffe`; no audio,
+  driver, or machine configuration changed. Next action: continue the next
+  safe M03/M07 recovery integration item.
+
 - Fixed an M05 template identifier compatibility defect on 2026-09-14. The
   visible mix-minus selector value (`mix-minus conversation`) is now accepted
   by the typed template contract and produces the same stopped graph as the

@@ -7,7 +7,7 @@ release and must not be presented as an installable Windows audio product.
 
 - Target: Windows 11 x64.
 - Portable control, storage, DSP, recording, CLI, UI, MCP, and plugin-worker
-  foundations are implemented and covered by automated tests. The UI has 188
+  foundations are implemented and covered by automated tests. The UI has 189
   passing tests and includes a visual graph editor, backend-bound built-in
   processor/preset editing, explicit endpoint binding, and route provenance.
 - The repository-local Steinberg VST3 SDK is pinned and verified at
@@ -15,13 +15,13 @@ release and must not be presented as an installable Windows audio product.
 - Native builds use Visual Studio Community 2026/MSVC 14.51.36231 and Windows
   SDK 10.0.28000.0; the installed WDK is 10.1.28000.2526.
 
-## Verified in this qualification snapshot (2026-09-13)
+## Verified in this qualification snapshot (2026-09-14)
 
 - The locked Rust workspace passes its current package tests and doc-tests,
   formatting, and strict Clippy; the guarded native tests remain explicitly
   opt-in.
 - M07 headless acceptance passes 33 CLI tests, 3 MCP interoperability tests,
-  152 control tests (2 guarded live tests ignored), 70 plugin-host tests, 13
+  156 control tests (2 guarded live tests ignored), 70 plugin-host tests, 13
   worker-process tests, and 17 shell tests.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI,
   native-shell, and plugin-worker artifacts, SBOM metadata, notices, checksums,
