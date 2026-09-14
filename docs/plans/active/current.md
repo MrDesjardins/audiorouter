@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Hardened VDEV-12 native bridge heartbeat sweeps on 2026-09-14. Capture-sink,
+  render-source, and duplex binding sweeps now detach and report each failed
+  binding while continuing to service all remaining bindings in the same
+  control-thread pass; the first bounded diagnostic is returned after the
+  sweep. This preserves failure isolation instead of allowing map iteration
+  order to starve healthy bridges. Control (150 passed, 2 guarded live tests
+  ignored), strict Clippy, formatting, and diff checks passed. Loaded-driver
+  heartbeat execution remains a native gate. Next action: continue the next
+  safe M03/M07 recovery integration item.
+
 - Implemented the API-08 validation correction on 2026-09-14. Direct
   `events.subscribe` dispatch now rejects unknown event filters before replay,
   matching the advertised category enum instead of silently returning an empty

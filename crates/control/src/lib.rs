@@ -4449,6 +4449,7 @@ impl ControlPlane {
             .keys()
             .cloned()
             .collect::<Vec<_>>();
+        let mut first_error = None;
         for bus_id in bus_ids {
             let result = self
                 .native_capture_sink_bindings
@@ -4463,12 +4464,14 @@ impl ControlPlane {
                     bridge.deactivate();
                 }
                 self.publish_virtual_bridge_failure(&bus_id);
-                return Err(ControlError::InvalidRequest(format!(
-                    "native capture sink heartbeat failed; binding detached: {error:?}"
-                )));
+                if first_error.is_none() {
+                    first_error = Some(format!(
+                        "native capture sink heartbeat failed; binding detached: {error:?}"
+                    ));
+                }
             }
         }
-        Ok(())
+        first_error.map_or(Ok(()), |message| Err(ControlError::InvalidRequest(message)))
     }
 
     #[cfg(windows)]
@@ -4478,6 +4481,7 @@ impl ControlPlane {
             .keys()
             .cloned()
             .collect::<Vec<_>>();
+        let mut first_error = None;
         for bus_id in bus_ids {
             let result = self
                 .native_render_source_bindings
@@ -4492,12 +4496,14 @@ impl ControlPlane {
                     bridge.deactivate();
                 }
                 self.publish_virtual_bridge_failure(&bus_id);
-                return Err(ControlError::InvalidRequest(format!(
-                    "native render source heartbeat failed; binding detached: {error:?}"
-                )));
+                if first_error.is_none() {
+                    first_error = Some(format!(
+                        "native render source heartbeat failed; binding detached: {error:?}"
+                    ));
+                }
             }
         }
-        Ok(())
+        first_error.map_or(Ok(()), |message| Err(ControlError::InvalidRequest(message)))
     }
 
     #[cfg(windows)]
@@ -4507,6 +4513,7 @@ impl ControlPlane {
             .keys()
             .cloned()
             .collect::<Vec<_>>();
+        let mut first_error = None;
         for bus_id in bus_ids {
             let result = self
                 .native_duplex_bindings
@@ -4521,12 +4528,14 @@ impl ControlPlane {
                     bridge.deactivate();
                 }
                 self.publish_virtual_bridge_failure(&bus_id);
-                return Err(ControlError::InvalidRequest(format!(
-                    "native duplex heartbeat failed; binding detached: {error:?}"
-                )));
+                if first_error.is_none() {
+                    first_error = Some(format!(
+                        "native duplex heartbeat failed; binding detached: {error:?}"
+                    ));
+                }
             }
         }
-        Ok(())
+        first_error.map_or(Ok(()), |message| Err(ControlError::InvalidRequest(message)))
     }
 
     #[cfg(windows)]
