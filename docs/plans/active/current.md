@@ -2,15 +2,13 @@
 
 Updated: 2026-09-14.
 
-- REC-03 audit note on 2026-09-14: the create-time dither choice is now
-  forwarded to the encoder, but finalized `RecordingRecord`/`RecordingRow`
-  metadata still lacks a persisted dither/conversion-settings field. This is
-  an open backend/storage contract task requiring a versioned schema/migration
-  and file-library/API coverage; the UI checkbox must not be treated as proof
-  of metadata compliance. The same audit found the configured FLAC path still
-  constructs its streaming writer with dither disabled, so the backend task
-  must also propagate the option through that worker before claiming REC-03.
-  No audio endpoint or machine configuration changed.
+- REC-03 audit update on 2026-09-14: the configured dither option now reaches
+  both WAV and FLAC encoders (pushed as `ebf2fc92`), but finalized
+  `RecordingRecord`/`RecordingRow` metadata still lacks a persisted
+  dither/conversion-settings field. This remains an open backend/storage
+  contract task requiring a versioned schema/migration and file-library/API
+  coverage; the UI checkbox must not be treated as proof of metadata
+  compliance. No audio endpoint or machine configuration changed.
 
 - Delivered the REC-03 recorder dither control on 2026-09-14. The UI now
   exposes TPDF dithering as an explicit create-time option, enabled by
