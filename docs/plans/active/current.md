@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete `tests/acceptance/safe-all.ps1` chain after
+  `1000ffae` on 2026-09-14. M00 toolchain/native checks, M03 project WDK
+  build/signability, M01/M04/M05, M06 VST3/VST2 workers, M07 headless, unsigned
+  M08 artifacts, 159 traceability IDs, and documentation (53 Markdown files,
+  191 local links) passed. The chain cleaned its 15 run-owned temporary
+  children and changed no endpoint, driver installation, signing mode, plugin
+  registration, startup registration, or persistent audio configuration.
+  Evidence: `tests/acceptance/safe-all.ps1` output from the Windows workspace.
+  Loaded-driver, production-signing, and physical-latency gates remain open.
+  Next action: continue the next safe M03/M07 recovery integration item.
+
 - Implemented the VDEV-12 portable recovery slice on 2026-09-14: the engine
   bridge set and control plane now expose a bounded control-thread lease-expiry
   sweep using an injected monotonic tick. Expiry silences and drains stale
