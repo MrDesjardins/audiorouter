@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Added the control-plane scheduler telemetry boundary on 2026-09-14. The
+  read-only `system.diagnostics` response now reports an explicit `null` when
+  no native worker is attached, or a bounded snapshot of active generation,
+  negotiated sample rate, overrun/underrun, xrun, processing, and deadline
+  counters when one is attached. The schema, API reference, and redaction
+  regression were updated together. Control crate coverage passed (143
+  passed, 2 ignored); no audio endpoint or machine configuration was touched.
+  Per-node meter publication and the loaded production-driver transport gate
+  remain open.
+
 - Fixed a real M02 acceptance integration defect on 2026-09-14. After the
   native lifecycle boundary was tightened, the control-owned VB-Cable probe
   still stopped the endpoint worker before stopping its running session; the

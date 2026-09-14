@@ -3215,6 +3215,32 @@ fn diagnostics_output_schema() -> Value {
             },
             "nativeAdapter": { "enum": ["implemented-not-activated", "configured-stopped", "running"] },
             "nativeSessionId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+            "schedulerTelemetry": {
+                "oneOf": [
+                    { "const": null },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "activeGeneration": { "type": ["integer", "null"], "minimum": 0 },
+                            "activeSampleRateHz": { "type": ["integer", "null"], "minimum": 1 },
+                            "inputOverruns": { "type": "integer", "minimum": 0 },
+                            "inputUnderruns": { "type": "integer", "minimum": 0 },
+                            "outputOverruns": { "type": "integer", "minimum": 0 },
+                            "outputUnderruns": { "type": "integer", "minimum": 0 },
+                            "processedQuanta": { "type": "integer", "minimum": 0 },
+                            "repairedSamples": { "type": "integer", "minimum": 0 },
+                            "xruns": { "type": "integer", "minimum": 0 },
+                            "processingTimeNsTotal": { "type": "integer", "minimum": 0 },
+                            "processingTimeNsMax": { "type": "integer", "minimum": 0 },
+                            "deadlineMisses": { "type": "integer", "minimum": 0 },
+                            "deadlineLatenessNsTotal": { "type": "integer", "minimum": 0 },
+                            "deadlineLatenessNsMax": { "type": "integer", "minimum": 0 }
+                        },
+                        "required": ["activeGeneration", "activeSampleRateHz", "inputOverruns", "inputUnderruns", "outputOverruns", "outputUnderruns", "processedQuanta", "repairedSamples", "xruns", "processingTimeNsTotal", "processingTimeNsMax", "deadlineMisses", "deadlineLatenessNsTotal", "deadlineLatenessNsMax"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
             "privacyMute": {
                 "type": "object",
                 "properties": {
@@ -3245,7 +3271,7 @@ fn diagnostics_output_schema() -> Value {
             },
             "redacted": { "const": true }
         },
-        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeSessionId", "privacyMute", "recovery", "eventLog", "redacted"],
+        "required": ["build", "backend", "storage", "audio", "nativeAdapter", "nativeSessionId", "schedulerTelemetry", "privacyMute", "recovery", "eventLog", "redacted"],
         "additionalProperties": false
     })
 }
@@ -4705,6 +4731,34 @@ impl ControlPlane {
             "successfulStops": worker.successful_stops,
             "resetSuccesses": worker.reset_successes,
             "rejectedPumps": self.native_endpoint_rejections,
+        })
+    }
+
+    /// Return the lock-free native scheduler counters for diagnostics. This
+    /// is a control-thread read; the realtime path only updates atomics.
+    /// `null` is deliberate when no worker is attached, so an unavailable
+    /// adapter is never represented as a healthy zeroed scheduler.
+    fn native_scheduler_telemetry(&self) -> Value {
+        let Some(worker) = self.native_endpoint_worker.as_ref() else {
+            return Value::Null;
+        };
+        let scheduler = worker.bridge().scheduler();
+        let telemetry = scheduler.telemetry();
+        json!({
+            "activeGeneration": telemetry.active_generation.map(|generation| generation.value()),
+            "activeSampleRateHz": scheduler.active_sample_rate_hz(),
+            "inputOverruns": telemetry.input_overruns,
+            "inputUnderruns": telemetry.input_underruns,
+            "outputOverruns": telemetry.output_overruns,
+            "outputUnderruns": telemetry.output_underruns,
+            "processedQuanta": telemetry.processed_quanta,
+            "repairedSamples": telemetry.repaired_samples,
+            "xruns": telemetry.xruns,
+            "processingTimeNsTotal": telemetry.processing_time_ns_total,
+            "processingTimeNsMax": telemetry.processing_time_ns_max,
+            "deadlineMisses": telemetry.deadline_misses,
+            "deadlineLatenessNsTotal": telemetry.deadline_lateness_ns_total,
+            "deadlineLatenessNsMax": telemetry.deadline_lateness_ns_max,
         })
     }
 
@@ -7117,6 +7171,7 @@ impl ControlPlane {
                     },
                     "nativeAdapter": self.native_adapter_state(),
                     "nativeSessionId": self.native_endpoint_session.as_ref().map(EntityId::as_str),
+                    "schedulerTelemetry": self.native_scheduler_telemetry(),
                     "privacyMute": {
                         "muted": self.privacy_muted,
                         "persistence": if self.storage.is_some() { "durable" } else { "memory" }
@@ -13543,6 +13598,7 @@ mod tests {
         assert_eq!(result["storage"], "memory");
         assert_eq!(result["nativeAdapter"], "implemented-not-activated");
         assert_eq!(result["nativeSessionId"], Value::Null);
+        assert_eq!(result["schedulerTelemetry"], Value::Null);
         assert_eq!(result["redacted"], true);
         assert!(result.get("path").is_none());
     }

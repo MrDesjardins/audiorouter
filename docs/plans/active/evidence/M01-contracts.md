@@ -357,9 +357,12 @@ recovery state, and event cursors. The schema is covered by control discovery
 tests and remains a read-only contract.
 
 The `system.diagnostics` output schema now explicitly models its redacted
-backend, unavailable-audio, privacy/recovery, and event-log fields. Discovery
-tests verify the redaction marker and bounded counters; the operation remains
-read-only.
+backend, unavailable-audio, privacy/recovery, and event-log fields. It now
+also models the optional `schedulerTelemetry` snapshot: no attached native
+worker returns `null`, while an attached worker reports only bounded scheduler
+counters, active generation, and negotiated sample rate. Control tests verify
+the unavailable `null` state and bounded field contract; the operation remains
+read-only and does not touch endpoint state.
 
 The fixed `startup.get` capability response and `recovery.clearSafeMode` result
 now have explicit output schemas and shared TypeScript types. Their

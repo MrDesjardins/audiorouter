@@ -223,7 +223,10 @@ of an earlier support bundle. The explicit `diagnostics export` form and the
 option form are equivalent.
 
 Process-loopback packet telemetry is currently exposed by the Windows adapter
-that owns a live capture object, not by the control-plane diagnostics response.
+that owns a live capture object. When a native endpoint worker is attached,
+the control-plane diagnostics response also exposes its bounded scheduler
+counter snapshot as `schedulerTelemetry`; it is `null` when no worker is
+attached and therefore never presents an unavailable adapter as healthy zeros.
 Its bounded snapshot reports wait calls/timeouts, successful packets and
 frames, minimum/maximum packet period, silent packets, and rejected packets.
 The adapter scheduler probe additionally reports bounded processing-time and
@@ -238,6 +241,12 @@ bound session ID. Attachment requires a caller-supplied exact-binding worker,
 so discovery and ordinary session open cannot activate audio implicitly. These
 statuses do not claim a production driver, graph activation, or physical
 latency qualification.
+
+`schedulerTelemetry` contains the active graph generation and negotiated sample
+rate, bounded input/output overrun and underrun counters, processed quanta,
+repaired samples, xruns, processing-time totals/maxima, and deadline-miss and
+lateness counters. It is a read-only control-thread snapshot of atomics; the
+audio callback does not wait for diagnostics or serialize JSON.
 
 The MCP stdio adapter exposes focused read/write tools and `call_api`; it uses
 the enrolled client identity and cannot bypass the backend permission checks.
