@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Requalified the full Rust workspace at pushed head `4c89fdd9` on 2026-09-14.
+  CLI/MCP (35 tests), control (143), domain (64), DSP (32), engine (110),
+  plugin-host (83 including worker-process tests), protocol (8), recording
+  (40), storage (86), transport (19), and Windows-audio (73) all passed,
+  along with workspace doc-tests. This is portable/user-mode evidence only;
+  no driver installation, signing-policy change, endpoint-default change, or
+  persistent machine audio configuration occurred.
+
 - Added the control-plane scheduler telemetry boundary on 2026-09-14. The
   read-only `system.diagnostics` response now reports an explicit `null` when
   no native worker is attached, or a bounded snapshot of active generation,
