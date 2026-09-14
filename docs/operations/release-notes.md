@@ -1,13 +1,13 @@
 # AudioRouter 0.1.0-dev qualification notes
 
-This document describes the current development snapshot (2026-09-13). It is not a signed
+This document describes the current development snapshot (2026-09-14). It is not a signed
 release and must not be presented as an installable Windows audio product.
 
 ## Scope and platform
 
 - Target: Windows 11 x64.
 - Portable control, storage, DSP, recording, CLI, UI, MCP, and plugin-worker
-  foundations are implemented and covered by automated tests. The UI has 140
+  foundations are implemented and covered by automated tests. The UI has 188
   passing tests and includes a visual graph editor, backend-bound built-in
   processor/preset editing, explicit endpoint binding, and route provenance.
 - The repository-local Steinberg VST3 SDK is pinned and verified at
@@ -17,11 +17,12 @@ release and must not be presented as an installable Windows audio product.
 
 ## Verified in this qualification snapshot (2026-09-13)
 
-- The locked Rust workspace passes 466 unit/integration tests, all doc-tests,
-  formatting, and strict Clippy.
-- M07 headless acceptance passes 26 CLI tests, 2 MCP interoperability tests,
-  97 control tests, 57 plugin-host tests, 13 worker-process tests, and strict
-  Clippy.
+- The locked Rust workspace passes its current package tests and doc-tests,
+  formatting, and strict Clippy; the guarded native tests remain explicitly
+  opt-in.
+- M07 headless acceptance passes 33 CLI tests, 3 MCP interoperability tests,
+  152 control tests (2 guarded live tests ignored), 70 plugin-host tests, 13
+  worker-process tests, and 17 shell tests.
 - M08 disposable artifact preparation creates and verifies unsigned x64 CLI,
   native-shell, and plugin-worker artifacts, SBOM metadata, notices, checksums,
   and a manifest, validates bounded PE headers for x64 executables, then removes
@@ -69,8 +70,9 @@ release and must not be presented as an installable Windows audio product.
   filesystem/network OS sandboxing, arbitrary plugin execution, and a broad
   third-party compatibility matrix remain open. The VST2 editor, rights, and
   release-qualification gates also remain open.
-- Sign-in startup, tray/background lifecycle, and manual accessibility and
-  first-time-user qualification remain open.
+- Sign-in startup registration remains unverified in an attended rollback run;
+  tray/background lifecycle code is covered by shell tests, while manual
+  accessibility, scaling, and first-time-user qualification remain open.
 
 ## Safety and recovery
 

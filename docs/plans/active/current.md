@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Reconciled release qualification notes on 2026-09-14 with the current
+  pushed test counts: UI 188, control 152 plus 2 guarded live tests ignored,
+  CLI 33, MCP interoperability 3, plugin-host 70, worker-process 13, and
+  shell 17. Documentation validation passed for 53 Markdown files and 192
+  local links. A fresh Windows UI-surface inspection returned no targetable
+  apps, so manual accessibility/scaling evidence was not claimed. No audio,
+  driver, registry, or machine configuration was accessed. Next action:
+  continue the next independently testable M03/M07 recovery item.
+
 - Closed the M07 frontend-owned shell RPC gate on 2026-09-14. The attended
   Tauri/WebView acceptance reached the native `rpc_request` command and the
   authenticated backend `system.describe` through a disposable pipe and
