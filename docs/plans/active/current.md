@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Closed the remaining REC-03 API evidence gap on 2026-09-14. The control
+  regression now stores both a conservative legacy recording (`unknown`
+  conversion, no dither) and a converted dithered recording, then verifies
+  `recordings.list` round-trips the persisted `dither` and conversion values
+  without reading or modifying audio. Formatting and the focused control test
+  passed. This confirms the existing SQLite migration, finalization metadata,
+  shared API schema, and UI hydration contract; file encoding and physical
+  audio gates remain separate. Next action: continue the next safe,
+  independently testable delivery item.
+
 - Requalified the complete non-installing safe acceptance chain after the
   guarded route gained its built-in Gain stage on 2026-09-14. M00 toolchain,
   native compile, AudioRouter x64 WDK build/catalog signability, read-only

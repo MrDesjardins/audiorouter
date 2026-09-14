@@ -15127,8 +15127,8 @@ mod tests {
                 title: None,
                 artist: None,
                 comment: None,
-                dither: false,
-                conversion: "unknown".into(),
+                dither: true,
+                conversion: "targetSampleRate=44100;channels=2;bitsPerSample=16".into(),
             })
             .unwrap();
         let mut plane = ControlPlane::with_storage("recordings", storage);
@@ -15157,6 +15157,11 @@ mod tests {
         assert_eq!(result[0]["missing"], false);
         assert_eq!(result[0]["dither"], false);
         assert_eq!(result[0]["conversion"], "unknown");
+        assert_eq!(result[1]["dither"], true);
+        assert_eq!(
+            result[1]["conversion"],
+            "targetSampleRate=44100;channels=2;bitsPerSample=16"
+        );
         let response = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(10)),
