@@ -413,6 +413,15 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByText("Draft effect: gainDb: 0 → -6. Plan changes to validate and commit.")).toBeTruthy();
   });
 
+  it("renders the backend-derived EQ response for a draft EQ node", async () => {
+    const processorResponse = vi.fn(async () => ({ frequenciesHz: [20, 1000, 20000], magnitudeDb: [0, -6, 0] }));
+    render(<App backend={{ ...connectedPreviewBackend(), processorResponse }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Parametric EQ, Effect" }));
+
+    expect(await screen.findByRole("img", { name: "Parametric EQ magnitude response" })).toBeTruthy();
+    expect(processorResponse).toHaveBeenCalledWith(expect.objectContaining({ sampleRateHz: 48000, frequenciesHz: expect.any(Array), bands: expect.any(Array) }));
+  });
+
   it("commits a dropped gate parameter through the graph backend", async () => {
     const planGraph = vi.fn(async (candidate: typeof demoSession) => ({
       planId: "gate-plan",

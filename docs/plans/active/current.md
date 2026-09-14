@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added UI proof for backend-derived EQ visualization on 2026-09-13. The
+  regression creates a draft Parametric EQ node, requests its authoritative
+  response curve at 48 kHz, and verifies the accessible magnitude chart is
+  rendered from the returned data. TypeScript typecheck and the full UI suite
+  pass (18 files/161 tests); no endpoint or machine audio configuration is
+  accessed.
+
 - Added UI-to-backend Pitch parameter integration coverage on 2026-09-13.
   The regression drags the built-in Pitch processor onto the canvas, changes
   semitones to `5`, plans the graph, and verifies the backend receives the
