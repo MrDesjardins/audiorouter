@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Final REC-03 guarded acceptance on 2026-09-14: elevated
+  `tests/acceptance/safe-all.ps1` passed at commit `5148bbe8` through M00–M08
+  after adding buffered-FLAC dither configuration. This includes the 31
+  endpoint read-only inventory, project/reference driver build-only checks,
+  M01/M04/M05/M06/M07 validation, unsigned M08 artifact preparation,
+  traceability for 159 normative IDs, and documentation validation of 52
+  Markdown files with 190 local links. No driver installation/loading,
+  signing-mode change, plugin registration, live audio mutation, or machine
+  configuration occurred. REC-03 implementation evidence is now complete for
+  the supported recorder constructors; old constructors intentionally mean
+  false dither and are documented compatibility defaults. Next action:
+  advance to the next open plan item outside recording metadata.
+
 - Completed the buffered-FLAC REC-03 compatibility slice on 2026-09-14.
   `FlacBufferEncoder`, `BufferedFlacRecorder`, and
   `BufferedFlacRecorderWorker` now expose dither-aware constructors while
