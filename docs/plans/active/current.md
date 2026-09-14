@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Corrected native startup ownership matching on 2026-09-14. Registry values
+  are now compared using Windows case-insensitive path semantics and an
+  optional whole-value quote pair; values with extra arguments remain foreign.
+  Shell tests increased to 15 and passed, including both ownership regressions;
+  strict Clippy, formatting, and diff checks also pass. No registry, driver,
+  endpoint, or persistent audio configuration was changed. Next action:
+  continue the next independently testable M03/M07 recovery item.
+
 - Added lifecycle-state path protection to the M03 management script on
   2026-09-14. Existing ancestors of the rollback JSON path are now checked
   for reparse points before install/uninstall state is accessed or created;

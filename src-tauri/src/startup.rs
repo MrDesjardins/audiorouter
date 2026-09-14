@@ -37,6 +37,14 @@ mod windows_registry {
         Ok(wide(text))
     }
 
+    fn registration_matches(value: &str, executable: &str) -> bool {
+        let unquoted = value
+            .strip_prefix('"')
+            .and_then(|candidate| candidate.strip_suffix('"'))
+            .unwrap_or(value);
+        unquoted.eq_ignore_ascii_case(executable)
+    }
+
     fn value_text(key: HKEY, name: PCWSTR) -> Result<Option<String>, String> {
         let mut value_type = REG_VALUE_TYPE(0);
         let mut byte_len = 0u32;
@@ -132,7 +140,7 @@ mod windows_registry {
                 .map_err(|_| "startup executable path is not valid UTF-16".to_owned())?;
             if existing
                 .as_deref()
-                .is_some_and(|value| value != executable_text)
+                .is_some_and(|value| !registration_matches(value, &executable_text))
             {
                 return Err("existing startup registration is owned by another command".into());
             }
@@ -152,7 +160,7 @@ mod windows_registry {
             };
             let executable_text = String::from_utf16(&executable[..executable.len() - 1])
                 .map_err(|_| "startup executable path is not valid UTF-16".to_owned())?;
-            if existing != executable_text {
+            if !registration_matches(&existing, &executable_text) {
                 return Err("startup registration is owned by another command".into());
             }
             unsafe { RegDeleteValueW(raw, PCWSTR(name.as_ptr())) }
@@ -189,7 +197,34 @@ mod windows_registry {
             return Err(format!("startup registry key lookup failed: {status:?}"));
         }
         let _key = Key(raw);
-        Ok(value_text(raw, PCWSTR(name.as_ptr()))?.as_deref() == Some(executable_text.as_str()))
+        Ok(value_text(raw, PCWSTR(name.as_ptr()))?
+            .as_deref()
+            .is_some_and(|value| registration_matches(value, &executable_text)))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::registration_matches;
+
+        #[test]
+        fn ownership_matches_windows_path_casing() {
+            assert!(registration_matches(
+                r#"C:\PROGRAM FILES\AUDIOROUTER\SHELL.EXE"#,
+                r#"C:\Program Files\AudioRouter\shell.exe"#
+            ));
+        }
+
+        #[test]
+        fn ownership_accepts_one_whole_value_quote_pair() {
+            assert!(registration_matches(
+                r#""C:\Program Files\AudioRouter\shell.exe""#,
+                r#"C:\Program Files\AudioRouter\shell.exe"#
+            ));
+            assert!(!registration_matches(
+                r#""C:\Program Files\AudioRouter\shell.exe" --unexpected"#,
+                r#"C:\Program Files\AudioRouter\shell.exe"#
+            ));
+        }
     }
 }
 
