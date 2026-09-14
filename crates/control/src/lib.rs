@@ -16420,10 +16420,32 @@ mod tests {
             .unwrap();
         assert_eq!(taps.len(), 2);
         for node_id in ["recorder-a", "recorder-b"] {
+            let arm = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(format!("{node_id}-arm"))),
+                method: "recorders.arm".into(),
+                params: Some(json!({
+                    "sessionId": session_id,
+                    "nodeId": node_id,
+                    "idempotencyKey": format!("node-{node_id}-arm"),
+                })),
+            });
+            assert!(arm.error.is_none(), "recorders.arm: {arm:?}");
+            let repeated_arm = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(format!("{node_id}-repeated-arm"))),
+                method: "recorders.arm".into(),
+                params: Some(json!({
+                    "sessionId": session_id,
+                    "nodeId": node_id,
+                    "idempotencyKey": format!("node-{node_id}-repeated-arm"),
+                })),
+            });
+            assert!(repeated_arm.result.is_none());
+            assert!(repeated_arm.error.is_some());
             for (index, method, frame) in [
-                (0, "recorders.arm", None),
-                (1, "recorders.start", Some(0)),
-                (2, "recorders.stop", Some(0)),
+                (2, "recorders.start", Some(0)),
+                (3, "recorders.stop", Some(0)),
             ] {
                 let mut params = json!({
                     "sessionId": session_id,

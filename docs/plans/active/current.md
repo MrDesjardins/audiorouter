@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Extended M07 node-recorder regression coverage on 2026-09-14. Each
+  independently attached recorder node now proves an invalid repeated arm is
+  rejected without proceeding to the worker, covering the node-owned path in
+  addition to the session-owned ordering regression. The focused node binding
+  test, formatting, and diff checks passed; no audio or machine configuration
+  changed. Next action: continue the next independently testable recovery or
+  delivery item.
+
 - Hardened M07 session shutdown recorder boundaries on 2026-09-14. Shutdown
   now uses a pending `stopFrame` when a recorder is already in `Stopping`, so
   queued audio is finalized through the requested boundary rather than the
