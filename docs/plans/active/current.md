@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added UI-to-backend Compressor parameter integration coverage on 2026-09-13.
+  The regression drags the built-in Compressor onto the visual canvas, edits
+  its ratio to `6`, plans the graph, and verifies the authoritative candidate
+  contains the changed parameter before commit. TypeScript typecheck and the
+  full UI suite pass (18 files/162 tests); no endpoint or machine audio
+  configuration is accessed.
+
 - Requalified the complete safe M00-M08 acceptance chain at pushed head
   `c9f6349c` on 2026-09-13 after adding UI-to-backend Pitch parameter and
   backend-derived EQ response coverage. The project x64 WDK build/signability,

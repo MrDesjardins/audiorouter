@@ -522,6 +522,53 @@ describe("keyboard connection dialog", () => {
     }));
   });
 
+  it("commits a dropped compressor parameter through the graph backend", async () => {
+    const planGraph = vi.fn(async (candidate: typeof demoSession) => ({
+      planId: "compressor-plan",
+      baseRevision: candidate.revision,
+      expiresInMs: 30_000,
+      diff: [],
+      affectedDestinations: [],
+      warnings: [],
+      requiredScopes: ["graphWrite"],
+    }));
+    const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
+    const compressor = {
+      id: "compressor",
+      version: 1,
+      category: "dynamics" as const,
+      availability: { status: "available" as const },
+      latencySamples: 0,
+      parameters: [
+        { name: "ratio", type: "number" as const, unit: ":1", minimum: 1, maximum: 20, default: 3 },
+      ],
+    };
+    const backend = { ...connectedPreviewBackend(), listProcessors: async () => [compressor], planGraph, commitGraph };
+    render(<App backend={backend} />);
+
+    const dropSource = await screen.findByRole("button", { name: /^Compressor$/ });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      effectAllowed: "copy",
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    };
+    fireEvent.dragStart(dropSource, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer });
+    fireEvent.click(await screen.findByLabelText("Compressor 1, compressor"));
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "ratio precise value" }), { target: { value: "6" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+
+    await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("compressor-plan", demoSession.revision, expect.any(String)));
+    expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ kind: "compressor", parameters: expect.objectContaining({ ratio: 6 }) }),
+      ]),
+    }));
+  });
+
   it("expands an authoritative EQ preset into a draft node", async () => {
     const backend = {
       ...connectedPreviewBackend(),
