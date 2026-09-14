@@ -8,6 +8,7 @@ import { demoSession, demoSessions } from "./fixtures";
 import { recordDraft, redoDraft as redoDraftHistory, undoDraft as undoDraftHistory, type DraftHistory } from "./history";
 import { templateSession, type TemplateId } from "./templates";
 import { filterLibraryEntries, libraryEntries, libraryEntryAccessibleLabel } from "./library";
+import { selectNativePump } from "./nativePump";
 import { nodePortLabels, nodeStateLabel, routeLatencyText, routeNodeLabels } from "./graphView";
 import { readCompactStatus, readShortcuts, readTheme, writeCompactStatus, writeShortcuts, writeTheme, type ThemeMode } from "./preferences";
 import { defaultShortcutBinding, isEditableShortcutTarget, shortcutConflicts, shortcutFromKeyboardEvent, type ShortcutAction, type ShortcutBinding } from "./shortcuts";
@@ -749,8 +750,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const nativeAdapterKind = snapshot?.diagnostics.nativeAdapterKind;
     const pumpNativeEndpoint = backend.pumpNativeEndpoint;
     const pumpNativeDuplex = backend.pumpNativeDuplex;
-    if (!backend.connected || nativeGeneration === null || !sessionRunning ||
-        (nativeAdapterKind === "duplex" ? !pumpNativeDuplex : !pumpNativeEndpoint)) return;
+    const pumpKind = selectNativePump(nativeAdapterKind, Boolean(pumpNativeEndpoint), Boolean(pumpNativeDuplex));
+    if (!backend.connected || nativeGeneration === null || !sessionRunning || pumpKind === null) return;
     let active = true;
     let pumping = false;
     let lastReportedAt = 0;
@@ -758,7 +759,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!active || pumping) return;
       pumping = true;
       try {
-        const result = nativeAdapterKind === "duplex"
+        const result = pumpKind === "duplex"
           ? await pumpNativeDuplex!(session.id, nativeGeneration, 64, 64)
           : await pumpNativeEndpoint!(session.id, nativeGeneration, 64);
         const now = Date.now();

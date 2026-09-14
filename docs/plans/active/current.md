@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Fixed a native UI pump safety edge on 2026-09-14. The effect previously
+  treated a missing or unknown `nativeAdapterKind` as the legacy endpoint
+  adapter whenever a generation was present, which could dispatch a stale
+  snapshot to the wrong worker during an attachment transition. The shared
+  selector now requires an authoritative `endpoint` or `duplex` kind and an
+  available matching method; missing, unknown, or unavailable combinations
+  remain idle. Added focused regression coverage for both adapter kinds and
+  transition states. No endpoint, driver, or machine audio configuration was
+  accessed. Next action: continue the next independently testable native/UI
+  delivery item.
+
 - Revalidated the system-selected Rust adapter smoke path on 2026-09-14.
   The bounded run captured 51 packets/24,480 frames, processed 191 graph
   blocks, and produced 24,448 scheduler frames at 48 kHz with the 128-frame
