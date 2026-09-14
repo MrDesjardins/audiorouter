@@ -11758,3 +11758,20 @@ ignored). Persisted recording rows still do not expose dither/conversion
 settings, so the storage/API migration and library metadata evidence remain
 open. Next action: complete that versioned metadata contract with migration,
 round-trip tests, and UI hydration before revisiting the acceptance gate.
+# 2026-09-14 — Full guarded acceptance after REC-03 fix
+
+Elevated `tests/acceptance/safe-all.ps1` passed at commit `ebf2fc92`: M00
+toolchain/native compile/31-endpoint inventory and disposable SysVAD x64
+qualification; M01 CLI; M04 32 DSP + 40 recording tests; M05 UI typecheck,
+177 tests, and production build; M06 pinned VST3 SDK/validator/offline
+worker, VST2 fixtures/workers; M07 headless CLI/MCP/plugin-host; M08 release
+artifact preparation; traceability (159 normative IDs); and documentation
+validation (52 Markdown files, 190 local links). The first non-elevated run
+stopped at read-only `Get-PnpDevice` WMI access denied; the elevated rerun
+resolved that environment limitation. The run performed no driver
+installation/loading, signing-mode change, plugin registration, live audio
+mutation, or persistent machine configuration. Open product gates remain
+unchanged: production driver activation/clean-machine install, physical
+latency, manual UI accessibility/scaling, and independent vendor-plugin
+compatibility. Next action: implement the versioned persisted recording
+conversion/dither metadata contract rather than only documenting it.
