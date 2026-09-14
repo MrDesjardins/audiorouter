@@ -12,6 +12,15 @@ Updated: 2026-09-14.
   loaded-driver, production-signing, and physical-latency gates remain open.
   Next action: continue the next safe M03/M07 recovery integration item.
 
+- Planned the next VDEV-12 failure-path slice: native binding heartbeat errors
+- now detach and close only the affected binding, deactivate its portable
+  route, and preserve other bindings. The failure path remains control-thread
+  work; no audio callback, endpoint default, or durable desired-state mutation
+  is involved. Control (149 passed, 2 guarded live tests ignored), strict
+  Clippy, formatting, and diff checks passed. Native endpoint/driver loading
+  and physical-latency evidence remain open. Next action: continue the next
+  safe M03/M07 recovery integration item.
+
 - Corrected REC-03 default quantization policy on 2026-09-14. When the API
   omits `dither`, integer WAV/FLAC recorder formats now default to TPDF
   dithering while WAV Float32 defaults to no dither; explicit opt-out remains

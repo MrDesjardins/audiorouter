@@ -4440,34 +4440,84 @@ impl ControlPlane {
 
     #[cfg(windows)]
     pub fn heartbeat_native_capture_sink_bindings(&mut self) -> Result<(), ControlError> {
-        for binding in self.native_capture_sink_bindings.values_mut() {
-            binding.heartbeat().map_err(|error| {
-                ControlError::InvalidRequest(format!(
-                    "native capture sink heartbeat failed: {error:?}"
-                ))
-            })?;
+        let bus_ids = self
+            .native_capture_sink_bindings
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        for bus_id in bus_ids {
+            let result = self
+                .native_capture_sink_bindings
+                .get_mut(&bus_id)
+                .expect("captured native binding key must remain present")
+                .heartbeat();
+            if let Err(error) = result {
+                if let Some(binding) = self.native_capture_sink_bindings.remove(&bus_id) {
+                    let _ = binding.close();
+                }
+                if let Some(bridge) = self.virtual_bridges.get(&bus_id) {
+                    bridge.deactivate();
+                }
+                return Err(ControlError::InvalidRequest(format!(
+                    "native capture sink heartbeat failed; binding detached: {error:?}"
+                )));
+            }
         }
         Ok(())
     }
 
     #[cfg(windows)]
     pub fn heartbeat_native_render_source_bindings(&mut self) -> Result<(), ControlError> {
-        for binding in self.native_render_source_bindings.values_mut() {
-            binding.heartbeat().map_err(|error| {
-                ControlError::InvalidRequest(format!(
-                    "native render source heartbeat failed: {error:?}"
-                ))
-            })?;
+        let bus_ids = self
+            .native_render_source_bindings
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        for bus_id in bus_ids {
+            let result = self
+                .native_render_source_bindings
+                .get_mut(&bus_id)
+                .expect("captured native binding key must remain present")
+                .heartbeat();
+            if let Err(error) = result {
+                if let Some(binding) = self.native_render_source_bindings.remove(&bus_id) {
+                    let _ = binding.close();
+                }
+                if let Some(bridge) = self.virtual_bridges.get(&bus_id) {
+                    bridge.deactivate();
+                }
+                return Err(ControlError::InvalidRequest(format!(
+                    "native render source heartbeat failed; binding detached: {error:?}"
+                )));
+            }
         }
         Ok(())
     }
 
     #[cfg(windows)]
     pub fn heartbeat_native_duplex_bindings(&mut self) -> Result<(), ControlError> {
-        for binding in self.native_duplex_bindings.values_mut() {
-            binding.heartbeat().map_err(|error| {
-                ControlError::InvalidRequest(format!("native duplex heartbeat failed: {error:?}"))
-            })?;
+        let bus_ids = self
+            .native_duplex_bindings
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        for bus_id in bus_ids {
+            let result = self
+                .native_duplex_bindings
+                .get_mut(&bus_id)
+                .expect("captured native binding key must remain present")
+                .heartbeat();
+            if let Err(error) = result {
+                if let Some(binding) = self.native_duplex_bindings.remove(&bus_id) {
+                    let _ = binding.close();
+                }
+                if let Some(bridge) = self.virtual_bridges.get(&bus_id) {
+                    bridge.deactivate();
+                }
+                return Err(ControlError::InvalidRequest(format!(
+                    "native duplex heartbeat failed; binding detached: {error:?}"
+                )));
+            }
         }
         Ok(())
     }
