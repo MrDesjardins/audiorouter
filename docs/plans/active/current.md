@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Revalidated three guarded Rust adapter bridge cycles on 2026-09-14 using
+  the exact active VB-Cable capture/render pair. Each 500 ms cycle processed
+  51 packets, 24,480 captured frames, 191 graph/tap quanta, and 24,448
+  rendered frames with zero non-finite samples, dropped render frames, xruns,
+  or deadline misses; each produced a valid temporary recording. All streams
+  and recordings were stopped/removed, and the media-device snapshot stayed
+  unchanged across cycles. This strengthens repeated user-mode bridge
+  lifecycle evidence only; loaded PortCls, managed-driver, physical-latency,
+  and production-signing gates remain open. No defaults, volume, mute, driver,
+  or persistent audio configuration changed. Next action: continue the next
+  independently testable native/UI delivery item.
+
 - Fixed and requalified the guarded control-route harness on 2026-09-14. The
   M02 probe had retained the pre-dither `StreamingFlacRecorderWorker::new`
   call shape, so route acceptance failed at compile time with `E0061` before
