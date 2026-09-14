@@ -139,6 +139,29 @@ describe("VB-Cable endpoint selection", () => {
     expect(await screen.findByText(/unavailable audio \(The control backend is disconnected\.\)/)).toBeTruthy();
   });
 
+  it("shows backend-authored recovery safe mode and recent crash count", async () => {
+    const disconnected = createDisconnectedBackend();
+    const backend = {
+      ...disconnected,
+      connected: true,
+      snapshot: async () => {
+        const current = await disconnected.snapshot();
+        return {
+          ...current,
+          status: {
+            ...current.status,
+            recovery: { safeMode: true, recentCrashes: 3, persistence: "memory" as const },
+          },
+        };
+      },
+    };
+    render(<App backend={backend} />);
+    expect(await screen.findByRole("heading", { name: "Safe mode is active" })).toBeTruthy();
+    expect(screen.getByText("3 recent crashes")).toBeTruthy();
+    expect(screen.getByText("Recovery state is held in memory for this preview.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear safe mode" }).hasAttribute("disabled")).toBe(false);
+  });
+
   it("offers a persisted compact route status view with live controls", async () => {
     render(<App backend={connectedPreviewBackend()} />);
     const toggle = await screen.findByRole("button", { name: "Compact status" });
