@@ -86,6 +86,11 @@ Updated: 2026-09-14.
   volume, mute, privacy, drivers, signing, and startup configuration were
   unchanged.
 
+- Requalified M00 process-loopback attribution on 2026-09-14. The bounded
+  500 ms disposable-process run captured 21,609 frames with 74,928 nonzero
+  payload bytes through the selected process tree. Temporary child state was
+  cleaned up and no persistent audio configuration changed.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
