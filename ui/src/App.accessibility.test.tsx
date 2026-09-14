@@ -35,8 +35,9 @@ afterEach(() => {
 describe("VB-Cable endpoint selection", () => {
   it("formats recorder drain telemetry only for a running native route", () => {
     const stats = { sessionId: demoSession.id, generation: 1, packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 3 };
-    expect(formatNativePumpSummary(stats, true)).toBe("native 128 in / 128 out / 3 recorder chunks");
-    expect(formatNativePumpSummary({ ...stats, recorderChunksDrained: 0 }, true)).toBe("native 128 in / 128 out");
+    expect(formatNativePumpSummary(stats, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks");
+    expect(formatNativePumpSummary({ ...stats, recorderChunksDrained: 0 }, true)).toBe("native 128 in / 128 out / 1 quanta");
+    expect(formatNativePumpSummary({ ...stats, droppedRenderFrames: 2, renderBackpressureEvents: 1 }, true)).toBe("native 128 in / 128 out / 1 quanta / 3 recorder chunks / 2 dropped / 1 backpressure");
     expect(formatNativePumpSummary(stats, false)).toBeNull();
   });
 

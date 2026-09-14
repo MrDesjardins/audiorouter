@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Exposed native pump health counters in the connected UI status summary on
+  2026-09-13. Running VB-Cable routes now show processed quanta and explicitly
+  surface nonzero dropped-render frames and backpressure events, alongside
+  existing capture/render and recorder-drain totals. UI typecheck and the full
+  suite pass (18 files/164 tests); no endpoint or machine audio configuration
+  is accessed.
+
 - Requalified the complete safe M00-M08 acceptance chain at pushed head
   `cfc3d712` on 2026-09-13. Toolchain/native compile, x64 WDK driver
   build/catalog signability, read-only 31-endpoint inventory, disposable

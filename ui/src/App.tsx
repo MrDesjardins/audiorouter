@@ -26,7 +26,11 @@ const PluginParameterContext = createContext<{ parameters: PluginParametersResul
 
 export function formatNativePumpSummary(stats: NativeEndpointPumpResult | null, running: boolean): string | null {
   if (!stats || !running) return null;
-  return `native ${stats.capturedFrames} in / ${stats.renderedFrames} out${stats.recorderChunksDrained > 0 ? ` / ${stats.recorderChunksDrained} recorder chunks` : ""}`;
+  const warnings = [
+    stats.droppedRenderFrames > 0 ? `${stats.droppedRenderFrames} dropped` : null,
+    stats.renderBackpressureEvents > 0 ? `${stats.renderBackpressureEvents} backpressure` : null,
+  ].filter((value): value is string => value !== null);
+  return `native ${stats.capturedFrames} in / ${stats.renderedFrames} out / ${stats.processedQuanta} quanta${stats.recorderChunksDrained > 0 ? ` / ${stats.recorderChunksDrained} recorder chunks` : ""}${warnings.length > 0 ? ` / ${warnings.join(" / ")}` : ""}`;
 }
 
 function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
