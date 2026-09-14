@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the authorized Rust adapter route for 2 seconds on 2026-09-13
+  through explicit VB-Cable endpoint IDs. It captured 96,480 frames,
+  processed 753 blocks, routed 96,384 frames, and observed zero deadline
+  misses/lateness; maximum processing time was 108,400 ns. Media state matched
+  before/after and temporary artifacts were removed; no endpoint default,
+  volume, mute, privacy, driver, signing, startup, or persistent machine-audio
+  setting changed. This is bounded user-mode endurance evidence, not physical
+  latency or long-duration hardware soak evidence.
+
 - Requalified the current-tip shared-mode endpoint matrix on 2026-09-13. All
   13 capture and 18 render endpoints completed bounded lifecycle checks; one
   occupied render returned the distinct `deviceInUse` diagnostic. Media state

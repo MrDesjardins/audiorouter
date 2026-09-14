@@ -1,5 +1,21 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - current-tip two-second adapter route
+
+The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 2000` run used explicit VB-Cable endpoint IDs and
+completed at 48 kHz with the 128-frame graph quantum. It captured 96,480
+frames, processed 753 graph blocks, scheduled and routed 96,384 frames, and
+observed zero deadline misses or lateness. Total processing time was
+16,902,500 ns with a 108,400 ns maximum; the timing histogram accounted for
+all 753 samples.
+
+The harness confirmed the media snapshot remained unchanged and removed its
+temporary probe artifacts. No endpoint default, volume, mute, privacy, driver,
+signing, startup, or persistent machine-audio setting changed. This is
+bounded user-mode endurance evidence, not a physical-latency or long-duration
+hardware soak qualification.
+
 ## 2026-09-13 - current-tip three-cycle bridge lifecycle
 
 The authorized `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
