@@ -378,10 +378,6 @@ fn adapter_control_route(
         std::thread::sleep(Duration::from_millis(1));
     }
     control
-        .stop_native_endpoint_worker()
-        .map_err(|error| format!("endpoint stop: {error:?}"))?;
-    let lifecycle = control.native_endpoint_lifecycle_telemetry();
-    control
         .control_recorder_node(
             &EntityId::new("recorder"),
             "recorders.stop",
@@ -389,11 +385,12 @@ fn adapter_control_route(
         )
         .map_err(|error| format!("recorder stop: {error:?}"))?;
     control
-        .detach_native_endpoint_worker()
-        .map_err(|error| format!("worker detach: {error:?}"))?;
-    control
         .session_stop(&session_id)
         .map_err(|error| format!("session stop: {error:?}"))?;
+    let lifecycle = control.native_endpoint_lifecycle_telemetry();
+    control
+        .detach_native_endpoint_worker()
+        .map_err(|error| format!("worker detach: {error:?}"))?;
     let recording_bytes = std::fs::metadata(&recording_path)
         .map_err(|error| format!("recording metadata: {error}"))?
         .len();

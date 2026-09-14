@@ -1,4 +1,23 @@
-# Native adapter route requalification (2026-09-13)
+# Native adapter route requalification (2026-09-14)
+
+## 2026-09-14 - lifecycle-order regression and rerun
+
+The control-owned probe initially exposed an unsafe teardown-order mismatch:
+it attempted to stop the native endpoint worker while its session was still
+running, and the newly enforced control boundary rejected the request. The
+probe was corrected to stop the recorder, stop the session (the authoritative
+native-worker shutdown boundary), capture lifecycle telemetry, and then detach
+the stopped worker.
+
+The authorized rerun through
+`tests/acceptance/m02-control-route-live.ps1 -AllowLiveAudio` used the exact
+active CABLE Output capture and CABLE Input render IDs. It passed with 50
+packets, 24,000 captured frames, 187 processed quanta, 23,936 rendered frames,
+and a 95,788-byte recording. Start/stop/reset each succeeded once, and the
+deliberate stale-generation pump was rejected. Before/after media snapshots
+matched, and process environment plus temporary recording state were restored.
+No endpoint default, volume, mute, privacy, driver, signing, startup, or
+persistent audio configuration changed.
 
 ## 2026-09-13 - current-head control-owned VB-Cable lifecycle
 

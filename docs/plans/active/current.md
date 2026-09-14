@@ -2,6 +2,20 @@
 
 Updated: 2026-09-13.
 
+- Fixed a real M02 acceptance integration defect on 2026-09-14. After the
+  native lifecycle boundary was tightened, the control-owned VB-Cable probe
+  still stopped the endpoint worker before stopping its running session; the
+  control plane correctly rejected that unsafe order. The probe now finalizes
+  its recorder, stops the session (which owns native worker shutdown), records
+  lifecycle telemetry, and only then detaches the stopped worker. The
+  authorized rerun against the exact active CABLE Output capture and CABLE
+  Input render pair passed: 50 packets, 24,000 captured frames, 187 processed
+  quanta, 23,936 rendered frames, 95,788-byte recording, one successful
+  start/stop/reset, and one deliberate stale-generation rejection. Before and
+  after media snapshots matched; process test settings and temporary recording
+  state were restored. No endpoint defaults, volume, mute, driver, signing,
+  startup, or persistent audio configuration changed.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `f376156c` on 2026-09-13 after fixing render-stream bridge
   publication. The elevated run passed project WDK build/catalog signability,
