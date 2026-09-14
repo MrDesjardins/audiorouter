@@ -2,6 +2,19 @@
 
 Updated: 2026-09-13.
 
+- Added the native process-loopback scheduler slice on 2026-09-13. The
+  Windows PCM16 process-loopback packet is expanded in caller-owned storage
+  to the scheduler's interleaved float32 contract, with a portable regression
+  covering stereo conversion. Added a stopped-by-default
+  `ProcessLoopbackWorker` that starts/stops capture and the selected render
+  endpoint as a pair, waits only through the bounded control-plane wait, and
+  pumps through the existing graph, tap, render-carry, and reset paths. The
+  focused Windows-audio suite passes 73 tests, and the locked workspace suite
+  passes after one isolated named-pipe integration retry. Live
+  process-loopback activation and verified-process restart recovery remain
+  open M02 gates. Evidence: focused and workspace test commands are recorded
+  in the handoff commit.
+
 - Added the first human-facing application-capture graph slice on 2026-09-13.
   The UI can add an observed application as a stopped draft source, retaining
   executable/path identity and either a selected-instance PID plus creation

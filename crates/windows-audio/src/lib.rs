@@ -1388,6 +1388,16 @@ pub struct CapturePacket {
     pub qpc_position: u64,
 }
 
+/// A capture source that copies one bounded packet into caller-owned
+/// interleaved float32 storage. Implementations must not wait or allocate.
+pub trait AudioCaptureSource {
+    fn next_packet_into(
+        &self,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError>;
+}
+
 /// Decode caller-owned interleaved IEEE float32 bytes into the engine's
 /// caller-owned planar block. The native capture adapter must copy a WASAPI
 /// packet into `source` and release the COM buffer before calling this helper.
@@ -1891,9 +1901,9 @@ impl WasapiSchedulerBridge {
         self.pump_internal(capture, render, Some(tap), Some(anchor))
     }
 
-    fn pump_internal(
+    fn pump_internal<C: AudioCaptureSource + ?Sized>(
         &mut self,
-        capture: &SharedCapture,
+        capture: &C,
         render: &dyn RenderSink,
         tap: Option<&dyn audiorouter_engine::AudioTap>,
         deadline: Option<DeadlineSchedule>,
@@ -1923,6 +1933,19 @@ impl WasapiSchedulerBridge {
         }
         self.process_ready(render, &mut result, tap, deadline)?;
         Ok(result)
+    }
+
+    /// Pump a process-loopback packet after its PCM16 payload has been
+    /// expanded to the bridge's float32 boundary. The process source is
+    /// otherwise scheduled identically to an endpoint capture source.
+    #[cfg(windows)]
+    pub fn pump_process_loopback(
+        &mut self,
+        capture: &ProcessLoopbackCapture,
+        render: &SharedRender,
+        tap: Option<&dyn audiorouter_engine::AudioTap>,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        self.pump_internal(capture, render, tap, None)
     }
 
     fn process_ready(
@@ -2079,6 +2102,17 @@ impl EndpointLifecycle for SharedRender {
     }
     fn stop(&mut self) -> Result<(), AudioError> {
         SharedRender::stop(self)
+    }
+}
+
+#[cfg(windows)]
+impl EndpointLifecycle for ProcessLoopbackCapture {
+    fn start(&mut self) -> Result<(), AudioError> {
+        ProcessLoopbackCapture::start(self)
+    }
+
+    fn stop(&mut self) -> Result<(), AudioError> {
+        ProcessLoopbackCapture::stop(self)
     }
 }
 
@@ -2363,6 +2397,103 @@ impl Drop for WasapiEndpointWorker {
     }
 }
 
+/// Owns a verified process-loopback capture client and an explicitly selected
+/// render client. The worker is stopped on construction and only the control
+/// plane may transition it to running. Process-loopback PCM16 is expanded at
+/// the capture boundary, so the scheduler and graph use the same float32
+/// contract as endpoint capture.
+#[cfg(windows)]
+pub struct ProcessLoopbackWorker {
+    capture: ProcessLoopbackCapture,
+    render: SharedRender,
+    bridge: WasapiSchedulerBridge,
+    running: bool,
+}
+
+#[cfg(windows)]
+impl ProcessLoopbackWorker {
+    pub fn new(
+        capture: ProcessLoopbackCapture,
+        render: SharedRender,
+        bridge: WasapiSchedulerBridge,
+    ) -> Self {
+        Self {
+            capture,
+            render,
+            bridge,
+            running: false,
+        }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn bridge(&self) -> &WasapiSchedulerBridge {
+        &self.bridge
+    }
+
+    pub fn bridge_mut(&mut self) -> &mut WasapiSchedulerBridge {
+        &mut self.bridge
+    }
+
+    pub fn start(&mut self) -> Result<(), AudioError> {
+        if self.running {
+            return Ok(());
+        }
+        start_endpoint_pair(&mut self.capture, &mut self.render)?;
+        self.running = true;
+        Ok(())
+    }
+
+    pub fn stop(&mut self) -> Result<(), AudioError> {
+        if !self.running {
+            return self.bridge.reset_stream().map(|_| ());
+        }
+        self.running = false;
+        stop_endpoint_pair_and_reset(&mut self.capture, &mut self.render, || {
+            self.bridge.reset_stream().map(|_| ())
+        })
+    }
+
+    pub fn wait_for_data(&self, timeout_ms: u32) -> Result<bool, AudioError> {
+        self.capture.wait_for_data(timeout_ms)
+    }
+
+    pub fn pump(&mut self) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        self.bridge
+            .pump_process_loopback(&self.capture, &self.render, None)
+    }
+
+    pub fn pump_with_tap(
+        &mut self,
+        tap: &dyn audiorouter_engine::AudioTap,
+    ) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        self.bridge
+            .pump_process_loopback(&self.capture, &self.render, Some(tap))
+    }
+
+    pub fn pump_available(&mut self, max_packets: u32) -> Result<WasapiSchedulerPump, AudioError> {
+        if !self.running {
+            return Err(AudioError::ProcessingStateUnavailable);
+        }
+        bounded_pump(max_packets, true, || self.pump())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ProcessLoopbackWorker {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct DeadlineSchedule {
     timeline_frame: u64,
@@ -2391,6 +2522,33 @@ fn validate_process_loopback_packet_frames(frames: u32) -> Result<(), AudioError
     (frames > 0 && frames <= MAX_PROCESS_LOOPBACK_PACKET_FRAMES)
         .then_some(())
         .ok_or(AudioError::InvalidFrameSize)
+}
+
+fn expand_pcm16_stereo_to_float32(
+    destination: &mut [u8],
+    frames: usize,
+) -> Result<usize, AudioError> {
+    let raw_bytes = frames
+        .checked_mul(2 * std::mem::size_of::<i16>())
+        .ok_or(AudioError::InvalidFrameSize)?;
+    let expanded_bytes = frames
+        .checked_mul(2 * std::mem::size_of::<f32>())
+        .ok_or(AudioError::InvalidFrameSize)?;
+    if expanded_bytes > destination.len() || raw_bytes > destination.len() {
+        return Err(AudioError::BufferTooSmall {
+            required: expanded_bytes,
+            available: destination.len(),
+        });
+    }
+    for sample in (0..frames * 2).rev() {
+        let source_offset = sample * std::mem::size_of::<i16>();
+        let destination_offset = sample * std::mem::size_of::<f32>();
+        let pcm = i16::from_le_bytes([destination[source_offset], destination[source_offset + 1]]);
+        let value = f32::from(pcm) / f32::from(i16::MAX);
+        destination[destination_offset..destination_offset + 4]
+            .copy_from_slice(&value.to_ne_bytes());
+    }
+    Ok(expanded_bytes)
 }
 
 /// Bounded process-loopback delivery counters. Values are snapshots of the
@@ -3211,6 +3369,23 @@ impl ProcessLoopbackCapture {
         }))
     }
 
+    /// Copy one PCM16 stereo packet into caller-owned interleaved float32
+    /// storage in place. The destination must have room for the expanded
+    /// representation; reverse traversal preserves unread PCM16 samples.
+    pub fn read_packet_as_float32(
+        &self,
+        destination: &mut [u8],
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        let Some(packet) = self.read_packet(destination)? else {
+            return Ok(None);
+        };
+        let frames = usize::try_from(packet.frames)
+            .ok()
+            .ok_or(AudioError::InvalidFrameSize)?;
+        let expanded_bytes = expand_pcm16_stereo_to_float32(destination, frames)?;
+        Ok(Some((packet, expanded_bytes)))
+    }
+
     pub fn stop(&mut self) -> Result<(), AudioError> {
         // Reset is a required cleanup attempt even when Stop reports a
         // device/service failure. Clear local state first so Drop and a
@@ -3229,6 +3404,20 @@ impl ProcessLoopbackCapture {
 impl Drop for ProcessLoopbackCapture {
     fn drop(&mut self) {
         let _ = self.stop();
+    }
+}
+
+#[cfg(windows)]
+impl AudioCaptureSource for ProcessLoopbackCapture {
+    fn next_packet_into(
+        &self,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        if bytes_per_frame != 2 * std::mem::size_of::<f32>() {
+            return Err(AudioError::InvalidFrameSize);
+        }
+        self.read_packet_as_float32(destination)
     }
 }
 
@@ -3600,6 +3789,16 @@ impl SharedCapture {
 impl Drop for SharedCapture {
     fn drop(&mut self) {
         let _ = self.stop();
+    }
+}
+
+impl AudioCaptureSource for SharedCapture {
+    fn next_packet_into(
+        &self,
+        destination: &mut [u8],
+        bytes_per_frame: usize,
+    ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+        SharedCapture::next_packet_into(self, destination, bytes_per_frame)
     }
 }
 
@@ -5564,6 +5763,24 @@ mod tests {
             encode_interleaved_float32(&block, &mut [0; 4]),
             Err(AudioError::BufferTooSmall { .. })
         ));
+    }
+
+    #[test]
+    fn process_loopback_pcm16_expands_in_place_to_interleaved_float32() {
+        let mut bytes = [0_u8; 16];
+        for (index, sample) in [0_i16, 16_384, -16_384, i16::MAX].iter().enumerate() {
+            bytes[index * 2..index * 2 + 2].copy_from_slice(&sample.to_le_bytes());
+        }
+        let expanded = expand_pcm16_stereo_to_float32(&mut bytes, 2).unwrap();
+        assert_eq!(expanded, 16);
+        let samples = bytes
+            .chunks_exact(4)
+            .map(|sample| f32::from_ne_bytes(sample.try_into().unwrap()))
+            .collect::<Vec<_>>();
+        assert_eq!(samples[0], 0.0);
+        assert!((samples[1] - 0.5).abs() < 0.0001);
+        assert!((samples[2] + 0.5).abs() < 0.0001);
+        assert_eq!(samples[3], 1.0);
     }
 
     #[test]
