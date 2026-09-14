@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the guarded control-owned VB-Cable route for one second on
+  2026-09-14 using the exact active capture/render endpoint IDs. The run
+  captured and rendered 48,000 frames across 100 packets and 375 processed
+  quanta, wrote 192,044 recording bytes, and passed one start/stop/reset
+  lifecycle plus the expected stale-pump rejection. Before/after checks
+  confirmed unchanged endpoint identity/state, defaults, volume, mute, and
+  driver configuration. This strengthens user-mode shared-WASAPI evidence
+  only; loaded PortCls, production driver/signing, and physical-latency gates
+  remain open. Next action: continue the next safe, independently testable
+  plan item.
+
 - Corrected the `status.get` discovery contract on 2026-09-14. The runtime
   already reports `audio: "available"` for a running native worker, but the
   advertised output schema incorrectly required the constant `"unavailable"`.
