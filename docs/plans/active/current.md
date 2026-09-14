@@ -31,6 +31,17 @@ Updated: 2026-09-14.
   action: run clean-tree M08 release preparation, then finish compatibility
   worker metadata propagation.
 
+- Clean-tree release verification on 2026-09-14: M08 unsigned release
+  preparation passed after the metadata contract and CLI fixture updates,
+  including optimized Rust binaries, UI typecheck/production build, artifact
+  preparation and verification. M08 traceability (159 normative IDs) and
+  documentation validation (52 Markdown files, 190 local links) also passed.
+  The complete chain's earlier M00–M06 evidence remains valid; its only
+  failure was the now-corrected CLI fixture. No installer, driver, signing,
+  or audio configuration action occurred. Compatibility-worker metadata is
+  still the next implementation slice; legacy constructors intentionally
+  retain `unknown` until they accept explicit settings.
+
 - Delivered the REC-03 recorder dither control on 2026-09-14. The UI now
   exposes TPDF dithering as an explicit create-time option, enabled by
   default, and forwards the selected value through the shared
