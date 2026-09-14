@@ -389,6 +389,17 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "nativeEndpoints.detach", params: { sessionId: demoSession.id } });
   });
 
+  it("forwards native duplex detachment for the exact session", async () => {
+    let received: unknown;
+    const result = { sessionId: demoSession.id, state: "detached" as const };
+    const client = {
+      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.detachNativeDuplex?.(demoSession.id)).resolves.toEqual(result);
+    expect(received).toEqual({ method: "nativeDuplex.detach", params: { sessionId: demoSession.id } });
+  });
+
   it("forwards the bounded native pump with the exact session generation", async () => {
     let received: unknown;
     const result = { sessionId: demoSession.id, generation: 7, packets: 2, capturedFrames: 256, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 0 };

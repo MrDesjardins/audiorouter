@@ -256,6 +256,11 @@ export interface NativeEndpointDetachResult {
   state: "detached";
 }
 
+export interface NativeDuplexDetachResult {
+  sessionId: EntityId;
+  state: "detached";
+}
+
 export interface NativeApplicationPrepareResult {
   sessionId: EntityId;
   state: "configured-stopped";
@@ -856,6 +861,7 @@ export type ImplementedMethod =
   | "devices.list"
   | "nativeEndpoints.prepare"
   | "nativeEndpoints.detach"
+  | "nativeDuplex.detach"
   | "nativeApplications.prepare"
   | "nativeEndpoints.pump"
   | "nativeDuplex.pump"
@@ -950,6 +956,7 @@ export type MethodParams = {
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
   "nativeEndpoints.prepare": { sessionId: EntityId; captureEndpointId: string; renderEndpointId: string };
   "nativeEndpoints.detach": { sessionId: EntityId };
+  "nativeDuplex.detach": { sessionId: EntityId };
   "nativeApplications.prepare": { sessionId: EntityId; processId: number; executable: string; executablePath?: string | null; creationTime100ns: string; mode: "include" | "exclude"; renderEndpointId: string };
   "nativeEndpoints.pump": { sessionId: EntityId; generation: number; maxPackets?: number };
   "nativeDuplex.pump": { sessionId: EntityId; generation: number; maxInputQuanta?: number; maxOutputPackets?: number };
@@ -1056,6 +1063,7 @@ export type MethodResult = {
   "devices.list": DeviceInfo[] | DeviceListPage;
   "nativeEndpoints.prepare": NativeEndpointPrepareResult;
   "nativeEndpoints.detach": NativeEndpointDetachResult;
+  "nativeDuplex.detach": NativeDuplexDetachResult;
   "nativeApplications.prepare": NativeApplicationPrepareResult;
   "nativeEndpoints.pump": NativeEndpointPumpResult;
   "nativeDuplex.pump": NativeDuplexPumpResult;

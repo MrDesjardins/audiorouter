@@ -1776,6 +1776,9 @@ fn method_description(name: &str) -> &'static str {
         "nativeEndpoints.detach" => {
             "Detach a stopped native endpoint worker so exact bindings can be replaced."
         }
+        "nativeDuplex.detach" => {
+            "Detach a stopped native duplex bridge so its exact driver binding can be replaced."
+        }
         "nativeApplications.prepare" => {
             "Prepare a verified application process-loopback capture and exact render client without starting audio."
         }
@@ -1938,6 +1941,12 @@ fn method_input_schema(name: &str) -> Value {
             &["sessionId", "captureEndpointId", "renderEndpointId"],
         ),
         "nativeEndpoints.detach" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["sessionId"],
+        ),
+        "nativeDuplex.detach" => object_schema(
             json!({
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
             }),
@@ -2813,6 +2822,15 @@ fn method_output_schema(name: &str) -> Value {
             "additionalProperties": false
         }),
         "nativeEndpoints.detach" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "state": { "const": "detached" }
+            },
+            "required": ["sessionId", "state"],
+            "additionalProperties": false
+        }),
+        "nativeDuplex.detach" => json!({
             "type": "object",
             "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
@@ -8028,6 +8046,7 @@ impl ControlPlane {
                     "nativeApplications.prepare" => {
                         self.dispatch_native_applications_prepare(request.params)
                     }
+                    "nativeDuplex.detach" => self.dispatch_native_duplex_detach(request.params),
                     "nativeEndpoints.pump" => self.dispatch_native_endpoints_pump(request.params),
                     "nativeDuplex.pump" => self.dispatch_native_duplex_pump(request.params),
                     "plugins.scan" => self.dispatch_plugins_scan(request.params),
@@ -10163,6 +10182,38 @@ impl ControlPlane {
         Ok(json!({ "sessionId": session_id, "state": "detached" }))
     }
 
+    fn dispatch_native_duplex_detach(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(EntityId::new)
+            .ok_or_else(|| ControlError::InvalidRequest("sessionId is required".into()))?;
+        self.get_session(&session_id)?;
+        #[cfg(windows)]
+        {
+            if self.native_duplex_worker_session.as_ref() != Some(&session_id) {
+                return Err(ControlError::InvalidRequest(
+                    "native duplex worker is not attached to this session".into(),
+                ));
+            }
+            self.detach_native_duplex_worker()?;
+            return Ok(json!({ "sessionId": session_id, "state": "detached" }));
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = session_id;
+            Err(ControlError::InvalidRequest(
+                "native duplex detachment requires Windows".into(),
+            ))
+        }
+    }
+
     fn dispatch_native_applications_prepare(
         &mut self,
         params: Option<Value>,
@@ -11353,6 +11404,7 @@ fn validate_method_params(method: &str, params: Option<&Value>) -> Result<(), Co
         "devices.list" => &["cursor", "limit"],
         "nativeEndpoints.prepare" => &["sessionId", "captureEndpointId", "renderEndpointId"],
         "nativeEndpoints.detach" => &["sessionId"],
+        "nativeDuplex.detach" => &["sessionId"],
         "nativeApplications.prepare" => &[
             "sessionId",
             "processId",
@@ -18256,6 +18308,32 @@ mod tests {
         );
         assert_eq!(response.error.unwrap().code, -32602);
         assert!(plane.native_endpoint_worker.is_none());
+    }
+
+    #[test]
+    fn native_duplex_detachment_requires_device_administration_and_windows() {
+        let mut plane = ControlPlane::default();
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(94)),
+                method: "nativeDuplex.detach".into(),
+                params: Some(json!({ "sessionId": "missing" })),
+            },
+            &ClientGrant::for_role(ClientRole::Operator),
+        );
+        assert_eq!(response.error.unwrap().code, -32001);
+
+        let response = plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(95)),
+                method: "nativeDuplex.detach".into(),
+                params: Some(json!({ "sessionId": "missing" })),
+            },
+            &ClientGrant::with_scopes([PermissionScope::DeviceAdministration]),
+        );
+        assert_eq!(response.error.unwrap().code, -32602);
     }
 
     #[test]

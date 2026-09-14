@@ -15,7 +15,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 72 methods, including the session portability,
+The current catalog contains 73 methods, including the session portability,
 recorder lifecycle, plugin inventory/retry, and startup plan/apply methods added
 after the initial 47-method reference.
 
@@ -74,6 +74,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `devices.list` | `read` | read-only |
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
 | `nativeEndpoints.detach` | `deviceAdministration` | external operation; detaches an exact stopped native worker |
+| `nativeDuplex.detach` | `deviceAdministration` | external operation; detaches an exact stopped project-driver bridge |
 | `nativeApplications.prepare` | `deviceAdministration` | external operation; prepares a verified stopped process-loopback capture and exact render client |
 | `nativeEndpoints.pump` | `sessionControl` | external operation; drains a bounded packet budget for the exact running native generation |
 | `nativeDuplex.pump` | `sessionControl` | external operation; drains independently bounded input and output work for the exact running duplex generation |
@@ -134,6 +135,8 @@ replacement endpoint, or activate a stopped session.
 `nativeEndpoints.detach` requires the session to be stopped and removes only
 that session's stopped worker, allowing a deliberate exact-endpoint selection
 and preparation to follow.
+`nativeDuplex.detach` has the same stopped-session rule for the project-driver
+bridge and returns unavailable on non-Windows hosts.
 
 Pump ticks are intentionally not counted against the user mutation-rate bucket:
 they are bounded scheduler traffic rather than user mutations. They remain

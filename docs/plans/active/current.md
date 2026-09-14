@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Added the M03/VDEV-12 project-driver duplex replacement path on
+  2026-09-14. `nativeDuplex.detach` is now an authorized
+  `deviceAdministration` RPC that targets the exact session and delegates to
+  the existing stopped-worker teardown boundary; it is unavailable on
+  non-Windows hosts. The shared TypeScript/Rust contracts, discovery schemas,
+  control dispatch, UI backend adapter, API reference, and authorization
+  regression were updated together. Control (158 passed, 2 guarded live
+  ignored), domain (64), UI (192 across 19 files), contract drift (73
+  methods), Windows-target compilation, UI production build, formatting, diff,
+  and documentation checks passed. No endpoint, driver, registry, or
+  persistent machine audio configuration was changed. Next action: continue
+  the next safe M03/M07 recovery integration item.
+
 - Added the M03/CAP-12 exact endpoint replacement path on 2026-09-14.
   `nativeEndpoints.detach` is now a device-administration RPC that accepts
   only the exact session, requires the worker to be stopped, and removes only
