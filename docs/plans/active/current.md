@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Requalified the endpoint-wide bounded native lifecycle on 2026-09-14 with
+  `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`. All 13
+  capture and 18 render endpoints completed the lifecycle matrix; one
+  occupied render endpoint remained an explicit contention result. Media
+  identity and state were preserved, and defaults, volume, mute, privacy,
+  drivers, signing, and startup configuration were unchanged. This is shared
+  WASAPI endpoint evidence, not loaded AudioRouter driver or physical-latency
+  qualification. Next action: continue the next safe M03/M07 recovery item.
+
 - Requalified the bounded process-loopback exclusion path on 2026-09-14
   with `m00-native-process-exclude-live.ps1 -AllowLiveAudio
   -DurationMilliseconds 500`. The disposable child was excluded while the
