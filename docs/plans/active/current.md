@@ -73,6 +73,13 @@ Updated: 2026-09-14.
   identity/state matched before and after; defaults, volume, mute, privacy,
   driver, signing, startup, and endpoint registration were unchanged.
 
+- Requalified the non-installing M03 driver gate on 2026-09-14 with the
+  installed Visual Studio/WDK toolchain. The x64 driver compiled, the INF was
+  stamped, signability reported zero errors and warnings, and catalog
+  generation completed. Disposable outputs were removed; no installation,
+  loading, signing-mode, boot-policy, service, or audio configuration action
+  occurred.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
