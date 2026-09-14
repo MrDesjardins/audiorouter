@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Clarified the first-run UI guidance on 2026-09-13 so the human-testable
+  quick route explicitly lists the built-in Pitch processor alongside EQ,
+  Gate, Compressor, and Limiter. TypeScript typecheck and all 159 UI tests
+  passed; this presentation-only change does not access endpoints or modify
+  machine audio configuration.
+
 - Requalified the full safe M00-M08 acceptance chain at pushed head
   `b071dbfd` on 2026-09-13. Toolchain/native checks, the project x64 WDK
   build and signability/catalog pass, M01/M04, M05 (159 UI tests, typecheck,
