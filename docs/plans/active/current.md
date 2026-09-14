@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Requalified the bounded process-loopback exclusion path on 2026-09-14
+  with `m00-native-process-exclude-live.ps1 -AllowLiveAudio
+  -DurationMilliseconds 500`. The disposable child was excluded while the
+  capture lifecycle completed and produced 22,050 frames; temporary output
+  was removed and media-device state remained unchanged. This proves the
+  exclusion mode/lifecycle boundary, not a full cross-process isolation
+  threshold. Next action: continue the next safe M03/M07 recovery item.
+
 - Requalified the authorized control-owned application-capture lifecycle on
   2026-09-14 using the exact live Voicemeeter identity (PID 34568,
   `voicemeeterpro.exe`, creation time `134336595287373468`) and the verified
