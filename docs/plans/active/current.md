@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Connected VDEV-12 capture-sink lease maintenance to endpoint pumping on
+  2026-09-14. Prepared capture-sink bindings now track their negotiated
+  half-lease cadence, and the control plane services them before each bounded
+  endpoint pump; the realtime tap remains enqueue-only. Per-binding failure
+  containment, bridge deactivation, and `virtualBridge.failed` reporting are
+  preserved. Control (150 passed, 2 guarded live tests ignored),
+  Windows-audio (73 passed), strict Clippy, formatting, Windows-target check,
+  and diff checks passed. Loaded-driver execution and physical timing remain
+  native gates. Next action: continue the next safe M03/M07 recovery item.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `c7f49716` on 2026-09-14 after duplex bridge lease maintenance.
   M00 toolchain/native compile and 31-endpoint read-only inventory, M03

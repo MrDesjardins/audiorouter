@@ -4443,6 +4443,8 @@ impl ControlPlane {
     }
 
     #[cfg(windows)]
+    /// Service prepared capture-sink leases at their negotiated cadence.
+    /// Failure containment remains per binding so another route can continue.
     pub fn heartbeat_native_capture_sink_bindings(&mut self) -> Result<(), ControlError> {
         let bus_ids = self
             .native_capture_sink_bindings
@@ -4455,7 +4457,7 @@ impl ControlPlane {
                 .native_capture_sink_bindings
                 .get_mut(&bus_id)
                 .expect("captured native binding key must remain present")
-                .heartbeat();
+                .heartbeat_if_due();
             if let Err(error) = result {
                 if let Some(binding) = self.native_capture_sink_bindings.remove(&bus_id) {
                     let _ = binding.close();
@@ -5129,6 +5131,8 @@ impl ControlPlane {
         generation: u64,
         max_packets: u32,
     ) -> Result<Value, ControlError> {
+        #[cfg(windows)]
+        self.heartbeat_native_capture_sink_bindings()?;
         let taps = self.native_endpoint_taps.take().ok_or_else(|| {
             self.native_endpoint_rejections = self.native_endpoint_rejections.saturating_add(1);
             ControlError::InvalidRequest("native graph recorder taps are not prepared".into())

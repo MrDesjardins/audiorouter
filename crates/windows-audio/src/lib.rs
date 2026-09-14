@@ -1058,6 +1058,8 @@ pub struct NativeBridgeCaptureSinkBinding {
     generation: u64,
     controller: NativeBridgeController,
     writer: std::sync::Arc<NativeBridgeRealtimeWriter>,
+    last_heartbeat: std::time::Instant,
+    heartbeat_interval: std::time::Duration,
 }
 
 #[cfg(windows)]
@@ -1134,6 +1136,8 @@ impl NativeBridgeCaptureSinkBinding {
         }
         let bus_id = audiorouter_domain::EntityId::new(hello.bus_id.clone());
         let generation = hello.generation;
+        let heartbeat_interval =
+            std::time::Duration::from_millis(u64::from(hello.lease_ms / 2).max(1));
         let controller = NativeBridgeController::create(device_path, mapping_path, hello)?;
         let writer = controller.realtime_writer()?;
         Ok(Self {
@@ -1141,6 +1145,8 @@ impl NativeBridgeCaptureSinkBinding {
             generation,
             controller,
             writer: std::sync::Arc::new(writer),
+            last_heartbeat: std::time::Instant::now(),
+            heartbeat_interval,
         })
     }
 
@@ -1154,6 +1160,18 @@ impl NativeBridgeCaptureSinkBinding {
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
         self.controller.heartbeat()
+    }
+
+    /// Refresh the capture-sink lease only when its negotiated cadence is
+    /// due. This is called from the control/lifecycle thread, never the tap.
+    pub fn heartbeat_if_due(&mut self) -> Result<(), NativeBridgeControllerError> {
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_heartbeat) < self.heartbeat_interval {
+            return Ok(());
+        }
+        self.heartbeat()?;
+        self.last_heartbeat = now;
+        Ok(())
     }
 
     pub fn published_blocks(&self) -> u64 {
