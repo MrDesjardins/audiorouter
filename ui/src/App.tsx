@@ -34,6 +34,7 @@ export const WORKSPACE_EVENT_CATEGORIES = [
   "runtime.activated",
   "runtime.stopped",
   "virtualDevice.changed",
+  "virtualBridge.failed",
   "recorder.changed",
   "recording.metadataChanged",
   "recording.renamed",

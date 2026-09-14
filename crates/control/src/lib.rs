@@ -67,7 +67,7 @@ const MAX_MEMORY_OPERATION_OUTCOMES: usize = 100;
 const MAX_PLUGIN_INVENTORY_ROOTS: usize = 64;
 const MAX_PLAN_REQUIRED_SCOPES: usize = 1;
 const MAX_PLAN_WARNINGS: usize = 1;
-const STATE_CATEGORIES: [&str; 15] = [
+const STATE_CATEGORIES: [&str; 16] = [
     "session.created",
     "session.deleted",
     "graph.committed",
@@ -78,6 +78,7 @@ const STATE_CATEGORIES: [&str; 15] = [
     "privacy.muteEnabled",
     "privacy.muteDisabled",
     "virtualDevice.changed",
+    "virtualBridge.failed",
     "recorder.changed",
     "recording.metadataChanged",
     "recording.renamed",
@@ -4458,6 +4459,7 @@ impl ControlPlane {
                 if let Some(bridge) = self.virtual_bridges.get(&bus_id) {
                     bridge.deactivate();
                 }
+                self.publish_virtual_bridge_failure(&bus_id);
                 return Err(ControlError::InvalidRequest(format!(
                     "native capture sink heartbeat failed; binding detached: {error:?}"
                 )));
@@ -4486,6 +4488,7 @@ impl ControlPlane {
                 if let Some(bridge) = self.virtual_bridges.get(&bus_id) {
                     bridge.deactivate();
                 }
+                self.publish_virtual_bridge_failure(&bus_id);
                 return Err(ControlError::InvalidRequest(format!(
                     "native render source heartbeat failed; binding detached: {error:?}"
                 )));
@@ -4514,6 +4517,7 @@ impl ControlPlane {
                 if let Some(bridge) = self.virtual_bridges.get(&bus_id) {
                     bridge.deactivate();
                 }
+                self.publish_virtual_bridge_failure(&bus_id);
                 return Err(ControlError::InvalidRequest(format!(
                     "native duplex heartbeat failed; binding detached: {error:?}"
                 )));
@@ -5583,6 +5587,15 @@ impl ControlPlane {
     /// Windows endpoint or changing durable desired state.
     pub fn expire_virtual_bridge_leases(&self, now_tick: u64) -> usize {
         self.virtual_bridges.expire_stale_leases(now_tick)
+    }
+
+    fn publish_virtual_bridge_failure(&mut self, bus_id: &EntityId) {
+        self.events.append(
+            0,
+            Some(bus_id.as_str().to_owned()),
+            "virtualBridge.failed",
+            None,
+        );
     }
 
     pub fn rename_virtual_bus(
@@ -17430,6 +17443,22 @@ mod tests {
         assert!(plane.virtual_bridges.get(&id).is_some());
         plane.delete_virtual_bus(&id).unwrap();
         assert!(plane.virtual_bridges.get(&id).is_none());
+    }
+
+    #[test]
+    fn virtual_bridge_failure_event_is_discoverable_and_bus_scoped() {
+        let mut plane = ControlPlane::default();
+        let bus_id = EntityId::new("failed-bus");
+        plane.publish_virtual_bridge_failure(&bus_id);
+        let event = plane.events.since(0, 10).unwrap().pop().unwrap();
+        assert_eq!(event.category, "virtualBridge.failed");
+        assert_eq!(event.operation_id.as_deref(), Some("failed-bus"));
+        assert!(event.session_id.is_none());
+        let description = plane.describe();
+        let categories = description["events"]["stateCategories"].as_array().unwrap();
+        assert!(categories
+            .iter()
+            .any(|value| value == "virtualBridge.failed"));
     }
 
     #[test]

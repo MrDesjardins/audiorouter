@@ -30,6 +30,19 @@ Updated: 2026-09-14.
   failure, loaded-driver diagnostics, and physical silence timing remain
   native gates. Next action: continue the next safe M03/M07 integration item.
 
+- Implemented the VDEV-12/API-08 failure-observability slice on 2026-09-14:
+  control advertises and emits a discoverable `virtualBridge.failed` event
+  after native heartbeat containment detaches the affected binding and
+  deactivates its portable bridge. The bounded bus identity is retained;
+  HRESULTs, paths, and private diagnostics remain only in the structured
+  supervisor response. UI subscribes to the category and control regression
+  coverage proves discovery and bus scoping. Evidence: [bridge failure event
+  evidence](evidence/VDEV-12-bridge-failure-events.md). Control (150 passed, 2
+  guarded live tests ignored), UI (183), strict Clippy, typecheck, and docs
+  validation passed. No endpoint/configuration changed. Loaded-driver failure
+  timing and production signing remain open. Next action: continue the next
+  safe M03/M07 recovery integration item.
+
 - Planned the next VDEV-12 failure-path slice: native binding heartbeat errors
 - now detach and close only the affected binding, deactivate its portable
   route, and preserve other bindings. The failure path remains control-thread
