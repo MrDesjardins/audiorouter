@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Extended read-only diagnostics for duplex native ownership on 2026-09-14.
+  `nativeAdapter` and `nativeSessionId` now reflect an attached duplex worker
+  as well as the existing endpoint worker, including configured-stopped and
+  running states. The control lifecycle remains generation-checked and does
+  not activate endpoints implicitly. Verification: 145 control tests and 73
+  Windows-audio tests passed, strict Clippy, formatting, and diff checks
+  passed. No endpoint or machine audio configuration was accessed. Loaded
+  PortCls, production signing, and physical-latency gates remain open. Next
+  action: continue the next independently testable native bridge item.
+
 - Closed the bridge-to-session construction gap on 2026-09-14. A negotiated
   duplex binding now has a direct factory into paired workers, and the control
   plane owns that worker through generation-checked attach/start/pump/stop/
