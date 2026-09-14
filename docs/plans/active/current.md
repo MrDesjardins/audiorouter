@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Qualified the supplied x64 BUSTERse VST2 binary on 2026-09-14 through the
+  contained worker path. Processing passed at 44.1, 48, and 96 kHz, and both
+  bounded editor-thread containment regressions passed; the DLL SHA-256
+  fingerprint remained `580325343014664a61fd1c2d73e5424897a47199be5c5538da75c25a8d0261d3`.
+  The acceptance restored the pre-existing VST2 environment variables and
+  performed no registration, file modification, audio stream, or machine
+  configuration action. This does not qualify a native editor window, opaque
+  vendor state round-trip, rights, or release compatibility. Next action:
+  continue the next independently testable M03/M07 recovery item while
+  retaining those M06 gates.
+
 - Qualified the supplied x64 TDR Nova VST2 binary on 2026-09-14 through the
   contained worker path. Processing passed at 44.1, 48, and 96 kHz, and the
   bounded editor-thread containment regressions passed; the DLL SHA-256
