@@ -293,6 +293,7 @@ function PluginScanPanel({ backend, onAddPlaceholder }: { backend: UiBackend; on
 function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { backend: UiBackend; sessionId: string; connected: boolean; recorderStatuses: RecorderStatus[] }) {
   const [frameText, setFrameText] = useState("0");
   const [state, setState] = useState("idle");
+  const [lastFrame, setLastFrame] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [recorderId, setRecorderId] = useState("recorder-1");
   const [format, setFormat] = useState<import("@audiorouter/contracts").RecorderFileFormat>("wavPcm24");
@@ -302,7 +303,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
   const validFrame = Number.isSafeInteger(frame) && frame >= 0;
   useEffect(() => {
     const status = recorderStatuses.find((item) => item.sessionId === sessionId);
-    if (status) setState(status.state);
+    if (status) { setState(status.state); setLastFrame(status.lastFrame); }
   }, [recorderStatuses, sessionId]);
   const create = async () => {
     if (!recorderId.trim()) { setMessage("Provide a recorder ID."); return; }
@@ -315,11 +316,12 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
       setMessage(formatUiError(error, "Unable to create recorder."));
     }
   };
-  const run = async (action: string, operation: () => Promise<{ state: string }>) => {
+  const run = async (action: string, operation: () => Promise<{ state: string; lastFrame?: number | null }>) => {
     setMessage(`${action}...`);
     try {
       const result = await operation();
       setState(result.state);
+      if (result.lastFrame !== undefined) setLastFrame(result.lastFrame ?? null);
       setMessage(`Recorder ${result.state} at frame ${frame}.`);
     } catch (error) {
       setMessage(formatUiError(error, `Unable to ${action.toLowerCase()} recorder.`));
@@ -338,6 +340,7 @@ function RecorderActions({ backend, sessionId, connected, recorderStatuses }: { 
       <button type="button" className="secondary" onClick={() => void run("Stopping", () => backend.stopRecorder(sessionId, frame, uiIdempotencyKey("recorder-stop")))} disabled={!connected || !validFrame}>Stop</button>
     </div>
     {message && <p className="muted" role="status">{message}</p>}
+    {lastFrame !== null && <p className="muted" role="status">Backend last frame: {lastFrame}</p>}
     <p className="muted">Actions are sent only to a connected backend and use explicit engine frame boundaries. The preview backend never arms or starts recording.</p>
   </section>;
 }

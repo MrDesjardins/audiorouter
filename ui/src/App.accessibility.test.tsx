@@ -473,6 +473,7 @@ describe("keyboard connection dialog", () => {
     render(<App backend={backend} />);
     const panel = await screen.findByRole("region", { name: "Recorder" });
     await waitFor(() => expect(within(panel).getByText("recording")).toBeTruthy());
+    expect(within(panel).getByText("Backend last frame: 480")).toBeTruthy();
   });
 
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {

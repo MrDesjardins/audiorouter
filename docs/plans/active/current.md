@@ -5,7 +5,9 @@ Updated: 2026-09-14.
 - Closed a portable M04/M05 recorder-state hydration gap on 2026-09-14.
   The connected UI now reads `recorders.list` on startup/backend replacement
   and refreshes it with lifecycle events, so the Recorder panel does not
-  display a locally guessed `idle` state after reconnect or session changes.
+  display a locally guessed `idle` state or lose the backend's last frame
+  after reconnect or session changes; lifecycle responses update that frame
+  immediately as well.
   Added a rendered authoritative-state regression; TypeScript typecheck and
   the full UI suite passed (18 files, 172 tests). No audio endpoint or machine
   configuration was changed.
