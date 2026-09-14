@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the authorized M00 process-attribution acceptance on 2026-09-14
+  for a 500 ms disposable child. The exact process capture path produced
+  21,609 captured frames and 77,823 nonzero payload bytes; activation,
+  capture start/stop/reset, child exit, and before/after media-state checks
+  passed. Temporary executable/object outputs were removed and no persistent
+  audio configuration changed. Next action: continue the next safe M03/M07
+  recovery or delivery item.
+
 - Passed the authorized M02/CAP-11 application-capture lifecycle on
   2026-09-14 using the exact active `voicemeeterpro.exe` identity (PID,
   executable, and creation time) and existing VB-Cable render endpoint. The
