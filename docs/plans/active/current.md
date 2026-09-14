@@ -21,6 +21,13 @@ Updated: 2026-09-13.
   Remaining proof is intentionally the loaded PortCls callback/transport and
   production-driver gates; source/build evidence does not waive them.
 
+- Corrected native session-start idempotency reporting on 2026-09-13. A
+  repeated `session_start` on an already-running session now reports
+  `runtime: native` when that session owns an attached native worker instead
+  of incorrectly claiming `fake`; non-native sessions retain the fake label.
+  The focused regression and complete control crate suite pass (144 tests,
+  2 ignored). No endpoint was opened by these tests.
+
 - Added a persisted local compact route-status view on 2026-09-13. The UI
   exposes an accessible `Compact status` toggle that presents the selected
   session, backend/native telemetry summary, session start/stop, and privacy

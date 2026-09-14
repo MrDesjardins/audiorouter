@@ -87,6 +87,10 @@ const STATE_CATEGORIES: [&str; 15] = [
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
+fn session_runtime_label(native_attached: bool) -> &'static str {
+    if native_attached { "native" } else { "fake" }
+}
+
 /// Result returned by a backend-owned encoder worker during graceful stop.
 /// `file_finalized` is intentionally explicit so a control-state transition
 /// cannot be mistaken for a durable file finalization.
@@ -6848,7 +6852,7 @@ impl ControlPlane {
         if let Some(runtime) = self.runtimes.get(id) {
             if runtime.state() == RuntimeState::Running {
                 return Ok(
-                    json!({ "sessionId": id, "state": "running", "generation": runtime.generation(), "runtime": "fake" }),
+                    json!({ "sessionId": id, "state": "running", "generation": runtime.generation(), "runtime": session_runtime_label(native_attached) }),
                 );
             }
         }
@@ -6914,7 +6918,7 @@ impl ControlPlane {
             "sessionId": id,
             "state": "running",
             "generation": generation,
-            "runtime": if native_attached { "native" } else { "fake" }
+            "runtime": session_runtime_label(native_attached)
         }))
     }
 
@@ -14923,7 +14927,9 @@ mod tests {
         let first = plane.session_start(&original.id).unwrap();
         assert_eq!(first["state"], "running");
         assert_eq!(first["generation"], 1);
-        assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 1);
+        let replay = plane.session_start(&original.id).unwrap();
+        assert_eq!(replay["generation"], 1);
+        assert_eq!(replay["runtime"], "fake");
         assert_eq!(
             plane.session_stop(&original.id).unwrap()["state"],
             "stopped"
@@ -14931,6 +14937,12 @@ mod tests {
         let events = plane.events.since(0, 10).unwrap();
         assert_eq!(events.last().unwrap().resource_revision, original.revision);
         assert_eq!(plane.session_start(&original.id).unwrap()["generation"], 2);
+    }
+
+    #[test]
+    fn session_runtime_label_distinguishes_native_attachment() {
+        assert_eq!(session_runtime_label(false), "fake");
+        assert_eq!(session_runtime_label(true), "native");
     }
 
     #[test]
