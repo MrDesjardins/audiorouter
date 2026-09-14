@@ -118,6 +118,10 @@ fn effective_wav_dither(format: WavFormat, requested: bool) -> bool {
     requested && !matches!(format, WavFormat::Float32)
 }
 
+fn default_dither_for_format(format: FileRecorderFormat) -> bool {
+    !matches!(format, FileRecorderFormat::Wav(WavFormat::Float32))
+}
+
 /// Explicit identity required before a file worker may publish a library row.
 /// The worker never guesses session, recorder, or path ownership from a file
 /// handle; callers must provide all three on the lifecycle thread.
@@ -8553,10 +8557,6 @@ impl ControlPlane {
             .ok_or_else(|| {
                 ControlError::InvalidRequest("maximumChunksPerPass is required".into())
             })?;
-        let dither = params
-            .get("dither")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
         let format_name = params
             .get("format")
             .and_then(Value::as_str)
@@ -8577,6 +8577,13 @@ impl ControlPlane {
                 ))
             }
         };
+        // Integer formats default to TPDF dithering when the optional API
+        // field is omitted. Float32 never applies dither; the finalization
+        // metadata also records that effective policy.
+        let dither = params
+            .get("dither")
+            .and_then(Value::as_bool)
+            .unwrap_or(default_dither_for_format(format));
         let session = EntityId::new(session_id);
         if self.store.session(&session).is_none() {
             return Err(ControlError::InvalidRequest("session not found".into()));
@@ -16614,6 +16621,22 @@ mod tests {
             "targetSampleRate=48000;channels=1;format=Float32"
         );
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recorder_format_defaults_enable_dither_only_for_integer_output() {
+        assert!(default_dither_for_format(FileRecorderFormat::Wav(
+            WavFormat::Pcm16
+        )));
+        assert!(default_dither_for_format(FileRecorderFormat::Wav(
+            WavFormat::Pcm24
+        )));
+        assert!(default_dither_for_format(FileRecorderFormat::Flac {
+            bits_per_sample: 16,
+        }));
+        assert!(!default_dither_for_format(FileRecorderFormat::Wav(
+            WavFormat::Float32
+        )));
     }
 
     #[test]

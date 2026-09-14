@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Corrected REC-03 default quantization policy on 2026-09-14. When the API
+  omits `dither`, integer WAV/FLAC recorder formats now default to TPDF
+  dithering while WAV Float32 defaults to no dither; explicit opt-out remains
+  supported. The CLI now follows the same policy and accepts `--no-dither`,
+  while retaining `--dither` compatibility. Added control coverage for the
+  format policy. Control (147 passed, 2 guarded live tests ignored), CLI (33
+  plus MCP interoperability), formatting, and strict control Clippy passed.
+  No endpoint or machine audio configuration changed. Next action: continue
+  the next safe delivery item.
+
 - Aligned the M05 recorder form with REC-03 on 2026-09-14. Selecting WAV
   Float32 now clears and disables the TPDF dither control and explains that
   floating output is not dithered; the create request therefore cannot claim

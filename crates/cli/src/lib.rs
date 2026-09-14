@@ -1468,7 +1468,8 @@ fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
             .map_err(|_| {
                 CliError::InvalidArguments("--maximum-chunks-per-pass must be an integer".into())
             })?;
-        let mut params = json!({ "sessionId": session_id, "recorderId": recorder_id, "format": format, "sequence": sequence, "channels": channels, "sampleRate": sample_rate, "dither": args.contains(&"--dither"), "queueCapacity": queue_capacity, "maximumChunksPerPass": maximum_chunks_per_pass, "idempotencyKey": idempotency_key });
+        let dither = default_recorder_dither(format, args.contains(&"--no-dither"));
+        let mut params = json!({ "sessionId": session_id, "recorderId": recorder_id, "format": format, "sequence": sequence, "channels": channels, "sampleRate": sample_rate, "dither": dither, "queueCapacity": queue_capacity, "maximumChunksPerPass": maximum_chunks_per_pass, "idempotencyKey": idempotency_key });
         if let Some(node_id) = node_id {
             params["nodeId"] = json!(node_id);
         }
@@ -1534,6 +1535,10 @@ fn recorder_command(args: &[&str]) -> Result<Value, CliError> {
         .result
         .ok_or_else(|| CliError::InvalidArguments("recorder operation failed".into()))
         .map_err(|error| CliError::Storage(format!("{error:?}")))
+}
+
+fn default_recorder_dither(format: &str, no_dither: bool) -> bool {
+    format != "wavFloat32" && !no_dither
 }
 
 fn session_command(args: &[&str]) -> Result<Value, CliError> {
@@ -1783,7 +1788,7 @@ fn help_value() -> Value {
     );
     value["commands"].as_array_mut().unwrap().insert(
         15,
-        json!("recorder create <session-id> <recorder-id> --format FORMAT --channels 1|2 --sample-rate 44100|48000 --database <path> --idempotency-key KEY | recorder <arm|start|pause|resume|split|stop> ..."),
+        json!("recorder create <session-id> <recorder-id> --format FORMAT --channels 1|2 --sample-rate 44100|48000 [--no-dither] --database <path> --idempotency-key KEY | recorder <arm|start|pause|resume|split|stop> ..."),
     );
     value["commands"].as_array_mut().unwrap().insert(
         14,
@@ -2435,6 +2440,15 @@ fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recorder_dither_defaults_follow_output_precision() {
+        assert!(default_recorder_dither("wavPcm16", false));
+        assert!(default_recorder_dither("wavPcm24", false));
+        assert!(default_recorder_dither("flac16", false));
+        assert!(!default_recorder_dither("wavFloat32", false));
+        assert!(!default_recorder_dither("wavPcm24", true));
+    }
 
     #[test]
     fn bounded_text_reader_rejects_input_before_unbounded_growth() {
