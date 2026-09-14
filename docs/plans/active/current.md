@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the aggregate safe acceptance chain on 2026-09-14 at the
+  current handoff head. M00 toolchain/native inventory, M03 AudioRouter and
+  disposable SysVAD x64 builds, M04 DSP/recording, M05 UI (typecheck,
+  19-file/189-test suite, production build), M06 VST3/VST2 workers, M07
+  headless, M08 unsigned artifacts and 159 normative mappings, and
+  documentation validation (53 Markdown files, 193 local links) passed.
+  Acceptance cleanup removed 15 run-owned temporary children. No driver was
+  installed/loaded, no signing or boot policy changed, and no startup or
+  machine audio configuration changed. Loaded PortCls, production signing,
+  physical-latency, and attended UI gates remain open. Next action: continue
+  the next safe M03/M07 recovery integration item.
+
 - Hardened M03/VDEV-12 native worker handoff on 2026-09-14. Transferring a
   duplex or render-source native binding into its worker now deactivates the
   matching portable bridge before removing the control-plane binding, so
