@@ -18,6 +18,21 @@ setting changed. This qualifies API mode/lifecycle and data-path behavior;
 it does not establish a full cross-process isolation threshold or production
 driver capability.
 
+## 2026-09-13 - current-tip shared-mode endpoint matrix
+
+The authorized `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`
+run passed against the current endpoint inventory: all 13 capture endpoints
+and 18 render endpoints completed bounded shared-mode lifecycle checks. One
+render endpoint reported the expected `AUDCLNT_E_DEVICE_IN_USE` ownership
+diagnostic and was retained as an occupied result rather than hidden as a
+generic failure.
+
+The before/after media snapshot matched and temporary executable/object files
+were removed. No endpoint default, volume, mute, privacy, driver, signing,
+startup, or persistent machine-audio setting changed. This is a current-tip
+shared-mode matrix result, not physical-latency, endurance, or managed-driver
+evidence.
+
 ## 2026-09-13 - guarded shared-mode endpoint matrix
 
 The authorized `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`

@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the current-tip shared-mode endpoint matrix on 2026-09-13. All
+  13 capture and 18 render endpoints completed bounded lifecycle checks; one
+  occupied render returned the distinct `deviceInUse` diagnostic. Media state
+  remained unchanged and temporary executable/object files were removed; no
+  endpoint default, volume, mute, privacy, driver, signing, startup, or
+  persistent machine-audio setting changed. Physical-latency, endurance,
+  managed-driver, and attended WebView2 gates remain open.
+
 - Requalified the guarded shared-mode endpoint matrix on 2026-09-13. All 13
   capture and 18 render endpoints completed bounded lifecycle checks; one
   occupied render was reported as the distinct `deviceInUse` diagnostic.
