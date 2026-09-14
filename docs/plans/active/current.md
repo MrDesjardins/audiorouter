@@ -18,10 +18,10 @@ Updated: 2026-09-13.
   draft controls keyed by numeric parameter ID; identity changes fail closed.
   Domain validation bounds draft plugin values to normalized `[0, 1]`.
   `cargo test -p audiorouter-control --offline` passed (134 plus 1 ignored),
-  UI typecheck passed, and all UI tests passed (156). Parameter events are not
-  yet handed from the committed graph into the realtime worker bridge; that is
-  the next implementation task. No plugin was registered or machine audio
-  configuration changed.
+  UI typecheck passed, and all UI tests passed (156). Committed parameter
+  values are forwarded to the worker bridge by the follow-up slice recorded
+  immediately above. No plugin was registered or machine audio configuration
+  changed.
 
 - Tightened plugin lifecycle safety on 2026-09-13. `session.start` now rejects
   an enabled plugin graph unless the exact native endpoint session is attached;
