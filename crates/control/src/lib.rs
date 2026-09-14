@@ -3908,6 +3908,12 @@ pub struct ControlPlane {
         HashMap<EntityId, audiorouter_windows_audio::NativeBridgeRenderSourceBinding>,
     #[cfg(windows)]
     native_duplex_bindings: HashMap<EntityId, audiorouter_windows_audio::NativeBridgeDuplexBinding>,
+    #[cfg(windows)]
+    native_duplex_worker: Option<audiorouter_windows_audio::NativeBridgeDuplexWorker>,
+    #[cfg(windows)]
+    native_duplex_worker_session: Option<EntityId>,
+    #[cfg(windows)]
+    native_duplex_worker_generation: Option<u64>,
 }
 
 impl Default for ControlPlane {
@@ -3983,6 +3989,12 @@ impl ControlPlane {
             native_render_source_bindings: HashMap::new(),
             #[cfg(windows)]
             native_duplex_bindings: HashMap::new(),
+            #[cfg(windows)]
+            native_duplex_worker: None,
+            #[cfg(windows)]
+            native_duplex_worker_session: None,
+            #[cfg(windows)]
+            native_duplex_worker_generation: None,
         }
     }
 
@@ -4009,6 +4021,33 @@ impl ControlPlane {
             worker,
         ));
         self.native_endpoint_session = Some(session_id);
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Attach a stopped, already-negotiated duplex bridge worker to one
+    /// session. Endpoint opening and bridge negotiation remain outside this
+    /// control operation; the session generation is checked again at start.
+    pub fn attach_native_duplex_worker(
+        &mut self,
+        session_id: EntityId,
+        generation: u64,
+        worker: audiorouter_windows_audio::NativeBridgeDuplexWorker,
+    ) -> Result<(), ControlError> {
+        self.get_session(&session_id)?;
+        if self.native_endpoint_worker.is_some() || self.native_duplex_worker.is_some() {
+            return Err(ControlError::InvalidRequest(
+                "native worker is already attached".into(),
+            ));
+        }
+        if worker.is_running() {
+            return Err(ControlError::InvalidRequest(
+                "native duplex worker must be stopped before attachment".into(),
+            ));
+        }
+        self.native_duplex_worker = Some(worker);
+        self.native_duplex_worker_session = Some(session_id);
+        self.native_duplex_worker_generation = Some(generation);
         Ok(())
     }
 
@@ -4493,6 +4532,139 @@ impl ControlPlane {
             })?
             .start()
             .map_err(audio_control_error)
+    }
+
+    #[cfg(windows)]
+    /// Start an attached duplex bridge only for its exact running session
+    /// generation. This does not discover endpoints or change defaults.
+    pub fn start_native_duplex_worker(&mut self) -> Result<(), ControlError> {
+        let session_id = self.native_duplex_worker_session.clone().ok_or_else(|| {
+            ControlError::InvalidRequest("native duplex worker is not attached".into())
+        })?;
+        let expected_generation = self.native_duplex_worker_generation.ok_or_else(|| {
+            ControlError::InvalidRequest("native duplex worker generation is missing".into())
+        })?;
+        let runtime = self.runtimes.get(&session_id).ok_or_else(|| {
+            ControlError::InvalidRequest("native duplex worker session is not running".into())
+        })?;
+        if runtime.state() != RuntimeState::Running || runtime.generation() != expected_generation {
+            return Err(ControlError::InvalidRequest(
+                "native duplex worker requires the matching running session generation".into(),
+            ));
+        }
+        self.native_duplex_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native duplex worker is not attached".into())
+            })?
+            .start()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("native duplex start failed: {error:?}"))
+            })
+    }
+
+    #[cfg(windows)]
+    /// Stop the duplex bridge before its session is reported stopped.
+    pub fn stop_native_duplex_worker(&mut self) -> Result<(), ControlError> {
+        if let Some(session_id) = self.native_duplex_worker_session.as_ref() {
+            if self
+                .runtimes
+                .get(session_id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
+                return Err(ControlError::InvalidRequest(
+                    "stop the session before stopping its native duplex worker".into(),
+                ));
+            }
+        }
+        self.native_duplex_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native duplex worker is not attached".into())
+            })?
+            .stop()
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("native duplex stop failed: {error:?}"))
+            })
+    }
+
+    #[cfg(windows)]
+    /// Detach only a stopped duplex worker from its session.
+    pub fn detach_native_duplex_worker(&mut self) -> Result<(), ControlError> {
+        if self
+            .native_duplex_worker
+            .as_ref()
+            .is_some_and(|worker| worker.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "native duplex worker must be stopped before detachment".into(),
+            ));
+        }
+        if self.native_duplex_worker.take().is_none() {
+            return Err(ControlError::InvalidRequest(
+                "native duplex worker is not attached".into(),
+            ));
+        }
+        self.native_duplex_worker_session = None;
+        self.native_duplex_worker_generation = None;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    /// Pump bounded work from both directions without waiting or implicit
+    /// recovery. The caller owns event wakeups and chooses both budgets.
+    pub fn pump_native_duplex_worker(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+        max_input_quanta: u32,
+        max_output_packets: u32,
+    ) -> Result<Value, ControlError> {
+        if self.native_duplex_worker_session.as_ref() != Some(session_id)
+            || self.native_duplex_worker_generation != Some(generation)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native duplex worker is not bound to the requested session generation".into(),
+            ));
+        }
+        let runtime = self.runtimes.get(session_id).ok_or_else(|| {
+            ControlError::InvalidRequest("native duplex worker session is unavailable".into())
+        })?;
+        if runtime.state() != RuntimeState::Running || runtime.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native duplex worker session generation is not running".into(),
+            ));
+        }
+        let (input, output) = self
+            .native_duplex_worker
+            .as_mut()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native duplex worker is not attached".into())
+            })?
+            .pump_available(max_input_quanta, max_output_packets)
+            .map_err(|error| {
+                ControlError::InvalidRequest(format!("native duplex pump failed: {error:?}"))
+            })?;
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "input": {
+                "packets": input.packets,
+                "capturedFrames": input.captured_frames,
+                "processedQuanta": input.processed_quanta,
+                "renderedFrames": input.rendered_frames,
+                "droppedRenderFrames": input.dropped_render_frames,
+                "renderBackpressureEvents": input.render_backpressure_events,
+            },
+            "output": {
+                "packets": output.packets,
+                "capturedFrames": output.captured_frames,
+                "processedQuanta": output.processed_quanta,
+                "renderedFrames": output.rendered_frames,
+                "droppedRenderFrames": output.dropped_render_frames,
+                "renderBackpressureEvents": output.render_backpressure_events,
+            },
+        }))
     }
 
     /// Stop the explicitly attached endpoint pair and clear staged bridge
@@ -5112,6 +5284,12 @@ impl ControlPlane {
             native_render_source_bindings: HashMap::new(),
             #[cfg(windows)]
             native_duplex_bindings: HashMap::new(),
+            #[cfg(windows)]
+            native_duplex_worker: None,
+            #[cfg(windows)]
+            native_duplex_worker_session: None,
+            #[cfg(windows)]
+            native_duplex_worker_generation: None,
         })
     }
 
@@ -6192,6 +6370,17 @@ impl ControlPlane {
                 "stop the native endpoint worker before deleting the session".into(),
             ));
         }
+        #[cfg(windows)]
+        if self.native_duplex_worker_session.as_ref() == Some(id)
+            && self
+                .native_duplex_worker
+                .as_ref()
+                .is_some_and(|worker| worker.is_running())
+        {
+            return Err(ControlError::InvalidRequest(
+                "stop the native duplex worker before deleting the session".into(),
+            ));
+        }
         let checkpoint = self.store.clone();
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.delete_session(id) {
@@ -6209,6 +6398,12 @@ impl ControlPlane {
             self.native_endpoint_worker.take();
             self.native_endpoint_session = None;
             self.native_endpoint_taps = None;
+        }
+        #[cfg(windows)]
+        if self.native_duplex_worker_session.as_ref() == Some(id) {
+            self.native_duplex_worker.take();
+            self.native_duplex_worker_session = None;
+            self.native_duplex_worker_generation = None;
         }
         self.runtimes.remove(id);
         for node in session
@@ -7108,8 +7303,15 @@ impl ControlPlane {
             .nodes
             .iter()
             .any(|node| node.enabled && node.kind == NodeKind::Plugin);
-        let native_attached = self.native_endpoint_session.as_ref() == Some(id)
+        let native_endpoint_attached = self.native_endpoint_session.as_ref() == Some(id)
             && self.native_endpoint_worker.is_some();
+        let mut native_attached = native_endpoint_attached;
+        #[cfg(windows)]
+        {
+            native_attached = native_attached
+                || (self.native_duplex_worker_session.as_ref() == Some(id)
+                    && self.native_duplex_worker.is_some());
+        }
         if has_enabled_plugin && !native_attached {
             return Err(ControlError::InvalidRequest(
                 "enabled plugin nodes require an attached native endpoint session".into(),
@@ -7154,7 +7356,7 @@ impl ControlPlane {
         // samples could reach the endpoint.  Prepare and publish the graph
         // before starting the worker; any failure rolls back the runtime and
         // selected bridge generation so the session cannot be half-started.
-        if native_attached {
+        if native_endpoint_attached {
             if let Err(error) = self.activate_native_graph(id, generation, 48_000) {
                 if let Some(runtime) = self.runtimes.get_mut(id) {
                     runtime.stop();
@@ -7175,6 +7377,19 @@ impl ControlPlane {
                 }
                 self.deactivate_virtual_route_bridges(id);
                 self.native_endpoint_taps = None;
+                return Err(error);
+            }
+        }
+        #[cfg(windows)]
+        if !native_endpoint_attached
+            && self.native_duplex_worker_session.as_ref() == Some(id)
+            && self.native_duplex_worker.is_some()
+        {
+            if let Err(error) = self.start_native_duplex_worker() {
+                if let Some(runtime) = self.runtimes.get_mut(id) {
+                    runtime.stop();
+                }
+                self.deactivate_virtual_route_bridges(id);
                 return Err(error);
             }
         }
@@ -7281,6 +7496,16 @@ impl ControlPlane {
         } else {
             None
         };
+        #[cfg(windows)]
+        let native_duplex_stop_error = if self.native_duplex_worker_session.as_ref() == Some(id) {
+            self.native_duplex_worker
+                .as_mut()
+                .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::stop)
+                .transpose()
+                .err()
+        } else {
+            None
+        };
         self.deactivate_virtual_route_bridges(id);
         let revision = self.get_session(id)?.revision;
         if let Some(runtime) = self.runtimes.get_mut(id) {
@@ -7290,6 +7515,12 @@ impl ControlPlane {
             .append(revision, None, "runtime.stopped", Some(id.clone()));
         if let Some(error) = native_stop_error {
             return Err(audio_control_error(error));
+        }
+        #[cfg(windows)]
+        if let Some(error) = native_duplex_stop_error {
+            return Err(ControlError::InvalidRequest(format!(
+                "native duplex worker stop failed: {error:?}"
+            )));
         }
         Ok(json!({
             "sessionId": id,

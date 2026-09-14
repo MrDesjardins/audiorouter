@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Connected the composed duplex bridge worker to the control-plane session
+  lifecycle on 2026-09-14. Control now supports stopped-worker attachment with
+  an exact session generation, explicit start/pump/stop/detach operations,
+  session-start activation, stop-before-stopped ordering, and deletion guards.
+  A start failure rolls back the runtime; generation and ownership mismatches
+  fail closed. Control coverage passed 143 tests, strict Clippy, formatting,
+  and diff checks. This is still non-installing user-mode evidence; loaded
+  PortCls transport, production signing, and physical-latency gates remain
+  open. Next action: continue native bridge construction/activation evidence.
+
 - Hardened `NativeBridgeDuplexWorker` teardown on 2026-09-14. Dropping the
   composed owner now explicitly stops both directions and resets staged audio,
   including partially-started states, while preserving the first lifecycle
