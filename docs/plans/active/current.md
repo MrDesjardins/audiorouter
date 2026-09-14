@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Closed a portable M04/M05 recorder-state hydration gap on 2026-09-14.
+  The connected UI now reads `recorders.list` on startup/backend replacement
+  and refreshes it with lifecycle events, so the Recorder panel does not
+  display a locally guessed `idle` state after reconnect or session changes.
+  Added a rendered authoritative-state regression; TypeScript typecheck and
+  the full UI suite passed (18 files, 171 tests). No audio endpoint or machine
+  configuration was changed.
+
 - Closed a portable M04/M05 recording-library refresh gap on 2026-09-14.
   The connected UI now reloads the selected session's recording rows when a
   subscribed `recorder.changed` event arrives, so newly finalized parts and

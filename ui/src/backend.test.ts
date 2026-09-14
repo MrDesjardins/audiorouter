@@ -99,6 +99,7 @@ describe("snapshot cache", () => {
       planGraph: async () => { throw new Error("not connected"); },
       commitGraph: async () => { throw new Error("not connected"); },
       listRecordings: async () => [],
+      listRecorders: async () => [],
       listRecordingRecovery: async () => ({ items: [], nextCursor: null }),
       listSessions: async () => [],
       listApplications: async () => [],

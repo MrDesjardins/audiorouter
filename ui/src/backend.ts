@@ -52,6 +52,7 @@ import { demoSession, demoSessions } from "./fixtures";
 export type ApplicationRow = ApplicationInfo;
 export type ProcessorResponseParams = NonNullable<MethodParams["processors.response"]>;
 export type ProcessorResponse = MethodResult["processors.response"];
+export type RecorderStatus = MethodResult["recorders.list"][number];
 
 /** Formats structured backend failures without losing actionable audio guidance. */
 export function formatUiError(error: unknown, fallback: string): string {
@@ -87,6 +88,7 @@ export interface UiBackend {
   planGraph(candidate: Session): Promise<GraphPlanResult>;
   commitGraph(planId: string, baseRevision: number, idempotencyKey: string, acknowledgments?: string[]): Promise<GraphCommitResult>;
   listRecordings(sessionId?: string): Promise<RecordingRow[]>;
+  listRecorders(): Promise<RecorderStatus[]>;
   listSessions(): Promise<Session[]>;
   listApplications(): Promise<ApplicationRow[]>;
   listDevices(includeInactive?: boolean): Promise<DeviceListItem[]>;
@@ -232,6 +234,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
       throw new Error("The backend is disconnected; graph changes are unavailable.");
     },
     async listRecordings() {
+      return [];
+    },
+    async listRecorders() {
       return [];
     },
     async listSessions() {
@@ -457,6 +462,9 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
           ? { sessionId: recordingSessionId, limit: 500 }
           : { sessionId: recordingSessionId, limit: 500, cursor }),
       );
+    },
+    async listRecorders() {
+      return client.request("recorders.list", undefined);
     },
     async listSessions() {
       return collectPagedRows((cursor) => client.request("sessions.list", cursor === null

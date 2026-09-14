@@ -465,6 +465,16 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText(/Recorder voice-take created unarmed/)).toBeTruthy();
   });
 
+  it("hydrates the recorder panel from the authoritative live state", async () => {
+    const backend = {
+      ...connectedPreviewBackend(),
+      listRecorders: async () => [{ sessionId: demoSession.id, state: "recording" as const, lastFrame: 480 }],
+    };
+    render(<App backend={backend} />);
+    const panel = await screen.findByRole("region", { name: "Recorder" });
+    await waitFor(() => expect(within(panel).getByText("recording")).toBeTruthy());
+  });
+
   it("offers bounded slider and precise entry for numeric processor parameters", async () => {
     const processor: ProcessorDescriptor = {
       id: "gain",
