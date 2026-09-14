@@ -3249,8 +3249,28 @@ fn diagnostics_output_schema() -> Value {
                     "properties": {
                         "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                         "kind": { "type": "string", "minLength": 1 },
-                        "meter": { "type": ["object", "null"] },
-                        "processor": { "type": ["object", "null"] }
+                        "meter": {
+                            "type": ["object", "null"],
+                            "properties": {
+                                "peakDb": { "type": "number" },
+                                "rmsDb": { "type": "number" },
+                                "clippedSamples": { "type": "integer", "minimum": 0 },
+                                "channelPeakDb": { "type": "array", "maxItems": 2, "items": { "type": "number" } },
+                                "channelRmsDb": { "type": "array", "maxItems": 2, "items": { "type": "number" } },
+                                "channelClippedSamples": { "type": "array", "maxItems": 2, "items": { "type": "integer", "minimum": 0 } }
+                            },
+                            "required": ["peakDb", "rmsDb", "clippedSamples", "channelPeakDb", "channelRmsDb", "channelClippedSamples"],
+                            "additionalProperties": false
+                        },
+                        "processor": {
+                            "type": ["object", "null"],
+                            "properties": {
+                                "gainReductionDb": { "type": "array", "maxItems": 2, "items": { "type": "number", "minimum": 0 } },
+                                "gateOpen": { "type": "array", "maxItems": 2, "items": { "type": "boolean" } }
+                            },
+                            "required": ["gainReductionDb", "gateOpen"],
+                            "additionalProperties": false
+                        }
                     },
                     "required": ["nodeId", "kind", "meter", "processor"],
                     "additionalProperties": false

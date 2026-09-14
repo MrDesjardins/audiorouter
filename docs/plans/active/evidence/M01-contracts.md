@@ -385,6 +385,12 @@ TypeScript contract require this field while keeping the existing redacted
 boundary. Control and engine regressions cover identity lookup and missing
 identity behavior; this is portable/control evidence, not loaded-driver proof.
 
+The nested telemetry contract was hardened on 2026-09-14. Meter and dynamics
+objects now declare all required fields, cap channel arrays at two, reject
+unknown properties, and constrain counters and gain reduction to nonnegative
+integers/numbers. Control tests, contracts typecheck, and drift validation
+passed without opening audio or changing machine state.
+
 The fixed `startup.get` capability response and `recovery.clearSafeMode` result
 now have explicit output schemas and shared TypeScript types. Their
 unavailable/cleared-state invariants are discovery-tested without registering

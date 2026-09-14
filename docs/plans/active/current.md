@@ -2,6 +2,12 @@
 
 Updated: 2026-09-14.
 
+- Hardened the nested `nodeTelemetry` diagnostics schema on 2026-09-14.
+  Meter and processor objects now have explicit required fields, finite-number
+  types, nonnegative counters/reduction, stereo-sized channel arrays, and
+  unknown-field rejection. Control tests (143), contracts typecheck/drift,
+  and UI typecheck passed. No endpoint or machine configuration changed.
+
 - Requalified the full Rust workspace at pushed head `4c89fdd9` on 2026-09-14.
   CLI/MCP (35 tests), control (143), domain (64), DSP (32), engine (110),
   plugin-host (83 including worker-process tests), protocol (8), recording

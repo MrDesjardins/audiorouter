@@ -256,6 +256,10 @@ matching prepared stage is available; a busy realtime processor is omitted
 rather than waited on. The response is observational and does not alter the
 saved graph.
 
+The nested telemetry schema is strict: meter and processor fields are required
+when present, channel arrays are capped at two channels, counters are
+nonnegative, and unknown properties are rejected.
+
 The UI requests this diagnostic snapshot at most once per second while a
 session is running. Diagnostics are not replayed or retained as meter events;
 the UI keeps the last successful snapshot if a refresh fails.
