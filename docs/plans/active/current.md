@@ -15,6 +15,12 @@ Updated: 2026-09-14.
   frames, xruns, or deadline misses, and removed its temporary recording.
   Media-device state and persistent configuration remained unchanged.
 
+- Requalified the guarded M02 Voicemeeter application-capture lifecycle on
+  2026-09-14 with the exact current PID, executable path, creation identity,
+  and CABLE Input render endpoint. Two bounded start/pump/stop cycles and
+  same-process worker restart passed; the media-device snapshot matched
+  before and after, and temporary environment values were restored.
+
 - Narrowed the live UI event subscription on 2026-09-14 to the bounded state
   categories the workspace can refresh: graph/runtime, virtual-device,
   recorder, and recording-library changes. Meter events remain excluded as
