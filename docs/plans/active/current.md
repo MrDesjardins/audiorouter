@@ -16,6 +16,12 @@ Updated: 2026-09-13.
   state were restored. No endpoint defaults, volume, mute, driver, signing,
   startup, or persistent audio configuration changed.
 
+- Requalified the session-scoped native lifecycle acceptance after the probe
+  repair on 2026-09-14. The exact active VB-Cable pair completed the guarded
+  500 ms start/pump/stop path with 24,000 captured frames, 187 processed
+  quanta, and 23,936 rendered frames. The ignored test passed, and its process
+  environment was restored; no persistent audio configuration changed.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   pushed head `f376156c` on 2026-09-13 after fixing render-stream bridge
   publication. The elevated run passed project WDK build/catalog signability,
