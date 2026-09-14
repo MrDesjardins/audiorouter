@@ -3820,6 +3820,9 @@ impl ControlPlane {
     ) -> Result<(), ControlError> {
         let session = self.get_session(&session_id)?.clone();
         let process_id_value = serde_json::Value::from(u64::from(config.process_id));
+        let executable_value = serde_json::Value::from(config.expected_executable);
+        let creation_time_value =
+            serde_json::Value::from(config.expected_creation_time_100ns.to_string());
         let has_matching_capture = session.nodes.iter().any(|node| {
             node.enabled
                 && node.kind == NodeKind::ApplicationCapture
@@ -3827,6 +3830,14 @@ impl ControlPlane {
                     .parameters
                     .get("processId")
                     .is_some_and(|value| value == &process_id_value)
+                && node
+                    .parameters
+                    .get("executable")
+                    .is_some_and(|value| value == &executable_value)
+                && node
+                    .parameters
+                    .get("creationTime100ns")
+                    .is_some_and(|value| value == &creation_time_value)
         });
         if !has_matching_capture {
             return Err(ControlError::InvalidRequest(
@@ -11316,6 +11327,71 @@ mod tests {
         ));
         assert!(plane.native_endpoint_worker.is_none());
         assert!(plane.endpoint_monitor.is_none());
+    }
+
+    #[test]
+    fn native_application_worker_rejects_graph_identity_mismatch_before_platform_access() {
+        let mut owned = session();
+        owned.id = EntityId::new("application-worker-identity-required");
+        owned.nodes[0] = Node {
+            id: EntityId::new("application"),
+            kind: NodeKind::ApplicationCapture,
+            type_version: 1,
+            name: "Application capture".into(),
+            enabled: true,
+            bypass: false,
+            parameters: [
+                ("executable".into(), json!("actual.exe")),
+                ("processPolicy".into(), json!("selectedInstance")),
+                ("processId".into(), json!(42)),
+                ("creationTime100ns".into(), json!("100")),
+            ]
+            .into_iter()
+            .collect(),
+            ports: vec![Port {
+                name: "main".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            }],
+        };
+        owned.nodes[1].ports[0].channels = 2;
+        owned.edges[0].source_node = EntityId::new("application");
+        owned.edges[0].matrix = vec![1.0, 0.0, 0.0, 1.0];
+        let mut plane = ControlPlane::default();
+        plane.create_session(owned).unwrap();
+        let render = audiorouter_windows_audio::EndpointInfo {
+            id: "render".into(),
+            direction: audiorouter_windows_audio::EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 30_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: "00000003-0000-0010-8000-00aa00389b71".into(),
+        };
+        let error = plane
+            .prepare_native_application_worker(
+                EntityId::new("application-worker-identity-required"),
+                NativeApplicationWorkerConfig {
+                    process_id: 42,
+                    expected_executable: "different.exe",
+                    expected_executable_path: None,
+                    expected_creation_time_100ns: 100,
+                    mode: audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+                    render: &render,
+                    buffer_duration_100ns: 0,
+                    max_attempts: 1,
+                    retry_delay_ms: 0,
+                },
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, ControlError::InvalidRequest(message) if message.contains("matching enabled"))
+        );
+        assert!(plane.endpoint_monitor.is_none());
+        assert!(plane.native_endpoint_worker.is_none());
     }
 
     #[cfg(windows)]

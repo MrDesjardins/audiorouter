@@ -23,6 +23,14 @@ Updated: 2026-09-13.
   Windows runtime evidence for the application route, not production-driver or
   signing evidence.
 
+- Closed an application-capture identity-consistency gap on 2026-09-13. Native
+  preparation now requires the enabled committed `applicationCapture` node to
+  match the requested PID, executable basename, and decimal creation-time
+  identity before process enumeration, COM activation, or endpoint-monitor
+  creation. A focused mismatch regression passes; the full control suite is
+  green (140 passed, two guarded live tests ignored) with strict Clippy. This
+  prevents a stale graph identity from being paired with a different request.
+
 - Added a guarded control-owned application-capture acceptance on 2026-09-13.
   With explicit `AUDIOROUTER_APPLICATION_PROCESS_ID`, executable,
   creation-time, and render-endpoint inputs, the test constructs the real
