@@ -3043,7 +3043,7 @@ impl Drop for CoTaskMemBlob {
 
 #[cfg(windows)]
 struct ProcessLoopbackActivationLifetime {
-    _operation: windows::Win32::Media::Audio::IActivateAudioInterfaceAsyncOperation,
+    _operation: Option<windows::Win32::Media::Audio::IActivateAudioInterfaceAsyncOperation>,
     _handler: windows::Win32::Media::Audio::IActivateAudioInterfaceCompletionHandler,
     _property: windows::Win32::System::Com::StructuredStorage::PROPVARIANT,
     _blob: CoTaskMemBlob,
@@ -3172,24 +3172,29 @@ impl ProcessLoopbackCapture {
                 completion: Arc::clone(&completion),
             }
             .into();
+        // The asynchronous API may retain the activation-parameter pointer
+        // until completion. Construct the owner before the call and pass the
+        // address of its stable field; passing a stack-local PROPVARIANT and
+        // moving it into this owner afterward creates a use-after-scope.
+        let mut activation_lifetime = ProcessLoopbackActivationLifetime {
+            _operation: None,
+            _handler: handler,
+            _property: property,
+            _blob: blob_owner,
+        };
         let operation = unsafe {
             ActivateAudioInterfaceAsync(
                 VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
                 &IAudioClient::IID,
-                Some(std::ptr::addr_of!(property)),
-                &handler,
+                Some(std::ptr::addr_of!(activation_lifetime._property)),
+                &activation_lifetime._handler,
             )
         }
         .map_err(|error| AudioError::WindowsOperation {
             operation: "ActivateAudioInterfaceAsync(process-loopback)",
             error,
         })?;
-        let activation_lifetime = ProcessLoopbackActivationLifetime {
-            _operation: operation,
-            _handler: handler,
-            _property: property,
-            _blob: blob_owner,
-        };
+        activation_lifetime._operation = Some(operation);
         let (lock, wake) = &*completion;
         let state = match lock.lock() {
             Ok(state) => state,
@@ -3284,6 +3289,21 @@ impl ProcessLoopbackCapture {
         unsafe { client.SetEventHandle(event.0)? };
         let capture: windows::Win32::Media::Audio::IAudioCaptureClient =
             unsafe { client.GetService()? };
+        let ProcessLoopbackActivationLifetime {
+            _operation: operation,
+            _handler: handler,
+            _property: mut property,
+            _blob: blob,
+        } = activation_lifetime;
+        std::mem::forget(blob);
+        unsafe {
+            windows::Win32::System::Com::StructuredStorage::PropVariantClear(
+                std::ptr::addr_of_mut!(property),
+            )
+            .ok();
+        }
+        drop(handler);
+        drop(operation);
         Ok(Self {
             client,
             capture,

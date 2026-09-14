@@ -2,6 +2,19 @@
 
 Updated: 2026-09-13.
 
+- Fixed and requalified a real process-loopback activation memory defect on
+  2026-09-13. Investigation reproduced `STATUS_HEAP_CORRUPTION` in the
+  elevated Rust probe, isolated it to raw activation-blob teardown, and
+  matched the native reference lifecycle by clearing the completed
+  `PROPVARIANT` with `PropVariantClear` instead of freeing its BLOB pointer
+  directly. The guarded include/exclude acceptance then passed at 100 ms:
+  include 9 packets/3,969 source frames/4,224 engine frames and exclude 7
+  packets/3,087 source frames/3,328 engine frames, with zero rejected packets,
+  XRuns, overruns, or underruns and unchanged media state. Focused Windows
+  tests (73) pass. The earlier crash was an ownership defect, not endpoint
+  contention; the result is recorded as a defect regression, not a driver or
+  production realtime qualification.
+
 - Connected application capture to the control-plane native worker boundary
   on 2026-09-13. Native worker ownership now supports either an exact
   endpoint pair or a verified process-loopback capture while preserving one
