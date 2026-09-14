@@ -9652,6 +9652,11 @@ impl ControlPlane {
                                 "event category must contain 1 to 128 characters".into(),
                             ));
                         }
+                        if !STATE_CATEGORIES.contains(&category) {
+                            return Err(ControlError::InvalidRequest(
+                                "event category is not discoverable".into(),
+                            ));
+                        }
                         Ok(category.to_owned())
                     })
                     .collect::<Result<Vec<_>, ControlError>>()
@@ -14153,6 +14158,14 @@ mod tests {
             id: Some(json!(1)),
             method: "sessions.list".into(),
             params: Some(json!({ "unexpected": true })),
+        });
+        assert_eq!(response.error.unwrap().code, -32602);
+
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(8)),
+            method: "events.subscribe".into(),
+            params: Some(json!({ "categories": ["not-a-real-event"] })),
         });
         assert_eq!(response.error.unwrap().code, -32602);
 

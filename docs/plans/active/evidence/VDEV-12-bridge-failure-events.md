@@ -24,6 +24,8 @@ subscribes to both so endpoint and recovery changes refresh the authoritative
 snapshot.
 The `events.subscribe` JSON schema also exposes this exact 19-value enum,
 preventing schema-driven clients from requesting undiscoverable categories.
+The direct dispatcher applies the same enum at runtime and rejects unknown
+filters before scanning retained events.
 
 Verification on Windows workspace `C:\code\audiorouter`:
 

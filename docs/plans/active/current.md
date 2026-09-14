@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Implemented the API-08 validation correction on 2026-09-14. Direct
+  `events.subscribe` dispatch now rejects unknown event filters before replay,
+  matching the advertised category enum instead of silently returning an empty
+  page. The focused regression and full control suite passed (150 tests, 2
+  guarded live ignored), with strict Clippy, formatting, diff, and docs checks
+  green. No audio or machine configuration was accessed. Next action: continue
+  the next safe M03/M07 recovery item.
+
 - Implemented the API-08 schema-hardening slice on 2026-09-14. The
   `events.subscribe` input schema now advertises the authoritative 19-value
   event-category enum, matching Rust discovery and the TypeScript contract;
