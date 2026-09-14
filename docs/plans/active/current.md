@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Added a persisted local compact route-status view on 2026-09-13. The UI
+  exposes an accessible `Compact status` toggle that presents the selected
+  session, backend/native telemetry summary, session start/stop, and privacy
+  mute actions; `Full workspace` returns to the editor. The preference is
+  local presentation state only and does not register OS-global shortcuts,
+  change endpoint bindings, or alter machine audio configuration. Regression
+  coverage passes (18 files/165 tests), TypeScript passes, and a disposable
+  production bundle succeeds. The normal `ui/dist` output remains locked by
+  an existing Edge/WebView2 process and was not forcibly replaced.
+
 - Confirmed no interactive desktop surface is available for the attended
   WebView2/Narrator gate on 2026-09-13 (`cua.getState` returned no apps or
   browsers). The full Rust workspace regression nevertheless passed at the

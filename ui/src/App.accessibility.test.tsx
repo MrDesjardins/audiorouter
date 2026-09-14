@@ -49,6 +49,20 @@ describe("VB-Cable endpoint selection", () => {
     expect(within(quickRoute).getByRole("link", { name: "Start the session" }).getAttribute("href")).toBe("#native-endpoint-panel");
   });
 
+  it("offers a persisted compact route status view with live controls", async () => {
+    render(<App backend={connectedPreviewBackend()} />);
+    const toggle = await screen.findByRole("button", { name: "Compact status" });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("region", { name: "Compact route status" })).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Compact route status" })).getByRole("button", { name: "Start session" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Full workspace" }).getAttribute("aria-pressed")).toBe("true");
+    expect(window.localStorage.getItem("audiorouter.ui.compact-status")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Full workspace" }));
+    expect(screen.queryByRole("region", { name: "Compact route status" })).toBeNull();
+    expect(window.localStorage.getItem("audiorouter.ui.compact-status")).toBe("false");
+  });
+
   it("forwards the selected application capture policy", async () => {
     const prepareNativeApplication = vi.fn(async () => ({ sessionId: demoSession.id, state: "configured-stopped" as const, processId: 42, executable: "Music.exe", executablePath: "C:\\Apps\\Music.exe", creationTime100ns: "123", mode: "exclude" as const, renderEndpointId: "render-test" }));
     const backend = {

@@ -8,6 +8,9 @@ button:hover, button:focus-visible { border-color: #70a8ff; outline: 2px solid #
 h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; } h3 { font-size: 1rem; }
 .eyebrow, .node-kind { color: #8fa5c8; font-size: .7rem; letter-spacing: .11em; text-transform: uppercase; } .muted, .node-card p, small { color: #9ba8bd; }
 .status-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; min-width: 0; color: #ffcf87; font-size: .85rem; } .status-detail { color: #9ba8bd; font-size: .75rem; overflow-wrap: anywhere; } .status-dot { flex: 0 0 auto; width: .6rem; height: .6rem; border-radius: 50%; background: #dc8f35; } .status-cluster button { padding: .35rem .55rem; font-size: .8rem; }
+.compact-status-panel { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 1250px; margin: 1rem auto 0; padding: .85rem 1rem; border: 1px solid #4b6388; border-radius: 10px; background: #182337; }
+.compact-status-panel > div { min-width: 0; } .compact-status-panel strong, .compact-status-panel .muted { overflow-wrap: anywhere; }
+.compact-status-panel .eyebrow { margin-bottom: .2rem; } .compact-status-panel .muted { margin-top: .25rem; font-size: .8rem; }
 .workspace-grid { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: calc(100vh - 82px); }
 .session-name { display: grid; gap: .3rem; color: #bdc9dc; font-size: .78rem; max-width: 28rem; }
 .session-name input { border: 1px solid #384458; border-radius: 6px; color: inherit; background: #1a2130; padding: .45rem; font: inherit; font-size: 1.35rem; font-weight: 600; }
@@ -71,7 +74,10 @@ h1, h2, h3, p { margin: 0; } h1 { font-size: 1.3rem; } h2 { font-size: 1.1rem; }
 .theme-light button, .theme-light .session-name input, .theme-light .session-picker select, .theme-light .recording-search input, .theme-light .theme-picker select { color: #172033; background: #edf1f6; border-color: #8b9ab0; }
 .theme-light .node-card { background: #f5f7fa; border-color: #8b9ab0; }
 .theme-light .muted, .theme-light .node-card p, .theme-light small, .theme-light .status-detail { color: #4b5b73; }
+.theme-light .compact-status-panel { background: #e5edf8; border-color: #7186a3; }
 .theme-high-contrast { color: #fff; background: #000; }
 .theme-high-contrast .topbar, .theme-high-contrast .sidebar, .theme-high-contrast .canvas-panel, .theme-high-contrast .panel, .theme-high-contrast .node-card { background: #000; border-color: #fff; }
 .theme-high-contrast button, .theme-high-contrast input, .theme-high-contrast select { color: #fff; background: #000; border-color: #fff; }
 .theme-high-contrast .muted, .theme-high-contrast .node-card p, .theme-high-contrast small, .theme-high-contrast .status-detail { color: #fff; }
+.theme-high-contrast .compact-status-panel { background: #000; border-color: #fff; }
+@media (max-width: 760px) { .compact-status-panel { align-items: flex-start; flex-direction: column; margin: 1rem; } }
