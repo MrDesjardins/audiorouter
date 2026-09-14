@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain on
+  2026-09-14 at pushed head `000834f4`. M00 toolchain/native inventory, M03
+  AudioRouter and disposable SysVAD x64 builds, M04 DSP/recording, M05 UI
+  (typecheck, 19 files/189 tests, production build), M06 SDK/VST3/VST2,
+  M07 headless, M08 unsigned artifacts and 159 requirement mappings, and
+  documentation validation (53 Markdown files, 193 local links) passed. The
+  chain removed 15 run-owned temporary children. No driver installation or
+  loading, signing-mode or boot-policy change, plugin/startup registration,
+  live audio mutation, or persistent machine configuration occurred. Loaded
+  PortCls, production signing/installation, physical-latency, and manual UI
+  gates remain open. Next action: continue the next safe M03/M07 recovery
+  integration item.
+
 - Closed the REC-10 recording-library metadata UI gap on 2026-09-14. The
   existing versioned backend/storage contract already persisted title, artist,
   and comment, but the UI exposed only title editing. The library now
