@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added the worker-facing duplex transfer on 2026-09-13. A validated paired
+  lease can now be split into independent render and capture controllers plus
+  the prebuilt capture writer, allowing the existing stopped worker types to
+  be attached without duplicating COM handles or lease state. Focused control
+  and Windows-audio tests pass (137 and 70, with one guarded live test
+  intentionally ignored); no endpoint was opened by construction.
+
 - Requalified the project-owned x64 driver build on 2026-09-13 at the current
   head with Visual Studio Community MSBuild 18.9.1 and WDK 10.0.28000.0.
   Utilities, Filters, Main, package/catalog, and Inc built; catalog
