@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Requalified the full locked workspace after the crash-recovery fix at
+  `35846337` on 2026-09-14. CLI (33), MCP interoperability (3), control (156
+  passed, 2 guarded live ignored), domain (64), DSP (32), engine (111), plugin
+  host (70), worker-process (13), protocol (8), recording (40), storage (90),
+  transport (19), and Windows audio (73) tests plus all doc-tests passed. No
+  endpoint, driver, registry, or persistent machine audio configuration was
+  accessed. Next action: continue the next safe M03/M07 recovery integration
+  item.
+
 - Closed an M07/VDEV-12 crash-recovery ownership gap on 2026-09-14. Runtime
   crash recovery now excludes native-owned sessions from automatic portable
   restart, stops and drops affected native endpoint/duplex workers, clears
