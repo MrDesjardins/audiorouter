@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the project-owned x64 driver build on 2026-09-13 at the current
+  head with Visual Studio Community MSBuild 18.9.1 and WDK 10.0.28000.0.
+  Utilities, Filters, Main, package/catalog, and Inc built; catalog
+  signability reported zero errors and zero warnings, and disposable output
+  was removed. Evidence: [M03 driver prototype evidence](evidence/M03-driver-prototype.md).
+  Installation, loading, production signing, and endpoint callback evidence
+  remain intentionally open.
+
 - Added the paired lease worker split on 2026-09-13. A validated duplex bus
   can transfer its render controller, capture controller, and prebuilt capture
   writer to the two stopped endpoint workers; the control plane checks graph

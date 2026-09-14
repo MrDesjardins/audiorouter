@@ -1,5 +1,15 @@
 # M03 AudioRouter virtual-driver prototype evidence
 
+## 2026-09-13 - WDK build requalification at current head
+
+Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+drivers/audiorouter-virtual/build.ps1`. Visual Studio Community MSBuild 18.9.1
+and WDK 10.0.28000.0 rebuilt Utilities, Filters, Main, package/catalog, and
+Inc for x64. Catalog signability reported zero errors and zero warnings, and
+the script removed its disposable output. No driver was installed or loaded;
+signing mode, boot policy, service state, endpoints, and persistent audio
+configuration were unchanged.
+
 ## 2026-09-13 - focused bridge source/build requalification
 
 Command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
