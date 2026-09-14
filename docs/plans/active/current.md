@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Corrected duplex-worker rollback state on 2026-09-14. A failed output
+  start no longer stops an input worker that was already running before the
+  duplex start attempt; only an input worker started by that transaction is
+  rolled back. The Windows-audio suite passed 73 tests, strict Clippy,
+  formatting, and diff checks. No endpoint was opened by these checks and no
+  machine audio configuration changed. Next action: continue the next safe
+  native bridge integration slice.
+
 - Added `NativeBridgeDuplexWorker` on 2026-09-14 to compose the existing
   render-source and capture-sink workers for one bus. It provides explicit
   stopped-by-default lifecycle, transactional start with rollback when the

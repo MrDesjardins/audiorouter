@@ -537,11 +537,14 @@ impl NativeBridgeDuplexWorker {
     }
 
     pub fn start(&mut self) -> Result<(), NativeBridgeDuplexWorkerError> {
+        let input_was_running = self.input.is_running();
         self.input
             .start()
             .map_err(NativeBridgeDuplexWorkerError::Input)?;
         if let Err(error) = self.output.start() {
-            let _ = self.input.stop();
+            if !input_was_running {
+                let _ = self.input.stop();
+            }
             return Err(NativeBridgeDuplexWorkerError::Output(error));
         }
         Ok(())
