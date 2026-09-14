@@ -2,6 +2,25 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
+  pushed head `f376156c` on 2026-09-13 after fixing render-stream bridge
+  publication. The elevated run passed project WDK build/catalog signability,
+  read-only 31-endpoint inventory, disposable SysVAD, M01/M04/M05 (18 files,
+  166 UI tests, typecheck, and production bundles), M06 VST3/VST2 workers,
+  M07, unsigned M08 artifacts, 159 traceability IDs, and 52-file/190-link
+  documentation validation. The initial non-elevated attempt stopped at the
+  known `Get-PnpDevice` access-denied boundary; the elevated rerun is the
+  authoritative result. Cleanup removed 15 run-owned temporary children. No
+  driver installation/loading, signing-mode or boot-policy change, plugin or
+  startup registration, or persistent audio configuration occurred.
+
+- Corrected the active-plan bridge status on 2026-09-13: both sample WaveRT
+  directions are now wired to the bounded bridge helpers. The render
+  `ReadBytes` callback refreshes its capture-sink lease shape before publishing
+  DMA, while the capture `WriteBytes` callback consumes render-source blocks.
+  Remaining proof is intentionally the loaded PortCls callback/transport and
+  production-driver gates; source/build evidence does not waive them.
+
 - Added a persisted local compact route-status view on 2026-09-13. The UI
   exposes an accessible `Compact status` toggle that presents the selected
   session, backend/native telemetry summary, session start/stop, and privacy
