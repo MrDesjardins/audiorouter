@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Qualified VST2 chunk-state and legacy-main behavior on 2026-09-13 with the
+  repository-owned fixtures. State save/restore, worker restart restoration,
+  non-finite-output rejection, and fault containment passed at 44.1, 48, and
+  96 kHz; generated fixture binaries remained local/ignored and temporary
+  VST environment values were restored. No plugin registration or audio
+  configuration changed. Redistribution/editor rights remain gated.
+
 - Re-ran the legacy VST2 worker matrix on 2026-09-13 against the supplied
   ReaPlugs directory. Six x64 audio-effect DLLs passed isolated load/process
   checks at 44.1, 48, and 96 kHz (18 combinations), including binary-integrity
