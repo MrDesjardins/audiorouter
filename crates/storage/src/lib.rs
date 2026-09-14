@@ -382,6 +382,8 @@ pub struct RecordingRecord {
     pub title: Option<String>,
     pub artist: Option<String>,
     pub comment: Option<String>,
+    pub dither: bool,
+    pub conversion: String,
 }
 
 fn recording_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordingRecord> {
@@ -413,6 +415,8 @@ fn recording_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordingReco
         title: row.get(12)?,
         artist: row.get(13)?,
         comment: row.get(14)?,
+        dither: row.get::<_, i64>(15)? != 0,
+        conversion: row.get(16)?,
     })
 }
 
@@ -460,6 +464,8 @@ fn validate_recording_record(recording: &RecordingRecord) -> Result<(), StorageE
         || !valid_recording_metadata(recording.title.as_deref())
         || !valid_recording_metadata(recording.artist.as_deref())
         || !valid_recording_metadata(recording.comment.as_deref())
+        || recording.conversion.is_empty()
+        || !valid_recording_metadata(Some(recording.conversion.as_str()))
     {
         return Err(StorageError::InvalidRecording(
             "invalid recording fields".into(),
@@ -835,7 +841,9 @@ impl Storage {
                  missing INTEGER NOT NULL DEFAULT 0 CHECK(missing IN (0, 1)),
                  title TEXT,
                  artist TEXT,
-                 comment TEXT
+                 comment TEXT,
+                 dither INTEGER NOT NULL DEFAULT 0 CHECK(dither IN (0, 1)),
+                 conversion TEXT NOT NULL DEFAULT 'unknown'
              );
              CREATE INDEX IF NOT EXISTS recordings_session_id ON recordings(session_id);
              CREATE TABLE IF NOT EXISTS recording_node_bindings (
@@ -869,6 +877,28 @@ impl Storage {
         if !has_request_hash {
             self.connection.execute(
                 "ALTER TABLE operation_journal ADD COLUMN request_hash TEXT NOT NULL DEFAULT ''",
+                [],
+            )?;
+        }
+        let has_recording_dither = self
+            .connection
+            .prepare("PRAGMA table_info(recordings)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .any(|column| column.as_deref().ok() == Some("dither"));
+        if !has_recording_dither {
+            self.connection.execute(
+                "ALTER TABLE recordings ADD COLUMN dither INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        let has_recording_conversion = self
+            .connection
+            .prepare("PRAGMA table_info(recordings)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .any(|column| column.as_deref().ok() == Some("conversion"));
+        if !has_recording_conversion {
+            self.connection.execute(
+                "ALTER TABLE recordings ADD COLUMN conversion TEXT NOT NULL DEFAULT 'unknown'",
                 [],
             )?;
         }
@@ -1411,15 +1441,16 @@ impl Storage {
         self.connection.execute(
             "INSERT INTO recordings
              (id, session_id, recorder_id, path, format, channels, sample_rate, frames,
-              file_bytes, start_time, state, missing, title, artist, comment)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+              file_bytes, start_time, state, missing, title, artist, comment, dither, conversion)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
              ON CONFLICT(id) DO UPDATE SET
                session_id=excluded.session_id, recorder_id=excluded.recorder_id,
                path=excluded.path, format=excluded.format, channels=excluded.channels,
                sample_rate=excluded.sample_rate, frames=excluded.frames,
                file_bytes=excluded.file_bytes, start_time=excluded.start_time,
                state=excluded.state, missing=excluded.missing, title=excluded.title,
-               artist=excluded.artist, comment=excluded.comment",
+               artist=excluded.artist, comment=excluded.comment, dither=excluded.dither,
+               conversion=excluded.conversion",
             params![
                 recording.id,
                 recording.session_id,
@@ -1436,6 +1467,8 @@ impl Storage {
                 recording.title,
                 recording.artist,
                 recording.comment,
+                recording.dither as i64,
+                recording.conversion,
             ],
         )?;
         Ok(())
@@ -1588,7 +1621,8 @@ impl Storage {
         }
         let mut statement = self.connection.prepare(
             "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
-                    frames, file_bytes, start_time, state, missing, title, artist, comment
+                    frames, file_bytes, start_time, state, missing, title, artist, comment,
+                    dither, conversion
              FROM recordings
              WHERE (?1 IS NULL OR session_id = ?1)
              ORDER BY start_time ASC, id ASC
@@ -1649,7 +1683,8 @@ impl Storage {
         let mut statement = if cursor.is_some() {
             self.connection.prepare(
                 "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
-                        frames, file_bytes, start_time, state, missing, title, artist, comment
+                        frames, file_bytes, start_time, state, missing, title, artist, comment,
+                        dither, conversion
                  FROM recordings
                  WHERE (?1 IS NULL OR session_id = ?1)
                    AND (start_time, id) > (
@@ -1661,7 +1696,8 @@ impl Storage {
         } else {
             self.connection.prepare(
                 "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
-                        frames, file_bytes, start_time, state, missing, title, artist, comment
+                    frames, file_bytes, start_time, state, missing, title, artist, comment,
+                        dither, conversion
                  FROM recordings
                  WHERE (?1 IS NULL OR session_id = ?1)
                  ORDER BY start_time ASC, id ASC
@@ -1691,7 +1727,8 @@ impl Storage {
         self.connection
             .query_row(
                 "SELECT id, session_id, recorder_id, path, format, channels, sample_rate,
-                        frames, file_bytes, start_time, state, missing, title, artist, comment
+                        frames, file_bytes, start_time, state, missing, title, artist, comment,
+                        dither, conversion
                  FROM recordings WHERE id = ?1",
                 params![id],
                 recording_from_row,
@@ -4947,6 +4984,8 @@ mod tests {
                 title: None,
                 artist: None,
                 comment: None,
+                dither: false,
+                conversion: "unknown".into(),
             })
             .unwrap();
         storage
@@ -5205,6 +5244,8 @@ mod tests {
             title: None,
             artist: None,
             comment: None,
+            dither: true,
+            conversion: "targetSampleRate=48000;channels=2;format=wav".into(),
         };
         storage.save_recording(&recording).unwrap();
         storage
@@ -5219,6 +5260,9 @@ mod tests {
         second.start_time = "2026-09-05T12:01:00Z".into();
         second.missing = true;
         storage.save_recording(&second).unwrap();
+        let loaded = storage.get_recording("rec-1").unwrap().unwrap();
+        assert!(loaded.dither);
+        assert_eq!(loaded.conversion, recording.conversion);
         assert_eq!(storage.list_recordings(Some("session")).unwrap().len(), 2);
         let (page, has_more) = storage
             .list_recordings_page(Some("session"), None, 1)
@@ -5258,6 +5302,49 @@ mod tests {
     }
 
     #[test]
+    fn legacy_recording_schema_gets_conservative_metadata_columns() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-recording-migration-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let connection = Connection::open(&path).unwrap();
+            connection
+                .execute_batch(
+                    "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+                     INSERT INTO schema_migrations(version) VALUES (1);
+                     CREATE TABLE recordings(
+                       id TEXT PRIMARY KEY, session_id TEXT NOT NULL, recorder_id TEXT NOT NULL,
+                       path TEXT NOT NULL, format TEXT NOT NULL, channels INTEGER NOT NULL,
+                       sample_rate INTEGER NOT NULL, frames INTEGER NOT NULL, file_bytes INTEGER NOT NULL,
+                       start_time TEXT NOT NULL, state TEXT NOT NULL, missing INTEGER NOT NULL,
+                       title TEXT, artist TEXT, comment TEXT
+                     );
+                     INSERT INTO recordings VALUES
+                       ('legacy', 'session', 'recorder', 'C:\\legacy.wav', 'wav', 1, 48000,
+                        0, 0, '2026-09-14T00:00:00Z', 'completed', 0, NULL, NULL, NULL);",
+                )
+                .unwrap();
+        }
+        let storage = Storage::open(&path).unwrap();
+        let legacy = storage.get_recording("legacy").unwrap().unwrap();
+        assert!(!legacy.dither);
+        assert_eq!(legacy.conversion, "unknown");
+        let columns = storage
+            .connection
+            .prepare("PRAGMA table_info(recordings)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(columns.iter().any(|column| column == "dither"));
+        assert!(columns.iter().any(|column| column == "conversion"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn unpaged_recording_list_rejects_an_unbounded_result() {
         let storage = Storage::open_memory().unwrap();
         for index in 0..=MAX_RECORDING_LIST_ITEMS {
@@ -5278,6 +5365,8 @@ mod tests {
                     title: None,
                     artist: None,
                     comment: None,
+                    dither: false,
+                    conversion: "unknown".into(),
                 })
                 .unwrap();
         }
@@ -5314,6 +5403,8 @@ mod tests {
             title: None,
             artist: None,
             comment: None,
+            dither: false,
+            conversion: "unknown".into(),
         };
         assert!(matches!(
             storage.save_recording(&recording),
@@ -5400,6 +5491,8 @@ mod tests {
             title: None,
             artist: None,
             comment: None,
+            dither: false,
+            conversion: "unknown".into(),
         };
         for metadata in [
             Some("bad\nvalue".to_owned()),
@@ -5444,6 +5537,8 @@ mod tests {
                 title: None,
                 artist: None,
                 comment: None,
+                dither: false,
+                conversion: "unknown".into(),
             })
             .unwrap();
         assert!(storage

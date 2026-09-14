@@ -124,6 +124,8 @@ fn finalized_flac_recording(
     identity: &FileRecordingIdentity,
     run_id: &str,
     start_time: &str,
+    dither: bool,
+    conversion: String,
 ) -> Result<FinalizedRecording, String> {
     let info = audiorouter_recording::inspect_flac_file(&identity.path)
         .map_err(|error| format!("FLAC library inspection failed: {error:?}"))?;
@@ -158,6 +160,8 @@ fn finalized_flac_recording(
         title: None,
         artist: None,
         comment: None,
+        dither,
+        conversion,
     })
 }
 
@@ -165,6 +169,8 @@ fn finalized_wav_recording(
     identity: &FileRecordingIdentity,
     run_id: &str,
     start_time: &str,
+    dither: bool,
+    conversion: String,
 ) -> Result<FinalizedRecording, String> {
     let info = audiorouter_recording::inspect_wav_file(&identity.path)
         .map_err(|error| format!("WAV library inspection failed: {error:?}"))?;
@@ -199,6 +205,8 @@ fn finalized_wav_recording(
         title: None,
         artist: None,
         comment: None,
+        dither,
+        conversion,
     })
 }
 
@@ -463,8 +471,13 @@ impl RecorderWorker for WavRecorderWorker {
                 .run_id
                 .as_deref()
                 .ok_or_else(|| "WAV finalized without a run identity".to_owned())?;
-            self.finalized_recordings =
-                vec![finalized_wav_recording(identity, run_id, start_time)?];
+            self.finalized_recordings = vec![finalized_wav_recording(
+                identity,
+                run_id,
+                start_time,
+                false,
+                "unknown".into(),
+            )?];
         }
         Ok(RecorderFinalizationOutcome {
             state: "completed".into(),
@@ -646,6 +659,7 @@ pub struct SegmentedWavRecorderWorker {
     format: WavFormat,
     channels: u16,
     sample_rate: u32,
+    dither: bool,
     paths: Arc<std::sync::Mutex<Vec<std::path::PathBuf>>>,
     started_at: Option<String>,
     run_id: Option<String>,
@@ -804,6 +818,7 @@ impl SegmentedWavRecorderWorker {
             format,
             channels,
             sample_rate,
+            dither,
             paths,
             started_at: None,
             run_id: None,
@@ -994,6 +1009,11 @@ impl RecorderWorker for SegmentedWavRecorderWorker {
                 title: None,
                 artist: None,
                 comment: None,
+                dither: self.dither,
+                conversion: format!(
+                    "targetSampleRate={};channels={};format=wav",
+                    self.sample_rate, self.channels
+                ),
             });
         }
         self.finalized_recordings = finalized;
@@ -1206,8 +1226,13 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
                 .run_id
                 .as_deref()
                 .ok_or_else(|| "FLAC finalized without a run identity".to_owned())?;
-            self.finalized_recordings =
-                vec![finalized_flac_recording(identity, run_id, start_time)?];
+            self.finalized_recordings = vec![finalized_flac_recording(
+                identity,
+                run_id,
+                start_time,
+                false,
+                "unknown".into(),
+            )?];
         }
         Ok(RecorderFinalizationOutcome {
             state: "completed".into(),
@@ -1224,6 +1249,10 @@ pub struct StreamingFlacRecorderWorker {
     recorder: Option<StreamingFlacRecorder<std::fs::File>>,
     queue: Arc<RecordingQueue>,
     maximum_chunks_per_pass: usize,
+    channels: u16,
+    sample_rate: u32,
+    bits_per_sample: u8,
+    dither: bool,
     library_identity: Option<FileRecordingIdentity>,
     started_at: Option<String>,
     run_id: Option<String>,
@@ -1258,6 +1287,10 @@ impl StreamingFlacRecorderWorker {
             recorder: Some(StreamingFlacRecorder::new(writer)),
             queue: Arc::new(queue),
             maximum_chunks_per_pass,
+            channels,
+            sample_rate,
+            bits_per_sample,
+            dither,
             library_identity: None,
             started_at: None,
             run_id: None,
@@ -1414,8 +1447,16 @@ impl RecorderWorker for StreamingFlacRecorderWorker {
                 .run_id
                 .as_deref()
                 .ok_or_else(|| "streaming FLAC finalized without a run identity".to_owned())?;
-            self.finalized_recordings =
-                vec![finalized_flac_recording(identity, run_id, start_time)?];
+            self.finalized_recordings = vec![finalized_flac_recording(
+                identity,
+                run_id,
+                start_time,
+                self.dither,
+                format!(
+                    "targetSampleRate={};channels={};bitsPerSample={}",
+                    self.sample_rate, self.channels, self.bits_per_sample
+                ),
+            )?];
         }
         Ok(RecorderFinalizationOutcome {
             state: "completed".into(),
@@ -3332,12 +3373,14 @@ fn recording_item_schema() -> Value {
             "missing": { "type": "boolean" },
             "title": { "type": ["string", "null"], "maxLength": 256 },
             "artist": { "type": ["string", "null"], "maxLength": 256 },
-            "comment": { "type": ["string", "null"], "maxLength": 256 }
+            "comment": { "type": ["string", "null"], "maxLength": 256 },
+            "dither": { "type": "boolean" },
+            "conversion": { "type": "string", "minLength": 1, "maxLength": 256 }
         },
         "required": [
             "id", "sessionId", "recorderId", "path", "format", "channels",
             "sampleRate", "frames", "fileBytes", "startTime", "state",
-            "missing", "title", "artist", "comment"
+            "missing", "title", "artist", "comment", "dither", "conversion"
         ],
         "additionalProperties": false
     })
@@ -8433,7 +8476,9 @@ impl ControlPlane {
                     "missing": record.missing,
                     "title": record.title,
                     "artist": record.artist,
-                    "comment": record.comment
+                    "comment": record.comment,
+                    "dither": record.dither,
+                    "conversion": record.conversion
                 }))
             })
             .collect::<Result<Vec<_>, ControlError>>()?;
@@ -14583,6 +14628,8 @@ mod tests {
                 title: Some("Test".into()),
                 artist: None,
                 comment: None,
+                dither: false,
+                conversion: "unknown".into(),
             })
             .unwrap();
         storage
@@ -14602,6 +14649,8 @@ mod tests {
                 title: None,
                 artist: None,
                 comment: None,
+                dither: false,
+                conversion: "unknown".into(),
             })
             .unwrap();
         let mut plane = ControlPlane::with_storage("recordings", storage);
@@ -14628,6 +14677,8 @@ mod tests {
         assert_eq!(result.as_array().unwrap().len(), 2);
         assert_eq!(result[0]["id"], "recording-1");
         assert_eq!(result[0]["missing"], false);
+        assert_eq!(result[0]["dither"], false);
+        assert_eq!(result[0]["conversion"], "unknown");
         let response = plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(10)),
@@ -14781,6 +14832,8 @@ mod tests {
                 title: None,
                 artist: None,
                 comment: None,
+                dither: false,
+                conversion: "unknown".into(),
             })
             .unwrap();
         let mut plane = ControlPlane::with_storage("recording-recycle", storage);
@@ -14836,6 +14889,8 @@ mod tests {
                 title: None,
                 artist: None,
                 comment: None,
+                dither: false,
+                conversion: "unknown".into(),
             })
             .unwrap();
         let mut plane = ControlPlane::with_storage("recording-edit", storage);
@@ -16279,7 +16334,7 @@ mod tests {
             },
             channels: 1,
             sample_rate: 48_000,
-            dither: false,
+            dither: true,
             queue_capacity: 8,
             maximum_chunks_per_pass: 1,
         };
@@ -16301,6 +16356,13 @@ mod tests {
                 .unwrap()
                 .frames,
             2
+        );
+        let finalized = worker.finalized_recordings();
+        assert_eq!(finalized.len(), 1);
+        assert!(finalized[0].dither);
+        assert_eq!(
+            finalized[0].conversion,
+            "targetSampleRate=48000;channels=1;bitsPerSample=16"
         );
         let _ = std::fs::remove_dir_all(root);
     }

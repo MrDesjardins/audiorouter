@@ -181,6 +181,8 @@ export interface RecordingMetadata {
   title: string | null;
   artist: string | null;
   comment: string | null;
+  dither: boolean;
+  conversion: string;
 }
 
 export interface RecordingRow extends RecordingMetadata {

@@ -2,13 +2,24 @@
 
 Updated: 2026-09-14.
 
-- REC-03 audit update on 2026-09-14: the configured dither option now reaches
-  both WAV and FLAC encoders (pushed as `ebf2fc92`), but finalized
-  `RecordingRecord`/`RecordingRow` metadata still lacks a persisted
-  dither/conversion-settings field. This remains an open backend/storage
-  contract task requiring a versioned schema/migration and file-library/API
-  coverage; the UI checkbox must not be treated as proof of metadata
-  compliance. No audio endpoint or machine configuration changed.
+- REC-03 implementation update on 2026-09-14: finalized recording rows now
+  persist bounded `dither` and `conversion` fields through SQLite and the
+  `recordings.list`/`recordings.get` contracts. Existing databases receive
+  conservative `false`/`unknown` defaults through an additive migration;
+  configured segmented-WAV and streaming-FLAC workers publish their actual
+  encoder settings. Storage migration, row round-trip, control response,
+  and configured streaming-FLAC regression tests pass. Compatibility workers
+  constructed through legacy constructors still publish `unknown` metadata
+  until their constructors accept versioned conversion settings. No audio
+  endpoint or machine configuration changed.
+
+- Delivered REC-03 persisted metadata slice on 2026-09-14. Added migration
+  coverage for a pre-metadata recordings table, bounded validation, TypeScript
+  contract fields, and UI fixture hydration. Verification: 145 control tests,
+  87 storage tests, 177 UI tests, strict Clippy, and format checks passed. The
+  full acceptance chain had already passed at the preceding commit; a fresh
+  full chain is still required after this contract change. Next action: finish
+  legacy worker metadata propagation and then requalify the full chain.
 
 - Delivered the REC-03 recorder dither control on 2026-09-14. The UI now
   exposes TPDF dithering as an explicit create-time option, enabled by

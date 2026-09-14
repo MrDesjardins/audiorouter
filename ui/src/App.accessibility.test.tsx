@@ -48,7 +48,7 @@ describe("VB-Cable endpoint selection", () => {
   });
 
   it("refreshes the recording library when a live state event arrives", async () => {
-    const recording: RecordingRow = { id: "take-live", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\take-live.wav", format: "wav", channels: 2, sampleRate: 48000, frames: 480, fileBytes: 1964, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null };
+    const recording: RecordingRow = { id: "take-live", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\take-live.wav", format: "wav", channels: 2, sampleRate: 48000, frames: 480, fileBytes: 1964, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null, dither: true, conversion: "targetSampleRate=48000;channels=2;format=wav" };
     let recordingListCalls = 0;
     const listRecordings = vi.fn(async () => {
       recordingListCalls += 1;
