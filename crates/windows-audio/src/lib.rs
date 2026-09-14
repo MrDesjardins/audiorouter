@@ -777,6 +777,7 @@ impl Drop for NativeBridgeController {
 /// callback handoff.
 pub struct NativeBridgeCaptureSinkBinding {
     bus_id: audiorouter_domain::EntityId,
+    generation: u64,
     controller: NativeBridgeController,
     writer: std::sync::Arc<NativeBridgeRealtimeWriter>,
 }
@@ -792,10 +793,12 @@ impl NativeBridgeCaptureSinkBinding {
             return Err(NativeBridgeControllerError::InvalidDuplex);
         }
         let bus_id = audiorouter_domain::EntityId::new(hello.bus_id.clone());
+        let generation = hello.generation;
         let controller = NativeBridgeController::create(device_path, mapping_path, hello)?;
         let writer = controller.realtime_writer()?;
         Ok(Self {
             bus_id,
+            generation,
             controller,
             writer: std::sync::Arc::new(writer),
         })
@@ -803,6 +806,10 @@ impl NativeBridgeCaptureSinkBinding {
 
     pub fn bus_id(&self) -> &audiorouter_domain::EntityId {
         &self.bus_id
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {

@@ -4005,7 +4005,7 @@ impl ControlPlane {
 
         let capture_bus_ids = session_virtual_capture_bus_ids(&session);
         self.prepare_virtual_route_bridges(session_id, generation, &capture_bus_ids)?;
-        let virtual_taps = self.virtual_route_tap_set(session_id, &capture_bus_ids)?;
+        let virtual_taps = self.virtual_route_tap_set(session_id, &capture_bus_ids, generation)?;
         recorder_taps.append(&virtual_taps).map_err(|_| {
             ControlError::InvalidRequest("native graph tap capacity exceeded".into())
         })?;
@@ -4102,6 +4102,7 @@ impl ControlPlane {
         &self,
         producer_session_id: &EntityId,
         capture_bus_ids: &[EntityId],
+        generation: u64,
     ) -> Result<AudioTapSet, ControlError> {
         let mut taps = AudioTapSet::new();
         if capture_bus_ids.is_empty() {
@@ -4124,6 +4125,11 @@ impl ControlPlane {
             if enabled {
                 #[cfg(windows)]
                 if let Some(binding) = self.native_capture_sink_bindings.get(&route.bus_id) {
+                    if binding.generation() != generation {
+                        return Err(ControlError::InvalidRequest(
+                            "native capture sink binding generation is stale".into(),
+                        ));
+                    }
                     taps.add_shared(binding.writer()).map_err(|_| {
                         ControlError::InvalidRequest(
                             "native capture sink tap capacity exceeded".into(),
@@ -15506,18 +15512,26 @@ mod tests {
         plane.virtual_bus_routes = routes;
         plane.virtual_bus_route_revision = 1;
         assert!(plane
-            .virtual_route_tap_set(&EntityId::new("producer"), &[])
+            .virtual_route_tap_set(&EntityId::new("producer"), &[], 1)
             .unwrap()
             .is_empty());
         assert_eq!(
             plane
-                .virtual_route_tap_set(&EntityId::new("producer"), &[EntityId::new("route-bus-1")])
+                .virtual_route_tap_set(
+                    &EntityId::new("producer"),
+                    &[EntityId::new("route-bus-1")],
+                    1,
+                )
                 .unwrap()
                 .len(),
             1
         );
         assert!(plane
-            .virtual_route_tap_set(&EntityId::new("producer"), &[EntityId::new("route-bus-2")])
+            .virtual_route_tap_set(
+                &EntityId::new("producer"),
+                &[EntityId::new("route-bus-2")],
+                1,
+            )
             .unwrap()
             .is_empty());
     }

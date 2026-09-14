@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Rejected stale project-driver capture-sink bindings on 2026-09-13. Each
+  binding now retains the negotiated graph generation and activation refuses
+  it when the running session generation differs, preventing a prior graph's
+  realtime writer from receiving a later graph's audio. Focused control and
+  Windows-audio suites pass (136 and 70 tests); no device was opened.
+
 - Added the first control-owned project-driver capture-sink binding on
   2026-09-13. `ControlPlane` can now prepare, heartbeat, and detach one
   negotiated `NativeBridgeCaptureSinkBinding`; graph activation prefers its
