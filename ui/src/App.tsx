@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ChangeEvent } from "react";
-import type { Node, PluginParametersResult, RecordingRecoveryItem, RouteInspection } from "@audiorouter/contracts";
+import type { NativeEndpointPumpResult, Node, PluginParametersResult, RecordingRecoveryItem, RouteInspection } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { createDisconnectedBackend, formatUiError, isRevisionConflict, SnapshotCache, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
@@ -23,6 +23,11 @@ import { GraphList as NodeList } from "./GraphList";
 
 const defaultBackend = createDisconnectedBackend();
 const PluginParameterContext = createContext<{ parameters: PluginParametersResult | null; error: string | null }>({ parameters: null, error: null });
+
+export function formatNativePumpSummary(stats: NativeEndpointPumpResult | null, running: boolean): string | null {
+  if (!stats || !running) return null;
+  return `native ${stats.capturedFrames} in / ${stats.renderedFrames} out${stats.recorderChunksDrained > 0 ? ` / ${stats.recorderChunksDrained} recorder chunks` : ""}`;
+}
 
 function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
   const [items, setItems] = useState<RecordingRecoveryItem[]>([]);
@@ -684,7 +689,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const visibleLibraryEntries = filterLibraryEntries(libraryEntries, librarySearch);
   const setupSteps = setupChecklist({ connected: backend.connected, audio: snapshot?.status.audio ?? null, storage: snapshot?.status.storage ?? null, deviceCount: devices.length, applicationCount: applications.length, vbCablePairAvailable: findVbCableEndpointPair(devices) !== null });
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
-  const nativePumpSummary = nativePumpStats && sessionRunning ? `native ${nativePumpStats.capturedFrames} in / ${nativePumpStats.renderedFrames} out${nativePumpStats.recorderChunksDrained > 0 ? ` / ${nativePumpStats.recorderChunksDrained} recorder chunks` : ""}` : null;
+  const nativePumpSummary = formatNativePumpSummary(nativePumpStats, sessionRunning);
   const statusSummary = `${snapshot ? `${snapshot.status.audio} audio - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot"}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}`;
   const recordDraftChange = (next: import("@audiorouter/contracts").Session) => { setDraftHistory((history) => recordDraft(history, draft, next)); setDraft(next); };
   const undoDraft = () => { const transition = undoDraftHistory(draftHistory, draft); if (transition.current === draft) return; setDraftHistory(transition.history); setDraft(transition.current); setActionMessage("Undid the last draft change."); };

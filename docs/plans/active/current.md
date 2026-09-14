@@ -20,6 +20,11 @@ Updated: 2026-09-13.
   tests pass; this is presentation of the existing backend result and does
   not change endpoint or machine audio configuration.
 
+- Added a direct UI regression for native recorder telemetry formatting on
+  2026-09-13. Running routes show the bounded recorder-chunk count, zero
+  drained chunks do not add noise, and stopped routes expose no stale summary.
+  UI coverage is now 159 tests; TypeScript typecheck remains green.
+
 - Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain at
   the current pushed head on 2026-09-13. Toolchain/native compile, non-
   installing x64 WDK driver build and catalog signability, read-only endpoint

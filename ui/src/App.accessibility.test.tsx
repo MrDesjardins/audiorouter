@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair } from "./App";
+import { App, findVbCableCaptureEndpointId, findVbCableEndpointPair, formatNativePumpSummary } from "./App";
 import { createDisconnectedBackend } from "./backend";
 import { DraftConnectionList, insertMixerActionId, removeMixerActionId } from "./DraftConnectionList";
 import { appendDraftConnection, insertDraftMixer } from "./draft";
@@ -33,6 +33,13 @@ afterEach(() => {
 });
 
 describe("VB-Cable endpoint selection", () => {
+  it("formats recorder drain telemetry only for a running native route", () => {
+    const stats = { sessionId: demoSession.id, generation: 1, packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0, recorderChunksDrained: 3 };
+    expect(formatNativePumpSummary(stats, true)).toBe("native 128 in / 128 out / 3 recorder chunks");
+    expect(formatNativePumpSummary({ ...stats, recorderChunksDrained: 0 }, true)).toBe("native 128 in / 128 out");
+    expect(formatNativePumpSummary(stats, false)).toBeNull();
+  });
+
   it("exposes the human-testable route sequence without duplicating controls", async () => {
     render(<App backend={connectedPreviewBackend()} />);
     const quickRoute = await screen.findByRole("region", { name: "Quick route" });
