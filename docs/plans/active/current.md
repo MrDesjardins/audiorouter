@@ -2,6 +2,24 @@
 
 Updated: 2026-09-13.
 
+- Qualified the existing VB-Cable bridge path on 2026-09-13 with one guarded
+  500 ms live cycle using the repository's M02 bridge runner. The exact
+  discovered render/capture pair produced 24,000 captured frames, 187
+  processed quanta/tap calls, 23,936 rendered frames, zero dropped frames,
+  zero XRuns/deadline misses, and zero non-finite tap samples. Before/after
+  media-device snapshots were identical and temporary outputs were removed.
+  Evidence: [M03 VB-Cable bridge evidence](evidence/M03-virtual-routing.md).
+  This advances the existing-VB-Cable human-test delivery, but does not claim
+  the project-owned driver or production endpoint lifecycle.
+
+- Corrected and requalified the control-owned VB-Cable route probe on
+  2026-09-13. It now relies on `session_start`'s documented native-worker
+  start boundary instead of issuing a redundant second start. The guarded
+  500 ms run passed with 24,480 captured frames, 191 processed quanta,
+  24,448 rendered frames, one successful start/stop/reset, one stale-pump
+  rejection, 48 kHz on both endpoints, and unchanged media-device state.
+  Evidence: [M03 VB-Cable bridge evidence](evidence/M03-virtual-routing.md).
+
 - Wired committed plugin parameter values into the worker bridge on
   2026-09-13. Native graph activation now converts bounded normalized
   `pluginParameter:<id>` values into sorted `ParameterEvent`s; the bridge

@@ -356,9 +356,6 @@ fn adapter_control_route(
     control
         .activate_native_graph(&session_id, generation, capture_info.sample_rate_hz)
         .map_err(|error| format!("graph activation: {error:?}"))?;
-    control
-        .start_native_endpoint_worker()
-        .map_err(|error| format!("endpoint start: {error:?}"))?;
     if control
         .pump_native_endpoint_worker_with_bound_taps(&session_id, generation + 1, 64)
         .is_ok()

@@ -1,5 +1,36 @@
 # M03 virtual-routing contract evidence
 
+## 2026-09-13 - guarded VB-Cable bridge publication
+
+Command:
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+tests/acceptance/m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500 -Cycles 1`
+
+The runner discovered the existing VB-Cable render/capture pair, opened the
+explicitly selected endpoints for one bounded cycle, and removed its temporary
+native executable/object and recording output afterward. Telemetry was:
+48 kHz, stereo, 50 packets, 24,000 captured frames, 187 processed quanta,
+187 tap calls, zero non-finite tap samples, 23,936 rendered frames, zero
+dropped render frames, zero scheduler XRuns, zero deadline misses, and a
+25,072-byte temporary recording. Before/after `Get-PnpDevice -Class Media
+-PresentOnly` snapshots were identical. The test changed no defaults, volume,
+mute, privacy, driver installation, signing, or persistent audio state.
+
+This qualifies the existing third-party VB-Cable user-mode bridge path for a
+human-testable M02/M03 demo. It does not qualify AudioRouter's own driver,
+PortCls callbacks, persistent endpoint lifecycle, or production signing.
+
+The companion control-owned route check initially exposed a probe defect: the
+probe explicitly started the endpoint after `session_start`, although the
+attached-native session lifecycle already starts it. Removing that redundant
+idempotent call restored the intended single-start assertion. The corrected
+run passed with generation 1, 51 packets, 24,480 captured frames, 191
+processed quanta, 24,448 rendered frames, 4,140 temporary recording bytes,
+one start/one successful start, one stop/one successful stop, one reset, one
+rejected stale-generation pump, and 48 kHz capture/render rates. Media-device
+identity/state remained unchanged.
+
 ## 2026-09-08 - Far-future plan expiry cap
 
 Restart hydration caps positive persisted virtual-device and startup-plan
