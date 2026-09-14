@@ -41,6 +41,8 @@ pub const MAX_PARAMETER_NAME_BYTES: usize = 128;
 pub const MAX_PLUGIN_PATH_BYTES: usize = 512;
 pub const MAX_PLUGIN_FINGERPRINT_BYTES: usize = 64;
 pub const MAX_PLUGIN_CLASS_ID_BYTES: usize = 64;
+pub const MAX_APPLICATION_EXECUTABLE_BYTES: usize = 256;
+pub const MAX_APPLICATION_PATH_BYTES: usize = 512;
 const EVENT_RETENTION: Duration = Duration::from_secs(15 * 60);
 pub const RECOVERY_CRASH_WINDOW_SECONDS: u64 = 10 * 60;
 pub const RECOVERY_SAFE_MODE_CRASHES: usize = 3;
@@ -178,6 +180,27 @@ fn valid_parametric_band_parameter(name: &str, value: &serde_json::Value) -> boo
             .is_some_and(|gain| gain.is_finite() && (-24.0..=24.0).contains(&gain)),
         _ => false,
     }
+}
+
+fn valid_bounded_string(value: &serde_json::Value, maximum: usize) -> bool {
+    value
+        .as_str()
+        .is_some_and(|text| !text.is_empty() && text.len() <= maximum)
+}
+
+fn valid_process_id(value: &serde_json::Value) -> bool {
+    value
+        .as_u64()
+        .is_some_and(|process_id| (1..=u64::from(u32::MAX)).contains(&process_id))
+}
+
+fn valid_creation_time(value: &serde_json::Value) -> bool {
+    value.as_str().is_some_and(|text| {
+        !text.is_empty()
+            && text.len() <= 20
+            && text.bytes().all(|byte| byte.is_ascii_digit())
+            && text.parse::<u64>().is_ok()
+    })
 }
 
 pub fn node_registry() -> [NodeTypeSpec; 19] {
@@ -1390,6 +1413,25 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Plugin, "classId") => value.as_str().is_some_and(|class_id| {
                     !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
                 }),
+                (NodeKind::ApplicationCapture, "executable") => {
+                    valid_bounded_string(value, MAX_APPLICATION_EXECUTABLE_BYTES)
+                }
+                (NodeKind::ApplicationCapture, "executablePath") => {
+                    valid_bounded_string(value, MAX_APPLICATION_PATH_BYTES)
+                }
+                (NodeKind::ApplicationCapture, "processPolicy") => {
+                    value.as_str().is_some_and(|policy| {
+                        matches!(policy, "selectedInstance" | "allVerifiedInstances")
+                    })
+                }
+                (NodeKind::ApplicationCapture, "processId") => valid_process_id(value),
+                (NodeKind::ApplicationCapture, "creationTime100ns") => valid_creation_time(value),
+                (NodeKind::EndpointLoopback, "endpointId") => {
+                    valid_bounded_string(value, MAX_ENTITY_ID_BYTES)
+                }
+                (NodeKind::EndpointLoopback, "defaultRole") => value.as_str().is_some_and(|role| {
+                    matches!(role, "console" | "multimedia" | "communications")
+                }),
                 (NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink, "busId") => {
                     value.as_str().is_some_and(|bus_id| {
                         !bus_id.is_empty() && bus_id.len() <= MAX_ENTITY_ID_BYTES
@@ -1425,6 +1467,59 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
             if !valid_bus_id {
                 errors.push(ValidationError::InvalidParameter {
                     path: format!("{path}.parameters.busId"),
+                });
+            }
+        }
+        if node.kind == NodeKind::ApplicationCapture {
+            let executable = node.parameters.get("executable");
+            if !executable
+                .is_some_and(|value| valid_bounded_string(value, MAX_APPLICATION_EXECUTABLE_BYTES))
+            {
+                errors.push(ValidationError::InvalidParameter {
+                    path: format!("{path}.parameters.executable"),
+                });
+            }
+            let policy = node.parameters.get("processPolicy");
+            if !policy.is_some_and(|value| {
+                value.as_str().is_some_and(|policy| {
+                    matches!(policy, "selectedInstance" | "allVerifiedInstances")
+                })
+            }) {
+                errors.push(ValidationError::InvalidParameter {
+                    path: format!("{path}.parameters.processPolicy"),
+                });
+            }
+            let selected = policy.and_then(serde_json::Value::as_str) == Some("selectedInstance");
+            let has_process_id = node.parameters.contains_key("processId");
+            let has_creation_time = node.parameters.contains_key("creationTime100ns");
+            if (selected && (!has_process_id || !has_creation_time))
+                || (!selected && (has_process_id || has_creation_time))
+            {
+                for (name, present) in [
+                    ("processId", has_process_id),
+                    ("creationTime100ns", has_creation_time),
+                ] {
+                    if selected && !present {
+                        errors.push(ValidationError::InvalidParameter {
+                            path: format!("{path}.parameters.{name}"),
+                        });
+                    } else if !selected && present {
+                        errors.push(ValidationError::InvalidParameter {
+                            path: format!("{path}.parameters.{name}"),
+                        });
+                    }
+                }
+            }
+        }
+        if node.kind == NodeKind::EndpointLoopback {
+            let has_endpoint = node.parameters.contains_key("endpointId");
+            let has_default = node.parameters.contains_key("defaultRole");
+            if has_endpoint == has_default {
+                errors.push(ValidationError::InvalidParameter {
+                    path: format!("{path}.parameters.endpointId"),
+                });
+                errors.push(ValidationError::InvalidParameter {
+                    path: format!("{path}.parameters.defaultRole"),
                 });
             }
         }
@@ -2730,6 +2825,67 @@ mod tests {
             .parameters
             .insert("busId".into(), serde_json::json!("voice-chat"));
         assert!(validate_session(&session(vec![identified], vec![])).is_ok());
+    }
+
+    #[test]
+    fn application_capture_requires_verified_process_identity_policy() {
+        let mut application = node("app", NodeKind::ApplicationCapture, PortDirection::Output);
+        application.parameters = [
+            ("executable".into(), serde_json::json!("game.exe")),
+            (
+                "processPolicy".into(),
+                serde_json::json!("selectedInstance"),
+            ),
+            ("processId".into(), serde_json::json!(42)),
+            ("creationTime100ns".into(), serde_json::json!("123456789")),
+        ]
+        .into_iter()
+        .collect();
+        assert!(validate_session(&session(vec![application.clone()], vec![])).is_ok());
+
+        application.parameters.remove("creationTime100ns");
+        let errors = validate_session(&session(vec![application], vec![])).unwrap_err();
+        assert!(errors.iter().any(|error| matches!(
+            error,
+            ValidationError::InvalidParameter { path }
+                if path == "nodes[0].parameters.creationTime100ns"
+        )));
+
+        let mut all_instances = node("all", NodeKind::ApplicationCapture, PortDirection::Output);
+        all_instances.parameters = [
+            ("executable".into(), serde_json::json!("game.exe")),
+            (
+                "processPolicy".into(),
+                serde_json::json!("allVerifiedInstances"),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        assert!(validate_session(&session(vec![all_instances.clone()], vec![])).is_ok());
+        all_instances
+            .parameters
+            .insert("processId".into(), serde_json::json!(42));
+        assert!(validate_session(&session(vec![all_instances], vec![])).is_err());
+    }
+
+    #[test]
+    fn endpoint_loopback_requires_one_explicit_binding_mode() {
+        let mut loopback = node(
+            "loopback",
+            NodeKind::EndpointLoopback,
+            PortDirection::Output,
+        );
+        loopback
+            .parameters
+            .insert("endpointId".into(), serde_json::json!("endpoint-1"));
+        assert!(validate_session(&session(vec![loopback.clone()], vec![])).is_ok());
+
+        loopback
+            .parameters
+            .insert("defaultRole".into(), serde_json::json!("console"));
+        assert!(validate_session(&session(vec![loopback.clone()], vec![])).is_err());
+        loopback.parameters.remove("endpointId");
+        assert!(validate_session(&session(vec![loopback], vec![])).is_ok());
     }
 
     #[test]

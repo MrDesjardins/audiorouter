@@ -2,6 +2,17 @@
 
 Updated: 2026-09-13.
 
+- Hardened CAP-05/CAP-06/CAP-08 graph contracts on 2026-09-13. The domain
+  validator now accepts only bounded application-capture selectors with an
+  executable and explicit `selectedInstance` or `allVerifiedInstances`
+  policy; selected instances require both PID and decimal creation-time
+  identity, while all-instance selectors reject PID fragments. Endpoint
+  loopback nodes now require exactly one validated endpoint ID or default role.
+  Added regressions and ran the full locked workspace suite: all workspace
+  tests/doc-tests passed (including 64 domain, 137 control, 108 engine, and
+  72 Windows-audio tests). Native process-worker activation remains a separate
+  M02 gate.
+
 - Requalified the complete `safe-all.ps1` chain on 2026-09-13 after the
   native-shell lock repair. Toolchain/native compile, x64 driver build and
   signability, endpoint inventory, disposable SysVAD, CLI, DSP/recording,
