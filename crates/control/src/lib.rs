@@ -4489,7 +4489,7 @@ impl ControlPlane {
                 .native_render_source_bindings
                 .get_mut(&bus_id)
                 .expect("captured native binding key must remain present")
-                .heartbeat();
+                .heartbeat_if_due();
             if let Err(error) = result {
                 if let Some(binding) = self.native_render_source_bindings.remove(&bus_id) {
                     let _ = binding.close();

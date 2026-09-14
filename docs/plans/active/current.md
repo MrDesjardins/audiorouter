@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Aligned VDEV-12 prepared render-source leases with the same negotiated
+  half-lease cadence on 2026-09-14. Control-thread sweeps now avoid issuing
+  redundant maintenance IOCTLs while retaining per-binding failure
+  containment; once transferred, the duplex worker remains the lease owner.
+  Control (150 passed, 2 guarded live tests ignored), Windows-audio (73
+  passed), strict Clippy, formatting, Windows-target check, and diff checks
+  passed. Loaded-driver execution and physical timing remain native gates.
+  Next action: continue the next safe M03/M07 recovery item.
+
 - Connected VDEV-12 capture-sink lease maintenance to endpoint pumping on
   2026-09-14. Prepared capture-sink bindings now track their negotiated
   half-lease cadence, and the control plane services them before each bounded

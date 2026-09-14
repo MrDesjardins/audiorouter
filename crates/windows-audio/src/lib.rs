@@ -1070,6 +1070,8 @@ pub struct NativeBridgeRenderSourceBinding {
     bus_id: audiorouter_domain::EntityId,
     generation: u64,
     controller: NativeBridgeController,
+    last_heartbeat: std::time::Instant,
+    heartbeat_interval: std::time::Duration,
 }
 
 #[cfg(windows)]
@@ -1084,11 +1086,15 @@ impl NativeBridgeRenderSourceBinding {
         }
         let bus_id = audiorouter_domain::EntityId::new(hello.bus_id.clone());
         let generation = hello.generation;
+        let heartbeat_interval =
+            std::time::Duration::from_millis(u64::from(hello.lease_ms / 2).max(1));
         let controller = NativeBridgeController::create(device_path, mapping_path, hello)?;
         Ok(Self {
             bus_id,
             generation,
             controller,
+            last_heartbeat: std::time::Instant::now(),
+            heartbeat_interval,
         })
     }
 
@@ -1102,6 +1108,18 @@ impl NativeBridgeRenderSourceBinding {
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
         self.controller.heartbeat()
+    }
+
+    /// Refresh the prepared render-source lease only when its negotiated
+    /// cadence is due. The endpoint worker owns the controller after transfer.
+    pub fn heartbeat_if_due(&mut self) -> Result<(), NativeBridgeControllerError> {
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_heartbeat) < self.heartbeat_interval {
+            return Ok(());
+        }
+        self.heartbeat()?;
+        self.last_heartbeat = now;
+        Ok(())
     }
 
     pub fn read_into_after(
