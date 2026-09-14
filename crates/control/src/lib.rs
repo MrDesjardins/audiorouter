@@ -4074,6 +4074,19 @@ impl ControlPlane {
         }
     }
 
+    fn any_native_worker_attached(&self) -> bool {
+        self.native_endpoint_worker.is_some() || {
+            #[cfg(windows)]
+            {
+                self.native_duplex_worker.is_some()
+            }
+            #[cfg(not(windows))]
+            {
+                false
+            }
+        }
+    }
+
     /// Attach an already-opened, exact-binding endpoint worker to one known
     /// session. Opening endpoints is outside this method and the worker stays
     /// stopped until an explicit start call is made.
@@ -4083,7 +4096,7 @@ impl ControlPlane {
         worker: audiorouter_windows_audio::WasapiEndpointWorker,
     ) -> Result<(), ControlError> {
         self.get_session(&session_id)?;
-        if self.native_endpoint_worker.is_some() {
+        if self.any_native_worker_attached() {
             return Err(ControlError::InvalidRequest(
                 "native endpoint worker is already attached".into(),
             ));
@@ -4111,7 +4124,7 @@ impl ControlPlane {
         worker: audiorouter_windows_audio::NativeBridgeDuplexWorker,
     ) -> Result<(), ControlError> {
         self.get_session(&session_id)?;
-        if self.native_endpoint_worker.is_some() || self.native_duplex_worker.is_some() {
+        if self.any_native_worker_attached() {
             return Err(ControlError::InvalidRequest(
                 "native worker is already attached".into(),
             ));
@@ -4136,7 +4149,7 @@ impl ControlPlane {
         worker: audiorouter_windows_audio::ProcessLoopbackWorker,
     ) -> Result<(), ControlError> {
         self.get_session(&session_id)?;
-        if self.native_endpoint_worker.is_some() {
+        if self.any_native_worker_attached() {
             return Err(ControlError::InvalidRequest(
                 "native worker is already attached".into(),
             ));
@@ -4186,7 +4199,7 @@ impl ControlPlane {
                 "application worker requires a matching enabled applicationCapture node".into(),
             ));
         }
-        if self.native_endpoint_worker.is_some() {
+        if self.any_native_worker_attached() {
             return Err(ControlError::InvalidRequest(
                 "native worker is already attached".into(),
             ));

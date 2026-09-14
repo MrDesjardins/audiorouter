@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Closed an M03/ARCH-05 native-worker exclusivity gap on 2026-09-14. All
+  endpoint, application-capture, and duplex worker attachment paths now use
+  one shared guard, preventing two native worker kinds from being attached
+  concurrently and competing for the same control-plane audio lifecycle.
+  Control tests (155 passed, 2 guarded live ignored), formatting, diff
+  checks, and Windows-target compilation passed. No endpoint or machine
+  audio configuration changed. Next action: continue the next safe M03/M07
+  recovery integration item.
+
 - Requalified the aggregate safe acceptance chain on 2026-09-14 at the
   current handoff head. M00 toolchain/native inventory, M03 AudioRouter and
   disposable SysVAD x64 builds, M04 DSP/recording, M05 UI (typecheck,
