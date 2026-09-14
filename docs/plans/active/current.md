@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete elevated safe acceptance chain on 2026-09-14 at
+  the current UI status-observability head. M00 toolchain/native checks,
+  project-owned x64 WDK driver build/signability/catalog, read-only endpoint
+  inventory, disposable SysVAD, M01/M04/M07, M05 UI (182 tests, typecheck,
+  production builds), M06 VST3/VST2 workers, unsigned M08 preparation, 159
+  traceability IDs, and documentation validation all passed. Cleanup removed
+  15 run-owned temporary children. This remains non-installing qualification:
+  loaded PortCls, production signing/install, physical latency, and manual
+  WebView2 acceptance remain open. No plugin registration, startup
+  registration, or machine audio configuration changed. Next action:
+  continue the next safe implementation item while preserving those gates.
+
 - Added M05 regression coverage on 2026-09-14 for status-reason visibility.
   The rendered UI test now verifies the disconnected backend's authoritative
   audio reason appears in the top/compact status summary, protecting the
