@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified the authorized control-owned application-capture lifecycle on
+  2026-09-14 using the exact live Voicemeeter identity (PID 34568,
+  `voicemeeterpro.exe`, creation time `134336595287373468`) and the verified
+  CABLE render endpoint. The guarded test passed two bounded start/pump/stop
+  cycles and same-process worker restart; process environment and media-device
+  state were restored/unchanged. This is measured process-loopback/WASAPI
+  adapter evidence only; protected-content behavior, loaded AudioRouter
+  driver routing, and physical latency remain separate gates. Next action:
+  continue the next safe M03/M07 recovery integration item.
+
 - Requalified the authorized VB-Cable signal loopback on 2026-09-14 with
   `m00-native-loopback.ps1 -AllowLiveAudio -CaptureDurationMilliseconds 1000
   -ToneDurationMilliseconds 1200`. The exact render/capture pair transported
