@@ -2,6 +2,19 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain at
+  the current pushed head on 2026-09-13. Toolchain/native compile, non-
+  installing x64 WDK driver build and catalog signability, read-only endpoint
+  inventory, disposable SysVAD, M01/M04, UI/typecheck and production build,
+  repository VST3 worker, VST2 legacy/chunk-state matrix, M07 headless
+  control, unsigned M08 artifacts, 159 normative traceability mappings, and
+  documentation validation (52 Markdown files/189 local links) all passed.
+  The acceptance cleanup removed 15 run-owned temporary children. No driver
+  installation/loading, signing-mode or boot-policy change, plugin/startup
+  registration, live stream, endpoint default, or persistent machine audio
+  configuration action occurred. Manual attended WebView observation and the
+  production driver/signing/endpoint gates remain open.
+
 - Completed the application-capture policy UI slice on 2026-09-13. The
   human-facing Applications panel now exposes the existing backend
   include/exclude policy and forwards the selected value to
