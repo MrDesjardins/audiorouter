@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Added the explicit render-source ownership handoff on 2026-09-13.
+  `ControlPlane::take_native_render_source_controller` checks the requested
+  graph generation before removing a prepared binding, then transfers the
+  negotiated controller to the stopped `NativeBridgeInputWorker` boundary;
+  heartbeat and close ownership move with that worker. This closes the
+  lifecycle seam without opening an endpoint in tests. Focused suites remain
+  green (137 control, 70 Windows-audio); actual worker attachment still needs
+  an explicitly prepared physical render endpoint and loaded-driver evidence.
+
 - Revalidated the human-test UI delivery on 2026-09-13. The React Flow
   canvas, drag/drop processor shelf, connection editor, parameter inspector,
   and plan/commit draft path pass the complete UI suite (18 files, 156 tests)

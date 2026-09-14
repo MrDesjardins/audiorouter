@@ -3944,6 +3944,33 @@ impl ControlPlane {
         })
     }
 
+    #[cfg(windows)]
+    /// Transfer a validated render-source lease to an endpoint worker. The
+    /// generation is checked before removal so a stale graph cannot consume
+    /// a binding prepared for an earlier graph.
+    pub fn take_native_render_source_controller(
+        &mut self,
+        bus_id: &EntityId,
+        generation: u64,
+    ) -> Result<audiorouter_windows_audio::NativeBridgeController, ControlError> {
+        let binding = self
+            .native_render_source_bindings
+            .get(bus_id)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("native render source binding is not prepared".into())
+            })?;
+        if binding.generation() != generation {
+            return Err(ControlError::InvalidRequest(
+                "native render source binding generation is stale".into(),
+            ));
+        }
+        Ok(self
+            .native_render_source_bindings
+            .remove(bus_id)
+            .expect("binding was checked above")
+            .into_controller())
+    }
+
     /// Start the explicitly attached endpoint pair on the control thread.
     pub fn start_native_endpoint_worker(&mut self) -> Result<(), ControlError> {
         self.native_endpoint_worker
@@ -15677,7 +15704,7 @@ mod tests {
         let bridge = plane.virtual_bridges.get(&bus_id).unwrap();
         assert!(!bridge.is_active());
         plane
-            .prepare_virtual_route_bridges(&producer, 7, &[bus_id.clone()])
+            .prepare_virtual_route_bridges(&producer, 7, std::slice::from_ref(&bus_id))
             .unwrap();
         assert!(bridge.is_active());
         assert_eq!(bridge.generation(), 7);
@@ -15689,7 +15716,7 @@ mod tests {
         assert_eq!(bridge.generation(), 7);
 
         plane
-            .prepare_virtual_route_bridges(&producer, 8, &[bus_id.clone()])
+            .prepare_virtual_route_bridges(&producer, 8, std::slice::from_ref(&bus_id))
             .unwrap();
         assert!(bridge.is_active());
         plane.delete_session(&producer).unwrap();
@@ -15719,7 +15746,7 @@ mod tests {
             )
             .unwrap();
         plane
-            .prepare_virtual_route_bridges(&producer, 4, &[bus_id.clone()])
+            .prepare_virtual_route_bridges(&producer, 4, std::slice::from_ref(&bus_id))
             .unwrap();
         plane
             .prepare_virtual_route_bridges(&producer, 4, &[])

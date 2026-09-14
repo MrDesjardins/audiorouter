@@ -348,6 +348,17 @@ pub struct NativeBridgeInputWorker {
 
 #[cfg(windows)]
 impl NativeBridgeInputWorker {
+    /// Consume a control-plane render-source binding after its bus and graph
+    /// generation have been validated. The worker then owns the bridge lease
+    /// and releases it on teardown.
+    pub fn from_render_source_binding(
+        binding: NativeBridgeRenderSourceBinding,
+        render: SharedRender,
+        bridge: WasapiSchedulerBridge,
+    ) -> Self {
+        Self::new(binding.into_controller(), render, bridge)
+    }
+
     pub fn new(
         source: NativeBridgeController,
         render: SharedRender,
@@ -830,6 +841,13 @@ impl NativeBridgeRenderSourceBinding {
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
         self.controller.read_into_after(minimum_sequence, samples)
+    }
+
+    /// Transfer the negotiated controller to a stopped input worker. The
+    /// caller must preserve the binding's bus and generation checks before
+    /// consuming this value; after transfer the worker owns heartbeat/close.
+    pub fn into_controller(self) -> NativeBridgeController {
+        self.controller
     }
 
     pub fn close(self) -> Result<(), NativeBridgeControllerError> {
