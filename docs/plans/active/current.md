@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete elevated safe acceptance chain against the worker-
+  kind routing commit on 2026-09-14. M00 toolchain/native checks, M03
+  AudioRouter and SysVAD build-only checks, M01 CLI, M04 DSP/recording, M05 UI
+  (typecheck, 179 tests, production build), M06 VST3/VST2, M07 headless,
+  unsigned M08 preparation, 159 normative mappings, and documentation all
+  passed. Cleanup removed 15 run-owned temporary children. No driver was
+  installed or loaded and no endpoint or machine audio configuration changed.
+  Loaded PortCls, production signing, and physical-latency evidence remain
+  open. Next action: continue the next independently testable native/UI
+  delivery item.
+
 - Added native worker-kind routing to diagnostics and the UI on 2026-09-14.
   `system.diagnostics` now reports whether the attached worker is the legacy
   endpoint adapter or the paired duplex adapter, while reporting `null` when
