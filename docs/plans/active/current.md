@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Added a shell-to-engine regression on 2026-09-13 for the human-test route.
+  The fresh three-node desktop graph now compiles at 48 kHz and preserves
+  asymmetric stereo samples through its neutral Gain stage, proving the
+  visible modifier is connected to the runtime graph rather than being UI
+  decoration. The shell suite now passes 11 tests; formatting and the locked
+  shell build/test pass. This remains portable/runtime evidence and does not
+  qualify a loaded virtual driver.
+
 - Made the first human-test route visibly exercise an in-house processor on
   2026-09-13. A fresh Tauri desktop session now contains a backend-owned
   neutral `Gain` node (0 dB) between the input and output, preserving the

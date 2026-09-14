@@ -617,6 +617,32 @@ mod tests {
     }
 
     #[test]
+    fn default_desktop_session_runs_through_the_neutral_gain_stage() {
+        let session = default_desktop_session();
+        let graph = audiorouter_engine::compile_session_at_sample_rate(
+            &session,
+            audiorouter_engine::RuntimeGeneration::new(1),
+            48_000,
+        )
+        .expect("fresh desktop graph should compile");
+        let mut block = audiorouter_engine::AudioBlock::new(2, 128).unwrap();
+        block.channel_mut(0).unwrap().fill(0.25);
+        block.channel_mut(1).unwrap().fill(-0.5);
+        graph.process(&mut block);
+        assert!(block.all_finite());
+        assert!(block
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| (*sample - 0.25).abs() < 1.0e-6));
+        assert!(block
+            .channel(1)
+            .unwrap()
+            .iter()
+            .all(|sample| (*sample + 0.5).abs() < 1.0e-6));
+    }
+
+    #[test]
     fn optional_frontend_probe_is_not_present_by_default() {
         let script = session_initialization_script("probe", false);
         assert!(!script.contains("shell-probe"));

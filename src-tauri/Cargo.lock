@@ -197,6 +197,7 @@ version = "0.1.0"
 dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
+ "audiorouter-engine",
  "audiorouter-protocol",
  "audiorouter-storage",
  "audiorouter-transport",
