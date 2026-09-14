@@ -902,6 +902,14 @@ impl Storage {
                 [],
             )?;
         }
+        // Version 2 records the bounded recording-encoding metadata contract
+        // (including conservative defaults for databases created before the
+        // columns existed). Keep this marker after both columns are present so
+        // reopening a partially upgraded database can finish the same upgrade.
+        self.connection.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version) VALUES (2)",
+            [],
+        )?;
         self.connection.execute(
             "CREATE INDEX IF NOT EXISTS operation_journal_created_at
              ON operation_journal(created_at)",
@@ -5341,6 +5349,17 @@ mod tests {
             .unwrap();
         assert!(columns.iter().any(|column| column == "dither"));
         assert!(columns.iter().any(|column| column == "conversion"));
+        assert_eq!(
+            storage
+                .connection
+                .query_row(
+                    "SELECT 1 FROM schema_migrations WHERE version = 2",
+                    [],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap(),
+            1
+        );
         let _ = std::fs::remove_file(path);
     }
 

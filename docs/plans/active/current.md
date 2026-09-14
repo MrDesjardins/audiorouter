@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Added the versioned REC-03 recording metadata migration on 2026-09-14.
+  Storage now records schema migration version 2 only after the bounded
+  `dither` and `conversion` columns exist, including conservative defaults
+  when upgrading a legacy database. The legacy-upgrade regression verifies
+  both columns and the migration marker. Storage tests (87), strict Clippy,
+  and formatting passed; no recording file, endpoint, driver, registry, or
+  persistent machine audio configuration was changed. Next action: continue
+  the next independently testable M03/M07 recovery item.
+
 - Revalidated the complete safe acceptance chain on 2026-09-14 at the
   current head. M00/M03 native toolchain and WDK build qualification, M01
   CLI, M04 DSP/recording, M05 UI, M06 VST2/VST3 worker paths, M07 headless
