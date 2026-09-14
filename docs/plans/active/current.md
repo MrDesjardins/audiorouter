@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Added a guarded control-owned application-capture acceptance on 2026-09-13.
+  With explicit `AUDIOROUTER_APPLICATION_PROCESS_ID`, executable,
+  creation-time, and render-endpoint inputs, the test constructs the real
+  `applicationCapture` graph, prepares the verified process worker, starts the
+  session, pumps the backend-owned graph, and requires packets, processed
+  quanta, and rendered frames before stopping/detaching. It is ignored unless
+  `AUDIOROUTER_ALLOW_LIVE_AUDIO=1`, so ordinary tests remain non-mutating.
+  Static checks pass; the live test remains an explicit machine/audio-session
+  qualification gate.
+
 - Hardened application-worker preparation ordering on 2026-09-13. The
   control plane now validates the session's enabled `applicationCapture`
   source, exact process ID, worker availability, and stereo render shape

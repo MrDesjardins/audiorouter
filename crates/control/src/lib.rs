@@ -11162,6 +11162,111 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
+    #[ignore = "requires explicit application identity, render endpoint, and AUDIOROUTER_ALLOW_LIVE_AUDIO=1"]
+    fn guarded_live_native_application_worker_lifecycle_uses_one_control_plane() {
+        if std::env::var("AUDIOROUTER_ALLOW_LIVE_AUDIO").as_deref() != Ok("1") {
+            return;
+        }
+        let process_id = std::env::var("AUDIOROUTER_APPLICATION_PROCESS_ID")
+            .expect("AUDIOROUTER_APPLICATION_PROCESS_ID is required")
+            .parse::<u32>()
+            .expect("application process ID must be numeric");
+        let executable = std::env::var("AUDIOROUTER_APPLICATION_EXECUTABLE")
+            .expect("AUDIOROUTER_APPLICATION_EXECUTABLE is required");
+        let creation_time = std::env::var("AUDIOROUTER_APPLICATION_CREATION_TIME_100NS")
+            .expect("AUDIOROUTER_APPLICATION_CREATION_TIME_100NS is required")
+            .parse::<u64>()
+            .expect("application creation time must be numeric");
+        let render_id = std::env::var("AUDIOROUTER_RENDER_ENDPOINT_ID")
+            .expect("AUDIOROUTER_RENDER_ENDPOINT_ID is required");
+        let render = audiorouter_windows_audio::enumerate_active_endpoints()
+            .unwrap()
+            .into_iter()
+            .find(|endpoint| {
+                endpoint.id == render_id
+                    && endpoint.direction == audiorouter_windows_audio::EndpointDirection::Render
+            })
+            .expect("configured render endpoint is not active");
+        let mut owned = session();
+        owned.id = EntityId::new("guarded-live-application");
+        owned.nodes[0] = Node {
+            id: EntityId::new("application"),
+            kind: NodeKind::ApplicationCapture,
+            type_version: 1,
+            name: "Application capture".into(),
+            enabled: true,
+            bypass: false,
+            parameters: [
+                ("executable".into(), json!(executable)),
+                ("processPolicy".into(), json!("selectedInstance")),
+                ("processId".into(), json!(process_id)),
+                ("creationTime100ns".into(), json!(creation_time.to_string())),
+            ]
+            .into_iter()
+            .collect(),
+            ports: vec![Port {
+                name: "main".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            }],
+        };
+        owned.nodes[1].ports[0].channels = 2;
+        owned.edges[0].source_node = EntityId::new("application");
+        owned.edges[0].matrix = vec![1.0, 0.0, 0.0, 1.0];
+        let mut plane = ControlPlane::default();
+        plane.create_session(owned).unwrap();
+        plane
+            .prepare_native_application_worker(
+                EntityId::new("guarded-live-application"),
+                NativeApplicationWorkerConfig {
+                    process_id,
+                    expected_executable: &executable,
+                    expected_executable_path: std::env::var("AUDIOROUTER_APPLICATION_PATH")
+                        .ok()
+                        .as_deref(),
+                    expected_creation_time_100ns: creation_time,
+                    mode: audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+                    render: &render,
+                    buffer_duration_100ns: 0,
+                    max_attempts: 3,
+                    retry_delay_ms: 100,
+                },
+            )
+            .unwrap();
+        let started = plane
+            .session_start(&EntityId::new("guarded-live-application"))
+            .unwrap();
+        let generation = started["generation"].as_u64().unwrap();
+        let started_at = Instant::now();
+        let mut packets = 0_u64;
+        let mut processed_quanta = 0_u64;
+        let mut rendered_frames = 0_u64;
+        while started_at.elapsed() < Duration::from_millis(500) {
+            let result = plane
+                .pump_native_endpoint_worker_with_bound_taps(
+                    &EntityId::new("guarded-live-application"),
+                    generation,
+                    64,
+                )
+                .unwrap();
+            packets = packets.saturating_add(result["packets"].as_u64().unwrap_or(0));
+            processed_quanta =
+                processed_quanta.saturating_add(result["processedQuanta"].as_u64().unwrap_or(0));
+            rendered_frames =
+                rendered_frames.saturating_add(result["renderedFrames"].as_u64().unwrap_or(0));
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        plane
+            .session_stop(&EntityId::new("guarded-live-application"))
+            .unwrap();
+        plane.detach_native_endpoint_worker().unwrap();
+        assert!(packets > 0);
+        assert!(processed_quanta > 0);
+        assert!(rendered_frames > 0);
+    }
+
+    #[cfg(windows)]
+    #[test]
     #[ignore = "requires explicit live endpoint IDs and AUDIOROUTER_ALLOW_LIVE_AUDIO=1"]
     fn guarded_live_native_endpoint_session_lifecycle_uses_one_control_plane() {
         if std::env::var("AUDIOROUTER_ALLOW_LIVE_AUDIO").as_deref() != Ok("1") {
