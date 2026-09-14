@@ -620,6 +620,7 @@ pub fn create_file_recorder_with_config(
                 config.channels,
                 config.sample_rate,
                 bits_per_sample,
+                config.dither,
                 config.queue_capacity,
                 config.maximum_chunks_per_pass,
             )?;
@@ -1235,6 +1236,7 @@ impl StreamingFlacRecorderWorker {
         channels: u16,
         sample_rate: u32,
         bits_per_sample: u8,
+        dither: bool,
         queue_capacity: usize,
         maximum_chunks_per_pass: usize,
     ) -> Result<Self, String> {
@@ -1242,7 +1244,7 @@ impl StreamingFlacRecorderWorker {
             return Err("maximum recorder drain pass must be positive".into());
         }
         let writer =
-            StreamingFlacWriter::new(output, channels, sample_rate, bits_per_sample, false)
+            StreamingFlacWriter::new(output, channels, sample_rate, bits_per_sample, dither)
                 .map_err(|error| {
                     format!("streaming FLAC writer initialization failed: {error:?}")
                 })?;
@@ -16228,7 +16230,8 @@ mod tests {
             .create_new(true)
             .open(&path)
             .unwrap();
-        let mut worker = StreamingFlacRecorderWorker::new(file, 1, 48_000, 16, 8, 1).unwrap();
+        let mut worker =
+            StreamingFlacRecorderWorker::new(file, 1, 48_000, 16, false, 8, 1).unwrap();
         worker.set_library_identity(FileRecordingIdentity {
             session_id: "session".into(),
             recorder_id: "voice".into(),

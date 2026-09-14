@@ -11746,3 +11746,15 @@ live-driver evidence.
   publication through the AudioRouter driver prototype using the same explicit
   lease/generation checks; installation, signing, and production PortCls
   ownership remain separate gates.
+# 2026-09-14 — REC-03 FLAC dither propagation
+
+The configured `FileRecorderConfig.dither` option now reaches
+`StreamingFlacRecorderWorker` and `StreamingFlacWriter`; FLAC creation no
+longer silently forces dithering off. This closes the runtime propagation
+part of REC-03 for both WAV and FLAC paths. Verification: `cargo test -p
+audiorouter-control -p audiorouter-recording --locked -- --test-threads=1`
+passed (143 control tests, 40 recording tests; 2 guarded live control tests
+ignored). Persisted recording rows still do not expose dither/conversion
+settings, so the storage/API migration and library metadata evidence remain
+open. Next action: complete that versioned metadata contract with migration,
+round-trip tests, and UI hydration before revisiting the acceptance gate.
