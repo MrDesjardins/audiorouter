@@ -33,6 +33,13 @@ Updated: 2026-09-14.
   paths. No installer, production signing, driver deployment, or audio
   configuration action occurred.
 
+- Requalified the explicitly selected user-installed x64 VST2 fixture
+  `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reacomp-standalone.dll` on
+  2026-09-14. The isolated worker processed at 44.1/48/96 kHz and passed
+  bounded editor-timeout containment; the before/after SHA-256 remained
+  `4c0862ab3cfd8a0345481b4792c07bf8d5a9761014f217d4e13669bf8143c7a0`.
+  No copy, registration, plugin mutation, or audio configuration occurred.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
