@@ -18,6 +18,21 @@ setting changed. This qualifies API mode/lifecycle and data-path behavior;
 it does not establish a full cross-process isolation threshold or production
 driver capability.
 
+## 2026-09-13 - guarded shared-mode endpoint matrix
+
+The authorized `m00-native-live.ps1 -AllowLiveAudio -DurationMilliseconds 100`
+probe passed across all 13 current capture endpoints and 18 current render
+endpoints. Every capture completed start/stop/reset; every render completed
+the same lifecycle except one endpoint that returned the expected distinct
+shared-ownership diagnostic (`AUDCLNT_E_DEVICE_IN_USE`) and was counted as
+occupied rather than treated as a generic failure.
+
+The harness verified the before/after media-device inventory and removed its
+temporary executable/object. No endpoint default, volume, mute, privacy,
+driver, signing, startup, or persistent machine-audio setting changed. This
+is bounded shared-mode lifecycle evidence, not long-run hardware, physical
+latency, or managed-driver evidence.
+
 ## 2026-09-13 - guarded digital impulse correlation
 
 The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 1000`

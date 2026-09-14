@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified the guarded shared-mode endpoint matrix on 2026-09-13. All 13
+  capture and 18 render endpoints completed bounded lifecycle checks; one
+  occupied render was reported as the distinct `deviceInUse` diagnostic.
+  Media inventory remained unchanged and temporary executable/object files
+  were removed; no endpoint default, volume, mute, privacy, driver, signing,
+  startup, or persistent machine-audio setting changed. Long-run hardware,
+  physical-latency, and managed-driver gates remain open.
+
 - Requalified guarded digital impulse correlation on 2026-09-13 through the
   exact VB-Cable pair. The 1,000-impulse run detected 999 groups, measured
   zero p95 spacing error in frames, and estimated a 52.42 ms digital onset.
