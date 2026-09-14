@@ -12,6 +12,11 @@ Updated: 2026-09-13.
   production bundle succeeds. The normal `ui/dist` output remains locked by
   an existing Edge/WebView2 process and was not forcibly replaced.
 
+- Added direct storage-contract coverage for the compact status preference on
+  2026-09-13. Missing and non-boolean values fail closed to the full
+  workspace, while enabled state round-trips. The focused preference suite
+  passes (3 tests) and TypeScript passes.
+
 - Confirmed no interactive desktop surface is available for the attended
   WebView2/Narrator gate on 2026-09-13 (`cua.getState` returned no apps or
   browsers). The full Rust workspace regression nevertheless passed at the
