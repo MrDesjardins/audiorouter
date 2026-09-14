@@ -12,6 +12,19 @@ Updated: 2026-09-14.
   No endpoint or machine audio configuration changed. Next action: continue
   the next safe delivery item.
 
+- Requalified the complete non-installing safe acceptance chain after the
+  recorder default-policy change on 2026-09-14. M00 toolchain/native compile,
+  AudioRouter x64 WDK build/catalog signability, read-only endpoint inventory,
+  disposable SysVAD, M01, M04, M05, M06 VST3/VST2 workers, M07, unsigned M08
+  preparation, 159 traceability IDs, and documentation validation (52
+  Markdown files/190 local links) all passed. Control ran 149 tests and the
+  CLI ran 33 tests; MCP interoperability and native worker matrices passed.
+  Cleanup removed 15 run-owned temporary children. This remains non-installing
+  qualification: loaded PortCls, production signing/install, physical latency,
+  and attended WebView2 gates remain open. No plugin/startup registration or
+  persistent machine audio configuration changed. Next action: continue the
+  next safe implementation delivery.
+
 - Aligned the M05 recorder form with REC-03 on 2026-09-14. Selecting WAV
   Float32 now clears and disables the TPDF dither control and explains that
   floating output is not dithered; the create request therefore cannot claim
