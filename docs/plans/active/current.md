@@ -66,6 +66,13 @@ Updated: 2026-09-14.
   checkpoint behavior, with doc-tests green. No audio device or machine
   configuration changed.
 
+- Requalified the authorized control-owned VB-Cable route on 2026-09-14 using
+  the freshly inventoried exact active pair. The 500 ms run captured 24,000
+  frames, processed 187 quanta, rendered 23,936 frames, and completed one
+  start/stop/reset cycle plus deliberate stale-generation rejection. Media
+  identity/state matched before and after; defaults, volume, mute, privacy,
+  driver, signing, startup, and endpoint registration were unchanged.
+
 - Requalified M05 at the current worktree on 2026-09-14. The acceptance
   wrapper passed contracts/UI typecheck, 18 UI test files with 167 tests, and
   a disposable Vite production build producing 3 artifacts. The telemetry
