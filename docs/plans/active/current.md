@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Closed a desktop-shell quit/finalization gap on 2026-09-14. The tray
+  `Quit and stop audio` path now reads a bounded authoritative recorder list,
+  finalizes only active recorders belonging to the desktop session, refuses
+  malformed or over-capacity status, and then requires the authoritative
+  session-stopped response before exiting. Recorders in other sessions remain
+  untouched. Added 2 shell regressions; `cargo test --manifest-path
+  src-tauri/Cargo.toml --locked` passed all 17 tests, strict shell Clippy and
+  workspace formatting passed. No tray action or machine audio configuration
+  was invoked. Next action: continue the next independently testable M03/M07
+  recovery item.
+
 - Requalified the complete non-installing `safe-all.ps1` chain at pushed head
   `1bbb411a` on 2026-09-14 after the recovery clear-flow UI regression. M00/M03
   toolchain, AudioRouter and disposable SysVAD WDK build/signability, M01
