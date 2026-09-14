@@ -29,6 +29,14 @@ Updated: 2026-09-14.
   passed. No endpoint or machine audio configuration changed. Next action:
   continue the next safe implementation delivery.
 
+- Revalidated the pushed REC-03 contract slice across the full Rust workspace
+  on 2026-09-14 with `cargo test --workspace --locked -- --test-threads=1`.
+  All workspace unit, integration, and doc-test suites passed, including
+  engine, Windows-audio boundary, control, CLI/MCP, DSP, storage, transport,
+  and plugin-host coverage. This is portable/boundary evidence only; no
+  endpoint, driver, or machine audio configuration was changed. Next action:
+  inspect and implement the next uncompleted safe plan item.
+
 - Requalified the complete non-installing safe acceptance chain after the
   recorder default-policy change on 2026-09-14. M00 toolchain/native compile,
   AudioRouter x64 WDK build/catalog signability, read-only endpoint inventory,
