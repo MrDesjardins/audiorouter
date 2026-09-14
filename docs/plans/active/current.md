@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the authorized current-tip Rust adapter route on 2026-09-13
+  through the exact existing VB-Cable pair. The 500 ms run negotiated 48 kHz
+  capture/render and a 128-frame graph quantum, captured 24,000 frames,
+  processed 187 blocks, routed 23,936 frames, and recorded zero deadline
+  misses/lateness. Its before/after media snapshot matched and temporary
+  binaries were removed; no endpoint default, volume, mute, privacy, driver,
+  signing, startup, or persistent machine-audio setting changed. This is
+  user-mode timing evidence; physical latency/drift, managed-driver,
+  production-signing, and attended-UI gates remain open.
+
 - Requalified the authorized current-tip application-loopback route on
   2026-09-13 using the existing `voicemeeterpro.exe` process (PID 34568), its
   exact executable/creation identity, and the active Voicemeeter render

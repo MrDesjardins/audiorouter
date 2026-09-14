@@ -1,5 +1,21 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - current-tip Rust adapter route
+
+The authorized `m02-rust-adapter-route-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 500` run used the exact existing VB-Cable pair and
+completed with 48,000 Hz capture/render, a 128-frame graph quantum, and a
+2,666,667 ns graph deadline. It captured 24,000 frames, processed 187 graph
+blocks, scheduled and routed 23,936 frames, recorded 4,246,900 ns total
+processing time with a 57,500 ns maximum, and observed zero deadline misses or
+deadline lateness. The 32-bucket timing histograms accounted for all samples.
+
+The harness compared media-device identity/state before and after, removed its
+temporary probe binaries, and confirmed no default endpoint, volume, mute,
+privacy, driver, signing, startup, or persistent machine-audio setting
+changed. This is user-mode adapter timing evidence, not physical latency,
+long-run drift/soak, managed-driver, or production-signing evidence.
+
 ## 2026-09-13 - current-tip guarded application-loopback lifecycle
 
 The explicitly authorized ignored control test
