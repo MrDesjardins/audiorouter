@@ -78,6 +78,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\run-vb-cable-desktop
 
 Each ID must match exactly one active endpoint of its requested direction.
 
+For an explicit application-capture qualification, use the guarded wrapper
+with the process identity returned by `apps list --json`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\acceptance\m02-control-application-live.ps1 `
+  -AllowLiveAudio -ProcessId 34568 -Executable 'voicemeeterpro.exe' `
+  -CreationTime100ns 134336595287373468 `
+  -ApplicationPath 'C:\Program Files (x86)\VB\Voicemeeter\voicemeeterpro.exe'
+```
+
+The wrapper requires an explicit identity, defaults only to one exact active
+CABLE Input render endpoint, snapshots media devices before and after, runs two
+bounded worker cycles, restores process environment values, and never changes
+endpoint defaults, volume, mute, or the selected process.
+
 The same `run-vb-cable-desktop.ps1` file is included beside the executables in
 the prepared unsigned release directory, so an extracted development artifact
 can be started without a repository checkout.

@@ -13,6 +13,13 @@ default, volume, mute, driver, signing, startup, or persistent audio
 configuration changed. This is same-process restart evidence; process
 replacement/rebind endurance plus production-driver transport remain open.
 
+The reproducible wrapper
+`tests/acceptance/m02-control-application-live.ps1` now requires the process
+identity explicitly, discovers only one exact active CABLE Input render
+endpoint by default, snapshots media devices, restores process environment
+values, and verifies unchanged media state in both normal and cleanup paths.
+It was exercised with the same Voicemeeter identity and passed.
+
 ## 2026-09-14 - lifecycle-order regression and rerun
 
 The control-owned probe initially exposed an unsafe teardown-order mismatch:

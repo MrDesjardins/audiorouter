@@ -32,6 +32,15 @@ Updated: 2026-09-14.
   changed. This establishes same-process restart qualification; process
   replacement/rebind endurance and production-driver evidence remain open.
 
+- Added the reproducible `tests/acceptance/m02-control-application-live.ps1`
+  wrapper on 2026-09-14. It requires an explicit process ID, executable, and
+  creation-time identity; optionally accepts the verified path and render ID;
+  snapshots media state before/after; restores all process environment values;
+  and runs the two-cycle guarded application-capture test without terminating
+  or reconfiguring the selected process. The wrapper itself was exercised with
+  the exact Voicemeeter identity and CABLE Input endpoint and passed. No
+  persistent audio configuration changed.
+
 - Requalified the complete guarded `tests/acceptance/safe-all.ps1` chain at
   the current worktree on 2026-09-14 after the lifecycle-order repair. The
   elevated chain passed project WDK build/catalog signability, read-only
