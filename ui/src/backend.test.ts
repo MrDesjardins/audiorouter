@@ -501,6 +501,18 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "recorders.create", params });
   });
 
+  it("forwards authoritative recorder state listing through the shared API", async () => {
+    let received: unknown;
+    const client = {
+      request: async (method: string, params: unknown) => {
+        received = { method, params };
+        return [{ sessionId: "session-1", state: "recording", lastFrame: 480 }];
+      },
+    } as never;
+    await expect(createLiveBackend(client, demoSession.id).listRecorders()).resolves.toEqual([{ sessionId: "session-1", state: "recording", lastFrame: 480 }]);
+    expect(received).toEqual({ method: "recorders.list", params: undefined });
+  });
+
   it("forwards the privacy safety latch through the live API", async () => {
     let received: unknown;
     const client = { request: async (method: string, params: unknown) => { received = { method, params }; return { muted: true, persistence: "memory", audioEffect: "process-local" }; } } as never;

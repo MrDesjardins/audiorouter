@@ -7,7 +7,7 @@ Updated: 2026-09-14.
   and refreshes it with lifecycle events, so the Recorder panel does not
   display a locally guessed `idle` state after reconnect or session changes.
   Added a rendered authoritative-state regression; TypeScript typecheck and
-  the full UI suite passed (18 files, 171 tests). No audio endpoint or machine
+  the full UI suite passed (18 files, 172 tests). No audio endpoint or machine
   configuration was changed.
 
 - Closed a portable M04/M05 recording-library refresh gap on 2026-09-14.
