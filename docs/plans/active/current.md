@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified `tests/acceptance/safe-all.ps1` at pushed commit `df30e2b9` on
+  2026-09-14. Toolchain/native compile, AudioRouter and disposable SysVAD
+  x64 build/signability, read-only 31-endpoint inventory, M01, M04, M05,
+  M06 VST3/VST2 workers, M07 headless, unsigned M08 artifacts, traceability
+  (159 IDs), and documentation (53 files/192 links) passed. The chain removed
+  its 15 run-owned temporary children. No driver installation/loading,
+  signing-mode change, startup registration, plugin registration, endpoint
+  default, or persistent audio configuration occurred. Native attended
+  startup rollback, loaded-driver behavior, production signing, installer,
+  and physical-latency gates remain open. Next action: continue the next
+  independently testable M03/M07 recovery integration item.
+
 - Hardened native startup observation on 2026-09-14. `startup_status` now
   validates and compares the HKCU Run value with the current shell executable;
   an unrelated owner is reported as unregistered and is never modified.
