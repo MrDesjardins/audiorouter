@@ -2,6 +2,11 @@
 
 Updated: 2026-09-13.
 
+- Added a pre-open duplex-generation regression on 2026-09-13. A render and
+  capture hello for the same bus but different graph generations now fails
+  before driver-handle or mapping creation. Focused Windows-audio coverage
+  includes this guard; no endpoint or driver was opened.
+
 - Added the worker-facing duplex transfer on 2026-09-13. A validated paired
   lease can now be split into independent render and capture controllers plus
   the prebuilt capture writer, allowing the existing stopped worker types to
