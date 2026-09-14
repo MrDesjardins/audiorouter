@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Hardened the M07 tray quit boundary on 2026-09-14. Recorder-list parsing
+  now validates every bounded entry, including entries owned by other
+  sessions; malformed fields, unknown states, and over-capacity responses fail
+  closed instead of being silently ignored. The desktop-session finalization
+  flow remains limited to active recorders. Shell tests (17), strict Clippy,
+  formatting, and diff checks passed after the regression. No tray action,
+  endpoint, driver, registry, or machine audio configuration was invoked.
+  Next action: continue the next independently testable M03/M07 recovery
+  item.
+
 - Closed a desktop-shell quit/finalization gap on 2026-09-14. The tray
   `Quit and stop audio` path now reads a bounded authoritative recorder list,
   finalizes only active recorders belonging to the desktop session, refuses

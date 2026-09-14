@@ -469,27 +469,33 @@ fn tray_recorders_to_finalize(
     if items.len() > 8 {
         return None;
     }
-    items
-        .iter()
-        .filter(|item| {
-            item.get("sessionId").and_then(serde_json::Value::as_str) == Some(session_id)
-                && matches!(
-                    item.get("state").and_then(serde_json::Value::as_str),
-                    Some("armed") | Some("recording") | Some("paused") | Some("stopping")
-                )
-        })
-        .map(|item| {
-            let node_id = item
-                .get("nodeId")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_owned);
-            let last_frame = item
-                .get("lastFrame")
-                .and_then(serde_json::Value::as_u64)
-                .unwrap_or_default();
-            Some((node_id, last_frame))
-        })
-        .collect()
+    let mut to_finalize = Vec::new();
+    for item in items {
+        let object = item.as_object()?;
+        let recorder_session = object.get("sessionId")?.as_str()?;
+        let state = object.get("state")?.as_str()?;
+        let last_frame = match object.get("lastFrame")? {
+            value if value.is_null() => 0,
+            value => value.as_u64()?,
+        };
+        let node_id = match object.get("nodeId") {
+            None => None,
+            Some(value) if value.is_null() => None,
+            Some(value) => Some(value.as_str()?.to_owned()),
+        };
+        if !matches!(
+            state,
+            "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"
+        ) {
+            return None;
+        }
+        if recorder_session == session_id
+            && matches!(state, "armed" | "recording" | "paused" | "stopping")
+        {
+            to_finalize.push((node_id, last_frame));
+        }
+    }
+    Some(to_finalize)
 }
 
 fn tray_privacy_muted(response: &JsonRpcResponse) -> Option<bool> {
@@ -897,9 +903,15 @@ mod tests {
                 { "sessionId": DESKTOP_SESSION_ID, "state": "idle", "lastFrame": null },
                 { "sessionId": DESKTOP_SESSION_ID, "state": "idle", "lastFrame": null }
             ])),
-            ..malformed
+            ..malformed.clone()
         };
         assert_eq!(tray_recorders_to_finalize(&over_capacity, DESKTOP_SESSION_ID), None);
+
+        let malformed_item = JsonRpcResponse {
+            result: Some(json!([{ "sessionId": DESKTOP_SESSION_ID, "state": "recording" }])),
+            ..malformed
+        };
+        assert_eq!(tray_recorders_to_finalize(&malformed_item, DESKTOP_SESSION_ID), None);
     }
 
     #[test]
