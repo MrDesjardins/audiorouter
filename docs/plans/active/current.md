@@ -27,6 +27,15 @@ Updated: 2026-09-13.
   This preserves fail-closed behavior and records vendor incompatibility
   without weakening the worker contract or touching audio configuration.
 
+- Requalified the frontend-owned Tauri/WebView2 RPC path on 2026-09-13 at
+  `1cdf1019`. The elevated disposable acceptance reached the authenticated
+  backend through `rpc_request`, returned a valid `system.describe` response,
+  and cleaned its temporary database, pipe, processes, and environment. This
+  closes the automated shell transport gate; manual visual/accessibility
+  observation still requires a targetable interactive desktop surface. No
+  audio endpoint, driver, plugin registration, or persistent configuration was
+  changed. Evidence: [M07 automation and recovery evidence](evidence/M07-automation-recovery.md).
+
 - Exposed the verified application-capture preparation path through the
   versioned JSON-RPC contract and UI on 2026-09-13. The new
   `nativeApplications.prepare` operation is device-administration gated,

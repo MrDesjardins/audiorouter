@@ -1,5 +1,15 @@
 # M07 automation and recovery evidence
 
+## 2026-09-13 - frontend-owned Tauri RPC requalification at `1cdf1019`
+
+`tests/acceptance/m07-shell-rpc.ps1` passed in the authorized elevated
+Windows session. A disposable enrolled client, SQLite database, named pipe,
+and shell process were created; WebView2 reached the authenticated backend
+through the Tauri `rpc_request` command and received a valid `system.describe`
+response. The wrapper terminated the shell/backend and removed its temporary
+state. No audio endpoint, driver, plugin registration, or persistent machine
+configuration was changed.
+
 ## 2026-09-13 - full safe-chain requalification at `fbba7134`
 
 The complete elevated `tests/acceptance/safe-all.ps1` chain passed at the
