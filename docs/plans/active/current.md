@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Added UI graph-connection transaction coverage on 2026-09-13. The
+  regression creates a `mic:out` → `voice:in` connection through the keyboard
+  connection dialog, plans the draft, and verifies the exact edge reaches the
+  graph backend before commit. TypeScript typecheck and the full UI suite pass
+  (18 files/164 tests); no endpoint or machine audio configuration is accessed.
+
 - Added UI-to-backend Limiter parameter integration coverage on 2026-09-13.
   The regression drags the built-in Limiter onto the visual canvas, edits its
   ceiling to `-3` dBFS, plans the graph, and verifies the authoritative

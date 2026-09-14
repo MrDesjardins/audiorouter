@@ -329,6 +329,34 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByText("Connection added to the draft. Review and plan the changes before committing.")).toBeTruthy();
   });
 
+  it("plans a keyboard-created connection through the graph backend", async () => {
+    const planGraph = vi.fn(async (candidate: typeof demoSession) => ({
+      planId: "connection-plan",
+      baseRevision: candidate.revision,
+      expiresInMs: 30_000,
+      diff: [],
+      affectedDestinations: [],
+      warnings: [],
+      requiredScopes: ["graphWrite"],
+    }));
+    const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
+    render(<App backend={{ ...connectedPreviewBackend(), planGraph, commitGraph }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Keyboard connection dialog" }));
+    const dialog = await screen.findByRole("dialog", { name: "Keyboard connection" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard source output port" }), { target: { value: "mic::out" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), { target: { value: "voice::in" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+
+    await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("connection-plan", demoSession.revision, expect.any(String)));
+    expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
+      edges: expect.arrayContaining([
+        expect.objectContaining({ sourceNode: "mic", sourcePort: "out", destinationNode: "voice", destinationPort: "in" }),
+      ]),
+    }));
+  });
+
   it("renders named canvas handles for connected graph editing", async () => {
     render(<App backend={connectedPreviewBackend()} />);
 
