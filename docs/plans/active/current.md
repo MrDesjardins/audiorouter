@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Passed the authorized M00 event and signal-path acceptances on 2026-09-14
+  against the existing VB-Cable pair. Event-driven capture/render completed
+  with 24,480 capture frames and 28,320 submitted render frames. The bounded
+  1.5-second tone loopback produced 217,662 nonzero captured bytes during a
+  1,000 ms capture. Both harnesses stopped/reset streams, removed temporary
+  outputs, and confirmed unchanged media identity/state; defaults, volume,
+  mute, privacy, registry, driver, signing, and startup configuration were
+  unchanged. Next action: continue the next safe M03/M07 recovery or delivery
+  item.
+
 - Passed the authorized M00/CAP-08 process-exclusion acceptance on 2026-09-14
   for a 500 ms disposable child. The exclusion-mode lifecycle completed
   activation, capture start/stop/reset, and child exit, producing 22,050
