@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Attempted a read-only rendered UI smoke on 2026-09-14 by starting the Vite
+  development server on disposable localhost port 5175; ports 5173 and 5174
+  were already occupied. The server initialized successfully and was then
+  stopped. This session exposed no browser surface, so no screenshot or
+  attended WebView2 acceptance evidence could be collected. Automated M05
+  evidence remains authoritative (181 tests, typecheck, and temporary build).
+  No endpoint, driver, or machine configuration changed. Next action:
+  continue safe implementation work while retaining manual UI acceptance as
+  an external gate.
+
 - Requalified the full safe acceptance chain on 2026-09-14 against the
   authoritative native-pump-kind fix. Toolchain/native compile, project-owned
   WDK driver build and signability/catalog checks, endpoint format inventory,
