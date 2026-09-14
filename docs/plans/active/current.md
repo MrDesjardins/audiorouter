@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the pushed duplex checkpoint on 2026-09-13. The locked
+  workspace passed all unit/integration tests and doc-tests (including 138
+  control, 62 domain, 32 DSP, 108 engine, 70 Windows-audio, and 32 CLI tests;
+  one guarded live control test remains intentionally ignored). The UI suite
+  passed 18 files/156 tests and its production build completed; documentation
+  validation passed with 52 Markdown files and 184 local links. No new live
+  audio, driver, signing, or machine-configuration action occurred in this
+  qualification.
+
 - Added the paired project-driver duplex binding on 2026-09-13. One
   `NativeBridgeDuplexBinding` now owns matching render-source and capture-sink
   leases for a bus, exposes the render reader and capture writer, and is
