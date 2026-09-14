@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Improved M05 status observability on 2026-09-14. The top status summary and
+  compact route-status view now include the backend-authored audio reason, so
+  users can distinguish a disconnected backend, a prepared-but-stopped
+  worker, and a running worker without inferring state from color or a bare
+  available/unavailable label. This is presentation-only; lifecycle actions,
+  endpoint selection, and machine configuration are unchanged. UI tests,
+  typecheck, and production-build checks remain required. Next action:
+  continue the next safe, independently testable plan item.
+
 - Strengthened CAP-06 process-restart identity coverage on 2026-09-14. The
   restart resolver now has explicit regression cases proving a persisted full
   executable path cannot bind a basename-only observation, and that a
