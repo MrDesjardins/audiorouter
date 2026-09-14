@@ -2,6 +2,19 @@
 
 Updated: 2026-09-14.
 
+- Requalified the full safe acceptance chain on 2026-09-14 against the
+  authoritative native-pump-kind fix. Toolchain/native compile, project-owned
+  WDK driver build and signability/catalog checks, endpoint format inventory,
+  disposable SysVAD qualification, M01/M04/M07, M05 UI (typecheck, 181 tests,
+  temporary production build), M06 VST3/VST2 workers, unsigned M08 artifact
+  preparation, 159 requirement mappings, and documentation validation all
+  passed. The chain removed 15 run-owned temporary children. This remains
+  compile/portable/reference-driver evidence: no driver installation/loading,
+  production signing, plugin registration, startup registration, or machine
+  audio configuration was performed. Loaded PortCls, physical latency, and
+  production distribution gates remain open. Next action: continue the next
+  independently testable delivery item.
+
 - Fixed a native UI pump safety edge on 2026-09-14. The effect previously
   treated a missing or unknown `nativeAdapterKind` as the legacy endpoint
   adapter whenever a generation was present, which could dispatch a stale
