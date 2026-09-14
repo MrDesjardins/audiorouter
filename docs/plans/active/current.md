@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Requalified the authorized Rust adapter bridge for five consecutive
+  two-second cycles on 2026-09-13 through the exact VB-Cable pair. Every
+  cycle captured 96,480 frames, processed 753 quanta/taps, rendered 96,384
+  frames, and reported zero non-finite samples, dropped frames, XRuns, or
+  deadline misses. Temporary streams/recordings were stopped and removed and
+  the media-device snapshot stayed unchanged. This strengthens user-mode
+  lifecycle/endurance evidence; it is not physical-latency, drift-soak,
+  managed-driver, or production-signing evidence.
+
 - Clarified the first-run UI guidance on 2026-09-13 so the human-testable
   quick route explicitly lists the built-in Pitch processor alongside EQ,
   Gate, Compressor, and Limiter. TypeScript typecheck and all 159 UI tests

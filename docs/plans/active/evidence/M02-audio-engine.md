@@ -1,5 +1,21 @@
 # Native adapter route requalification (2026-09-13)
 
+## 2026-09-13 - five-cycle adapter bridge endurance
+
+The authorized `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio
+-DurationMilliseconds 2000 -Cycles 5` run used the exact existing VB-Cable
+capture/render pair. All five cycles independently completed at 48 kHz
+stereo with 201 packets, 96,480 captured frames, 753 processed quanta and
+tap calls, and 96,384 rendered frames. Each cycle reported zero non-finite tap
+samples, dropped render frames, scheduler XRuns, and deadline misses; each
+recording contained 25,072 bytes.
+
+The harness stopped and removed every temporary stream and recording and the
+before/after media-device state was unchanged. This is stronger bounded
+user-mode bridge lifecycle evidence, but it does not establish calibrated
+physical latency, clock-drift soak, managed-driver ownership, or production
+signing.
+
 ## 2026-09-13 - built-in processing chain with pitch
 
 The authorized ignored control test
