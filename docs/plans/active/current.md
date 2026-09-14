@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the complete safe M00-M08 acceptance chain at pushed head
+  `c9f6349c` on 2026-09-13 after adding UI-to-backend Pitch parameter and
+  backend-derived EQ response coverage. The project x64 WDK build/signability,
+  read-only native checks, disposable SysVAD, M01/M04, M05 (18 files/161 UI
+  tests and production builds), M06 VST3/VST2 workers, M07, unsigned M08
+  artifacts, 159 normative mappings, and 52-file/189-link documentation
+  validation all passed. Fifteen temporary run-owned children were removed.
+  No driver install/load, signing-mode or boot-policy change, plugin/startup
+  registration, endpoint-default, or persistent audio action occurred.
+
 - Added UI proof for backend-derived EQ visualization on 2026-09-13. The
   regression creates a draft Parametric EQ node, requests its authoritative
   response curve at 48 kHz, and verifies the accessible magnitude chart is
