@@ -16421,7 +16421,7 @@ mod tests {
                 "sessionId": original.id,
                 "nodeId": "desktop-recorder",
                 "recorderId": "desktop",
-                "format": "wavPcm16",
+                "format": "wavFloat32",
                 "sequence": 0,
                 "channels": 1,
                 "sampleRate": 48000,
@@ -16504,6 +16504,20 @@ mod tests {
         assert!(recordings
             .iter()
             .any(|recording| recording["nodeId"] == "desktop-recorder"));
+        assert_eq!(
+            recordings
+                .iter()
+                .find(|recording| recording["recorderId"] == "capture")
+                .unwrap()["dither"],
+            true
+        );
+        assert_eq!(
+            recordings
+                .iter()
+                .find(|recording| recording["recorderId"] == "desktop")
+                .unwrap()["dither"],
+            false
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 

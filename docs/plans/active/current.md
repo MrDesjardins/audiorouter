@@ -21,6 +21,14 @@ Updated: 2026-09-14.
   endpoint, file recording, or machine audio configuration changed. Next
   action: continue the next safe implementation delivery.
 
+- Added end-to-end REC-03 default-policy coverage on 2026-09-14. The existing
+  control-owned recorder-node lifecycle now creates one integer WAV and one
+  Float32 WAV with `dither` omitted, finalizes both, and verifies persisted
+  metadata reports TPDF enabled only for the integer file. Control (148 passed,
+  2 guarded live tests ignored), strict Clippy, formatting, and diff checks
+  passed. No endpoint or machine audio configuration changed. Next action:
+  continue the next safe implementation delivery.
+
 - Requalified the complete non-installing safe acceptance chain after the
   recorder default-policy change on 2026-09-14. M00 toolchain/native compile,
   AudioRouter x64 WDK build/catalog signability, read-only endpoint inventory,
