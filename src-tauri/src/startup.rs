@@ -117,21 +117,39 @@ mod windows_registry {
         let subkey = wide(RUN_SUBKEY);
         let name = wide(VALUE_NAME);
         let mut raw = HKEY::default();
-        let status = unsafe {
-            RegCreateKeyExW(
-                HKEY_CURRENT_USER,
-                PCWSTR(subkey.as_ptr()),
-                Some(0),
-                None,
-                REG_OPTION_NON_VOLATILE,
-                KEY_SET_VALUE,
-                None,
-                &mut raw,
-                None,
-            )
+        let status = if enabled {
+            unsafe {
+                RegCreateKeyExW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(subkey.as_ptr()),
+                    Some(0),
+                    None,
+                    REG_OPTION_NON_VOLATILE,
+                    KEY_SET_VALUE,
+                    None,
+                    &mut raw,
+                    None,
+                )
+            }
+        } else {
+            unsafe {
+                RegOpenKeyExW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(subkey.as_ptr()),
+                    None,
+                    KEY_QUERY_VALUE | KEY_SET_VALUE,
+                    &mut raw,
+                )
+            }
         };
+        if status == ERROR_FILE_NOT_FOUND && !enabled {
+            return Ok(());
+        }
         if status != ERROR_SUCCESS {
-            return Err(format!("startup registry key creation failed: {status:?}"));
+            return Err(format!(
+                "startup registry key {} failed: {status:?}",
+                if enabled { "creation" } else { "lookup" }
+            ));
         }
         let _key = Key(raw);
         let status = if enabled {

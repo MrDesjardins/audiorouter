@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Removed an unintended native startup side effect on 2026-09-14. Disable
+  now opens the existing HKCU Run key instead of creating it, and a missing
+  key is a true no-op. Shell tests (15), strict Clippy, formatting, and diff
+  checks passed. No registry, driver, endpoint, or persistent audio
+  configuration was changed. Next action: continue the next independently
+  testable M03/M07 recovery item.
+
 - Fixed the startup-panel post-apply message race on 2026-09-14. Native
   success or failure text now survives the asynchronous observed-state
   refresh, while an explicit user refresh still clears stale feedback. Added
