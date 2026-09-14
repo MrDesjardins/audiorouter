@@ -22,6 +22,14 @@ Updated: 2026-09-14.
   gate and was not claimed. Next action: continue the next safe M03/M07
   recovery integration item.
 
+- Audited the VDEV-12 failure observability boundary on 2026-09-14. The
+  heartbeat containment path preserves the structured native error for the
+  supervisor and leaves the existing fixed event-category/API contract
+  unchanged; introducing an undiscoverable ad-hoc event would be incorrect.
+  The worker boundary remains compile- and unit-qualified, while real lease
+  failure, loaded-driver diagnostics, and physical silence timing remain
+  native gates. Next action: continue the next safe M03/M07 integration item.
+
 - Planned the next VDEV-12 failure-path slice: native binding heartbeat errors
 - now detach and close only the affected binding, deactivate its portable
   route, and preserve other bindings. The failure path remains control-thread
