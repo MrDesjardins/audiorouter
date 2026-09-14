@@ -594,6 +594,13 @@ impl NativeBridgeDuplexWorker {
 }
 
 #[cfg(windows)]
+impl Drop for NativeBridgeDuplexWorker {
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
+}
+
+#[cfg(windows)]
 /// Explicit owner of the driver lease and its broker-side mapped session.
 ///
 /// Construction claims the kernel lease before callers can publish blocks.

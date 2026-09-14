@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- Hardened `NativeBridgeDuplexWorker` teardown on 2026-09-14. Dropping the
+  composed owner now explicitly stops both directions and resets staged audio,
+  including partially-started states, while preserving the first lifecycle
+  error. The Windows-audio suite passed 73 tests, strict Clippy, formatting,
+  and diff checks. No endpoint was opened and no machine audio configuration
+  changed. Next action: continue the next native bridge integration slice.
+
 - Corrected duplex-worker rollback state on 2026-09-14. A failed output
   start no longer stops an input worker that was already running before the
   duplex start attempt; only an input worker started by that transaction is
