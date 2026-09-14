@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Closed the bridge-to-session construction gap on 2026-09-14. A negotiated
+  duplex binding now has a direct factory into paired workers, and the control
+  plane owns that worker through generation-checked attach/start/pump/stop/
+  detach operations, session stop ordering, and deletion protection. A startup
+  failure rolls back the session runtime. Verification: 145 control tests and
+  73 Windows-audio tests passed, with strict Clippy, formatting, and diff
+  checks. No endpoint was opened; loaded-driver PortCls, signing, and physical
+  latency evidence remain open. Next action: continue the next independently
+  testable native bridge or portable plan item.
+
 - Closed the duplex construction gap on 2026-09-14. A negotiated
   `NativeBridgeDuplexBinding` can now be consumed directly into the paired
   render-source/capture-sink workers, preserving one owner for each lease and
