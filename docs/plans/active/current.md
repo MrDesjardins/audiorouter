@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Requalified the full safe M00-M08 acceptance chain at pushed head
+  `b071dbfd` on 2026-09-13. Toolchain/native checks, the project x64 WDK
+  build and signability/catalog pass, M01/M04, M05 (159 UI tests, typecheck,
+  and production builds), M06 VST3/VST2 workers, M07, unsigned M08 artifact
+  preparation, 159 normative traceability mappings, and documentation
+  validation (52 Markdown files/189 links) all passed. The chain removed its
+  disposable outputs and made no driver install/load, signing-mode, plugin or
+  startup registration, live-stream, endpoint-default, or persistent audio
+  configuration change.
+
 - Requalified the in-house built-in processing chain on 2026-09-13 through
   the authorized VB-Cable pair after adding the `Pitch` node to the guarded
   native control-plane route. The bounded 500 ms run captured 24,000 frames,
