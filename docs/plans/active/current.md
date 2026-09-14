@@ -2,6 +2,15 @@
 
 Updated: 2026-09-14.
 
+- Requalified the authorized control-owned native lifecycle on 2026-09-14
+  with `m02-control-native-live.ps1 -AllowLiveAudio` against the exact
+  existing VB-Cable endpoints. The same-process bounded run captured 24,000
+  frames, processed 187 quanta, and rendered 23,936 frames; start/stop
+  cleanup completed and the script restored its process environment. This is
+  existing-endpoint WASAPI/control evidence only; the AudioRouter driver,
+  loaded PortCls callback, and physical-latency gates remain open. Next
+  action: continue the next safe M03/M07 recovery integration item.
+
 - Requalified the authorized live VB-Cable adapter bridge on 2026-09-14 with
   `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio -DurationMilliseconds 500
   -Cycles 1`. Exact existing endpoints completed 24,960 captured and
