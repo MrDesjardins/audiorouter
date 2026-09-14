@@ -38,6 +38,9 @@ A generic read grant cannot elevate itself to another scope. Revoked or
 unknown clients are denied before method dispatch. Imported bundles do not
 install drivers, execute plugins, arm recorders, or register startup.
 
+API discovery serializes the conceptual `startup.write` scope as
+`startupWrite`; startup registration remains unavailable in this build.
+
 ## Audio privacy boundary
 
 The process-local privacy latch silences physical-capture contributions inside
