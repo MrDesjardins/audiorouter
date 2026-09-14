@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Requalified guarded digital impulse correlation on 2026-09-13 through the
+  exact VB-Cable pair. The 1,000-impulse run detected 999 groups, measured
+  zero p95 spacing error in frames, and estimated a 52.42 ms digital onset.
+  Temporary executable/raw/log artifacts were removed and media state was
+  unchanged; no endpoint default, volume, mute, privacy, driver, signing,
+  startup, or persistent machine-audio setting changed. This is not calibrated
+  physical acoustic-latency evidence.
+
 - Requalified the guarded digital VB-Cable signal path on 2026-09-13. A
   1,500 ms disposable tone through the exact CABLE render/capture pair
   produced 207,198 nonzero captured payload bytes during a 1,000 ms capture.

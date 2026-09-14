@@ -18,6 +18,19 @@ setting changed. This qualifies API mode/lifecycle and data-path behavior;
 it does not establish a full cross-process isolation threshold or production
 driver capability.
 
+## 2026-09-13 - guarded digital impulse correlation
+
+The authorized `m00-native-impulse.ps1 -AllowLiveAudio -ImpulseCount 1000`
+probe passed through the exact existing VB-Cable pair. Analysis detected 999
+groups from 1,000 emitted impulses, with zero p95 spacing error in frames and
+an estimated digital onset of 52.42 ms.
+
+The bounded harness removed its temporary executable, raw capture, and logs
+and preserved the before/after media-device snapshot. No endpoint default,
+volume, mute, privacy, driver, signing, startup, or persistent machine-audio
+setting changed. The onset is digital correlation evidence only and is not a
+calibrated physical acoustic-latency result.
+
 ## 2026-09-13 - guarded digital signal-path loopback
 
 The authorized `m00-native-loopback.ps1 -AllowLiveAudio
