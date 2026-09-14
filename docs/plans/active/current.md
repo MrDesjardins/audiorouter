@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Completed the M04/M05 recording-visibility slice on 2026-09-14. The visual
+  editor now exposes persisted recording format, sample rate, channel count,
+  dither, and conversion metadata in an accessible Recording encoding panel,
+  keeping the backend-authored values visible after finalization. This covers
+  the user-facing REC metadata handoff and M05 API/UI parity without changing
+  endpoint or machine configuration. Verification: UI typecheck, 178 UI tests,
+  elevated production Vite build, and diff checks passed. The regular build
+  initially hit EPERM replacing the existing dist output; the elevated retry
+  passed. Next action: continue the next open native/portable plan item while
+  retaining the driver installation, signing, loaded PortCls, physical-latency,
+  and manual UI gates as explicit evidence requirements.
+
 - Final REC-03 guarded acceptance on 2026-09-14: elevated
   `tests/acceptance/safe-all.ps1` passed at commit `5148bbe8` through M00–M08
   after adding buffered-FLAC dither configuration. This includes the 31

@@ -865,6 +865,14 @@ describe("keyboard connection dialog", () => {
     expect(within(routePanel).getByText(/Channel map: \[1\]/)).toBeTruthy();
   });
 
+  it("shows persisted recording encoding details", async () => {
+    const recording: RecordingRow = { id: "encoded-take", sessionId: demoSession.id, recorderId: "recorder-1", path: "C:\\Audio\\encoded.flac", format: "flac", channels: 2, sampleRate: 44100, frames: 4410, fileBytes: 12000, startTime: "2026-09-14T01:00:00Z", state: "completed", missing: false, title: null, artist: null, comment: null, dither: true, conversion: "targetSampleRate=44100;channels=2;bitsPerSample=16" };
+    render(<App backend={{ ...connectedPreviewBackend(), listRecordings: async () => [recording] }} />);
+    const panel = await screen.findByRole("region", { name: "Recording encoding" });
+    expect(within(panel).getByText(/flac - 44100 Hz - 2 channels - TPDF dither/)).toBeTruthy();
+    expect(within(panel).getByText(/targetSampleRate=44100;channels=2;bitsPerSample=16/)).toBeTruthy();
+  });
+
   it("validates and explicitly commits a stopped session import", async () => {
     const imported = { ...demoSession, id: "imported-session", name: "Imported voice setup" };
     const planSessionImport = vi.fn(async () => ({ planId: "import-plan", expiresInMs: 300000, session: imported }));
