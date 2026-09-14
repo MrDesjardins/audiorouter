@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Closed a M07/UI-10 tray-quit lifecycle gap on 2026-09-14. The shell now
+  reads the coherent, bounded authoritative `activeSessionIds` set before
+  quitting, finalizes active recorders belonging to every active session, and
+  stops each session with a required idempotency key before exiting. Malformed,
+  duplicated, incoherent, or over-capacity status and recorder responses fail
+  closed and leave the shell running. This fixes the previous desktop-only
+  stop path and its missing `session.stop` idempotency key. Shell tests (19),
+  strict shell Clippy, formatting, and diff checks passed. No endpoint, driver,
+  or machine configuration was accessed. The attended tray/WebView2 and native
+  production gates remain open. Next action: continue the next safe M03/M07
+  recovery integration item.
+
 - Closed a portable M07/UI-10 tray-status gap on 2026-09-14. The shell now
   performs one bounded authoritative `status.get` and `recorders.list` refresh
   when the tray is created, so session/privacy/recorder state is not falsely
