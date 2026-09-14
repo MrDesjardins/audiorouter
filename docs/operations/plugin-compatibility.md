@@ -8,6 +8,14 @@ contract. Before/after fingerprints were checked for the candidates, and the
 temporary VST environment values were restored. No plugin registration or
 audio configuration changed.
 
+The native VST3 worker acceptance was rerun on 2026-09-13 with the pinned
+repository AGain fixture. Single-bus and auxiliary-bus processing,
+asynchronous graph staging, bounded failure quarantine, repeated-quantum
+timing, validated state restoration, finite output, and bounded shutdown
+passed. This is contained repository-fixture evidence; it does not establish
+compatibility with arbitrary vendor VST3 binaries or resolve the previously
+observed vendor-specific activation/crash behavior.
+
 The current read-only scan of that directory found nine x64 DLL candidates,
 all classified as VST2: `reacomp-standalone.dll`,
 `reacontrolmidi-standalone.dll`, `readelay-standalone.dll`,

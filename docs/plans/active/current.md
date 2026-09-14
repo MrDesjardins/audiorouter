@@ -2,6 +2,16 @@
 
 Updated: 2026-09-13.
 
+- Re-ran the native VST3 worker acceptance on 2026-09-13 with the pinned
+  repository AGain fixture. Single-bus and auxiliary-bus processing,
+  asynchronous graph staging, bounded worker-failure quarantine, repeated
+  quantum timing, validated state restoration, finite output, and shutdown
+  all passed. The disposable worker and fixture were built/cleaned by the
+  wrapper; no plugin registration, audio stream, or machine audio
+  configuration changed. This qualifies the repository fixture path only;
+  third-party VST3 activation and unattended crash behavior remain separate
+  compatibility gates. Evidence: [M06 VST3 worker acceptance](../../operations/plugin-compatibility.md).
+
 - Qualified VST2 chunk-state and legacy-main behavior on 2026-09-13 with the
   repository-owned fixtures. State save/restore, worker restart restoration,
   non-finite-output rejection, and fault containment passed at 44.1, 48, and
