@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Requalified the full Rust workspace on 2026-09-13 with `cargo test
+  --workspace`. All workspace unit/integration tests and doc-tests passed,
+  including the current control/CLI/MCP, DSP, engine, plugin-host, storage,
+  recording, transport, and Windows-audio suites. No audio endpoint, driver,
+  signing policy, or machine configuration was accessed.
+
 - Requalified the current pushed head `33f17f6a` through the authorized
   control-owned VB-Cable lifecycle on 2026-09-13. The exact active pair
   captured 24,000 frames, processed 187 graph quanta, and rendered 23,936
