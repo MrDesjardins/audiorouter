@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Requalified the authorized live VB-Cable adapter bridge on 2026-09-14 with
+  `m02-rust-adapter-bridge-live.ps1 -AllowLiveAudio -DurationMilliseconds 500
+  -Cycles 1`. Exact existing endpoints completed 24,960 captured and
+  rendered frames across 195 processed quanta/tap calls, with zero non-finite
+  samples, dropped render frames, scheduler xruns, or deadline misses; the
+  temporary recording was finalized and removed and the before/after media
+  snapshot was unchanged. This is measured existing-cable adapter evidence,
+  not AudioRouter driver or production PortCls evidence. Next action:
+  continue the next safe M03/M07 recovery integration item.
+
 - Revalidated the locked workspace and adapters at pushed head `65e4f953` on
   2026-09-14. Rust workspace tests passed across domain, DSP, engine,
   recording, storage, Windows-audio (73), control (150 with 2 guarded live
