@@ -3781,13 +3781,6 @@ impl ControlPlane {
         session_id: EntityId,
         config: NativeApplicationWorkerConfig<'_>,
     ) -> Result<(), ControlError> {
-        audiorouter_windows_audio::bind_application_with_path(
-            config.process_id,
-            config.expected_executable,
-            config.expected_executable_path,
-            Some(config.expected_creation_time_100ns),
-        )
-        .map_err(audio_control_error)?;
         let session = self.get_session(&session_id)?.clone();
         let process_id_value = serde_json::Value::from(u64::from(config.process_id));
         let has_matching_capture = session.nodes.iter().any(|node| {
@@ -3816,6 +3809,13 @@ impl ControlPlane {
                 "process-loopback render binding must be stereo IEEE float32".into(),
             ));
         }
+        audiorouter_windows_audio::bind_application_with_path(
+            config.process_id,
+            config.expected_executable,
+            config.expected_executable_path,
+            Some(config.expected_creation_time_100ns),
+        )
+        .map_err(audio_control_error)?;
         let capture =
             audiorouter_windows_audio::ProcessLoopbackCapture::open(config.process_id, config.mode)
                 .map_err(audio_control_error)?;
@@ -11112,6 +11112,49 @@ mod tests {
                 code: "invalidArgument",
                 ..
             }
+        ));
+        assert!(plane.native_endpoint_worker.is_none());
+        assert!(plane.endpoint_monitor.is_none());
+    }
+
+    #[test]
+    fn native_application_worker_rejects_missing_graph_source_before_platform_access() {
+        let mut plane = ControlPlane::default();
+        let mut owned = session();
+        owned.id = EntityId::new("application-worker-source-required");
+        plane.create_session(owned).unwrap();
+        let render = audiorouter_windows_audio::EndpointInfo {
+            id: "render".into(),
+            direction: audiorouter_windows_audio::EndpointDirection::Render,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 30_000,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            bits_per_sample: 32,
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: "00000003-0000-0010-8000-00aa00389b71".into(),
+        };
+        let error = plane
+            .prepare_native_application_worker(
+                EntityId::new("application-worker-source-required"),
+                NativeApplicationWorkerConfig {
+                    process_id: 12_345,
+                    expected_executable: "probe.exe",
+                    expected_executable_path: None,
+                    expected_creation_time_100ns: 1,
+                    mode: audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+                    render: &render,
+                    buffer_duration_100ns: 0,
+                    max_attempts: 1,
+                    retry_delay_ms: 0,
+                },
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            ControlError::InvalidRequest(message)
+                if message == "application worker requires a matching enabled applicationCapture node"
         ));
         assert!(plane.native_endpoint_worker.is_none());
         assert!(plane.endpoint_monitor.is_none());

@@ -2,6 +2,14 @@
 
 Updated: 2026-09-13.
 
+- Hardened application-worker preparation ordering on 2026-09-13. The
+  control plane now validates the session's enabled `applicationCapture`
+  source, exact process ID, worker availability, and stereo render shape
+  before process enumeration, COM activation, or endpoint-monitor creation.
+  Added a regression proving a missing graph source has no platform side
+  effects. Control tests pass (138 passed, one guarded live test ignored) and
+  strict Clippy passes with `-D warnings`.
+
 - Requalified the existing control-owned endpoint route after introducing the
   native worker variant boundary on 2026-09-13. The guarded VB-Cable route
   passed with 24,000 captured frames, 187 processed quanta, and 23,936
