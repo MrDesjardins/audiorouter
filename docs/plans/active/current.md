@@ -41,6 +41,13 @@ Updated: 2026-09-14.
   UI typechecks passed, and no endpoint or machine configuration was changed.
   Loaded PortCls transport and physical-driver evidence remain open.
 
+- Added selected-node telemetry presentation on 2026-09-14. The inspector now
+  renders backend-owned meter peak/RMS/clipping and dynamics reduction/gate
+  values when the committed node has a prepared observation, and explicitly
+  explains waiting/unavailable states for drafts, stopped nodes, and busy
+  stages. UI typecheck and the full suite passed (18 files, 167 tests); this
+  remains snapshot-based until bounded meter event refresh is connected.
+
 - Added prepared-stage node identity on 2026-09-14. Compiled engine graphs
   retain an immutable node-ID map beside their stages, and expose best-effort
   meter and dynamics telemetry by authored node ID without waiting on the

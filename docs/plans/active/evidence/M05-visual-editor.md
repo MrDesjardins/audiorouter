@@ -809,3 +809,14 @@ unique idempotency key. Disconnected mode clears the view and disables all
 mutations. UI typecheck, the 126-test suite, and diff checks passed. Backend
 validation and device administration authorization remain authoritative; the
 panel does not activate endpoints or change machine audio settings.
+
+## 2026-09-14 - Selected-node telemetry
+
+The selected-node inspector now consumes the redacted diagnostics snapshot and
+renders backend-owned meter peak/RMS/clipping and dynamics gain-reduction/gate
+state for the selected committed node. Draft, stopped, unprepared, and busy
+stages remain explicitly unavailable rather than showing stale or invented
+values. UI typecheck and the full suite passed with 18 files/167 tests. The
+panel is currently snapshot-based; bounded meter event refresh and attended
+WebView2/accessibility acceptance remain open. No endpoint or machine audio
+configuration was accessed.
