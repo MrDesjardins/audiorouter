@@ -2,6 +2,12 @@
 
 Updated: 2026-09-13.
 
+- Re-ran the legacy VST2 worker matrix on 2026-09-13 against the supplied
+  ReaPlugs directory. Six x64 audio-effect DLLs passed isolated load/process
+  checks at 44.1, 48, and 96 kHz (18 combinations), including binary-integrity
+  and environment-restore checks. This is explicit local VST2 evidence; it
+  does not grant redistribution/editor rights or alter audio configuration.
+
 - Hardened duplex hello validation on 2026-09-13. Render-source and
   capture-sink negotiations must now agree on protocol version, generation,
   sample rate, channel count, quantum size, and lease duration before either
