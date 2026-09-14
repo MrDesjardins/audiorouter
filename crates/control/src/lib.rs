@@ -4562,7 +4562,11 @@ impl ControlPlane {
                 "native capture sink binding is not prepared".into(),
             ));
         };
-        binding.close().map_err(|error| {
+        let close_result = binding.close();
+        if let Some(bridge) = self.virtual_bridges.get(bus_id) {
+            bridge.deactivate();
+        }
+        close_result.map_err(|error| {
             ControlError::InvalidRequest(format!("native capture sink close failed: {error:?}"))
         })
     }
@@ -4577,7 +4581,11 @@ impl ControlPlane {
                 "native render source binding is not prepared".into(),
             ));
         };
-        binding.close().map_err(|error| {
+        let close_result = binding.close();
+        if let Some(bridge) = self.virtual_bridges.get(bus_id) {
+            bridge.deactivate();
+        }
+        close_result.map_err(|error| {
             ControlError::InvalidRequest(format!("native render source close failed: {error:?}"))
         })
     }
@@ -4589,7 +4597,11 @@ impl ControlPlane {
                 "native duplex binding is not prepared".into(),
             ));
         };
-        binding.close().map_err(|error| {
+        let close_result = binding.close();
+        if let Some(bridge) = self.virtual_bridges.get(bus_id) {
+            bridge.deactivate();
+        }
+        close_result.map_err(|error| {
             ControlError::InvalidRequest(format!("native duplex close failed: {error:?}"))
         })
     }

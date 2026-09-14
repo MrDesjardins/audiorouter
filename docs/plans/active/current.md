@@ -2,10 +2,20 @@
 
 Updated: 2026-09-14.
 
+- Hardened M03/VDEV-12 explicit native binding detachment on 2026-09-14.
+  Capture-sink, render-source, and duplex binding removal now deactivates the
+  matching portable bridge even when native lease close reports an error,
+  preventing stale audio publication after recovery or operator teardown.
+  The control suite passed 154 tests with 2 guarded live tests intentionally
+  ignored; no driver was installed/loaded and no machine audio configuration
+  changed. Next action: continue the next safe M03/M07 recovery integration
+  item.
+
 - Reconciled the current qualification snapshot on 2026-09-14 after the
   mix-minus template compatibility fix. User-facing release notes now report
-  the verified current counts (189 UI tests and 156 control tests, with 2
-  guarded live control tests ignored) instead of stale prior counts. The full
+  the verified current counts (189 UI tests and 154 control tests passed, with
+  2 guarded live control tests intentionally ignored) instead of stale prior
+  counts. The full
   UI typecheck and 19-file/189-test suite passed at head `64825ffe`; no audio,
   driver, or machine configuration changed. Next action: continue the next
   safe M03/M07 recovery integration item.
