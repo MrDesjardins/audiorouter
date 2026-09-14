@@ -388,6 +388,25 @@ describe("live event cursor", () => {
     expect(received).toEqual({ method: "nativeEndpoints.pump", params: { sessionId: demoSession.id, generation: 7, maxPackets: 2 } });
   });
 
+  it("forwards independent duplex pump budgets with the exact session generation", async () => {
+    let received: unknown;
+    const result = {
+      sessionId: demoSession.id,
+      generation: 8,
+      input: { packets: 1, capturedFrames: 128, processedQuanta: 1, renderedFrames: 128, droppedRenderFrames: 0, renderBackpressureEvents: 0 },
+      output: { packets: 2, capturedFrames: 256, processedQuanta: 2, renderedFrames: 256, droppedRenderFrames: 0, renderBackpressureEvents: 0 },
+    };
+    const client = {
+      request: async (method: string, params: unknown) => { received = { method, params }; return result; },
+    } as never;
+    const backend = createLiveBackend(client, demoSession.id);
+    await expect(backend.pumpNativeDuplex?.(demoSession.id, 8, 1, 2)).resolves.toEqual(result);
+    expect(received).toEqual({
+      method: "nativeDuplex.pump",
+      params: { sessionId: demoSession.id, generation: 8, maxInputQuanta: 1, maxOutputPackets: 2 },
+    });
+  });
+
   it("forwards explicit plugin scan and inspection requests", async () => {
     const requests: unknown[] = [];
     const client = {

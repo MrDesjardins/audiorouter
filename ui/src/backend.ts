@@ -95,6 +95,7 @@ export interface UiBackend {
   prepareNativeEndpoint?(sessionId: string, captureEndpointId: string, renderEndpointId: string): Promise<import("@audiorouter/contracts").NativeEndpointPrepareResult>;
   prepareNativeApplication?(params: Omit<import("@audiorouter/contracts").MethodParams["nativeApplications.prepare"], "creationTime100ns"> & { creationTime100ns: string | null }): Promise<import("@audiorouter/contracts").NativeApplicationPrepareResult>;
   pumpNativeEndpoint?(sessionId: string, generation: number, maxPackets?: number): Promise<import("@audiorouter/contracts").NativeEndpointPumpResult>;
+  pumpNativeDuplex?(sessionId: string, generation: number, maxInputQuanta?: number, maxOutputPackets?: number): Promise<import("@audiorouter/contracts").NativeDuplexPumpResult>;
   listProcessors(): Promise<DiscoveryDocument["processors"]>;
   processorResponse(params: ProcessorResponseParams): Promise<ProcessorResponse>;
   listPresets(): Promise<DiscoveryDocument["presets"]>;
@@ -491,6 +492,14 @@ export function createLiveBackend(client: AudioRouterClient, sessionId: string):
     },
     async pumpNativeEndpoint(currentSessionId, generation, maxPackets = 64) {
       return client.request("nativeEndpoints.pump", { sessionId: currentSessionId, generation, maxPackets });
+    },
+    async pumpNativeDuplex(currentSessionId, generation, maxInputQuanta = 64, maxOutputPackets = 64) {
+      return client.request("nativeDuplex.pump", {
+        sessionId: currentSessionId,
+        generation,
+        maxInputQuanta,
+        maxOutputPackets,
+      });
     },
     async listProcessors() {
       return client.request("processors.list", undefined);

@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Added the UI adapter for paired native pumping on 2026-09-14. The shared
+  `UiBackend` now forwards typed `nativeDuplex.pump` requests with exact
+  session generation and independent bounded input/output budgets, keeping
+  the React layer on the same versioned API as CLI and native adapters. A
+  forwarding regression protects the request shape. Verification: 179 UI
+  tests passed and UI TypeScript typecheck passed; no endpoint, driver, or
+  machine audio configuration was accessed. Loaded PortCls, production
+  signing, and physical-latency evidence remain open. Next action: continue
+  the next independently testable UI/native integration item.
+
 - Exposed the paired native bridge pump through the versioned API on
   2026-09-14. `nativeDuplex.pump` is now present in the authoritative domain
   method registry, TypeScript contracts, control-plane discovery schemas,
