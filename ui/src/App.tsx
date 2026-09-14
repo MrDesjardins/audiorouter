@@ -662,7 +662,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         const now = Date.now();
         if (now - lastReportedAt >= 1000) { lastReportedAt = now; setNativePumpStats(result); }
       }
-      catch { /* Diagnostics remain backend-owned; do not retry or substitute endpoints here. */ }
+      catch { setNativePumpStats(null); /* Diagnostics remain backend-owned; do not retry or substitute endpoints here. */ }
       finally { pumping = false; }
     };
     void pump();
@@ -684,7 +684,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const visibleLibraryEntries = filterLibraryEntries(libraryEntries, librarySearch);
   const setupSteps = setupChecklist({ connected: backend.connected, audio: snapshot?.status.audio ?? null, storage: snapshot?.status.storage ?? null, deviceCount: devices.length, applicationCount: applications.length, vbCablePairAvailable: findVbCableEndpointPair(devices) !== null });
   const connectionLabel = backend.connected ? "Backend connected" : "Backend disconnected";
-  const nativePumpSummary = nativePumpStats && sessionRunning ? `native ${nativePumpStats.capturedFrames} in / ${nativePumpStats.renderedFrames} out` : null;
+  const nativePumpSummary = nativePumpStats && sessionRunning ? `native ${nativePumpStats.capturedFrames} in / ${nativePumpStats.renderedFrames} out${nativePumpStats.recorderChunksDrained > 0 ? ` / ${nativePumpStats.recorderChunksDrained} recorder chunks` : ""}` : null;
   const statusSummary = `${snapshot ? `${snapshot.status.audio} audio - ${snapshot.status.storage} storage - ${snapshot.status.sessionCount} session${snapshot.status.sessionCount === 1 ? "" : "s"}` : "Waiting for backend snapshot"}${nativePumpSummary ? ` - ${nativePumpSummary}` : ""}`;
   const recordDraftChange = (next: import("@audiorouter/contracts").Session) => { setDraftHistory((history) => recordDraft(history, draft, next)); setDraft(next); };
   const undoDraft = () => { const transition = undoDraftHistory(draftHistory, draft); if (transition.current === draft) return; setDraftHistory(transition.history); setDraft(transition.current); setActionMessage("Undid the last draft change."); };

@@ -13,6 +13,13 @@ Updated: 2026-09-13.
   explicitly offline callers. No endpoint or machine audio configuration was
   changed.
 
+- Exposed bounded recorder-drain telemetry in the connected UI status summary
+  on 2026-09-13. A running native route now shows when recorder chunks were
+  drained on the control thread, and a failed pump clears stale native
+  telemetry instead of presenting old counts as current. UI typecheck and
+  tests pass; this is presentation of the existing backend result and does
+  not change endpoint or machine audio configuration.
+
 - Requalified the complete elevated `tests/acceptance/safe-all.ps1` chain at
   the current pushed head on 2026-09-13. Toolchain/native compile, non-
   installing x64 WDK driver build and catalog signability, read-only endpoint
