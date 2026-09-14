@@ -2,6 +2,13 @@
 
 Updated: 2026-09-14.
 
+- REC-03 audit note on 2026-09-14: the create-time dither choice is now
+  forwarded to the encoder, but finalized `RecordingRecord`/`RecordingRow`
+  metadata still lacks a persisted dither/conversion-settings field. This is
+  an open backend/storage contract task requiring a versioned schema/migration
+  and file-library/API coverage; the UI checkbox must not be treated as proof
+  of metadata compliance. No audio endpoint or machine configuration changed.
+
 - Delivered the REC-03 recorder dither control on 2026-09-14. The UI now
   exposes TPDF dithering as an explicit create-time option, enabled by
   default, and forwards the selected value through the shared
