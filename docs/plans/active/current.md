@@ -12,6 +12,13 @@ Updated: 2026-09-14.
   Per-node meter publication and the loaded production-driver transport gate
   remain open.
 
+- Synchronized the shared TypeScript diagnostics contract on 2026-09-14 after
+  adding scheduler telemetry. `DiagnosticsSnapshot` now models the actual
+  native adapter states, nullable native session identity, available audio
+  state, and the bounded scheduler snapshot. Contracts typecheck, drift
+  validation, and UI typecheck passed; no runtime or machine configuration
+  changed.
+
 - Fixed a real M02 acceptance integration defect on 2026-09-14. After the
   native lifecycle boundary was tightened, the control-owned VB-Cable probe
   still stopped the endpoint worker before stopping its running session; the

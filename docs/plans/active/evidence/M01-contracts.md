@@ -364,6 +364,11 @@ counters, active generation, and negotiated sample rate. Control tests verify
 the unavailable `null` state and bounded field contract; the operation remains
 read-only and does not touch endpoint state.
 
+The shared TypeScript `DiagnosticsSnapshot` was synchronized with this response
+on 2026-09-14, including the three native adapter states, nullable native
+session identity, available/unavailable audio state, and scheduler fields.
+Contracts typecheck, contract drift validation, and the UI typecheck passed.
+
 The fixed `startup.get` capability response and `recovery.clearSafeMode` result
 now have explicit output schemas and shared TypeScript types. Their
 unavailable/cleared-state invariants are discovery-tested without registering

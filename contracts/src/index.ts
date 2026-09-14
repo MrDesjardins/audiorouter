@@ -485,8 +485,25 @@ export interface DiagnosticsSnapshot {
   build: string;
   backend: "control-plane";
   storage: "memory" | "sqlite";
-  audio: { state: "unavailable"; reason: string };
-  nativeAdapter: "not activated";
+  audio: { state: "available" | "unavailable"; reason: string };
+  nativeAdapter: "implemented-not-activated" | "configured-stopped" | "running";
+  nativeSessionId: EntityId | null;
+  schedulerTelemetry: {
+    activeGeneration: number | null;
+    activeSampleRateHz: number | null;
+    inputOverruns: number;
+    inputUnderruns: number;
+    outputOverruns: number;
+    outputUnderruns: number;
+    processedQuanta: number;
+    repairedSamples: number;
+    xruns: number;
+    processingTimeNsTotal: number;
+    processingTimeNsMax: number;
+    deadlineMisses: number;
+    deadlineLatenessNsTotal: number;
+    deadlineLatenessNsMax: number;
+  } | null;
   privacyMute: { muted: boolean; persistence: "durable" | "memory" };
   recovery: { safeMode: boolean; recentCrashes: number; persistence: "durable" | "memory" };
   eventLog: { latestSequence: number; retained: number };
