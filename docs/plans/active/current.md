@@ -2,6 +2,15 @@
 
 Updated: 2026-09-13.
 
+- Completed the application-capture policy UI slice on 2026-09-13. The
+  human-facing Applications panel now exposes the existing backend
+  include/exclude policy and forwards the selected value to
+  `nativeApplications.prepare`; the control remains disabled while a session
+  runs. Added an accessibility regression with an exact render binding that
+  proves `exclude` reaches the adapter. UI tests pass (18 files/158 tests) and
+  TypeScript typecheck passes. This changes no endpoint defaults, volume, mute,
+  driver state, or persistent machine audio configuration.
+
 - Exposed the verified application-capture preparation path through the
   versioned JSON-RPC contract and UI on 2026-09-13. The new
   `nativeApplications.prepare` operation is device-administration gated,

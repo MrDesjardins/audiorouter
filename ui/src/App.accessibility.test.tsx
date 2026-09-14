@@ -41,6 +41,33 @@ describe("VB-Cable endpoint selection", () => {
     expect(within(quickRoute).getByRole("link", { name: "Start the session" }).getAttribute("href")).toBe("#native-endpoint-panel");
   });
 
+  it("forwards the selected application capture policy", async () => {
+    const prepareNativeApplication = vi.fn(async () => ({ sessionId: demoSession.id, state: "configured-stopped" as const, processId: 42, executable: "Music.exe", executablePath: "C:\\Apps\\Music.exe", creationTime100ns: "123", mode: "exclude" as const, renderEndpointId: "render-test" }));
+    const backend = {
+      ...connectedPreviewBackend(),
+      listApplications: async () => [{
+        processId: 42,
+        executable: "Music.exe",
+        executablePath: "C:\\Apps\\Music.exe",
+        audioDisplayNames: ["Music"],
+        audioActivity: "active" as const,
+        captureCapability: "observed" as const,
+        audioSessionCount: 1,
+        activeAudioSessionCount: 1,
+        captureSessionCount: 1,
+        renderSessionCount: 1,
+        creationTime100ns: "123",
+      }],
+      prepareNativeApplication,
+    };
+    window.localStorage.setItem(`audiorouter.ui.endpoint-binding.${demoSession.id}`, JSON.stringify({ renderEndpointId: "render-test" }));
+    render(<App backend={backend} />);
+    await screen.findByRole("button", { name: "Prepare application worker" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Application capture policy" }), { target: { value: "exclude" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare application worker" }));
+    await waitFor(() => expect(prepareNativeApplication).toHaveBeenCalledWith(expect.objectContaining({ mode: "exclude" })));
+  });
+
   it("adds a verified scanned plugin as a stopped draft placeholder", async () => {
     const backend = {
       ...connectedPreviewBackend(),
