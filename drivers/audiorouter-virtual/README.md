@@ -30,12 +30,30 @@ default, or starts a driver service.
 deployment instructions are intentionally not an AudioRouter installation
 procedure; do not use them on a development workstation.
 
+## Explicit package lifecycle
+
+After producing a package, an administrator may use the guarded lifecycle
+entrypoint below on an isolated test system:
+
+```powershell
+.\manage.ps1 -Install -AllowDriverInstall -Inf .\path\to\AudioRouterVirtual.inf
+.\manage.ps1 -Uninstall -AllowDriverInstall -Inf .\path\to\AudioRouterVirtual.inf
+```
+
+Installation records the exact `oem*.inf` name returned by `pnputil`; uninstall
+requires that state file and removes only that package. Both switches are
+required, the INF must be inside this driver package directory, and ambiguous
+or missing state fails closed. The script does not change test-signing,
+Secure Boot, HVCI, audio defaults, or endpoint selections. Do not run it on the
+daily workstation until the isolated-target procedure and rollback evidence
+are approved.
+
 ## Current limits and next integration work
 
 - The prototype is x64 build-qualified; the active plan records the installed
   VS/WDK build and zero-error signability result. This is not production
   signing evidence.
-- Production signing, catalog/release policy, clean-machine install,
+- Production signing, catalog/release policy, clean-machine qualification,
   managed bus creation/rename/enable/
   disable/delete, and endpoint teardown are not implemented here.
 - The secured control scaffold has direction-aware ownership leases and a

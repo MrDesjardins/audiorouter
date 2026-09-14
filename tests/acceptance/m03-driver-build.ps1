@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $build = Join-Path $workspace 'drivers/audiorouter-virtual/build.ps1'
+$manage = Join-Path $workspace 'drivers/audiorouter-virtual/manage.ps1'
 $adapter = Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/adapter.cpp'
 $infSource = Get-Content -LiteralPath (Join-Path $workspace 'drivers/audiorouter-virtual/Source/Main/AudioRouterVirtual.inx') -Raw
 foreach ($required in @(
@@ -12,6 +13,20 @@ foreach ($required in @(
     }
 }
 $buildScript = Get-Content -LiteralPath $build -Raw
+$manageScript = Get-Content -LiteralPath $manage -Raw
+foreach ($required in @(
+        'ParameterSetName = ''Install''',
+        'ParameterSetName = ''Uninstall''',
+        'AllowDriverInstall',
+        'Refusing to overwrite existing lifecycle state',
+        'refusing unmanaged cleanup',
+        '/add-driver',
+        '/delete-driver',
+        'publishedName -notmatch ''^oem\d+\.inf$''')) {
+    if (-not $manageScript.Contains($required)) {
+        throw "guarded driver lifecycle control is missing: $required"
+    }
+}
 foreach ($required in @(
         '$outputWasProvided',
         '$outputExistedBeforeBuild',

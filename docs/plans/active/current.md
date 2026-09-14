@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Planned the next M03 delivery slice on 2026-09-14: add an explicit,
+  reversible driver package lifecycle script. Build-only qualification already
+  exists, but the repository still has no guarded install/uninstall entrypoint;
+  this leaves the managed-driver gate open even when an administrator is ready
+  to test it. The script will require an explicit install/uninstall switch and
+  an additional authorization switch, record the exact published package name,
+  refuse ambiguous cleanup, and never alter test-signing, Secure Boot, HVCI,
+  defaults, or endpoint selections. Verification will be static/script tests
+  and build-only checks; live installation remains a separately authorized
+  native gate with rollback evidence.
+
 - Requalified the production Rust adapter live path on 2026-09-14 with
   `m02-rust-adapter-live.ps1 -AllowLiveAudio -DurationMilliseconds 500`.
   The exact current endpoints negotiated 48 kHz stereo and produced 24,480
