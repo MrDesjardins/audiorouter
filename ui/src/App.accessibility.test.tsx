@@ -466,6 +466,53 @@ describe("keyboard connection dialog", () => {
     expect(await screen.findByText("Committed revision 8. Reconnect to refresh the authoritative view.")).toBeTruthy();
   });
 
+  it("commits a dropped pitch parameter through the graph backend", async () => {
+    const planGraph = vi.fn(async (candidate: typeof demoSession) => ({
+      planId: "pitch-plan",
+      baseRevision: candidate.revision,
+      expiresInMs: 30_000,
+      diff: [],
+      affectedDestinations: [],
+      warnings: [],
+      requiredScopes: ["graphWrite"],
+    }));
+    const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
+    const pitch = {
+      id: "pitch",
+      version: 1,
+      category: "pitch" as const,
+      availability: { status: "available" as const },
+      latencySamples: 1024,
+      parameters: [
+        { name: "semitones", type: "number" as const, unit: "st", minimum: -12, maximum: 12, default: 0 },
+      ],
+    };
+    const backend = { ...connectedPreviewBackend(), listProcessors: async () => [pitch], planGraph, commitGraph };
+    render(<App backend={backend} />);
+
+    const dropSource = await screen.findByRole("button", { name: /^Pitch shift$/ });
+    const canvas = screen.getByLabelText("Signal-flow graph");
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      types: ["application/x-audiorouter-library-kind"],
+      effectAllowed: "copy",
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? "",
+    };
+    fireEvent.dragStart(dropSource, { dataTransfer });
+    fireEvent.drop(canvas, { dataTransfer });
+    fireEvent.click(await screen.findByLabelText("Pitch shift 1, pitch"));
+    fireEvent.change(await screen.findByRole("spinbutton", { name: "semitones precise value" }), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+
+    await waitFor(() => expect(commitGraph).toHaveBeenCalledWith("pitch-plan", demoSession.revision, expect.any(String)));
+    expect(planGraph).toHaveBeenCalledWith(expect.objectContaining({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ kind: "pitch", parameters: expect.objectContaining({ semitones: 5 }) }),
+      ]),
+    }));
+  });
+
   it("expands an authoritative EQ preset into a draft node", async () => {
     const backend = {
       ...connectedPreviewBackend(),

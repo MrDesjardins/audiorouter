@@ -2,6 +2,13 @@
 
 Updated: 2026-09-13.
 
+- Added UI-to-backend Pitch parameter integration coverage on 2026-09-13.
+  The regression drags the built-in Pitch processor onto the canvas, changes
+  semitones to `5`, plans the graph, and verifies the backend receives the
+  actual `pitch` node and parameter before commit. TypeScript typecheck and
+  the full UI suite pass (18 files/160 tests); no endpoint or machine audio
+  configuration is accessed.
+
 - Requalified the event-driven native endpoint lifecycle for two seconds on
   2026-09-13 through the exact VB-Cable pair. The run captured 96,480 frames
   and rendered 100,800 silent frames after successful event setup, start,
