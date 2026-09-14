@@ -2,6 +2,14 @@
 
 Updated: 2026-09-14.
 
+- Requalified the complete M07 headless acceptance on 2026-09-14 after the
+  plugin-panel boundary fix. CLI (33), MCP (3), control (158 passed with 2
+  guarded live tests ignored), plugin-host (70), and worker-process (13) tests
+  passed; M01 CLI parity and documentation checks also passed. No audio device,
+  driver, plugin registration, or machine configuration was changed. Native
+  startup/driver and attended UI gates remain explicit blockers. Next action:
+  continue the next safe M03/M07 implementation slice.
+
 - Passed the isolated installed-plugin M06 acceptance on 2026-09-14 for the
   explicitly selected `C:\\Program Files\\VSTPlugins\\ReaPlugs\\reaeq-standalone.dll`.
   Processing passed at 44.1, 48, and 96 kHz; the dedicated editor-thread and
