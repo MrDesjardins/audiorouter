@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Requalified the authorized routed M02 path on 2026-09-14 against the exact
+  existing VB-Cable endpoints. `m02-control-route-live.ps1` passed with
+  generation 1, 24,000 captured frames, 187 processed quanta, 23,936
+  rendered frames, one successful start/stop/reset, and the stale-pump
+  rejection check. The complementary `m02-rust-adapter-route-live.ps1`
+  passed at 48 kHz stereo with 128-frame quanta, a 2,666,667 ns deadline,
+  23,936 routed frames, 187 timing samples, zero deadline misses, and zero
+  lateness. Both scripts verified unchanged media state and restored/removed
+  temporary resources. This remains existing-endpoint WASAPI evidence, not
+  loaded AudioRouter driver or PortCls evidence. Next action: continue the
+  next safe M03/M07 recovery integration item.
+
 - Requalified the authorized control-owned native lifecycle on 2026-09-14
   with `m02-control-native-live.ps1 -AllowLiveAudio` against the exact
   existing VB-Cable endpoints. The same-process bounded run captured 24,000
