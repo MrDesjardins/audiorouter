@@ -8,6 +8,12 @@ Updated: 2026-09-14.
   TypeScript typecheck and the full UI suite passed (18 files, 168 tests).
   No endpoint or machine configuration changed.
 
+- Requalified the bounded native impulse/correlation path on 2026-09-14
+  against the existing VB-Cable pair. Analysis detected 997 of 1,000 impulse
+  groups with zero p95 spacing error and estimated a 78.75 ms onset. This is
+  digital correlation evidence only and does not close calibrated physical
+  latency; temporary streams were cleaned up and configuration was unchanged.
+
 - Requalified the standalone Rust adapter route on 2026-09-14 against the
   freshly inventoried VB-Cable pair. The 500 ms run captured 24,480 frames,
   processed 191 graph blocks, routed 24,000 frames, recorded zero deadline
