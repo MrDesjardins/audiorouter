@@ -2,6 +2,17 @@
 
 Updated: 2026-09-14.
 
+- Completed the buffered-FLAC REC-03 compatibility slice on 2026-09-14.
+  `FlacBufferEncoder`, `BufferedFlacRecorder`, and
+  `BufferedFlacRecorderWorker` now expose dither-aware constructors while
+  preserving the old constructors as explicit false-dither wrappers. The
+  control regression finalizes through the worker, persists the row, and
+  verifies dither plus target conversion metadata. Verification: 145 control
+  tests, 40 recording tests, strict Clippy, and format checks passed. The
+  previous compatibility note below is superseded by this entry. Next action:
+  requalify the complete safe acceptance chain at this final REC-03 state,
+  then advance to the next open milestone item.
+
 - REC-03 implementation update on 2026-09-14: finalized recording rows now
   persist bounded `dither` and `conversion` fields through SQLite and the
   `recordings.list`/`recordings.get` contracts. Existing databases receive

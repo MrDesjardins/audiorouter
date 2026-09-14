@@ -1067,6 +1067,8 @@ pub struct FlacBufferEncoder {
     channels: usize,
     sample_rate: u32,
     bits_per_sample: u8,
+    dither: bool,
+    rng: u64,
     samples: Vec<i32>,
 }
 
@@ -1079,6 +1081,15 @@ impl FlacBufferEncoder {
         channels: usize,
         sample_rate: u32,
         bits_per_sample: u8,
+    ) -> Result<Self, RecordingError> {
+        Self::new_with_dither(channels, sample_rate, bits_per_sample, false)
+    }
+
+    pub fn new_with_dither(
+        channels: usize,
+        sample_rate: u32,
+        bits_per_sample: u8,
+        dither: bool,
     ) -> Result<Self, RecordingError> {
         if !(1..=2).contains(&channels) {
             return Err(RecordingError::InvalidChannels);
@@ -1093,6 +1104,8 @@ impl FlacBufferEncoder {
             channels,
             sample_rate,
             bits_per_sample,
+            dither,
+            rng: 0x9e37_79b9_7f4a_7c15,
             samples: Vec::new(),
         })
     }
@@ -1115,10 +1128,15 @@ impl FlacBufferEncoder {
         } else {
             8_388_607.0
         };
-        self.samples.extend(samples.iter().map(|sample| {
+        for sample in samples {
             let value = if sample.is_finite() { *sample } else { 0.0 };
-            (value.clamp(-1.0, 1.0) * scale).round() as i32
-        }));
+            let quantized = if self.dither {
+                quantize(value, true, &mut self.rng, scale)
+            } else {
+                (value.clamp(-1.0, 1.0) * scale).round()
+            };
+            self.samples.push(quantized as i32);
+        }
         Ok(added_frames)
     }
 
@@ -2488,8 +2506,22 @@ impl BufferedFlacRecorder {
         sample_rate: u32,
         bits_per_sample: u8,
     ) -> Result<Self, RecordingError> {
+        Self::new_with_dither(channels, sample_rate, bits_per_sample, false)
+    }
+
+    pub fn new_with_dither(
+        channels: usize,
+        sample_rate: u32,
+        bits_per_sample: u8,
+        dither: bool,
+    ) -> Result<Self, RecordingError> {
         Ok(Self {
-            encoder: FlacBufferEncoder::new(channels, sample_rate, bits_per_sample)?,
+            encoder: FlacBufferEncoder::new_with_dither(
+                channels,
+                sample_rate,
+                bits_per_sample,
+                dither,
+            )?,
             controller: RecorderController::new(),
             next_frame: None,
         })

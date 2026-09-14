@@ -1048,6 +1048,10 @@ pub struct BufferedFlacRecorderWorker {
     queue: Arc<RecordingQueue>,
     output: Option<std::fs::File>,
     maximum_chunks_per_pass: usize,
+    channels: usize,
+    sample_rate: u32,
+    bits_per_sample: u8,
+    dither: bool,
     library_identity: Option<FileRecordingIdentity>,
     started_at: Option<String>,
     run_id: Option<String>,
@@ -1063,11 +1067,32 @@ impl BufferedFlacRecorderWorker {
         queue_capacity: usize,
         maximum_chunks_per_pass: usize,
     ) -> Result<Self, String> {
+        Self::new_with_dither(
+            output,
+            channels,
+            sample_rate,
+            bits_per_sample,
+            false,
+            queue_capacity,
+            maximum_chunks_per_pass,
+        )
+    }
+
+    pub fn new_with_dither(
+        output: std::fs::File,
+        channels: usize,
+        sample_rate: u32,
+        bits_per_sample: u8,
+        dither: bool,
+        queue_capacity: usize,
+        maximum_chunks_per_pass: usize,
+    ) -> Result<Self, String> {
         if maximum_chunks_per_pass == 0 {
             return Err("maximum recorder drain pass must be positive".into());
         }
-        let recorder = BufferedFlacRecorder::new(channels, sample_rate, bits_per_sample)
-            .map_err(|error| format!("FLAC writer initialization failed: {error:?}"))?;
+        let recorder =
+            BufferedFlacRecorder::new_with_dither(channels, sample_rate, bits_per_sample, dither)
+                .map_err(|error| format!("FLAC writer initialization failed: {error:?}"))?;
         let queue = RecordingQueue::new_pooled(
             queue_capacity,
             channels,
@@ -1079,6 +1104,10 @@ impl BufferedFlacRecorderWorker {
             queue: Arc::new(queue),
             output: Some(output),
             maximum_chunks_per_pass,
+            channels,
+            sample_rate,
+            bits_per_sample,
+            dither,
             library_identity: None,
             started_at: None,
             run_id: None,
@@ -1241,8 +1270,11 @@ impl RecorderWorker for BufferedFlacRecorderWorker {
                 identity,
                 run_id,
                 start_time,
-                false,
-                "unknown".into(),
+                self.dither,
+                format!(
+                    "targetSampleRate={};channels={};bitsPerSample={}",
+                    self.sample_rate, self.channels, self.bits_per_sample
+                ),
             )?];
         }
         Ok(RecorderFinalizationOutcome {
@@ -16251,7 +16283,13 @@ mod tests {
             .create_new(true)
             .open(&path)
             .unwrap();
-        let mut worker = BufferedFlacRecorderWorker::new(file, 1, 48_000, 16, 8, 1).unwrap();
+        let mut worker =
+            BufferedFlacRecorderWorker::new_with_dither(file, 1, 48_000, 16, true, 8, 1).unwrap();
+        worker.set_library_identity(FileRecordingIdentity {
+            session_id: "session".into(),
+            recorder_id: "voice".into(),
+            path: path.clone(),
+        });
         worker.arm().unwrap();
         worker.start(0).unwrap();
         worker
@@ -16261,7 +16299,8 @@ mod tests {
             })
             .unwrap();
 
-        let mut plane = ControlPlane::default();
+        let mut plane =
+            ControlPlane::with_storage("buffered-flac-metadata", Storage::open_memory().unwrap());
         let original = session();
         plane.insert_session(original.clone()).unwrap();
         plane.session_start(&original.id).unwrap();
@@ -16279,6 +16318,18 @@ mod tests {
         let info = audiorouter_recording::inspect_flac_file(&path).unwrap();
         assert_eq!(info.frames, 2);
         assert_eq!(info.sample_rate, 48_000);
+        let finalized = plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .list_recordings(Some("session"))
+            .unwrap();
+        assert_eq!(finalized.len(), 1);
+        assert!(finalized[0].dither);
+        assert_eq!(
+            finalized[0].conversion,
+            "targetSampleRate=48000;channels=1;bitsPerSample=16"
+        );
         assert_eq!(
             plane.recorders[&original.id].state(),
             RecorderState::Completed
