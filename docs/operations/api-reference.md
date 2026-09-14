@@ -72,6 +72,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `nativeEndpoints.prepare` | `deviceAdministration` | external operation; prepares exact stopped clients |
 | `nativeApplications.prepare` | `deviceAdministration` | external operation; prepares a verified stopped process-loopback capture and exact render client |
 | `nativeEndpoints.pump` | `sessionControl` | external operation; drains a bounded packet budget for the exact running native generation |
+| `nativeDuplex.pump` | `sessionControl` | external operation; drains independently bounded input and output work for the exact running duplex generation |
 | `plugins.scan` | `pluginScan` | read-only |
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
@@ -133,6 +134,11 @@ authenticated, session-generation-bound, and fail closed when the native
 worker or prepared graph is absent. The response also reports the bounded
 number of recorder chunks drained on the control thread; file encoding and
 flushing never run in the realtime callback.
+
+`nativeDuplex.pump` applies the same authentication, generation, no-rebind,
+and fail-closed rules to a paired native bridge worker. Its `maxInputQuanta`
+and `maxOutputPackets` budgets are independently bounded, and the response
+keeps input and output counters separate so a stalled direction is observable.
 
 The singular and plural session lifecycle names are compatibility aliases with
 the same authorization and behavior. Mutating graph and virtual-device calls

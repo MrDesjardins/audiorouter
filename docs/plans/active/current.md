@@ -2,6 +2,16 @@
 
 Updated: 2026-09-14.
 
+- Documented the new duplex pump contract on 2026-09-14. The operations API
+  reference and API specification now list `nativeDuplex.pump`, its separate
+  bounded budgets, generation binding, fail-closed behavior, and distinct
+  direction counters. This prevents contract/implementation drift for the
+  paired native bridge. Verification: documentation diff check passed; no
+  endpoint, driver, or machine audio configuration was accessed. Loaded
+  PortCls, production signing, and physical-latency evidence remain open.
+  Next action: continue the next independently testable native/UI delivery
+  item.
+
 - Added the UI adapter for paired native pumping on 2026-09-14. The shared
   `UiBackend` now forwards typed `nativeDuplex.pump` requests with exact
   session generation and independent bounded input/output budgets, keeping
