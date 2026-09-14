@@ -2,6 +2,18 @@
 
 Updated: 2026-09-14.
 
+- Revalidated the guarded live VB-Cable route on 2026-09-14 at the current
+  pushed head. The opt-in M02 control harness matched the exact active
+  `CABLE Output (VB-Audio Virtual Cable)` capture and `CABLE Input (VB-Audio
+  Virtual Cable)` render endpoints, delivered 24,000 captured frames through
+  187 graph quanta, rendered 23,936 frames, and completed same-process
+  start/stop/reset cleanup. The wrapper restored its process environment.
+  This is user-mode shared-WASAPI evidence only; it does not qualify the
+  managed driver, loaded PortCls callback, physical latency, or production
+  signing. No defaults, volume, mute, driver, or persistent audio
+  configuration changed. Next action: continue the next independently
+  testable native/UI delivery item.
+
 - Requalified the complete elevated safe acceptance chain against the worker-
   kind routing commit on 2026-09-14. M00 toolchain/native checks, M03
   AudioRouter and SysVAD build-only checks, M01 CLI, M04 DSP/recording, M05 UI
